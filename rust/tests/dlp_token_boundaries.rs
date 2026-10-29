@@ -51,6 +51,15 @@ const BOUNDED: &[(&str, &str)] = &[
     ("dlp_vault_token", "-"),
     ("dlp_vault_legacy_token", ""),
     ("dlp_doppler_token", ""),
+    ("dlp_azure_devops_pat", ""),
+    ("dlp_circleci_token", ""),
+    ("dlp_vercel_token", ""),
+    ("dlp_netlify_token", ""),
+    ("dlp_flyio_token", "-"),
+    ("dlp_heroku_api_key", "-"),
+    ("dlp_render_api_key", ""),
+    ("dlp_cloudflare_origin_ca_key", "-"),
+    ("dlp_digitalocean_token", ""),
     ("dlp_stripe_key", "-"),
     ("dlp_stripe_webhook", "-"),
     ("dlp_slack_token", "-"),
@@ -173,11 +182,12 @@ fn prefix_rules_declare_their_token_boundary() {
 
 /// `text` with the context a context-gated rule needs on the line above:
 /// a key term for a wallet key (F01), a Vault term for a legacy Vault token
-/// (P05).
+/// (P05), a Render term for a Render API key (P06).
 fn with_context(rule: &str, text: String) -> String {
     match rule {
         "dlp_eth_private_key" => format!("wallet private key:\n{text}"),
         "dlp_vault_legacy_token" => format!("Vault token:\n{text}"),
+        "dlp_render_api_key" => format!("Render API key:\n{text}"),
         _ => text,
     }
 }

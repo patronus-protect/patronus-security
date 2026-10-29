@@ -1515,6 +1515,70 @@ PROFILES = {
         "registry.packagist.token", "SECRET_TOKEN", "secret", "packagist_token", "Private Packagist token",
         "Private-Packagist-Token",
     ),
+    # P06: CI and hosting.
+    "dlp_bitbucket_client_secret": Profile(
+        "vcs.bitbucket.client_secret", "API_KEY", "secret", "bitbucket_client_secret", "Bitbucket client secret",
+        "Bitbucket-Client-Secret",
+    ),
+    "dlp_azure_devops_pat": Profile(
+        "vcs.azure_devops.pat", "SECRET_TOKEN", "secret", "azure_devops_pat", "Azure DevOps PAT", "Azure-DevOps-PAT"
+    ),
+    "dlp_azure_devops_legacy_pat": Profile(
+        "vcs.azure_devops.pat", "SECRET_TOKEN", "secret", "azure_devops_pat", "Azure DevOps PAT", "Azure-DevOps-PAT"
+    ),
+    "dlp_circleci_token": Profile(
+        "ci.circleci.api_token", "SECRET_TOKEN", "secret", "circleci_token", "CircleCI API token", "CircleCI-API-Token"
+    ),
+    "dlp_circleci_legacy_token": Profile(
+        "ci.circleci.api_token", "SECRET_TOKEN", "secret", "circleci_token", "CircleCI API token", "CircleCI-API-Token"
+    ),
+    "dlp_travis_token": Profile(
+        "ci.travisci.access_token", "SECRET_TOKEN", "secret", "travis_api_token", "Travis CI API token", "Travis-CI-API-Token"
+    ),
+    "dlp_vercel_token": Profile(
+        "hosting.vercel.access_token", "CLOUD_KEY", "secret", "vercel_token", "Vercel access token", "Vercel-Zugriffstoken"
+    ),
+    "dlp_vercel_legacy_token": Profile(
+        "hosting.vercel.access_token", "CLOUD_KEY", "secret", "vercel_token", "Vercel access token", "Vercel-Zugriffstoken"
+    ),
+    "dlp_netlify_token": Profile(
+        "hosting.netlify.access_token", "CLOUD_KEY", "secret", "netlify_auth_token", "Netlify access token",
+        "Netlify-Zugriffstoken",
+    ),
+    "dlp_netlify_legacy_token": Profile(
+        "hosting.netlify.access_token", "CLOUD_KEY", "secret", "netlify_auth_token", "Netlify access token",
+        "Netlify-Zugriffstoken",
+    ),
+    "dlp_flyio_token": Profile(
+        "hosting.flyio.access_token", "CLOUD_KEY", "secret", "fly_api_token", "Fly.io API token", "Fly.io-API-Token",
+    ),
+    "dlp_flyio_macaroon_token": Profile(
+        "hosting.flyio.access_token", "CLOUD_KEY", "secret", "fly_api_token", "Fly.io API token", "Fly.io-API-Token",
+    ),
+    "dlp_heroku_api_key": Profile(
+        "hosting.heroku.api_key", "CLOUD_KEY", "secret", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel",
+    ),
+    "dlp_heroku_legacy_api_key": Profile(
+        "hosting.heroku.api_key", "CLOUD_KEY", "secret", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel",
+    ),
+    "dlp_render_api_key": Profile(
+        "hosting.render.api_key", "CLOUD_KEY", "secret", "render_api_key", "Render API key", "Render-API-Schlüssel",
+    ),
+    "dlp_railway_token": Profile(
+        "hosting.railway.api_token", "CLOUD_KEY", "secret", "railway_token", "Railway token", "Railway-Token",
+    ),
+    "dlp_cloudflare_api_key": Profile(
+        "hosting.cloudflare.api_key", "CLOUD_KEY", "secret", "cloudflare_api_token", "Cloudflare API token",
+        "Cloudflare-API-Token",
+    ),
+    "dlp_cloudflare_origin_ca_key": Profile(
+        "hosting.cloudflare.api_key", "CLOUD_KEY", "secret", "cloudflare_origin_ca_key", "Cloudflare Origin CA key",
+        "Cloudflare-Origin-CA-Schlüssel",
+    ),
+    "dlp_digitalocean_token": Profile(
+        "hosting.digitalocean.token", "CLOUD_KEY", "secret", "digitalocean_access_token", "DigitalOcean access token",
+        "DigitalOcean-Zugriffstoken",
+    ),
     "dlp_stripe_key": Profile("payment.stripe.secret_key", "PAYMENT_KEY", "secret", "stripe_secret_key", "Stripe secret key", "Stripe-Secret-Key"),
     "dlp_stripe_webhook": Profile("payment.stripe.webhook_secret", "PAYMENT_KEY", "secret", "stripe_webhook_secret", "Stripe webhook secret", "Stripe-Webhook-Secret"),
     "dlp_slack_token": Profile("comm.slack.token", "SECRET_TOKEN", "secret", "slack_token", "Slack token", "Slack-Token"),
@@ -1643,15 +1707,8 @@ PROFILES = {
         "vcs.gitlab.session_cookie", "CREDENTIAL", "secret", "gitlab_session_cookie", "GitLab session cookie",
         "GitLab-Session-Cookie", {"gitlab_session_cookie": "_gitlab_session=<<value>>"},
     ),
-    "vcs.bitbucket.client_secret": Profile(
-        "vcs.bitbucket.client_secret", "SECRET_TOKEN", "secret", "bitbucket_client_secret", "Bitbucket client secret",
-        "Bitbucket-Client-Secret",
-    ),
     "ci.droneci.access_token": Profile(
         "ci.droneci.access_token", "SECRET_TOKEN", "secret", "droneci_token", "Drone CI token", "Drone-CI-Token"
-    ),
-    "ci.travisci.access_token": Profile(
-        "ci.travisci.access_token", "SECRET_TOKEN", "secret", "travis_api_token", "Travis CI API token", "Travis-CI-API-Token"
     ),
     "registry.clojars.api_token": Profile(
         "registry.clojars.api_token", "SECRET_TOKEN", "secret", "clojars_deploy_token", "Clojars deploy token",
@@ -1722,24 +1779,6 @@ PROFILES = {
     "cloud.scalingo.api_token": Profile(
         "cloud.scalingo.api_token", "CLOUD_KEY", "secret", "scalingo_api_token", "Scalingo API token",
         "Scalingo-API-Token",
-    ),
-    "hosting.flyio.access_token": Profile(
-        "hosting.flyio.access_token", "CLOUD_KEY", "secret", "fly_api_token", "Fly.io API token", "Fly.io-API-Token",
-    ),
-    "hosting.netlify.access_token": Profile(
-        "hosting.netlify.access_token", "CLOUD_KEY", "secret", "netlify_auth_token", "Netlify access token",
-        "Netlify-Zugriffstoken",
-    ),
-    "hosting.heroku.api_key": Profile(
-        "hosting.heroku.api_key", "CLOUD_KEY", "secret", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel",
-    ),
-    "hosting.cloudflare.api_key": Profile(
-        "hosting.cloudflare.api_key", "CLOUD_KEY", "secret", "cloudflare_api_token", "Cloudflare API token",
-        "Cloudflare-API-Token",
-    ),
-    "hosting.digitalocean.token": Profile(
-        "hosting.digitalocean.token", "CLOUD_KEY", "secret", "digitalocean_access_token", "DigitalOcean access token",
-        "DigitalOcean-Zugriffstoken",
     ),
     "hosting.openshift.user_token": Profile(
         "hosting.openshift.user_token", "CLOUD_KEY", "secret", "openshift_token", "OpenShift token", "OpenShift-Token",

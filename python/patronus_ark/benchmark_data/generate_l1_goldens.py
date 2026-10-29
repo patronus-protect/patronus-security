@@ -4255,8 +4255,8 @@ def dx(
 
 
 # F01: rules that report a value only in its key context, also in `strict` (P05: legacy Vault
-# tokens only next to a Vault term).
-DLP_CONTEXT_GATED_RULES = ("dlp_eth_private_key", "dlp_vault_legacy_token")
+# tokens only next to a Vault term; P06: Render API keys only next to a Render term).
+DLP_CONTEXT_GATED_RULES = ("dlp_eth_private_key", "dlp_vault_legacy_token", "dlp_render_api_key")
 
 
 def dc(
@@ -4319,6 +4319,12 @@ DLP_LOOKALIKE_GENERATORS = (
     "rubygems_api_key_upper_hex", "cratesio_api_token_short", "packagist_token_bad_crc",
     "terraform_cloud_token_short", "pulumi_access_token_short", "vault_legacy_service_token_short",
     "doppler_personal_token_short", "doppler_cli_token_long",
+    # P06
+    "azure_devops_pat_shifted", "azure_devops_legacy_pat_short", "circleci_personal_token_short",
+    "travisci_access_token_short", "bitbucket_client_secret_short", "vercel_personal_token_short",
+    "netlify_personal_token_short", "netlify_access_token_short", "flyio_oauth_token_short",
+    "heroku_api_key_v2_short", "render_api_key_short", "cloudflare_api_token_short", "cloudflare_origin_ca_key_short",
+    "digitalocean_pat_short",
 )
 
 
@@ -10310,6 +10316,417 @@ DLP_P05_CASES = {
     ],
 }
 for _label, _rows in DLP_P05_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# P06: CI and hosting tokens. Provider prefixes: `dlp_azure_devops_pat` (84 alphanumerics with
+# `AZDO` at positions 76 to 80), `dlp_circleci_token` (`CCIPAT_`/`CCIPRJ_`), `dlp_vercel_token`
+# (`vcp_`, `vci_`, `vca_`, `vcr_`, `vck_`), `dlp_netlify_token` (`nfp_`), `dlp_flyio_token`
+# (`fo1_`), `dlp_flyio_macaroon_token` (`fm1a_`, `fm1r_`, `fm2_`), `dlp_heroku_api_key` (`HRKU-AA`), `dlp_render_api_key` (`rnd_`, only with
+# Render context), `dlp_cloudflare_origin_ca_key` (`v1.0-`) and `dlp_digitalocean_token`
+# (`dop_v1_`/`doo_v1_`/`dor_v1_`). Under a provider key with a credential noun: Bitbucket client
+# secrets, legacy Azure DevOps PATs, legacy CircleCI tokens, Travis CI tokens, legacy Vercel and
+# Netlify tokens, legacy Heroku API keys and Railway tokens (UUIDs) and Cloudflare API tokens and
+# Global API Keys. Hard negatives are shapes with a wrong length or signature position,
+# example/test fills, references, documented prefixes, IDs under provider keys without a
+# credential noun (`HEROKU_APP_ID`, `CIRCLE_SHA1`, `RAILWAY_PROJECT_ID`) and a Render-shaped key
+# without Render context.
+DLP_P06_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_azure_devops_pat",
+            "# Azure-DevOps-CLI auf dem Build-Agenten\nAZURE_DEVOPS_EXT_PAT=<<secret:0>>\n"
+            "AZURE_DEVOPS_ORG=https://dev.azure.com/acme\n",
+            "azure_devops_pat", 18101, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_azure_devops_pat",
+            "$ git clone https://build:<<secret:0>>@dev.azure.com/acme/shop/_git/api\n"
+            "Cloning into 'api'...\n",
+            "azure_devops_pat", 18102, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_azure_devops_legacy_pat",
+            "variables:\n  # PAT des Dienstkontos, läuft im März ab\n  AZURE_DEVOPS_EXT_PAT: <<secret:0>>\n",
+            "azure_devops_legacy_pat", 18103, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_azure_devops_legacy_pat",
+            "provider \"azuredevops\" {\n  org_service_url       = \"https://dev.azure.com/acme\"\n"
+            "  azdo_personal_access_token = \"<<secret:0>>\"\n}\n",
+            "azure_devops_legacy_pat", 18104, carrier="hcl",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_circleci_token",
+            "# Persönliches CircleCI-Token für das Release-Skript\nCIRCLECI_TOKEN=<<secret:0>>\n",
+            "circleci_personal_token", 18105, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_circleci_token",
+            "GET /api/v2/project/gh/acme/shop/pipeline HTTP/1.1\nHost: circleci.com\n"
+            "Circle-Token: <<secret:0>>\n",
+            "circleci_project_token", 18106, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_circleci_legacy_token",
+            "# Alter CircleCI-Zugang des Deploy-Bots\nCIRCLE_TOKEN=<<secret:0>>\nCIRCLE_PROJECT=gh/acme/shop\n",
+            "circleci_legacy_token", 18107, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_circleci_legacy_token",
+            "$ curl -s -H \"Circle-Token: <<secret:0>>\" https://circleci.com/api/v1.1/me\n",
+            "circleci_legacy_token", 18108, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_travis_token",
+            "# Zugang zur Travis-API für das Statusskript\nTRAVIS_API_TOKEN=<<secret:0>>\n",
+            "travisci_access_token", 18109, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_travis_token",
+            "{\n  \"ci\": {\n    \"provider\": \"travis\",\n    \"travis_token\": \"<<secret:0>>\"\n  }\n}\n",
+            "travisci_access_token", 18110, carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_azure_devops_pat",
+            "2026-10-28 08:12:44 WARN azdo: verworfener Wert <<secret:0>> (Signatur an falscher Stelle)\n",
+            "azure_devops_pat_shifted", 18131, "84-character shape with AZDO at positions 75 to 79", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_azure_devops_legacy_pat",
+            "variables:\n  AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)\n",
+            "pipeline variable reference", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_circleci_token",
+            "2026-10-28 08:12:44 WARN circleci: verworfener Wert <<secret:0>> (39 Hex-Ziffern)\n",
+            "circleci_personal_token_short", 18132, "CCIPAT_ shape with 39 instead of 40 hex digits", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_circleci_legacy_token",
+            "# vom Job gesetzt\nCIRCLE_SHA1=4f1c2e9a7b3d5f60718293a4b5c6d7e8f9012345\nCIRCLE_BUILD_NUM=4711\n",
+            "commit SHA under a CircleCI key without a credential noun", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_travis_token",
+            "# Beispiel aus der Doku\nTRAVIS_API_TOKEN=<<secret:0>>\n",
+            "travisci_access_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_azure_devops_pat",
+            "Azure DevOps PATs are 84 characters long and carry the signature AZDO at positions 76 to 80.",
+            "documented format without a value", carrier="prose",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_azure_devops_legacy_pat",
+            "2026-10-28T08:12:44Z WARN az: rejected <<secret:0>> (51 characters)\n",
+            "azure_devops_legacy_pat_short", 18133, "legacy PAT shape with 51 instead of 52 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_circleci_token",
+            "# docs example\nCIRCLECI_TOKEN=<<secret:0>>\n",
+            "circleci_personal_token", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_circleci_legacy_token",
+            "      - run: curl -H \"Circle-Token: $CIRCLE_TOKEN\" https://circleci.com/api/v2/me\n",
+            "environment reference", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_travis_token",
+            "2026-10-28T08:12:44Z WARN travis: rejected <<secret:0>> (21 characters)\n",
+            "travisci_access_token_short", 18134, "Travis token shape with 21 instead of 22 characters", carrier="log",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_bitbucket_client_secret",
+            "# OAuth-Consumer für den Bitbucket-Import\nBITBUCKET_CLIENT_ID=acme-import\n"
+            "BITBUCKET_CLIENT_SECRET=<<secret:0>>\n",
+            "bitbucket_client_secret", 18111, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_bitbucket_client_secret",
+            "importer:\n  source: bitbucket\n  bitbucket_client_id: acme-import\n"
+            "  bitbucket_client_secret: \"<<secret:0>>\"\n",
+            "bitbucket_client_secret", 18112, carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_bitbucket_client_secret",
+            "BITBUCKET_CLIENT_SECRET=${BITBUCKET_CLIENT_SECRET:?fehlt}\n",
+            "environment reference", carrier="env",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_bitbucket_client_secret",
+            "2026-10-28T08:12:44Z WARN oauth: rejected <<secret:0>> (63 characters)\n",
+            "bitbucket_client_secret_short", 18135, "Bitbucket secret shape with 63 instead of 64 characters",
+            carrier="log",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_vercel_token",
+            "# Deploy-Token des Teams (persönlich)\nVERCEL_TOKEN=<<secret:0>>\nVERCEL_ORG_ID=team_acme\n",
+            "vercel_personal_token", 18113, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_vercel_token",
+            "2026-10-28T08:12:44Z DEBUG oauth: exchanged code, access_token=<<secret:0>> expires_in=3600\n",
+            "vercel_app_access_token", 18114, carrier="log",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_vercel_legacy_token",
+            "{\n  \"projekt\": \"shop\",\n  \"vercelToken\": \"<<secret:0>>\"\n}\n",
+            "vercel_legacy_token", 18115, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_vercel_legacy_token",
+            "      - run: npx vercel deploy --prod\n        env:\n          VERCEL_TOKEN: <<secret:0>>\n",
+            "vercel_legacy_token", 18116, carrier="yaml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_netlify_token",
+            "$ netlify deploy --prod --dir dist --auth <<secret:0>>\nDeploy is live!\n",
+            "netlify_personal_token", 18117, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_netlify_token",
+            "[build.environment]\n  NETLIFY_AUTH_TOKEN = \"<<secret:0>>\"\n",
+            "netlify_personal_token", 18118, carrier="toml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_netlify_legacy_token",
+            "# Netlify-Zugang (altes Token)\nNETLIFY_AUTH_TOKEN=<<secret:0>>\nNETLIFY_SITE_ID=shop-prod\n",
+            "netlify_access_token", 18119, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_netlify_legacy_token",
+            "deploy:\n  provider: netlify\n  netlify_access_token: '<<secret:0>>'\n",
+            "netlify_access_token", 18120, carrier="yaml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_flyio_token",
+            "# Fly.io Deploy-Token\nFLY_API_TOKEN=<<secret:0>>\n",
+            "flyio_oauth_token", 18121, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_flyio_token",
+            "$ flyctl deploy --app shop-api --access-token <<secret:0>>\n",
+            "flyio_oauth_token", 18122, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_flyio_macaroon_token",
+            "# Deploy-Token der App (fly tokens create deploy)\nFLY_API_TOKEN=<<secret:0>>\n",
+            "flyio_macaroon_token", 18148, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_flyio_macaroon_token",
+            "GET /v1/apps/shop-api/machines HTTP/1.1\nHost: api.machines.dev\nAuthorization: FlyV1 <<secret:0>>\n",
+            "flyio_macaroon_token", 18149, carrier="http",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_heroku_api_key",
+            "Hallo Team,\n\nder neue Heroku-API-Schlüssel für die Pipeline lautet <<secret:0>>\n\n"
+            "Bitte den alten widerrufen.\n",
+            "heroku_api_key_v2", 18123, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_heroku_api_key",
+            "GET /apps HTTP/1.1\nHost: api.heroku.com\nAccept: application/vnd.heroku+json; version=3\n"
+            "Authorization: Bearer <<secret:0>>\n",
+            "heroku_api_key_v2", 18124, carrier="http",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_heroku_legacy_api_key",
+            "# Heroku-Zugang des Deploy-Jobs\nHEROKU_API_KEY=<<secret:0>>\nHEROKU_APP_NAME=shop-prod\n",
+            "heroku_api_key", 18125, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+            "{\"deploy\": {\"heroku_api_key\": \"<<secret:0>>\", \"app\": \"shop-prod\"}}\n",
+            "heroku_api_key", 18126, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_render_api_key",
+            "# Render-CLI im Build-Container\nRENDER_API_KEY=<<secret:0>>\n",
+            "render_api_key", 18127, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_render_api_key",
+            "GET /v1/services HTTP/1.1\nHost: api.render.com\nAuthorization: Bearer <<secret:0>>\n",
+            "render_api_key", 18128, carrier="http",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_railway_token",
+            "# Projekt-Token für den Railway-Deploy\nRAILWAY_TOKEN=<<secret:0>>\n",
+            "railway_token", 18129, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_railway_token",
+            "const client = new RailwayClient({\n  railwayApiToken: \"<<secret:0>>\",\n});\n",
+            "railway_token", 18130, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_cloudflare_api_key",
+            "# DNS-Automatisierung\nCLOUDFLARE_API_TOKEN=<<secret:0>>\nCLOUDFLARE_ZONE=acme.example\n",
+            "cloudflare_api_token", 18141, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_cloudflare_api_key",
+            "provider \"cloudflare\" {\n  email   = \"ops@example.com\"\n"
+            "  cloudflare_api_key = \"<<secret:0>>\"\n}\n",
+            "cloudflare_global_api_key", 18142, carrier="hcl",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_cloudflare_origin_ca_key",
+            "# Origin-CA-Schlüssel für cert-manager\nCLOUDFLARE_API_USER_SERVICE_KEY=<<secret:0>>\n",
+            "cloudflare_origin_ca_key", 18143, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_cloudflare_origin_ca_key",
+            "POST /client/v4/certificates HTTP/1.1\nHost: api.cloudflare.com\n"
+            "X-Auth-User-Service-Key: <<secret:0>>\n",
+            "cloudflare_origin_ca_key", 18144, carrier="http",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_digitalocean_token",
+            "$ doctl auth init --context prod --access-token <<secret:0>>\n",
+            "digitalocean_pat", 18145, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_digitalocean_token",
+            "{\"access_token\": \"<<secret:0>>\", \"token_type\": \"bearer\", \"expires_in\": 2592000}\n",
+            "digitalocean_oauth_token", 18146, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_digitalocean_token",
+            "DIGITALOCEAN_REFRESH_TOKEN=<<secret:0>>\n",
+            "digitalocean_refresh_token", 18147, carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_vercel_token",
+            "2026-10-28 08:12:44 WARN vercel: verworfener Wert <<secret:0>> (55 Zeichen)\n",
+            "vercel_personal_token_short", 18151, "vcp_ shape with 55 instead of 56 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_vercel_legacy_token",
+            "VERCEL_PROJECT_ID=prj_9Xk2Lm4Np6Qr8St0Uv2Wx4Yz\nVERCEL_ORG_ID=team_3Fh7Jk9Lm1Np3Qr5\n",
+            "IDs under Vercel keys without a credential noun", carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_netlify_token",
+            "2026-10-28 08:12:44 WARN netlify: verworfener Wert <<secret:0>> (35 Zeichen)\n",
+            "netlify_personal_token_short", 18152, "nfp_ shape with 35 instead of 36 characters", carrier="log",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_netlify_legacy_token",
+            "# Beispiel aus der Doku\nNETLIFY_AUTH_TOKEN=<<secret:0>>\n",
+            "netlify_access_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_flyio_token",
+            "2026-10-28 08:12:44 WARN fly: verworfener Wert <<secret:0>> (42 Zeichen)\n",
+            "flyio_oauth_token_short", 18153, "fo1_ shape with 42 instead of 43 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_heroku_legacy_api_key",
+            "# von Heroku gesetzt\nAPP_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\n"
+            "RELEASE_VERSION=v42\n",
+            "UUID in Heroku app metadata without a credential noun", carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_render_api_key",
+            "2026-10-28 08:12:44 WARN render: verworfener Wert <<secret:0>> (20 Zeichen)\n",
+            "render_api_key_short", 18154, "rnd_ shape with 20 instead of at least 24 characters", carrier="log",
+        ),
+        dc(
+            "CLOUD_KEY", "de", "dlp_render_api_key",
+            "2026-10-28 08:12:44 INFO cache: Eintrag <<secret:0>> nach 300 s verworfen\n",
+            "render_api_key", 18155, "rnd_ shape without a Render term", carrier="log", mode="strict",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_railway_token",
+            "RAILWAY_PROJECT_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\n"
+            "RAILWAY_SERVICE_ID=7a1d4c2b-6e8f-4a9b-8c3d-2e1f0a9b8c7d\n",
+            "UUIDs under Railway keys without a credential noun", carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_cloudflare_origin_ca_key",
+            "2026-10-28 08:12:44 WARN cf: verworfener Wert <<secret:0>> (145 Hex-Ziffern)\n",
+            "cloudflare_origin_ca_key_short", 18156, "Origin CA key shape with 145 instead of 146 hex digits",
+            carrier="log",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_digitalocean_token",
+            "# Beispiel aus der Doku\nDIGITALOCEAN_ACCESS_TOKEN=<<secret:0>>\n",
+            "digitalocean_pat", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_vercel_token",
+            "# docs example\nVERCEL_TOKEN=<<secret:0>>\n",
+            "vercel_personal_token", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="env",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_vercel_legacy_token",
+            "      - run: npx vercel deploy --prod --token ${{ secrets.VERCEL_TOKEN }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_flyio_macaroon_token",
+            "Fly.io-Deploy-Tokens beginnen mit FlyV1 fm2_ und einem Base64-Macaroon.",
+            "documented prefix without a value", carrier="prose",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_netlify_token",
+            "Netlify personal access tokens start with nfp_ followed by 36 characters.",
+            "documented prefix without a value", carrier="prose",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_netlify_legacy_token",
+            "2026-10-28T08:12:44Z WARN netlify: rejected <<secret:0>> (39 characters)\n",
+            "netlify_access_token_short", 18157, "Netlify token shape with 39 instead of 40 to 46 characters",
+            carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_heroku_api_key",
+            "2026-10-28T08:12:44Z WARN heroku: rejected <<secret:0>> (57 characters after HRKU-AA)\n",
+            "heroku_api_key_v2_short", 18158, "HRKU-AA shape with 57 instead of 58 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+            "heroku:\n  app_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\n  api_key: ${HEROKU_API_KEY}\n",
+            "app UUID and environment reference", carrier="yaml",
+        ),
+        dc(
+            "CLOUD_KEY", "en", "dlp_render_api_key",
+            "2026-10-28T08:12:44Z INFO cache: evicted <<secret:0>> after 300s\n",
+            "render_api_key", 18159, "rnd_ shape without a Render term", carrier="log", mode="strict",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_railway_token",
+            "# docs example\nRAILWAY_TOKEN=<<secret:0>>\n",
+            "railway_token", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_cloudflare_api_key",
+            "2026-10-28T08:12:44Z WARN cloudflare: rejected <<secret:0>> (39 characters)\n",
+            "cloudflare_api_token_short", 18160, "Cloudflare API token shape with 39 instead of 40 characters",
+            carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_cloudflare_api_key",
+            "cloudflare_zone_id = \"0123456789abcdef0123456789abcdef\"\n"
+            "cloudflare_account_id = \"fedcba9876543210fedcba9876543210\"\n",
+            "IDs under Cloudflare keys without a credential noun", carrier="hcl",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_digitalocean_token",
+            "2026-10-28T08:12:44Z WARN doctl: rejected <<secret:0>> (63 hex digits)\n",
+            "digitalocean_pat_short", 18161, "dop_v1_ shape with 63 instead of 64 hex digits", carrier="log",
+        ),
+    ],
+}
+for _label, _rows in DLP_P06_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

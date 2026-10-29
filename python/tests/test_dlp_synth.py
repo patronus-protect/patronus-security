@@ -369,6 +369,20 @@ def defined_networking(value):
     return value.startswith("dnkey-") and prefixed("", BASE32, 26)(head) and prefixed("", BASE32, 52)(tail)
 
 
+def circleci(prefix):
+    """CircleCI API token: prefix + base58 UUID (22) + _ + 40 hex digits."""
+    def check(value):
+        uuid, _, tail = value.removeprefix(prefix).partition("_")
+        return value.startswith(prefix) and prefixed("", checks.BASE58, 22)(uuid) and prefixed("", HEX, 40)(tail)
+
+    return check
+
+
+def azure_devops_pat(value):
+    """Azure DevOps PAT since 2024: 84 alphanumerics with AZDO at positions 76 to 80."""
+    return len(value) == 84 and set(value) <= set(ALNUM) and value[76:80] == "AZDO"
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
@@ -604,6 +618,18 @@ CHECKS = {
     "cratesio_api_token": prefixed("cio", ALNUM, 32),
     "packagist_org_token": lambda v: checks.has_valid_crc32_hex_suffix(v, "packagist_out_"),
     "packagist_user_token": lambda v: checks.has_valid_crc32_hex_suffix(v, "packagist_uut_"),
+    # P06
+    "azure_devops_pat": azure_devops_pat,
+    "azure_devops_legacy_pat": prefixed("", BASE36, 52),
+    "circleci_personal_token": circleci("CCIPAT_"),
+    "circleci_project_token": circleci("CCIPRJ_"),
+    "circleci_legacy_token": prefixed("", HEX, 40),
+    "vercel_personal_token": prefixed("vcp_", ALNUM, 56),
+    "vercel_app_access_token": prefixed("vca_", ALNUM, 56),
+    "vercel_legacy_token": prefixed("", ALNUM, 24),
+    "netlify_personal_token": prefixed("nfp_", ALNUM, 36),
+    "render_api_key": prefixed("rnd_", ALNUM, 32),
+    "railway_token": uuid_shaped,
     "prefect_api_key": prefixed("pnu_", ALNUM, 36),
     "infracost_api_key": prefixed("ico-", ALNUM, 32),
     "octopus_deploy_api_key": prefixed("API-", UPPER_ALNUM, 26),
@@ -742,6 +768,14 @@ LOOKALIKE_FAILURES = {
     "packagist_token_bad_crc": lambda v: any(
         checks.has_valid_crc32_hex_suffix(v, f"packagist_{kind}_") for kind in ("ort", "out", "uut", "cut")
     ),
+    # P06
+    "azure_devops_pat_shifted": azure_devops_pat,
+    "azure_devops_legacy_pat_short": CHECKS["azure_devops_legacy_pat"],
+    "circleci_personal_token_short": CHECKS["circleci_personal_token"],
+    "vercel_personal_token_short": CHECKS["vercel_personal_token"],
+    "netlify_personal_token_short": CHECKS["netlify_personal_token"],
+    "render_api_key_short": lambda v: any(prefixed("rnd_", ALNUM, n)(v) for n in range(24, 65)),
+    "cloudflare_api_token_short": CHECKS["cloudflare_api_token"],
     "prefect_api_key_short": CHECKS["prefect_api_key"],
     "infracost_api_key_short": CHECKS["infracost_api_key"],
     "octopus_deploy_api_key_lower": CHECKS["octopus_deploy_api_key"],

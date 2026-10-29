@@ -142,6 +142,96 @@
       "lookalike": ["doppler_personal_token_short", "doppler_cli_token_long"],
       "probes": ["DOPPLER_TOKEN=<<secret:0>>", "$ doppler secrets download --token <<secret:0>> --no-file"]
     },
+    "dlp_bitbucket_client_secret": {
+      "generators": ["bitbucket_client_secret"],
+      "lookalike": ["bitbucket_client_secret_short"],
+      "probes": ["BITBUCKET_CLIENT_SECRET=<<secret:0>>", "importer:\n  bitbucket_client_secret: \"<<secret:0>>\""]
+    },
+    "dlp_azure_devops_pat": {
+      "generators": ["azure_devops_pat"],
+      "lookalike": ["azure_devops_pat_shifted"],
+      "probes": ["AZURE_DEVOPS_EXT_PAT=<<secret:0>>", "$ echo <<secret:0>> | az devops login --organization https://dev.azure.com/acme"]
+    },
+    "dlp_azure_devops_legacy_pat": {
+      "generators": ["azure_devops_legacy_pat"],
+      "lookalike": ["azure_devops_legacy_pat_short"],
+      "probes": ["AZURE_DEVOPS_EXT_PAT=<<secret:0>>", "{\"azdo_personal_access_token\": \"<<secret:0>>\"}"]
+    },
+    "dlp_circleci_token": {
+      "generators": ["circleci_personal_token", "circleci_project_token"],
+      "lookalike": ["circleci_personal_token_short"],
+      "probes": ["CIRCLECI_TOKEN=<<secret:0>>", "curl -H \"Circle-Token: <<secret:0>>\" https://circleci.com/api/v2/me"]
+    },
+    "dlp_circleci_legacy_token": {
+      "generators": ["circleci_legacy_token"],
+      "probes": ["CIRCLE_TOKEN=<<secret:0>>", "curl -H \"Circle-Token: <<secret:0>>\" https://circleci.com/api/v2/me"]
+    },
+    "dlp_travis_token": {
+      "generators": ["travisci_access_token"],
+      "lookalike": ["travisci_access_token_short"],
+      "probes": ["TRAVIS_API_TOKEN=<<secret:0>>", "ci:\n  travis_token: \"<<secret:0>>\""]
+    },
+    "dlp_vercel_token": {
+      "generators": ["vercel_personal_token", "vercel_app_access_token"],
+      "lookalike": ["vercel_personal_token_short"],
+      "probes": ["VERCEL_TOKEN=<<secret:0>>", "$ vercel deploy --prod --token <<secret:0>>"]
+    },
+    "dlp_vercel_legacy_token": {
+      "generators": ["vercel_legacy_token"],
+      "probes": ["VERCEL_TOKEN=<<secret:0>>", "{\"vercelToken\": \"<<secret:0>>\"}"]
+    },
+    "dlp_netlify_token": {
+      "generators": ["netlify_personal_token"],
+      "lookalike": ["netlify_personal_token_short"],
+      "probes": ["NETLIFY_AUTH_TOKEN=<<secret:0>>", "$ netlify deploy --prod --auth <<secret:0>>"]
+    },
+    "dlp_netlify_legacy_token": {
+      "generators": ["netlify_access_token"],
+      "lookalike": ["netlify_access_token_short"],
+      "probes": ["NETLIFY_AUTH_TOKEN=<<secret:0>>", "deploy:\n  netlify_access_token: '<<secret:0>>'"]
+    },
+    "dlp_flyio_token": {
+      "generators": ["flyio_oauth_token"],
+      "lookalike": ["flyio_oauth_token_short"],
+      "probes": ["FLY_API_TOKEN=<<secret:0>>", "$ flyctl deploy --access-token <<secret:0>>"]
+    },
+    "dlp_flyio_macaroon_token": {
+      "generators": ["flyio_macaroon_token"],
+      "probes": ["FLY_API_TOKEN=<<secret:0>>", "Authorization: FlyV1 <<secret:0>>"]
+    },
+    "dlp_heroku_api_key": {
+      "generators": ["heroku_api_key_v2"],
+      "lookalike": ["heroku_api_key_v2_short"],
+      "probes": ["HEROKU_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_heroku_legacy_api_key": {
+      "generators": ["heroku_api_key"],
+      "probes": ["HEROKU_API_KEY=<<secret:0>>", "{\"deploy\": {\"heroku_api_key\": \"<<secret:0>>\"}}"]
+    },
+    "dlp_render_api_key": {
+      "generators": ["render_api_key"],
+      "lookalike": ["render_api_key_short"],
+      "probes": ["RENDER_API_KEY=<<secret:0>>", "# Render deploy\ncurl -H \"Authorization: Bearer <<secret:0>>\" https://api.render.com/v1/services"]
+    },
+    "dlp_railway_token": {
+      "generators": ["railway_token"],
+      "probes": ["RAILWAY_TOKEN=<<secret:0>>", "{\"railwayApiToken\": \"<<secret:0>>\"}"]
+    },
+    "dlp_cloudflare_api_key": {
+      "generators": ["cloudflare_api_token", "cloudflare_global_api_key"],
+      "lookalike": ["cloudflare_api_token_short"],
+      "probes": ["CLOUDFLARE_API_TOKEN=<<secret:0>>", "# terraform.tfvars\ncloudflare_api_token = \"<<secret:0>>\""]
+    },
+    "dlp_cloudflare_origin_ca_key": {
+      "generators": ["cloudflare_origin_ca_key"],
+      "lookalike": ["cloudflare_origin_ca_key_short"],
+      "probes": ["CLOUDFLARE_API_USER_SERVICE_KEY=<<secret:0>>", "X-Auth-User-Service-Key: <<secret:0>>"]
+    },
+    "dlp_digitalocean_token": {
+      "generators": ["digitalocean_pat", "digitalocean_oauth_token", "digitalocean_refresh_token"],
+      "lookalike": ["digitalocean_pat_short"],
+      "probes": ["DIGITALOCEAN_ACCESS_TOKEN=<<secret:0>>", "$ doctl auth init --access-token <<secret:0>>"]
+    },
     "dlp_stripe_key": {
       "generators": ["stripe_secret_live", "stripe_restricted_test", "stripe_secret_test_long"],
       "probes": ["STRIPE_SECRET_KEY=<<secret:0>>", "Stripe.api_key = \"<<secret:0>>\""]
@@ -321,9 +411,7 @@
     "identity.onepassword.secret": {"generators": ["onepassword_secret_key", "onepassword_service_account_token"], "lookalike": ["onepassword_secret_key_wrong_version"]},
     "commerce.shipping.api_token": {"generators": ["duffel_live_token", "easypost_api_key", "shippo_live_token"], "lookalike": ["shippo_live_token_short"]},
     "vcs.gitlab.session_cookie": {"generators": ["gitlab_session_cookie"], "lookalike": ["gitlab_session_cookie_short"]},
-    "vcs.bitbucket.client_secret": {"generators": ["bitbucket_client_secret"], "lookalike": ["bitbucket_client_secret_short"]},
     "ci.droneci.access_token": {"generators": ["droneci_access_token"], "lookalike": ["droneci_access_token_short"]},
-    "ci.travisci.access_token": {"generators": ["travisci_access_token"], "lookalike": ["travisci_access_token_short"]},
     "registry.clojars.api_token": {"generators": ["clojars_deploy_token"], "lookalike": ["clojars_deploy_token_short"]},
     "devops.prefect.api_token": {"generators": ["prefect_api_key"], "lookalike": ["prefect_api_key_short"]},
     "devops.infracost.api_token": {"generators": ["infracost_api_key"], "lookalike": ["infracost_api_key_short"]},
@@ -341,11 +429,6 @@
     "cloud.ibm.credentials": {"generators": ["ibm_cloud_iam_api_key"], "lookalike": ["ibm_cloud_iam_api_key_short"]},
     "cloud.yandex.credentials": {"generators": ["yandex_api_key", "yandex_static_access_key_secret"], "lookalike": ["yandex_api_key_short"]},
     "cloud.scalingo.api_token": {"generators": ["scalingo_api_token"], "lookalike": ["scalingo_api_token_short"]},
-    "hosting.flyio.access_token": {"generators": ["flyio_oauth_token", "flyio_macaroon_token"], "lookalike": ["flyio_oauth_token_short"]},
-    "hosting.netlify.access_token": {"generators": ["netlify_access_token"], "lookalike": ["netlify_access_token_short"]},
-    "hosting.heroku.api_key": {"generators": ["heroku_api_key", "heroku_api_key_v2"], "lookalike": ["heroku_api_key_v2_short"]},
-    "hosting.cloudflare.api_key": {"generators": ["cloudflare_api_token", "cloudflare_global_api_key", "cloudflare_origin_ca_key"], "lookalike": ["cloudflare_origin_ca_key_short"]},
-    "hosting.digitalocean.token": {"generators": ["digitalocean_pat", "digitalocean_oauth_token", "digitalocean_refresh_token"], "lookalike": ["digitalocean_pat_short"]},
     "hosting.openshift.user_token": {"generators": ["openshift_user_token"], "lookalike": ["openshift_user_token_short"]},
     "hosting.defined_networking.api_token": {"generators": ["defined_networking_api_token"], "lookalike": ["defined_networking_api_token_short"]},
     "hosting.fastly.api_token": {"generators": ["fastly_api_token"], "lookalike": ["fastly_api_token_short"]},

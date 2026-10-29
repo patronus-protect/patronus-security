@@ -232,6 +232,23 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   (alle dokumentierten Präfixe). Ein NuGet-API-Key (`oy2…`) hat keine Herstellerquelle für sein
   Format und bleibt ohne eigene Regel; Clojars, Prefect, Infracost, Octopus Deploy, Harness, Snyk,
   Sonar, Codecov und Sourcegraph (Entity-Map `backlog: P05`) bleiben `baseline_only`.
+  Seit P06 decken neunzehn Provider-Regeln CI und Hosting ab. Präfix-Regeln mit Token-Grenze:
+  Azure DevOps (84 Zeichen mit der Signatur `AZDO` an Position 76–80, beide Schreibweisen),
+  CircleCI (`CCIPAT_`/`CCIPRJ_`, Base58-UUID und 40 Hex-Ziffern), Vercel (`vcp_`, `vci_`, `vca_`,
+  `vcr_`, `vck_` und 56 Zeichen, Länge der dokumentierten Beispiele), Netlify (`nfp_`), Fly.io
+  (`fo1_`; die Base64-Macaroons `fm1a_`/`fm1r_`/`fm2_` als eigene Regel ohne Token-Grenze, weil
+  `/` und `+` zum Token gehören), Heroku (`HRKU-AA`), Render (`rnd_`; Render dokumentiert keine
+  Länge, deshalb nur mit `render` auf der Zeile oder bis zu fünf Zeilen darüber), Cloudflare
+  Origin CA (`v1.0-`) und DigitalOcean (`dop_v1_`/`doo_v1_`/`dor_v1_`). Schlüsselgebunden (Makro
+  `provider_key!`: Providername im Schlüssel, ein Credential-Nomen direkt vor dem Trenner, wie die
+  gitleaks-Keyword-Regeln, aber enger): Bitbucket-Client-Secret (`API_KEY`), alte Azure-DevOps-PATs
+  (52 Zeichen), alte CircleCI- (40 Hex) und Vercel-Tokens (24), Travis CI (22), alte
+  Netlify-Tokens, alte Heroku-API-Keys und Railway-Tokens (UUIDs) sowie Cloudflare-API-Token und
+  Global API Key. IDs unter Provider-Schlüsseln ohne Credential-Nomen (`HEROKU_APP_ID`,
+  `CIRCLE_SHA1`, `RAILWAY_PROJECT_ID`) sind keine Zugangsdaten. Ein Schlüssel ohne Providernamen in
+  einem Provider-Abschnitt (`heroku:\n  api_key: …`, Terraform `provider "cloudflare" { api_token
+  = … }`) bleibt bei den generischen Regeln. Drone CI, OpenShift, Defined Networking, Fastly und
+  SettleMint (Entity-Map `backlog: P06`) bleiben `baseline_only`.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
