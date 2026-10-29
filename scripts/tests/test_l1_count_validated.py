@@ -179,7 +179,8 @@ def test_checked_in_ark_count():
     # the SE organisationsnummer, the CA SIN, the TR T.C. Kimlik No and the ZA ID number, B-EU2 the AT social
     # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN, B-KR the
     # KR resident, foreigner and business registration numbers, B-ESIT the ES NIF, the ES NIE and the IT
-    # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs).
+    # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs), A13 the PL PESEL and REGON (the
+    # NIP is the PL VAT ID).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -250,8 +251,10 @@ def test_checked_in_ark_count():
         Unit("pii.es.nif", "es"),
         Unit("pii.es.nie", "es"),
         Unit("pii.it.fiscal_code", "it"),
+        Unit("pii.pl.pesel", "pl"),
+        Unit("pii.pl.regon", "pl"),
     }
-    assert len(counts.ark) == 69
+    assert len(counts.ark) == 71
     assert counts.m3_met is False
 
 
@@ -382,7 +385,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 69
+    assert payload["ark"]["count"] == 71
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -535,6 +538,15 @@ def test_cli_count_json_and_check(tmp_path):
     assert vat["pii.es.vat_id"]["sources"] == ["pii_vat_id_es: es_vat_id", "pii_vat_id_es_proximity: es_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
     assert vat["pii.pt.vat_id"]["sources"] == ["pii_vat_id_pt: pt_vat_id"]
+    # A13: PESEL and REGON are units of their own; the bare NIP rule reuses the B16 validator and counts
+    # with the PL VAT ID (no second unit).
+    pl = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.pl.pesel", "pii.pl.regon")
+    }
+    assert pl == {"pii.pl.pesel": ["pii_pesel_pl: pl_pesel"], "pii.pl.regon": ["pii_regon_pl: pl_regon"]}
+    assert vat["pii.pl.vat_id"]["sources"] == ["pii_vat_id_pl: pl_vat_id", "pii_vat_id_pl_proximity: pl_vat_id"]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]

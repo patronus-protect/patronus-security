@@ -2457,6 +2457,54 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_pesel_pl",
+    "de": "Die polnische Personenkennzahl lautet 01252230429.",
+    "en": "PESEL: 02070803628",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "PESEL-Nummer: 50052724039",
+        "Vorgang 50052724038 wurde abgeschlossen."
+      ],
+      "en": [
+        "PESEL: 02130803627",
+        "Reference 02070803628 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_regon_pl",
+    "de": "REGON-Nummer: 797289256",
+    "en": "The company's REGON number is 12345678512347.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "REGON-Nummer: 797289257",
+        "Vorgang 797289256 wurde abgeschlossen."
+      ],
+      "en": [
+        "REGON: 12345678612342",
+        "Reference 732065814 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_pl_proximity",
+    "de": "NIP-Nummer: 4106325383",
+    "en": "NIP: 5260250995",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NIP des Lieferanten lautet 2311045017.",
+        "en": "Our Polish tax identification number is 943-16-38-485."
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_bban_gb",
     "de": "Unsere Bankverbindung (BBAN) lautet ZFJR88590163492773.",
     "en": "We store the bank account number (BBAN) SYIL09843639680686 of the payee.",

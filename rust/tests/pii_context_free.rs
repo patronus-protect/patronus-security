@@ -83,8 +83,8 @@ const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
 /// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1),
 /// the SIREN (B-EU1), the T.C. Kimlik No (B-LUHN), the PT NIF and the IE PPSN
-/// (B-EU2).
-const CONTEXT_BOUND_LABELS: [&str; 8] = [
+/// (B-EU2), the PL PESEL and REGON (A13).
+const CONTEXT_BOUND_LABELS: [&str; 10] = [
     "NHS_NUMBER",
     "AU_ACN",
     "AU_TFN",
@@ -93,6 +93,8 @@ const CONTEXT_BOUND_LABELS: [&str; 8] = [
     "TR_NATIONAL_ID",
     "PT_NIF",
     "IE_PPSN",
+    "PL_PESEL",
+    "PL_REGON",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 5] = [
@@ -153,6 +155,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_vat_id_lv",
             "pii_vat_id_mt",
             "pii_vat_id_pl",
+            "pii_vat_id_pl_proximity",
             "pii_vat_id_pt",
             "pii_vat_id_ro",
             "pii_vat_id_se",
@@ -213,7 +216,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         };
         assert_eq!(pattern.strength, strength, "{}", pattern.name);
         assert!(!pattern.captured_value, "{}", pattern.name);
-        // The bare Partita IVA (B01) and CIF (B-ESIT), the old numeric document serial (F08) and the
+        // The bare Partita IVA (B01), CIF (B-ESIT) and NIP (A13), the old numeric document serial (F08) and the
         // LANR (B-DE1) are the unbound checksum rules that need a term; 11 bare
         // digits with a Luhn digit, 10 with a 7-3-1 digit or 9 with a mod-10 digit
         // prove too little alone. So does a regional national phone number (F01).
@@ -223,6 +226,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
                 "pii_phone_regional",
                 "pii_vat_id_it_proximity",
                 "pii_vat_id_es_proximity",
+                "pii_vat_id_pl_proximity",
                 "pii_passport_number_de_legacy",
                 "pii_identity_card_number_de_legacy",
                 "pii_physician_number_lanr_de_proximity",

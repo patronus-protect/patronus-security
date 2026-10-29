@@ -418,6 +418,7 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_vat_id_lv",
             "pii_vat_id_mt",
             "pii_vat_id_pl",
+            "pii_vat_id_pl_proximity",
             "pii_vat_id_pt",
             "pii_vat_id_ro",
             "pii_vat_id_se",
@@ -496,7 +497,9 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_nie_es",
             "pii_nie_es_context_free",
             "pii_fiscal_code_it",
-            "pii_fiscal_code_it_context_free"
+            "pii_fiscal_code_it_context_free",
+            "pii_pesel_pl",
+            "pii_regon_pl"
         ]
     );
 }
@@ -586,6 +589,8 @@ fn reference_scores_per_rule() {
         ("pii_nie_es_context_free", 0.55),
         ("pii_fiscal_code_it", 0.60),
         ("pii_fiscal_code_it_context_free", 0.55),
+        ("pii_pesel_pl", 0.60),
+        ("pii_regon_pl", 0.60),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

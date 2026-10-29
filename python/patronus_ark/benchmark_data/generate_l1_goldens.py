@@ -4135,6 +4135,89 @@ B_ESIT_CASES = [
 for _row in B_ESIT_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# A13: Polish PESEL (PL_PESEL, eleven digits with the birth date, the century in the month and a
+# weighted check digit 1-3-7-9 mod 10), REGON (PL_REGON, nine digits weighted mod 11 or fourteen
+# whose first nine are a REGON of their own) and the bare NIP without the `PL` prefix (VAT_ID_PL,
+# the B16 validator). `pii_pesel_pl` and `pii_regon_pl` report the value in every mode when a term
+# of the label stands near it or is its key; bare digits always need the term. The bare NIP needs
+# a VAT or NIP term or key and is balanced/recall only (`pii_vat_id_pl_proximity`). PL rows add
+# the Polish field names. Hard negatives: failed check digits, impossible dates, a fourteen-digit
+# REGON with a wrong first nine, values without a term and parts of longer values. Appended so
+# existing ids stay stable.
+A13_CASES = [
+    # ── PL PESEL ───────────────────────────────────────────────────────────
+    p("PL_PESEL", "en", "pii_pesel_pl", "PESEL: ", "02070803628"),
+    p("PL_PESEL", "en", "pii_pesel_pl", "Her PESEL number is ", "90110536890", ".", carrier="prose"),
+    p("PL_PESEL", "en", "pii_pesel_pl", '{"pesel": "', "88030387058", '"}', carrier="json"),
+    p("PL_PESEL", "en", "pii_pesel_pl", "name,pesel\nAnna Nowak,", "72052773904", "", carrier="csv", mode="balanced"),
+    p("PL_PESEL", "en", "pii_pesel_pl", "Polish national identification number: ", "05241690065", mode="recall"),
+    p("PL_PESEL", "de", "pii_pesel_pl", "PESEL-Nummer: ", "50052724038"),
+    p("PL_PESEL", "de", "pii_pesel_pl", "Die polnische Personenkennzahl lautet ", "01252230429", ".", carrier="prose"),
+    p("PL_PESEL", "de", "pii_pesel_pl", "| Name | PESEL |\n|---|---|\n| Jan Kowalski | ", "88082272643", " |", carrier="table"),
+    p("PL_PESEL", "de", "pii_pesel_pl", "Als PESEL ist ", "90100831864", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("PL_PESEL", "de", "pii_pesel_pl", "Polnische Identifikationsnummer: ", "05310456684", mode="recall"),
+    p("PL_PESEL", "pl", "pii_pesel_pl", "Numer PESEL: ", "88050729397"),
+    p("PL_PESEL", "pl", "pii_pesel_pl", "PESEL ", "90030370310", ""),
+    n("PL_PESEL", "en", "pii_pesel_pl", "PESEL: 02070803629", "check digit fails"),
+    n("PL_PESEL", "en", "pii_pesel_pl", "PESEL: 02130803627", "month 13"),
+    n("PL_PESEL", "en", "pii_pesel_pl", "Reference 02070803628 was archived.", "eleven bare digits without a PESEL term", carrier="prose", mode="balanced"),
+    n("PL_PESEL", "en", "pii_pesel_pl", "PESEL: 02070803628-1", "part of a longer value", mode="balanced"),
+    n("PL_PESEL", "en", "pii_pesel_pl", "90110536890", "eleven bare digits", mode="recall"),
+    n("PL_PESEL", "de", "pii_pesel_pl", "PESEL-Nummer: 50052724039", "check digit fails"),
+    n("PL_PESEL", "de", "pii_pesel_pl", "PESEL-Nummer: 50023004039", "30 February"),
+    n("PL_PESEL", "de", "pii_pesel_pl", "Vorgang 50052724038 wurde abgeschlossen.", "eleven bare digits without a PESEL term", carrier="prose", mode="balanced"),
+    n("PL_PESEL", "de", "pii_pesel_pl", "PESEL-Nummer: 50052724038-1", "part of a longer value", mode="balanced"),
+    n("PL_PESEL", "de", "pii_pesel_pl", "Neue Angabe: 01252230429", "eleven bare digits", mode="recall"),
+    n("PL_PESEL", "pl", "pii_pesel_pl", "Numer PESEL: 88050729398", "check digit fails"),
+    # ── PL REGON ───────────────────────────────────────────────────────────
+    p("PL_REGON", "en", "pii_regon_pl", "REGON: ", "123456785"),
+    p("PL_REGON", "en", "pii_regon_pl", "The company's REGON number is ", "732065814", ".", carrier="prose"),
+    p("PL_REGON", "en", "pii_regon_pl", '{"regon": "', "12345678512347", '"}', carrier="json"),
+    p("PL_REGON", "en", "pii_regon_pl", "company,regon\nPolmex Sp. z o.o.,", "926240204", "", carrier="csv", mode="balanced"),
+    p("PL_REGON", "en", "pii_regon_pl", "Polish statistical number: ", "95217292048588", mode="recall"),
+    p("PL_REGON", "de", "pii_regon_pl", "REGON-Nummer: ", "797289256"),
+    p("PL_REGON", "de", "pii_regon_pl", "Die REGON des Lieferanten lautet ", "14394440582149", ".", carrier="prose"),
+    p("PL_REGON", "de", "pii_regon_pl", "| Firma | REGON |\n|---|---|\n| Polmex | ", "144609442", " |", carrier="table"),
+    p("PL_REGON", "de", "pii_regon_pl", "Als REGON ist ", "536764277", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("PL_REGON", "de", "pii_regon_pl", "Polnische Statistiknummer: ", "30774240023989", mode="recall"),
+    p("PL_REGON", "pl", "pii_regon_pl", "Numer REGON: ", "215521652"),
+    p("PL_REGON", "pl", "pii_regon_pl", "REGON ", "43446023435254", ""),
+    n("PL_REGON", "en", "pii_regon_pl", "REGON: 123456786", "check digit fails"),
+    n("PL_REGON", "en", "pii_regon_pl", "REGON: 12345678612342", "fourteen digits whose first nine fail"),
+    n("PL_REGON", "en", "pii_regon_pl", "Reference 732065814 was archived.", "nine bare digits without a REGON term", carrier="prose", mode="balanced"),
+    n("PL_REGON", "en", "pii_regon_pl", "REGON: 000000000", "one repeated digit"),
+    n("PL_REGON", "en", "pii_regon_pl", "12345678512347", "fourteen bare digits", mode="recall"),
+    n("PL_REGON", "de", "pii_regon_pl", "REGON-Nummer: 797289257", "check digit fails"),
+    n("PL_REGON", "de", "pii_regon_pl", "REGON-Nummer: 14394440582148", "check digit of the fourteen fails"),
+    n("PL_REGON", "de", "pii_regon_pl", "Vorgang 797289256 wurde abgeschlossen.", "nine bare digits without a REGON term", carrier="prose", mode="balanced"),
+    n("PL_REGON", "de", "pii_regon_pl", "REGON-Nummer: 797289256-1", "part of a longer value", mode="balanced"),
+    n("PL_REGON", "de", "pii_regon_pl", "Neue Angabe: 144609442", "nine bare digits", mode="recall"),
+    n("PL_REGON", "pl", "pii_regon_pl", "Numer REGON: 215521653", "check digit fails"),
+    # ── PL NIP (VAT_ID_PL without the prefix) ──────────────────────────────
+    p("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: ", "5260250995", mode="balanced"),
+    p("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Our Polish tax identification number is ", "943-16-38-485", ".", carrier="prose", mode="balanced"),
+    p("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", '{"supplier": "Polmex", "nip": "', "2143864618", '"}', carrier="json", mode="balanced"),
+    p("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Polish VAT number: ", "984-055-15-28", mode="recall"),
+    p("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP ", "3233229145", "", mode="recall"),
+    p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: ", "4106325383", mode="balanced"),
+    p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Polnische Steuernummer (NIP): ", "497-305-06-10", mode="balanced"),
+    p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", '{"lieferant": "Polmex", "nip": "', "1343644803", '"}', carrier="json", mode="balanced"),
+    p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Die NIP des Lieferanten lautet ", "2311045017", ".", carrier="prose", mode="recall"),
+    p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Firma;NIP\nPolmex;", "4695147471", "", carrier="csv", mode="balanced"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 5260250996", "check digit fails", mode="balanced"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Reference 5260250995 was archived.", "ten bare digits without a VAT or NIP term", carrier="prose", mode="recall"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 5260250995-1", "part of a longer value", mode="balanced"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Invoice number 2143864618 is overdue.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 9840551520", "check digit fails", mode="recall"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 4106325384", "check digit fails", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Bitte 4106325383 übernehmen.", "ten bare digits without a VAT or NIP term", carrier="prose", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 4106325383-1", "part of a longer value", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Rechnungsnummer 1343644803 ist offen.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 497-305-06-11", "check digit fails", mode="recall"),
+]
+for _row in A13_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
