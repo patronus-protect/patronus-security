@@ -548,13 +548,13 @@ PII_CASES = {
         p("IBAN", "de", "pii_iban_generic", "| Bank | IBAN |\n|---|---|\n| Raiffeisen | ", "CH9300762011623852957", " |", carrier="table"),
         p("IBAN", "de", "pii_iban_de", "IBAN:", "DE02100500000024290661", "  BIC: siehe oben", tags=("ocr",)),
         p("IBAN", "de", "pii_iban_de", "IBAN: ", "DE02​3705​0299​0000​6847​12", "", tags=("obfuscated",)),
-        p("IBAN", "de", "pii_iban_generic", "IBAN: ", "AT61 1904 3002 3457 3201", "", gap=True),
+        p("IBAN", "de", "pii_iban_generic", "IBAN: ", "AT61 1904 3002 3457 3201", ""),
         p("IBAN", "en", "pii_iban_generic", "Please wire the deposit to ", "NL91ABNA0417164300", " by Friday.", carrier="prose", tags=("no_context",)),
         p("IBAN", "en", "pii_iban_generic", '{"beneficiary": "Acme BV", "iban": "', "FR1420041010050500013M02606", '"}', carrier="json"),
         p("IBAN", "en", "pii_iban_generic", "payee:\n  iban: ", "ES9121000418450200051332", "\n", carrier="yaml"),
         p("IBAN", "en", "pii_iban_de", "<account><iban>", "DE02700202700010108669", "</iban></account>", carrier="xml"),
         p("IBAN", "en", "pii_iban_generic", "IBAN ", "BE68539007547034", "  |  Ref. 2026/10", tags=("ocr",)),
-        p("IBAN", "en", "pii_iban_generic", "IBAN: ", "GB29 NWBK 6016 1331 9268 19", "", gap=True),
+        p("IBAN", "en", "pii_iban_generic", "IBAN: ", "GB29 NWBK 6016 1331 9268 19", ""),
         p("IBAN", "en", "pii_iban_de", "IBAN: ", "DE44 5001 0517\n5407 3249 31", "", tags=("ocr",)),
         n("IBAN", "de", "pii_iban_de", "IBAN: DE89 3704 0044 XXXX XXXX 00", "masked IBAN", tags=("obfuscated",)),
         n("IBAN", "de", "pii_iban_generic", "Artikelnummer AB12CDEFGHIJKLMN", "letters where check digits belong"),
@@ -4218,6 +4218,41 @@ A13_CASES = [
     n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "USt-IdNr.: 2143864618", "generic VAT term without a NIP term", mode="balanced"),
 ]
 for _row in A13_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# B-IBAN (T05, T21, F03): an IBAN needs a country of the SWIFT IBAN registry, exactly that
+# country's length and MOD-97; both IBAN rules read it compact or in blocks of four, letters
+# included, in upper or lower case. A grouped IBAN ends at its registry length, so a following
+# word or block of four is not part of it. SEPA creditor identifiers (`DE98ZZZ09999999999`) pass
+# MOD-97 by chance but have no IBAN length and stay negative in every mode.
+B_IBAN_CASES = [
+    p("IBAN", "en", "pii_iban_generic", "IBAN: ", "GB82 WEST 1234 5698 7654 32"),
+    p("IBAN", "en", "pii_iban_generic", "Please wire the deposit to ", "nl91 abna 0417 1643 00", " by Friday.", carrier="prose", tags=("no_context",)),
+    p("IBAN", "en", "pii_iban_generic", "Account: ", "mt84malt011000012345mtlcast001s"),
+    p("IBAN", "en", "pii_iban_generic", "IBAN ", "BE68 5390 0754 7034", " and BIC GEBABEBB", carrier="prose"),
+    p("IBAN", "en", "pii_iban_generic", '{"iban": "', "FR14 2004 1010 0505 0001 3M02 606", '"}', carrier="json"),
+    p("IBAN", "en", "pii_iban_generic", "payee:\n  iban: ", "no93 8601 1117 947", "\n", carrier="yaml", mode="balanced"),
+    p("IBAN", "en", "pii_iban_de", "IBAN: ", "de89 3704 0044 0532 0130 00"),
+    p("IBAN", "de", "pii_iban_generic", "IBAN (Österreich): ", "at61 1904 3002 3457 3201"),
+    p("IBAN", "de", "pii_iban_generic", "Bitte überweisen Sie auf ", "CH93 0076 2011 6238 5295 7", " bis Freitag.", carrier="prose", tags=("no_context",)),
+    p("IBAN", "de", "pii_iban_generic", "Konto ", "IT60 X054 2811 1010 0000 0123 456", " und Name", carrier="prose"),
+    p("IBAN", "de", "pii_iban_generic", "Name;IBAN\nRossi;", "es91 2100 0418 4502 0005 1332", "", carrier="csv"),
+    p("IBAN", "de", "pii_iban_de", "Kontoverbindung: ", "de02120300000000202051", mode="balanced"),
+    p("IBAN", "de", "pii_iban_generic", "| Bank | IBAN |\n|---|---|\n| Erste | ", "AT61 1904 3002 3457 3201", " |", carrier="table", mode="recall"),
+    n("IBAN", "en", "pii_iban_generic", "Creditor identifier: DE30ZZZ56545348553", "SEPA creditor ID passes MOD-97 but has no IBAN length"),
+    n("IBAN", "en", "pii_iban_generic", "SEPA direct debit from creditor ID DE98ZZZ00001140336 on 1 Nov.", "SEPA creditor ID in prose", carrier="prose", mode="balanced"),
+    n("IBAN", "en", "pii_iban_generic", "IBAN: gb82 west 1234 5698 7654 33", "lowercase IBAN whose MOD-97 fails"),
+    n("IBAN", "en", "pii_iban_generic", "Account PH12 3456 7890 1234 5678 90", "country without IBAN", mode="recall"),
+    n("IBAN", "en", "pii_iban_generic", "Ref GB82WEST12345698765432XYZ", "IBAN glued to more characters"),
+    n("IBAN", "en", "pii_iban_generic", "IBAN: GB82 WEST 1234 5698 7654 3", "one character short of the GB length"),
+    n("IBAN", "de", "pii_iban_generic", "Gläubiger-Identifikationsnummer: DE30ZZZ56545348553", "SEPA creditor ID passes MOD-97 but has no IBAN length"),
+    n("IBAN", "de", "pii_iban_generic", "SEPA-Lastschrift, Gläubiger-ID DE13ZZZ00001013632, Mandatsreferenz M-2026-17", "SEPA creditor ID in prose", carrier="prose", mode="balanced"),
+    n("IBAN", "de", "pii_iban_generic", "Gläubiger-ID: DE57ZZZ00001061146", "SEPA creditor ID", mode="recall"),
+    n("IBAN", "de", "pii_iban_generic", "IBAN: at61 1904 3002 3457 3202", "lowercase IBAN whose MOD-97 fails"),
+    n("IBAN", "de", "pii_iban_generic", "Commit de89a7f3c2b1e4d5f6a7b8c9 ist gemergt.", "hex hash with a country prefix", carrier="prose"),
+    n("IBAN", "de", "pii_iban_generic", "IBAN: Gb82 West 1234 5698 7654 32", "mixed case is no printed IBAN"),
+]
+for _row in B_IBAN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
