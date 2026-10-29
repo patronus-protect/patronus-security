@@ -6,6 +6,29 @@ SHA-256 `87496da37aef…`, Paket 0.1.10, Release-Build, Modus `strict`). Presidi
 angesehen. Die Tabellen ab [Anhang](#anhang-tabellen) erzeugt `scoreboard.py report` (Befehle unter
 [Reproduktion](#reproduktion)); Fehler-Buckets und Kandidaten sind Handarbeit für die nächste TRIAGE.
 
+## Aktueller Stand: Scoreboard 2026-10-29
+
+Gemessen auf `main` `9cb48cc`, Dev-Split, Meilensteine auf `balanced`; Snapshot
+[`research/scoreboard/2026-10-29.json`](../../scoreboard/2026-10-29.json). Die Abschnitte darunter sind die
+Historie (E11 am 2026-10-19, B-EVAL am 2026-10-21).
+
+| Familie | ARK balanced P/R/F1 | F1 am 2026-10-24 | Presidio tuned P/R/F1 | HN-FP ARK / tuned |
+|---|---|---:|---|---|
+| neutral | 71.2 / 63.8 / **67.3** | 63.2 | 35.3 / 47.4 / 40.5 | 0 / 0 |
+| presidio_favored | 99.6 / 53.7 / 69.7 | 54.3 | 92.1 / 58.2 / **71.4** | 0 / 0 |
+| ark_authored ¹ | 99.7 / 68.4 / **81.1** | – | 54.0 / 31.3 / 39.6 | 2 / 215 |
+
+¹ berichtet, entscheidet keinen Meilenstein.
+
+- **M1 (EN, vs. tuned):** nicht erreicht. neutral 9/9 (2026-10-24: 6/9), presidio_favored 14/19 (5/12);
+  darunter liegen `entity.passport_number`, `pii.iban`, `pii.ip_address`, `pii.uk.national_insurance_number`,
+  `pii.us.social_security_number`.
+- **M2 (DE, Macro-F1):** gegen `default` erreicht, gegen `tuned` nicht: neutral 58.0 ≥ 33.6, presidio_favored
+  59.6 < 85.7 (2026-10-24: 54.1 / 24.7).
+- **M3:** 69 prüfziffervalidierte Einheiten gegen Presidio 35, Ziel 70 (2026-10-24: 35).
+- **M4:** nicht neu gemessen (2026-10-24: 100 KiB p95 145.9 ms Bindings).
+- **Immer:** HN-FP auf den entscheidenden Familien 0 (Presidio 0).
+
 ## Datenlage
 
 | Familie | Korpus | Dev-Zeilen | Gold (L1) | Manifest (`.ready`) |

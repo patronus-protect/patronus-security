@@ -1,0 +1,3738 @@
+{
+  "schema": "ark-l1-scoreboard-snapshot-v1",
+  "description": "Milestone measurement of the L1 PII and DLP programmes (research/l1-pii/README.md, research/dlp/README.md). Read by scripts/generate_docs.py for docs/reference/l1-capabilities.md; the newest file in research/scoreboard/ wins. F1, precision and recall in percent. Milestones, latency and notes are maintained by hand; per-entity and per-group results (pii.entities, dlp.entities, dlp.groups) come from scripts/scoreboard_snapshot.py from-reports (see scripts/l1_presidio/README.md).",
+  "date": "2026-10-29",
+  "commit": "9cb48cc",
+  "splits": "dev",
+  "pii": {
+    "baseline": "Presidio tuned",
+    "decision_mode": "balanced",
+    "overall_f1": {
+      "neutral": 67.3,
+      "presidio_favored": 69.7
+    },
+    "hard_negative_fp": {
+      "ark": 0,
+      "presidio": 0
+    },
+    "milestones": [
+      {
+        "id": "M1",
+        "name": "EN parity",
+        "value": "neutral 9/9, presidio_favored 14/19 shared ids with F1 >= Presidio tuned",
+        "target": "every shared id F1 >= Presidio tuned",
+        "met": false
+      },
+      {
+        "id": "M2",
+        "name": "DE/EU macro-F1",
+        "value": "neutral 58.0, presidio_favored 59.6",
+        "target": "neutral >= 33.6 (Presidio tuned + 15 pp), presidio_favored >= 85.7",
+        "met": false,
+        "note": "neutral met, presidio_favored not met; met against Presidio default, targets 36.7 / 7.3"
+      },
+      {
+        "id": "M3",
+        "name": "Checksum-validated breadth",
+        "value": "ARK 69, Presidio 35 checksum-validated units",
+        "target": "70 (2x Presidio 2.2.364)",
+        "met": false
+      },
+      {
+        "id": "M4",
+        "name": "Latency",
+        "value": "100 KiB p95 145.9 ms (bindings), 150.0 ms (native)",
+        "target": "100 KiB p95 <= 10 ms",
+        "met": false,
+        "note": "value from 2026-10-24, not re-measured; decision 2026-10-24: latency work last"
+      },
+      {
+        "id": "Always",
+        "name": "Hard negatives",
+        "value": "FP 0 (Presidio 0)",
+        "target": "FP <= Presidio",
+        "met": true
+      }
+    ],
+    "entities": {
+      "entity.driver_license_number": {
+        "neutral": {
+          "gold": 120,
+          "f1": {
+            "ark-balanced": 37.1,
+            "ark-strict": 37.1,
+            "presidio-default": 0.8,
+            "presidio-tuned": 6.2
+          }
+        },
+        "presidio_favored": {
+          "gold": 14,
+          "f1": {
+            "ark-balanced": 83.3,
+            "ark-strict": 52.6,
+            "presidio-default": 15.2,
+            "presidio-tuned": 78.3
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.7,
+            "presidio-tuned": 47.3
+          }
+        }
+      },
+      "entity.passport_number": {
+        "neutral": {
+          "gold": 98,
+          "f1": {
+            "ark-balanced": 54.4,
+            "ark-strict": 54.8,
+            "presidio-default": 18.7,
+            "presidio-tuned": 38.4
+          }
+        },
+        "presidio_favored": {
+          "gold": 29,
+          "f1": {
+            "ark-balanced": 34.3,
+            "ark-strict": 0.0,
+            "presidio-default": 60.5,
+            "presidio-tuned": 51.3
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 93.3,
+            "ark-strict": 86.4,
+            "presidio-default": 4.7,
+            "presidio-tuned": 52.6
+          }
+        }
+      },
+      "pii.applicant_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.at.social_security_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.at.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.au.abn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 18,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.au.acn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.au.medicare": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 19,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.au.tfn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 20,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.be.national_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.be.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.bg.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ca.sin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 57.1,
+            "ark-strict": 33.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ch.ahv_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.ch.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.credit_card.cvv": {
+        "neutral": {
+          "gold": 47,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 27,
+          "f1": {
+            "ark-balanced": 68.3,
+            "ark-strict": 68.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.credit_card.expiry": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 26,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.credit_card.pan": {
+        "neutral": {
+          "gold": 135,
+          "f1": {
+            "ark-balanced": 47.9,
+            "ark-strict": 47.9,
+            "presidio-default": 35.6,
+            "presidio-tuned": 35.6
+          }
+        },
+        "presidio_favored": {
+          "gold": 49,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 91.1,
+            "presidio-tuned": 91.1
+          }
+        },
+        "ark_authored": {
+          "gold": 19,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 92.7,
+            "presidio-default": 79.2,
+            "presidio-tuned": 79.2
+          }
+        }
+      },
+      "pii.crypto_wallet": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 21,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        }
+      },
+      "pii.customer_id": {
+        "neutral": {
+          "gold": 90,
+          "f1": {
+            "ark-balanced": 60.9,
+            "ark-strict": 60.9,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 93,
+          "f1": {
+            "ark-balanced": 99.5,
+            "ark-strict": 99.5,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.cy.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.cz.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.date_of_birth": {
+        "neutral": {
+          "gold": 82,
+          "f1": {
+            "ark-balanced": 67.0,
+            "ark-strict": 67.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 144,
+          "f1": {
+            "ark-balanced": 99.7,
+            "ark-strict": 99.7,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.de.bsnr": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 57.1,
+            "ark-strict": 57.1,
+            "presidio-default": 0.0,
+            "presidio-tuned": 57.1
+          }
+        },
+        "ark_authored": {
+          "gold": 50,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 65.0
+          }
+        }
+      },
+      "pii.de.commercial_register": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 56,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 88.0
+          }
+        }
+      },
+      "pii.de.health_insurance_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 55,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 96.2,
+            "presidio-default": 0.0,
+            "presidio-tuned": 86.6
+          }
+        }
+      },
+      "pii.de.lanr": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 50.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 53,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 97.1,
+            "presidio-default": 0.0,
+            "presidio-tuned": 81.6
+          }
+        }
+      },
+      "pii.de.postal_code": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 231,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 82.8
+          }
+        }
+      },
+      "pii.de.social_security_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 25,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 81.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 27.6
+          }
+        }
+      },
+      "pii.de.tax_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 27,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 94.1,
+            "presidio-default": 0.0,
+            "presidio-tuned": 29.3
+          }
+        }
+      },
+      "pii.de.tax_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 2,
+          "f1": {
+            "ark-balanced": 66.7,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 55,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 95.2,
+            "presidio-default": 0.0,
+            "presidio-tuned": 84.5
+          }
+        }
+      },
+      "pii.de.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 75.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 87,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 65.1
+          }
+        }
+      },
+      "pii.dk.cpr": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.dk.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ee.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.email": {
+        "neutral": {
+          "gold": 417,
+          "f1": {
+            "ark-balanced": 68.8,
+            "ark-strict": 68.8,
+            "presidio-default": 67.9,
+            "presidio-tuned": 67.9
+          }
+        },
+        "presidio_favored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 144,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        }
+      },
+      "pii.employee_id": {
+        "neutral": {
+          "gold": 75,
+          "f1": {
+            "ark-balanced": 88.2,
+            "ark-strict": 88.2,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 27,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.es.nie": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 88.9,
+            "ark-strict": 33.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 26,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 84.4,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.es.nif": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 80.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 26,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.es.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.fi.personal_identity_code": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 14,
+          "f1": {
+            "ark-balanced": 96.3,
+            "ark-strict": 25.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 28,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.fi.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.financial_account_number": {
+        "neutral": {
+          "gold": 126,
+          "f1": {
+            "ark-balanced": 49.2,
+            "ark-strict": 47.8,
+            "presidio-default": 5.0,
+            "presidio-tuned": 12.5
+          }
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 57.1,
+            "ark-strict": 0.0,
+            "presidio-default": 66.7,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 20,
+          "f1": {
+            "ark-balanced": 78.9,
+            "ark-strict": 78.9,
+            "presidio-default": 4.9,
+            "presidio-tuned": 37.5
+          }
+        }
+      },
+      "pii.fr.nir": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.fr.siren": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.fr.siret": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.fr.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.gr.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.hr.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.hu.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.iban": {
+        "neutral": {
+          "gold": 70,
+          "f1": {
+            "ark-balanced": 80.6,
+            "ark-strict": 80.6,
+            "presidio-default": 81.6,
+            "presidio-tuned": 81.6
+          }
+        },
+        "presidio_favored": {
+          "gold": 66,
+          "f1": {
+            "ark-balanced": 63.9,
+            "ark-strict": 63.9,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 81,
+          "f1": {
+            "ark-balanced": 68.3,
+            "ark-strict": 68.3,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        }
+      },
+      "pii.identity_card_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 11,
+          "f1": {
+            "ark-balanced": 42.9,
+            "ark-strict": 16.7,
+            "presidio-default": 0.0,
+            "presidio-tuned": 84.2
+          }
+        },
+        "ark_authored": {
+          "gold": 31,
+          "f1": {
+            "ark-balanced": 78.4,
+            "ark-strict": 55.8,
+            "presidio-default": 0.0,
+            "presidio-tuned": 38.5
+          }
+        }
+      },
+      "pii.ie.ppsn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.ie.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.in.aadhaar": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 4,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.in.gstin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.in.pan": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 19,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.in.voter_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ip_address": {
+        "neutral": {
+          "gold": 88,
+          "f1": {
+            "ark-balanced": 96.7,
+            "ark-strict": 96.7,
+            "presidio-default": 94.6,
+            "presidio-tuned": 94.6
+          }
+        },
+        "presidio_favored": {
+          "gold": 41,
+          "f1": {
+            "ark-balanced": 86.1,
+            "ark-strict": 86.1,
+            "presidio-default": 100.0,
+            "presidio-tuned": 96.2
+          }
+        },
+        "ark_authored": {
+          "gold": 84,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        }
+      },
+      "pii.it.fiscal_code": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 50.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.it.vat_code": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 1,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 28,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.kr.brn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 2,
+          "f1": {
+            "ark-balanced": 66.7,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 27,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.kr.frn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 80.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.kr.rrn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 57.1,
+            "ark-strict": 33.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.license_plate": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 21,
+          "f1": {
+            "ark-balanced": 9.1,
+            "ark-strict": 9.1,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 19,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 69.0
+          }
+        }
+      },
+      "pii.lt.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.lu.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.lv.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.mac_address": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 6,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        }
+      },
+      "pii.mt.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ng.nin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 28,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.nl.bsn": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.nl.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.no.fodselsnummer": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.no.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.patient_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 92.7,
+            "ark-strict": 92.7,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ph.tin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ph.umid": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 8,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.phone": {
+        "neutral": {
+          "gold": 504,
+          "f1": {
+            "ark-balanced": 82.1,
+            "ark-strict": 82.0,
+            "presidio-default": 36.7,
+            "presidio-tuned": 36.7
+          }
+        },
+        "presidio_favored": {
+          "gold": 46,
+          "f1": {
+            "ark-balanced": 91.8,
+            "ark-strict": 80.5,
+            "presidio-default": 65.1,
+            "presidio-tuned": 65.1
+          }
+        },
+        "ark_authored": {
+          "gold": 85,
+          "f1": {
+            "ark-balanced": 98.2,
+            "ark-strict": 83.6,
+            "presidio-default": 26.0,
+            "presidio-tuned": 26.0
+          }
+        }
+      },
+      "pii.pl.pesel": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.pl.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.pt.nif": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 0
+        }
+      },
+      "pii.pt.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.ro.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.se.organisationsnummer": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 50.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 20,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.se.personnummer": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 2,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 66.7,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 19,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.se.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.sg.nric_fin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 50.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 21,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.sg.uen": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 4,
+          "f1": {
+            "ark-balanced": 85.7,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.si.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.sk.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.student_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 30,
+          "f1": {
+            "ark-balanced": 98.3,
+            "ark-strict": 98.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.swift_bic": {
+        "neutral": {
+          "gold": 79,
+          "f1": {
+            "ark-balanced": 38.5,
+            "ark-strict": 38.5,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 84,
+          "f1": {
+            "ark-balanced": 36.9,
+            "ark-strict": 36.9,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.th.tnin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 6,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.tr.national_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 4,
+          "f1": {
+            "ark-balanced": 66.7,
+            "ark-strict": 66.7,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 21,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.uk.national_insurance_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 66.7,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 95.2,
+            "presidio-default": 0.0,
+            "presidio-tuned": 50.0
+          }
+        }
+      },
+      "pii.uk.nhs_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 53,
+          "f1": {
+            "ark-balanced": 96.1,
+            "ark-strict": 96.1,
+            "presidio-default": 83.5,
+            "presidio-tuned": 83.0
+          }
+        }
+      },
+      "pii.uk.postcode": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 4,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 249,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.uk.vat_id": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 16,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.url": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 21,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 77.8,
+            "presidio-tuned": 77.8
+          }
+        },
+        "ark_authored": {
+          "gold": 20,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 8.2,
+            "presidio-tuned": 8.2
+          }
+        }
+      },
+      "pii.us.itin": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 2,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 100.0,
+            "presidio-tuned": 100.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 83.0,
+            "presidio-tuned": 58.1
+          }
+        }
+      },
+      "pii.us.mbi": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 24,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.us.medical_license": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 41.1,
+            "presidio-tuned": 32.3
+          }
+        }
+      },
+      "pii.us.npi": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 5,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 22,
+          "f1": {
+            "ark-balanced": 0.0,
+            "ark-strict": 0.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.us.social_security_number": {
+        "neutral": {
+          "gold": 44,
+          "f1": {
+            "ark-balanced": 68.5,
+            "ark-strict": 50.8,
+            "presidio-default": 21.4,
+            "presidio-tuned": 66.7
+          }
+        },
+        "presidio_favored": {
+          "gold": 15,
+          "f1": {
+            "ark-balanced": 75.0,
+            "ark-strict": 57.1,
+            "presidio-default": 100.0,
+            "presidio-tuned": 88.9
+          }
+        },
+        "ark_authored": {
+          "gold": 29,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 23.4,
+            "presidio-tuned": 55.6
+          }
+        }
+      },
+      "pii.username": {
+        "neutral": {
+          "gold": 26,
+          "f1": {
+            "ark-balanced": 10.3,
+            "ark-strict": 10.3,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "presidio_favored": {
+          "gold": 0
+        },
+        "ark_authored": {
+          "gold": 84,
+          "f1": {
+            "ark-balanced": 98.2,
+            "ark-strict": 98.2,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      },
+      "pii.za.id_number": {
+        "neutral": {
+          "gold": 0
+        },
+        "presidio_favored": {
+          "gold": 3,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 50.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        },
+        "ark_authored": {
+          "gold": 23,
+          "f1": {
+            "ark-balanced": 100.0,
+            "ark-strict": 100.0,
+            "presidio-default": 0.0,
+            "presidio-tuned": 0.0
+          }
+        }
+      }
+    },
+    "latency": {
+      "size": "100 KiB",
+      "p95_ms": {
+        "bindings": 145.9,
+        "native": 150.0,
+        "native_de": 155.0,
+        "native_en": 38.0
+      },
+      "target_p95_ms": 10.0,
+      "note": "value from 2026-10-24, not re-measured; decision 2026-10-24: latency work last"
+    },
+    "families": [
+      "neutral",
+      "presidio_favored",
+      "ark_authored"
+    ],
+    "engines": [
+      "ark-balanced",
+      "ark-strict",
+      "presidio-default",
+      "presidio-tuned"
+    ]
+  },
+  "dlp": {
+    "baselines": [
+      "gitleaks",
+      "TruffleHog",
+      "detect-secrets"
+    ],
+    "decision_profile": "default",
+    "overall": {
+      "f1": 88.6,
+      "precision": 99.3,
+      "recall": 80.0
+    },
+    "milestones": [
+      {
+        "id": "M1",
+        "name": "Provider parity",
+        "value": "recall >= max(gitleaks, TruffleHog) on all 20 shared entities with gold; FP/MB benign code 0.053 (gitleaks 0.21)",
+        "target": "recall >= max(gitleaks, TruffleHog) at FP/MB <= gitleaks",
+        "met": true
+      },
+      {
+        "id": "M2",
+        "name": "Generic secrets",
+        "value": "CREDENTIAL F1 96.8 (gitleaks 23.7)",
+        "target": "F1 >= 43.7 (best baseline + 20 pp)",
+        "met": true
+      },
+      {
+        "id": "M3",
+        "name": "Breadth",
+        "value": "62/206 gitleaks default rules mapped (30.1 %); 72 secret rules / 60 entities; 7 offline structure checks; 15 classes without baseline counterpart",
+        "target": ">= 90 % gitleaks rules mapped; >= 150 secret formats; >= 30 offline structure checks; >= 20 classes without baseline counterpart",
+        "met": false
+      },
+      {
+        "id": "M4",
+        "name": "Latency",
+        "value": "100 KiB p95 11.7 ms (under runner load); throughput 8.16 MiB/s (gitleaks 4.16 MiB/s)",
+        "target": "throughput >= gitleaks and 100 KiB p95 <= ~15 ms",
+        "met": true,
+        "note": "measured on the runner VPS under load; gitleaks throughput from 2026-10-24, not re-measured; rule decided 2026-10-24"
+      }
+    ],
+    "latency": {
+      "size": "100 KiB",
+      "p95_ms": 11.7,
+      "throughput_mib_s": 8.16,
+      "gitleaks_throughput_mib_s": 4.16,
+      "target": "throughput >= gitleaks and 100 KiB p95 <= ~15 ms"
+    },
+    "tools": [
+      "ark",
+      "gitleaks",
+      "trufflehog",
+      "detect-secrets"
+    ],
+    "opt_in_profile": "extended",
+    "groups": {
+      "API_KEY": {
+        "gold": 320,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 46.5,
+            "precision": 38.3,
+            "recall": 59.1
+          },
+          "trufflehog": {
+            "f1": 99.5,
+            "precision": 99.7,
+            "recall": 99.4
+          },
+          "detect-secrets": {
+            "f1": 12.6,
+            "precision": 12.7,
+            "recall": 12.5
+          }
+        }
+      },
+      "CLOUD_KEY": {
+        "gold": 200,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 49.1,
+            "precision": 66.1,
+            "recall": 39.0
+          },
+          "trufflehog": {
+            "f1": 32.6,
+            "precision": 100.0,
+            "recall": 19.5
+          },
+          "detect-secrets": {
+            "f1": 32.9,
+            "precision": 33.3,
+            "recall": 32.5
+          }
+        }
+      },
+      "PAYMENT_KEY": {
+        "gold": 80,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 39.2,
+            "precision": 33.3,
+            "recall": 47.5
+          },
+          "trufflehog": {
+            "f1": 28.0,
+            "precision": 100.0,
+            "recall": 16.2
+          },
+          "detect-secrets": {
+            "f1": 21.8,
+            "precision": 33.3,
+            "recall": 16.2
+          }
+        }
+      },
+      "SECRET_TOKEN": {
+        "gold": 360,
+        "default": {
+          "ark": {
+            "f1": 99.2,
+            "precision": 100.0,
+            "recall": 98.3
+          },
+          "gitleaks": {
+            "f1": 47.6,
+            "precision": 37.1,
+            "recall": 66.4
+          },
+          "trufflehog": {
+            "f1": 71.7,
+            "precision": 87.3,
+            "recall": 60.8
+          },
+          "detect-secrets": {
+            "f1": 45.5,
+            "precision": 38.5,
+            "recall": 55.6
+          }
+        }
+      },
+      "CREDENTIAL": {
+        "gold": 320,
+        "default": {
+          "ark": {
+            "f1": 96.8,
+            "precision": 100.0,
+            "recall": 93.8
+          },
+          "gitleaks": {
+            "f1": 23.7,
+            "precision": 20.2,
+            "recall": 28.7
+          },
+          "trufflehog": {
+            "f1": 11.4,
+            "precision": 10.5,
+            "recall": 12.5
+          },
+          "detect-secrets": {
+            "f1": 11.9,
+            "precision": 7.1,
+            "recall": 37.8
+          }
+        }
+      },
+      "PASSWORD_HASH": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 91.9,
+            "precision": 100.0,
+            "recall": 85.0
+          },
+          "gitleaks": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "trufflehog": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "detect-secrets": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        }
+      },
+      "PRIVATE_KEY": {
+        "gold": 37,
+        "default": {
+          "ark": {
+            "f1": 88.1,
+            "precision": 78.7,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 46.8,
+            "precision": 33.3,
+            "recall": 78.4
+          },
+          "trufflehog": {
+            "f1": 45.8,
+            "precision": 100.0,
+            "recall": 29.7
+          },
+          "detect-secrets": {
+            "f1": 56.1,
+            "precision": 38.9,
+            "recall": 100.0
+          }
+        }
+      },
+      "CRYPTO_KEY": {
+        "gold": 80,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "trufflehog": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "detect-secrets": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        }
+      },
+      "dlp.de.vat_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.de.commercial_register_number": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "dlp.de.facility_number_bsnr": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 28.6,
+            "precision": 33.3,
+            "recall": 25.0
+          }
+        }
+      },
+      "dlp.record.case_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.record.contract_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.record.claim_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.record.order_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.record.invoice_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.project_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.organization_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "dlp.internal.business_metric": {
+        "gold": 0,
+        "profile": "extended"
+      },
+      "dlp.content.source_code": {
+        "gold": 214,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 99.1,
+            "precision": 98.6,
+            "recall": 99.5
+          }
+        }
+      },
+      "dlp.content.sql": {
+        "gold": 10,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 90.9,
+            "precision": 83.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "dlp.content.database_dump": {
+        "gold": 0,
+        "profile": "extended"
+      },
+      "dlp.content.system_log": {
+        "gold": 456,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        }
+      }
+    },
+    "entities": {
+      "llm.anthropic.api_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 49.4,
+            "precision": 33.3,
+            "recall": 95.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "llm.openai.api_key": {
+        "gold": 120,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 58.7,
+            "precision": 42.6,
+            "recall": 94.2
+          },
+          "trufflehog": {
+            "f1": 98.7,
+            "precision": 99.2,
+            "recall": 98.3
+          },
+          "detect-secrets": {
+            "f1": 18.4,
+            "precision": 12.7,
+            "recall": 33.3
+          }
+        }
+      },
+      "llm.huggingface.token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 49.4,
+            "precision": 33.3,
+            "recall": 95.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "llm.xai.api_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "llm.groq.api_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "llm.replicate.api_token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "cloud.aws.access_key_id": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 66.7,
+            "precision": 50.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 34.0,
+            "precision": 20.5,
+            "recall": 100.0
+          }
+        }
+      },
+      "cloud.aws.secret_access_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 21.3,
+            "precision": 12.8,
+            "recall": 62.5
+          }
+        }
+      },
+      "cloud.gcp.api_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 97.4,
+            "precision": 100.0,
+            "recall": 95.0
+          }
+        }
+      },
+      "cloud.gcp.oauth_access_token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 98.7,
+            "precision": 100.0,
+            "recall": 97.5
+          }
+        }
+      },
+      "cloud.gcp.oauth_client_secret": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "vcs.github.token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 66.7,
+            "precision": 50.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 66.7,
+            "precision": 50.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "vcs.github.fine_grained_pat": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 66.7,
+            "precision": 50.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 66.7,
+            "precision": 50.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        }
+      },
+      "vcs.gitlab.pat": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "vcs.gitlab.token": {
+        "gold": 0
+      },
+      "vcs.gitlab.oauth_app_secret": {
+        "gold": 0
+      },
+      "registry.npm.access_token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 49.4,
+            "precision": 33.3,
+            "recall": 95.0
+          },
+          "trufflehog": {
+            "f1": 97.6,
+            "precision": 95.2,
+            "recall": 100.0
+          }
+        }
+      },
+      "registry.pypi.upload_token": {
+        "gold": 0
+      },
+      "registry.rubygems.api_token": {
+        "gold": 0
+      },
+      "registry.jfrog.artifactory": {
+        "gold": 0
+      },
+      "devops.terraform_cloud.token": {
+        "gold": 0
+      },
+      "devops.pulumi.api_token": {
+        "gold": 0
+      },
+      "devops.vault.token": {
+        "gold": 0
+      },
+      "devops.doppler.api_token": {
+        "gold": 0
+      },
+      "vcs.bitbucket.client_secret": {
+        "gold": 0
+      },
+      "vcs.azure_devops.pat": {
+        "gold": 0
+      },
+      "ci.circleci.api_token": {
+        "gold": 0
+      },
+      "ci.travisci.access_token": {
+        "gold": 0
+      },
+      "hosting.vercel.access_token": {
+        "gold": 0
+      },
+      "hosting.netlify.access_token": {
+        "gold": 0
+      },
+      "hosting.flyio.access_token": {
+        "gold": 0
+      },
+      "hosting.heroku.api_key": {
+        "gold": 0
+      },
+      "hosting.railway.api_token": {
+        "gold": 0
+      },
+      "hosting.cloudflare.api_key": {
+        "gold": 0
+      },
+      "hosting.digitalocean.token": {
+        "gold": 0
+      },
+      "payment.stripe.secret_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 49.4,
+            "precision": 33.3,
+            "recall": 95.0
+          },
+          "trufflehog": {
+            "f1": 49.1,
+            "precision": 100.0,
+            "recall": 32.5
+          },
+          "detect-secrets": {
+            "f1": 32.9,
+            "precision": 33.3,
+            "recall": 32.5
+          }
+        }
+      },
+      "comm.slack.token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 72.7,
+            "precision": 57.1,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "comm.discord.bot_token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "key.pem_private_key": {
+        "gold": 37,
+        "default": {
+          "ark": {
+            "f1": 88.1,
+            "precision": 78.7,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 46.8,
+            "precision": 33.3,
+            "recall": 78.4
+          },
+          "trufflehog": {
+            "f1": 45.8,
+            "precision": 100.0,
+            "recall": 29.7
+          },
+          "detect-secrets": {
+            "f1": 56.1,
+            "precision": 38.9,
+            "recall": 100.0
+          }
+        }
+      },
+      "token.jwt": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 64.4,
+            "precision": 100.0,
+            "recall": 47.5
+          },
+          "detect-secrets": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "credential.secret_assignment": {
+        "gold": 80,
+        "default": {
+          "ark": {
+            "f1": 90.1,
+            "precision": 95.8,
+            "recall": 85.0
+          },
+          "gitleaks": {
+            "f1": 17.9,
+            "precision": 10.5,
+            "recall": 60.0
+          },
+          "detect-secrets": {
+            "f1": 7.4,
+            "precision": 3.9,
+            "recall": 60.0
+          }
+        }
+      },
+      "credential.password_assignment": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 90.4,
+            "precision": 100.0,
+            "recall": 82.5
+          },
+          "detect-secrets": {
+            "f1": 3.3,
+            "precision": 1.7,
+            "recall": 52.5
+          }
+        }
+      },
+      "credential.http_bearer": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "gitleaks": {
+            "f1": 4.8,
+            "precision": 50.0,
+            "recall": 2.5
+          }
+        }
+      },
+      "credential.http_basic_auth": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "credential.url_userinfo": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          },
+          "trufflehog": {
+            "f1": 19.0,
+            "precision": 10.5,
+            "recall": 100.0
+          },
+          "detect-secrets": {
+            "f1": 44.0,
+            "precision": 28.2,
+            "recall": 100.0
+          }
+        }
+      },
+      "credential.connection_string": {
+        "gold": 0
+      },
+      "credential.ldap_bind_password": {
+        "gold": 0
+      },
+      "credential.signed_url_signature": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 97.4,
+            "precision": 100.0,
+            "recall": 95.0
+          }
+        }
+      },
+      "credential.session_cookie": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "credential.csrf_token": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 91.9,
+            "precision": 100.0,
+            "recall": 85.0
+          }
+        }
+      },
+      "credential.password_hash": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 91.9,
+            "precision": 100.0,
+            "recall": 85.0
+          }
+        }
+      },
+      "content.source_code": {
+        "gold": 214,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 99.1,
+            "precision": 98.6,
+            "recall": 99.5
+          }
+        }
+      },
+      "content.database_dump": {
+        "gold": 0,
+        "profile": "extended"
+      },
+      "content.system_log": {
+        "gold": 456,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        }
+      },
+      "payment.stripe.webhook_secret": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "registry.dockerhub.access_token": {
+        "gold": 0
+      },
+      "registry.cratesio.api_token": {
+        "gold": 0
+      },
+      "registry.packagist.token": {
+        "gold": 0
+      },
+      "hosting.render.api_key": {
+        "gold": 0
+      },
+      "crypto.ethereum.private_key": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "crypto.bitcoin.wif": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 100.0,
+            "precision": 100.0,
+            "recall": 100.0
+          }
+        }
+      },
+      "credential.url_userinfo_token": {
+        "gold": 0
+      },
+      "credential.url_query_secret": {
+        "gold": 40,
+        "default": {
+          "ark": {
+            "f1": 97.4,
+            "precision": 100.0,
+            "recall": 95.0
+          }
+        }
+      },
+      "identifier.de.vat_id": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.de.commercial_register": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 50.0,
+            "precision": 33.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "identifier.de.bsnr": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 28.6,
+            "precision": 33.3,
+            "recall": 25.0
+          }
+        }
+      },
+      "identifier.record.case": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.record.contract": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.record.claim": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.record.order": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.record.invoice": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.project": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "identifier.organization": {
+        "gold": 32,
+        "profile": "extended",
+        "extended": {
+          "ark": {
+            "f1": 18.2,
+            "precision": 33.3,
+            "recall": 12.5
+          }
+        }
+      },
+      "content.business_metric": {
+        "gold": 0,
+        "profile": "extended"
+      },
+      "content.sql": {
+        "gold": 10,
+        "profile": "extended",
+        "level": "document",
+        "extended": {
+          "ark": {
+            "f1": 90.9,
+            "precision": 83.3,
+            "recall": 100.0
+          }
+        }
+      },
+      "vcs.gitlab.session_cookie": {
+        "gold": 0
+      },
+      "comm.slack.app_config_token": {
+        "gold": 0
+      },
+      "llm.cohere.api_key": {
+        "gold": 0
+      },
+      "llm.perplexity.api_key": {
+        "gold": 0
+      },
+      "llm.privateai.api_key": {
+        "gold": 0
+      },
+      "cloud.aws.bedrock_api_key": {
+        "gold": 0
+      },
+      "cloud.alibaba.access_key": {
+        "gold": 0
+      },
+      "cloud.azure.entra_client_secret": {
+        "gold": 0
+      },
+      "cloud.azure.storage_account_key": {
+        "gold": 0
+      },
+      "cloud.gcp.service_account_key": {
+        "gold": 0
+      },
+      "cloud.ibm.credentials": {
+        "gold": 0
+      },
+      "cloud.yandex.credentials": {
+        "gold": 0
+      },
+      "cloud.scalingo.api_token": {
+        "gold": 0
+      },
+      "registry.clojars.api_token": {
+        "gold": 0
+      },
+      "devops.prefect.api_token": {
+        "gold": 0
+      },
+      "devops.infracost.api_token": {
+        "gold": 0
+      },
+      "devops.octopus_deploy.api_key": {
+        "gold": 0
+      },
+      "devops.harness.api_key": {
+        "gold": 0
+      },
+      "devops.snyk.api_token": {
+        "gold": 0
+      },
+      "devops.sonar.api_token": {
+        "gold": 0
+      },
+      "devops.codecov.access_token": {
+        "gold": 0
+      },
+      "devops.sourcegraph.access_token": {
+        "gold": 0
+      },
+      "ci.droneci.access_token": {
+        "gold": 0
+      },
+      "hosting.openshift.user_token": {
+        "gold": 0
+      },
+      "hosting.defined_networking.api_token": {
+        "gold": 0
+      },
+      "hosting.fastly.api_token": {
+        "gold": 0
+      },
+      "hosting.settlemint.access_token": {
+        "gold": 0
+      },
+      "observability.datadog.access_token": {
+        "gold": 0
+      },
+      "observability.newrelic.key": {
+        "gold": 0
+      },
+      "observability.sentry.token": {
+        "gold": 0
+      },
+      "observability.grafana.token": {
+        "gold": 0
+      },
+      "observability.dynatrace.api_token": {
+        "gold": 0
+      },
+      "observability.sumologic.access_token": {
+        "gold": 0
+      },
+      "comm.webhook_url": {
+        "gold": 0
+      },
+      "comm.discord.api_credentials": {
+        "gold": 0
+      },
+      "comm.telegram.bot_token": {
+        "gold": 0
+      },
+      "comm.twilio.api_key": {
+        "gold": 0
+      },
+      "comm.sendgrid.api_key": {
+        "gold": 0
+      },
+      "comm.brevo.api_key": {
+        "gold": 0
+      },
+      "comm.mailgun.key": {
+        "gold": 0
+      },
+      "comm.mailchimp.api_key": {
+        "gold": 0
+      },
+      "comm.messagebird.api_token": {
+        "gold": 0
+      },
+      "comm.mattermost.access_token": {
+        "gold": 0
+      },
+      "comm.sendbird.access_token": {
+        "gold": 0
+      },
+      "comm.gitter.access_token": {
+        "gold": 0
+      },
+      "payment.square.access_token": {
+        "gold": 0
+      },
+      "payment.shopify.token": {
+        "gold": 0
+      },
+      "payment.coinbase.access_token": {
+        "gold": 0
+      },
+      "payment.plaid.secret": {
+        "gold": 0
+      },
+      "payment.gocardless.api_token": {
+        "gold": 0
+      },
+      "payment.flutterwave.secret": {
+        "gold": 0
+      },
+      "payment.finicity.secret": {
+        "gold": 0
+      },
+      "payment.crypto_exchange.secret": {
+        "gold": 0
+      },
+      "payment.freemius.secret_key": {
+        "gold": 0
+      },
+      "commerce.shipping.api_token": {
+        "gold": 0
+      },
+      "saas.atlassian.api_token": {
+        "gold": 0
+      },
+      "saas.notion.api_token": {
+        "gold": 0
+      },
+      "saas.linear.secret": {
+        "gold": 0
+      },
+      "saas.airtable.token": {
+        "gold": 0
+      },
+      "saas.asana.client_secret": {
+        "gold": 0
+      },
+      "saas.hubspot.api_key": {
+        "gold": 0
+      },
+      "saas.zendesk.secret_key": {
+        "gold": 0
+      },
+      "saas.intercom.api_key": {
+        "gold": 0
+      },
+      "saas.postman.api_token": {
+        "gold": 0
+      },
+      "saas.mapbox.secret_token": {
+        "gold": 0
+      },
+      "saas.launchdarkly.access_token": {
+        "gold": 0
+      },
+      "saas.typeform.api_token": {
+        "gold": 0
+      },
+      "saas.contentful.delivery_token": {
+        "gold": 0
+      },
+      "saas.dropbox.api_token": {
+        "gold": 0
+      },
+      "saas.adobe.client_secret": {
+        "gold": 0
+      },
+      "saas.facebook.secret": {
+        "gold": 0
+      },
+      "saas.twitter.secret": {
+        "gold": 0
+      },
+      "saas.linkedin.client_secret": {
+        "gold": 0
+      },
+      "saas.looker.client_secret": {
+        "gold": 0
+      },
+      "saas.twitch.api_token": {
+        "gold": 0
+      },
+      "saas.etsy.access_token": {
+        "gold": 0
+      },
+      "saas.freshbooks.access_token": {
+        "gold": 0
+      },
+      "saas.squarespace.access_token": {
+        "gold": 0
+      },
+      "saas.misc.api_token": {
+        "gold": 0
+      },
+      "saas.sidekiq.credentials": {
+        "gold": 0
+      },
+      "identity.okta.access_token": {
+        "gold": 0
+      },
+      "identity.authress.access_key": {
+        "gold": 0
+      },
+      "identity.onepassword.secret": {
+        "gold": 0
+      },
+      "key.age_secret_key": {
+        "gold": 0
+      },
+      "data.databricks.api_token": {
+        "gold": 0
+      },
+      "data.planetscale.secret": {
+        "gold": 0
+      },
+      "data.confluent.secret": {
+        "gold": 0
+      },
+      "data.algolia.api_key": {
+        "gold": 0
+      },
+      "data.clickhouse.api_secret": {
+        "gold": 0
+      },
+      "data.cloudant.credentials": {
+        "gold": 0
+      },
+      "credential.cli_password": {
+        "gold": 0
+      },
+      "credential.file.nuget_config": {
+        "gold": 0
+      },
+      "credential.kubernetes_secret": {
+        "gold": 0
+      },
+      "credential.high_entropy_string": {
+        "gold": 0
+      },
+      "key.pkcs12_file": {
+        "gold": 0
+      },
+      "key.symmetric_key": {
+        "gold": 0
+      }
+    }
+  },
+  "schema_version": "1.1"
+}
