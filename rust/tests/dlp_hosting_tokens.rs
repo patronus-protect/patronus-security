@@ -285,8 +285,9 @@ fn generated_prefix_tokens_are_reported_whole_in_de_and_en_carriers() {
                 let value = generated(gen, seed);
                 for carrier in CARRIERS {
                     let text = carrier.replace("{}", &value);
-                    assert!(reports(&text, group, &value), "{gen}: {text:?}");
-                    let rule = entry(&text, rule_id).unwrap_or_else(|| panic!("{gen}: {text:?}"));
+                    assert!(reports(&text, group, &value), "{gen}/{seed}: {carrier:?}");
+                    let rule = entry(&text, rule_id)
+                        .unwrap_or_else(|| panic!("{gen}/{seed}: {carrier:?}"));
                     assert_eq!(rule["subtype"], *subtype, "{rule_id}");
                 }
             }
@@ -294,7 +295,7 @@ fn generated_prefix_tokens_are_reported_whole_in_de_and_en_carriers() {
         // A sentence may end right after a token.
         let value = generated(gens[0], 7);
         let text = format!("Das Render-Token lautet {value}.");
-        assert!(entry(&text, rule_id).is_some(), "{text:?}");
+        assert!(entry(&text, rule_id).is_some(), "{rule_id}");
     }
 }
 
@@ -306,15 +307,16 @@ fn generated_values_are_reported_under_their_provider_key() {
                 let value = generated(gen, seed);
                 for carrier in KEYED_CARRIERS {
                     let text = keyed(carrier, key, &value);
-                    assert!(reports(&text, group, &value), "{gen}: {text:?}");
-                    let rule = entry(&text, rule_id).unwrap_or_else(|| panic!("{gen}: {text:?}"));
+                    assert!(reports(&text, group, &value), "{gen}/{seed}: {carrier:?}");
+                    let rule = entry(&text, rule_id)
+                        .unwrap_or_else(|| panic!("{gen}/{seed}: {carrier:?}"));
                     assert_eq!(rule["subtype"], *subtype, "{rule_id}");
                 }
             }
         }
     }
     // Labels, headers and other spellings of the key.
-    for (rule_id, gen, text) in [
+    for (rule_id, gen, template) in [
         (
             "dlp_heroku_legacy_api_key",
             "heroku_api_key",
@@ -351,8 +353,8 @@ fn generated_values_are_reported_under_their_provider_key() {
             "\"railwayApiToken\" => '{}',",
         ),
     ] {
-        let text = text.replace("{}", &generated(gen, 3));
-        assert!(entry(&text, rule_id).is_some(), "{text:?}");
+        let text = template.replace("{}", &generated(gen, 3));
+        assert!(entry(&text, rule_id).is_some(), "{rule_id}: {template:?}");
     }
 }
 
@@ -396,7 +398,7 @@ fn provider_keys_without_a_credential_noun_hold_no_secret() {
         ("dlp_heroku_legacy_api_key", format!("API_KEY={uuid}")),
         ("dlp_travis_token", format!("TOKEN={}", &alnum[..22])),
     ] {
-        assert!(entry(&text, rule_id).is_none(), "{text:?}");
+        assert!(entry(&text, rule_id).is_none(), "{rule_id}");
     }
 }
 
@@ -504,7 +506,7 @@ fn values_of_another_length_or_alphabet_are_no_token() {
         for (rule_id, value) in cases {
             for carrier in &CARRIERS[..3] {
                 let text = carrier.replace("{}", &value);
-                assert!(entry(&text, rule_id).is_none(), "{rule_id}: {text:?}");
+                assert!(entry(&text, rule_id).is_none(), "{rule_id}: {carrier:?}");
             }
         }
     }
@@ -545,7 +547,7 @@ fn single_case_bodies_are_no_token() {
             ),
         ] {
             let text = CARRIERS[0].replace("{}", &value);
-            assert!(entry(&text, rule_id).is_none(), "{rule_id}: {text:?}");
+            assert!(entry(&text, rule_id).is_none(), "{rule_id}");
         }
     }
 }
@@ -559,7 +561,7 @@ fn render_api_keys_need_render_context() {
             format!("# Render deploy hook\n\n\n\n\nAPI_KEY={value}\n"),
             format!("Der Schlüssel {value} gehört zum Render-Konto.\n"),
         ] {
-            assert!(entry(&text, "dlp_render_api_key").is_some(), "{text:?}");
+            assert!(entry(&text, "dlp_render_api_key").is_some(), "seed {seed}");
         }
         for text in [
             format!("API_KEY={value}\n"),
@@ -567,7 +569,7 @@ fn render_api_keys_need_render_context() {
             // A Render term six lines above is out of reach.
             format!("# Render\n\n\n\n\n\nAPI_KEY={value}\n"),
         ] {
-            assert!(entry(&text, "dlp_render_api_key").is_none(), "{text:?}");
+            assert!(entry(&text, "dlp_render_api_key").is_none(), "seed {seed}");
         }
     }
 }
@@ -640,7 +642,7 @@ fn example_and_test_fills_are_silent() {
             ) else {
                 continue;
             };
-            assert!(scan(&text).evidence_spans.is_empty(), "{gen}: {text:?}");
+            assert!(scan(&text).evidence_spans.is_empty(), "{gen}/{fill}");
         }
     }
 }
