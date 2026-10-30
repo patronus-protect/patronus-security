@@ -171,10 +171,10 @@ fn registry_length_per_country() {
             Some(length),
             "{country}"
         );
-        assert!(validators::mod97(iban), "{iban}");
-        assert!(validators::iban(iban), "{iban}");
-        assert!(validators::iban(&grouped(iban)), "{iban}");
-        assert!(validators::iban(&iban.to_ascii_lowercase()), "{iban}");
+        assert!(validators::mod97(iban), "{country}");
+        assert!(validators::iban(iban), "{country}");
+        assert!(validators::iban(&grouped(iban)), "{country}");
+        assert!(validators::iban(&iban.to_ascii_lowercase()), "{country}");
     }
     for country in ["PH", "BD", "AR", "CO", "TH", "US", "ZZ", "XX"] {
         assert_eq!(
@@ -193,24 +193,24 @@ fn length_other_than_the_registry_fails_even_when_mod97_holds() {
         for bban in [&bban[..bban.len() - 1], &format!("{bban}7")] {
             let candidate = with_check_digits(country, bban);
             assert_ne!(candidate.len(), length);
-            assert!(validators::mod97(&candidate), "{candidate}");
-            assert!(!validators::iban(&candidate), "{candidate}");
+            assert!(validators::mod97(&candidate), "{country}");
+            assert!(!validators::iban(&candidate), "{country}");
         }
     }
 }
 
 #[test]
 fn invalid_check_digits_and_shapes_fail() {
-    for (_, _, iban) in REGISTRY {
+    for (country, _, iban) in REGISTRY {
         let wrong = format!(
             "{}{:02}{}",
             &iban[..2],
             (iban[2..4].parse::<u32>().unwrap() + 1) % 100,
             &iban[4..]
         );
-        assert!(!validators::iban(&wrong), "{wrong}");
+        assert!(!validators::iban(&wrong), "{country}");
     }
-    for value in [
+    for (number, value) in [
         "",
         "DE",
         "DE89",
@@ -218,16 +218,19 @@ fn invalid_check_digits_and_shapes_fail() {
         "DE89-3704-0044-0532-0130-00",
         "DE89370400440532013001",
         "PH12345678901234567890",
-    ] {
-        assert!(!validators::iban(value), "{value}");
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(!validators::iban(value), "shape #{number}");
     }
 }
 
 #[test]
 fn creditor_identifiers_are_no_iban() {
-    for creditor in CREDITOR_IDS {
-        assert!(validators::mod97(creditor), "{creditor}");
-        assert!(!validators::iban(creditor), "{creditor}");
+    for (number, creditor) in CREDITOR_IDS.iter().enumerate() {
+        assert!(validators::mod97(creditor), "creditor ID #{number}");
+        assert!(!validators::iban(creditor), "creditor ID #{number}");
         for text in [
             format!("Gläubiger-Identifikationsnummer: {creditor}"),
             format!("SEPA-Lastschrift, Gläubiger-ID {creditor}, Mandatsreferenz M-2026-17"),
@@ -235,7 +238,10 @@ fn creditor_identifiers_are_no_iban() {
             format!("SEPA direct debit from creditor ID {creditor} on 1 Nov."),
         ] {
             for mode in MODES {
-                assert!(ibans(&text, mode).is_empty(), "{mode:?}: {text}");
+                assert!(
+                    ibans(&text, mode).is_empty(),
+                    "{mode:?}: creditor ID #{number}"
+                );
             }
         }
     }
@@ -243,7 +249,7 @@ fn creditor_identifiers_are_no_iban() {
 
 #[test]
 fn every_registry_country_is_found_compact_grouped_and_lowercase() {
-    for (_, _, iban) in REGISTRY {
+    for (country, _, iban) in REGISTRY {
         for value in [
             iban.to_owned(),
             grouped(iban),
@@ -255,7 +261,7 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
                 assert_eq!(
                     ibans(&field, mode),
                     std::slice::from_ref(&value),
-                    "{mode:?}: {field}"
+                    "{mode:?}: {country}"
                 );
             }
             for prose in [
@@ -265,7 +271,7 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
                 assert_eq!(
                     ibans(&prose, PiiMode::Strict),
                     std::slice::from_ref(&value),
-                    "{prose}"
+                    "{country}"
                 );
             }
         }
@@ -288,7 +294,29 @@ fn a_grouped_iban_ends_at_its_registry_length() {
         ("NO93 8601 1117 947 kr", "NO93 8601 1117 947"),
     ] {
         for mode in MODES {
-            assert_eq!(ibans(text, mode), [value], "{mode:?}: {text}");
+            assert_eq!(ibans(text, mode), [value], "{mode:?}");
+        }
+    }
+}
+
+#[test]
+fn ibans_side_by_side_are_found_each() {
+    for (text, values) in [
+        (
+            "IBAN BE68539007547034 BE68539007547034",
+            ["BE68539007547034", "BE68539007547034"],
+        ),
+        (
+            "Konten: BE68 5390 0754 7034 AT61 1904 3002 3457 3201",
+            ["BE68 5390 0754 7034", "AT61 1904 3002 3457 3201"],
+        ),
+        (
+            "Accounts be68 5390 0754 7034 be68 5390 0754 7034 for rent",
+            ["be68 5390 0754 7034", "be68 5390 0754 7034"],
+        ),
+    ] {
+        for mode in MODES {
+            assert_eq!(ibans(text, mode), values, "{mode:?}");
         }
     }
 }
