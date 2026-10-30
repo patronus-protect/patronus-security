@@ -421,6 +421,42 @@ fn password_variables_keep_the_password_rule_on_the_same_span() {
     }
 }
 
+/// Q-DLP-PW: a chosen password whose letter runs, dots and `~` read like a
+/// member access (`Name.Abc~…`, `a.Bcdefg.hij42`) is a value of the password
+/// rule, so it keeps the password span over `dlp_env_var_secret`, and alone
+/// (TOML, HTTP header, code constant) it is still reported.
+#[test]
+fn dotted_passwords_keep_the_password_rule() {
+    for gen in ["dotted_tilde_password", "dotted_digit_password"] {
+        assert_resolved(
+            "# .env (copied from .env.example)\nWORKER_QUEUE=reports\nDB_PASSWORD=<<secret:0>>\n",
+            gen,
+            6801,
+            "CREDENTIAL",
+            "dlp_password_assignment",
+            "dlp_env_var_secret",
+        );
+        for (template, seed) in [
+            ("[auth]\ndb_password = \"<<secret:0>>\"\n", 6802),
+            ("Accept: application/json\nDb-Password: <<secret:0>>\n\n", 6803),
+            ("const DB_KENNWORT: &str = \"<<secret:0>>\";\n", 6804),
+            ("lager:\n  datenbank:\n    passwort: <<secret:0>>\n", 6805),
+        ] {
+            let (text, range) = fill(template, gen, seed);
+            let result = scan(&text);
+            let found = rule_matches(&result)
+                .into_iter()
+                .any(|(rule, start, end, suppressed)| {
+                    rule == "dlp_password_assignment"
+                        && start == range.start
+                        && end == range.end
+                        && suppressed.is_none()
+                });
+            assert!(found, "{gen} {template}: {:?}", rule_matches(&result));
+        }
+    }
+}
+
 /// T15: API keys, tokens and client secrets under a variable name have no
 /// password subtype and stay with `dlp_env_var_secret`; the generic
 /// assignment on the same span gives way to it by registry order as before.

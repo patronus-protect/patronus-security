@@ -364,6 +364,8 @@
     "xai_api_key": "8f2208b1e99dc07c78658bc6",
     "yandex_api_key": "6f739e514a771f9aec1e5350",
     "yandex_api_key_short": "f6c56df0b24c213f4c4865e1",
-    "yandex_static_access_key_secret": "69c70a6eb7fcd0a6854d60b5"
+    "yandex_static_access_key_secret": "69c70a6eb7fcd0a6854d60b5",
+    "dotted_tilde_password": "9071f81cf8584e296b9c94fc",
+    "dotted_digit_password": "0143158f9743145a7aa4bc96"
   }
 }

@@ -11845,6 +11845,117 @@ DLP_GPROSE_CASES = {
 for _label, _rows in DLP_GPROSE_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# Q-DLP-PW: a chosen password whose letter runs, dots and `~` read like a member access
+# (`Name.Abc~…`, `a.Bcdefg.hij42`) is a value of `dlp_password_assignment`; only a member access
+# that code can end (end of value, `;`, `,`, `)`, an operator) is code. Hard negatives: member
+# access chains, PHP property chains, environment references and documented example values.
+DLP_Q_DLP_PW_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# .env Versand-Worker (aus .env.example kopiert)\nVERSAND_QUEUE=belege\nVERSAND_DB_PASSWORT=<<secret:0>>\nSENTRY_ENVIRONMENT=staging\n",
+            "dotted_tilde_password", 6801, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[abgleich]\nbasis_url = \"https://api.example.de/v2\"\ndb_passwort = \"<<secret:0>>\"\n",
+            "dotted_digit_password", 6802, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "lager:\n  datenbank:\n    host: db.lager.intern\n    passwort: <<secret:0>>\n",
+            "dotted_tilde_password", 6803, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "// Zugang zum Import-Endpunkt\nconst DB_KENNWORT: &str = \"<<secret:0>>\";\n",
+            "dotted_digit_password", 6804, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "lager.datenbank.url=jdbc:postgresql://db.lager.intern/lager\nlager.datenbank.passwort=<<secret:0>>\n",
+            "dotted_tilde_password", 6805, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# .env for the report worker (copied from .env.example)\nWORKER_QUEUE=reports\nDB_PASSWORD=<<secret:0>>\nSENTRY_ENVIRONMENT=staging\n",
+            "dotted_tilde_password", 6806, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[auth]\ndb_password = \"<<secret:0>>\"\n",
+            "dotted_digit_password", 6807, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "POST /v2/exports HTTP/1.1\nAccept: application/json\nDb-Password: <<secret:0>>\n\n",
+            "dotted_tilde_password", 6808, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "$ export SMTP_PASSWORD=<<secret:0>>\n$ ./bin/send-digest\n",
+            "dotted_digit_password", 6809, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "2026-10-30T09:12:44Z DEBUG connect host=db.internal user=report password=<<secret:0>>\n",
+            "dotted_tilde_password", 6810, carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "passwort = konto.zugang.passwort;\n",
+            "member access chain under a password key", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const kennwort = this.formular.kennwort.value;\n",
+            "member access chain in JavaScript", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "$passwort = $anfrage->eingabe->passwort;\n",
+            "PHP property chain under a password key", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "lager:\n  passwort: ${LAGER_DB_PASSWORT}\n",
+            "environment reference under a password key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Beispiel aus der Doku\npasswort: beispiel.Passwort~\n",
+            "documented example value with a member-access shape", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "password = settings.database.password\n",
+            "member access chain under a password key", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "if (password.length > 0) { submit(user.password); }\n",
+            "member access in a condition", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "$password = $request->input->password;\n",
+            "PHP property chain under a password key", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "DB_PASSWORD=${DB_PASSWORD}\n",
+            "environment reference under a password variable", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# documented sample\npassword: example.Password~\n",
+            "documented example value with a member-access shape", carrier="yaml",
+        ),
+    ],
+}
+for _label, _rows in DLP_Q_DLP_PW_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
