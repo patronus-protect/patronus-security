@@ -56,6 +56,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   their prefilter keywords; 40 benign-code documents of 100 KiB with the two rules gated on vs. off:
   p50 8.0 vs. 7.8 ms, p95 10.9 vs. 11.9 ms (same build, run noise, no measurable change).
   PIN/TAN/PUK and Wi-Fi keys (G07) are not part of this change.
+  - **Detection change** (every mode): a value right after a noun is left to the assignment rules
+    only when one of them reads that noun (`Passwort`, `Kennwort`, `password`, `passwd`, `secret`,
+    `token`); after `passphrase`, `Passwörter`, `Kennwörter`, `passwords` (`passphrase:` and the
+    value below) `dlp_prose_password` reports it instead of no rule (Codex review on #220).
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,

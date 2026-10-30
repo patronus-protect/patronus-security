@@ -102,6 +102,29 @@ fn password_handed_over_in_chats_tickets_and_mails() {
     }
 }
 
+/// A value right after a noun the assignment rules do not know
+/// (`passphrase`, plurals such as `Passwörter`) stays with the prose rule
+/// (Codex review on #220); after `Passwort` it stays with the assignment rule.
+#[test]
+fn value_right_after_a_noun_without_an_assignment_rule_is_reported() {
+    for noun in [
+        "passphrase",
+        "Passphrase",
+        "Passwörter",
+        "Kennwörter",
+        "passwords",
+        "passwds",
+    ] {
+        for separator in [":\n", ": "] {
+            let text = format!("Hallo,\n\n{noun}{separator}Krbpqtz3658*\n");
+            assert_reported(&text, "dlp_prose_password", "Krbpqtz3658*");
+        }
+    }
+    for text in ["Passwort:\nKrbpqtz3658*\n", "password: Krbpqtz3658*\n"] {
+        assert_reported(text, "dlp_password_assignment", "Krbpqtz3658*");
+    }
+}
+
 #[test]
 fn secret_and_token_handed_over_in_chats_tickets_and_mails() {
     let cases = [

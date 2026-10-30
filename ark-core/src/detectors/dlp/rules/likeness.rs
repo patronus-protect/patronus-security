@@ -690,7 +690,8 @@ fn numbered_identifier(value: &str) -> bool {
 
 /// G-PROSE: whether the text from a credential noun at `key_start` to the
 /// value hands that value over in prose. The assignment rules own a value
-/// right after the noun (`Passwort: …`, `password is …`); a hash, checksum
+/// right after one of their nouns, `assigned` (`Passwort: …`, `password is …`;
+/// not `passphrase:` or `Passwörter:`, which they do not read); a hash, checksum
 /// or fingerprint noun, or one of `other_nouns`, between them names another
 /// value (`Passwort-Hash`, `Zugangsdaten (Client-Secret)` for a password);
 /// and a value under a field label of its own on a later line
@@ -699,15 +700,21 @@ fn is_prose_handover(
     text: &str,
     key_start: usize,
     value: &Range<usize>,
+    assigned: &[&str],
     other_nouns: &[&str],
 ) -> bool {
     let between = &text[key_start..value.start];
     let after_noun = between.trim_start_matches(|c: char| c.is_alphanumeric());
+    let noun = &between[..between.len() - after_noun.len()];
     let separator = after_noun.trim_matches(|c: char| c.is_whitespace() || matches!(c, '"' | '\''));
     // `Token (Base58): …` qualifies the noun of a field label.
     let qualified =
         separator.starts_with('(') && separator.ends_with("):") && !separator.contains('\n');
-    if qualified || matches!(separator, "" | ":" | "=" | "=>" | "is" | "ist" | "lautet") {
+    if assigned
+        .iter()
+        .any(|known| noun.eq_ignore_ascii_case(known))
+        && (qualified || matches!(separator, "" | ":" | "=" | "=>" | "is" | "ist" | "lautet"))
+    {
         return false;
     }
     let lower = between.to_lowercase();
@@ -737,14 +744,22 @@ fn is_prose_handover(
 }
 
 /// G-PROSE: [`is_prose_handover`] for a password noun; a secret or token
-/// noun after it names the value (`Kennwort (Client-Secret)`).
+/// noun after it names the value (`Kennwort (Client-Secret)`). The nouns of
+/// `dlp_password_assignment` are its own.
 pub fn is_prose_password_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
-    is_prose_handover(text, key_start, &value, &["secret", "token", "api"])
+    is_prose_handover(
+        text,
+        key_start,
+        &value,
+        &["password", "passwort", "passwd", "kennwort"],
+        &["secret", "token", "api"],
+    )
 }
 
-/// G-PROSE: [`is_prose_handover`] for a secret or token noun.
+/// G-PROSE: [`is_prose_handover`] for a secret or token noun; both are
+/// nouns of `dlp_generic_credential_assignment`.
 pub fn is_prose_secret_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
-    is_prose_handover(text, key_start, &value, &[])
+    is_prose_handover(text, key_start, &value, &["secret", "token"], &[])
 }
 
 /// F-GEN2 (T08): whether the value at `range` of `text`, which
@@ -1933,6 +1948,9 @@ mod tests {
             "password for the job:\n\nKrbpqtz3658*",
             "Passwort): Krbpqtz3658*",
             "Zugangsdaten für das Testsystem: pruefer / Krbpqtz3658*",
+            // No assignment rule reads these nouns.
+            "passphrase:\nKrbpqtz3658*",
+            "Passwörter: Krbpqtz3658*",
         ] {
             assert!(check(text, value, is_prose_password_key), "{text}");
         }
