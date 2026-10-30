@@ -275,6 +275,18 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   belegbare Längenangabe bleiben die präfixierten Honeycomb-Ingest-Keys ohne eigene Regel (unter
   einem Honeycomb-Schlüssel greifen die generischen Regeln); Sumo Logic (Entity-Map
   `backlog: P07`) bleibt `baseline_only`.
+  Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
+  (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
+  Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am
+  Zeilenende oder allein bis zu zwei Zeilen weiter („Wie lautet das Datenbank-Passwort?“ und die
+  Antwort, „here is the client secret:“ und der Wert darunter); `Zugangsdaten`/`credentials` nur
+  als `benutzer / passwort`. Der Wert muss gewählt oder ausgestellt aussehen
+  (`likeness::is_prose_value`: Zeichenklassen wie ein Listeneintrag, ein Buchstabe, kein Datum,
+  keine Mail-Adresse, kein nummerierter Bezeichner, reine Buchstaben nur mit zufälligem
+  Groß-/Kleinwechsel). Ein Wert direkt nach dem Nomen bleibt bei den Zuweisungsregeln; ein Hash-
+  oder anderes Wert-Nomen dazwischen („Passwort-Hash“, „Kennwort (Client-Secret)“) und ein eigenes
+  Feld-Label auf einer späteren Zeile („Fundstelle: …“) verwerfen ihn. PIN/TAN/PUK und WLAN-Schlüssel
+  (G07) sind noch offen.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).

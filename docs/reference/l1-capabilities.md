@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 91 | 23 |
-| Regex rules | 152 | 111 (+5 relationship rules) |
+| Regex rules | 152 | 113 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 71 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 105 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -297,7 +297,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 35 | 28 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
-| `CREDENTIAL` | generic_credential | on | 10 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
+| `CREDENTIAL` | generic_credential | on | 12 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
 | `CRYPTO_KEY` | key_material | on | 2 | 2 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
@@ -375,8 +375,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
 | `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | format | on | gitleaks: `private-key`; TruffleHog: `PrivateKey`; detect-secrets: `PrivateKeyDetector` |
 | `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | format | on | gitleaks: `jwt`, `jwt-base64`; TruffleHog: `JWT`; detect-secrets: `JwtTokenDetector` |
-| `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment` | none | on | gitleaks: `generic-api-key`; detect-secrets: `KeywordDetector` |
-| `credential.password_assignment` | shared | `CREDENTIAL` | `dlp_password_assignment` | none | on | detect-secrets: `KeywordDetector` |
+| `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment`, `dlp_prose_secret` | none | on | gitleaks: `generic-api-key`; detect-secrets: `KeywordDetector` |
+| `credential.password_assignment` | shared | `CREDENTIAL` | `dlp_password_assignment`, `dlp_prose_password` | none | on | detect-secrets: `KeywordDetector` |
 | `credential.http_bearer` | shared | `SECRET_TOKEN` | `dlp_bearer_token` | format | on | gitleaks: `curl-auth-header` |
 | `credential.http_basic_auth` | shared | `CREDENTIAL` | `dlp_basic_auth` | structure | on | – |
 | `credential.url_userinfo` | shared | `CREDENTIAL` | `dlp_url_userinfo_password` | none | on | TruffleHog: `URI`, `Postgres`, `MongoDB`, `Redis`, `FTP`, `RabbitMQ`, `JDBC`; detect-secrets: `BasicAuthDetector` |
