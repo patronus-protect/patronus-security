@@ -503,13 +503,13 @@ NL `paspoortnummer`, `reisdocumentnummer`) meldet `pii_passport_number_field` in
 neun Großbuchstaben und Ziffern mit mindestens fünf Ziffern: bis zu drei führende Buchstaben und dann
 Ziffern (`X45929398`, `AAA482913`, `621475562`) oder die französische Form `07RY12580`
 (`validators::passport_number_field`). Ein Buchstabe und genau sechs Ziffern (`A482913`, Holdout-HN-FP
-des Laufs 20261022T171514Z) ist keine Passform; ein Wert in deutscher Passform (Serie `CFGHJK`, ICAO-
-Alphabet) muss die ICAO-9303-Prüfziffer bestehen; eine wiederholte Ziffer und sieben aufsteigende
+des Laufs 20261022T171514Z) ist keine Passform; Werte in deutscher Dokumentform (Passserie `CFGHJK` im ICAO-
+Alphabet, gültige Ausweisnummer) bleiben bei den deutschen Regeln; eine wiederholte Ziffer und sieben aufsteigende
 Ziffern (`12345678`, `D12345675`) sind Platzhalter. Mit einem Dokumentbegriff in der Nähe oder als
 Schlüssel, in jedem Modus: der US-Pass in Buchstabenform, ein Buchstabe und acht Ziffern
 (`pii_passport_number_us`; neun Ziffern meldet `pii_passport_number_uk`), Pass und Ausweis AT/CH, ein
 Buchstabe und sieben Ziffern (`pii_passport_number_at_ch`, `pii_identity_card_number_at_ch`), die
-italienische Carta d'identità (CIE `CA48213EF` oder Papierform `AY4417825`,
+italienische Carta d'identità (CIE `CA48213EF`; die Papierform hat die Form des Zwei-Buchstaben-Passes,
 `pii_identity_card_number_it`, Lexikon `pii.identity_card` um IT-Begriffe erweitert) und der spanische
 Pasaporte, drei Buchstaben und sechs Ziffern (`pii_passport_number_es`). Die IT-Patente bleibt bei F15.
 

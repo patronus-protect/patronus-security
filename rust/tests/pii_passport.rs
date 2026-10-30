@@ -4,8 +4,8 @@
 //!
 //! `pii_passport_number_field` reports six to nine letters and digits, at least five
 //! digits, right after an explicit passport field name (EN/DE/ES/FR/IT/NL) in every
-//! mode. Format only: one letter and exactly six digits is no passport form, a value
-//! in German passport form must pass its ICAO 9303 check digit, one repeated digit and
+//! mode. Format only: one letter and exactly six digits is no passport form, German document
+//! forms stay with the German rules, one repeated digit and
 //! a run of seven ascending digits are placeholders. With a document term near the
 //! value or as its key: the US letter form (one letter, eight digits), the Austrian and
 //! Swiss passport and identity card (one letter, seven digits), the Italian carta
@@ -125,8 +125,6 @@ fn field_validator_checks_the_passport_form() {
         "621475562",
         "48291366",
         "07RY12580",
-        // German passport form with a valid ICAO 9303 check digit
-        "F48291366",
     ] {
         assert!(validators::passport_number_field(valid), "{valid}");
     }
@@ -134,7 +132,9 @@ fn field_validator_checks_the_passport_form() {
         // one letter and exactly six digits
         "A482913",
         "K482913",
-        // German passport form, ICAO 9303 check digit fails
+        // German document forms stay with the German rules
+        "F48291366",
+        "T22000129",
         "F48291367",
         "C01X00T42",
         // letters inside the digits outside the French form (the German
@@ -160,7 +160,7 @@ fn field_validator_checks_the_passport_form() {
 
 #[test]
 fn document_validators_check_their_country_forms() {
-    for valid in ["A12803456", "Z90381274", "S17933286", "F48291366"] {
+    for valid in ["A12803456", "Z90381274", "S17933286"] {
         assert!(validators::us_passport_number(valid), "{valid}");
     }
     for invalid in [
@@ -180,7 +180,7 @@ fn document_validators_check_their_country_forms() {
     for invalid in ["P436691", "P43669181", "PA366918", "p4366918", "P4444444"] {
         assert!(!validators::letter_seven_digits(invalid), "{invalid}");
     }
-    for valid in ["CA48213EF", "CB90217KD", "AY4417825"] {
+    for valid in ["CA48213EF", "CB90217KD"] {
         assert!(validators::it_identity_card_number(valid), "{valid}");
     }
     for invalid in [
@@ -189,6 +189,8 @@ fn document_validators_check_their_country_forms() {
         "C148213EF",
         "ca48213ef",
         "CA00000EF",
+        // the paper card form is the two-letter passport and German ID form
+        "AY4417825",
     ] {
         assert!(!validators::it_identity_card_number(invalid), "{invalid}");
     }

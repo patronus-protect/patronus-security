@@ -167,13 +167,12 @@ pub(super) const IDENTITY_CARD_NUMBER_AT_CH: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
-/// An Italian carta d'identità number, the CIE (`CA48213EF`) or the paper card
-/// (`AY4417825`), with an identity card term near the value or as its key (T10,
+/// An Italian carta d'identità number, the CIE (`CA48213EF`), with an identity card term near the value or as its key (T10,
 /// B-PASS). The Italian passport has two letters and seven digits
 /// ([`PASSPORT_NUMBER_TWO_LETTERS`]).
 pub(super) const IDENTITY_CARD_NUMBER_IT: PiiPattern = PiiPattern {
     name: "pii_identity_card_number_it",
-    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{5}(?:[A-Z]{2}|[0-9]{2})(?-u:\b)",
+    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{5}[A-Z]{2}(?-u:\b)",
     entity_group: "IDENTITY_CARD_NUMBER",
     validator: Some(validators::it_identity_card_number),
     strength: ValidatorStrength::Format,

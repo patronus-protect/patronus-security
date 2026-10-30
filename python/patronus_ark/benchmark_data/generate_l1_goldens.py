@@ -4259,7 +4259,7 @@ for _row in B_IBAN_CASES:
 # `pii_passport_number_field` reports six to nine letters and digits, at least five digits,
 # right after an explicit passport field name in English, German, Spanish, French, Italian or
 # Dutch, in every mode. Format only: one letter and exactly six digits is no passport form,
-# a value in German passport form must pass its ICAO 9303 check digit, one repeated digit and
+# German document forms stay with the German rules, one repeated digit and
 # a run of seven ascending digits are placeholders. With a document term near the value or as
 # its key: the US letter form (`pii_passport_number_us`, one letter and eight digits), the
 # Austrian and Swiss passport and identity card (`pii_passport_number_at_ch`,
@@ -4362,7 +4362,7 @@ B_PASS_CASES = [
     n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_at_ch", "Build A7418205 failed.", "no identity card term", carrier="prose"),
     # ── IT carta d'identità and ES pasaporte with a document term ─────────
     p("IDENTITY_CARD_NUMBER", "it", "pii_identity_card_number_it", "Carta d'identità n. ", "CA48213EF"),
-    p("IDENTITY_CARD_NUMBER", "it", "pii_identity_card_number_it", "Numero carta d'identità: ", "AY4417825"),
+    p("IDENTITY_CARD_NUMBER", "it", "pii_identity_card_number_it", "Numero carta d'identità: ", "CD71592HL"),
     p("IDENTITY_CARD_NUMBER", "it", "pii_identity_card_number_it", "La carta di identità ", "CB90217KD", " è valida.", carrier="prose"),
     p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_it", "Italienische Identitätskarte ", "CA48213EF", carrier="prose"),
     p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_it", "Ausweisnummer (Italien): ", "CB90217KD"),
