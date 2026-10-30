@@ -656,7 +656,7 @@ pub fn is_item_value(value: &str) -> bool {
 /// above, so the value must show it on its own as an item does
 /// ([`is_item_value`]), hold a letter (no date, number or reference) and be
 /// no e-mail address, chosen-looking stand-in (`p@ssw0rd`) or numbered
-/// identifier (`api_key_1` in an OpenAPI document). A value of
+/// identifier (`api_key_1` in an OpenAPI document) and no `key=value`. A value of
 /// letters and `.`/`-`/`_` only counts with the case changes of a random
 /// string (`FUQoUXNMiLPyRH.yAQ`), not of a name (`KeePassXC`,
 /// `System.Security`).
@@ -672,6 +672,7 @@ pub fn is_prose_value(text: &str, range: Range<usize>) -> bool {
     };
     (is_item_value(value) || (is_word_like(value) && random_letters()))
         && value.bytes().any(|byte| byte.is_ascii_alphabetic())
+        && !value.trim_end_matches('=').contains('=')
         && !value
             .split_once('@')
             .is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.'))
@@ -703,7 +704,10 @@ fn is_prose_handover(
     let between = &text[key_start..value.start];
     let after_noun = between.trim_start_matches(|c: char| c.is_alphanumeric());
     let separator = after_noun.trim_matches(|c: char| c.is_whitespace() || matches!(c, '"' | '\''));
-    if matches!(separator, "" | ":" | "=" | "=>" | "is" | "ist" | "lautet") {
+    // `Token (Base58): …` qualifies the noun of a field label.
+    let qualified =
+        separator.starts_with('(') && separator.ends_with("):") && !separator.contains('\n');
+    if qualified || matches!(separator, "" | ":" | "=" | "=>" | "is" | "ist" | "lautet") {
         return false;
     }
     let lower = between.to_lowercase();
@@ -1909,6 +1913,7 @@ mod tests {
             "ExpiredToken",
             "api_key_1",
             "P@ssw0rd",
+            "_authToken=npm_1LaM66EZIxUZdVnRfF8S84eq",
         ] {
             assert!(!prose("here you go: {v}\n", value), "{value}");
         }
@@ -1937,18 +1942,20 @@ mod tests {
             // Another value is named between noun and value.
             "Passwort-Hash: Krbpqtz3658*",
             "Kennwort (Client-Secret): Krbpqtz3658*",
+            // A qualified field label is an assignment.
+            "Kennwort (Base58): Krbpqtz3658*",
             // A field label of its own on a later line.
             "Das Kennwort ist geheim.\nFundstelle: Krbpqtz3658*",
         ] {
             assert!(!check(text, value, is_prose_password_key), "{text}");
         }
         assert!(check(
-            "Secret (Dienst): Krbpqtz3658*",
+            "Secret für den Dienst: Krbpqtz3658*",
             value,
             is_prose_secret_key
         ));
         assert!(!check(
-            "Secret-Hash (Dienst): Krbpqtz3658*",
+            "Secret-Hash für den Dienst: Krbpqtz3658*",
             value,
             is_prose_secret_key
         ));
