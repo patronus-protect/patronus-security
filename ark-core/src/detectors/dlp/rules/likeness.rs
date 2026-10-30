@@ -672,7 +672,9 @@ pub fn is_prose_value(text: &str, range: Range<usize>) -> bool {
     };
     (is_item_value(value) || (is_word_like(value) && random_letters()))
         && value.bytes().any(|byte| byte.is_ascii_alphabetic())
-        && !value.contains('@')
+        && !value
+            .split_once('@')
+            .is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.'))
         && is_chosen_secret(value)
         && !numbered_identifier(value)
 }
@@ -1892,6 +1894,7 @@ mod tests {
             "FUQoUXNMiLPyRH.yAx",
             "sdkrf-UuV7xbwiTFQz",
             "69275e292564a6fa9870e7631f7fa3499b5d99fa",
+            "Wjslscq0382@",
         ] {
             assert!(prose("here you go: {v}\n", value), "{value}");
         }

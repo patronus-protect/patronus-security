@@ -55,6 +55,8 @@ def _t(text: str) -> str:
 INFRA = frozenset({"secret"})
 CONFIG = frozenset({"secret", "identifier"})
 PROSE = frozenset({"secret", "identifier", "fragment"})
+# G-PROSE: a value handed over after its noun in a chat, ticket or mail.
+HANDOVER = PROSE | {"handover"}
 CODE = ("content.source_code",)
 LOG = ("content.system_log",)
 DUMP = ("content.database_dump", "content.sql")
@@ -68,7 +70,7 @@ def _code(id, language, split, code_language, template, env_ref, escape=("json",
 
 
 def _prose(id, format, language, split, template, env_ref, content=()):
-    return Family(id, format, language, split, _t(template), env_ref, (), 0, True, PROSE, content)
+    return Family(id, format, language, split, _t(template), env_ref, (), 0, True, HANDOVER, content)
 
 
 def _dump(id, language, split, template, env_ref):
@@ -1664,6 +1666,8 @@ PROFILES = {
     "dlp_env_var_secret": Profile("credential.secret_assignment", "CREDENTIAL", "secret", "service_secret", "service secret", "Dienst-Secret"),
     "dlp_password_assignment": Profile("credential.password_assignment", "CREDENTIAL", "secret", "db_password", "database password", "Datenbank-Passwort"),
     "dlp_generic_credential_assignment": Profile("credential.secret_assignment", "CREDENTIAL", "secret", "client_secret", "client secret", "Client-Secret"),
+    "dlp_prose_password": Profile("credential.password_assignment", "CREDENTIAL", "handover", "db_password", "database password", "Datenbank-Passwort"),
+    "dlp_prose_secret": Profile("credential.secret_assignment", "CREDENTIAL", "handover", "client_secret", "client secret", "Client-Secret"),
     "dlp_bearer_token": Profile(
         "credential.http_bearer", "SECRET_TOKEN", "secret", "authorization", "access token", "Access-Token", "Bearer <<value>>"
     ),

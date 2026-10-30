@@ -50,7 +50,7 @@ FORMATS = (
     "env", "yaml", "json", "toml", "hcl", "xml", "properties", "shell", "dockerfile",
     "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail", "sql",
 )
-KINDS = ("secret", "identifier", "fragment")
+KINDS = ("secret", "identifier", "fragment", "handover")
 ESCAPES = ("json", "xml", "indent")
 KEY_MARKERS = ("KEY", "key", "keyCamel", "KeyPascal", "key-kebab", "Key-Header")
 MARKERS = frozenset({"value", "label", *KEY_MARKERS})
