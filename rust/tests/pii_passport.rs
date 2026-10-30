@@ -134,7 +134,7 @@ fn field_validator_checks_the_passport_form() {
         "K482913",
         // German document forms stay with the German rules
         "F48291366",
-        "T22000129",
+        "T22000124",
         "F48291367",
         "C01X00T42",
         // letters inside the digits outside the French form (the German

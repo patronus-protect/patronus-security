@@ -764,7 +764,7 @@ pub fn passport_number_two_letters(s: &str) -> bool {
 /// Whether `s` is left to the German document rules (B-PASS): a value in the
 /// form of a German passport number, a passport series letter and characters of
 /// the ICAO alphabet ending in a digit (`C01X00T41`, `C01X00T42`, valid or not),
-/// or a valid German identity card number (`T22000129`).
+/// or a valid German identity card number (`T22000124`).
 fn de_document_form(s: &str) -> bool {
     const ALPHABET: &[u8] = b"0123456789CFGHJKLMNPRTVWXYZ";
     let bytes = s.as_bytes();
