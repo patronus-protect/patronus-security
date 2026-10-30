@@ -443,6 +443,7 @@ tasks:
 
   # M1 IBAN (presidio_favored 63.9 vs 100; 35 of 66 FN are grouped non-DE IBAN)
   - id: B-IBAN
+    status: done
     title: "IBAN: grouped and lowercase variants for all countries in strict, length per country from the SWIFT IBAN registry, SEPA creditor IDs are no IBAN"
     type: recall-fix
     deps: [K05, B-EVAL]

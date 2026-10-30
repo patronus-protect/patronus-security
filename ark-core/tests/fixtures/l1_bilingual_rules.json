@@ -349,9 +349,19 @@
   {
     "category": "pii",
     "rule_id": "pii_iban_generic",
-    "de": "IBAN: GB82WEST12345698765432",
-    "en": "IBAN: GB82WEST12345698765432",
-    "language_neutral": true,
+    "de": "IBAN: GB82 WEST 1234 5698 7654 32",
+    "en": "IBAN: nl91 abna 0417 1643 00",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Gläubiger-Identifikationsnummer: DE30ZZZ56545348553",
+        "SEPA-Lastschrift, Gläubiger-ID DE13ZZZ00001013632"
+      ],
+      "en": [
+        "Creditor identifier: DE98ZZZ00001140336",
+        "Ref GB82WEST12345698765432XYZ"
+      ]
+    },
     "balanced": {
       "context": {
         "de": "Bankkonto GB82WEST12345698765432",

@@ -601,6 +601,42 @@ fn vat_body(rule_id: &str, text: &str, start: usize) -> bool {
 }
 
 impl NativeRegexDetector for PiiPipeline {
+    /// A grouped IBAN of the generic rule ends at the registry length of its
+    /// country: a following word or block of four (`BE68 5390 0754 7034 und`)
+    /// is cut off before the validator sees the match, and the scan resumes
+    /// there, so an IBAN right after it is found too (B-IBAN).
+    fn rule_captures<'t>(
+        &self,
+        index: usize,
+        regex: &Regex,
+        text: &'t str,
+        _scan: Option<&crate::detectors::dlp::prefilter::RuleScan>,
+    ) -> Vec<regex::Captures<'t>> {
+        if self.rule_ids[index] != "pii_iban_generic" {
+            return regex.captures_iter(text).collect();
+        }
+        let mut found = Vec::new();
+        let mut at = 0;
+        while let Some(captures) = regex.captures_at(text, at) {
+            let whole = captures.get(0).unwrap();
+            match validators::iban_end(whole.as_str()) {
+                Some(end) if end < whole.len() => {
+                    at = whole.start() + end;
+                    found.extend(
+                        regex.captures_at(&text[..at], whole.start()).filter(|cut| {
+                            cut.get(0).is_some_and(|cut| cut.start() == whole.start())
+                        }),
+                    );
+                }
+                _ => {
+                    at = whole.end();
+                    found.push(captures);
+                }
+            }
+        }
+        found
+    }
+
     fn allows_match(
         &self,
         index: usize,

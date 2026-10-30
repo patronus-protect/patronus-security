@@ -9,9 +9,9 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 // card as secondary evidence of the IBAN (T07), the scored modes drop it (K07).
 pub(super) const IBAN_DE: PiiPattern = PiiPattern {
     name: "pii_iban_de",
-    pattern: r"\bDE\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",
+    pattern: r"\b(?:DE|de)\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",
     entity_group: "IBAN",
-    validator: Some(validators::mod97),
+    validator: Some(validators::iban),
     strength: ValidatorStrength::Checksum,
     base_score: 55,
     captured_value: false,
@@ -19,11 +19,15 @@ pub(super) const IBAN_DE: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+// Every registry country, compact or in blocks of four (letters included), in
+// upper or in lower case (B-IBAN). The validator holds the registry length per
+// country; a grouped match that runs into the next word or block is cut to that
+// length first (`PiiPipeline::rule_captures`).
 pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
     name: "pii_iban_generic",
-    pattern: r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
+    pattern: r"\b(?:[A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?|[a-z]{2}[0-9]{2}(?: ?[a-z0-9]{4}){2,7}(?: ?[a-z0-9]{1,3})?)\b",
     entity_group: "IBAN",
-    validator: Some(validators::mod97),
+    validator: Some(validators::iban),
     strength: ValidatorStrength::Checksum,
     base_score: 45,
     captured_value: false,

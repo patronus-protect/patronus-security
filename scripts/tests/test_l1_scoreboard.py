@@ -641,7 +641,7 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert report["engines"]["ark-strict"] == MODULE.score_rows(rows, ark, EMAP, "g.jsonl")
     assert report["engines"]["presidio-tuned"] == MODULE.score_rows(rows, presidio, EMAP, "g.jsonl")
     gaps = report["gold_gaps"]
-    assert gaps["validators"]["pii.iban"] == ["mod97"]
+    assert gaps["validators"]["pii.iban"] == ["iban"]
     email = gaps["corpora"][GRETEL]["pii.email"]
     assert email["gold"] == 2 and email["gold_invalid"] is None
     assert email["engines"] == {"ark-strict": {"duplicate_fp": 3, "invalid_found": None},
@@ -653,12 +653,12 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
     assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
     assert f"| {GRETEL} | pii.credit_card.pan | payment_card | 2 | 1 | 0 | 0 | 1 |" in lines
-    assert f"| {GRETEL} | pii.iban | mod97 | 1 | 0 | 0 | 0 | 0 |" in lines
+    assert f"| {GRETEL} | pii.iban | iban | 1 | 0 | 0 | 0 | 0 |" in lines
 
 
 def test_gold_validators_cover_every_checksum_validator():
     validators = MODULE.gold_validators(EMAP)
-    assert validators["pii.iban"] == ("mod97",)
+    assert validators["pii.iban"] == ("iban",)
     assert validators["pii.credit_card.pan"] == ("payment_card",)
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
     assert validators["pii.de.vat_id"] == ("de_vat_id",)
@@ -681,9 +681,11 @@ def test_gold_validators_cover_every_checksum_validator():
                       "4047737215142"],
      ["4111111111111112", "44 20 1234 5678", "1748503543012", "3473149258607313", "2721731492586072",
       "4506095123081", "470312-1081835", "202201010800", "199912312359596", "0157-09-316-8811", "4242"]),
-    ("mod97", ["DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "GB82WEST12345698765432"],
+    # B-IBAN: registry country, its exact length and MOD-97; creditor IDs are no IBAN.
+    ("iban", ["DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "GB82WEST12345698765432",
+              "gb82 west 1234 5698 7654 32", "NO9386011117947"],
      ["DE89370400440532013001", "DE00370400440532013000", "DE18 4306 0967 1234 5678 01", "GB82WEST12345698765433",
-      "DE8"]),
+      "DE8", "DE30ZZZ56545348553", "PH12345678901234567890"]),
     ("steuer_id", ["86095742719", "86 095 742 719", "12345678903"],
      ["86095742718", "06095742719", "8609574271", "860957427190"]),
     ("steuer_id_issued", ["86095742719", "86 095 742 719"],
