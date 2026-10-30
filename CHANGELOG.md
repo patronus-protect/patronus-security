@@ -33,6 +33,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
     `pii_iban_generic` resumes at the cut instead of the end of the over-long match, so an IBAN
     right after another one (`BE68539007547034 BE68539007547034`, two grouped IBANs in a row) is
     reported as well instead of being swallowed (Codex review on #219).
+- DLP G-PROSE (G06): credentials handed over in chats, tickets and mails. New rules
+  `dlp_prose_password` (`CREDENTIAL`, subtype `password`, entity `credential.password_assignment`)
+  and `dlp_prose_secret` (`CREDENTIAL`, `generic_secret`, entity `credential.secret_assignment`),
+  generic overlap tier, format source `ark`. They report the value after a password noun
+  (Passwort, Kennwort, password, passphrase) or a secret/token/API-key noun when it follows a `:`
+  on the noun's line or the next one and stands at the end of its line or alone up to two lines
+  further („Wie lautet das Datenbank-Passwort?“ and the reply, „here is the client secret:“ and the
+  value below, „(Datenbank-Passwort): …“); `Zugangsdaten`/`credentials` only as `user / password`.
+  The value must look chosen or issued (`likeness::is_prose_value`: item-like character classes, a
+  letter, no date, e-mail address or numbered identifier, letters only with random case changes),
+  and the placeholder, example and reference checks of the generic rules apply. A value right after
+  the noun stays with the assignment rules; a hash or other value noun between noun and value, a
+  field label of its own on a later line and a provider token prefix (`npm_` …) reject it. New
+  carrier kind `handover` (chat/ticket/mail families only), `rules.json` probes, 24 `dlp_l1` rows
+  (12 positives, 12 hard negatives incl. encyclopedia and law prose, DE and EN), fixture entries,
+  `rust/tests/dlp_prose_credentials.rs` and likeness unit tests. **Detection change**: values
+  handed over in prose are new `CREDENTIAL` findings. Dev chat/ticket/mail carriers, default secret
+  groups: 24 of 30 values found (0 before; the 6 left are password hashes, G-HASH), no new
+  hard-negative FP, benign docs 0 new spans, benign code 0 new spans. PIN/TAN/PUK and Wi-Fi keys
+  (G07) are not part of this change.
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
