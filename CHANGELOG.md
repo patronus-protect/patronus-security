@@ -51,8 +51,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `rust/tests/dlp_prose_credentials.rs` and likeness unit tests. **Detection change**: values
   handed over in prose are new `CREDENTIAL` findings. Dev chat/ticket/mail carriers, default secret
   groups: 24 of 30 values found (0 before; the 6 left are password hashes, G-HASH), no new
-  hard-negative FP, benign docs 0 new spans, benign code 0 new spans. PIN/TAN/PUK and Wi-Fi keys
-  (G07) are not part of this change.
+  hard-negative FP, benign docs 0 new spans, benign code 0 new spans. Both regexes are bounded
+  (noun, at most 160 + 80 characters to the `:`, a value of at most 100 characters) and run only on
+  their prefilter keywords; 40 benign-code documents of 100 KiB with the two rules gated on vs. off:
+  p50 8.0 vs. 7.8 ms, p95 10.9 vs. 11.9 ms (same build, run noise, no measurable change).
+  PIN/TAN/PUK and Wi-Fi keys (G07) are not part of this change.
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
