@@ -650,6 +650,97 @@ pub fn is_item_value(value: &str) -> bool {
         && !is_metasyntactic(bare)
 }
 
+/// G-PROSE (G06): whether the value at `range` of `text`, which
+/// `dlp_prose_password` or `dlp_prose_secret` found at the end of a line in
+/// a chat, ticket or mail, could be a credential. Its noun may stand a line
+/// above, so the value must show it on its own as an item does
+/// ([`is_item_value`]), hold a letter (no date, number or reference) and be
+/// no e-mail address, chosen-looking stand-in (`p@ssw0rd`) or numbered
+/// identifier (`api_key_1` in an OpenAPI document). A value of
+/// letters and `.`/`-`/`_` only counts with the case changes of a random
+/// string (`FUQoUXNMiLPyRH.yAQ`), not of a name (`KeePassXC`,
+/// `System.Security`).
+pub fn is_prose_value(text: &str, range: Range<usize>) -> bool {
+    let value = &text[range];
+    let random_letters = || {
+        let case_changes = value
+            .as_bytes()
+            .windows(2)
+            .filter(|pair| pair[0].is_ascii_lowercase() && pair[1].is_ascii_uppercase())
+            .count();
+        case_changes >= 3 && is_token_like(value)
+    };
+    (is_item_value(value) || (is_word_like(value) && random_letters()))
+        && value.bytes().any(|byte| byte.is_ascii_alphabetic())
+        && !value.contains('@')
+        && is_chosen_secret(value)
+        && !numbered_identifier(value)
+}
+
+/// G-PROSE: an identifier in one naming convention with numbers in or after
+/// its words (`api_key_1`, `node-2-east`).
+fn numbered_identifier(value: &str) -> bool {
+    let letters = value.replace(|c: char| c.is_ascii_digit(), "");
+    let letters = letters.trim_matches(['_', '-']);
+    value.contains(['_', '-']) && is_identifier(&letters.replace("__", "_").replace("--", "-"))
+}
+
+/// G-PROSE: whether the text from a credential noun at `key_start` to the
+/// value hands that value over in prose. The assignment rules own a value
+/// right after the noun (`Passwort: …`, `password is …`); a hash, checksum
+/// or fingerprint noun, or one of `other_nouns`, between them names another
+/// value (`Passwort-Hash`, `Zugangsdaten (Client-Secret)` for a password);
+/// and a value under a field label of its own on a later line
+/// (`Fundstelle: …`, `Status: …`) belongs to that label.
+fn is_prose_handover(
+    text: &str,
+    key_start: usize,
+    value: &Range<usize>,
+    other_nouns: &[&str],
+) -> bool {
+    let between = &text[key_start..value.start];
+    let after_noun = between.trim_start_matches(|c: char| c.is_alphanumeric());
+    let separator = after_noun.trim_matches(|c: char| c.is_whitespace() || matches!(c, '"' | '\''));
+    if matches!(separator, "" | ":" | "=" | "=>" | "is" | "ist" | "lautet") {
+        return false;
+    }
+    let lower = between.to_lowercase();
+    if ["hash", "prüfsumme", "checksum", "fingerprint", "digest"]
+        .iter()
+        .chain(other_nouns)
+        .any(|noun| lower.contains(noun))
+    {
+        return false;
+    }
+    // `user / ` before the value is part of the handover.
+    let mut head = between.trim_end();
+    if let Some(user) = head.strip_suffix('/') {
+        head = user
+            .trim_end()
+            .trim_end_matches(|c: char| !c.is_whitespace());
+        head = head.trim_end();
+    }
+    let head = head.trim_end_matches(':');
+    let Some(line_start) = head.rfind('\n') else {
+        return true;
+    };
+    let label = head[line_start + 1..].trim();
+    !(label.chars().next().is_some_and(char::is_uppercase)
+        && label.chars().all(|c| c.is_alphabetic() || c == '-')
+        && !is_credential_noun(&label.to_lowercase()))
+}
+
+/// G-PROSE: [`is_prose_handover`] for a password noun; a secret or token
+/// noun after it names the value (`Kennwort (Client-Secret)`).
+pub fn is_prose_password_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    is_prose_handover(text, key_start, &value, &["secret", "token", "api"])
+}
+
+/// G-PROSE: [`is_prose_handover`] for a secret or token noun.
+pub fn is_prose_secret_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    is_prose_handover(text, key_start, &value, &[])
+}
+
 /// F-GEN2 (T08): whether the value at `range` of `text`, which
 /// `dlp_env_var_secret` matched after an upper-case variable name, could be
 /// a secret. A constant such as `DATA_API_KEY = '.data-api'` or
@@ -1326,8 +1417,9 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 mod tests {
     use super::{
         closes_string, is_assignment_value, is_connection_password, is_env_value,
-        is_masked_credential_noun, is_passphrase, is_userinfo_password, is_userinfo_token,
-        key_shape, suits_field_key, KeyShape,
+        is_masked_credential_noun, is_passphrase, is_prose_password_key, is_prose_secret_key,
+        is_prose_value, is_userinfo_password, is_userinfo_token, key_shape, suits_field_key,
+        KeyShape,
     };
 
     /// The value after the last `{v}` marker position of `template`.
@@ -1786,6 +1878,76 @@ mod tests {
         assert!(!gate(
             "cs = \"Server=db;Password=\" + cfg.DbPassword + \";\"",
             " + cfg.DbPassword + "
+        ));
+    }
+    /// G-PROSE: `{v}` in `template` as a prose value.
+    fn prose(template: &str, value: &str) -> bool {
+        userinfo(template, value, is_prose_value)
+    }
+
+    #[test]
+    fn prose_values_look_chosen_or_issued() {
+        for value in [
+            "Krbpqtz3658*",
+            "FUQoUXNMiLPyRH.yAx",
+            "sdkrf-UuV7xbwiTFQz",
+            "69275e292564a6fa9870e7631f7fa3499b5d99fa",
+        ] {
+            assert!(prose("here you go: {v}\n", value), "{value}");
+        }
+        for value in [
+            "2024-07-01",
+            "14.09.2026",
+            "978-0-13-468599-1",
+            "servicedesk@example.de",
+            "Passwortmanager",
+            "KeePassXC",
+            "System.Security.Cryptography",
+            "ExpiredToken",
+            "api_key_1",
+            "P@ssw0rd",
+        ] {
+            assert!(!prose("here you go: {v}\n", value), "{value}");
+        }
+    }
+
+    #[test]
+    fn prose_keys_hand_the_value_over() {
+        let check =
+            |text: &str, value: &str, gate: fn(&str, usize, std::ops::Range<usize>) -> bool| {
+                let start = text.find(value).unwrap();
+                gate(text, 0, start..start + value.len())
+            };
+        let value = "Krbpqtz3658*";
+        for text in [
+            "Passwort für die Testumgebung?\n[08:17] daniel.r: Krbpqtz3658*",
+            "password for the job:\n\nKrbpqtz3658*",
+            "Passwort): Krbpqtz3658*",
+            "Zugangsdaten für das Testsystem: pruefer / Krbpqtz3658*",
+        ] {
+            assert!(check(text, value, is_prose_password_key), "{text}");
+        }
+        for text in [
+            // The assignment rules own a value right after the noun.
+            "Passwort: Krbpqtz3658*",
+            "password is Krbpqtz3658*",
+            // Another value is named between noun and value.
+            "Passwort-Hash: Krbpqtz3658*",
+            "Kennwort (Client-Secret): Krbpqtz3658*",
+            // A field label of its own on a later line.
+            "Das Kennwort ist geheim.\nFundstelle: Krbpqtz3658*",
+        ] {
+            assert!(!check(text, value, is_prose_password_key), "{text}");
+        }
+        assert!(check(
+            "Secret (Dienst): Krbpqtz3658*",
+            value,
+            is_prose_secret_key
+        ));
+        assert!(!check(
+            "Secret-Hash (Dienst): Krbpqtz3658*",
+            value,
+            is_prose_secret_key
         ));
     }
 }

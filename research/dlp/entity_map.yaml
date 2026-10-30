@@ -495,14 +495,14 @@ entities:
   - id: credential.secret_assignment
     scope: shared
     group: CREDENTIAL
-    ark: [dlp_env_var_secret, dlp_generic_credential_assignment]
+    ark: [dlp_env_var_secret, dlp_generic_credential_assignment, dlp_prose_secret]
     gitleaks: [generic-api-key]
     detect_secrets: [KeywordDetector]
     backlog: F11
   - id: credential.password_assignment
     scope: shared
     group: CREDENTIAL
-    ark: [dlp_password_assignment]
+    ark: [dlp_password_assignment, dlp_prose_password]
     detect_secrets: [KeywordDetector]
     google_dlp: [PASSWORD]
     backlog: F11

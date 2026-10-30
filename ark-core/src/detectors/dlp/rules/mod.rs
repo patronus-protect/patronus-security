@@ -154,6 +154,8 @@ const GENERIC_CREDENTIALS: &[&str] = &[
     "dlp_env_var_secret",
     "dlp_password_assignment",
     "dlp_generic_credential_assignment",
+    "dlp_prose_password",
+    "dlp_prose_secret",
 ];
 
 /// K08: the overlap tier of a secret rule; `None` for identifier and content

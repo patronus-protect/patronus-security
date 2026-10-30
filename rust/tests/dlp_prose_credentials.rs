@@ -27,22 +27,6 @@ fn scan(text: &str) -> SecurityScanResult {
         .expect("native DLP result must be present")
 }
 
-/// The rule that reports `value` (not suppressed by another rule).
-fn reporting_rule(result: &SecurityScanResult, value: &str) -> Option<String> {
-    let span = result.evidence_spans.iter().find(|span| span.text == value)?;
-    result.layers[0]
-        .details
-        .get("matched_rules")?
-        .as_array()?
-        .iter()
-        .find(|rule| {
-            rule.get("suppressed_by").is_none()
-                && rule["start"].as_u64() == Some(span.start as u64)
-                && rule["end"].as_u64() == Some(span.end as u64)
-        })
-        .and_then(|rule| rule["rule_id"].as_str().map(str::to_owned))
-}
-
 fn assert_reported(text: &str, rule_id: &str, value: &str) {
     let result = scan(text);
     assert!(
@@ -59,8 +43,7 @@ fn assert_reported(text: &str, rule_id: &str, value: &str) {
         .collect();
     assert!(
         rules.iter().any(|rule| rule == rule_id),
-        "{rule_id}: rule did not report {value:?} in {text:?}: {rules:?} ({:?})",
-        reporting_rule(&result, value)
+        "{rule_id}: rule did not report {value:?} in {text:?}: {rules:?}"
     );
 }
 
