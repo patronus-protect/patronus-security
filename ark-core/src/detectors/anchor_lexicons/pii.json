@@ -3406,6 +3406,15 @@
       "identitaetskarte"
     ],
     "shared": [],
+    "it": [
+      "carta d'identità",
+      "carta d'identita",
+      "carta di identità",
+      "carta di identita",
+      "carta d'identità elettronica",
+      "numero carta d'identità",
+      "numero della carta d'identità"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]

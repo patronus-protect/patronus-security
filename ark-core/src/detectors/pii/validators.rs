@@ -761,6 +761,102 @@ pub fn passport_number_two_letters(s: &str) -> bool {
         && bytes[2..].iter().all(u8::is_ascii_digit)
 }
 
+/// Whether `s` has the form of a German passport number, a series letter and
+/// characters of the ICAO alphabet ending in a digit (`C01X00T42`), but fails its
+/// ICAO 9303 check digit (B-PASS): a field-name or context-bound format rule of
+/// another country leaves it negative.
+fn failed_de_passport_form(s: &str) -> bool {
+    const ALPHABET: &[u8] = b"0123456789CFGHJKLMNPRTVWXYZ";
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && b"CFGHJK".contains(&bytes[0])
+        && bytes.iter().all(|byte| ALPHABET.contains(byte))
+        && bytes[8].is_ascii_digit()
+        && !de_passport_number(s)
+}
+
+/// Whether the digits of `s` can be an issued document number (B-PASS): not
+/// one repeated digit and no placeholder run of seven ascending digits
+/// (`12345678`, `D12345675`).
+fn issued_digits(s: &str) -> bool {
+    let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_digit).collect();
+    let ascending = digits.windows(2).fold((1, 1), |(run, longest), pair| {
+        let run = if pair[1] == pair[0] + 1 { run + 1 } else { 1 };
+        (run, longest.max(run))
+    });
+    digits.iter().any(|&digit| digit != digits[0]) && ascending.1 < 7
+}
+
+/// Passport number after an explicit passport field name (T24, B-PASS): six to
+/// nine upper-case letters and digits, at least five of them digits, as up to
+/// three leading letters and digits (`X45929398`, `AAA123456`, `621475562`) or the
+/// French `07RY12580`. Format only. One letter and exactly six digits
+/// (`A123456`) is no issued passport form, the digits are not one repeated digit,
+/// and a value in German passport form must pass its ICAO 9303 check digit.
+pub fn passport_number_field(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let letters = bytes
+        .iter()
+        .take_while(|byte| byte.is_ascii_uppercase())
+        .count();
+    let prefixed = letters <= 3 && bytes[letters..].iter().all(u8::is_ascii_digit);
+    let french = bytes.len() == 9
+        && bytes[..2].iter().all(u8::is_ascii_digit)
+        && bytes[2..4].iter().all(u8::is_ascii_uppercase)
+        && bytes[4..].iter().all(u8::is_ascii_digit);
+    (6..=9).contains(&bytes.len())
+        && (prefixed || french)
+        && bytes.iter().filter(|byte| byte.is_ascii_digit()).count() >= 5
+        && !(letters == 1 && bytes.len() == 7)
+        && issued_digits(s)
+        && !failed_de_passport_form(s)
+}
+
+/// US passport number in the letter form of the Next Generation Passport
+/// (A05, B-PASS): one letter and eight digits (`A12803456`); nine digits are
+/// the form of [`nine_digits`]. Format only; a value in German passport form must
+/// pass its ICAO 9303 check digit.
+pub fn us_passport_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes[0].is_ascii_uppercase()
+        && bytes[1..].iter().all(u8::is_ascii_digit)
+        && issued_digits(s)
+        && !failed_de_passport_form(s)
+}
+
+/// Austrian and Swiss passport and identity card number (B08, B-PASS): one
+/// letter and seven digits (`P4366918`, `X0217453`). Format only.
+pub fn letter_seven_digits(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 8
+        && bytes[0].is_ascii_uppercase()
+        && bytes[1..].iter().all(u8::is_ascii_digit)
+        && issued_digits(s)
+}
+
+/// Italian carta d'identità (T10, B-PASS): the electronic CIE, two letters, five
+/// digits and two letters (`CA48213EF`), or the paper card, two letters and
+/// seven digits (`AY4417825`). Format only.
+pub fn it_identity_card_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let cie = bytes.len() == 9
+        && bytes[..2].iter().all(u8::is_ascii_uppercase)
+        && bytes[2..7].iter().all(u8::is_ascii_digit)
+        && bytes[7..].iter().all(u8::is_ascii_uppercase);
+    (cie || passport_number_two_letters(s)) && issued_digits(s)
+}
+
+/// Spanish pasaporte (T10, B-PASS): three letters and six digits (`PAA482913`).
+/// Format only.
+pub fn es_passport_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes[..3].iter().all(u8::is_ascii_uppercase)
+        && bytes[3..].iter().all(u8::is_ascii_digit)
+        && issued_digits(s)
+}
+
 /// UK driving licence number (B-UK): the first five letters of the surname padded
 /// with `9`, the decade digit of the birth year, the birth month (plus 50 for
 /// women), the day, the year digit, two initials (`9` for none), a digit or letter

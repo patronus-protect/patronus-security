@@ -107,6 +107,12 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     uk::NHS_NUMBER,
     uk::PASSPORT_NUMBER,
     intl::PASSPORT_NUMBER_TWO_LETTERS,
+    intl::PASSPORT_NUMBER_FIELD,
+    intl::PASSPORT_NUMBER_US,
+    intl::PASSPORT_NUMBER_AT_CH,
+    intl::IDENTITY_CARD_NUMBER_AT_CH,
+    intl::IDENTITY_CARD_NUMBER_IT,
+    intl::PASSPORT_NUMBER_ES,
     vat::VAT_ID_DE,
     vat::VAT_ID_AT,
     vat::VAT_ID_CH,
@@ -692,8 +698,16 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_ssn_us_proximity"
             | "pii_nhs_number_uk"
             | "pii_passport_number_uk"
-            | "pii_passport_number_two_letters" => {
+            | "pii_passport_number_two_letters"
+            | "pii_passport_number_us"
+            | "pii_passport_number_at_ch"
+            | "pii_identity_card_number_at_ch"
+            | "pii_identity_card_number_it"
+            | "pii_passport_number_es" => {
                 context::stands_alone(text, captures.get(0).unwrap().range())
+            }
+            "pii_passport_number_field" => {
+                context::stands_alone(text, captures.name("value").unwrap().range())
             }
             // A cell whose key names the label is the whole value, also between
             // numeric cells (`tfn,age\n876543210,42`).
