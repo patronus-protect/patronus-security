@@ -29,6 +29,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Dev scoreboard vs. 6c680c7 (PASS in strict and balanced, no new hard-negative FP): `pii.iban`
   exact F1 75.0 → 97.8 in both modes; L1 F1 strict +1.0 pp, balanced +0.9 pp. The rule regex is
   linear and bounded; the cut is one pass over the match, only for over-long grouped matches.
+  - **Detection change** (every mode): after a match is cut at its registry length, the scan of
+    `pii_iban_generic` resumes at the cut instead of the end of the over-long match, so an IBAN
+    right after another one (`BE68539007547034 BE68539007547034`, two grouped IBANs in a row) is
+    reported as well instead of being swallowed (Codex review on #219).
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
