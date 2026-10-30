@@ -655,7 +655,7 @@ pub fn is_item_value(value: &str) -> bool {
 /// a chat, ticket or mail, could be a credential. Its noun may stand a line
 /// above, so the value must show it on its own as an item does
 /// ([`is_item_value`]), hold a letter (no date, number or reference) and be
-/// no e-mail address, chosen-looking stand-in (`p@ssw0rd`) or numbered
+/// no e-mail address or `user@host`, chosen-looking stand-in (`p@ssw0rd`) or numbered
 /// identifier (`api_key_1` in an OpenAPI document) and no `key=value`. A value of
 /// letters and `.`/`-`/`_` only counts with the case changes of a random
 /// string (`FUQoUXNMiLPyRH.yAQ`), not of a name (`KeePassXC`,
@@ -673,9 +673,9 @@ pub fn is_prose_value(text: &str, range: Range<usize>) -> bool {
     (is_item_value(value) || (is_word_like(value) && random_letters()))
         && value.bytes().any(|byte| byte.is_ascii_alphabetic())
         && !value.trim_end_matches('=').contains('=')
-        && !value
-            .split_once('@')
-            .is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.'))
+        && !value.split_once('@').is_some_and(|(local, host)| {
+            !local.is_empty() && host.starts_with(|c: char| c.is_ascii_alphabetic())
+        })
         && is_chosen_secret(value)
         && !numbered_identifier(value)
 }
@@ -1914,6 +1914,7 @@ mod tests {
             "api_key_1",
             "P@ssw0rd",
             "_authToken=npm_1LaM66EZIxUZdVnRfF8S84eq",
+            "TOKEN@host",
         ] {
             assert!(!prose("here you go: {v}\n", value), "{value}");
         }
