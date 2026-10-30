@@ -438,7 +438,10 @@ fn dotted_passwords_keep_the_password_rule() {
         );
         for (template, seed) in [
             ("[auth]\ndb_password = \"<<secret:0>>\"\n", 6802),
-            ("Accept: application/json\nDb-Password: <<secret:0>>\n\n", 6803),
+            (
+                "Accept: application/json\nDb-Password: <<secret:0>>\n\n",
+                6803,
+            ),
             ("const DB_KENNWORT: &str = \"<<secret:0>>\";\n", 6804),
             ("lager:\n  datenbank:\n    passwort: <<secret:0>>\n", 6805),
         ] {

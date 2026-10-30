@@ -443,8 +443,11 @@ static CALL_OR_INDEX: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Member access: two or more digit-free identifier segments
 /// (`this._input.value`, `password.length`, `Y.username`, `_.password`).
+/// Q-DLP-PW: a `~` or a `.` before a digit or a symbol does not end one in
+/// code, so the letter runs of a chosen password (`wPF.DZs~Brb…`,
+/// `o.Bbst….jdJ44`) are none.
 static MEMBER_ACCESS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[$]?[A-Za-z_$]+(?:(?:\.|->|\?\.|!\.)[A-Za-z_$]+)+(?:[^A-Za-z0-9_$]|$)").unwrap()
+    Regex::new(r"^[$]?[A-Za-z_$]+(?:(?:\.|->|\?\.|!\.)[A-Za-z_$]+)+(?:[^A-Za-z0-9_$.~]|$)").unwrap()
 });
 
 /// ABNF repetition (`1*(tchar)`, `*DIGIT`) of grammar listings.
