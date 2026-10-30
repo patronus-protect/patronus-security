@@ -11,6 +11,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Passport and identity card numbers by field name (B-PASS: T24, A05, B08, T10). New rule
+  `pii_passport_number_field` reports six to nine upper-case letters and digits, at least five of
+  them digits, right after an explicit passport field name in English, German, Spanish, French,
+  Italian or Dutch (`Passport No. X45929398`, `Reisepass (D5832368)`, `Mi pasaporte es AAA482913`,
+  `le passeport numéro 07RY12580`, `passaporto n. M0572847`) in every mode
+  (`validators::passport_number_field`, format only): up to three leading letters and digits or the
+  French `07RY12580`; one letter and exactly six digits (`A482913`, the holdout HN-FP of run
+  20261022T171514Z) is no passport form, a value in German passport form must pass its ICAO 9303
+  check digit, one repeated digit and seven ascending digits (`12345678`) are placeholders. With a
+  document term near the value or as its key, in every mode: the US passport letter form, one
+  letter and eight digits (`pii_passport_number_us`; nine digits stay `pii_passport_number_uk`),
+  the Austrian and Swiss passport and identity card, one letter and seven digits
+  (`pii_passport_number_at_ch`, `pii_identity_card_number_at_ch`), the Italian carta d'identità
+  (CIE `CA48213EF` or paper `AY4417825`, `pii_identity_card_number_it`; Italian terms in the
+  `pii.identity_card` lexicon) and the Spanish pasaporte, three letters and six digits
+  (`pii_passport_number_es`). New `rust/tests/pii_passport.rs`, 117 new `pii_l1` rows (DE, EN, ES,
+  FR, IT, NL), one rule fixture entry per rule. **Detection change** (every mode): passport and
+  identity card numbers in these forms are new `PASSPORT_NUMBER` / `IDENTITY_CARD_NUMBER`
+  findings; no existing rule or validator changes.
 - IBAN per the SWIFT IBAN registry (B-IBAN: T05, T21, F03). New validator `iban` for
   `pii_iban_de` and `pii_iban_generic`: a registry country (89), exactly its registry length, two
   check digits, letters and digits only, and MOD-97 (`mod97` itself is unchanged); the scoreboard

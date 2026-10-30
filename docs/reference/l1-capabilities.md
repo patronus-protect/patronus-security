@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 91 | 23 |
-| Regex rules | 152 | 113 (+5 relationship rules) |
+| Regex rules | 158 | 113 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 71 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 105 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -76,8 +76,8 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.es.nie` | shared | `ES_NIE` | `pii_nie_es`, `pii_nie_es_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `ES_NIE` |
 | `pii.it.fiscal_code` | shared | `IT_FISCAL_CODE` | `pii_fiscal_code_it`, `pii_fiscal_code_it_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `IT_FISCAL_CODE` |
 | `pii.pl.pesel` | shared | `PL_PESEL` | `pii_pesel_pl` | checksum | on | `PL_PESEL` |
-| `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
-| `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 3 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
+| `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_field`, `pii_passport_number_us`, `pii_passport_number_at_ch`, `pii_passport_number_es`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 9 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
+| `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_at_ch`, `pii_identity_card_number_it`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
 | `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
 | `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` |
 | `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` |

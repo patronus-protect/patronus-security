@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (152)
+## PII rules (158)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -67,6 +67,12 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_nhs_number_uk` | `NHS_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_passport_number_uk` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
 | `pii_passport_number_two_letters` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_passport_number_field` | `PASSPORT_NUMBER` | yes | format | 40 | field or key | 0.80 |
+| `pii_passport_number_us` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_passport_number_at_ch` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_identity_card_number_at_ch` | `IDENTITY_CARD_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_identity_card_number_it` | `IDENTITY_CARD_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_passport_number_es` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
 | `pii_vat_id_de` | `VAT_ID_DE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_at` | `VAT_ID_AT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_ch` | `VAT_ID_CH` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
