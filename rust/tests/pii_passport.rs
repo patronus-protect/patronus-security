@@ -4,7 +4,7 @@
 //!
 //! `pii_passport_number_field` reports six to nine letters and digits, at least five
 //! digits, right after an explicit passport field name (EN/DE/ES/FR/IT/NL) in every
-//! mode. Format only: one letter and exactly six digits is no passport form, German document
+//! mode. Format only: one or two letters and exactly six digits is no passport form, German document
 //! forms stay with the German rules, one repeated digit and
 //! a run of seven ascending digits are placeholders. With a document term near the
 //! value or as its key: the US letter form (one letter, eight digits), the Austrian and
@@ -120,7 +120,6 @@ fn field_validator_checks_the_passport_form() {
         "X45929398",
         "AAA482913",
         "SG9943897",
-        "NZ137286",
         "O0606527",
         "621475562",
         "48291366",
@@ -129,9 +128,11 @@ fn field_validator_checks_the_passport_form() {
         assert!(validators::passport_number_field(valid), "{valid}");
     }
     for invalid in [
-        // one letter and exactly six digits
+        // one or two letters and exactly six digits
         "A482913",
         "K482913",
+        "NZ137286",
+        "AB123456",
         // German document forms stay with the German rules
         "F48291366",
         "T22000124",

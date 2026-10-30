@@ -797,8 +797,8 @@ fn issued_digits(s: &str) -> bool {
 /// Passport number after an explicit passport field name (T24, B-PASS): six to
 /// nine upper-case letters and digits, at least five of them digits, as up to
 /// three leading letters and digits (`X45929398`, `AAA123456`, `621475562`) or the
-/// French `07RY12580`. Format only. One letter and exactly six digits
-/// (`A123456`) is no issued passport form, the digits are no placeholder
+/// French `07RY12580`. Format only. One or two letters and exactly six digits
+/// (`A123456`, `AB123456`) is no issued passport form, the digits are no placeholder
 /// ([`issued_digits`]), and German document forms stay with the German rules
 /// ([`de_document_form`]).
 pub fn passport_number_field(s: &str) -> bool {
@@ -815,7 +815,7 @@ pub fn passport_number_field(s: &str) -> bool {
     (6..=9).contains(&bytes.len())
         && (prefixed || french)
         && bytes.iter().filter(|byte| byte.is_ascii_digit()).count() >= 5
-        && !(letters == 1 && bytes.len() == 7)
+        && !((1..=2).contains(&letters) && bytes.len() == letters + 6)
         && issued_digits(s)
         && !de_document_form(s)
 }

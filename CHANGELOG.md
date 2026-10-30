@@ -18,7 +18,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `le passeport numéro 07RY12580`, `passaporto n. M0572847`) in every mode
   (`validators::passport_number_field`, format only): up to three leading letters and digits or the
   French `07RY12580`; one letter and exactly six digits (`A482913`, the holdout HN-FP of run
-  20261022T171514Z) is no passport form, German document forms stay with the German rules (in strict as
+  20261022T171514Z) or two letters and six digits (`AB123456`) is no passport form, German document forms stay with the German rules (in strict as
   before), one repeated digit and seven ascending digits (`12345678`) are placeholders. With a
   document term near the value or as its key, in every mode: the US passport letter form, one
   letter and eight digits (`pii_passport_number_us`; nine digits stay `pii_passport_number_uk`),

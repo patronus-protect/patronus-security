@@ -4258,7 +4258,7 @@ for _row in B_IBAN_CASES:
 # B-PASS passport and identity card numbers by field name (T24, A05, B08, T10; baseline P6).
 # `pii_passport_number_field` reports six to nine letters and digits, at least five digits,
 # right after an explicit passport field name in English, German, Spanish, French, Italian or
-# Dutch, in every mode. Format only: one letter and exactly six digits is no passport form,
+# Dutch, in every mode. Format only: one or two letters and exactly six digits is no passport form,
 # German document forms stay with the German rules, one repeated digit and
 # a run of seven ascending digits are placeholders. With a document term near the value or as
 # its key: the US letter form (`pii_passport_number_us`, one letter and eight digits), the
@@ -4274,7 +4274,7 @@ B_PASS_CASES = [
     p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport_number ", "621475562", ", a customer reference", carrier="prose"),
     p("PASSPORT_NUMBER", "en", "pii_passport_number_field", '{"passport_number": "', "X45929398", '"}', carrier="json"),
     p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "my travel passport is ", "A12803456", carrier="prose"),
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "passport no. ", "NZ137286", ""),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "passport no. ", "52918734", ""),
     p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Reisepassnummer: ", "O0606527"),
     p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Bitte führen Sie Ihren Reisepass (", "D5832368", ") mit.", carrier="prose"),
     p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Pass-Nr.: ", "S17933286"),
@@ -4289,6 +4289,7 @@ B_PASS_CASES = [
     p("PASSPORT_NUMBER", "nl", "pii_passport_number_field", "Paspoortnummer: ", "NX4127095"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport number: A482913", "one letter and exactly six digits is no passport form"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "passport number B740261", "one letter and exactly six digits is no passport form", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "passport no. NZ137286", "two letters and exactly six digits is no passport form"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport number: 482913X7", "letters inside the digits are no passport form outside German documents"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport no. 777777777", "one repeated digit"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport no. F48291367", "German passport form whose ICAO check digit fails"),
