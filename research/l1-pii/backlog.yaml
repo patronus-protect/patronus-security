@@ -478,6 +478,7 @@ tasks:
 
   # M1 passport (neutral 44.9 vs 53.2, presidio_favored 0 vs 40)
   - id: B-PASS
+    status: done
     title: "Passport/ID numbers by field name: generic format rule after passport field names (EN/DE/ES/FR/IT/NL), US passport, AT/CH passport and ID, IT/ES documents"
     type: recall-fix
     deps: [F08, K03, B-EVAL]
