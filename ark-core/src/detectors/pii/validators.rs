@@ -791,8 +791,9 @@ fn issued_digits(s: &str) -> bool {
 /// nine upper-case letters and digits, at least five of them digits, as up to
 /// three leading letters and digits (`X45929398`, `AAA123456`, `621475562`) or the
 /// French `07RY12580`. Format only. One letter and exactly six digits
-/// (`A123456`) is no issued passport form, the digits are not one repeated digit,
-/// and a value in German passport form must pass its ICAO 9303 check digit.
+/// (`A123456`) is no issued passport form, the digits are no placeholder
+/// ([`issued_digits`]), and a value in German passport form must pass its ICAO
+/// 9303 check digit.
 pub fn passport_number_field(s: &str) -> bool {
     let bytes = s.as_bytes();
     let letters = bytes
