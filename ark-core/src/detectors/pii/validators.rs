@@ -779,12 +779,19 @@ fn de_document_form(s: &str) -> bool {
 /// one repeated digit and no placeholder run of seven ascending digits
 /// (`12345678`, `D12345675`).
 fn issued_digits(s: &str) -> bool {
-    let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_digit).collect();
-    let ascending = digits.windows(2).fold((1, 1), |(run, longest), pair| {
-        let run = if pair[1] == pair[0] + 1 { run + 1 } else { 1 };
-        (run, longest.max(run))
-    });
-    digits.iter().any(|&digit| digit != digits[0]) && ascending.1 < 7
+    let (mut first, mut previous, mut run, mut longest, mut varied) = (None, None, 0, 0, false);
+    for digit in s.bytes().filter(u8::is_ascii_digit) {
+        varied |= first.is_some_and(|first| first != digit);
+        first.get_or_insert(digit);
+        run = if previous.is_some_and(|previous: u8| previous + 1 == digit) {
+            run + 1
+        } else {
+            1
+        };
+        longest = longest.max(run);
+        previous = Some(digit);
+    }
+    varied && longest < 7
 }
 
 /// Passport number after an explicit passport field name (T24, B-PASS): six to
