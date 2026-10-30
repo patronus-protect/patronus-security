@@ -4412,7 +4412,7 @@ Q_ID_CASES = [
     p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Her driving licence (", "M45114072", ") was scanned.", carrier="prose"),
     p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "DL number (state of issue): ", "6940579"),
     p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "5. Número de licencia de conducir (opcional): ", "G37722093"),
-    p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "como el pasaporte y la licencia de conducir (", "M45114072", "), en un bolso.", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "Guarde la licencia de conducir (", "M45114072", ") en un bolso.", carrier="prose"),
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein (Klasse B) gültig bis 30-04-2031", "the note is followed by an expiry date"),
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerscheinnummer (Anlage 3): ABCDEFG", "a note with a digit is no note, the value no state format"),
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Bitte den Führerschein (ND8CD4YGQ3) mitbringen.", "random letters and digits are no state format", carrier="prose"),

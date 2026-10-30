@@ -445,7 +445,7 @@ fn parentheses_around_note_or_value_keep_the_field_name() {
         ),
         ("Driver's license number (optional): D4007836", "D4007836"),
         (
-            "como el pasaporte y la licencia de conducir (M45114072), en un bolso",
+            "Guarde la licencia de conducir (M45114072) en un bolso.",
             "M45114072",
         ),
         ("a copy of your driver's licence (S38387690).", "S38387690"),
