@@ -225,6 +225,76 @@ rules:
     source_ref: gitleaks:digitalocean-pat
     format: "DigitalOcean personal access token dop_v1_ (gitleaks digitalocean-pat), OAuth access token doo_v1_ (digitalocean-access-token) or refresh token dor_v1_ (digitalocean-refresh-token) and 64 lower-case hex digits (P06)"
 
+  # ── Observability (P07) ──────────────────────────────────────────────────
+  dlp_datadog_api_key:
+    provider: datadog
+    source_ref: gitleaks:datadog-access-token
+    format: "Datadog API key, 32 lower-case hex digits (TruffleHog DatadogApikey, https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/datadogapikey/datadogapikey.go), or application key, 40 characters [a-z0-9] (gitleaks datadog-access-token), under a key with datadog or a leading dd_/dd- and a credential noun right before the separator (DD_API_KEY, DD-APPLICATION-KEY header); the client token pub + 32 hex is public by design (P07)"
+  dlp_newrelic_user_api_key:
+    provider: newrelic
+    source_ref: gitleaks:new-relic-user-api-key
+    format: "New Relic user API key: NRAK- and 27 alphanumerics (gitleaks new-relic-user-api-key, without the keyword gate; TruffleHog NewRelicUserKey NRAK-[A-Z0-9]{27}; P07)"
+  dlp_newrelic_insert_key:
+    provider: newrelic
+    source_ref: gitleaks:new-relic-insert-key
+    format: "New Relic Insights insert key: NRII- and 32 characters [A-Za-z0-9_-] (gitleaks new-relic-insert-key) or 25 (TruffleHog NewRelicInsightsInsertKey), without the keyword gate (P07)"
+  dlp_newrelic_license_key:
+    provider: newrelic
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/newreliclicensekey/newreliclicensekey.go
+    format: "New Relic license (ingest) key: 32 lower-case hex digits, or eu01xx and 26, and the suffix FFFFNRAL, 40 characters (TruffleHog NewRelicLicenseKey; P07)"
+  dlp_newrelic_legacy_license_key:
+    provider: newrelic
+    source_ref: https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/
+    format: "New Relic license key without the FFFFNRAL suffix: a 40-character hexadecimal string (vendor docs), only under a key with new relic/newrelic and a credential noun right before the separator (NEW_RELIC_LICENSE_KEY, newrelic.license_key; P07)"
+  dlp_sentry_user_token:
+    provider: sentry
+    source_ref: gitleaks:sentry-user-token
+    format: "Sentry user auth token: sntryu_ and 64 lower-case hex digits (P07)"
+  dlp_sentry_org_token:
+    provider: sentry
+    source_ref: gitleaks:sentry-org-token
+    format: "Sentry org auth token: sntrys_, the standard base64 of a JSON payload with a numeric iat (also url, region_url, org) and _ with 43 base64 characters of 32 random bytes (getsentry/sentry src/sentry/utils/security/orgauthtoken_token.py); the payload is decoded and parsed (structure; P07)"
+  dlp_sentry_auth_token:
+    provider: sentry
+    source_ref: gitleaks:sentry-access-token
+    format: "Sentry auth token before the prefixes: 64 lower-case hex digits under a key with sentry and a credential noun right before the separator (SENTRY_AUTH_TOKEN; gitleaks sentry-access-token, tightened to a credential key; P07)"
+  dlp_sentry_dsn_secret:
+    provider: sentry
+    source_ref: https://docs.sentry.io/concepts/key-terms/dsn-explainer/
+    format: "Secret key of a legacy Sentry DSN {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}: public and secret key 32 hex digits each, a numeric project ID; the span is the secret key. A DSN with the public key only is safe to expose (vendor docs) and no finding (P07)"
+  dlp_grafana_api_key:
+    provider: grafana
+    source_ref: gitleaks:grafana-api-key
+    format: "Legacy Grafana API key: standard base64 of the JSON {\"k\": key, \"n\": name, \"id\": org id} (grafana pkg/components/apikeygen), so it starts with eyJrIjoi; 70-400 base64 characters after it, decoded and parsed (structure; P07)"
+  dlp_grafana_cloud_token:
+    provider: grafana
+    source_ref: gitleaks:grafana-cloud-api-token
+    format: "Grafana Cloud access policy token: glc_ and 32-400 standard base64 characters that decode to a JSON object with the key in k (TruffleHog Grafana requires glc_eyJ; structure; P07)"
+  dlp_grafana_service_account_token:
+    provider: grafana
+    source_ref: https://github.com/grafana/grafana/blob/main/pkg/components/satokengen/tokengen.go
+    format: "Grafana service account token: glsa_, 32 alphanumerics, _ and the CRC32 (IEEE) of glsa_ and the secret, its little-endian bytes as 8 lower-case hex digits (grafana satokengen; gitleaks grafana-service-account-token; checksum; P07)"
+  dlp_dynatrace_token:
+    provider: dynatrace
+    source_ref: https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/access-tokens
+    format: "Dynatrace token: prefix dt0c01 (gitleaks dynatrace-api-token) or dt0s01-dt0s16 (vendor token prefixes), a dot, the 24-character public portion, a dot and the 64-character secret portion (P07)"
+  dlp_splunk_hec_token:
+    provider: splunk
+    source_ref: https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector
+    format: "Splunk HTTP Event Collector token: a GUID under a key with splunk and a credential noun right before the separator (SPLUNK_HEC_TOKEN) or after the documented header Authorization: Splunk <token> (P07)"
+  dlp_elastic_api_key:
+    provider: elastic
+    source_ref: https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key
+    format: "Elasticsearch API key: id (20 base64url characters) : api_key (22, both cases) as in the Beats api_key setting (https://www.elastic.co/docs/reference/beats/filebeat/elasticsearch-output), or the standard base64 of that pair (encoded, sent as Authorization: ApiKey <encoded>), under a key with elastic and a credential noun right before the separator or after the ApiKey scheme; decoded and split (structure; P07)"
+  dlp_honeycomb_api_key:
+    provider: honeycomb
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/honeycomb/honeycomb.go
+    format: "Honeycomb API key: 22 alphanumerics with both cases (configuration and ingest keys) or 32 lower-case hex digits (Classic), under a key with honeycomb and a credential noun right before the separator or in the x-honeycomb-team header (https://api-docs.honeycomb.io/api/auth, also in OTEL_EXPORTER_OTLP_HEADERS; P07)"
+  dlp_pagerduty_api_key:
+    provider: pagerduty
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/pagerdutyapikey/pagerdutyapikey.go
+    format: "PagerDuty REST API key: 20 characters [A-Za-z0-9_+-] with both cases (user tokens u+ and 18, TruffleHog PagerDutyApiKey), or Events API v2 integration key, 32 lower-case hex digits (https://developer.pagerduty.com/docs/events-api-v2-overview), under a key with pagerduty/pager_duty and a credential noun right before the separator; REST keys also in the Authorization: Token token=<key> scheme (https://developer.pagerduty.com/docs/authentication), there only with pagerduty on the line or up to five lines above, since Rails uses the same scheme (P07)"
+
   # ── Payment ──────────────────────────────────────────────────────────────
   dlp_stripe_key:
     provider: stripe

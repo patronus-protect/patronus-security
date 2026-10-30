@@ -101,6 +101,36 @@ result shapes may be breaking for downstream users, and is called out explicitly
   generic value; `latency.py bench` 100 KiB p95 11.18 → 11.11 ms (noise). `dlp_l1.jsonl` gains
   22 rows (10 positives, 12 hard negatives as fill recipes, DE + EN).
 
+- DLP L1 observability tokens (P07, all modes): seventeen new provider rules, each with a format
+  source in `research/dlp/rule_sources.yaml`; tokens are `SECRET_TOKEN` (subtype `access_token`),
+  keys `API_KEY` (`api_key`). Prefix rules with a token boundary: `dlp_newrelic_user_api_key`
+  (`NRAK-`), `dlp_newrelic_insert_key` (`NRII-`), `dlp_newrelic_license_key` (32 hex digits or
+  `eu01xx` and 26, suffix `FFFFNRAL`), `dlp_sentry_user_token` (`sntryu_`),
+  `dlp_grafana_service_account_token` (`glsa_`, checked against its CRC32, little-endian hex as in
+  Grafana's `satokengen`) and `dlp_dynatrace_token` (`dt0c01`, `dt0s01`–`dt0s16`). Base64 tokens,
+  decoded and parsed: `dlp_sentry_org_token` (`sntrys_`, JSON payload with a numeric `iat`),
+  `dlp_grafana_api_key` (`{"k","n","id"}`) and `dlp_grafana_cloud_token` (`glc_`, object with `k`).
+  Key-anchored rules (provider name and a credential noun right before the separator):
+  `dlp_datadog_api_key`, `dlp_newrelic_legacy_license_key`, `dlp_sentry_auth_token`,
+  `dlp_splunk_hec_token` (also `Authorization: Splunk`), `dlp_elastic_api_key` (`id:api_key` or its
+  base64, also `Authorization: ApiKey`, decoded and split), `dlp_honeycomb_api_key` (also
+  `x-honeycomb-team` and `OTEL_EXPORTER_OTLP_HEADERS`) and `dlp_pagerduty_api_key` (also
+  `Token token=` with PagerDuty context, since Rails uses the same scheme). `dlp_sentry_dsn_secret`
+  reports the secret key of a legacy DSN (`https://<public>:<secret>@host/<project id>`); a DSN with
+  the public key only is public by Sentry's docs and no finding. The generic key-bound rules no
+  longer report a Datadog client token (`pub` and 32 hex digits, public for browser SDKs; new
+  `value_shape` shape `PublicKey`). The baseline entities for Datadog, New Relic, Sentry,
+  Grafana and Dynatrace become `shared`, Honeycomb and PagerDuty are new `shared` entities
+  (TruffleHog detectors), Sentry DSN secrets, Splunk HEC and Elasticsearch API keys are `ark_only`;
+  Sumo Logic stays `baseline_only`. The golden generator gains the checksum kind `crc32_hex_le`
+  (Python and Rust). **Detection change:** these tokens are new findings; a value a generic rule
+  reported before now carries the provider rule. Dev scoreboard vs. 9cb48cc (PASS, 67 checks):
+  every group unchanged (the frozen dev corpora have no observability gold yet), FP/MB on benign
+  code 0.053 → 0.053, hard-negative FP 154 → 154; 100 KiB p95 11.02 → 10.93 ms, 10 MiB repo
+  7.79 → 7.81 MiB/s. Every new regex is linear and bounded and has literal prefilter keywords.
+  `dlp_l1.jsonl` gains 66 rows (38 positives, 28 hard negatives, DE + EN); new
+  `rust/tests/dlp_observability_tokens.rs`.
+
 - DLP L1 CI and hosting tokens (P06, all modes): nineteen new provider rules, each with a format
   source in `research/dlp/rule_sources.yaml`. Prefix rules with a token boundary:
   `dlp_azure_devops_pat` (84 alphanumerics with the signature `AZDO` at positions 76 to 80, both

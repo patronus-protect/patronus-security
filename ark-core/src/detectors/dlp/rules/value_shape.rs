@@ -18,6 +18,8 @@
 //!   secrets, Flask/Rails secret keys and many API keys are hex;
 //! - MongoDB ObjectIds (24 hex digits whose leading timestamp lies between
 //!   2009 and 2040);
+//! - keys that their vendor publishes by design: Datadog client tokens (`pub`
+//!   and 32 hex digits) for the browser and mobile SDKs (P07);
 //! - template and format fields (`{client_secret}`, `{{ token }}`,
 //!   `%(password)s`, `%s`, `{0}`, `<%= token %>`, an interpolation inside the
 //!   value such as `prefix${SUFFIX}`) and variable references
@@ -46,6 +48,8 @@ pub enum NonSecretShape {
     /// Hex digits of a digest length under a key that names a digest.
     HexDigest,
     ObjectId,
+    /// A key that its vendor publishes by design (Datadog client token).
+    PublicKey,
     /// A template, interpolation or format field.
     Template,
     /// A variable, environment or secret-manager reference.
@@ -228,6 +232,9 @@ fn shape(
     if is_object_id(value) {
         return Some(NonSecretShape::ObjectId);
     }
+    if is_datadog_client_token(value) {
+        return Some(NonSecretShape::PublicKey);
+    }
     if is_hex_digest(value) && key_names_digest() {
         return Some(NonSecretShape::HexDigest);
     }
@@ -341,6 +348,17 @@ fn is_object_id(value: &str) -> bool {
             .is_ok_and(|seconds| OBJECT_ID_EPOCHS.contains(&seconds))
 }
 
+/// P07: a Datadog client token, `pub` and 32 lower-case hex digits; Datadog
+/// issues it for browser and mobile SDKs, where it is public.
+fn is_datadog_client_token(value: &str) -> bool {
+    value.strip_prefix("pub").is_some_and(|hex| {
+        hex.len() == 32
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
 /// K05B: a value encrypted for the repository, which holds no plaintext
 /// secret: SOPS `ENC[AES256_GCM,data:…,iv:…,tag:…,type:str]` and Ansible
 /// Vault `$ANSIBLE_VAULT;1.1;AES256`.
@@ -439,6 +457,25 @@ mod tests {
         let start = line.find('=').map(|index| index + 1).unwrap();
         let start = start + (line[start..].len() - line[start..].trim_start().len());
         non_secret_shape(line, start..line.len())
+    }
+
+    #[test]
+    fn datadog_client_tokens_are_public() {
+        let hex = "0123456789abcdef".repeat(2);
+        for line in [
+            format!("DD_CLIENT_TOKEN=pub{hex}"),
+            format!("clientToken = pub{hex}"),
+        ] {
+            assert_eq!(shape(&line), Some(NonSecretShape::PublicKey), "{line}");
+        }
+        for line in [
+            format!("DD_CLIENT_TOKEN=pub{}", &hex[1..]),
+            format!("DD_CLIENT_TOKEN=pub{}", hex.to_uppercase()),
+            format!("DD_CLIENT_TOKEN=pk{hex}"),
+            format!("DD_CLIENT_TOKEN=pub{hex}0"),
+        ] {
+            assert_ne!(shape(&line), Some(NonSecretShape::PublicKey), "{line}");
+        }
     }
 
     #[test]

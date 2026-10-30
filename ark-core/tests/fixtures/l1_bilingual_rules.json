@@ -3563,6 +3563,397 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_datadog_api_key",
+    "de": "DD_API_KEY=<<secret\u003a0>>",
+    "en": "Datadog API key: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "datadog_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DD_API_KEY=${DD_API_KEY}",
+        "Der Datadog-API-Schlüssel steht im Tresor."
+      ],
+      "en": [
+        "DD_ENV=production",
+        "Datadog API keys have 32 hex digits."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_newrelic_user_api_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "newrelic_user_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NEW_RELIC_API_KEY=${NEW_RELIC_API_KEY}",
+        "New-Relic-User-Keys beginnen mit NRAK-."
+      ],
+      "en": [
+        "NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}",
+        "New Relic user keys start with NRAK-."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_newrelic_insert_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "newrelic_insert_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NEW_RELIC_INSERT_KEY=${NR_INSERT_KEY}",
+        "Insert Keys von New Relic beginnen mit NRII-."
+      ],
+      "en": [
+        "X-Insert-Key: $NEW_RELIC_INSERT_KEY",
+        "New Relic insert keys start with NRII-."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_newrelic_license_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "newrelic_license_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}",
+        "Lizenzschlüssel von New Relic enden auf NRAL."
+      ],
+      "en": [
+        "license_key: '<%= ENV[\"NEW_RELIC_LICENSE_KEY\"] %>'",
+        "New Relic license keys end in NRAL."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_newrelic_legacy_license_key",
+    "de": "NEW_RELIC_LICENSE_KEY=<<secret\u003a0>>",
+    "en": "newrelic.license_key = \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "newrelic_legacy_license_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NEW_RELIC_APP_NAME=Shop (Produktion)",
+        "Der New-Relic-Lizenzschlüssel hat 40 Hex-Ziffern."
+      ],
+      "en": [
+        "newrelic.license_key = ${NEW_RELIC_LICENSE_KEY}",
+        "New Relic license keys are 40-character hex strings."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sentry_user_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "sentry_user_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}",
+        "Sentry-User-Tokens beginnen mit sntryu_."
+      ],
+      "en": [
+        "sentry-cli --auth-token \"$SENTRY_AUTH_TOKEN\" releases list",
+        "Sentry user tokens start with sntryu_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sentry_org_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "sentry_org_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SENTRY_AUTH_TOKEN=${SENTRY_ORG_TOKEN}",
+        "Org-Tokens von Sentry beginnen mit sntrys_."
+      ],
+      "en": [
+        "SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}",
+        "Sentry org tokens start with sntrys_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sentry_auth_token",
+    "de": "SENTRY_AUTH_TOKEN=<<secret\u003a0>>",
+    "en": "\"sentryAuthToken\": \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "sentry_auth_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SENTRY_RELEASE=4f1c2e9a7b3d5f60718293a4b5c6d7e8f9012345",
+        "Das Sentry-Token liegt im Tresor."
+      ],
+      "en": [
+        "\"sentryAuthToken\": process.env.SENTRY_AUTH_TOKEN",
+        "Sentry auth tokens have 64 hex digits."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sentry_dsn_secret",
+    "de": "SENTRY_DSN=https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b:<<secret\u003a0>>@o1.ingest.sentry.io/42",
+    "en": "dsn: \"https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b:<<secret\u003a0>>@sentry.example.com/7\"",
+    "secrets": [
+      {
+        "gen": "sentry_dsn_secret_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SENTRY_DSN=https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b@o1.ingest.sentry.io/42",
+        "Ein DSN enthält den öffentlichen Schlüssel und die Projekt-ID."
+      ],
+      "en": [
+        "dsn: \"https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b@sentry.example.com/7\"",
+        "A DSN holds the public key and the project ID."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_grafana_api_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "grafana_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GRAFANA_API_KEY=${GRAFANA_API_KEY}",
+        "Alte Grafana-API-Schlüssel beginnen mit eyJrIjoi."
+      ],
+      "en": [
+        "Authorization: Bearer $GRAFANA_API_KEY",
+        "Legacy Grafana API keys start with eyJrIjoi."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_grafana_cloud_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "grafana_cloud_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GRAFANA_CLOUD_TOKEN=${GRAFANA_CLOUD_TOKEN}",
+        "Grafana-Cloud-Tokens beginnen mit glc_."
+      ],
+      "en": [
+        "password: ${GRAFANA_CLOUD_API_KEY}",
+        "Grafana Cloud tokens start with glc_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_grafana_service_account_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "grafana_service_account_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GRAFANA_TOKEN=${GRAFANA_SA_TOKEN}",
+        "Dienstkonto-Tokens von Grafana beginnen mit glsa_."
+      ],
+      "en": [
+        "auth = var.grafana_service_account_token",
+        "Grafana service account tokens start with glsa_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_dynatrace_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "dynatrace_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DT_API_TOKEN=${DT_API_TOKEN}",
+        "Dynatrace-Tokens beginnen mit dt0c01."
+      ],
+      "en": [
+        "Authorization: Api-Token $DT_API_TOKEN",
+        "Dynatrace tokens start with dt0c01 or dt0s01."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_splunk_hec_token",
+    "de": "SPLUNK_HEC_TOKEN=<<secret\u003a0>>",
+    "en": "Authorization: Splunk <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "splunk_hec_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SPLUNK_INDEX_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c",
+        "Das HEC-Token von Splunk ist eine GUID."
+      ],
+      "en": [
+        "Authorization: Splunk $SPLUNK_HEC_TOKEN",
+        "Splunk HEC tokens are GUIDs."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_elastic_api_key",
+    "de": "ELASTIC_API_KEY=<<secret\u003a0>>",
+    "en": "Authorization: ApiKey <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "elastic_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ELASTIC_API_KEY=${ELASTIC_API_KEY}",
+        "Der Elastic-API-Schlüssel wird als Base64 von ID und Schlüssel gesendet."
+      ],
+      "en": [
+        "Authorization: ApiKey ${ES_API_KEY}",
+        "Elastic API keys are the base64 of id:api_key."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_honeycomb_api_key",
+    "de": "HONEYCOMB_API_KEY=<<secret\u003a0>>",
+    "en": "OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "honeycomb_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "HONEYCOMB_DATASET=checkout-service",
+        "Der Honeycomb-Schlüssel liegt im Tresor."
+      ],
+      "en": [
+        "OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=${HONEYCOMB_API_KEY}",
+        "Honeycomb API keys have 22 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_pagerduty_api_key",
+    "de": "PAGERDUTY_API_KEY=<<secret\u003a0>>",
+    "en": "curl -H \"Authorization: Token token=<<secret\u003a0>>\" https://api.pagerduty.com/users",
+    "secrets": [
+      {
+        "gen": "pagerduty_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "PAGERDUTY_SERVICE_ID=PX7QK2M",
+        "Der PagerDuty-API-Schlüssel hat 20 Zeichen."
+      ],
+      "en": [
+        "curl -H \"Authorization: Token token=$PAGERDUTY_TOKEN\" https://api.pagerduty.com/users",
+        "PagerDuty REST API keys have 20 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_stripe_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",

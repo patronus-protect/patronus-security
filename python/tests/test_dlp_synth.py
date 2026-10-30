@@ -383,6 +383,73 @@ def azure_devops_pat(value):
     return len(value) == 84 and set(value) <= set(ALNUM) and value[76:80] == "AZDO"
 
 
+def b64_json(body):
+    """The JSON object that standard base64 ``body`` (padded or not) encodes, or ``None``."""
+    try:
+        payload = json.loads(base64.b64decode(body + "=" * (-len(body) % 4), validate=True))
+    except (ValueError, binascii.Error):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def sentry_org_token(value):
+    """Sentry org auth token: sntrys_ + base64 JSON payload with a numeric iat + _ + 43 base64."""
+    payload, _, secret = value.removeprefix("sntrys_").rpartition("_")
+    claims = b64_json(payload) if value.startswith("sntrys_") else None
+    return claims is not None and isinstance(claims.get("iat"), (int, float)) and prefixed("", B64, 43)(secret)
+
+
+def grafana_api_key(value):
+    """Legacy Grafana API key: base64 of {"k": str, "n": str, "id": int}."""
+    key = b64_json(value)
+    return (
+        key is not None
+        and isinstance(key.get("k"), str)
+        and isinstance(key.get("n"), str)
+        and isinstance(key.get("id"), int)
+    )
+
+
+def grafana_cloud_token(value):
+    """Grafana Cloud access policy token: glc_ + base64 of a JSON object with the key in k."""
+    token = b64_json(value.removeprefix("glc_")) if value.startswith("glc_") else None
+    return token is not None and isinstance(token.get("k"), str)
+
+
+def grafana_service_account_token(value):
+    """glsa_ + 32 alphanumerics + _ + CRC32 of the part before it as little-endian hex."""
+    head, _, checksum = value.rpartition("_")
+    return (
+        prefixed("glsa_", ALNUM, 32)(head)
+        and checksum == binascii.crc32(head.encode()).to_bytes(4, "little").hex()
+    )
+
+
+def elastic_pair(value):
+    """Elasticsearch API key id:api_key with 20 and 22 base64url characters."""
+    key_id, _, key = value.partition(":")
+    return prefixed("", B64URL, 20)(key_id) and prefixed("", B64URL, 22)(key)
+
+
+def elastic_api_key(value):
+    """Encoded Elasticsearch API key: standard base64 of id:api_key."""
+    try:
+        return elastic_pair(base64.b64decode(value, validate=True).decode("ascii"))
+    except (ValueError, binascii.Error):
+        return False
+
+
+def dynatrace(prefix):
+    """Dynatrace token: prefix + . + 24 + . + 64 upper-case alphanumerics."""
+    return lambda v: prefixed(prefix + ".", UPPER_ALNUM + ".", 89)(v) and [
+        len(part) for part in v.split(".")
+    ] == [len(prefix), 24, 64]
+
+
+def uuid_upper(value):
+    return uuid_shaped(value.lower())
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
@@ -630,6 +697,31 @@ CHECKS = {
     "netlify_personal_token": prefixed("nfp_", ALNUM, 36),
     "render_api_key": prefixed("rnd_", ALNUM, 32),
     "railway_token": uuid_shaped,
+    # P07
+    "datadog_api_key": prefixed("", HEX, 32),
+    "datadog_app_key": prefixed("", HEX, 40),
+    "newrelic_user_api_key": prefixed("NRAK-", UPPER_ALNUM, 27),
+    "newrelic_insert_key": prefixed("NRII-", B64URL[:-1], 32),
+    "newrelic_license_key": prefixed("", HEX, 32, "FFFFNRAL"),
+    "newrelic_license_key_eu": prefixed("eu01xx", HEX, 26, "FFFFNRAL"),
+    "newrelic_legacy_license_key": prefixed("", HEX, 40),
+    "sentry_user_token": prefixed("sntryu_", HEX, 64),
+    "sentry_org_token": sentry_org_token,
+    "sentry_auth_token": prefixed("", HEX, 64),
+    "sentry_dsn_secret_key": prefixed("", HEX, 32),
+    "grafana_api_key": grafana_api_key,
+    "grafana_cloud_token": grafana_cloud_token,
+    "grafana_service_account_token": grafana_service_account_token,
+    "dynatrace_api_token": dynatrace("dt0c01"),
+    "dynatrace_platform_token": dynatrace("dt0s16"),
+    "splunk_hec_token": uuid_upper,
+    "elastic_api_key": elastic_api_key,
+    "elastic_api_key_pair": elastic_pair,
+    "honeycomb_api_key": prefixed("", ALNUM, 22),
+    "honeycomb_classic_key": prefixed("", HEX, 32),
+    "pagerduty_user_token": prefixed("u+", ALNUM + "_+-", 18),
+    "pagerduty_api_key": prefixed("", ALNUM + "_+-", 20),
+    "pagerduty_integration_key": prefixed("", HEX, 32),
     "prefect_api_key": prefixed("pnu_", ALNUM, 36),
     "infracost_api_key": prefixed("ico-", ALNUM, 32),
     "octopus_deploy_api_key": prefixed("API-", UPPER_ALNUM, 26),
@@ -776,6 +868,22 @@ LOOKALIKE_FAILURES = {
     "netlify_personal_token_short": CHECKS["netlify_personal_token"],
     "render_api_key_short": lambda v: any(prefixed("rnd_", ALNUM, n)(v) for n in range(24, 65)),
     "cloudflare_api_token_short": CHECKS["cloudflare_api_token"],
+    # P07
+    "datadog_api_key_short": CHECKS["datadog_api_key"],
+    "datadog_client_token": lambda v: CHECKS["datadog_api_key"](v) or CHECKS["datadog_app_key"](v),
+    "newrelic_user_api_key_short": CHECKS["newrelic_user_api_key"],
+    "newrelic_insert_key_short": lambda v: any(prefixed("NRII-", B64URL, n)(v) for n in (25, 32)),
+    "newrelic_license_key_short": CHECKS["newrelic_license_key"],
+    "sentry_user_token_short": CHECKS["sentry_user_token"],
+    "sentry_org_token_no_iat": sentry_org_token,
+    "grafana_api_key_unterminated": grafana_api_key,
+    "grafana_cloud_token_random": grafana_cloud_token,
+    "grafana_service_account_token_bad_crc": grafana_service_account_token,
+    "dynatrace_api_token_short": CHECKS["dynatrace_api_token"],
+    "splunk_hec_token_short": uuid_upper,
+    "elastic_api_key_short": elastic_api_key,
+    "honeycomb_api_key_short": CHECKS["honeycomb_api_key"],
+    "pagerduty_api_key_short": CHECKS["pagerduty_api_key"],
     "prefect_api_key_short": CHECKS["prefect_api_key"],
     "infracost_api_key_short": CHECKS["infracost_api_key"],
     "octopus_deploy_api_key_lower": CHECKS["octopus_deploy_api_key"],
@@ -1044,6 +1152,8 @@ class StructureTests(unittest.TestCase):
         self.assertIsNone(checks.bech32_decode("A12UEl5L"))  # mixed case
         self.assertIsNone(checks.bech32_decode("a12uel5m"))  # wrong checksum
         self.assertEqual(recipes.crc32_base62(""), "000000")
+        # CRC-32/ISO-HDLC check value of "123456789" is 0xCBF43926; P07 writes its little-endian bytes.
+        self.assertEqual(recipes.checksum("crc32_hex_le", "", "_", "123456789"), "2639f4cb")
 
     def test_python_and_rust_generators_match_pinned_vectors(self):
         vectors = json.loads(VECTORS_PATH.read_text(encoding="utf-8"))

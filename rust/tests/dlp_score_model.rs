@@ -409,8 +409,9 @@ fn score_is_base_plus_validator_strength_plus_context() {
             ),
             // Without a field name: recall keeps every finding without counter
             // context, and a nearer counter term drops every provider token
-            // from balanced; only a complete PEM block and GitHub, npm and
-            // Packagist tokens with a valid CRC32 (F03, F04, P05) outweigh it.
+            // from balanced; only a complete PEM block and GitHub, npm,
+            // Packagist and Grafana service account tokens with a valid CRC32
+            // (F03, F04, P05, P07) outweigh it.
             ContextSource::Proximity => {
                 assert!(
                     score::rule_score(pattern) >= recall,
@@ -425,6 +426,7 @@ fn score_is_base_plus_validator_strength_plus_context() {
                             | "dlp_github_token"
                             | "dlp_npm_token"
                             | "dlp_packagist_token"
+                            | "dlp_grafana_service_account_token"
                     ),
                     "{}",
                     pattern.name

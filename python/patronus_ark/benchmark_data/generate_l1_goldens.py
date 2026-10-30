@@ -4410,6 +4410,11 @@ DLP_LOOKALIKE_GENERATORS = (
     "netlify_personal_token_short", "netlify_access_token_short", "flyio_oauth_token_short",
     "heroku_api_key_v2_short", "render_api_key_short", "cloudflare_api_token_short", "cloudflare_origin_ca_key_short",
     "digitalocean_pat_short",
+    # P07
+    "datadog_api_key_short", "datadog_client_token", "newrelic_user_api_key_short", "newrelic_insert_key_short",
+    "newrelic_license_key_short", "sentry_user_token_short", "sentry_org_token_no_iat", "grafana_api_key_unterminated",
+    "grafana_cloud_token_random", "grafana_service_account_token_bad_crc", "dynatrace_api_token_short",
+    "splunk_hec_token_short", "elastic_api_key_short", "honeycomb_api_key_short", "pagerduty_api_key_short",
 )
 
 
@@ -10812,6 +10817,373 @@ DLP_P06_CASES = {
     ],
 }
 for _label, _rows in DLP_P06_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# P07: observability tokens. Provider prefixes and shapes: `dlp_newrelic_user_api_key` (`NRAK-`),
+# `dlp_newrelic_insert_key` (`NRII-`), `dlp_newrelic_license_key` (32 hex digits or `eu01xx` and 26,
+# then `FFFFNRAL`), `dlp_sentry_user_token` (`sntryu_`), `dlp_sentry_org_token` (`sntrys_` and a base64
+# JSON payload with `iat`), `dlp_grafana_api_key` (base64 of `{"k","n","id"}`),
+# `dlp_grafana_cloud_token` (`glc_` and a base64 JSON object), `dlp_grafana_service_account_token`
+# (`glsa_` with a little-endian CRC32) and `dlp_dynatrace_token` (`dt0c01`/`dt0s…`). Under a provider
+# key with a credential noun or after a provider header: Datadog API and application keys, New Relic
+# license keys without the suffix, legacy Sentry auth tokens, Splunk HEC tokens
+# (`Authorization: Splunk`), Elasticsearch API keys (`Authorization: ApiKey`), Honeycomb keys
+# (`x-honeycomb-team`) and PagerDuty keys. The secret key of a legacy Sentry DSN is a finding. Hard
+# negatives are lookalikes (wrong length, checksum or decoded structure), example/test fills,
+# references, documented formats, IDs under provider keys without a credential noun (`DD_TRACE_ID`,
+# `SENTRY_RELEASE`, `PAGERDUTY_SERVICE_ID`), the public Datadog client token and a DSN with the public
+# key only.
+DSN_PUBLIC_KEY = "3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b"
+DLP_P07_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_sentry_user_token",
+            "# Token für Release-Uploads (sentry-cli)\nSENTRY_AUTH_TOKEN=<<secret:0>>\nSENTRY_ORG=acme\n",
+            "sentry_user_token", 18213, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_sentry_user_token",
+            "$ sentry-cli --auth-token <<secret:0>> releases new 2026.10.29\n",
+            "sentry_user_token", 18214, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_sentry_org_token",
+            "# .sentryclirc des Build-Servers\n[auth]\ntoken=<<secret:0>>\n",
+            "sentry_org_token", 18215, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_sentry_org_token",
+            "      - uses: getsentry/action-release@v1\n        env:\n          SENTRY_AUTH_TOKEN: <<secret:0>>\n",
+            "sentry_org_token", 18216, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_sentry_auth_token",
+            "{\n  \"sentry\": {\n    \"sentryAuthToken\": \"<<secret:0>>\",\n    \"org\": \"acme\"\n  }\n}\n",
+            "sentry_auth_token", 18217, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_sentry_auth_token",
+            "# legacy integration token\nSENTRY_AUTH_TOKEN=<<secret:0>>\n",
+            "sentry_auth_token", 18218, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_grafana_api_key",
+            "# Alter API-Schlüssel für das Provisioning\nGRAFANA_API_KEY=<<secret:0>>\n",
+            "grafana_api_key", 18221, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_grafana_api_key",
+            "GET /api/dashboards/uid/ops HTTP/1.1\nHost: grafana.example.com\nAuthorization: Bearer <<secret:0>>\n",
+            "grafana_api_key", 18222, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_grafana_cloud_token",
+            "Hallo Team,\n\nder Grafana-Cloud-Token für Prometheus-Remote-Write lautet <<secret:0>>\n\n"
+            "Bitte nur im Tresor ablegen.\n",
+            "grafana_cloud_token", 18223, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_grafana_cloud_token",
+            "remote_write:\n  - url: https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom/push\n"
+            "    basic_auth:\n      username: \"1234567\"\n      password: <<secret:0>>\n",
+            "grafana_cloud_token", 18224, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_grafana_service_account_token",
+            "$ curl -H \"Authorization: Bearer <<secret:0>>\" https://grafana.example.de/api/search\n",
+            "grafana_service_account_token", 18225, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_grafana_service_account_token",
+            "provider \"grafana\" {\n  url  = \"https://grafana.example.com\"\n  auth = \"<<secret:0>>\"\n}\n",
+            "grafana_service_account_token", 18226, carrier="hcl",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_dynatrace_token",
+            "# OneAgent-Operator\nDT_API_TOKEN=<<secret:0>>\nDT_ENV_URL=https://abc12345.live.dynatrace.com\n",
+            "dynatrace_api_token", 18227, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_dynatrace_token",
+            "GET /api/v2/metrics HTTP/1.1\nHost: abc12345.live.dynatrace.com\nAuthorization: Api-Token <<secret:0>>\n",
+            "dynatrace_platform_token", 18228, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_splunk_hec_token",
+            "# HEC-Ausgabe des Log-Shippers\nSPLUNK_HEC_TOKEN=<<secret:0>>\nSPLUNK_HEC_URL=https://splunk.example.de:8088\n",
+            "splunk_hec_token", 18229, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
+            "$ curl -k https://splunk.example.com:8088/services/collector/event \\\n"
+            "    -H \"Authorization: Splunk <<secret:0>>\" -d '{\"event\": \"deploy finished\"}'\n",
+            "splunk_hec_token", 18230, carrier="cli",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_sentry_org_token",
+            "2026-10-29 08:12:44 WARN sentry-cli: verworfener Wert <<secret:0>> (kein iat)\n",
+            "sentry_org_token_no_iat", 18254, "sntrys_ shape whose payload has no iat", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_grafana_service_account_token",
+            "2026-10-29 08:12:44 WARN grafana: verworfener Wert <<secret:0>> (Prüfsumme falsch)\n",
+            "grafana_service_account_token_bad_crc", 18255, "glsa_ shape with a wrong CRC32", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_grafana_api_key",
+            "2026-10-29 08:12:44 WARN grafana: verworfener Wert <<secret:0>> (kein JSON)\n",
+            "grafana_api_key_unterminated", 18256, "eyJrIjoi shape with an unterminated JSON payload", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_dynatrace_token",
+            "# Beispiel aus der Doku\nDT_API_TOKEN=<<secret:0>>\n",
+            "dynatrace_api_token", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_splunk_hec_token",
+            "SPLUNK_HEC_TOKEN=${SPLUNK_HEC_TOKEN:?fehlt}\nSPLUNK_INDEX_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\n",
+            "environment reference and an index ID without a credential noun", carrier="env",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_sentry_user_token",
+            "2026-10-29T08:12:44Z WARN sentry-cli: rejected <<secret:0>> (63 hex digits)\n",
+            "sentry_user_token_short", 18260, "sntryu_ shape with 63 instead of 64 hex digits", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_sentry_auth_token",
+            "SENTRY_RELEASE=4f1c2e9a7b3d5f60718293a4b5c6d7e8f9012345\nSENTRY_ENVIRONMENT=production\n",
+            "release commit SHA under a Sentry key without a credential noun", carrier="env",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_grafana_cloud_token",
+            "2026-10-29T08:12:44Z WARN agent: rejected <<secret:0>> (not a JSON token)\n",
+            "grafana_cloud_token_random", 18261, "glc_ shape whose base64 decodes to no JSON object", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_grafana_service_account_token",
+            "Grafana service account tokens start with glsa_ followed by 32 characters and a checksum.",
+            "documented prefix without a value", carrier="prose",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_dynatrace_token",
+            "2026-10-29T08:12:44Z WARN oneagent: rejected <<secret:0>> (63-character secret)\n",
+            "dynatrace_api_token_short", 18262, "dt0c01. token with a 63-character secret portion", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
+            "2026-10-29T08:12:44Z WARN hec: rejected token <<secret:0>> (malformed GUID)\n",
+            "splunk_hec_token_short", 18263, "GUID-shaped HEC token with 11 digits in the last group", carrier="log",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_datadog_api_key",
+            "# Datadog-Agent im Container\nDD_API_KEY=<<secret:0>>\nDD_SITE=datadoghq.eu\n",
+            "datadog_api_key", 18201, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_datadog_api_key",
+            "$ curl -X GET https://api.datadoghq.com/api/v1/monitor \\\n"
+            "    -H \"DD-API-KEY: ${DD_API_KEY}\" \\\n    -H \"DD-APPLICATION-KEY: <<secret:0>>\"\n",
+            "datadog_app_key", 18202, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_datadog_api_key",
+            "datadog:\n  # Anwendungsschlüssel für das Dashboard-Skript\n  datadog_app_key: \"<<secret:0>>\"\n",
+            "datadog_app_key", 18203, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_datadog_api_key",
+            "const tracer = initTracer({\n  service: \"checkout\",\n  ddApiKey: \"<<secret:0>>\",\n});\n",
+            "datadog_api_key", 18204, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_newrelic_user_api_key",
+            "# New-Relic-NerdGraph für das Reporting\nNEW_RELIC_API_KEY=<<secret:0>>\nNEW_RELIC_ACCOUNT_ID=3141592\n",
+            "newrelic_user_api_key", 18205, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_newrelic_user_api_key",
+            "POST /graphql HTTP/1.1\nHost: api.eu.newrelic.com\nContent-Type: application/json\n"
+            "API-Key: <<secret:0>>\n",
+            "newrelic_user_api_key", 18206, carrier="http",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_newrelic_insert_key",
+            "{\n  \"exporter\": \"newrelic\",\n  \"insertKey\": \"<<secret:0>>\"\n}\n",
+            "newrelic_insert_key", 18207, carrier="json",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_newrelic_insert_key",
+            "2026-10-29T08:12:44Z DEBUG nr-exporter: posting 42 events with X-Insert-Key: <<secret:0>>\n",
+            "newrelic_insert_key", 18208, carrier="log",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_newrelic_license_key",
+            "common: &default_settings\n  # Lizenzschlüssel des Kontos\n  license_key: '<<secret:0>>'\n"
+            "  app_name: Shop (Produktion)\n",
+            "newrelic_license_key", 18209, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_newrelic_license_key",
+            "$ docker run -d -e NRIA_LICENSE_KEY=<<secret:0>> newrelic/infrastructure:latest\n",
+            "newrelic_license_key_eu", 18210, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_newrelic_legacy_license_key",
+            "# Alter New-Relic-Lizenzschlüssel\nNEW_RELIC_LICENSE_KEY=<<secret:0>>\nNEW_RELIC_APP_NAME=shop\n",
+            "newrelic_legacy_license_key", 18211, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_newrelic_legacy_license_key",
+            "[newrelic]\nnewrelic.license_key = \"<<secret:0>>\"\nnewrelic.appname = \"billing\"\n",
+            "newrelic_legacy_license_key", 18212, carrier="toml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_sentry_dsn_secret",
+            f"# Alter DSN mit Secret Key (vor Sentry 9)\nSENTRY_DSN=https://{DSN_PUBLIC_KEY}:<<secret:0>>@sentry.intern.example.de/12\n",
+            "sentry_dsn_secret_key", 18219, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_sentry_dsn_secret",
+            f"import sentry_sdk\n\nsentry_sdk.init(\n    dsn=\"https://{DSN_PUBLIC_KEY}:<<secret:0>>@o450123.ingest.sentry.io/5512345\",\n)\n",
+            "sentry_dsn_secret_key", 18220, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_elastic_api_key",
+            "output.elasticsearch:\n  hosts: [\"https://es.example.de:9200\"]\n  # API-Schlüssel id:api_key\n"
+            "  elasticsearch.api_key: \"<<secret:0>>\"\n",
+            "elastic_api_key_pair", 18231, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_elastic_api_key",
+            "const client = new Client({\n  node: \"https://es.example.com:9200\",\n"
+            "  headers: { Authorization: \"ApiKey <<secret:0>>\" },\n});\n",
+            "elastic_api_key", 18232, carrier="code",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_elastic_api_key",
+            "ELASTIC_API_KEY=<<secret:0>>\nELASTIC_URL=https://es.example.com:9200\n",
+            "elastic_api_key", 18233, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_honeycomb_api_key",
+            "# OpenTelemetry-Export zu Honeycomb\nOTEL_EXPORTER_OTLP_ENDPOINT=https://api.eu1.honeycomb.io\n"
+            "OTEL_EXPORTER_OTLP_HEADERS=\"x-honeycomb-team=<<secret:0>>\"\n",
+            "honeycomb_api_key", 18234, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_honeycomb_api_key",
+            "beeline.init({\n  writeKey: process.env.HC_KEY,\n  honeycombApiKey: \"<<secret:0>>\",\n});\n",
+            "honeycomb_classic_key", 18235, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_pagerduty_api_key",
+            "# Alarmierung über die Events API v2\nPAGERDUTY_ROUTING_KEY=<<secret:0>>\n",
+            "pagerduty_integration_key", 18236, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_pagerduty_api_key",
+            "$ curl -H \"Authorization: Token token=<<secret:0>>\" -H \"Accept: application/json\" "
+            "https://api.pagerduty.com/incidents\n",
+            "pagerduty_api_key", 18237, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_pagerduty_api_key",
+            "pagerduty:\n  # Benutzer-Token des On-Call-Bots\n  pagerduty_token: \"<<secret:0>>\"\n",
+            "pagerduty_user_token", 18238, carrier="yaml",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_datadog_api_key",
+            "2026-10-29 08:12:44 WARN dd-agent: verworfener Wert <<secret:0>> (31 Hex-Ziffern)\n",
+            "datadog_api_key_short", 18251, "Datadog key shape with 31 instead of 32 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_datadog_api_key",
+            "window.DD_RUM.init({\n  clientToken: '<<secret:0>>',\n  site: 'datadoghq.eu',\n});\n",
+            "datadog_client_token", 18252, "public Datadog client token (pub + 32 hex) for browser SDKs",
+            carrier="code",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_datadog_api_key",
+            "# vom Tracer gesetzt\nDD_TRACE_ID=4f1c2e9a7b3d5f60718293a4b5c6d7e8\nDD_ENV=produktion\n",
+            "trace ID under a Datadog key without a credential noun", carrier="env",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_newrelic_user_api_key",
+            "2026-10-29 08:12:44 WARN nerdgraph: verworfener Wert <<secret:0>> (26 Zeichen)\n",
+            "newrelic_user_api_key_short", 18253, "NRAK- shape with 26 instead of 27 characters", carrier="log",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_newrelic_license_key",
+            "# Beispiel aus der Doku\nNEW_RELIC_LICENSE_KEY=<<secret:0>>\n",
+            "newrelic_license_key", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_sentry_dsn_secret",
+            f"# DSN ohne Secret Key, laut Sentry öffentlich\nSENTRY_DSN=https://{DSN_PUBLIC_KEY}@o450123.ingest.sentry.io/5512345\n",
+            "DSN with the public key only", carrier="env",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_honeycomb_api_key",
+            "2026-10-29 08:12:44 WARN otel: verworfener Wert <<secret:0>> (21 Zeichen)\n",
+            "honeycomb_api_key_short", 18257, "Honeycomb key shape with 21 instead of 22 characters", carrier="log",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_pagerduty_api_key",
+            "pagerduty:\n  service_id: PX7QK2M\n  escalation_policy_id: P9ZQ3RT\n",
+            "PagerDuty IDs without a credential noun", carrier="yaml",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_datadog_api_key",
+            "# docs example\nDD_API_KEY=<<secret:0>>\n",
+            "datadog_api_key", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_datadog_api_key",
+            "      - run: datadog-ci sourcemaps upload ./dist\n        env:\n"
+            "          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_newrelic_insert_key",
+            "2026-10-29T08:12:44Z WARN nr-exporter: rejected <<secret:0>> (31 characters)\n",
+            "newrelic_insert_key_short", 18258, "NRII- shape with 31 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_newrelic_license_key",
+            "2026-10-29T08:12:44Z WARN infra-agent: rejected <<secret:0>> (39 characters)\n",
+            "newrelic_license_key_short", 18259, "license key shape with 31 hex digits before FFFFNRAL", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_newrelic_legacy_license_key",
+            "NEW_RELIC_APP_ID=4f1c2e9a7b3d5f60718293a4b5c6d7e8f9012345\nNEW_RELIC_ACCOUNT_ID=3141592\n",
+            "IDs under New Relic keys without a credential noun", carrier="env",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_elastic_api_key",
+            "2026-10-29T08:12:44Z WARN es-client: rejected ApiKey value <<secret:0>>\n",
+            "elastic_api_key_short", 18264, "base64 of id:api_key with a 21-character api_key", carrier="log",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_honeycomb_api_key",
+            "# docs example\nHONEYCOMB_API_KEY=<<secret:0>>\n",
+            "honeycomb_classic_key", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_pagerduty_api_key",
+            "2026-10-29T08:12:44Z WARN pd-client: rejected <<secret:0>> (19 characters)\n",
+            "pagerduty_api_key_short", 18265, "PagerDuty key shape with 19 instead of 20 characters", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_pagerduty_api_key",
+            "curl -H \"Authorization: Token token=$PAGERDUTY_TOKEN\" https://api.pagerduty.com/users\n",
+            "environment reference in the Token scheme", carrier="cli",
+        ),
+    ],
+}
+for _label, _rows in DLP_P07_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 # T18: providers without an ARK rule (GOLD-D2 baseline entities) issue values with a hex, digit or
