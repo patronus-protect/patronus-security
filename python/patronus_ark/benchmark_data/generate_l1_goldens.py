@@ -4393,6 +4393,61 @@ B_PASS_CASES = [
 for _row in B_PASS_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# Q-ID quality pass for driver's licence and passport numbers. A note in parentheses between a
+# licence field name and the value (`Führerscheinnummer (falls relevant): …`) and a value in
+# parentheses after the field name (`licencia de conducir (M45114072)`) keep the binding; a note
+# with a digit is no note and the value keeps its state format. `travel document`,
+# `Reisedokument` and the Korean `여권` are passport terms of the lexicon. Appended so existing
+# ids stay stable.
+Q_ID_CASES = [
+    # ── Licence field name with a note or a value in parentheses ─────────
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "10. Führerscheinnummer (falls relevant): ", "3330234369", "\n11. Adresse: Gemsfairen 6"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein (Klasse B): ", "B6728301"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Bitte legen Sie Ihren Führerschein (", "S38387690", ") vor.", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Fahrerlaubnis-Nr. (optional): ", "D4007836"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Die Führerscheinnummer (siehe Kopie) lautet ", "T36493663", ".", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license number (optional): ", "D4007836"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "a copy of your driver's licence (", "S38387690", ").", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver License No. (if any): ", "G37722093"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Her driving licence (", "M45114072", ") was scanned.", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "DL number (state of issue): ", "6940579"),
+    p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "5. Número de licencia de conducir (opcional): ", "G37722093"),
+    p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "como el pasaporte y la licencia de conducir (", "M45114072", "), en un bolso.", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein (Klasse B) gültig bis 30-04-2031", "the note is followed by an expiry date"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerscheinnummer (Anlage 3): ABCDEFG", "a note with a digit is no note, the value no state format"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Bitte den Führerschein (ND8CD4YGQ3) mitbringen.", "random letters and digits are no state format", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein (Abschnitt 4) 41827365", "the parentheses hold a number, not a note"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein (12)", "too short"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "a valid driver's licence (ND8CD4YGQ3) is required.", "random letters and digits are no state format", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license (front side) scanned.", "a note without a value", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license (section 4) 41827365", "the parentheses hold a number, not a note"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license (expires): 2031-04-30", "a calendar date is no licence number"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "driver's licence (12)", "too short"),
+    # ── Passport terms: travel document, Reisedokument, 여권 ─────────────
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_us", "my travel document is ", "A12803456", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_us", "Travel document number: ", "Z12803456"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_us", "Please bring the travel document ", "B48291036", " to the gate.", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_us", "name,travel_document\nJane Doe,", "A48291036", carrier="csv"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_us", '{"travel_document": "', "E70391842", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Reisedokument ", "A48291036", " liegt vor.", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Reisedokument: ", "Z12803456"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Das Reisedokument ", "E70391842", " ist bis 2031 gültig.", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_us", "name,reisedokument\nJana Roth,", "A48291036", carrier="csv"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Koreanischer Pass: 대한민국 여권 ", "S87654321", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "my travel document is A128034", "one letter and six digits"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "Travel document 12345678 attached.", "eight digits without a letter", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "travel document a12803456", "lower case"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "Order S87654321 shipped.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "Travel document A12345678", "placeholder run of eight ascending digits"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Reisedokument A12345678", "placeholder run of eight ascending digits"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Reisedokument A128034", "one letter and six digits"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Bestellung S87654321 ist da.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "여권 S876543", "one letter and six digits"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Reisedokument A00000000", "one repeated digit"),
+]
+for _row in Q_ID_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

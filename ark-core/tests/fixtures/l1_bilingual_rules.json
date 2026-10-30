@@ -780,11 +780,13 @@
     "hard_negatives": {
       "de": [
         "Bestellnummer 41827365 ist eingegangen.",
-        "Führerscheinnummer: 30-04-2031"
+        "Führerscheinnummer: 30-04-2031",
+        "Führerschein (Klasse B) gültig bis 30-04-2031"
       ],
       "en": [
         "The licence number L4718203 belongs to a software seat.",
-        "Driver's license number: 2031-04-30"
+        "Driver's license number: 2031-04-30",
+        "Driver's license (expires): 2031-04-30"
       ]
     },
     "structure": {
@@ -1051,10 +1053,12 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Rechnung A48291036 ist offen."
+        "Rechnung A48291036 ist offen.",
+        "Reisedokument A12345678"
       ],
       "en": [
-        "Order A48291036 has shipped."
+        "Order A48291036 has shipped.",
+        "Travel document A12345678"
       ]
     }
   },
