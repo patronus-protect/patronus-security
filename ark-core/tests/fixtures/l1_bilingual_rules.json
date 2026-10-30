@@ -1030,6 +1030,96 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_passport_number_field",
+    "de": "Reisepassnummer: O0606527",
+    "en": "Passport Number: S17933286",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Reisepassnummer: K482913"
+      ],
+      "en": [
+        "Passport number: A482913"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_us",
+    "de": "Der US-Reisepass A48291036 ist gültig.",
+    "en": "US passport Z12803456 expires in 2031.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Rechnung A48291036 ist offen."
+      ],
+      "en": [
+        "Order A48291036 has shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_at_ch",
+    "de": "Österreichischer Reisepass P4366918, ausgestellt in Wien.",
+    "en": "Austrian passport P4366918 issued in Vienna.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellung P4366918 ist eingegangen."
+      ],
+      "en": [
+        "Order P4366918 has shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_at_ch",
+    "de": "Identitätskarte E3092741, Kanton Bern.",
+    "en": "Swiss identity card E3092741 issued in Bern.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Lieferschein E3092741 liegt bei."
+      ],
+      "en": [
+        "Invoice E3092741 is due."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_it",
+    "de": "Italienische Identitätskarte CA48213EF",
+    "en": "Italian identity card CA48213EF issued in Rome.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Artikel CA48213EF vergriffen."
+      ],
+      "en": [
+        "Order CA48213EF has shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_es",
+    "de": "Spanischer Reisepass PAA482913",
+    "en": "Spanish passport PAA482913 issued in Madrid.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellung PAA482913 ist da."
+      ],
+      "en": [
+        "Order PAA482913 has shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_vat_id_de",
     "de": "Bitte tragen Sie DE703082462 im Formular ein.",
     "en": "Please copy DE478383064 into the supplier record.",
