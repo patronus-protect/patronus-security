@@ -162,6 +162,8 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_env_var_secret", "generic_secret"),
     ("dlp_password_assignment", "password"),
     ("dlp_generic_credential_assignment", "generic_secret"),
+    ("dlp_prose_password", "password"),
+    ("dlp_prose_secret", "generic_secret"),
     ("dlp_bearer_token", "access_token"),
     ("dlp_basic_auth", "password"),
     ("dlp_signed_url_signature", "signature"),

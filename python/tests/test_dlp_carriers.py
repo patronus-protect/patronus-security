@@ -177,6 +177,13 @@ class FamilyTests(unittest.TestCase):
 
 
 class ProfileTests(unittest.TestCase):
+    def test_handover_profiles_only_fill_chat_ticket_and_mail_families(self):
+        handover = [rule_id for rule_id, profile in carriers.profiles().items() if profile.kind == "handover"]
+        self.assertEqual(sorted(handover), ["dlp_prose_password", "dlp_prose_secret"])
+        for family in carriers.families():
+            accepted = "handover" in family.accepts
+            self.assertEqual(accepted, family.format in {"chat", "ticket", "mail"}, family.id)
+
     def test_every_value_rule_has_a_profile_matching_the_entity_map(self):
         entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
         by_rule = {}
@@ -189,7 +196,7 @@ class ProfileTests(unittest.TestCase):
         for rule_id, profile in profiles.items():
             self.assertEqual(profile.entity, by_rule[rule_id]["id"], rule_id)
             self.assertEqual(profile.group, by_rule[rule_id].get("group"), rule_id)
-            self.assertIn(profile.kind, {"secret", "identifier", "fragment"}, rule_id)
+            self.assertIn(profile.kind, set(carriers.KINDS), rule_id)
             self.assertTrue(profile.label_de and profile.label_en, rule_id)
             self.assertRegex(profile.key, r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$", rule_id)
         content = {entity["id"] for entity in entity_map["entities"] if entity["id"].startswith("content.")}

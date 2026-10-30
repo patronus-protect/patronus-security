@@ -704,6 +704,22 @@ impl DlpPipeline {
         captures.get(self.value_group(index, captures).unwrap_or(0))
     }
 
+    /// G-PROSE: whether `value` starts with the token prefix (`npm_`,
+    /// `glpat-` …) of a prefix rule. A prose rule leaves such a value to
+    /// the provider rule, which reports it or rejects its shape.
+    fn has_token_prefix(&self, value: &str) -> bool {
+        self.metas.iter().any(|meta| {
+            meta.boundary.is_some()
+                && meta.keywords.iter().any(|keyword| {
+                    keyword.len() >= 4
+                        && keyword.ends_with(['_', '-'])
+                        && value
+                            .get(..keyword.len())
+                            .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
+                })
+        })
+    }
+
     /// F03: whether `value`, without leading quotes, starts with a whole
     /// token of a prefixed provider rule with a checksum (GitHub `ghp_` …)
     /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
@@ -1025,6 +1041,9 @@ impl NativeRegexDetector for DlpPipeline {
             && (self.fails_token_checksum(value.as_str())
                 || self.has_wrong_token_length(text, value.range()))
         {
+            return false;
+        }
+        if rules::is_prose_rule(rule_id) && self.has_token_prefix(value.as_str()) {
             return false;
         }
         // A generic rule capturing a provider-shaped value applies the

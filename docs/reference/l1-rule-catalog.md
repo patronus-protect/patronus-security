@@ -274,7 +274,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (111)
+## DLP regex rules (113)
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -395,6 +395,8 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_env_var_secret` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
 | `dlp_password_assignment` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
 | `dlp_generic_credential_assignment` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
+| `dlp_prose_password` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
+| `dlp_prose_secret` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
 | `dlp_bearer_token` | `SECRET_TOKEN` | `access_token` | – | `format` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6750#section-2.1) | yes | on | 35 | field | 0.75 |
 | `dlp_basic_auth` | `CREDENTIAL` | `password` | – | `structure` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc7617#section-2) | yes | on | 35 | field | 0.85 |
 | `dlp_signed_url_signature` | `CREDENTIAL` | `signature` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |

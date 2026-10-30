@@ -4306,6 +4306,48 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_prose_password",
+    "de": "Wie lautet das Datenbank-Passwort?\n[08:17] daniel.r: Qwmzt7724!",
+    "en": "anyone have the database password?\n[09:43] tom.w: here you go: Qwmzt7724!",
+    "hard_negatives": {
+      "de": [
+        "Ein Passwort ist eine Zeichenfolge zur Authentifizierung.\nSiehe auch: Passwortmanager",
+        "Das Kennwort ist geheim zu halten.\nFundstelle: BGBl.2024-I-117",
+        "Wie lautet das Datenbank-Passwort?\n[08:17] daniel.r: steht als $DB_PASSWORD in der .env",
+        "Laut Konfiguration hinterlegt (Passwort-Hash): 5f4dcc3b5aa765d61d8327deb882cf99",
+        "Passwort vergessen? Kontakt:\nservicedesk@example.de"
+      ],
+      "en": [
+        "A password is a secret string of characters.\nISBN: 978-0-13-468599-1",
+        "the password shall be changed every 90 days.\nEffective date: 2024-07-01",
+        "anyone have the database password?\n[09:43] tom.w: here you go: changeme",
+        "Forgot your password? See the guide:\nhttps://example.com/help/reset-password",
+        "Password reset requested\nDate: Mon, 14 Sep 2026 09:12:44 +0200"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_prose_secret",
+    "de": "Laut Konfiguration hinterlegt (Client-Secret): r7Vq2-mKpLwXz84tNa",
+    "en": "here is the client secret for the reporting job:\n\nr7Vq2-mKpLwXz84tNa",
+    "hard_negatives": {
+      "de": [
+        "anbei die Zugangsdaten (Client-Secret):\n\nYOUR_CLIENT_SECRET_HERE",
+        "Das Client-Secret läuft ab.\nSiehe: Kapitel 4",
+        "Laut Konfiguration hinterlegt (Client-Secret): ${CLIENT_SECRET} aus der Umgebung"
+      ],
+      "en": [
+        "here is the client secret for the reporting job:\n\ndeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "The client secret rotates nightly; the job reads it from:\n${CLIENT_SECRET}",
+        "the token has expired.\nStatus: ExpiredToken"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_bearer_token",
     "de": "Access-Token für den Abgleich: Bearer kQ7vRz2mXp9TsW4nYb3d",
     "en": "AUTHORIZATION=Bearer kQ7vRz2mXp9TsW4nYb3d",

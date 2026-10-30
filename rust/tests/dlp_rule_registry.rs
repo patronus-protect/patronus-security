@@ -90,6 +90,8 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_env_var_secret",
     "dlp_password_assignment",
     "dlp_generic_credential_assignment",
+    "dlp_prose_password",
+    "dlp_prose_secret",
     "dlp_bearer_token",
     "dlp_basic_auth",
     "dlp_signed_url_signature",

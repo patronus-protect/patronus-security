@@ -375,6 +375,20 @@
       "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["client_secret: <<secret:0>>", "Der API-Schlüssel ist <<secret:0>>"]
     },
+    "dlp_prose_password": {
+      "generators": ["password"],
+      "probes": [
+        "[09:41] maria.k: anyone have the database password for staging?\n[09:43] tom.w: here you go: <<secret:0>>\n",
+        "Hallo zusammen,\n\nanbei das Datenbank-Passwort für den Abschlusslauf:\n\n<<secret:0>>\n"
+      ]
+    },
+    "dlp_prose_secret": {
+      "generators": ["generic_api_secret", "csrf_token"],
+      "probes": [
+        "Note from reporter: the job still uses the old client secret. Current value in the config: <<secret:0>>\n",
+        "[08:15] lena.s: Wie lautet das Client-Secret in der Testumgebung?\n[08:17] daniel.r: <<secret:0>>\n"
+      ]
+    },
     "dlp_bearer_token": {
       "generators": ["bearer_opaque_token"],
       "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me", "AUTHORIZATION=Bearer <<secret:0>>", "{\"authorization\": \"Bearer <<secret:0>>\"}", "Hier der Access-Token: Bearer <<secret:0>>"]

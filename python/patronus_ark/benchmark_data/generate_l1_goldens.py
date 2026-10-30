@@ -11344,6 +11344,146 @@ for _label, _rows in DLP_T18_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# G-PROSE (G06): chats, tickets and mails hand a value over after the credential noun, at the end
+# of a line up to one line further: `dlp_prose_password` for password nouns (Passwort, Kennwort,
+# Zugangsdaten, passphrase), `dlp_prose_secret` for secret and token nouns (client secret,
+# Dienst-Secret, CSRF token). The value must look chosen or issued; words, references,
+# placeholders, examples, hashes and the noun in encyclopedia or law prose are no secrets.
+DLP_GPROSE_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "[08:15] lena.s: Wie lautet das Datenbank-Passwort für die Testumgebung?\n"
+            "[08:17] daniel.r: <<secret:0>>\n[08:17] daniel.r: Bitte nur lokal verwenden.\n",
+            "password", 12001, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Hallo zusammen,\n\nanbei die Zugangsdaten für den Abschlusslauf (Kennwort):\n\n<<secret:0>>\n\n"
+            "Bitte nach dem Lauf löschen.\n",
+            "password", 12002, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Ticket #4711: Login schlägt fehl. Laut Konfiguration hinterlegt (Datenbank-Passwort): <<secret:0>>\n",
+            "password", 12003, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Hi Jonas, hier deine Zugangsdaten für das Testsystem: pruefer / <<secret:0>>\n",
+            "password", 12004, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_secret",
+            "Laut Konfiguration hinterlegt (Client-Secret): <<secret:0>>\nBitte prüfen, ob der Wert noch gilt.\n",
+            "generic_api_secret", 12005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_prose_secret",
+            "[09:01] mia: hat jemand das Dienst-Secret für Staging?\n[09:02] ole: klar:\n<<secret:0>>\n",
+            "password", 12006, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "[09:41] maria.k: anyone have the database password for the staging box?\n"
+            "[09:43] tom.w: here you go: <<secret:0>>\n[09:43] tom.w: please don't paste it anywhere else\n",
+            "password", 12011, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "Hi team,\n\nas discussed, here is the database password for the reporting job:\n\n<<secret:0>>\n\n"
+            "Thanks,\nAlex\n",
+            "password", 12012, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "Note from reporter: the job still uses the old password. Current value in the config: <<secret:0>>\n",
+            "password", 12013, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "Your login credentials for the test portal: tester / <<secret:0>>\n",
+            "password", 12014, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_secret",
+            "Hi team,\n\nhere is the client secret for the reporting job:\n\n<<secret:0>>\n\nThanks,\nAlex\n",
+            "generic_api_secret", 12015, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_prose_secret",
+            "Note from reporter: the job still uses the old CSRF token. Current value in the config: <<secret:0>>\n",
+            "csrf_token", 12016, carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Ein Passwort ist eine Zeichenfolge zur Authentifizierung.\nSiehe auch: Passwortmanager\n",
+            "encyclopedia prose about passwords (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "§ 5 Abs. 2: Das Kennwort ist geheim zu halten und nach Kenntnis Dritter zu ändern.\n"
+            "Fundstelle: BGBl.2024-I-117\n",
+            "law prose about passwords (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "[08:15] lena.s: Wie lautet das Datenbank-Passwort?\n[08:17] daniel.r: steht als $DB_PASSWORD in der .env\n",
+            "environment reference instead of a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Laut Konfiguration hinterlegt (Passwort-Hash): 5f4dcc3b5aa765d61d8327deb882cf99\n",
+            "password hash, not a password", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_secret",
+            "anbei die Zugangsdaten (Client-Secret):\n\nYOUR_CLIENT_SECRET_HERE\n",
+            "placeholder", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_prose_password",
+            "Passwort vergessen? Kontakt:\nservicedesk@example.de\n",
+            "e-mail address after a password mention", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "A password is a secret string of characters used to confirm a user's identity.\n"
+            "ISBN: 978-0-13-468599-1\n",
+            "encyclopedia prose with a reference number", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "Section 3(b): the password shall be changed every 90 days.\nEffective date: 2024-07-01\n",
+            "law prose with a date", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "[09:41] maria.k: anyone have the database password?\n[09:43] tom.w: here you go: changeme\n",
+            "placeholder password", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_secret",
+            "Hi team,\n\nhere is the client secret for the reporting job:\n\n"
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n",
+            "documented example value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_password",
+            "Forgot your password? See the guide:\nhttps://example.com/help/reset-password\n",
+            "URL after a password mention", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_prose_secret",
+            "The client secret rotates nightly; the job reads it from:\n${CLIENT_SECRET}\n",
+            "template reference", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_GPROSE_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

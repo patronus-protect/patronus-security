@@ -31,6 +31,28 @@ macro_rules! generic_key {
     };
 }
 
+/// G-PROSE (G06): a value handed over after a credential noun in a chat,
+/// ticket or mail: after a `:` on the noun's line or the next one, at the
+/// end of its line or alone up to two lines further, optionally after a
+/// user name and ` / `.
+macro_rules! prose_value {
+    () => {
+        concat!(
+            r"(?-u:\b)[^\r\n]{0,160}?(?:\r?\n[^\r\n]{0,80}?)?:[ \t]*(?:\r?\n[ \t]*){0,2}",
+            r"(?:[^\s:/]{1,64}[ \t]+/[ \t]+)?",
+            prose_value_end!(),
+        )
+    };
+}
+
+/// G-PROSE: the value at the end of its line. It holds no quote, bracket,
+/// `|`, `:`, `/` or `\` and does not end with sentence punctuation.
+macro_rules! prose_value_end {
+    () => {
+        r#"([^\s"'`<>()\[\]{}|:/\\]{7,99}[^\s"'`<>()\[\]{}|:/\\.,;])[ \t]*\r?(?m:$)"#
+    };
+}
+
 /// K05: how config lines bind a value to a generic key-bound rule: its key
 /// grammar and the value lengths of its regex.
 pub(super) fn config_key(rule_id: &str) -> Option<ConfigKey> {
@@ -158,6 +180,56 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::GenericSecret)
         .with_value_gate(likeness::is_assignment_value)
         .with_key_gate(likeness::is_credential_key),
+    },
+    DlpPattern {
+        name: "dlp_prose_password",
+        // G-PROSE (G06): `Wie lautet das Datenbank-Passwort?` and the value
+        // in the reply, `password for the job:` and the value below it,
+        // `Zugangsdaten: user / value`.
+        pattern: concat!(
+            r"(?i)(?:(?:passw(?:or)?ds?|passw(?:o|ö)rter|passwort|kennw(?:o|ö)rter|kennwort|passphrase)",
+            prose_value!(),
+            // `Zugangsdaten`/`credentials` cover any value: a password only
+            // as `user / password` on the noun's line.
+            r"|(?:zugangsdaten|credentials)(?-u:\b)[^\r\n]{0,80}?:[ \t]*[^\s:/]{1,64}[ \t]+/[ \t]+",
+            prose_value_end!(),
+            ")",
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &[
+                "passw",
+                "kennw",
+                "passphrase",
+                "zugangsdaten",
+                "credentials",
+            ],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_prose_value)
+        .with_key_gate(likeness::is_prose_password_key),
+    },
+    DlpPattern {
+        name: "dlp_prose_secret",
+        // G-PROSE (G06): the same handover after a secret, token or API key
+        // noun (`client secret`, `Dienst-Secret`, `CSRF token`).
+        pattern: concat!(
+            r"(?i)(?:secret|token|api[ _-]?key|api-?schl(?:ü|ue)ssel)",
+            prose_value!(),
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 30,
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["secret", "token", "api"])
+            .with_subtype(SecretSubtype::GenericSecret)
+            .with_value_gate(likeness::is_prose_value)
+            .with_key_gate(likeness::is_prose_secret_key),
     },
     DlpPattern {
         name: "dlp_bearer_token",

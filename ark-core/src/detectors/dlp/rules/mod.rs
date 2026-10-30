@@ -154,7 +154,14 @@ const GENERIC_CREDENTIALS: &[&str] = &[
     "dlp_env_var_secret",
     "dlp_password_assignment",
     "dlp_generic_credential_assignment",
+    "dlp_prose_password",
+    "dlp_prose_secret",
 ];
+
+/// G-PROSE: the rules that read a value handed over in prose.
+pub fn is_prose_rule(rule_id: &str) -> bool {
+    matches!(rule_id, "dlp_prose_password" | "dlp_prose_secret")
+}
 
 /// K08: the overlap tier of a secret rule; `None` for identifier and content
 /// rules, which keep overlapping spans. Provider and key-material formats
