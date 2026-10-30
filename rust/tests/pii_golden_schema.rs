@@ -150,9 +150,11 @@ fn fr_es_it_nl_field_names_have_n_gated_positives_and_hard_negatives() {
             .unwrap();
         // B01, B-EU1, B-LUHN, B-EU2, B-ESIT: country IDs also have rows in their
         // national language; they bind no field name and are counted per label above.
+        // So do the Italian and Spanish documents of B-PASS (term near the value).
         if ["VAT_ID_", "FR_", "NL_", "BE_", "CA_", "CH_", "ES_", "IT_"]
             .iter()
             .any(|prefix| pattern.entity_group.starts_with(prefix))
+            || ["pii_identity_card_number_it", "pii_passport_number_es"].contains(&pattern.name)
         {
             continue;
         }
