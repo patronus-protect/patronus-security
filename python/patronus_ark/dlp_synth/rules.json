@@ -365,7 +365,7 @@
     },
     "dlp_password_assignment": {
       "generators": ["password", "url_userinfo_password"],
-      "weak": ["weak_repeated_password", "weak_snake_case_password", "weak_dollar_password"],
+      "weak": ["weak_repeated_password", "weak_snake_case_password", "weak_dollar_password", "dotted_tilde_password", "dotted_digit_password"],
       "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["password: <<secret:0>>", "Das Passwort lautet <<secret:0>> (bitte nach dem ersten Login ändern)."]
     },
