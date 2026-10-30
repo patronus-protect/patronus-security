@@ -555,6 +555,7 @@ tasks:
       presidio_favored NINO and driver's licence F1 >= tuned in balanced; count_validated.py count rises by 1
 
   - id: Q-ID
+    status: done
     title: "Quality: driver licence 37/53/72, passport 38/34/77, identity card 43/78, UK NINO 67 (neutral/presidio_favored/ark_authored)"
     type: recall-fix
     deps: [B-PASS, B-UK]
