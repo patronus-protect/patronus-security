@@ -30,6 +30,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   FR, IT, NL), one rule fixture entry per rule. **Detection change** (every mode): passport and
   identity card numbers in these forms are new `PASSPORT_NUMBER` / `IDENTITY_CARD_NUMBER`
   findings; no existing rule or validator changes.
+  Dev scoreboard vs. 227c840 (PASS in strict and balanced, no new hard-negative FP):
+  `entity.passport_number` exact F1 +12.2 pp strict, +11.4 pp balanced (exact true positives
+  neutral 37 → 51, presidio_favored 6 → 9 balanced); `pii.identity_card_number` +25.5 / +18.7 pp;
+  L1 F1 +0.4 pp in both modes. The new rules are literal-anchored (field names) or
+  context-bound bounded regexes without per-match allocation.
 - IBAN per the SWIFT IBAN registry (B-IBAN: T05, T21, F03). New validator `iban` for
   `pii_iban_de` and `pii_iban_generic`: a registry country (89), exactly its registry length, two
   check digits, letters and digits only, and MOD-97 (`mod97` itself is unchanged); the scoreboard
