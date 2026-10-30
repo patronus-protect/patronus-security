@@ -496,6 +496,23 @@ Partita IVA (`pii_vat_id_it_proximity`, B01). Presidio meldet auch Codici fiscal
 Kontrollbuchstaben (`AAAAAA00B11C333N` der Recognizer-Tests), ARK nicht. Gold steht in `pii_l1` (DE,
 EN, dazu `es`- und `it`-Zeilen) und in den Recognizer-Tests (`presidio_favored`).
 
+Stand B-PASS (T24, A05, B08, T10; M3 unverändert, alle neuen Regeln sind Formatregeln): Nach einem
+ausdrücklichen Pass-Feldnamen (EN `passport number/no./#`, DE `Reisepass(nummer)`, `Pass-Nr.`,
+`Passnummer`, ES `número de pasaporte`, `pasaporte`, FR `numéro de passeport`, IT `passaporto n.`,
+NL `paspoortnummer`, `reisdocumentnummer`) meldet `pii_passport_number_field` in jedem Modus sechs bis
+neun Großbuchstaben und Ziffern mit mindestens fünf Ziffern: bis zu drei führende Buchstaben und dann
+Ziffern (`X45929398`, `AAA482913`, `621475562`) oder die französische Form `07RY12580`
+(`validators::passport_number_field`). Ein Buchstabe und genau sechs Ziffern (`A482913`, Holdout-HN-FP
+des Laufs 20261022T171514Z) ist keine Passform; Werte in deutscher Dokumentform (Passserie `CFGHJK` im ICAO-
+Alphabet, gültige Ausweisnummer) bleiben bei den deutschen Regeln; eine wiederholte Ziffer und sieben aufsteigende
+Ziffern (`12345678`, `D12345675`) sind Platzhalter. Mit einem Dokumentbegriff in der Nähe oder als
+Schlüssel, in jedem Modus: der US-Pass in Buchstabenform, ein Buchstabe und acht Ziffern
+(`pii_passport_number_us`; neun Ziffern meldet `pii_passport_number_uk`), Pass und Ausweis AT/CH, ein
+Buchstabe und sieben Ziffern (`pii_passport_number_at_ch`, `pii_identity_card_number_at_ch`), die
+italienische Carta d'identità (CIE `CA48213EF`; die Papierform hat die Form des Zwei-Buchstaben-Passes,
+`pii_identity_card_number_it`, Lexikon `pii.identity_card` um IT-Begriffe erweitert) und der spanische
+Pasaporte, drei Buchstaben und sechs Ziffern (`pii_passport_number_es`). Die IT-Patente bleibt bei F15.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

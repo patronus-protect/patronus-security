@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! International payment identifiers: IBAN, payment card number, CVV, card expiry, SWIFT/BIC;
-//! passport numbers of two letters and seven digits.
+//! passport and identity card numbers by field name or a document term near the value
+//! (B-PASS): a format rule after an explicit passport field name, the US letter form,
+//! Austrian and Swiss, Italian and Spanish documents, two letters and seven digits.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── IBAN ─────────────────────────────────────────────────────────────────
@@ -97,6 +99,96 @@ pub(super) const PASSPORT_NUMBER_TWO_LETTERS: PiiPattern = PiiPattern {
     pattern: r"(?-u:\b)[A-Z]{2}[0-9]{7}(?-u:\b)",
     entity_group: "PASSPORT_NUMBER",
     validator: Some(validators::passport_number_two_letters),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A passport number after an explicit passport field name in English, German,
+/// Spanish, French, Italian or Dutch (T24, B-PASS): `Passport No. X45929398`,
+/// `Reisepass: P4366918`, `Mi pasaporte es AAA123456`, `passaporto n. M0572847`.
+/// Format only, in every mode; [`validators::passport_number_field`] keeps the
+/// value a document number.
+pub(super) const PASSPORT_NUMBER_FIELD: PiiPattern = PiiPattern {
+    name: "pii_passport_number_field",
+    pattern: r#"(?i)\b(?:passport(?:[-_ \t]?(?:number|num|no|nr|id))?\.?|reisepass(?:[-_ \t]?(?:nummer|nr))?\.?|pass(?:[-_ \t]?(?:nummer|nr))\.?|n(?:ú|u)mero[ \t]+de[ \t]+pasaporte|pasaporte(?:[ \t]+(?:n(?:ú|u)mero|n(?:º|°|o)\.?))?|num(?:é|e)ro[ \t]+de[ \t]+passeport|passeport(?:[ \t]+(?:num(?:é|e)ro|n(?:°|o)\.?))?|numero[ \t]+(?:di|del)[ \t]+passaporto|passaporto(?:[ \t]+(?:numero|n(?:°|\.)?))?|paspoort(?:[-_ \t]?(?:nummer|nr))?\.?|reisdocumentnummer)["']?[ \t]*(?:(?:is|ist|lautet|es|est|è)[ \t]+)?[:#=]?[ \t]*["'(]?(?P<value>(?-i:[A-Z0-9]{6,9}))\b"#,
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::passport_number_field),
+    strength: ValidatorStrength::Format,
+    base_score: 40,
+    captured_value: true,
+    requires_context: false,
+    scored_only: false,
+};
+
+/// A US passport number in the letter form, one letter and eight digits
+/// (`A12803456`), with a passport term near the value or as its key (A05,
+/// B-PASS). Nine digits are `uk::PASSPORT_NUMBER`.
+pub(super) const PASSPORT_NUMBER_US: PiiPattern = PiiPattern {
+    name: "pii_passport_number_us",
+    pattern: r"(?-u:\b)[A-Z][0-9]{8}(?-u:\b)",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::us_passport_number),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// An Austrian or Swiss passport number, one letter and seven digits
+/// (`P4366918`), with a passport term near the value or as its key (B08, B-PASS).
+pub(super) const PASSPORT_NUMBER_AT_CH: PiiPattern = PiiPattern {
+    name: "pii_passport_number_at_ch",
+    pattern: r"(?-u:\b)[A-Z][0-9]{7}(?-u:\b)",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::letter_seven_digits),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// An Austrian Personalausweis or Swiss Identitätskarte number, one letter and
+/// seven digits (`X0217453`), with an identity card term near the value or as its
+/// key (B08, B-PASS).
+pub(super) const IDENTITY_CARD_NUMBER_AT_CH: PiiPattern = PiiPattern {
+    name: "pii_identity_card_number_at_ch",
+    pattern: r"(?-u:\b)[A-Z][0-9]{7}(?-u:\b)",
+    entity_group: "IDENTITY_CARD_NUMBER",
+    validator: Some(validators::letter_seven_digits),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// An Italian carta d'identità number, the CIE (`CA48213EF`), with an identity card term near the value or as its key (T10,
+/// B-PASS). The Italian passport has two letters and seven digits
+/// ([`PASSPORT_NUMBER_TWO_LETTERS`]).
+pub(super) const IDENTITY_CARD_NUMBER_IT: PiiPattern = PiiPattern {
+    name: "pii_identity_card_number_it",
+    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{5}[A-Z]{2}(?-u:\b)",
+    entity_group: "IDENTITY_CARD_NUMBER",
+    validator: Some(validators::it_identity_card_number),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A Spanish pasaporte number, three letters and six digits (`PAA482913`), with a
+/// passport term near the value or as its key (T10, B-PASS).
+pub(super) const PASSPORT_NUMBER_ES: PiiPattern = PiiPattern {
+    name: "pii_passport_number_es",
+    pattern: r"(?-u:\b)[A-Z]{3}[0-9]{6}(?-u:\b)",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::es_passport_number),
     strength: ValidatorStrength::Format,
     base_score: 20,
     captured_value: false,
