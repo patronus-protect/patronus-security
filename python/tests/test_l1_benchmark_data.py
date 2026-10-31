@@ -368,6 +368,10 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 self.assertTrue(row["entities"][0]["text"].startswith("+"), row["id"])
                 annotated[("PHONE", row["language"])] += 1
                 continue
+            if [e["label"] for e in row["entities"]] == ["IN_PAN"]:
+                # B-IN: an Indian PAN after `Permanent Account Number` is no bank account.
+                self.assertEqual(row["target_label"], "FINANCIAL_ACCOUNT_NUMBER", row["id"])
+                continue
             if row["target_label"] in {"PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"}:
                 # F08: the field name of another label wins over a bare document check digit.
                 [entity] = row["entities"]
