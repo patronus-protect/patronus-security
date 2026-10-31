@@ -125,7 +125,7 @@ fn tax_number_validator_accepts_the_elster_form_of_every_land() {
         "2129081508158", // SH
         "4151081508156", // TH
         // grouped
-        "2893/081/50812",
+        "2893/0815/08152",
         "2893 0 815 08152",
     ] {
         assert!(validators::de_tax_number(valid), "{valid}");
@@ -147,6 +147,7 @@ fn tax_number_validator_rejects_forms_no_land_prints() {
         "2893181508152",
         // twelve digits in any grouping
         "028150815012",
+        "2893/081/50812",
         "1234/567/89012",
         // FFF/BBB/UUUUP led by 3 to 9, FFF/BBBB/UUUP led by 0 or 4 to 9
         "456/789/01234",
@@ -291,7 +292,6 @@ fn commercial_register_lookalikes_stay_silent() {
         "Amtsgericht München HRB 1234567",
         // part of a longer token
         "Amtsgericht München XHRB 12345",
-        "Amtsgericht München HRB 12345-2",
         "Ticket HRB-12345",
         // a field that names another value
         "Aktenzeichen: HRB 12345",

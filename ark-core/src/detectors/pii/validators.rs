@@ -503,12 +503,57 @@ fn valid_date(day: u8, month: u8, year: u16) -> bool {
     (1..=max_day).contains(&day)
 }
 
+/// German Steuernummer (F13) in the groups one Land prints or in the 13-digit
+/// ELSTER form. Länder: `FF/BBB/UUUUP` (BE, HB, HH, NI, RP, SH), `FFBBB/UUUUP`
+/// (BW), `FFF/BBB/UUUUP` led by 0, 1 or 2 (BY 1xx–2xx; BB, HE, MV, SL 0xx; SN
+/// 2xx; ST, TH 1xx) and `FFF/BBBB/UUUP` led by 1, 2 or 3 (NW), grouped by `/`,
+/// spaces or `-`, or ungrouped. ELSTER: the four-digit Bundesfinanzamtsnummer
+/// with its Land prefix (SL 10, BE 11, SH 21, HH 22, NI 23, HB 24, HE 26, RP 27,
+/// BW 28, BB 30, ST 31, SN 32, MV 40, TH 41, NW 51–53, BY 91–92), a `0`, then
+/// district and serial, grouped any way. One repeated digit is never issued.
 pub fn de_tax_number(s: &str) -> bool {
-    let digits = s
-        .chars()
-        .filter(|ch| ch.is_ascii_digit())
-        .collect::<Vec<_>>();
-    (10..=13).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
+    let mut digits = [0u8; 13];
+    let mut len = 0;
+    let mut groups = [0u8; 3];
+    let mut group_count = 0;
+    let mut in_group = false;
+    for byte in s.bytes() {
+        if byte.is_ascii_digit() {
+            if len == digits.len() {
+                return false;
+            }
+            digits[len] = byte - b'0';
+            len += 1;
+            if !in_group {
+                group_count += 1;
+                in_group = true;
+            }
+            if let Some(group) = groups.get_mut(group_count - 1) {
+                *group += 1;
+            }
+        } else {
+            in_group = false;
+        }
+    }
+    let digits = &digits[..len];
+    if digits.iter().all(|digit| *digit == digits[0]) {
+        return false;
+    }
+    let first = digits[0];
+    let groups = (group_count <= 3).then_some(&groups[..group_count]);
+    match (len, groups) {
+        (13, _) => {
+            matches!(
+                first * 10 + digits[1],
+                10 | 11 | 21..=24 | 26..=28 | 30..=32 | 40 | 41 | 51..=53 | 91 | 92
+            ) && digits[4] == 0
+        }
+        (10, Some([10] | [2, 3, 5] | [5, 5])) => true,
+        (11, Some([11])) => first <= 3,
+        (11, Some([3, 3, 5])) => first <= 2,
+        (11, Some([3, 4, 4])) => (1..=3).contains(&first),
+        _ => false,
+    }
 }
 
 /// German pension insurance number (Rentenversicherungsnummer, VKVV § 4; B-DE1):

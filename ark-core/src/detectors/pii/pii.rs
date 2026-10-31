@@ -221,6 +221,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     us::DEA_NUMBER,
     us::NPI,
     us::NPI_CONTEXT_FREE,
+    de::COMMERCIAL_REGISTER,
+    de::COMMERCIAL_REGISTER_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -808,7 +810,8 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"
             | "pii_health_insurance_number_de_context_free"
-            | "pii_steuernummer_de_context_free" => !context::foreign_field(
+            | "pii_steuernummer_de_context_free"
+            | "pii_commercial_register_de_context_free" => !context::foreign_field(
                 prepared.structure(),
                 text,
                 captures.get(0).unwrap().range(),

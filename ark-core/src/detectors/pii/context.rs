@@ -60,6 +60,7 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ),
     ("STEUERID", &["pii.tax_identifier"]),
     ("TAX_NUMBER_DE", &["pii.tax_number"]),
+    ("COMMERCIAL_REGISTER_DE", &["pii.commercial_register"]),
     ("SOCIALID", &["pii.social_insurance_number"]),
     ("HEALTH_INSURANCE_NUMBER", &["pii.health_insurance_number"]),
     ("PHYSICIAN_NUMBER_LANR", &["pii.physician_number"]),

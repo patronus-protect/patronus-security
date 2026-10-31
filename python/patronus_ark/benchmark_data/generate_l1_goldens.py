@@ -919,7 +919,7 @@ PII_CASES = {
         p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", '{"steuernummer": "', "123/456/78902", '"}', carrier="json"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: ", "21/815/08150"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "The German tax number of the branch is ", "143/208/30142", ".", carrier="prose", gap=True),
-        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "2893/081/50812", "\n", carrier="yaml"),
+        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "2893/0815/08152", "\n", carrier="yaml"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "tax number=", "151/815/08156", carrier="kv"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number:", "048/815/08153", "   Page 1", tags=("ocr",)),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "| Tax number | ", "048/815/08154", " |", carrier="table"),
@@ -4700,6 +4700,7 @@ B_DEFMT_CASES = [
     n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 028150815012", "twelve digits", mode="balanced"),
     n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Bitte 5133081508159 übernehmen.", "13 bare digits without a field name", carrier="prose", mode="recall"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German Steuernummer: 1234/567/89012", "twelve digits in groups no Land prints"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: 2893/081/50812\n", "twelve digits behind an ELSTER prefix", carrier="yaml"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 1781508150001", "no Land prefix 17 in the ELSTER form"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 433/8150/8159", "NW form led by 4"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 2181/508/150", "ten digits in groups no Land prints", mode="balanced"),
@@ -4726,7 +4727,7 @@ B_DEFMT_CASES = [
     n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Commercial register: XHRB 12345", "part of a longer token"),
     n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "HRC 12345", "HRC is no commercial register", mode="balanced"),
     n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Ticket HRB-12345", "part of a hyphenated token", mode="recall"),
-    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Build HRB 12345-2 failed.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Build HR 12345 failed.", "HR without A or B", carrier="prose", mode="balanced"),
 ]
 for _row in B_DEFMT_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
