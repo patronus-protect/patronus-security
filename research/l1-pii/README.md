@@ -306,8 +306,11 @@ bleibt feldgebunden, `0181508150000` bleibt FN (kein Land hat das Präfix 01). N
 `HRA`/`HRB`, eine bis sechs Ziffern ohne führende Null, optional das Gerichtskürzel (`B`, `FL`, `HL`, `KI`,
 `PI`); `pii_commercial_register_de` meldet in jedem Modus mit Register- oder Amtsgerichtsbegriff in der Nähe
 oder als Schlüssel, `pii_commercial_register_de_context_free` blank in `balanced`/`recall` (0,50).
-`pii.de.commercial_register` ist damit `shared` und zählt für M2. Dev `presidio_favored` balanced, exakt:
-Handelsregister 100,0 (`HRA12345`; `HRC 12345`, `HR 12345` bleiben stumm), Steuernummer unverändert 66,7.
+`pii.de.commercial_register` ist damit `shared` und zählt für M2. Die Registerform prüft
+`validators::de_commercial_register` (Registernummer 1–6 Ziffern ohne führende Null). Dev `presidio_favored` balanced, exakt:
+Handelsregister 0,0 → 100,0 (`HRA12345`; `HRC 12345`, `HR 12345` bleiben stumm), Steuernummer unverändert
+66,7; `ark_authored` strict Handelsregister 0,0 → 99,1, Steuernummer unverändert 93,5; keine neuen FP auf Hard
+Negatives.
 Stand B-ACCT: ARK 50, gemeinsam 19 (A04, F14). Die ABA-Routing-Nummer (US) rechnet die Prüfziffer
 (`validators::aba_routing_number`: Routing-Symbol 00–12, 21–32, 61–72 oder 80, Gewichte 3-7-1 mod 10,
 nicht eine wiederholte Ziffer) und meldet `FINANCIAL_ACCOUNT_NUMBER`; die Einheit ist
