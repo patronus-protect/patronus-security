@@ -12,7 +12,10 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{
+    detectors::dlp::{dlp::DLP_PATTERNS, prefilter::RulePrefilter},
+    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
@@ -222,4 +225,23 @@ fn dotted_arguments_are_passwords_not_member_access() {
         assert_exact(template, "zXyKqTrBmWvL.HqRtNpm");
     }
     assert_silent("mysql -u root -p$cfg.password shop");
+}
+
+#[test]
+fn rule_is_searched_near_its_keywords() {
+    // Tool names are common in code and docs: the rule must not scan the
+    // whole text, so every match starts a bounded lead before a keyword.
+    let index = DLP_PATTERNS
+        .iter()
+        .position(|rule| rule.name == "dlp_cli_password")
+        .expect("dlp_cli_password is registered");
+    let prefilter = RulePrefilter::new(DLP_PATTERNS);
+    let text = format!(
+        "{}\nsee the {} docs for details\n",
+        "x".repeat(4096),
+        concat!("cu", "rl")
+    );
+    let scan = prefilter.scan(&text);
+    assert!(scan.is_active(index));
+    assert!(scan.is_local(index));
 }

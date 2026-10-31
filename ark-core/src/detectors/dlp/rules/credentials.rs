@@ -449,17 +449,19 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         // password, without the file under `-n`), PowerShell
         // `ConvertTo-SecureString` with a literal and `-AsPlainText`, and
         // `net use \\server\share` with a password before or after `/user:`
-        // (`*` prompts).
+        // (`*` prompts). Repetitions stay bounded and the piped literal
+        // ASCII, so every match starts at most 64 bytes before a keyword
+        // and the rule is searched near its keyword hits only.
         pattern: concat!(
-            r"(?i)(?:(?:(?-u:\b)curl(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t]",
+            r"(?i)(?:(?:(?-u:\b)curl(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,256}?[ \t]",
             r#"(?:(?-i:-u)[ \t]*|--user(?:[ \t]+|=))["']?[^\s"':]{0,64}:"#,
             r"|(?-u:\b)(?:mysql(?:dump|admin|import|show|check|pump|binlog)?",
             r"|mariadb(?:-dump|-admin|-import|-show|-check)?)(?:\.exe)?(?-u:\b)",
-            r"(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?:(?-i:-p)|--password=)",
+            r"(?:[^\r\n|;&]|\\\r?\n){0,256}?[ \t](?:(?-i:-p)|--password=)",
             r"|(?:(?m:^)|[ \t;&|(])(?:(?:export|env)[ \t]{1,4})?pgpassword=",
-            r"|(?-u:\b)sshpass(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?-i:-p)[ \t]*",
+            r"|(?-u:\b)sshpass(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,256}?[ \t](?-i:-p)[ \t]*",
             r"|(?-u:\b)(?:docker|podman|nerdctl|buildah|skopeo)(?:\.exe)?[ \t]+login(?-u:\b)",
-            r"(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?:(?-i:-p)[ \t]*|--password(?:[ \t]+|=))",
+            r"(?:[^\r\n|;&]|\\\r?\n){0,256}?[ \t](?:(?-i:-p)[ \t]*|--password(?:[ \t]+|=))",
             r"|(?-u:\b)htpasswd(?:\.exe)?(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
             r"[ \t]+(?-i:-(?:[A-Za-z]*n[A-Za-z]*b|[A-Za-z]*b[A-Za-z]*n)[A-Za-z]*)",
             r"(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
@@ -473,12 +475,12 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
             r#")(?:"([^"\r\n]{1,150})"|'([^'\r\n]{1,150})'|([^\s"'`|;&<>\\]{0,149}[^\s"'`|;&<>\\,]))"#,
             r#"|(?-u:\b)convertto-securestring[ \t]+(?:-string[ \t]+)?"#,
             r#"(?:\\?"([^"$\\\r\n]{1,150})\\?"|'([^'\r\n]{1,150})')[ \t]+(?:-force[ \t]+)?-asplaintext"#,
-            r#"|(?:"([ !#%-~]{1,48})"|'([ -&(-~]{1,48})')[ \t]?\|[ \t]?"#,
+            r#"|(?:"((?-u:[ !#%-~]){1,48})"|'((?-u:[ -&(-~]){1,48})')[ \t]?\|[ \t]?"#,
             r"convertto-securestring[ \t]+(?:-force[ \t]+)?-asplaintext",
-            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]+"|\\\\[^\s"]+)[ \t]+"#,
-            r#"(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149}))[ \t]+(?:/[a-z]+(?::\S*)?[ \t]+)*?/u(?:ser)?:"#,
-            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]+"|\\\\[^\s"]+)[ \t]+"#,
-            r#"(?:/[a-z]+(?::\S*)?[ \t]+)*?/u(?:ser)?:\S+[ \t]+(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149})))"#,
+            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]{1,200}"|\\\\[^\s"]{1,200})[ \t]+"#,
+            r#"(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149}))[ \t]+(?:/[a-z]{1,16}(?::\S{0,64})?[ \t]+){0,8}?/u(?:ser)?:"#,
+            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]{1,200}"|\\\\[^\s"]{1,200})[ \t]+"#,
+            r#"(?:/[a-z]{1,16}(?::\S{0,64})?[ \t]+){0,8}?/u(?:ser)?:\S{1,128}[ \t]+(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149})))"#,
         ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
