@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (164)
+## PII rules (167)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -178,6 +178,9 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_gstin_in_context_free` | `IN_GSTIN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_pan_in` | `IN_PAN` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_voter_id_in` | `IN_VOTER` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
+| `pii_dea_number_us` | `MEDICAL_LICENSE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_npi_us` | `US_NPI` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_npi_us_context_free` | `US_NPI` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 
 ### PII context lexicon
 
@@ -280,6 +283,8 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `IN_GSTIN` | `pii.in_gstin` |
 | `IN_PAN` | `pii.in_pan` |
 | `IN_VOTER` | `pii.in_voter_id` |
+| `MEDICAL_LICENSE` | `pii.us_dea_number` |
+| `US_NPI` | `pii.us_npi` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

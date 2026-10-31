@@ -218,6 +218,9 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     india::GSTIN_CONTEXT_FREE,
     india::PAN,
     india::VOTER_ID,
+    us::DEA_NUMBER,
+    us::NPI,
+    us::NPI_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -754,7 +757,9 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_aadhaar_in"
             | "pii_gstin_in"
             | "pii_pan_in"
-            | "pii_voter_id_in") => {
+            | "pii_voter_id_in"
+            | "pii_dea_number_us"
+            | "pii_npi_us") => {
                 let value = captures.get(0).unwrap().range();
                 if vat_body(rule_id, text, value.start) {
                     return false;

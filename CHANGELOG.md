@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- US medical licence numbers (A06). Two new labels: `MEDICAL_LICENSE` (DEA registration number: a
+  registrant type letter A–H, J–M, P, R–U or X, the initial of the last name or `9`, seven digits, the
+  last the units digit of `d1 + d3 + d5 + 2 × (d2 + d4 + d6)`) and `US_NPI` (National Provider
+  Identifier: ten digits, first 1 or 2, plain or grouped 4-3-3 with spaces or hyphens, no repeated
+  digit before the check digit, Luhn check digit behind the prefix `80840`). `pii_dea_number_us` and
+  `pii_npi_us` report the value in every mode when a term of the label (new lexicon entries with EN
+  and DE terms) stands near it or is its key, also as a CSV cell; `pii_npi_us_context_free` reports
+  the bare grouped NPI in `balanced`/`recall` at 0.55 (K05). Two letters and seven digits pass the DEA
+  digit one time in ten and ten plain digits the NPI digit one time in ten, so neither is reported
+  bare. The `presidio_only` ids `pii.us.medical_license` and `pii.us.npi` become `shared`; M3 ARK
+  73 → 75, shared 30 → 32. New `rust/tests/pii_us_medical.rs`, 43 new `pii_l1` rows (DE, EN), rule
+  fixture entries, Python ports in `scoreboard.py`. **Detection change** (`strict`: the two labels
+  with a term or key; `balanced`/`recall`: also the bare grouped NPI). Three new regexes, linear and
+  bounded (fixed-length character classes with word boundaries); validators run only on matches.
+
 - Indian identifiers (B-IN). Four new labels: `IN_AADHAAR` (twelve digits, first digit 2–9, plain or
   grouped 4-4-4 with spaces, hyphens or colons, no palindrome, Verhoeff check digit), `IN_GSTIN`
   (state code 01–38/97/99, the holder's PAN, entity number, `Z` and a check character weighted 1-2

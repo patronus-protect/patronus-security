@@ -3282,6 +3282,76 @@
     ]
   },
   {
+    "id": "pii.us_dea_number",
+    "description": "US-DEA-Registrierungsnummer (Drug Enforcement Administration, Verschreibungsberechtigung)",
+    "en": [
+      "dea number",
+      "dea no",
+      "dea #",
+      "dea registration",
+      "dea registration number",
+      "dea license",
+      "dea licence",
+      "dea certificate",
+      "dea_number",
+      "dea_no",
+      "prescriber dea",
+      "drug enforcement administration",
+      "drug enforcement administration number",
+      "drug enforcement administration registration"
+    ],
+    "de": [
+      "dea-nummer",
+      "dea nummer",
+      "dea_nummer",
+      "dea-registrierungsnummer",
+      "dea-registrierung",
+      "dea-zulassung",
+      "dea-zulassungsnummer"
+    ],
+    "shared": [
+      "dea",
+      "dea#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/us.rs"
+    ]
+  },
+  {
+    "id": "pii.us_npi",
+    "description": "US National Provider Identifier (NPI, CMS-Kennung für Leistungserbringer im Gesundheitswesen)",
+    "en": [
+      "npi number",
+      "npi no",
+      "npi #",
+      "npi_number",
+      "national provider identifier",
+      "national provider id",
+      "national provider number",
+      "provider npi",
+      "provider identifier",
+      "provider id",
+      "prescriber npi",
+      "billing npi",
+      "rendering npi",
+      "referring npi"
+    ],
+    "de": [
+      "npi-nummer",
+      "npi nummer",
+      "npi_nummer",
+      "us-leistungserbringer-kennung",
+      "leistungserbringer-nummer"
+    ],
+    "shared": [
+      "npi",
+      "npi#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/us.rs"
+    ]
+  },
+  {
     "id": "pii.pl_nip",
     "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
     "en": [

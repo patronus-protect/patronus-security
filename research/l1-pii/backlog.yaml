@@ -765,6 +765,7 @@ tasks:
 
   # M3 +2 (72)
   - id: A06
+    status: done
     title: "Medical licence: DEA (checksum) + NPI (Luhn with 80840)"
     type: new-entity
     deps: [K05]

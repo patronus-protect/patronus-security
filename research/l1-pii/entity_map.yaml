@@ -330,6 +330,20 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [IN_VOTER]
 
+  - id: pii.us.medical_license
+    scope: shared
+    ark: [MEDICAL_LICENSE]
+    presidio: [MEDICAL_LICENSE]
+    corpora:
+      presidio-analyzer-recognizer-tests: [MEDICAL_LICENSE]
+
+  - id: pii.us.npi
+    scope: shared
+    ark: [US_NPI]
+    presidio: [US_NPI]
+    corpora:
+      presidio-analyzer-recognizer-tests: [US_NPI]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -496,10 +510,8 @@ entities:
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
   - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {presidio-analyzer-recognizer-tests: [CRYPTO]}}
-  - {id: pii.us.medical_license, scope: presidio_only, ark: [], presidio: [MEDICAL_LICENSE], corpora: {presidio-analyzer-recognizer-tests: [MEDICAL_LICENSE]}}
   - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {presidio-analyzer-recognizer-tests: [US_ITIN]}}
   - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
-  - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {presidio-analyzer-recognizer-tests: [US_NPI]}}
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
@@ -651,6 +663,8 @@ checksums:
     in_gstin: {algorithm: "Prüfzeichen gewichtet 1-2 mod 36"}        # B-IN, plus Bundesstaat 01–38/97/99, Z an Stelle 14
     in_pan: null                        # B-IN, Inhabertyp im vierten Buchstaben, keine Prüfziffer (Algorithmus nicht veröffentlicht)
     in_voter_id: null                   # B-IN, EPIC: drei Buchstaben, sieben Ziffern, keine Prüfziffer
+    us_dea_number: {algorithm: DEA-Prüfziffer}                     # A06, d1+d3+d5+2×(d2+d4+d6) mod 10, Registranttyp A–H/J–M/P/R–U/X
+    us_npi: {algorithm: Luhn mit Präfix 80840}                     # A06, zehn Ziffern, erste 1 oder 2, blank oder 4-3-3
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

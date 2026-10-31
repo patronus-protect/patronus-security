@@ -437,7 +437,13 @@ and the GSTIN (`IN_GSTIN`, state code, PAN, entity number, `Z` and a mod-36 chec
 `BNZPM2501F`) and the voter ID (`IN_VOTER`, EPIC, three letters and seven digits; `KLT4471920`) are
 format checks. With a term (`Aadhaar`, `GSTIN`, `GST number`, `PAN`, `Permanent Account Number`,
 `Voter ID`, `EPIC`) or as a key they are reported in every mode; bare, in `balanced`/`recall` only
-and at `0.55`, the grouped Aadhaar number and the GSTIN. The German document number rules keep
+and at `0.55`, the grouped Aadhaar number and the GSTIN. Two US medical licence numbers (A06)
+carry a check digit: the DEA registration number (`MEDICAL_LICENSE`, a registrant type letter, the
+last-name initial or `9`, seven digits with a mod-10 check digit; `AB1234563`) and the National
+Provider Identifier (`US_NPI`, ten digits, first 1 or 2, Luhn behind the prefix `80840`;
+`1234567893`). With a term (`DEA number`, `DEA-Nummer`, `NPI`, `National Provider Identifier`) or
+as a key they are reported in every mode; bare, in `balanced`/`recall` only and at `0.55`, the NPI
+in 4-3-3 groups (`1234-567-893`). The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

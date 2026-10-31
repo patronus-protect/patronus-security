@@ -481,6 +481,18 @@ USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelz
 Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
 den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
 
+Stand A06: ARK 75, gemeinsam 32. Zwei Labels mit Prüfziffer, beide `shared` mit dem gleichnamigen
+Recognizer von presidio-analyzer 2.2.364: `MEDICAL_LICENSE` (`validators::us_dea_number`, DEA-Nummer:
+Registranttyp A–H/J–M/P/R–U/X, Initiale des Nachnamens oder `9`, sieben Ziffern, die letzte die Einerstelle
+von d1 + d3 + d5 + 2 × (d2 + d4 + d6)) und `US_NPI` (`us_npi`, zehn Ziffern, erste 1 oder 2, blank oder 4-3-3
+mit Leerzeichen oder Bindestrich, keine wiederholte Ziffer vor der Prüfziffer, Luhn hinter dem Präfix
+`80840`). Beide meldet je eine Regel in jedem Modus mit einem Begriff des Labels in der Nähe oder als
+Schlüssel; kontextfrei in `balanced`/`recall` (K05, 0,55) nur die gruppierte NPI. Die DEA-Ziffer trifft
+jeden zehnten Code aus zwei Buchstaben und sieben Ziffern, die NPI-Ziffer jede zehnte blanke Zehnerzahl;
+beide bleiben deshalb ohne Begriff stumm (Presidio meldet die blanke NPI mit 0,1 unter der Schwelle).
+Gold steht in `pii_l1` (DE, EN), im E05-Goldset (`ark_authored`) und in den Recognizer-Tests
+(`presidio_favored`, nur NPI).
+
 Stand B-IN: ARK 73, gemeinsam 30 (A09, T11). Zwei Labels mit Prüfung: `IN_AADHAAR`
 (`validators::in_aadhaar`, zwölf Ziffern, erste 2–9, blank oder 4-4-4 mit Leerzeichen, Bindestrich oder
 Doppelpunkt, kein Palindrom, Verhoeff-Prüfziffer; `shared` und gemeinsame Einheit mit dem Recognizer

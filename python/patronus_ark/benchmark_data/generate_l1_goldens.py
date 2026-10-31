@@ -4617,6 +4617,63 @@ B_IN_CASES = [
 for _row in B_IN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# A06: US medical licence numbers. The DEA registration number (MEDICAL_LICENSE, a registrant type
+# letter, the initial of the last name or 9, seven digits, the last the units digit of
+# d1 + d3 + d5 + 2 x (d2 + d4 + d6)) and the National Provider Identifier (US_NPI, ten digits, first
+# 1 or 2, plain or grouped 4-3-3, Luhn check digit behind the prefix 80840) are reported in every
+# mode when a term of the label stands near them or is their key; in balanced/recall the grouped NPI
+# is also reported bare (K05). Hard negatives: failed check digits, a letter that is no registrant
+# type, an NPI led by another digit, values without a term and parts of longer values.
+A06_CASES = [
+    # ── US DEA registration number ─────────────────────────────────────────
+    p("MEDICAL_LICENSE", "en", "pii_dea_number_us", "DEA number: ", "DC2758689"),
+    p("MEDICAL_LICENSE", "en", "pii_dea_number_us", "The prescriber's DEA registration is ", "UE8031976", ".", carrier="prose"),
+    p("MEDICAL_LICENSE", "en", "pii_dea_number_us", '{"dea_number": "', "HG5334189", '"}', carrier="json"),
+    p("MEDICAL_LICENSE", "en", "pii_dea_number_us", "name,dea\nEmily Harrison,", "SB6596312", "", carrier="csv", mode="balanced"),
+    p("MEDICAL_LICENSE", "en", "pii_dea_number_us", "Drug Enforcement Administration registration: ", "X95988285", mode="recall"),
+    p("MEDICAL_LICENSE", "de", "pii_dea_number_us", "DEA-Nummer: ", "UM5770513"),
+    p("MEDICAL_LICENSE", "de", "pii_dea_number_us", "Die DEA-Registrierungsnummer der Praxis lautet ", "TR8988808", ".", carrier="prose"),
+    p("MEDICAL_LICENSE", "de", "pii_dea_number_us", "| Name | DEA-Nummer |\n|---|---|\n| Dr. Jonas Weber | ", "FH8867686", " |", carrier="table"),
+    p("MEDICAL_LICENSE", "de", "pii_dea_number_us", "Als DEA-Nummer ist ", "TS3434468", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("MEDICAL_LICENSE", "de", "pii_dea_number_us", "nr;name;dea_nummer\n1;Javier Sánchez;", "XC8504688", "", carrier="csv", mode="recall"),
+    n("MEDICAL_LICENSE", "en", "pii_dea_number_us", "DEA number: DC2758680", "check digit fails"),
+    n("MEDICAL_LICENSE", "en", "pii_dea_number_us", "DEA number: IC2758689", "I is no registrant type"),
+    n("MEDICAL_LICENSE", "en", "pii_dea_number_us", "Reference DC2758689 was archived.", "DEA form without a DEA term", carrier="prose", mode="balanced"),
+    n("MEDICAL_LICENSE", "en", "pii_dea_number_us", "DEA number: DC2758689-2", "part of a longer value", mode="recall"),
+    n("MEDICAL_LICENSE", "en", "pii_dea_number_us", "DEA number: D12758689", "a digit other than 9 as the second character"),
+    n("MEDICAL_LICENSE", "de", "pii_dea_number_us", "DEA-Nummer: UM5770514", "check digit fails"),
+    n("MEDICAL_LICENSE", "de", "pii_dea_number_us", "DEA-Nummer: WM5770513", "W is no registrant type"),
+    n("MEDICAL_LICENSE", "de", "pii_dea_number_us", "Vorgang UM5770513 wurde abgeschlossen.", "DEA form without a DEA term", carrier="prose", mode="balanced"),
+    n("MEDICAL_LICENSE", "de", "pii_dea_number_us", "DEA-Nummer: XUM5770513", "part of a longer value", mode="recall"),
+    n("MEDICAL_LICENSE", "de", "pii_dea_number_us", "DEA-Nummer: UM577051", "six digits"),
+    # ── US National Provider Identifier ────────────────────────────────────
+    p("US_NPI", "en", "pii_npi_us", "NPI: ", "1565277724"),
+    p("US_NPI", "en", "pii_npi_us", "The National Provider Identifier on file is ", "1405651617", ".", carrier="prose"),
+    p("US_NPI", "en", "pii_npi_us", '{"npi": "', "2817-380-837", '"}', carrier="json"),
+    p("US_NPI", "en", "pii_npi_us", "provider,npi\nDr. Emily Harrison,", "1669526901", "", carrier="csv", mode="balanced"),
+    p("US_NPI", "en", "pii_npi_us", "Provider identifier ", "1286155159", mode="recall"),
+    p("US_NPI", "en", "pii_npi_us_context_free", "Referral to ", "1054-355-379", " is pending.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("US_NPI", "en", "pii_npi_us_context_free", "", "1517 978 007", "", tags=("no_context",), mode="recall"),
+    p("US_NPI", "de", "pii_npi_us", "NPI-Nummer: ", "1072090842"),
+    p("US_NPI", "de", "pii_npi_us", "Die NPI des behandelnden Arztes lautet ", "2016802532", ".", carrier="prose"),
+    p("US_NPI", "de", "pii_npi_us", "| Name | NPI |\n|---|---|\n| Dr. Jonas Weber | ", "2204 957 684", " |", carrier="table"),
+    p("US_NPI", "de", "pii_npi_us", "Als NPI ist ", "2636189260", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("US_NPI", "de", "pii_npi_us", "nr;name;plz;npi;betrag\n1;Anna Schäfer;30317;", "2591358629", ";1.943,29 €", carrier="csv", mode="recall"),
+    p("US_NPI", "de", "pii_npi_us_context_free", "Überweisung an ", "2500-030-897", " folgt.", carrier="prose", tags=("no_context",), mode="balanced"),
+    n("US_NPI", "en", "pii_npi_us", "NPI: 1565277725", "check digit fails"),
+    n("US_NPI", "en", "pii_npi_us", "NPI: 3850184615", "first digit 3 with a valid check digit"),
+    n("US_NPI", "en", "pii_npi_us", "Reference 1565277724 was archived.", "ten bare digits without an NPI term", carrier="prose", mode="balanced"),
+    n("US_NPI", "en", "pii_npi_us", "NPI: 15652777241", "part of a longer value", mode="recall"),
+    n("US_NPI", "en", "pii_npi_us_context_free", "Referral to 1054-355-370 is pending.", "grouped digits whose check digit fails", carrier="prose", mode="balanced"),
+    n("US_NPI", "de", "pii_npi_us", "NPI-Nummer: 1072090843", "check digit fails"),
+    n("US_NPI", "de", "pii_npi_us", "NPI-Nummer: 1111111112", "one repeated digit before the check digit"),
+    n("US_NPI", "de", "pii_npi_us", "Vorgang 1072090842 wurde abgeschlossen.", "ten bare digits without an NPI term", carrier="prose", mode="balanced"),
+    n("US_NPI", "de", "pii_npi_us", "NPI-Nummer: 1072-090-842-5", "part of a longer value", mode="recall"),
+    n("US_NPI", "de", "pii_npi_us_context_free", "Überweisung an 2500-030 897 folgt.", "mixed grouping", carrier="prose", mode="recall"),
+]
+for _row in A06_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

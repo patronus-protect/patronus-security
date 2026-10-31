@@ -12,6 +12,13 @@
 //! with a routing or account term near the value or as its key; only the printed
 //! 4-4-1 form is reported bare, in `balanced` and `recall`. A routing number under
 //! its field name is also an account value of `pii_financial_account_number`.
+//!
+//! Two medical licence numbers carry a check digit (A06). The DEA registration
+//! number (two letters, seven digits, a mod-10 digit) fits one in ten letter-led
+//! codes, so `pii_dea_number_us` reports it only with a DEA term near the value
+//! or as its key. The NPI (ten digits, first 1 or 2, Luhn behind the prefix
+//! `80840`) is reported by `pii_npi_us` with an NPI term, plain or grouped 4-3-3;
+//! only the grouped form is reported bare, in `balanced` and `recall`.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
@@ -114,6 +121,49 @@ pub(super) const ABA_ROUTING_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
     pattern: r"(?-u:\b)[0-9]{4}-[0-9]{4}-[0-9](?-u:\b)",
     entity_group: "FINANCIAL_ACCOUNT_NUMBER",
     validator: Some(validators::aba_routing_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+// ── Medizinische Zulassungen ─────────────────────────────────────────────────
+
+/// DEA registration number with a DEA term near the value or as its key.
+pub(super) const DEA_NUMBER: PiiPattern = PiiPattern {
+    name: "pii_dea_number_us",
+    pattern: r"(?-u:\b)[A-HJ-MPR-UX][A-Z9][0-9]{7}(?-u:\b)",
+    entity_group: "MEDICAL_LICENSE",
+    validator: Some(validators::us_dea_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 25,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// National Provider Identifier, ten digits or 4-3-3, with an NPI term near the
+/// value or as its key.
+pub(super) const NPI: PiiPattern = PiiPattern {
+    name: "pii_npi_us",
+    pattern: r"(?-u:\b)[12](?:[0-9]{9}|[0-9]{3}-[0-9]{3}-[0-9]{3}|[0-9]{3} [0-9]{3} [0-9]{3})(?-u:\b)",
+    entity_group: "US_NPI",
+    validator: Some(validators::us_npi),
+    strength: ValidatorStrength::Checksum,
+    base_score: 25,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A bare NPI in its 4-3-3 groups, in `balanced` and `recall` only, as
+/// presidio-analyzer scores this form above the bare digits.
+pub(super) const NPI_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_npi_us_context_free",
+    pattern: r"(?-u:\b)[12](?:[0-9]{3}-[0-9]{3}-[0-9]{3}|[0-9]{3} [0-9]{3} [0-9]{3})(?-u:\b)",
+    entity_group: "US_NPI",
+    validator: Some(validators::us_npi),
     strength: ValidatorStrength::Checksum,
     base_score: 20,
     captured_value: false,

@@ -2749,6 +2749,54 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_dea_number_us",
+    "de": "DEA-Nummer: UM5770513",
+    "en": "The prescriber's DEA registration is UE8031976.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "DEA-Nummer: UM5770514",
+        "Vorgang UM5770513 wurde abgeschlossen."
+      ],
+      "en": [
+        "DEA number: IC2758689",
+        "Reference DC2758689 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_npi_us",
+    "de": "Die NPI des behandelnden Arztes lautet 2016802532.",
+    "en": "NPI: 1565277724",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NPI-Nummer: 1072090843",
+        "Vorgang 1072090842 wurde abgeschlossen."
+      ],
+      "en": [
+        "NPI: 3850184615",
+        "Reference 1565277724 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_npi_us_context_free",
+    "de": "Überweisung an 2500-030-897 folgt.",
+    "en": "Referral to 1054-355-379 is pending.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Als NPI ist 2204 957 684 hinterlegt.",
+        "en": "The National Provider Identifier on file is 2817-380-837."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

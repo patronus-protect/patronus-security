@@ -1376,6 +1376,29 @@ def in_gstin(value: str) -> bool:
     )
 
 
+def us_dea_number(value: str) -> bool:
+    """Port of ``validators::us_dea_number`` (registrant type, last-name initial or 9, d1+d3+d5+2(d2+d4+d6) mod 10)."""
+    digits = _separated_digits(value[2:], 7, "") if len(value) == 9 else None
+    return (
+        digits is not None
+        and value[0] in "ABCDEFGHJKLMPRSTUX"
+        and (value[1] == "9" or "A" <= value[1] <= "Z")
+        and (digits[0] + digits[2] + digits[4] + 2 * (digits[1] + digits[3] + digits[5])) % 10 == digits[6]
+    )
+
+
+def us_npi(value: str) -> bool:
+    """Port of ``validators::us_npi`` (10 digits, plain or 4-3-3 with one separator, first 1 or 2, Luhn behind 80840)."""
+    grouped = len(value) == 12 and value[4] == value[8] and value[4] in " -"
+    digits = _separated_digits(value, 10, " -") if grouped or len(value) == 10 else None
+    return (
+        digits is not None
+        and digits[0] in (1, 2)
+        and len(set(digits[:9])) > 1
+        and synth_goldset.luhn_valid("80840" + "".join(map(str, digits)))
+    )
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1454,6 +1477,8 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "pl_regon": pl_regon,
     "in_aadhaar": in_aadhaar,
     "in_gstin": in_gstin,
+    "us_dea_number": us_dea_number,
+    "us_npi": us_npi,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).
