@@ -481,6 +481,21 @@ USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelz
 Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
 den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
 
+Stand B-IN: ARK 73, gemeinsam 30 (A09, T11). Zwei Labels mit Prüfung: `IN_AADHAAR`
+(`validators::in_aadhaar`, zwölf Ziffern, erste 2–9, blank oder 4-4-4 mit Leerzeichen, Bindestrich oder
+Doppelpunkt, kein Palindrom, Verhoeff-Prüfziffer; `shared` und gemeinsame Einheit mit dem Recognizer
+`IN_AADHAAR` von presidio-analyzer 2.2.364) und `IN_GSTIN` (`in_gstin`, Bundesstaat 01–38/97/99, PAN des
+Inhabers, Einheitsnummer 1–9/A–Z, `Z`, Prüfzeichen gewichtet 1-2 mod 36; Presidio prüft nur die Form, also
+eine ARK-Einheit ohne Presidio-Gegenstück). `IN_PAN` (`in_pan`, Inhabertyp P/C/H/F/A/T/B/L/J/G im vierten
+Buchstaben, Serie ≠ 0000) und `IN_VOTER` (`in_voter_id`, EPIC: drei Buchstaben, sieben Ziffern, nicht alle
+null) sind Form + Kontext und zählen nicht zu M3. Alle vier meldet je eine Regel in jedem Modus mit einem
+Begriff des Labels in der Nähe oder als Schlüssel (Lexika mit EN- und DE-Begriffen); kontextfrei in
+`balanced`/`recall` (K05, 0,55) die gruppierte Aadhaar-Nummer und die GSTIN. Die Werte der
+GSTIN-Recognizer-Tests (`27ABCDE1234F1Z5`, `07PQRST6789K1Z2`) bestehen das Prüfzeichen nicht und bleiben
+ungemeldet. Reisepass und Kfz-Kennzeichen IN (Form + Kontext, Labels `PASSPORT_NUMBER`/`LICENSEPLATE`)
+bleiben offen. Gold steht in `pii_l1` (DE, EN), im E05-Goldset (`ark_authored`) und in den
+Recognizer-Tests (`presidio_favored`).
+
 Stand B-ESIT: ARK 69, gemeinsam 28 (A11, A12). Drei Labels mit Kontrollbuchstabe, alle `shared` mit
 dem gleichnamigen Recognizer von presidio-analyzer 2.2.364: `ES_NIF` (`validators::es_nif`, DNI/NIF,
 acht Ziffern oder sieben eines alten DNI und der Kontrollbuchstabe mod 23), `ES_NIE` (`es_nie`, `X`/`Y`/`Z`

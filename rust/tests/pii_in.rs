@@ -5,8 +5,8 @@
 //! twelve digits, first digit 2–9, plain or grouped 4-4-4, Verhoeff check digit)
 //! and the GSTIN (`IN_GSTIN`, state code, the PAN of the holder, entity number,
 //! `Z` and a mod-36 check character). The PAN (`IN_PAN`, holder type in the
-//! fourth letter) and the voter ID (`IN_VOTER`, EPIC) are format and context
-//! only. Each is reported in every mode when a term of the label stands near it
+//! fourth letter) and the voter ID (`IN_VOTER`, EPIC, three letters and seven
+//! digits) are format and context only. Each is reported in every mode when a term of the label stands near it
 //! or is its key; in `balanced` and `recall` the grouped Aadhaar number and the
 //! GSTIN are also reported bare (K05).
 
@@ -246,12 +246,22 @@ fn the_indian_rules_have_their_label_validator_and_mode() {
             ValidatorStrength::Format,
             false,
         ),
-        (VOTER, "IN_VOTER", None, ValidatorStrength::None, false),
+        (
+            VOTER,
+            "IN_VOTER",
+            Some(validators::in_voter_id),
+            ValidatorStrength::Format,
+            false,
+        ),
     ] {
         let rule = pattern(rule_id);
         assert_eq!(rule.entity_group, label, "{rule_id}");
         assert_eq!(rule.strength, strength, "{rule_id}");
-        assert_eq!(validator(rule), check.map(|check| check as usize), "{rule_id}");
+        assert_eq!(
+            validator(rule),
+            check.map(|check| check as usize),
+            "{rule_id}"
+        );
         assert!(!rule.captured_value, "{rule_id}");
         assert_eq!(rule.scored_only, scored_only, "{rule_id}");
         assert_eq!(rule.requires_context, !scored_only, "{rule_id}");
@@ -266,6 +276,24 @@ fn the_indian_rules_have_their_label_validator_and_mode() {
     }
 }
 
+#[test]
+fn voter_id_validator_checks_the_epic_form() {
+    for valid in ["KLT4471920", "WBX0938264", "MUP5632811", "CPJ4467918"] {
+        assert!(validators::in_voter_id(valid), "{valid}");
+    }
+    for invalid in [
+        // serial 0000000, form
+        "KLT0000000",
+        "KLT447192",
+        "KL44719201",
+        "KLT44719201",
+        "klt4471920",
+        "1234567890",
+    ] {
+        assert!(!validators::in_voter_id(invalid), "{invalid}");
+    }
+}
+
 // ── values with a term or key, every mode ────────────────────────────────────
 
 #[test]
@@ -273,7 +301,11 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
     for (rule_id, text, value) in [
         (AADHAAR, "Aadhaar number: 5915 3375 9365", "5915 3375 9365"),
         (AADHAAR, "My Aadhaar is 599979610811.", "599979610811"),
-        (AADHAAR, "{\"aadhaar\": \"8797-7332-6157\"}", "8797-7332-6157"),
+        (
+            AADHAAR,
+            "{\"aadhaar\": \"8797-7332-6157\"}",
+            "8797-7332-6157",
+        ),
         (AADHAAR, "Aadhaar-Nummer: 4294 5428 4060", "4294 5428 4060"),
         (
             AADHAAR,
@@ -281,7 +313,11 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
             "398288889437",
         ),
         (GSTIN, "GSTIN: 10BAGFF2439K3ZL", "10BAGFF2439K3ZL"),
-        (GSTIN, "Our GST number is 20DWWHC5119Y4Z0.", "20DWWHC5119Y4Z0"),
+        (
+            GSTIN,
+            "Our GST number is 20DWWHC5119Y4Z0.",
+            "20DWWHC5119Y4Z0",
+        ),
         (GSTIN, "{\"gstin\": \"06CXKCD8583B3Z4\"}", "06CXKCD8583B3Z4"),
         (
             GSTIN,
@@ -323,7 +359,11 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
 fn a_structural_cell_is_a_value_of_its_own_next_to_numeric_cells() {
     for (rule_id, text, value) in [
         (AADHAAR, "aadhaar,age\n406928830752,42", "406928830752"),
-        (GSTIN, "gstin,employees\n30IDYTH1820Z4Z7,31", "30IDYTH1820Z4Z7"),
+        (
+            GSTIN,
+            "gstin,employees\n30IDYTH1820Z4Z7,31",
+            "30IDYTH1820Z4Z7",
+        ),
         (PAN, "pan,age\nCQWPS4821L,42", "CQWPS4821L"),
         (VOTER, "epic,age\nMHR1186402,42", "MHR1186402"),
     ] {

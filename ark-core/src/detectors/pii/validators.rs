@@ -1634,6 +1634,16 @@ pub fn in_pan(s: &str) -> bool {
         && bytes[9].is_ascii_uppercase()
 }
 
+/// Indian voter ID (B-IN, EPIC, Electors Photo Identity Card): three upper-case
+/// letters and seven digits, not all zero. No check digit, a format check.
+pub fn in_voter_id(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 10
+        && bytes[..3].iter().all(u8::is_ascii_uppercase)
+        && bytes[3..].iter().all(u8::is_ascii_digit)
+        && bytes[3..].iter().any(|&byte| byte != b'0')
+}
+
 /// Austrian social security number (B-EU2, Versicherungsnummer): ten digits,
 /// plain or `NNNN DDMMYY`. Three serial digits from 100 on, a check digit and six
 /// digits that are usually the birth date `DDMMYY`; when a day runs out of serials

@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (158)
+## PII rules (164)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -172,6 +172,12 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_fiscal_code_it_context_free` | `IT_FISCAL_CODE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_pesel_pl` | `PL_PESEL` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_regon_pl` | `PL_REGON` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_aadhaar_in` | `IN_AADHAAR` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_aadhaar_in_context_free` | `IN_AADHAAR` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_gstin_in` | `IN_GSTIN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_gstin_in_context_free` | `IN_GSTIN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_pan_in` | `IN_PAN` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
+| `pii_voter_id_in` | `IN_VOTER` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 
 ### PII context lexicon
 
@@ -270,6 +276,10 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `IT_FISCAL_CODE` | `pii.it_fiscal_code` |
 | `PL_PESEL` | `pii.pl_pesel` |
 | `PL_REGON` | `pii.pl_regon` |
+| `IN_AADHAAR` | `pii.in_aadhaar` |
+| `IN_GSTIN` | `pii.in_gstin` |
+| `IN_PAN` | `pii.in_pan` |
+| `IN_VOTER` | `pii.in_voter_id` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

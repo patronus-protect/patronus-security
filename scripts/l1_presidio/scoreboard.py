@@ -84,6 +84,7 @@ from typing import Any, Callable, Iterable, NamedTuple
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import entity_map as entity_map_module  # noqa: E402
+import synth_goldset  # noqa: E402
 
 
 SCHEMA = "ark-l1-scoreboard-v1"
@@ -1349,6 +1350,32 @@ def pl_regon(value: str) -> bool:
     return nine if len(digits) == 9 else nine and check((2, 4, 8, 5, 0, 9, 7, 3, 6, 1, 2, 4, 8))
 
 
+def in_aadhaar(value: str) -> bool:
+    """Port of ``validators::in_aadhaar`` (12 digits, plain or 4-4-4 with one separator, first 2–9, no palindrome, Verhoeff)."""
+    grouped = len(value) == 14 and value[4] == value[9] and value[4] in " -:"
+    digits = _separated_digits(value, 12, " -:") if grouped or len(value) == 12 else None
+    return (
+        digits is not None
+        and digits[0] >= 2
+        and digits != digits[::-1]
+        and synth_goldset.verhoeff_valid("".join(map(str, digits)))
+    )
+
+
+def in_gstin(value: str) -> bool:
+    """Port of ``validators::in_gstin`` (state 01–38/97/99, PAN, entity number 1–9/A–Z, Z, check character mod 36)."""
+    if len(value) != 15 or not value.isascii() or not value[:2].isdigit():
+        return False
+    if any(char not in synth_goldset.GSTIN_CHARS for char in value):
+        return False
+    return (
+        (1 <= int(value[:2]) <= 38 or int(value[:2]) in (97, 99))
+        and value[12] != "0"
+        and value[13] == "Z"
+        and synth_goldset.gstin_check_char(value[:14]) == value[14]
+    )
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1425,6 +1452,8 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "it_fiscal_code": it_fiscal_code,
     "pl_pesel": pl_pesel,
     "pl_regon": pl_regon,
+    "in_aadhaar": in_aadhaar,
+    "in_gstin": in_gstin,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).

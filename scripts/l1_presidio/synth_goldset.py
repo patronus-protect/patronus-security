@@ -1011,13 +1011,18 @@ def gen_in_pan(r: Rng, p: Persona, lang: str) -> str:
 GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def gen_gstin(r: Rng, p: Persona, lang: str) -> str:
-    body = f"{r.randint(1, 37):02d}" + indian_pan(r, p, r.choice("CFP")) + str(r.randint(1, 9)) + "Z"
+def gstin_check_char(body: str) -> str:
+    """Check character of the first fourteen GSTIN characters (weights 1 2 1 2 …, base-36 digit sums)."""
     total = 0
     for index, char in enumerate(body):
         product = GSTIN_CHARS.index(char) * (2 if index % 2 else 1)
         total += product // 36 + product % 36
-    return body + GSTIN_CHARS[(36 - total % 36) % 36]
+    return GSTIN_CHARS[(36 - total % 36) % 36]
+
+
+def gen_gstin(r: Rng, p: Persona, lang: str) -> str:
+    body = f"{r.randint(1, 37):02d}" + indian_pan(r, p, r.choice("CFP")) + str(r.randint(1, 9)) + "Z"
+    return body + gstin_check_char(body)
 
 
 def gen_voter(r: Rng, p: Persona, lang: str) -> str:

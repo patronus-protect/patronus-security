@@ -11,6 +11,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Indian identifiers (B-IN). Four new labels: `IN_AADHAAR` (twelve digits, first digit 2–9, plain or
+  grouped 4-4-4 with spaces, hyphens or colons, no palindrome, Verhoeff check digit), `IN_GSTIN`
+  (state code 01–38/97/99, the holder's PAN, entity number, `Z` and a check character weighted 1-2
+  mod 36), `IN_PAN` (five letters with the holder type as the fourth, four digits other than `0000`,
+  a letter; format check) and `IN_VOTER` (EPIC, three letters and seven digits; format check).
+  `pii_aadhaar_in`, `pii_gstin_in`, `pii_pan_in` and `pii_voter_id_in` report the value in every mode
+  when a term of the label (new lexicon entries with EN and DE terms) stands near it or is its key,
+  also as a CSV cell; `pii_aadhaar_in_context_free` and `pii_gstin_in_context_free` report the bare
+  grouped Aadhaar number and the bare GSTIN in `balanced`/`recall` at 0.55 (K05). The four
+  `presidio_only` ids `pii.in.*` become `shared`; M3 ARK 71 → 73, shared 29 → 30. The Python ports
+  in `scoreboard.py` reuse the Verhoeff and GSTIN helpers of `synth_goldset.py`. New
+  `rust/tests/pii_in.rs`, 86 new `pii_l1` rows (DE, EN), rule fixture entries.
+  **Detection change** (`strict`: the four labels with a term or key; `balanced`/`recall`: also the
+  bare grouped Aadhaar number and GSTIN). Six new regexes, linear and bounded (fixed-length
+  character classes with word boundaries); validators run only on matches.
+
 - Payment fields (Q-FIN, quality floor F1 ≥ 80). A card security code whose field names the card
   (`Credit Card Security Code: 279`, `Kreditkarte, Sicherheitscode: 123`,
   `Creditcardveiligheidscode: 713`, `Code de sécurité de la carte de crédit : 965`) belongs to a
