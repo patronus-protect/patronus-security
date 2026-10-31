@@ -54,7 +54,7 @@ pub(super) const CREDIT_CARD: PiiPattern = PiiPattern {
 
 pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
     name: "pii_credit_card_cvv",
-    pattern: r"(?i)\b(?:cvv2?|cvc2?|card[ \t]+verification[ \t]+(?:value|code)|kartenpr(?:ü|ue)fnummer|kartenpr(?:ü|ue)fziffer|sicherheitscode|code[ \t]+de[ \t]+s(?:é|e)curit(?:é|e)[ \t]+de[ \t]+(?:la[ \t]+)?carte(?:[ \t]+(?:de[ \t]+cr(?:é|e)dit|bancaire))?|cryptogramme(?:[ \t]+visuel)?|c(?:ó|o)digo[ \t]+de[ \t]+seguridad[ \t]+de[ \t]+(?:la[ \t]+)?tarjeta(?:[ \t]+de[ \t]+(?:cr(?:é|e)dito|d(?:é|e)bito))?|codice[ \t]+di[ \t]+sicurezza[ \t]+della[ \t]+carta(?:[ \t]+di[ \t]+(?:credito|debito))?|(?:creditcard|kaart)[- \t]?(?:veiligheids|beveiligings|verificatie)code)[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{3,4})\b",
+    pattern: r"(?i)\b(?:cvv2?|cvc2?|card[ \t]+verification[ \t]+(?:value|code)|(?:(?:credit|debit|payment)[ \t]+)?(?:card[ \t]+)?security[ \t]+code|kartenpr(?:ü|ue)fnummer|kartenpr(?:ü|ue)fziffer|sicherheitscode|code[ \t]+de[ \t]+s(?:é|e)curit(?:é|e)[ \t]+de[ \t]+(?:la[ \t]+)?carte(?:[ \t]+(?:de[ \t]+cr(?:é|e)dit|bancaire))?|cryptogramme(?:[ \t]+visuel)?|c(?:ó|o)digo[ \t]+de[ \t]+seguridad[ \t]+de[ \t]+(?:la[ \t]+)?tarjeta(?:[ \t]+de[ \t]+(?:cr(?:é|e)dito|d(?:é|e)bito))?|codice[ \t]+di[ \t]+sicurezza[ \t]+della[ \t]+carta(?:[ \t]+di[ \t]+(?:credito|debito))?|(?:creditcard|kaart)[- \t]?(?:veiligheids|beveiligings|verificatie)code)(?:\*\*)?[ \t]*(?:(?:is|of)[ \t]*)?[:#=\-]?(?:\*\*)?[ \t]*\(?(?P<value>\d{3,4})\b",
     entity_group: "CREDITCARD_CVV",
     validator: Some(validators::cvv),
     strength: ValidatorStrength::Format,
@@ -80,7 +80,10 @@ pub(super) const CREDIT_CARD_EXPIRY: PiiPattern = PiiPattern {
 pub(super) const SWIFT_BIC_CONTEXT: PiiPattern = PiiPattern {
     name: "pii_swift_bic_context",
     // "Swift supports ..." describes a programming language, not a bank field.
-    pattern: r"(?i)\b(?:(?:swift|bic)(?:[ \t]+code)?[ \t]*[:#=][ \t]*|(?:swift[ \t]+code|bic(?:[ \t]+code)?)[ \t]+is[ \t]+)(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
+    // Field names: `SWIFT`, `BIC`, `Swift/BIC-code`, `swift_bic_code`, `swiftBIC`,
+    // an optional note in parentheses before the colon, and in prose `BIC X`,
+    // `SWIFT BIC code X`, `swift code is X` (Q-FIN).
+    pattern: r"(?i)\b(?:(?:swift(?:[ \t]*/[ \t]*bic|[-_ \t]?bic)?|bic)(?:[-_ \t]?code)?(?:[ \t]*\([^()\d\n]{1,40}\))?[ \t]*[:#=][ \t]*|(?:swift(?:[ \t]*/[ \t]*bic|[ \t]+bic)?[ \t]+code|swift[ \t]+bic|bic(?:[ \t]+code)?)[ \t]+(?:is[ \t]+)?)(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
     entity_group: "SWIFT_CODE",
     validator: Some(validators::bic),
     strength: ValidatorStrength::Format,
