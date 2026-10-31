@@ -81,9 +81,10 @@ pub(super) const SWIFT_BIC_CONTEXT: PiiPattern = PiiPattern {
     name: "pii_swift_bic_context",
     // "Swift supports ..." describes a programming language, not a bank field.
     // Field names: `SWIFT`, `BIC`, `Swift/BIC-code`, `swift_bic_code`, `swiftBIC`,
-    // an optional note in parentheses before the colon, and in prose `BIC X`,
-    // `SWIFT BIC code X`, `swift code is X` (Q-FIN).
-    pattern: r"(?i)\b(?:(?:swift(?:[ \t]*/[ \t]*bic|[-_ \t]?bic)?|bic)(?:[-_ \t]?code)?(?:[ \t]*\([^()\d\n]{1,40}\))?[ \t]*[:#=][ \t]*|(?:swift(?:[ \t]*/[ \t]*bic|[ \t]+bic)?[ \t]+code|swift[ \t]+bic|bic(?:[ \t]+code)?)[ \t]+(?:is[ \t]+)?)(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
+    // an optional note before the colon (`(for transfers)`, `for Bank Transfer`),
+    // and in prose `BIC X`, `SWIFT BIC code "X"`, `swift code is X`, `Als BIC ist X`,
+    // `code SWIFT est X`, `codice SWIFT X` (Q-FIN).
+    pattern: r#"(?i)\b(?:(?:swift(?:[ \t]*/[ \t]*bic|[-_ \t]?bic)?|bic)(?:[-_ \t]?code)?(?:[ \t]*\([^()\d\n]{1,40}\)|[ \t]+for[ \t]+[^:\d\n]{1,30})?[ \t]*[:#=][ \t]*|(?:swift(?:[ \t]*/[ \t]*bic|[ \t]+bic)?[ \t]+code|swift[ \t]+bic|bic(?:[ \t]+code)?|cod(?:e|ice)[ \t]+swift)[ \t]+(?:(?:is|ist|est|è)[ \t]+)?)["']?(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b"#,
     entity_group: "SWIFT_CODE",
     validator: Some(validators::bic),
     strength: ValidatorStrength::Format,

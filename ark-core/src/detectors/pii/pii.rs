@@ -807,6 +807,9 @@ impl NativeRegexDetector for PiiPipeline {
                 !context::foreign_field(fields, text, value.clone(), pattern.entity_group)
                     || context::key_holds_term(fields, text, value, pattern.entity_group)
             }
+            "pii_financial_account_number" => {
+                !context::permanent_account_number(text, field.unwrap())
+            }
             "pii_email" => !context::url_userinfo(text, captures.get(0).unwrap().start()),
             "pii_username" => {
                 !context::continues_as_name(text, captures.name("value").unwrap().range())

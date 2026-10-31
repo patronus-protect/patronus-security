@@ -8,6 +8,8 @@
 //! - SWIFT/BIC field names: `Swift/BIC-code:`, `swift_bic_code`, `<swiftBIC>`, a note in
 //!   parentheses before the colon, and `BIC X` or `SWIFT BIC code X` in prose. The BIC
 //!   validator is unchanged.
+//! - Account numbers after `Konto-Nr.:`, `Als Kontonummer ist …` and `Bank account on file
+//!   is …`; `Permanent Account Number` is the Indian PAN, no bank account.
 
 use patronus_ark::detectors::pii::score::PiiMode;
 use patronus_ark::{
@@ -145,6 +147,17 @@ fn combined_swift_bic_field_names_bind_the_bic() {
             ("SWIFT-BIC: BYLADEM1001", "BYLADEM1001"),
             ("BIC (Empfängerbank): GENODEF1M04", "GENODEF1M04"),
             ("Swift/BIC-code: RABONL2U", "RABONL2U"),
+            (
+                "Swift BIC Code for Bank Transfer: YAOWGBAK845",
+                "YAOWGBAK845",
+            ),
+            (
+                "We noted that the swift BIC code \"DTHCGBRK958\" is outdated.",
+                "DTHCGBRK958",
+            ),
+            ("Als BIC ist QHPABE3KPNM hinterlegt.", "QHPABE3KPNM"),
+            ("dont le code SWIFT est REIUUSJL577 et", "REIUUSJL577"),
+            ("con il codice SWIFT FHZZUSBS650.", "FHZZUSBS650"),
         ],
         "SWIFT_CODE",
     );
@@ -173,7 +186,38 @@ fn swift_without_a_bic_field_or_value_stays_silent() {
             "Wir wickeln SWIFT ZAHLUNG ab.",
             "SWIFT-BIC: DEUTDEFF5",
             "Swift code is powerful.",
+            "Swift BIC Code for 2 banks: DEUTDEFF500",
+            "Als BIC ist folgendes hinterlegt.",
+            "Le code SWIFT est obligatoire.",
         ],
         "SWIFT_CODE",
+    );
+}
+
+#[test]
+fn abbreviated_and_assigned_account_fields_bind_the_account() {
+    assert_found(
+        &[
+            ("Zur Zuordnung – Konto-Nr.: 192555007.", "192555007"),
+            ("Als Kontonummer ist 17404395 hinterlegt.", "17404395"),
+            ("The Bank account on file is 20875414.", "20875414"),
+            ("Konto-Nr.:9611835706", "9611835706"),
+            ("Your account number is 207424939751.", "207424939751"),
+        ],
+        "FINANCIAL_ACCOUNT_NUMBER",
+    );
+}
+
+#[test]
+fn a_permanent_account_number_or_card_after_konto_nr_is_no_bank_account() {
+    assert_silent(
+        &[
+            "Permanent Account Number: DNKPL8403R",
+            "Permanent Account Number:\tPNHPM1821Q",
+            "beløbet overføres til din konto nr. 5116119275326625 inden fredag",
+            "Konto-Nr.: folgt",
+            "Als Kontonummer ist nichts hinterlegt.",
+        ],
+        "FINANCIAL_ACCOUNT_NUMBER",
     );
 }

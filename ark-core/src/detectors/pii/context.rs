@@ -912,6 +912,17 @@ pub(super) fn payment_expiry(text: &str, field_start: usize, card_regex: &Regex)
         || has_payment_card(text, field_start - context.len()..field_start, card_regex)
 }
 
+/// Whether an account field is `Permanent Account Number`, the Indian PAN
+/// (`pii_in_pan`), not a bank account (Q-FIN).
+pub(super) fn permanent_account_number(text: &str, field: Range<usize>) -> bool {
+    let before = text[..field.start].trim_end_matches([' ', '\t']);
+    let word = before.get(before.len().saturating_sub(9)..).unwrap_or("");
+    word.eq_ignore_ascii_case("permanent")
+        || text.as_bytes()[field]
+            .windows(9)
+            .any(|window| window.eq_ignore_ascii_case(b"permanent"))
+}
+
 pub(super) fn employee_identifier(text: &str, field_start: usize, value: &str) -> bool {
     static EMPLOYMENT: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)\b(?:employee|staff|personnel|mitarbeiter|personal|personalnummer)\b")
