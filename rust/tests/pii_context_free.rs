@@ -84,7 +84,7 @@ const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1),
 /// the SIREN (B-EU1), the T.C. Kimlik No (B-LUHN), the PT NIF and the IE PPSN
 /// (B-EU2), the PL PESEL and REGON (A13).
-const CONTEXT_BOUND_LABELS: [&str; 10] = [
+const CONTEXT_BOUND_LABELS: [&str; 11] = [
     "NHS_NUMBER",
     "AU_ACN",
     "AU_TFN",
@@ -95,6 +95,7 @@ const CONTEXT_BOUND_LABELS: [&str; 10] = [
     "IE_PPSN",
     "PL_PESEL",
     "PL_REGON",
+    "MEDICAL_LICENSE",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 5] = [
@@ -208,6 +209,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_fiscal_code_it_context_free",
             "pii_aadhaar_in_context_free",
             "pii_gstin_in_context_free",
+            "pii_npi_us_context_free",
         ]
     );
     for pattern in scored_only {
@@ -262,7 +264,8 @@ fn scored_only_rules_are_unbound_checksum_rules() {
     // eleven bare digits, the only form of a T.C. Kimlik No, its two check digits
     // one time in a hundred (B-LUHN), nine bare digits the NIF mod-11 digit one
     // time in eleven and seven digits with a letter the PPSN check letter one time
-    // in 23 (B-EU2).
+    // in 23 (B-EU2). Two letters and seven digits pass the DEA mod-10 digit one
+    // time in ten, like any letter-led document code (A06).
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
@@ -355,6 +358,7 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("IT_FISCAL_CODE", "RSSMRA85T10A562S", 0.55),
         ("IN_AADHAAR", "5915 3375 9365", 0.55),
         ("IN_GSTIN", "10BAGFF2439K3ZL", 0.55),
+        ("US_NPI", "1850-184-619", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()

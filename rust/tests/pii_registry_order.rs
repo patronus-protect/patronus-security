@@ -192,6 +192,9 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_gstin_in_context_free", "IN_GSTIN"),
     ("pii_pan_in", "IN_PAN"),
     ("pii_voter_id_in", "IN_VOTER"),
+    ("pii_dea_number_us", "MEDICAL_LICENSE"),
+    ("pii_npi_us", "US_NPI"),
+    ("pii_npi_us_context_free", "US_NPI"),
 ];
 
 #[test]

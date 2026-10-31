@@ -860,6 +860,12 @@ def test_gold_validators_cover_every_checksum_validator():
     ("in_gstin", ["10BAGFF2439K3ZL", "20DWWHC5119Y4Z0", "15JEDHV3851A1ZZ", "34LAMCC6452E4ZB"],
      ["10BAGFF2439K3ZM", "27ABCDE1234F1Z5", "00BAGFF2439K3ZM", "45RWETR6874M6ZU", "36RWETR6874M0ZZ",
       "27ABCDE1234F1Y5", "27ABCDE1234F1Z", "10bagff2439k3zl"]),
+    # A06: US DEA number, NPI (rust/tests/pii_us_medical.rs).
+    ("us_dea_number", ["PF4225315", "MW9582847", "X95988285", "AB1234563", "BB1388568"],
+     ["PF4225316", "AB1234567", "IF4225315", "WF4225315", "P14225315", "PF422531", "pf4225315", "PF 4225315"]),
+    ("us_npi", ["1850184619", "2458556968", "1850-184-619", "2458 556 968", "1003000126", "1234-567-893"],
+     ["1850184610", "3850184615", "0850184611", "1111111112", "185018461", "1850-184 619", "1850.184.619",
+      "185-0184-619", "185018461A"]),
 ])
 def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
     check = MODULE.CHECKSUM_PORTS[name]

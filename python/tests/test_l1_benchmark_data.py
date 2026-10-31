@@ -53,6 +53,8 @@ PII_LABELS = {
     "IN_GSTIN",
     "IN_PAN",
     "IN_VOTER",
+    "MEDICAL_LICENSE",
+    "US_NPI",
     "KR_BRN",
     "KR_FRN",
     "KR_RRN",
