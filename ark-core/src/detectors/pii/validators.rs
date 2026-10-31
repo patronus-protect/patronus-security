@@ -540,7 +540,7 @@ pub fn de_tax_number(s: &str) -> bool {
         return false;
     }
     let first = digits[0];
-    let groups = (group_count <= 3).then_some(&groups[..group_count]);
+    let groups = groups.get(..group_count);
     match (len, groups) {
         (13, _) => {
             matches!(

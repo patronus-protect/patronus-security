@@ -157,6 +157,7 @@ fn tax_number_validator_rejects_forms_no_land_prints() {
         "45678901234",
         // other groups
         "2181/508/150",
+        "21 81 508 150",
         "12/34/56789",
         "123/456/7890",
         // too short or too long
