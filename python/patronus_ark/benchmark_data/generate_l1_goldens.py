@@ -11957,6 +11957,182 @@ for _label, _rows in DLP_Q_DLP_PW_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# G03: passwords on CLI command lines. `dlp_cli_password` reports the password of `curl -u/--user
+# user:…`, the MySQL/MariaDB clients `-p…`/`--password=…`, a shell `PGPASSWORD=…` (libpq),
+# `sshpass -p`, `docker`/`podman login -p/--password`, `htpasswd -b…` (the last argument),
+# PowerShell `ConvertTo-SecureString "…" -AsPlainText` and `net use \\server\share … /user:`. Hard
+# negatives: prompts (`curl -u user`, `mysql -p db`, `-W`, `net use … *`), `--password-stdin`,
+# `sshpass -e/-f`, shell and template references, placeholders and documented call syntax.
+DLP_G03_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "$ curl -u lager-deploy:<<secret:0>> -T lager-2026.10.tgz https://nexus.lager.intern/repository/raw/\n"
+            "  % Total    % Received % Xferd\n",
+            "curl_user_password", 19001, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "#!/bin/bash\n# Nächtliche Sicherung der Lagerdatenbank\nmysqldump -h db.lager.intern -u sicherung "
+            "-p<<secret:0>> --single-transaction lager > /sicherung/lager.sql\n",
+            "curl_user_password", 19002, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "sicherung:\n  stage: deploy\n  script:\n    - sshpass -p '<<secret:0>>' scp dump.sql "
+            "sicherung@backup.lager.intern:/daten/\n",
+            "password", 19003, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "2026-09-14 08:12:03 INFO deploy.sh: + docker login -u lager-ci -p <<secret:0>> registry.lager.intern\n"
+            "2026-09-14 08:12:04 INFO deploy.sh: Login Succeeded\n",
+            "curl_user_password", 19004, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "Hallo Jana,\n\nden Zugang für das Lager-Dashboard habe ich so angelegt:\n"
+            "htpasswd -bc /etc/nginx/.htpasswd jana <<secret:0>>\nBitte nach dem ersten Login ändern.\n",
+            "curl_user_password", 19005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "# Laufwerk der Buchhaltung verbinden\n$kennwort = ConvertTo-SecureString \"<<secret:0>>\" -AsPlainText -Force\n"
+            "$zugang = New-Object System.Management.Automation.PSCredential('LAGER\\jana', $kennwort)\n",
+            "password", 19006, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "C:\\> net use Z: \\\\fs01.lager.intern\\buchhaltung <<secret:0>> /user:LAGER\\jana /persistent:no\n"
+            "Der Befehl wurde erfolgreich ausgeführt.\n",
+            "curl_user_password", 19007, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "# Wartung jeden Sonntag\n0 3 * * 0 PGPASSWORD=<<secret:0>> psql -h db.lager.intern -U lager -d lager "
+            "-c \"VACUUM ANALYZE\"\n",
+            "curl_user_password", 19008, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "      - name: Publish release\n        run: |\n          curl --user \"release-bot:<<secret:0>>\" "
+            "-X POST https://artifacts.example.com/api/upload\n",
+            "curl_user_password", 19011, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "$ mysql -h db.internal -u orders --password=<<secret:0>> orders\n"
+            "Welcome to the MySQL monitor.  Commands end with ; or \\g.\n",
+            "curl_user_password", 19012, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "2026-09-14T08:12:03Z + sshpass -p<<secret:0>> ssh deploy@10.0.4.12 'systemctl restart api'\n",
+            "curl_user_password", 19013, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "#!/bin/sh\nset -eu\necho \"logging in to the registry\"\ndocker login --username ci-bot --password "
+            "<<secret:0>> registry.example.com\ndocker push registry.example.com/api:latest\n",
+            "curl_user_password", 19014, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "FROM nginx:1.27-alpine\nRUN apk add --no-cache apache2-utils \\\n"
+            " && htpasswd -nbB admin <<secret:0>> > /etc/nginx/.htpasswd\n",
+            "curl_user_password", 19015, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "$cred = New-Object System.Management.Automation.PSCredential('svc-deploy', "
+            "(ConvertTo-SecureString -String '<<secret:0>>' -AsPlainText -Force))\n",
+            "password", 19016, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "@echo off\nREM map the reports share\nnet use \\\\files.internal\\reports /user:ACME\\svc-reports "
+            "<<secret:0>>\n",
+            "curl_user_password", 19017, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "Hi Sam,\n\nthe backup job runs\n\nPGPASSWORD='<<secret:0>>' pg_dump -h db.internal -U orders orders "
+            "> orders.sql\n\nPlease rotate it after the migration.\n",
+            "password", 19018, carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "$ curl -u lager-deploy -T lager.tgz https://nexus.lager.intern/repository/raw/\n"
+            "Enter host password for user 'lager-deploy':\n",
+            "curl user name without a password (prompt)", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "#!/bin/bash\nmysqldump -h db.lager.intern -u sicherung -p lager > /sicherung/lager.sql\n",
+            "mysql -p with a space is the prompt, lager the database", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "sicherung:\n  script:\n    - sshpass -e scp dump.sql sicherung@backup.lager.intern:/daten/\n"
+            "    - echo \"$REGISTRY_PASSWORT\" | docker login -u lager-ci --password-stdin registry.lager.intern\n",
+            "password from the environment and stdin", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "# Laufwerk verbinden\n$kennwort = ConvertTo-SecureString $env:LAGER_KENNWORT -AsPlainText -Force\n"
+            "net use Z: \\\\fs01.lager.intern\\buchhaltung * /user:LAGER\\jana\n",
+            "environment reference and the password prompt *", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "Aufruf laut Handbuch: htpasswd -b <datei> <benutzer> <passwort> oder curl -u <benutzer>:<passwort> <url>\n",
+            "documented call syntax with placeholders", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_cli_password",
+            "# Wartung\nPGPASSWORD=\"${LAGER_DB_PASSWORT}\" psql -h db.lager.intern -U lager -d lager\n",
+            "shell variable as PGPASSWORD", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "      - name: Publish release\n        run: curl --user \"${{ secrets.RELEASE_USER }}:${{ secrets.RELEASE_PASSWORD }}\" "
+            "-X POST https://artifacts.example.com/api/upload\n",
+            "CI secret references as curl credentials", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "$ mysql -h db.internal -u orders -p orders\nEnter password:\n",
+            "mysql password prompt", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "docker login -u gitlab-ci-token -p \"$CI_JOB_TOKEN\" \"$CI_REGISTRY\"\n"
+            "sshpass -f /run/secrets/deploy_pw ssh deploy@10.0.4.12 uptime\n",
+            "CI variable and password file", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "# usage\n#   curl -u username:password https://api.example.com/v1/me\n"
+            "#   htpasswd -nb user password\n",
+            "documented stand-in credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "$secure = ConvertTo-SecureString $encrypted -Key $key\n"
+            "$plain = ConvertTo-SecureString -String $Password -AsPlainText -Force\n",
+            "PowerShell variables, no literal", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_cli_password",
+            "The -p option of sshpass passes the password on the command line; prefer -e or -f.\n",
+            "option name in prose", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_G03_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():
