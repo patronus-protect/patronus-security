@@ -3312,7 +3312,10 @@
       "passport no",
       "passport-no",
       "passport_no",
-      "travel passport"
+      "travel passport",
+      "travel document",
+      "travel-document",
+      "travel_document"
     ],
     "de": [
       "reisepass",
@@ -3332,9 +3335,12 @@
       "pass nr",
       "pass-nr",
       "pass_nr",
-      "passdokument"
+      "passdokument",
+      "reisedokument"
     ],
-    "shared": [],
+    "shared": [
+      "여권"
+    ],
     "fr": [
       "passeport",
       "numéro de passeport",

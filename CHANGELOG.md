@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Driver's licence and passport numbers (Q-ID, quality floor F1 ≥ 80). A driver's licence field
+  name may be followed by a note in parentheses without a digit (`Führerscheinnummer (falls
+  relevant): 3330234369`, `licencia de conducir (opcional): G37722093`), and the value may open a
+  parenthesis (`la licencia de conducir (M45114072)`); `travel document`, `Reisedokument` and the
+  Korean `여권` are passport terms of the `pii.passport` lexicon, so the US passport letter form
+  binds to them (`my travel document is A12803456`). **Detection change** (every mode): these
+  values are new `DRIVER_LICENSE_NUMBER` / `PASSPORT_NUMBER` findings; no validator changes. Dev,
+  exact F1, balanced: driver's licence neutral 37.1 → 40.3, passport presidio_favored 47.4 → 55.0
+  (strict 18.8 → 29.4), no new FP, Gretel and ark_authored unchanged. The entities that stay below
+  80 (driver's licence neutral, passport and identity card presidio_favored, UK NINO 66.7 from a
+  gold span with a leading space) are recorded decisions in `research/l1-pii/README.md` (Stand
+  Q-ID). The note group is a bounded character class inside the literal-anchored field-name
+  regex; the lexicon gains four terms.
 - Passport and identity card numbers by field name (B-PASS: T24, A05, B08, T10). New rule
   `pii_passport_number_field` reports six to nine upper-case letters and digits, at least five of
   them digits, right after an explicit passport field name in English, German, Spanish, French,

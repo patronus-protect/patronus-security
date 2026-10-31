@@ -6,9 +6,11 @@
 //! German letter may name a US licence (`Führerscheinnummer: T36493663`), an Italian
 //! form a German one. The value decides the format and the rule. Field names are
 //! DE/EN plus IT, FR, ES and NL (T26); prose joins them to the value with `is`, `of`,
-//! `ist`, `lautet`, `è`, `est` or `es` ("my driver's license number is 6940579"). A
-//! number without a licence field name or structural key (K04) is no finding in any
-//! mode: none of the formats carries a check digit. The one exception is the UK licence,
+//! `ist`, `lautet`, `è`, `est` or `es` ("my driver's license number is 6940579"). A note
+//! in parentheses without a digit may follow the field name (`Führerscheinnummer (falls
+//! relevant): …`, Q-ID), and the value may open a parenthesis (`licencia de conducir
+//! (M45114072)`). A number without a licence field name or structural key (K04) is no
+//! finding in any mode: none of the formats carries a check digit. The one exception is the UK licence,
 //! whose sixteen characters encode surname, birth date and initials: bare, it is
 //! reported in `balanced` and `recall`.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
@@ -33,7 +35,7 @@ macro_rules! driver_license_pattern {
             r"|licence[ \t]+de[ \t]+conduc(?:teur|tion)",
             r"|(?:n(?:ú|u)mero[ \t]+de[ \t]+(?:la[ \t]+)?)?(?:licencia|permiso|carn(?:é|e)t?)[ \t]+de[ \t]+conducir",
             r"|rijbewijs(?:[-_ \t]?(?:nummer|nr))?",
-            r")(?-u:\b)\.?[ \t]*(?:(?:is|of|ist|lautet|è|est|es)[ \t]*)?[:#=\-]?[ \t]*(?P<value>",
+            r")(?-u:\b)\.?[ \t]*(?:\([^()0-9\n]{1,40}\)[ \t]*)?(?:(?:is|of|ist|lautet|è|est|es)[ \t]*)?[:#=\-]?[ \t]*\(?(?P<value>",
             $($value)+,
             r")(?-u:\b)",
         )

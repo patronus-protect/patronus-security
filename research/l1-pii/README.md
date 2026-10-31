@@ -513,6 +513,50 @@ italienische Carta d'identità (CIE `CA48213EF`; die Papierform hat die Form des
 `pii_identity_card_number_it`, Lexikon `pii.identity_card` um IT-Begriffe erweitert) und der spanische
 Pasaporte, drei Buchstaben und sechs Ziffern (`pii_passport_number_es`). Die IT-Patente bleibt bei F15.
 
+Stand Q-ID (Qualitätsuntergrenze, 2026-10-25): Führerschein, Pass, Ausweis und UK-NINO, die der
+Snapshot 2026-10-24 unter F1 80 führt. Seitdem hob B-PASS Pass und Ausweis (Snapshot 2026-10-29).
+Neu: Zwischen Führerschein-Feldname und Wert darf eine Anmerkung in Klammern ohne Ziffer stehen
+(`Führerscheinnummer (falls relevant): 3330234369`, `licencia de conducir (opcional): G37722093`),
+und der Wert darf in einer Klammer stehen (`la licencia de conducir (M45114072)`); `travel document`,
+`Reisedokument` und das koreanische `여권` sind Pass-Begriffe (`pii.passport`), so dass
+`my travel document is A12803456` und `대한민국 여권 S87654321` die US-Buchstabenform binden. Kein
+Validator ändert sich. Dev, exakt, balanced (strict gleich oder besser), Stand B-PASS → Q-ID:
+
+| Entität | neutral | presidio_favored | ark_authored |
+|---|---|---|---|
+| Führerschein | 37,1 → 40,3 | 83,3 | 100,0 |
+| Pass | 68,0 | 47,4 → 55,0 (strict 18,8 → 29,4) | 97,9 |
+| Ausweis | – | 42,9 | 100,0 |
+| UK-NINO | – | 66,7 | 100,0 |
+
+**Entscheidung:** Die übrigen Werte bleiben unter 80; kein Regelproblem, das sich ohne gelockerte
+Validatoren oder kontextfreie Formatregeln lösen ließe.
+
+- **Führerschein neutral 40,3.** ai4privacy führt 76 Werte in 25 Sprachen, fast alle zufällige
+  acht bis zehn Zeichen (`OL0R6376K8`, `VQNDWCLAAR`), meist ohne Führerschein-Feldnamen und in keinem
+  Format eines Ausstellers; 7 sind jetzt gefunden. Gretel 67,6: die FN stehen unter anderen
+  Feldnamen (`Policy Number:`, `Wallet Address:`, `participantID`, SWIFT `:52A:`, FIX `103=`) oder
+  haben zwei Buchstaben und acht Ziffern (`EQ36802596`, `NF40972009`), eine Form, die kein
+  US-Bundesstaat vergibt; die drei FP sind Zellen einer CSV-Führerscheinspalte, von der Gretel nur die erste Zeile
+  annotiert.
+- **Pass presidio_favored 55,0.** 21 der 29 Gold-Werte sind blanke Werte ohne Begriff aus den
+  Recognizer-Tests: ES `AAA123456` auch in gemischter Schreibweise (`AaA123456`), KR `M123A4567`,
+  US `912803456`/`Z12803456`, IN/UK `XY9876543`, IT `B3097651`. Ohne Prüfziffer meldet ARK keine
+  blanke Formatnummer (K05); die deutschen Pässe mit ICAO-Prüfziffer sind gefunden. `My old passport
+  M12345678` ist der Platzhalter mit acht aufsteigenden Ziffern (B-PASS), `L01X00T44` ist nach der
+  ICAO-Serie (`L`) ein Ausweis und wird als solcher gemeldet. Neutral liegt Gretel bei 83,1;
+  ai4privacy (52,1) führt Pässe in 25 Sprachen meist ohne Pass-Begriff (`your PQ5426663 and …`).
+- **Ausweis presidio_favored 42,9.** `CZ6311T03` und `G00000002` tragen eine Pass-Serie (`C`, `G`)
+  und werden als Pass gemeldet; `T99999999`, `t22000129` und `T22000129` bestehen die ICAO-Prüfziffer
+  nicht (der gedruckte Wert hat keine). Nach `Ausweis Nr.` bleibt dieser Wert in jedem Modus still:
+  die feldgebundene Regel kennt `Nr.` nicht, und das hält `strict_reports_no_bare_document_number`
+  (F08) fest. Die italienische Papierform (`AA1234567`, `aa 1234567`, `1234567Aa`) steht blank.
+  Höchstwert ohne kontextfreie Formatregel: 3 von 11.
+- **UK-NINO presidio_favored 66,7.** Der Gold-Span ` YZ 61 48 68 B` beginnt mit dem Leerzeichen vor
+  dem Wert; ARK meldet `YZ 61 48 68 B` und zählt damit als FN und FP desselben Werts. Die beiden
+  anderen Werte sind gefunden, die Negative (`FQ 00 00 00 C`, `UV 98 76 54 B`) still. 80,0 gäbe es
+  nur, wenn ARK den richtigen Wert nicht meldete.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

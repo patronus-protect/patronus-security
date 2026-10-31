@@ -426,3 +426,40 @@ fn balanced_scores_follow_the_rule_base() {
         assert_eq!(licence_spans(text, PiiMode::Strict)[0].1, 1.0, "{text}");
     }
 }
+
+/// Q-ID: a note in parentheses between the field name and the value
+/// (`Führerscheinnummer (falls relevant): …`) and a value in parentheses after the
+/// field name (`la licencia de conducir (M45114072)`) keep the binding. A note with a
+/// digit is no note, and the value keeps its state format.
+#[test]
+fn parentheses_around_note_or_value_keep_the_field_name() {
+    for (text, value) in [
+        (
+            "10. Führerscheinnummer (falls relevant): 3330234369",
+            "3330234369",
+        ),
+        ("Führerschein (Klasse B): B6728301", "B6728301"),
+        (
+            "5. Número de licencia de conducir (opcional): G37722093",
+            "G37722093",
+        ),
+        ("Driver's license number (optional): D4007836", "D4007836"),
+        (
+            "Guarde la licencia de conducir (M45114072) en un bolso.",
+            "M45114072",
+        ),
+        ("a copy of your driver's licence (S38387690).", "S38387690"),
+    ] {
+        assert_reports(RULES[1], text, value);
+    }
+    for text in [
+        "a valid driver's licence (ND8CD4YGQ3) is required.",
+        "Führerschein (Klasse B) gültig bis 30-04-2031",
+        "Driver's license (front side) scanned.",
+        "Führerscheinnummer (Anlage 3): ABCDEFG",
+        "driver's licence (12)",
+        "Driver's license (section 4) 41827365",
+    ] {
+        assert_silent(text);
+    }
+}

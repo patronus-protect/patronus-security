@@ -365,3 +365,27 @@ fn country_forms_need_a_document_term() {
         assert_silent(text, label);
     }
 }
+
+/// Q-ID: `travel document` (EN), `Reisedokument` (DE) and the Korean `여권` are
+/// passport terms of the lexicon; the country forms still check their shape.
+#[test]
+fn travel_document_and_yeogwon_are_passport_terms() {
+    for (text, value) in [
+        ("my travel document is A12803456", "A12803456"),
+        ("Travel document number: Z12803456", "Z12803456"),
+        ("Reisedokument A48291036 liegt vor.", "A48291036"),
+        ("대한민국 여권 S87654321", "S87654321"),
+    ] {
+        assert_reports(US, text, value);
+    }
+    for text in [
+        "my travel document is A128034",
+        "Travel document 12345678 attached.",
+        "travel document a12803456",
+        "Reisedokument A12345678",
+        "여권 S876543",
+        "Order S87654321 shipped.",
+    ] {
+        assert_silent(text, "PASSPORT_NUMBER");
+    }
+}
