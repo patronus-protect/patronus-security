@@ -4812,6 +4812,8 @@ DLP_LOOKALIKE_GENERATORS = (
     "newrelic_license_key_short", "sentry_user_token_short", "sentry_org_token_no_iat", "grafana_api_key_unterminated",
     "grafana_cloud_token_random", "grafana_service_account_token_bad_crc", "dynatrace_api_token_short",
     "splunk_hec_token_short", "elastic_api_key_short", "honeycomb_api_key_short", "pagerduty_api_key_short",
+    # G03: a shell variable reference in the password position
+    "cli_password_env_ref",
 )
 
 
