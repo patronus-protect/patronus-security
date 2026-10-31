@@ -990,7 +990,7 @@ pub fn us_npi(s: &str) -> bool {
         && grouped_digits::<10>(s).is_some_and(|digits| {
             matches!(digits[0], 1 | 2)
                 && !one_repeated_digit(&digits[..9])
-                && (luhn_checksum(&digits) + 24) % 10 == 0
+                && (luhn_checksum(&digits) + 24).is_multiple_of(10)
         })
 }
 
