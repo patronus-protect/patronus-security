@@ -221,14 +221,40 @@ fn bare_elster_form_stays_silent() {
 // ── Handelsregister ──────────────────────────────────────────────────────────
 
 #[test]
-fn commercial_register_rules_carry_the_form_in_the_regex() {
+fn commercial_register_validator_checks_prefix_and_register_number() {
+    for valid in [
+        "HRA12345",
+        "HRB 1",
+        "HRB 123456",
+        "HRA\t9012",
+        "HRB 98765 B",
+        "HRB 1234 KI",
+    ] {
+        assert!(validators::de_commercial_register(valid), "{valid}");
+    }
+    for invalid in [
+        "HRB 012345",
+        "HRB 0",
+        "HRB 1234567",
+        "HRB",
+        "HRC 12345",
+        "HR 12345",
+        "hrb 12345",
+        "HRB 12a45",
+    ] {
+        assert!(!validators::de_commercial_register(invalid), "{invalid}");
+    }
+}
+
+#[test]
+fn commercial_register_rules_are_format_rules() {
     let bound = pattern(REGISTER);
     assert_eq!(bound.entity_group, LABEL);
-    assert_eq!(bound.strength, ValidatorStrength::None);
+    assert_eq!(bound.strength, ValidatorStrength::Format);
     assert!(bound.requires_context && !bound.scored_only && !bound.captured_value);
     let bare = pattern(REGISTER_BARE);
     assert_eq!(bare.entity_group, LABEL);
-    assert_eq!(bare.strength, ValidatorStrength::None);
+    assert_eq!(bare.strength, ValidatorStrength::Format);
     assert!(!bare.requires_context && bare.scored_only && !bare.captured_value);
     assert_eq!(bound.pattern, bare.pattern);
 }

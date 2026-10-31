@@ -556,6 +556,23 @@ pub fn de_tax_number(s: &str) -> bool {
     }
 }
 
+/// German commercial register number (B03): `HRA` or `HRB`, the register number
+/// of one to six digits without a leading zero (the courts count from 1), an
+/// optional court suffix after a space.
+pub fn de_commercial_register(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("HRA").or_else(|| s.strip_prefix("HRB")) else {
+        return false;
+    };
+    let number = rest
+        .trim_start_matches([' ', '\t'])
+        .split([' ', '\t'])
+        .next()
+        .unwrap_or_default();
+    (1..=6).contains(&number.len())
+        && !number.starts_with('0')
+        && number.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 /// German pension insurance number (Rentenversicherungsnummer, VKVV § 4; B-DE1):
 /// area (two digits), birth day (01–31, or 51–81 with the supplementary mark),
 /// birth month (01–12), birth year, the initial of the birth name, a serial of two

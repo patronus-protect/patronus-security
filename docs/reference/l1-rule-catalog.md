@@ -181,8 +181,8 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_dea_number_us` | `MEDICAL_LICENSE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_npi_us` | `US_NPI` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_npi_us_context_free` | `US_NPI` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
-| `pii_commercial_register_de` | `COMMERCIAL_REGISTER_DE` | no | none | 50 | key or proximity (required) | 0.65–0.75 |
-| `pii_commercial_register_de_context_free` | `COMMERCIAL_REGISTER_DE` | no | none | 50 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
+| `pii_commercial_register_de` | `COMMERCIAL_REGISTER_DE` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
+| `pii_commercial_register_de_context_free` | `COMMERCIAL_REGISTER_DE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 
 ### PII context lexicon
 

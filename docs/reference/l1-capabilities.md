@@ -52,7 +52,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
 | `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |
 | `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de`, `pii_steuernummer_de_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_NUMBER` |
-| `pii.de.commercial_register` | shared | `COMMERCIAL_REGISTER_DE` | `pii_commercial_register_de`, `pii_commercial_register_de_context_free` | pattern | on (1 of 2 rules `balanced`/`recall` only) | `DE_HANDELSREGISTER` |
+| `pii.de.commercial_register` | shared | `COMMERCIAL_REGISTER_DE` | `pii_commercial_register_de`, `pii_commercial_register_de_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `DE_HANDELSREGISTER` |
 | `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de`, `pii_rentenversicherung_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_SOCIAL_SECURITY` |
 | `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de`, `pii_health_insurance_number_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_HEALTH_INSURANCE` |
 | `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de`, `pii_physician_number_lanr_de_proximity` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_LANR` |

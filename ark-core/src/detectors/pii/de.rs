@@ -106,17 +106,17 @@ pub(super) const STEUERNUMMER_CONTEXT_FREE: PiiPattern = PiiPattern {
 // ── Handelsregister ──────────────────────────────────────────────────────────
 
 /// Commercial register number (B03): `HRA` (sole traders, partnerships) or `HRB`
-/// (corporations), one to six digits and the suffix some courts append (`B`
-/// Berlin, `FL`, `HL`, `KI`, `PI` in Schleswig-Holstein). The prefix carries the
-/// form; strict asks for a register or local court term near the value or as its
-/// key (`Amtsgericht München, HRB 123456`).
+/// (corporations), the register number and the suffix some courts append (`B`
+/// Berlin, `FL`, `HL`, `KI`, `PI` in Schleswig-Holstein). Strict asks for a
+/// register or local court term near the value or as its key
+/// (`Amtsgericht München, HRB 123456`).
 pub(super) const COMMERCIAL_REGISTER: PiiPattern = PiiPattern {
     name: "pii_commercial_register_de",
     pattern: COMMERCIAL_REGISTER_PATTERN,
     entity_group: "COMMERCIAL_REGISTER_DE",
-    validator: None,
-    strength: ValidatorStrength::None,
-    base_score: 50,
+    validator: Some(validators::de_commercial_register),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
     captured_value: false,
     requires_context: true,
     scored_only: false,
@@ -128,16 +128,16 @@ pub(super) const COMMERCIAL_REGISTER_CONTEXT_FREE: PiiPattern = PiiPattern {
     name: "pii_commercial_register_de_context_free",
     pattern: COMMERCIAL_REGISTER_PATTERN,
     entity_group: "COMMERCIAL_REGISTER_DE",
-    validator: None,
-    strength: ValidatorStrength::None,
-    base_score: 50,
+    validator: Some(validators::de_commercial_register),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
     captured_value: false,
     requires_context: false,
     scored_only: true,
 };
 
 const COMMERCIAL_REGISTER_PATTERN: &str =
-    r"(?-u:\b)HR[AB][ \t]?[1-9][0-9]{0,5}(?:[ \t](?:B|FL|HL|KI|PI))?(?-u:\b)";
+    r"(?-u:\b)HR[AB][ \t]?[0-9]{1,7}(?:[ \t](?:B|FL|HL|KI|PI))?(?-u:\b)";
 
 // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
 pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {

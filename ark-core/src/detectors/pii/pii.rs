@@ -39,15 +39,15 @@ pub struct PiiPattern {
     pub requires_context: bool,
     /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
     /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
-    /// value that strict reports only after its field name. Four format rules
+    /// value that strict reports only after its field name. Five format rules
     /// are here because their issuing rules stand in for a check digit: the
     /// grouped US SSN (B-SSN: separators and SSA ranges), the UK NINO (issued
     /// prefixes and suffixes, one letter case), the UK driving licence
-    /// (surname, birth date and initials, B-UK) and the slashed German
-    /// Steuernummer (the groups of the Länder, Q-DE). The bare commercial register
-    /// number (B-DEFMT) has no validator: its `HRA`/`HRB` prefix is the form. The
-    /// regional phone rule (F01) is here so that `strict` stays unchanged; its
-    /// numbering plan and a phone term stand in for a check digit.
+    /// (surname, birth date and initials, B-UK), the slashed German
+    /// Steuernummer (the groups of the Länder, Q-DE) and the German commercial
+    /// register number (the `HRA`/`HRB` prefix, B-DEFMT). The regional phone rule
+    /// (F01) is here so that `strict` stays unchanged; its numbering plan and a
+    /// phone term stand in for a check digit.
     pub scored_only: bool,
 }
 
