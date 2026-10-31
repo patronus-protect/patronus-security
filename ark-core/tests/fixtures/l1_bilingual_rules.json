@@ -431,6 +431,16 @@
       "es": "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: 318",
       "it": "Carta 4111 1111 1111 1111, codice di sicurezza della carta: 552",
       "nl": "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode: 713"
+    },
+    "hard_negatives": {
+      "de": [
+        "Tresor-Sicherheitscode: 9182",
+        "Kreditkarte beantragt; Sicherheitscode: 5531"
+      ],
+      "en": [
+        "The alarm security code is 7731.",
+        "Gift card balance: 250, security code 123"
+      ]
     }
   },
   {
@@ -449,6 +459,16 @@
     "structure": {
       "de": "{\"bic\": \"DEUTDEFF500\"}",
       "en": "<bank><bic>BARCGB22</bic></bank>"
+    },
+    "hard_negatives": {
+      "de": [
+        "BIC siehe Kontoauszug",
+        "Wir wickeln SWIFT ZAHLUNG ab."
+      ],
+      "en": [
+        "SWIFT BIC code missing from the form.",
+        "Swift BIC Code (2 of 3): DEUTDEFF500"
+      ]
     }
   },
   {
