@@ -499,7 +499,11 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_fiscal_code_it",
             "pii_fiscal_code_it_context_free",
             "pii_pesel_pl",
-            "pii_regon_pl"
+            "pii_regon_pl",
+            "pii_aadhaar_in",
+            "pii_aadhaar_in_context_free",
+            "pii_gstin_in",
+            "pii_gstin_in_context_free"
         ]
     );
 }
@@ -591,6 +595,12 @@ fn reference_scores_per_rule() {
         ("pii_fiscal_code_it_context_free", 0.55),
         ("pii_pesel_pl", 0.60),
         ("pii_regon_pl", 0.60),
+        ("pii_aadhaar_in", 0.60),
+        ("pii_aadhaar_in_context_free", 0.55),
+        ("pii_gstin_in", 0.60),
+        ("pii_gstin_in_context_free", 0.55),
+        ("pii_pan_in", 0.50),
+        ("pii_voter_id_in", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

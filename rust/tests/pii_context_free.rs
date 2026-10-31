@@ -206,6 +206,8 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_nif_es_context_free",
             "pii_nie_es_context_free",
             "pii_fiscal_code_it_context_free",
+            "pii_aadhaar_in_context_free",
+            "pii_gstin_in_context_free",
         ]
     );
     for pattern in scored_only {
@@ -351,6 +353,8 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("ES_NIF", "12345678Z", 0.55),
         ("ES_NIE", "X1234567L", 0.55),
         ("IT_FISCAL_CODE", "RSSMRA85T10A562S", 0.55),
+        ("IN_AADHAAR", "5915 3375 9365", 0.55),
+        ("IN_GSTIN", "10BAGFF2439K3ZL", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()

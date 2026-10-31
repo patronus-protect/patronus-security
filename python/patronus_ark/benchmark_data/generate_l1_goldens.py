@@ -4513,6 +4513,110 @@ Q_ID_CASES = [
 for _row in Q_ID_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-IN: Indian identifiers. The Aadhaar number (IN_AADHAAR, twelve digits, first digit 2-9, plain
+# or grouped 4-4-4 with spaces, hyphens or colons, Verhoeff check digit) and the GSTIN (IN_GSTIN,
+# state code, the PAN of the holder, entity number, `Z` and a mod-36 check character) carry a real
+# check; the PAN (IN_PAN, five letters with the holder type as the fourth, four digits, a letter)
+# and the voter ID (IN_VOTER, EPIC: three letters and seven digits) are format and context only.
+# Every label is reported in every mode when a term of the label stands near it or is its key; in
+# balanced/recall the grouped Aadhaar number and the GSTIN are also reported bare (K05). Hard
+# negatives: failed check digits, a leading 0 or 1, a state code outside 01-38/97/99, a fourth
+# letter that is no PAN holder type, values without a term and parts of longer values.
+B_IN_CASES = [
+    # ── IN Aadhaar ─────────────────────────────────────────────────────────
+    p("IN_AADHAAR", "en", "pii_aadhaar_in", "Aadhaar number: ", "5915 3375 9365"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in", "My Aadhaar is ", "599979610811", ".", carrier="prose"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in", '{"aadhaar": "', "8797-7332-6157", '"}', carrier="json"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in", "name,aadhaar\nRavi Kumar,", "406928830752", "", carrier="csv", mode="balanced"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in", "UIDAI Aadhaar no. ", "4041 6225 6822", mode="recall"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in_context_free", "Applicant ", "5352 4277 1202", " joined in May.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IN_AADHAAR", "en", "pii_aadhaar_in_context_free", "", "6532-0568-8226", "", tags=("no_context",), mode="recall"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in", "Aadhaar-Nummer: ", "4294 5428 4060"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in", "Die Aadhaar-Nummer des Antragstellers lautet ", "398288889437", ".", carrier="prose"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in", "| Name | Aadhaar |\n|---|---|\n| Priya Shah | ", "8759 3369 7434", " |", carrier="table"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in", "Als Aadhaar ist ", "675872747324", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in", "Indische Identifikationsnummer (Aadhaar): ", "5753 5139 3956", mode="recall"),
+    p("IN_AADHAAR", "de", "pii_aadhaar_in_context_free", "Bewerber ", "3090 2961 0020", " aus Pune", carrier="prose", tags=("no_context",), mode="balanced"),
+    n("IN_AADHAAR", "en", "pii_aadhaar_in", "Aadhaar number: 5915 3375 9366", "check digit fails"),
+    n("IN_AADHAAR", "en", "pii_aadhaar_in", "Aadhaar number: 1234 5678 9010", "leading 1 with a valid check digit"),
+    n("IN_AADHAAR", "en", "pii_aadhaar_in", "Reference 599979610811 was archived.", "twelve bare digits without an Aadhaar term", carrier="prose", mode="balanced"),
+    n("IN_AADHAAR", "en", "pii_aadhaar_in", "Aadhaar number: 5915 3375 9365 7", "part of a longer value", mode="balanced"),
+    n("IN_AADHAAR", "en", "pii_aadhaar_in", "Applicant 5352 4277 1203 joined in May.", "grouped digits whose check digit fails", carrier="prose", mode="recall"),
+    n("IN_AADHAAR", "de", "pii_aadhaar_in", "Aadhaar-Nummer: 4294 5428 4061", "check digit fails"),
+    n("IN_AADHAAR", "de", "pii_aadhaar_in", "Aadhaar-Nummer: 0294 5428 4068", "leading 0 with a valid check digit"),
+    n("IN_AADHAAR", "de", "pii_aadhaar_in", "Vorgang 398288889437 wurde abgeschlossen.", "twelve bare digits without an Aadhaar term", carrier="prose", mode="balanced"),
+    n("IN_AADHAAR", "de", "pii_aadhaar_in", "Aadhaar-Nummer: 4294-5428-4060-1", "part of a longer value", mode="balanced"),
+    n("IN_AADHAAR", "de", "pii_aadhaar_in", "Aadhaar-Nummer: 4294 54284060", "mixed grouping", mode="recall"),
+    # ── IN GSTIN ───────────────────────────────────────────────────────────
+    p("IN_GSTIN", "en", "pii_gstin_in", "GSTIN: ", "10BAGFF2439K3ZL"),
+    p("IN_GSTIN", "en", "pii_gstin_in", "Our GST number is ", "20DWWHC5119Y4Z0", ".", carrier="prose"),
+    p("IN_GSTIN", "en", "pii_gstin_in", '{"gstin": "', "06CXKCD8583B3Z4", '"}', carrier="json"),
+    p("IN_GSTIN", "en", "pii_gstin_in", "supplier,gstin\nTata Traders,", "30IDYTH1820Z4Z7", "", carrier="csv", mode="balanced"),
+    p("IN_GSTIN", "en", "pii_gstin_in", "GST registration: ", "17ZUXFU2907C2Z3", mode="recall"),
+    p("IN_GSTIN", "en", "pii_gstin_in_context_free", "Invoice from ", "25OLGTA9304C8ZW", " is due.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IN_GSTIN", "en", "pii_gstin_in_context_free", "", "28MHVAN9845P9Z6", "", tags=("no_context",), mode="recall"),
+    p("IN_GSTIN", "de", "pii_gstin_in", "GSTIN: ", "36RWETR6874M6ZT"),
+    p("IN_GSTIN", "de", "pii_gstin_in", "Die GSTIN des Lieferanten lautet ", "16KGICL5894M8ZW", ".", carrier="prose"),
+    p("IN_GSTIN", "de", "pii_gstin_in", "| Firma | GSTIN |\n|---|---|\n| Mehta Exports | ", "17TTXFN2493I3ZV", " |", carrier="table"),
+    p("IN_GSTIN", "de", "pii_gstin_in", "Als indische GST-Nummer ist ", "14SXZAK2035H1ZO", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IN_GSTIN", "de", "pii_gstin_in", "GST-Nummer: ", "32FPCPC1785F4Z5", mode="recall"),
+    p("IN_GSTIN", "de", "pii_gstin_in_context_free", "Lieferant ", "15JEDHV3851A1ZZ", " aus Mumbai", carrier="prose", tags=("no_context",), mode="balanced"),
+    n("IN_GSTIN", "en", "pii_gstin_in", "GSTIN: 10BAGFF2439K3ZM", "check character fails"),
+    n("IN_GSTIN", "en", "pii_gstin_in", "GSTIN: 00BAGFF2439K3ZM", "state code 00 with a valid check character"),
+    n("IN_GSTIN", "en", "pii_gstin_in", "GSTIN: 27ABCDE1234F1Y5", "no Z in the fourteenth place"),
+    n("IN_GSTIN", "en", "pii_gstin_in", "Invoice from 25OLGTA9304C8ZX is due.", "bare form whose check character fails", carrier="prose", mode="balanced"),
+    n("IN_GSTIN", "en", "pii_gstin_in", "GSTIN: 10BAGFF2439K3ZL5", "part of a longer value", mode="recall"),
+    n("IN_GSTIN", "de", "pii_gstin_in", "GSTIN: 36RWETR6874M6ZU", "check character fails"),
+    n("IN_GSTIN", "de", "pii_gstin_in", "GSTIN: 45RWETR6874M6ZU", "state code 45 with a valid check character"),
+    n("IN_GSTIN", "de", "pii_gstin_in", "GSTIN: 36RWETR6874M0ZZ", "entity number 0 with a valid check character"),
+    n("IN_GSTIN", "de", "pii_gstin_in", "Lieferant 15JEDHV3851A1Z0 aus Mumbai", "bare form whose check character fails", carrier="prose", mode="balanced"),
+    n("IN_GSTIN", "de", "pii_gstin_in", "GSTIN: X36RWETR6874M6ZT", "part of a longer value", mode="recall"),
+    # ── IN PAN ─────────────────────────────────────────────────────────────
+    p("IN_PAN", "en", "pii_pan_in", "PAN: ", "BNZPM2501F"),
+    p("IN_PAN", "en", "pii_pan_in", "The Permanent Account Number on file is ", "AFZPK7190K", ".", carrier="prose"),
+    p("IN_PAN", "en", "pii_pan_in", '{"pan_number": "', "AAACR5055K", '"}', carrier="json"),
+    p("IN_PAN", "en", "pii_pan_in", "name,pan\nAnil Rao,", "CQWPS4821L", "", carrier="csv", mode="balanced"),
+    p("IN_PAN", "en", "pii_pan_in", "Income tax PAN card: ", "AAFFS9921J", mode="recall"),
+    p("IN_PAN", "de", "pii_pan_in", "Indische PAN: ", "DKLPR3307N"),
+    p("IN_PAN", "de", "pii_pan_in", "Die PAN-Nummer des Kunden lautet ", "EHTPV5562Q", ".", carrier="prose"),
+    p("IN_PAN", "de", "pii_pan_in", "| Name | PAN |\n|---|---|\n| Neha Iyer | ", "GJMPT8834H", " |", carrier="table"),
+    p("IN_PAN", "de", "pii_pan_in", "Als indische PAN ist ", "BYXPA1290D", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IN_PAN", "de", "pii_pan_in", "Permanent Account Number: ", "KRTPG4410M", mode="recall"),
+    n("IN_PAN", "en", "pii_pan_in", "PAN: BNZXM2501F", "fourth letter is no holder type"),
+    n("IN_PAN", "en", "pii_pan_in", "PAN: BNZPM0000F", "serial 0000"),
+    n("IN_PAN", "en", "pii_pan_in", "Reference BNZPM2501F was archived.", "PAN form without a PAN term", carrier="prose", mode="balanced"),
+    n("IN_PAN", "en", "pii_pan_in", "PAN: BNZPM2501F7", "part of a longer value", mode="recall"),
+    n("IN_PAN", "en", "pii_pan_in", "PAN: BNZPM25010", "digit in the last place"),
+    n("IN_PAN", "de", "pii_pan_in", "Indische PAN: DKLQR3307N", "fourth letter is no holder type"),
+    n("IN_PAN", "de", "pii_pan_in", "Indische PAN: DKLPR0000N", "serial 0000"),
+    n("IN_PAN", "de", "pii_pan_in", "Vorgang DKLPR3307N wurde abgeschlossen.", "PAN form without a PAN term", carrier="prose", mode="balanced"),
+    n("IN_PAN", "de", "pii_pan_in", "Indische PAN: XDKLPR3307N", "part of a longer value", mode="recall"),
+    n("IN_PAN", "de", "pii_pan_in", "Indische PAN: DKLP3307N", "four letters"),
+    # ── IN voter ID (EPIC) ─────────────────────────────────────────────────
+    p("IN_VOTER", "en", "pii_voter_id_in", "Voter ID: ", "KLT4471920"),
+    p("IN_VOTER", "en", "pii_voter_id_in", "You can vote with your EPIC number ", "WBX0938264", ".", carrier="prose"),
+    p("IN_VOTER", "en", "pii_voter_id_in", '{"voter_id": "', "DLH5520731", '"}', carrier="json"),
+    p("IN_VOTER", "en", "pii_voter_id_in", "name,epic\nSunil Das,", "MHR1186402", "", carrier="csv", mode="balanced"),
+    p("IN_VOTER", "en", "pii_voter_id_in", "Electoral photo identity card: ", "GJA7739015", mode="recall"),
+    p("IN_VOTER", "de", "pii_voter_id_in", "Indische Wähler-ID: ", "TNV2048837"),
+    p("IN_VOTER", "de", "pii_voter_id_in", "Die EPIC-Nummer der Antragstellerin lautet ", "UPK6610294", ".", carrier="prose"),
+    p("IN_VOTER", "de", "pii_voter_id_in", "| Name | Wähler-ID |\n|---|---|\n| Arjun Nair | ", "KAR3307518", " |", carrier="table"),
+    p("IN_VOTER", "de", "pii_voter_id_in", "Als EPIC-Nummer ist ", "BRS9921046", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IN_VOTER", "de", "pii_voter_id_in", "Indischer Wählerausweis: ", "PBJ4458210", mode="recall"),
+    n("IN_VOTER", "en", "pii_voter_id_in", "Voter ID: KLT447192", "six digits"),
+    n("IN_VOTER", "en", "pii_voter_id_in", "Voter ID: KL44719201", "two letters"),
+    n("IN_VOTER", "en", "pii_voter_id_in", "Reference KLT4471920 was archived.", "EPIC form without a voter term", carrier="prose", mode="balanced"),
+    n("IN_VOTER", "en", "pii_voter_id_in", "Voter ID: KLT4471920-1", "part of a longer value", mode="recall"),
+    n("IN_VOTER", "en", "pii_voter_id_in", "Voter ID: 1234567890", "digits only"),
+    n("IN_VOTER", "de", "pii_voter_id_in", "Indische Wähler-ID: TNV204883", "six digits"),
+    n("IN_VOTER", "de", "pii_voter_id_in", "Indische Wähler-ID: TN20488371", "two letters"),
+    n("IN_VOTER", "de", "pii_voter_id_in", "Vorgang TNV2048837 wurde abgeschlossen.", "EPIC form without a voter term", carrier="prose", mode="balanced"),
+    n("IN_VOTER", "de", "pii_voter_id_in", "Indische Wähler-ID: XTNV2048837", "part of a longer value", mode="recall"),
+    n("IN_VOTER", "de", "pii_voter_id_in", "Indische Wähler-ID: TNV20488370", "eight digits"),
+]
+for _row in B_IN_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

@@ -180,7 +180,7 @@ def test_checked_in_ark_count():
     # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN, B-KR the
     # KR resident, foreigner and business registration numbers, B-ESIT the ES NIF, the ES NIE and the IT
     # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs), A13 the PL PESEL and REGON (the
-    # NIP is the PL VAT ID).
+    # NIP is the PL VAT ID), B-IN the IN Aadhaar number and GSTIN (the PAN and the voter ID are format only).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -253,8 +253,10 @@ def test_checked_in_ark_count():
         Unit("pii.it.fiscal_code", "it"),
         Unit("pii.pl.pesel", "pl"),
         Unit("pii.pl.regon", "pl"),
+        Unit("pii.in.aadhaar", "in"),
+        Unit("pii.in.gstin", "in"),
     }
-    assert len(counts.ark) == 71
+    assert len(counts.ark) == 73
     # A13 reaches the M3 target (2 × 35 = 70).
     assert counts.m3_met is True
 
@@ -386,7 +388,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 71
+    assert payload["ark"]["count"] == 73
     assert payload["m3"] == {"factor": 2, "target": 70, "met": True}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -548,6 +550,17 @@ def test_cli_count_json_and_check(tmp_path):
     }
     assert pl == {"pii.pl.pesel": ["pii_pesel_pl: pl_pesel"], "pii.pl.regon": ["pii_regon_pl: pl_regon"]}
     assert vat["pii.pl.vat_id"]["sources"] == ["pii_vat_id_pl: pl_vat_id", "pii_vat_id_pl_proximity: pl_vat_id"]
+    # B-IN: Aadhaar (Verhoeff) and GSTIN (mod 36) count; the PAN validator checks a form only and the voter
+    # ID has none.
+    india = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"].startswith("pii.in.")
+    }
+    assert india == {
+        "pii.in.aadhaar": ["pii_aadhaar_in: in_aadhaar", "pii_aadhaar_in_context_free: in_aadhaar"],
+        "pii.in.gstin": ["pii_gstin_in: in_gstin", "pii_gstin_in_context_free: in_gstin"],
+    }
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
