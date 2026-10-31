@@ -1541,6 +1541,99 @@ pub fn pl_regon(s: &str) -> bool {
     }
 }
 
+/// Indian Aadhaar number (B-IN): twelve digits, plain or grouped 4-4-4 with one
+/// kind of separator (space, hyphen or colon), first digit 2–9, no palindrome
+/// (never issued), the last a Verhoeff check digit.
+pub fn in_aadhaar(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let grouped =
+        bytes.len() == 14 && bytes[4] == bytes[9] && matches!(bytes[4], b' ' | b'-' | b':');
+    (grouped || bytes.len() == 12)
+        && separated_digits::<12>(s, b" -:").is_some_and(|digits| {
+            digits[0] >= 2 && !digits.iter().eq(digits.iter().rev()) && verhoeff(&digits)
+        })
+}
+
+/// Whether `digits` end in a valid Verhoeff check digit (dihedral group D5).
+fn verhoeff(digits: &[u32]) -> bool {
+    const MULTIPLY: [[u8; 10]; 10] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+        [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+        [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+        [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+        [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+        [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+        [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+        [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+        [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    ];
+    const PERMUTE: [[u8; 10]; 8] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+        [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+        [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+        [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+        [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+        [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+        [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    ];
+    digits
+        .iter()
+        .rev()
+        .enumerate()
+        .fold(0, |check, (index, &digit)| {
+            MULTIPLY[usize::from(check)][usize::from(PERMUTE[index % 8][digit as usize])]
+        })
+        == 0
+}
+
+/// Indian GSTIN (B-IN): fifteen characters, a state code 01–38, 97 or 99, the
+/// ten characters of the holder's PAN, an entity number 1–9 or A–Z, `Z` and a
+/// check character: over the first fourteen (0–9, A–Z as 0–35) weighted 1 2 1 2 …,
+/// each product's base-36 digits summed, `(36 − sum mod 36) mod 36`.
+pub fn in_gstin(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let value = |byte: u8| match byte {
+        b'0'..=b'9' => Some(u32::from(byte - b'0')),
+        b'A'..=b'Z' => Some(u32::from(byte - b'A') + 10),
+        _ => None,
+    };
+    if bytes.len() != 15
+        || !bytes[..2].iter().all(u8::is_ascii_digit)
+        || !matches!((bytes[0] - b'0') * 10 + bytes[1] - b'0', 1..=38 | 97 | 99)
+        || bytes[12] == b'0'
+        || bytes[13] != b'Z'
+    {
+        return false;
+    }
+    let mut sum = 0;
+    for (index, &byte) in bytes[..14].iter().enumerate() {
+        let Some(product) = value(byte).map(|value| value * if index % 2 == 1 { 2 } else { 1 })
+        else {
+            return false;
+        };
+        sum += product / 36 + product % 36;
+    }
+    value(bytes[14]) == Some((36 - sum % 36) % 36)
+}
+
+/// Indian Permanent Account Number (B-IN): five upper-case letters, the fourth
+/// the holder type (P person, C company, H Hindu undivided family, F firm,
+/// A association of persons, T trust, B body of individuals, L local authority,
+/// J artificial juridical person, G government), four digits other than `0000`
+/// and a letter. The last letter is a check character whose algorithm is not
+/// published, so this is a format check.
+pub fn in_pan(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 10
+        && bytes[..5].iter().all(u8::is_ascii_uppercase)
+        && b"PCHFATBLJG".contains(&bytes[3])
+        && bytes[5..9].iter().all(u8::is_ascii_digit)
+        && &bytes[5..9] != b"0000"
+        && bytes[9].is_ascii_uppercase()
+}
+
 /// Austrian social security number (B-EU2, Versicherungsnummer): ten digits,
 /// plain or `NNNN DDMMYY`. Three serial digits from 100 on, a check digit and six
 /// digits that are usually the birth date `DDMMYY`; when a day runs out of serials
