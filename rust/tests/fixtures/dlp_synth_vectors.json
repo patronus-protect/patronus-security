@@ -86,7 +86,7 @@
     "cratesio_api_token": "59eb04eb1747c9a2846dae12",
     "cratesio_api_token_short": "f47f8a7134083e60dffaf23b",
     "csrf_token": "3241c962268f37e21d92ccbe",
-    "curl_user_only": "386d480565303d3a227923e5",
+    "cli_password_env_ref": "e064803d0659675260bc3a79",
     "curl_user_password": "c8426b548cc0c65abd4177cf",
     "databricks_api_token": "32005a15871f2a6c3b5cdd33",
     "databricks_api_token_short": "7245eec2b7a48265c8e95ec6",

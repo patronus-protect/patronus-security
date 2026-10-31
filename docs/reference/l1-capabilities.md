@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 95 | 23 |
-| Regex rules | 164 | 113 (+5 relationship rules) |
+| Regex rules | 164 | 114 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 73 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 109 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -297,7 +297,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 35 | 28 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
-| `CREDENTIAL` | generic_credential | on | 12 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
+| `CREDENTIAL` | generic_credential | on | 13 | 10 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
 | `CRYPTO_KEY` | key_material | on | 2 | 2 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
@@ -382,6 +382,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `credential.url_userinfo` | shared | `CREDENTIAL` | `dlp_url_userinfo_password` | none | on | TruffleHog: `URI`, `Postgres`, `MongoDB`, `Redis`, `FTP`, `RabbitMQ`, `JDBC`; detect-secrets: `BasicAuthDetector` |
 | `credential.connection_string` | shared | `CREDENTIAL` | `dlp_connection_string_password` | structure | on | TruffleHog: `JDBC`, `SQLServer` |
 | `credential.ldap_bind_password` | shared | `CREDENTIAL` | `dlp_ldap_bind_password` | format | on | TruffleHog: `LDAP` |
+| `credential.cli_password` | shared | `CREDENTIAL` | `dlp_cli_password` | format | on | gitleaks: `curl-auth-user` |
 | `credential.signed_url_signature` | shared | `CREDENTIAL` | `dlp_signed_url_signature` | none | on | – |
 | `credential.session_cookie` | shared | `CREDENTIAL` | `dlp_session_cookie` | none | on | – |
 | `credential.csrf_token` | shared | `SECRET_TOKEN` | `dlp_csrf_token` | none | on | – |
@@ -498,7 +499,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `data.algolia.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `algolia-api-key` |
 | `data.clickhouse.api_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `clickhouse-cloud-api-secret-key` |
 | `data.cloudant.credentials` | baseline_only | `API_KEY` | – | – | – | detect-secrets: `CloudantDetector` |
-| `credential.cli_password` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `curl-auth-user` |
 | `credential.file.nuget_config` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `nuget-config-password` |
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `kubernetes-secret-yaml` |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | detect-secrets: `Base64HighEntropyString`, `HexHighEntropyString` |
@@ -519,7 +519,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 61 shared, 24 ARK only, 94 baseline only, 11 out of scope.
+Entities: 62 shared, 24 ARK only, 93 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -581,6 +581,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-29; same cells
 | `credential.url_userinfo` | shared | `CREDENTIAL` | 40 | ARK 100.0 / best baseline 44.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (TruffleHog, detect-secrets) |
 | `credential.connection_string` | shared | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.ldap_bind_password` | shared | `CREDENTIAL` | 0 | no gold | no gold |
+| `credential.cli_password` | shared | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.signed_url_signature` | shared | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
 | `credential.session_cookie` | shared | `CREDENTIAL` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `credential.csrf_token` | shared | `SECRET_TOKEN` | 40 | ARK 91.9 / no baseline | ARK 85.0 / no baseline |
@@ -697,7 +698,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-29; same cells
 | `data.algolia.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `data.clickhouse.api_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `data.cloudant.credentials` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `credential.cli_password` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.file.nuget_config` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |

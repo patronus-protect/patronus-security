@@ -211,3 +211,15 @@ fn options_in_prose_are_no_findings() {
         assert_silent(text);
     }
 }
+
+#[test]
+fn dotted_arguments_are_passwords_not_member_access() {
+    // A shell argument is no code; a `$` reference stays one.
+    for template in [
+        concat!("cu", "rl -u deploy:{v} https://api.example.com"),
+        "sshpass -p {v} ssh deploy@10.0.4.12 uptime",
+    ] {
+        assert_exact(template, "zXyKqTrBmWvL.HqRtNpm");
+    }
+    assert_silent("mysql -u root -p$cfg.password shop");
+}

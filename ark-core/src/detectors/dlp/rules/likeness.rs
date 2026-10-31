@@ -1212,6 +1212,17 @@ pub fn is_connection_password(text: &str, range: Range<usize>) -> bool {
     !code && is_chosen_secret(value)
 }
 
+/// G03: [`is_connection_password`] for a command-line argument. A shell
+/// argument is no member access: a bare `Xk7pQ.wRmz` is a dotted password,
+/// `$cfg.password` stays a reference.
+pub fn is_cli_password(text: &str, range: Range<usize>) -> bool {
+    let value = &text[range.clone()];
+    if !value.starts_with('$') && MEMBER_ACCESS.is_match(value) {
+        return is_chosen_secret(value);
+    }
+    is_connection_password(text, range)
+}
+
 /// [`is_chosen_password`] without the user-id.
 fn is_chosen_secret(value: &str) -> bool {
     let plain: String = value.chars().map(leet_letter).collect();

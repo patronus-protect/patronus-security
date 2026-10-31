@@ -927,8 +927,9 @@ LOOKALIKE_FAILURES = {
     "algolia_admin_api_key_short": CHECKS["algolia_admin_api_key"],
     "clickhouse_cloud_api_secret_short": CHECKS["clickhouse_cloud_api_secret"],
     "cloudant_password_short": lambda v: CHECKS["cloudant_password"](v) or CHECKS["cloudant_api_key"](v),
+    # G03
+    "cli_password_env_ref": CHECKS["curl_user_password"],
     # GOLD-D6
-    "curl_user_only": lambda v: ":" in v or CHECKS["curl_user_password"](v),
     "nuget_username": CHECKS["nuget_cleartext_password"],
     "kubernetes_configmap_binary": CHECKS["kubernetes_secret_data"],
     "uuid_v4": lambda v: CHECKS["base64_high_entropy_string"](v) or CHECKS["hex_high_entropy_string"](v)

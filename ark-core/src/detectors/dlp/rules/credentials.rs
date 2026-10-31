@@ -504,7 +504,7 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
             ],
         )
         .with_subtype(SecretSubtype::Password)
-        .with_value_gate(likeness::is_connection_password),
+        .with_value_gate(likeness::is_cli_password),
     },
 ];
 

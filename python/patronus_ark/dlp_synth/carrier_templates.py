@@ -1711,7 +1711,7 @@ PROFILES = {
         "curl-Upload-Befehl",
         {
             "curl_user_password": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
-            "curl_user_only": "curl -u <<value>> -T build.tgz https://nexus.example.com/repository/raw/",
+            "cli_password_env_ref": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
         },
     ),
     "dlp_de_vat_id": Profile("identifier.de.vat_id", "dlp.de.vat_id", "identifier", "vat_id", "VAT ID", "USt-IdNr."),
