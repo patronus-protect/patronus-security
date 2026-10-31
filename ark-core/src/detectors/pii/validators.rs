@@ -964,6 +964,36 @@ pub fn aba_routing_number(s: &str) -> bool {
     })
 }
 
+/// US DEA registration number (A06): a registrant type letter (A–H, J–M, P, R–U,
+/// X), the initial of the registrant's last name or `9`, and seven digits, the
+/// last the units digit of `d1 + d3 + d5 + 2 × (d2 + d4 + d6)`.
+pub fn us_dea_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && b"ABCDEFGHJKLMPRSTUX".contains(&bytes[0])
+        && (bytes[1].is_ascii_uppercase() || bytes[1] == b'9')
+        && vat_digits(&s[2..], 7).is_some_and(|digits| {
+            (digits[0] + digits[2] + digits[4] + 2 * (digits[1] + digits[3] + digits[5])) % 10
+                == digits[6]
+        })
+}
+
+/// US National Provider Identifier (A06): ten digits, plain or grouped 4-3-3 with
+/// one kind of separator (space or hyphen), first digit 1 or 2, the last a Luhn
+/// check digit over the card issuer prefix `80840` and the first nine (the prefix
+/// adds 24 to the Luhn sum). One repeated digit before the check digit is never
+/// issued.
+pub fn us_npi(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let grouped = bytes.len() == 12 && bytes[4] == bytes[8] && matches!(bytes[4], b' ' | b'-');
+    (grouped || bytes.len() == 10)
+        && grouped_digits::<10>(s).is_some_and(|digits| {
+            matches!(digits[0], 1 | 2)
+                && !one_repeated_digit(&digits[..9])
+                && (luhn_checksum(&digits) + 24) % 10 == 0
+        })
+}
+
 pub fn uk_nino(s: &str) -> bool {
     let normalized = s.replace(' ', "").to_ascii_uppercase();
     if normalized.len() != 9 {

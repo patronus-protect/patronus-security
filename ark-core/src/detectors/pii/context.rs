@@ -130,6 +130,8 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("IN_GSTIN", &["pii.in_gstin"]),
     ("IN_PAN", &["pii.in_pan"]),
     ("IN_VOTER", &["pii.in_voter_id"]),
+    ("MEDICAL_LICENSE", &["pii.us_dea_number"]),
+    ("US_NPI", &["pii.us_npi"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),
