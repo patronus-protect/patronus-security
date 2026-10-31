@@ -192,6 +192,7 @@ fn tiers_follow_provider_token_hash_credential_generic() {
         ("dlp_credential_in_url", OverlapTier::Credential),
         ("dlp_connection_string_password", OverlapTier::Credential),
         ("dlp_ldap_bind_password", OverlapTier::Credential),
+        ("dlp_cli_password", OverlapTier::Credential),
         ("dlp_env_var_secret", OverlapTier::Generic),
         ("dlp_password_assignment", OverlapTier::Generic),
         ("dlp_generic_credential_assignment", OverlapTier::Generic),

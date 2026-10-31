@@ -4795,6 +4795,29 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_cli_password",
+    "de": "# Nächtliche Sicherung\nmysqldump -h db.lager.intern -u sicherung -p<<secret\u003a0>> lager > /sicherung/lager.sql",
+    "en": "$ curl -u release-bot:<<secret\u003a0>> -T build.tgz https://nexus.example.com/repository/raw/",
+    "secrets": [
+      {
+        "gen": "curl_user_password",
+        "seed": 7
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "$ mysqldump -h db.lager.intern -u sicherung -p lager > /sicherung/lager.sql",
+        "net use Z: \\\\fs01.lager.intern\\buchhaltung * /user:LAGER\\jana"
+      ],
+      "en": [
+        "docker login -u gitlab-ci-token -p \"$CI_JOB_TOKEN\" \"$CI_REGISTRY\"",
+        "$plain = ConvertTo-SecureString -String $Password -AsPlainText -Force"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_de_vat_id",
     "de": "USt-IdNr: DE123456789",
     "en": "VAT-ID: DE123456789",

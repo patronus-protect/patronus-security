@@ -25,6 +25,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
   fixture entries, Python ports in `scoreboard.py`. **Detection change** (`strict`: the two labels
   with a term or key; `balanced`/`recall`: also the bare grouped NPI). Three new regexes, linear and
   bounded (fixed-length character classes with word boundaries); validators run only on matches.
+- CLI credentials (G03). New rule `dlp_cli_password` (`CREDENTIAL`, subtype `password`, structural
+  credential tier) reports the password of `curl -u`/`--user user:…`, the MySQL/MariaDB clients
+  (`-p…` attached, `--password=…`), a shell `PGPASSWORD=…`, `sshpass -p`, `docker`/`podman login
+  -p`/`--password`, `htpasswd` in batch mode (`-b`, the last argument), PowerShell
+  `ConvertTo-SecureString "…" -AsPlainText` (also piped) and `net use \\server\share … /user:`.
+  Prompts (`curl -u user`, `mysql -p db`, `net use … *`), `--password-stdin`, `sshpass -e`/`-f`,
+  shell, CI and template references and stand-ins are no findings. The entity
+  `credential.cli_password` (gitleaks `curl-auth-user`) moves from `baseline_only` to `shared`; its
+  synthetic carriers and generators belong to the rule in `rules.json`. New
+  `rust/tests/dlp_cli_passwords.rs`, 28 new `dlp_l1` rows (DE, EN), rule fixture entry.
+  **Detection change** (every mode): these command-line passwords are new `CREDENTIAL` findings; a
+  `PGPASSWORD=…` value that `dlp_password_assignment` reported before now reports `dlp_cli_password`.
+  One new regex with literal keywords (prefilter: `curl`, `mysql`, `mariadb`, `pgpassword`,
+  `sshpass`, `docker`, `podman`, `nerdctl`, `buildah`, `skopeo`, `htpasswd`,
+  `convertto-securestring`, `net use`), bounded gaps (≤ 300 characters within a line) and bounded
+  values.
 
 - Indian identifiers (B-IN). Four new labels: `IN_AADHAAR` (twelve digits, first digit 2–9, plain or
   grouped 4-4-4 with spaces, hyphens or colons, no palindrome, Verhoeff check digit), `IN_GSTIN`

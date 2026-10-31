@@ -228,6 +228,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   generische Zuweisung und den URL-Parameter desselben Werts. `dlp_url_userinfo_password` nimmt
   auch Userinfo ohne Benutzernamen (`redis://:…@host`). URL-Userinfo von
   `postgres://`/`mysql://`/`mongodb+srv://`/`amqp://` bleibt bei `dlp_url_userinfo_password`.
+  Seit G03 meldet `dlp_cli_password` (`CREDENTIAL`, Untertyp `password`, Stufe strukturelles
+  Credential) Passwörter auf Kommandozeilen: `curl -u`/`--user user:…`, MySQL/MariaDB-Clients
+  `-p…` (angehängt; `-p db` fragt nach) und `--password=…`, Shell-`PGPASSWORD=…`, `sshpass -p`,
+  `docker`/`podman login -p`/`--password`, `htpasswd -b…` (letztes Argument), PowerShell
+  `ConvertTo-SecureString "…" -AsPlainText` und `net use \\server\share … /user:`. Prompts,
+  `--password-stdin`, `sshpass -e`/`-f` und Referenzen bleiben negativ. Offen: die generische
+  Zuweisung liest `$kennwort = ConvertTo-SecureString …` als Wert `ConvertTo-SecureString`.
   Seit P05 decken elf Provider-Regeln DevOps- und Paket-Registries ab (`SECRET_TOKEN`, Untertyp
   `access_token`): Docker Hub (`dckr_pat_`/`dckr_oat_`, 27 Zeichen), PyPI (`pypi-` und ein
   base64url-Macaroon V2, das vollständig geparst wird: Version, Header mit Location `pypi.org` oder
