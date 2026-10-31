@@ -147,6 +147,8 @@ fn powershell_and_net_use_passwords_are_reported() {
         "$pw = ConvertTo-SecureString \"{v}\" -AsPlainText -Force",
         "$pw = ConvertTo-SecureString -String '{v}' -AsPlainText -Force",
         "(ConvertTo-SecureString '{v}' -Force -AsPlainText)",
+        "$pw = '{v}' | ConvertTo-SecureString -AsPlainText -Force",
+        "{\"run\": \"$pw = ConvertTo-SecureString \\\"{v}\\\" -AsPlainText -Force\"}",
         "net use Z: \\\\fs01.internal\\finance {v} /user:ACME\\jana /persistent:no",
         "net use \\\\files.internal\\reports /user:ACME\\svc-reports {v}",
         "NET USE \\\\files.internal\\ipc$ \"{v}\" /USER:svc",

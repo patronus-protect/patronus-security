@@ -12054,8 +12054,8 @@ DLP_G03_CASES = {
         ),
         ds(
             "CREDENTIAL", "de", "dlp_cli_password",
-            "# Laufwerk der Buchhaltung verbinden\n$kennwort = ConvertTo-SecureString \"<<secret:0>>\" -AsPlainText -Force\n"
-            "$zugang = New-Object System.Management.Automation.PSCredential('LAGER\\jana', $kennwort)\n",
+            "# Laufwerk der Buchhaltung verbinden\n$sicher = ConvertTo-SecureString \"<<secret:0>>\" -AsPlainText -Force\n"
+            "$zugang = New-Object System.Management.Automation.PSCredential('LAGER\\jana', $sicher)\n",
             "password", 19006, carrier="code",
         ),
         ds(
@@ -12136,7 +12136,7 @@ DLP_G03_CASES = {
         ),
         dn(
             "CREDENTIAL", "de", "dlp_cli_password",
-            "# Laufwerk verbinden\n$kennwort = ConvertTo-SecureString $env:LAGER_KENNWORT -AsPlainText -Force\n"
+            "# Laufwerk verbinden\n$sicher = ConvertTo-SecureString $env:LAGER_KENNWORT -AsPlainText -Force\n"
             "net use Z: \\\\fs01.lager.intern\\buchhaltung * /user:LAGER\\jana\n",
             "environment reference and the password prompt *", carrier="code",
         ),
