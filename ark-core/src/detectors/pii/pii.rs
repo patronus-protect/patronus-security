@@ -807,6 +807,9 @@ impl NativeRegexDetector for PiiPipeline {
                 !context::foreign_field(fields, text, value.clone(), pattern.entity_group)
                     || context::key_holds_term(fields, text, value, pattern.entity_group)
             }
+            "pii_financial_account_number" => {
+                !context::permanent_account_number(text, field.unwrap())
+            }
             "pii_email" => !context::url_userinfo(text, captures.get(0).unwrap().start()),
             "pii_username" => {
                 !context::continues_as_name(text, captures.name("value").unwrap().range())
@@ -963,7 +966,8 @@ impl NativeRegexDetector for PiiPipeline {
         let has_payment_card =
             context::has_payment_card(text, 0..text.len(), &self.regexes[card_index]);
         // A table column headed `cvc`/`cvv` types its values; a CVV field elsewhere
-        // (`CVV: 123`, a `cvv` key) still needs a reported card.
+        // (`CVV: 123`, a `cvv` key) still needs a reported card or a card term in
+        // its clause (`Credit Card Security Code: 279`, Q-FIN).
         let column_cvvs: Vec<_> = if spans.iter().any(|span| span.label == "CREDITCARD_CVV") {
             self.structured_values(rule_index("pii_credit_card_cvv"), prepared)
                 .into_iter()
@@ -975,7 +979,13 @@ impl NativeRegexDetector for PiiPipeline {
         };
         spans.retain(|span| {
             let coupled_cvv = span.label == "CREDITCARD_CVV"
-                && (has_payment_card || column_cvvs.contains(&(span.start_byte..span.end_byte)));
+                && (has_payment_card
+                    || column_cvvs.contains(&(span.start_byte..span.end_byte))
+                    || context::card_term_without_number(
+                        text,
+                        span.start_byte,
+                        &self.regexes[card_index],
+                    ));
             (span.end_byte - span.start_byte >= 4 || coupled_cvv)
                 && (span.label != "CREDITCARD_CVV" || coupled_cvv)
         });

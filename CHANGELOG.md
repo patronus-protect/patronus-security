@@ -11,6 +11,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Payment fields (Q-FIN, quality floor F1 ≥ 80). A card security code whose field names the card
+  (`Credit Card Security Code: 279`, `Kreditkarte, Sicherheitscode: 123`,
+  `Creditcardveiligheidscode: 713`, `Code de sécurité de la carte de crédit : 965`) belongs to a
+  card without the card number in the text; `security code` is a CVV field name, and a bare
+  `CVV:`/`Security code:` still needs a reported card or a CVV column. SWIFT/BIC accepts combined
+  field names (`Swift/BIC-Code:`, `SWIFT-BIC:`, `swift_bic_code`, `<swiftBIC>`), a note before the
+  colon (`Swift BIC Code (for international transactions):`, `… for Bank Transfer:`) and prose
+  assignments (`BIC COBADEFFXXX`, `SWIFT BIC code "X"`, `Als BIC ist X`, `code SWIFT est X`). The
+  account rule binds `Konto-Nr.:`, `Als Kontonummer ist …` and `Bank account on file is …`, and
+  `Permanent Account Number` (the Indian PAN) is no longer an account. **Detection change** (every
+  mode): these values are new `CREDITCARD_CVV` / `SWIFT_CODE` / `FINANCIAL_ACCOUNT_NUMBER` findings,
+  three Indian PAN values lose their account label; no validator changes. Dev, exact F1, balanced
+  (strict equal): CVV neutral 0.0 → 63.4, SWIFT/BIC neutral 38.5 → 73.4 and ark_authored
+  36.9 → 100.0, account number ark_authored 78.9 → 100.0; no new FP on hard negatives, no other
+  entity changes. The entities that stay below 80 (card number, CVV and account number neutral,
+  account number presidio_favored, CVV and card expiry ark_authored) are recorded decisions in
+  `research/l1-pii/README.md` (Stand Q-FIN). The new field-name alternatives sit inside the
+  existing literal-anchored regexes; the card-term check runs only on CVV spans without a card.
 - Driver's licence and passport numbers (Q-ID, quality floor F1 ≥ 80). A driver's licence field
   name may be followed by a note in parentheses without a digit (`Führerscheinnummer (falls
   relevant): 3330234369`, `licencia de conducir (opcional): G37722093`), and the value may open a

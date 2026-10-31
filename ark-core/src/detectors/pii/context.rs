@@ -895,13 +895,38 @@ fn preceding_clause(text: &str, field_start: usize) -> &str {
     &before[clause_start..]
 }
 
-pub(super) fn payment_expiry(text: &str, field_start: usize, card_regex: &Regex) -> bool {
+/// Whether the clause before a field names a payment card (`credit card`,
+/// `Kreditkarte`, `Creditcardveiligheidscode`, `carte de crédit`, `tarjeta de
+/// crédito`, `carta di credito`) or ends in a `card:` label. A card verification
+/// code or expiry date after such a term belongs to a card without its number.
+pub(super) fn payment_term(text: &str, field_start: usize) -> bool {
     static PAYMENT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)\b(?:credit[ -]?card|debit[ -]?card|payment[ -]?card|kreditkarte|debitkarte|bankkarte|zahlungskarte|visa|mastercard|amex|american[ \t]+express)\b|\b(?:card|karte)[ \t]*[:,-]?[ \t]*$").unwrap()
+        Regex::new(r"(?i)\b(?:credit[ -]?card|debit[ -]?card|payment[ -]?card|kreditkarte|debitkarte|bankkarte|zahlungskarte|visa|mastercard|amex|american[ \t]+express|carte[ \t]+(?:de[ \t]+cr(?:é|e)dit|bancaire)|tarjeta[ \t]+de[ \t]+(?:cr(?:é|e)dito|d(?:é|e)bito)|carta[ \t]+di[ \t]+(?:credito|debito))\b|\bcreditcard|\b(?:card|karte)[ \t]*[:,-]?[ \t]*$").unwrap()
     });
+    PAYMENT.is_match(preceding_clause(text, field_start))
+}
+
+/// A card term binds a card verification code without a card number; a card-shaped
+/// number in the same clause that fails the card validator still keeps it silent.
+pub(super) fn card_term_without_number(text: &str, field_start: usize, card_regex: &Regex) -> bool {
+    payment_term(text, field_start) && !card_regex.is_match(preceding_clause(text, field_start))
+}
+
+pub(super) fn payment_expiry(text: &str, field_start: usize, card_regex: &Regex) -> bool {
     let context = preceding_clause(text, field_start);
-    PAYMENT.is_match(context)
+    payment_term(text, field_start)
         || has_payment_card(text, field_start - context.len()..field_start, card_regex)
+}
+
+/// Whether an account field is `Permanent Account Number`, the Indian PAN
+/// (`pii_in_pan`), not a bank account (Q-FIN).
+pub(super) fn permanent_account_number(text: &str, field: Range<usize>) -> bool {
+    let before = text[..field.start].trim_end_matches([' ', '\t']);
+    let word = before.get(before.len().saturating_sub(9)..).unwrap_or("");
+    word.eq_ignore_ascii_case("permanent")
+        || text.as_bytes()[field]
+            .windows(9)
+            .any(|window| window.eq_ignore_ascii_case(b"permanent"))
 }
 
 pub(super) fn employee_identifier(text: &str, field_start: usize, value: &str) -> bool {

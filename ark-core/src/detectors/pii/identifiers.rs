@@ -206,9 +206,13 @@ pub(super) const DATE_OF_BIRTH_WRITTEN_MONTH_FIRST: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+/// An account number after an account field name. An abbreviated name takes a
+/// colon after its dot (`Konto-Nr.: 192555007`; `konto nr. 5116…` in prose stays
+/// with the card rule), `ist` assigns like `is` (`Als Kontonummer ist 17404395`),
+/// and `Permanent Account Number` is the Indian PAN (`context::permanent_account_number`, Q-FIN).
 pub(super) const FINANCIAL_ACCOUNT_NUMBER: PiiPattern = PiiPattern {
     name: "pii_financial_account_number",
-    pattern: r"(?i)\b(?:kontonummer|konto[-_ ]?nr|depotnummer|depot[-_ ]?nr|account[ \t]+number|bank[ \t]+account|bban(?:[ \t]+number)?|acct[ \t]*(?:number|no|id)|(?:(?:bank|aba)[ \t]+)?routing[ \t]+(?:transit[ \t]+)?(?:number|no)|aba[ \t]+number|(?:routing|aba)[-_ ]?nummer|num(?:é|e)ro[ \t]+de[ \t]+compte(?:[ \t]+bancaire)?|compte[ \t]+bancaire|num(?:é|e)ro[ \t]+(?:de[ \t]+routage|d['’]acheminement)(?:[ \t]+de[ \t]+la[ \t]+banque)?|n(?:ú|u)mero[ \t]+(?:de[ \t]+)?cuenta(?:[ \t]+bancaria)?|cuenta[ \t]+bancaria|n(?:ú|u)mero[ \t]+de[ \t]+ruta(?:[ \t]+bancaria)?|numero[ \t]+(?:di|del)[ \t]+conto(?:[ \t]+corrente)?|conto[ \t]+corrente|numero[ \t]+di[ \t]+routing(?:[ \t]+bancario)?|(?:bank)?rekening[-_ \t]?(?:nummer|nr))\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
+    pattern: r"(?i)\b(?:kontonummer|konto[-_ ]?nr|depotnummer|depot[-_ ]?nr|account[ \t]+number|bank[ \t]+account(?:[ \t]+on[ \t]+file)?|bban(?:[ \t]+number)?|acct[ \t]*(?:number|no|id)|(?:(?:bank|aba)[ \t]+)?routing[ \t]+(?:transit[ \t]+)?(?:number|no)|aba[ \t]+number|(?:routing|aba)[-_ ]?nummer|num(?:é|e)ro[ \t]+de[ \t]+compte(?:[ \t]+bancaire)?|compte[ \t]+bancaire|num(?:é|e)ro[ \t]+(?:de[ \t]+routage|d['’]acheminement)(?:[ \t]+de[ \t]+la[ \t]+banque)?|n(?:ú|u)mero[ \t]+(?:de[ \t]+)?cuenta(?:[ \t]+bancaria)?|cuenta[ \t]+bancaria|n(?:ú|u)mero[ \t]+de[ \t]+ruta(?:[ \t]+bancaria)?|numero[ \t]+(?:di|del)[ \t]+conto(?:[ \t]+corrente)?|conto[ \t]+corrente|numero[ \t]+di[ \t]+routing(?:[ \t]+bancario)?|(?:bank)?rekening[-_ \t]?(?:nummer|nr))\b(?:\.[ \t]*:|[ \t]*(?:ist[ \t]+|is[ \t]*)?[:#=\-]?)[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
     entity_group: "FINANCIAL_ACCOUNT_NUMBER",
     validator: Some(validators::bounded_identifier),
     strength: ValidatorStrength::Format,
