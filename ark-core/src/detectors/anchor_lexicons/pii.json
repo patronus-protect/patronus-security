@@ -3160,6 +3160,128 @@
     ]
   },
   {
+    "id": "pii.in_aadhaar",
+    "description": "Indische Aadhaar-Nummer (Unique Identification Number der UIDAI)",
+    "en": [
+      "aadhaar number",
+      "aadhaar no",
+      "aadhaar card",
+      "aadhaar card number",
+      "aadhar number",
+      "aadhar no",
+      "aadhar card",
+      "uid number",
+      "uidai number",
+      "unique identification number",
+      "indian national id"
+    ],
+    "de": [
+      "aadhaar-nummer",
+      "aadhaar nummer",
+      "aadhar-nummer",
+      "indische identifikationsnummer",
+      "indische id-nummer"
+    ],
+    "shared": [
+      "aadhaar",
+      "aadhar",
+      "uidai",
+      "आधार"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/india.rs"
+    ]
+  },
+  {
+    "id": "pii.in_gstin",
+    "description": "Indische GST-Identifikationsnummer (GSTIN, Goods and Services Tax Identification Number)",
+    "en": [
+      "gst number",
+      "gst no",
+      "gst registration",
+      "gst registration number",
+      "gst identification number",
+      "goods and services tax identification number",
+      "gstin number",
+      "gstin no",
+      "indian gst number"
+    ],
+    "de": [
+      "gst-nummer",
+      "indische gst-nummer",
+      "indische umsatzsteuernummer",
+      "indische steuer-identifikationsnummer"
+    ],
+    "shared": [
+      "gstin",
+      "gstin/uin",
+      "gst-in"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/india.rs"
+    ]
+  },
+  {
+    "id": "pii.in_pan",
+    "description": "Indische Permanent Account Number (PAN, Steuerkennung des Income Tax Department)",
+    "en": [
+      "permanent account number",
+      "pan number",
+      "pan no",
+      "pan card",
+      "pan card number",
+      "income tax pan",
+      "indian pan",
+      "pan_number",
+      "in_pan"
+    ],
+    "de": [
+      "indische pan",
+      "pan-nummer",
+      "indische steuerkennung",
+      "pan_indien"
+    ],
+    "shared": [
+      "pan",
+      "pan#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/india.rs"
+    ]
+  },
+  {
+    "id": "pii.in_voter_id",
+    "description": "Indische Wähler-ID (EPIC, Electors Photo Identity Card)",
+    "en": [
+      "voter id",
+      "voter id number",
+      "voter id card",
+      "voter card",
+      "voter_id",
+      "voters id",
+      "epic number",
+      "epic no",
+      "electoral photo identity card",
+      "electors photo identity card",
+      "election card",
+      "election commission id"
+    ],
+    "de": [
+      "wähler-id",
+      "indische wähler-id",
+      "wählerausweis",
+      "indischer wählerausweis",
+      "epic-nummer",
+      "wahlausweis"
+    ],
+    "shared": [
+      "epic"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/india.rs"
+    ]
+  },
+  {
     "id": "pii.pl_nip",
     "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
     "en": [

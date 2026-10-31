@@ -302,6 +302,34 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [PL_PESEL]
 
+  - id: pii.in.aadhaar
+    scope: shared
+    ark: [IN_AADHAAR]
+    presidio: [IN_AADHAAR]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IN_AADHAAR]
+
+  - id: pii.in.gstin
+    scope: shared
+    ark: [IN_GSTIN]
+    presidio: [IN_GSTIN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IN_GSTIN]
+
+  - id: pii.in.pan
+    scope: shared
+    ark: [IN_PAN]
+    presidio: [IN_PAN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IN_PAN]
+
+  - id: pii.in.voter_id
+    scope: shared
+    ark: [IN_VOTER]
+    presidio: [IN_VOTER]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IN_VOTER]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -475,10 +503,6 @@ entities:
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
-  - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {presidio-analyzer-recognizer-tests: [IN_AADHAAR]}}
-  - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {presidio-analyzer-recognizer-tests: [IN_GSTIN]}}
-  - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {presidio-analyzer-recognizer-tests: [IN_PAN]}}
-  - {id: pii.in.voter_id, scope: presidio_only, ark: [], presidio: [IN_VOTER], corpora: {presidio-analyzer-recognizer-tests: [IN_VOTER]}}
   - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {presidio-analyzer-recognizer-tests: [NG_NIN]}}
   - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {presidio-analyzer-recognizer-tests: [PH_TIN]}}
   - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {presidio-analyzer-recognizer-tests: [PH_UMID]}}
@@ -623,6 +647,10 @@ checksums:
     it_fiscal_code: {algorithm: "Kontrollbuchstabe ungerade/gerade Tabelle mod 26"}  # B-ESIT, Codice Fiscale mit Omocodia
     pl_pesel: {algorithm: "(10 − gewichtet 1-3-7-9 mod 10) mod 10"}   # A13, plus Geburtsdatum 1900–2100 (Jahrhundert im Monat)
     pl_regon: {algorithm: "gewichtet 8-9-2-3-4-5-6-7 mod 11 (14 Stellen: 2-4-8-5-0-9-7-3-6-1-2-4-8)"}  # A13, REGON 9 oder 14 Stellen
+    in_aadhaar: {algorithm: Verhoeff}                                # B-IN, zwölf Ziffern, erste 2–9, kein Palindrom
+    in_gstin: {algorithm: "Prüfzeichen gewichtet 1-2 mod 36"}        # B-IN, plus Bundesstaat 01–38/97/99, Z an Stelle 14
+    in_pan: null                        # B-IN, Inhabertyp im vierten Buchstaben, keine Prüfziffer (Algorithmus nicht veröffentlicht)
+    in_voter_id: null                   # B-IN, EPIC: drei Buchstaben, sieben Ziffern, keine Prüfziffer
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

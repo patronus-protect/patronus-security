@@ -186,6 +186,12 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_fiscal_code_it_context_free", "IT_FISCAL_CODE"),
     ("pii_pesel_pl", "PL_PESEL"),
     ("pii_regon_pl", "PL_REGON"),
+    ("pii_aadhaar_in", "IN_AADHAAR"),
+    ("pii_aadhaar_in_context_free", "IN_AADHAAR"),
+    ("pii_gstin_in", "IN_GSTIN"),
+    ("pii_gstin_in_context_free", "IN_GSTIN"),
+    ("pii_pan_in", "IN_PAN"),
+    ("pii_voter_id_in", "IN_VOTER"),
 ];
 
 #[test]

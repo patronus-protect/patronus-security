@@ -430,7 +430,14 @@ or CIF term, like the bare Partita IVA. Two Polish numbers with a check digit (A
 `02070803628`) and the REGON (`PL_REGON`, nine digits or fourteen of a local unit, weighted mod 11;
 `123456785`). They are reported in every mode with a term (`PESEL`, `REGON`) or as a key, never
 bare. A bare NIP (`NIP: 5260250995`) is a `VAT_ID_PL` in `balanced`/`recall` with a NIP term
-(a generic VAT term is not enough). The German document number rules keep
+(a generic VAT term is not enough). Four Indian numbers (B-IN): the Aadhaar number (`IN_AADHAAR`,
+twelve digits, first digit 2–9, plain or grouped 4-4-4, a Verhoeff check digit; `5915 3375 9365`)
+and the GSTIN (`IN_GSTIN`, state code, PAN, entity number, `Z` and a mod-36 check character;
+`10BAGFF2439K3ZL`) carry a check; the PAN (`IN_PAN`, the holder type in the fourth letter;
+`BNZPM2501F`) and the voter ID (`IN_VOTER`, EPIC, three letters and seven digits; `KLT4471920`) are
+format checks. With a term (`Aadhaar`, `GSTIN`, `GST number`, `PAN`, `Permanent Account Number`,
+`Voter ID`, `EPIC`) or as a key they are reported in every mode; bare, in `balanced`/`recall` only
+and at `0.55`, the grouped Aadhaar number and the GSTIN. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

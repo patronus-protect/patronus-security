@@ -756,6 +756,7 @@ tasks:
 
   # M3 +2 (70: target reached)
   - id: B-IN
+    status: done
     title: "IN Aadhaar (Verhoeff), GSTIN (check character), PAN, voter ID, passport, vehicle registration"
     type: new-entity
     deps: [K05]

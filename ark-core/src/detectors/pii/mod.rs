@@ -23,6 +23,7 @@ mod es;
 mod fr;
 mod identifiers;
 mod ie;
+mod india;
 mod intl;
 mod it;
 mod kr;

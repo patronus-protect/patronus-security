@@ -462,7 +462,11 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_nie_es",
             "pii_fiscal_code_it",
             "pii_pesel_pl",
-            "pii_regon_pl"
+            "pii_regon_pl",
+            "pii_aadhaar_in",
+            "pii_gstin_in",
+            "pii_pan_in",
+            "pii_voter_id_in"
         ]
     );
     for pattern in bound {

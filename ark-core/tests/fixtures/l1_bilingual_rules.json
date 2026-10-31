@@ -2653,6 +2653,102 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_aadhaar_in",
+    "de": "Aadhaar-Nummer: 4294 5428 4060",
+    "en": "My Aadhaar is 599979610811.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Aadhaar-Nummer: 4294 5428 4061",
+        "Vorgang 398288889437 wurde abgeschlossen."
+      ],
+      "en": [
+        "Aadhaar number: 1234 5678 9010",
+        "Reference 599979610811 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_aadhaar_in_context_free",
+    "de": "Bewerber 3090 2961 0020 aus Pune",
+    "en": "Applicant 5352 4277 1202 joined in May.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Aadhaar-Nummer des Antragstellers lautet 3982 8888 9437.",
+        "en": "8797-7332-6157 is her Aadhaar number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_gstin_in",
+    "de": "Die GSTIN des Lieferanten lautet 16KGICL5894M8ZW.",
+    "en": "GSTIN: 10BAGFF2439K3ZL",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "GSTIN: 36RWETR6874M6ZU",
+        "GSTIN: 45RWETR6874M6ZU"
+      ],
+      "en": [
+        "GSTIN: 10BAGFF2439K3ZM",
+        "GSTIN: 27ABCDE1234F1Y5"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_gstin_in_context_free",
+    "de": "Lieferant 15JEDHV3851A1ZZ aus Mumbai",
+    "en": "Invoice from 25OLGTA9304C8ZW is due.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Als indische GST-Nummer ist 14SXZAK2035H1ZO hinterlegt.",
+        "en": "Our GST number is 20DWWHC5119Y4Z0."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_pan_in",
+    "de": "Indische PAN: DKLPR3307N",
+    "en": "The Permanent Account Number on file is AFZPK7190K.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Indische PAN: DKLQR3307N",
+        "Vorgang DKLPR3307N wurde abgeschlossen."
+      ],
+      "en": [
+        "PAN: BNZPM0000F",
+        "Reference BNZPM2501F was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_voter_id_in",
+    "de": "Indische Wähler-ID: TNV2048837",
+    "en": "Voter ID: KLT4471920",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Indische Wähler-ID: TNV204883",
+        "Vorgang TNV2048837 wurde abgeschlossen."
+      ],
+      "en": [
+        "Voter ID: KL44719201",
+        "Reference KLT4471920 was archived."
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

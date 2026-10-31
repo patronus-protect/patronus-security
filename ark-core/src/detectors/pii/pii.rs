@@ -10,8 +10,8 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, driver_license, es, fr, identifiers, ie, intl, it, kr,
-    licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators, vat, za,
+    at, au, be, ca, ch, common, context, de, driver_license, es, fr, identifiers, ie, india, intl,
+    it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -212,6 +212,12 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     it::FISCAL_CODE_CONTEXT_FREE,
     pl::PESEL,
     pl::REGON,
+    india::AADHAAR,
+    india::AADHAAR_CONTEXT_FREE,
+    india::GSTIN,
+    india::GSTIN_CONTEXT_FREE,
+    india::PAN,
+    india::VOTER_ID,
 ];
 
 pub struct PiiPipeline {
@@ -744,7 +750,11 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_nie_es"
             | "pii_fiscal_code_it"
             | "pii_pesel_pl"
-            | "pii_regon_pl") => {
+            | "pii_regon_pl"
+            | "pii_aadhaar_in"
+            | "pii_gstin_in"
+            | "pii_pan_in"
+            | "pii_voter_id_in") => {
                 let value = captures.get(0).unwrap().range();
                 if vat_body(rule_id, text, value.start) {
                     return false;
