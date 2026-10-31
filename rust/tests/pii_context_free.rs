@@ -210,11 +210,15 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_aadhaar_in_context_free",
             "pii_gstin_in_context_free",
             "pii_npi_us_context_free",
+            "pii_commercial_register_de_context_free",
         ]
     );
     for pattern in scored_only {
         let strength = if FORMAT_RULES.contains(&pattern.name) {
             ValidatorStrength::Format
+        } else if pattern.name == "pii_commercial_register_de_context_free" {
+            // The HRA/HRB prefix is the whole form; no validator follows (B-DEFMT).
+            ValidatorStrength::None
         } else {
             ValidatorStrength::Checksum
         };

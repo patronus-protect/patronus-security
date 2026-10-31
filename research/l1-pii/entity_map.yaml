@@ -134,6 +134,13 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [DE_TAX_NUMBER]
 
+  - id: pii.de.commercial_register
+    scope: shared
+    ark: [COMMERCIAL_REGISTER_DE]
+    presidio: [DE_HANDELSREGISTER]
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]
+
   - id: pii.de.social_security_number
     scope: shared
     ark: [SOCIALID]
@@ -513,7 +520,6 @@ entities:
   - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {presidio-analyzer-recognizer-tests: [US_ITIN]}}
   - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
-  - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
   - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {presidio-analyzer-recognizer-tests: [NG_NIN]}}
   - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {presidio-analyzer-recognizer-tests: [PH_TIN]}}
@@ -603,7 +609,7 @@ checksums:
     username: null
     calendar_date: null
     written_calendar_date: null
-    de_tax_number: null                 # Länge 10–13, nicht alle Ziffern gleich
+    de_tax_number: null                 # B-DEFMT, Gruppen der Länder (10/11 Ziffern) oder ELSTER (Länderpräfix + 0), keine Prüfziffer
     de_social_security_number: {algorithm: "VKVV § 4, Quersummen gewichtet 2-1-2-5-7-1-2-1-2-1-2-1 mod 10"}  # B-DE1, RVNR, plus Geburtstag/-monat
     de_health_insurance_number: {algorithm: "§ 290 SGB V, Quersummen gewichtet 1-2 mod 10"}  # B-DE1, KVNR
     lanr: {algorithm: "gewichtet 4-9 mod 10"}  # B-DE1, LANR

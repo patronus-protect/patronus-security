@@ -468,7 +468,8 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_pan_in",
             "pii_voter_id_in",
             "pii_dea_number_us",
-            "pii_npi_us"
+            "pii_npi_us",
+            "pii_commercial_register_de"
         ]
     );
     for pattern in bound {

@@ -177,7 +177,11 @@ fn tax_number_after_its_field_name_follows_the_forms_of_the_laender() {
         ("Steuernummer: 133/8150/8159", "133/8150/8159"),
     ] {
         for mode in MODES {
-            assert_eq!(values(text, mode, "TAX_NUMBER_DE"), [value], "{mode:?}: {text}");
+            assert_eq!(
+                values(text, mode, "TAX_NUMBER_DE"),
+                [value],
+                "{mode:?}: {text}"
+            );
         }
     }
     for text in [
@@ -242,10 +246,19 @@ fn commercial_register_with_a_court_or_register_term_is_reported_in_every_mode()
         ("Handelsregister: HRB12345", "HRB12345"),
         ("Registernummer: HRA 2136", "HRA 2136"),
         ("Commercial register: HRB 208472", "HRB 208472"),
-        ("Registered at the local court of Hamburg, HRB 32375", "HRB 32375"),
-        ("Die Firma ist im Handelsregister unter HRB 44020 eingetragen.", "HRB 44020"),
+        (
+            "Registered at the local court of Hamburg, HRB 32375",
+            "HRB 32375",
+        ),
+        (
+            "Die Firma ist im Handelsregister unter HRB 44020 eingetragen.",
+            "HRB 44020",
+        ),
         (r#"{"commercial_register": "HRB 143241"}"#, "HRB 143241"),
-        ("nr;name;handelsregister\n1;Grace Davies;HRB 32461", "HRB 32461"),
+        (
+            "nr;name;handelsregister\n1;Grace Davies;HRB 32461",
+            "HRB 32461",
+        ),
     ] {
         for mode in MODES {
             assert_eq!(values(text, mode, LABEL), [value], "{mode:?}: {text}");
@@ -311,6 +324,10 @@ fn commercial_register_suffix_is_a_known_court_suffix_only() {
             ["HRB 12345"],
             "{mode:?}"
         );
-        assert_eq!(values("HRB 12345 B", mode, LABEL), ["HRB 12345 B"], "{mode:?}");
+        assert_eq!(
+            values("HRB 12345 B", mode, LABEL),
+            ["HRB 12345 B"],
+            "{mode:?}"
+        );
     }
 }

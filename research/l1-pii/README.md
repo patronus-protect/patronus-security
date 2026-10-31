@@ -92,7 +92,7 @@ Werkzeug begünstigt Presidio. Deshalb trägt jede Gold-Quelle genau eine Famili
   Presidio tuned um ≥ 15 pp übertreffen, auf `presidio_favored` genügt Parität (≥ Presidio tuned):
   dort liegt tuned bei 87 und tuned + 15 pp über 100. Eine Mindestzahl an Gold je ID gibt es nicht;
   eine Familie ohne deutsches Gold für eine zählende ID erfüllt M2 nicht. `presidio_only`-IDs
-  (Handelsregister, BSNR, PLZ, USt-IdNr. …) zählen nicht zum Mittel, bis `entity_map.yaml` sie
+  (PLZ, URL, US ITIN …) zählen nicht zum Mittel, bis `entity_map.yaml` sie
   `shared` führt, weil ARK sie erkennt; `semantic` zählt nie. Prüfung: `scoreboard.py m2` (Exit 1,
   solange nicht beide Familien halten).
 - Für M3, M4 und „Immer“ gilt dieselbe Trennung: Ergebnisse auf `ark_authored` stehen im Bericht,
@@ -296,6 +296,18 @@ und KVNR bei 80,0. Dev `presidio_favored` balanced, exakt, vorher → nachher:
 
 `strict` bleibt bitgleich. Auf `ark_authored` (Dev-Goldset E05, balanced) liegen alle sechs IDs über 80:
 KVNR 100,0, LANR 98,1, RVNR 100,0, Steuer-ID 100,0, Steuernummer 94,2 → 98,1, USt-IdNr. DE 100,0.
+
+B-DEFMT (F13, B03): `validators::de_tax_number` prüft die Steuernummer gegen die Gruppen der Länder statt
+gegen 10 bis 13 beliebige Ziffern: `FF/BBB/UUUUP` (BE, HB, HH, NI, RP, SH), `FFBBB/UUUUP` (BW),
+`FFF/BBB/UUUUP` mit führender 0, 1 oder 2 (BY, BB, HE, MV, SL, SN, ST, TH), `FFF/BBBB/UUUP` mit führender
+1, 2 oder 3 (NW), dazu die 13-stellige ELSTER-Form: Länderpräfix der Bundesfinanzamtsnummer (10, 11,
+21–24, 26–28, 30–32, 40, 41, 51–53, 91–92), eine `0`, Bezirk und Unterscheidungsnummer. Die ELSTER-Form
+bleibt feldgebunden, `0181508150000` bleibt FN (kein Land hat das Präfix 01). Neu `COMMERCIAL_REGISTER_DE`:
+`HRA`/`HRB`, eine bis sechs Ziffern ohne führende Null, optional das Gerichtskürzel (`B`, `FL`, `HL`, `KI`,
+`PI`); `pii_commercial_register_de` meldet in jedem Modus mit Register- oder Amtsgerichtsbegriff in der Nähe
+oder als Schlüssel, `pii_commercial_register_de_context_free` blank in `balanced`/`recall` (0,50).
+`pii.de.commercial_register` ist damit `shared` und zählt für M2. Dev `presidio_favored` balanced, exakt:
+Handelsregister 100,0 (`HRA12345`; `HRC 12345`, `HR 12345` bleiben stumm), Steuernummer unverändert 66,7.
 Stand B-ACCT: ARK 50, gemeinsam 19 (A04, F14). Die ABA-Routing-Nummer (US) rechnet die Prüfziffer
 (`validators::aba_routing_number`: Routing-Symbol 00–12, 21–32, 61–72 oder 80, Gewichte 3-7-1 mod 10,
 nicht eine wiederholte Ziffer) und meldet `FINANCIAL_ACCOUNT_NUMBER`; die Einheit ist
