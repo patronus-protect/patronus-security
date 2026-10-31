@@ -237,7 +237,11 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
             "Die DEA-Registrierungsnummer der Praxis lautet X95988285.",
             "X95988285",
         ),
-        (DEA, "Unsere Unterlagen nennen als DEA-Nummer: RN4135883.", "RN4135883"),
+        (
+            DEA,
+            "Unsere Unterlagen nennen als DEA-Nummer: RN4135883.",
+            "RN4135883",
+        ),
         (NPI, "NPI: 1850184619", "1850184619"),
         (
             NPI,
