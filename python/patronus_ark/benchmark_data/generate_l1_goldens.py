@@ -4294,7 +4294,7 @@ B_IBAN_CASES = [
     p("IBAN", "en", "pii_iban_generic", "IBAN: ", "GB82 WEST 1234 5698 7654 32"),
     p("IBAN", "en", "pii_iban_generic", "Please wire the deposit to ", "nl91 abna 0417 1643 00", " by Friday.", carrier="prose", tags=("no_context",)),
     p("IBAN", "en", "pii_iban_generic", "Account: ", "mt84malt011000012345mtlcast001s"),
-    p("IBAN", "en", "pii_iban_generic", "IBAN ", "BE68 5390 0754 7034", " and BIC GEBABEBB", carrier="prose"),
+    p("IBAN", "en", "pii_iban_generic", "IBAN ", "BE68 5390 0754 7034", " and BIC GEBABEBB", carrier="prose", also=(("SWIFT_CODE", "GEBABEBB"),)),
     p("IBAN", "en", "pii_iban_generic", '{"iban": "', "FR14 2004 1010 0505 0001 3M02 606", '"}', carrier="json"),
     p("IBAN", "en", "pii_iban_generic", "payee:\n  iban: ", "no93 8601 1117 947", "\n", carrier="yaml", mode="balanced"),
     p("IBAN", "en", "pii_iban_de", "IBAN: ", "de89 3704 0044 0532 0130 00"),
