@@ -557,6 +557,59 @@ Validatoren oder kontextfreie Formatregeln lösen ließe.
   anderen Werte sind gefunden, die Negative (`FQ 00 00 00 C`, `UV 98 76 54 B`) still. 80,0 gäbe es
   nur, wenn ARK den richtigen Wert nicht meldete.
 
+Stand Q-FIN (Qualitätsuntergrenze, 2026-10-25): Kartennummer, CVV, Ablaufdatum, IBAN, SWIFT/BIC und
+Kontonummer, die der Snapshot 2026-10-24 unter F1 80 führt. Neu: Ein Sicherheitscode, dessen Feldname
+die Karte nennt (`Credit Card Security Code: 279`, `Kreditkarte, Sicherheitscode: 123`,
+`Creditcardveiligheidscode: 713`, `Código de Seguridad de Tarjeta de Crédito: 599`), gehört zu einer
+Karte, auch ohne Kartennummer im Text (`context::payment_term`, derselbe Kartenbegriff im Satzteil
+vor dem Feld wie beim Ablaufdatum, um NL/FR/ES/IT erweitert); `security code` ist ein CVV-Feldname,
+blank bleibt er an Karte oder CVV-Spalte gebunden. SWIFT/BIC kennt kombinierte Feldnamen
+(`Swift/BIC-Code:`, `SWIFT-BIC:`, `swift_bic_code`, `<swiftBIC>`), eine Anmerkung vor dem Doppelpunkt
+(`(for international transactions)`, `for Bank Transfer`), in Prosa `BIC X`, `SWIFT BIC code "X"`,
+`Als BIC ist X`, `code SWIFT est X`, `codice SWIFT X` (Werte ohne Kleinbuchstaben). Die Kontonummer
+bindet `Konto-Nr.:` (Punkt nur mit Doppelpunkt: `konto nr. 5116…` bleibt Karte), `ist` als Zuweisung
+und `Bank account on file is`; `Permanent Account Number` ist die indische PAN, kein Konto. Kein
+Validator ändert sich. Dev, exakt, balanced (strict gleich), Stand B-IBAN → Q-FIN:
+
+| Entität | neutral | presidio_favored | ark_authored |
+|---|---|---|---|
+| Kartennummer | 47,9 | 100,0 | 100,0 |
+| CVV | 0,0 → 63,4 | – | 68,3 |
+| Ablaufdatum | – | – | 0,0 |
+| IBAN | 91,7 | 100,0 | 100,0 |
+| SWIFT/BIC | 38,5 → 73,4 | – | 36,9 → 100,0 |
+| Kontonummer | 49,2 | 57,1 | 78,9 → 100,0 |
+
+IBAN liegt seit B-IBAN überall über 80 (unmögliche Gold-Werte zählen nicht, siehe oben).
+**Entscheidung:** Die übrigen Werte bleiben unter 80; keiner ließe sich ohne gelockerten Validator,
+kontextfreie Formatregel oder unterdrückte Gold-konforme Funde heben.
+
+- **Kartennummer neutral 47,9.** 86 der 135 Gold-Werte bestehen Luhn bzw. IIN und Länge nicht
+  (65 von 82 in ai4privacy, 21 von 53 in Gretel, z. B. 15 Ziffern mit JCB-Präfix `3553 6548 1210 873`);
+  B-PAN prüft beides in jedem Modus. Höchstwert ohne gelockerten Validator: Recall 49/135.
+- **CVV neutral 63,4.** 21 FN haben kein CVV-Feld: FIX `44=132` (Preis), `DTICUC:868`, Suffixe von
+  Transaktions-IDs und maskierten Kartennummern (`**** 143`, `ZL-2022-039`), `Customer: Sure, it's 425`,
+  das Markdown-maskierte `credit\_card\_security\_code`. Die 9 FP sind Zellen einer CVV-Spalte neben
+  Karte und Ablaufdatum, die Gretel nicht annotiert. Auch ohne jeden FP: höchstens 71.
+- **CVV ark_authored 68,3 und Ablaufdatum ark_authored 0,0.** Das eingefrorene E05-Goldset annotiert
+  CVV und Ablaufdatum ohne Karte (`Security code: 449`, `"cvc": "233"`, `Prüfnummer: 024`,
+  `Ablaufdatum: 03/2028`, `My Expiry is 11/2027`, Spalte `expiry`). Genau diese Formen sind in
+  `pii_l1` und `rust/tests/pii_l1.rs` Hard Negatives (`CVV: 123 – eine Kartennummer fehlt.`,
+  `Expiry date is 12/2028.`, `Ablaufdatum: 12/2028 auf der Verpackung.`), weil Lizenzen, Zertifikate,
+  Angebote und Packungen dieselbe Form tragen. CVV und Ablaufdatum bleiben an Karte, Kartenbegriff
+  oder CVV-Spalte gebunden.
+- **SWIFT/BIC neutral 73,4.** Die 28 FN stehen ohne BIC-Feld: Gretel setzt BIC-förmige Werte als
+  Firmen- und Parteinamen in Prosa (`by and between EDOUGBTT744, a company organized …`), in
+  FIX/EDI-Felder (`75=`, `ISA*…*Z9*`) und Tabellenzellen; `X (Swift BIC Code)` nennt das Feld erst
+  danach. 9 FP sind Werte unter `BIC/SWIFT:`/`SWIFT Code:`, die Gretel nicht annotiert (`BNPAFRPPXXX`,
+  `INGBNL2A`).
+- **Kontonummer neutral 49,2, presidio_favored 57,1.** 42 der 61 neutralen FP sind Platzhalter
+  (`123456789`, `1234567890`) unter `Account Number:`/`AcctId`, die Gretel nicht annotiert; nach der
+  Gold-Konvention (T01) sind Platzhalter positiv, ARK meldet sie weiter. Die FN stehen unter anderen
+  Feldern (SWIFT `:25:`/`:52A:`, FIX, EDIFACT `LIN`, `Policy Number:`) oder blank in Prosa. Auf
+  presidio_favored sind die drei FN blanke Testwerte ohne Begriff (`121000358`, `121042882`,
+  `945456787654`); blanke neun Ziffern meldet ARK als ABA nur in der Druckform 4-4-1 (B-ACCT).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in
