@@ -443,8 +443,11 @@ static CALL_OR_INDEX: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Member access: two or more digit-free identifier segments
 /// (`this._input.value`, `password.length`, `Y.username`, `_.password`).
+/// Q-DLP-PW: a `~` or a `.` before a digit or a symbol does not end one in
+/// code, so the letter runs of a chosen password (`wPF.DZs~Brb…`,
+/// `o.Bbst….jdJ44`) are none.
 static MEMBER_ACCESS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[$]?[A-Za-z_$]+(?:(?:\.|->|\?\.|!\.)[A-Za-z_$]+)+(?:[^A-Za-z0-9_$]|$)").unwrap()
+    Regex::new(r"^[$]?[A-Za-z_$]+(?:(?:\.|->|\?\.|!\.)[A-Za-z_$]+)+(?:[^A-Za-z0-9_$.~]|$)").unwrap()
 });
 
 /// ABNF repetition (`1*(tchar)`, `*DIGIT`) of grammar listings.
@@ -1572,6 +1575,40 @@ mod tests {
         ] {
             assert!(assignment(template, value), "{template} / {value}");
         }
+    }
+
+    /// Q-DLP-PW: letter runs joined by `.` read as a member access only where
+    /// code can end one; a `~` or a `.` before a digit or a symbol cannot.
+    #[test]
+    fn dotted_passwords_are_no_member_access() {
+        for (template, value) in [
+            ("DB_PASSWORD={v}", "wPF.DZs~BrbDYmfvGE"),
+            ("db_password = {v}", "o.BbstNwOmPc.jdJ44"),
+            ("db_password = \"{v}\"", "MYBCnxeFPi.Rd~FRaF"),
+            ("Db-Password: {v}", "X.rl~92qlMqrWhAaC-"),
+            ("passwort: {v}", "Kxqtrw.Lmn~4hT7pQ2v"),
+            ("password = {v}", "v.Rwmsik.zqp42LT"),
+            ("password: {v}", "Abc.def.-x9Kq2"),
+        ] {
+            assert!(assignment(template, value), "{template} / {value}");
+        }
+        for (template, value) in [
+            ("password = {v}", "config.db.password"),
+            ("password = {v}", "user.password;"),
+            ("password: {v}", "form.password.value,"),
+            ("password: {v}", "this.passwort!.trim()"),
+            ("$password = {v}", "$request->input->password;"),
+            ("password: {v}", "e.length>0?"),
+            ("passwort = {v}", "konto.zugang.passwort"),
+        ] {
+            assert!(!assignment(template, value), "{template} / {value}");
+        }
+        let env = |template: &str, value: &str| {
+            let start = template.find("{v}").unwrap();
+            let text = template.replace("{v}", value);
+            is_env_value(&text, start..start + value.len())
+        };
+        assert!(env("DB_PASSWORD={v}", "wPF.DZs~BrbDYmfvGE"));
     }
 
     #[test]

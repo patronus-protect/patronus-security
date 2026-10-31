@@ -41,6 +41,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `dlp_password_assignment` (`password`), nicht `dlp_env_var_secret` (`generic_secret`).
   Variablen ohne Passwort-Nomen (`API_KEY`, `CLIENT_SECRET`) bleiben bei `dlp_env_var_secret`;
   verschiedene Spans entscheidet weiter die Reihenfolge.
+  Seit Q-DLP-PW gilt ein Wert nur als Member-Zugriff (Code), wo Code ihn enden lassen kann:
+  `wPF.DZs~Brb…` oder `o.Bbst….jdJ44` (Ende an `~` oder an einem `.` vor Ziffer/Symbol) sind
+  gewählte Passwörter. Offen: Schlüssel-Wert-Tupel in SQL-Dumps (`(2,'db_password','…')`) der
+  nach dem Einfrieren hinzugekommenen Carrier `sql.*` (T19) erkennt keine Regel.
   Seit T01 haben die Präfix-Regeln (Provider-Token, ETH/WIF, JWT) eine Token-Grenze
   (`RuleMeta::boundary`): Vor und nach dem Wert steht kein `[A-Za-z0-9_]` und kein Zeichen des
   Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`

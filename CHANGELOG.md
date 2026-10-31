@@ -82,6 +82,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   neutral 37 → 51, presidio_favored 6 → 9 balanced); `pii.identity_card_number` +25.5 / +18.7 pp;
   L1 F1 +0.4 pp in both modes. The new rules are literal-anchored (field names) or
   context-bound bounded regexes without per-match allocation.
+- DLP Q-DLP-PW: chosen passwords whose letter runs, dots and `~` read like a member access
+  (`DB_PASSWORD=wPF.DZs~…`, `db_password = "o.Bbst….jdJ44"`) are values of
+  `dlp_password_assignment` again. The member-access check of the F-GEN1 likeness
+  (`likeness::MEMBER_ACCESS`, shared by the assignment, CSRF and connection-password gates) no
+  longer ends a chain at `~` or at a `.` before a digit or symbol, which code cannot do; member
+  access ending at the value end, `;`, `,`, `)`, `[`, `(` or an operator stays code. New generators
+  `dotted_tilde_password` and `dotted_digit_password`, 20 `dlp_l1` rows (10 positives, 10 hard
+  negatives, DE and EN), rule fixture and overlap tests. **Detection change** (every mode): such
+  values are new `CREDENTIAL` findings; under a password variable the span moves from
+  `dlp_env_var_secret` to `dlp_password_assignment`. Dev synthetic carriers:
+  `credential.password_assignment` exact recall 39/40 → 40/40, no other row changes; benign code
+  and benign docs unchanged. The regex is the same linear pattern with two more excluded
+  characters (no latency effect).
 - IBAN per the SWIFT IBAN registry (B-IBAN: T05, T21, F03). New validator `iban` for
   `pii_iban_de` and `pii_iban_generic`: a registry country (89), exactly its registry length, two
   check digits, letters and digits only, and MOD-97 (`mod97` itself is unchanged); the scoreboard
