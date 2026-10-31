@@ -906,6 +906,12 @@ pub(super) fn payment_term(text: &str, field_start: usize) -> bool {
     PAYMENT.is_match(preceding_clause(text, field_start))
 }
 
+/// A card term binds a card verification code without a card number; a card-shaped
+/// number in the same clause that fails the card validator still keeps it silent.
+pub(super) fn card_term_without_number(text: &str, field_start: usize, card_regex: &Regex) -> bool {
+    payment_term(text, field_start) && !card_regex.is_match(preceding_clause(text, field_start))
+}
+
 pub(super) fn payment_expiry(text: &str, field_start: usize, card_regex: &Regex) -> bool {
     let context = preceding_clause(text, field_start);
     payment_term(text, field_start)

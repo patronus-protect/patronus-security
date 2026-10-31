@@ -981,7 +981,11 @@ impl NativeRegexDetector for PiiPipeline {
             let coupled_cvv = span.label == "CREDITCARD_CVV"
                 && (has_payment_card
                     || column_cvvs.contains(&(span.start_byte..span.end_byte))
-                    || context::payment_term(text, span.start_byte));
+                    || context::card_term_without_number(
+                        text,
+                        span.start_byte,
+                        &self.regexes[card_index],
+                    ));
             (span.end_byte - span.start_byte >= 4 || coupled_cvv)
                 && (span.label != "CREDITCARD_CVV" || coupled_cvv)
         });
