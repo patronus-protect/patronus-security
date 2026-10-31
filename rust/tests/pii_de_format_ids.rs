@@ -5,10 +5,10 @@
 //!
 //! A Steuernummer is the Finanzamt number, the district and the serial with its
 //! check digit. Each Land prints it in its own groups: `FF/BBB/UUUUP` (BE, HB,
-//! HH, NI, RP, SH), `FFBBB/UUUUP` (BW), `FFF/BBB/UUUUP` led by 0, 1 or 2 (BY,
-//! BB, HE, MV, SL, SN, ST, TH) and `FFF/BBBB/UUUP` led by 1, 2 or 3 (NW). The
-//! ELSTER form puts the four-digit Bundesfinanzamtsnummer (Land prefix) and a
-//! `0` in front of district and serial. The commercial register number is
+//! HH, NI, RP, SH), `FFBBB/UUUUP` (BW), `FFF/BBB/UUUUP` (BY, BB, HE, MV, SL,
+//! SN, ST, TH) and `FFF/BBBB/UUUP` (NW). The ELSTER form puts the four-digit
+//! Bundesfinanzamtsnummer (Land prefix) and a `0`, or the two-digit Land code
+//! 01–16, in front of district and serial. The commercial register number is
 //! reported with a register or local court term in every mode and bare in
 //! `balanced` and `recall`.
 
@@ -98,8 +98,13 @@ fn tax_number_validator_accepts_the_forms_of_the_laender() {
         // without separators
         "2181508150",
         "18181508155",
-        // the presidio-analyzer value
+        // any leading digit of the Finanzamt number, as in test and sample values
         "123/456/78901",
+        "456/789/01234",
+        "987/654/32109",
+        "033/8150/8159",
+        "433/8150/8159",
+        "45678901234",
     ] {
         assert!(validators::de_tax_number(valid), "{valid}");
     }
@@ -127,6 +132,10 @@ fn tax_number_validator_accepts_the_elster_form_of_every_land() {
         // grouped
         "2893/0815/08152",
         "2893 0 815 08152",
+        // the two-digit Land code 01-16 (presidio-analyzer notation)
+        "0181508150000",
+        "0218150815000",
+        "1681508150001",
     ] {
         assert!(validators::de_tax_number(valid), "{valid}");
     }
@@ -138,8 +147,7 @@ fn tax_number_validator_rejects_forms_no_land_prints() {
         // repeated digits
         "000/000/00000",
         "111/111/11111",
-        // ELSTER: no Land prefix 01, 00, 17, 50 or 93; no 0 after the Finanzamt number
-        "0181508150000",
+        // ELSTER: no Land prefix 00, 17, 50 or 93; no 0 after the Finanzamt number
         "0081508150001",
         "1781508150001",
         "5033081508159",
@@ -149,12 +157,6 @@ fn tax_number_validator_rejects_forms_no_land_prints() {
         "028150815012",
         "2893/081/50812",
         "1234/567/89012",
-        // FFF/BBB/UUUUP led by 3 to 9, FFF/BBBB/UUUP led by 0 or 4 to 9
-        "456/789/01234",
-        "987/654/32109",
-        "033/8150/8159",
-        "433/8150/8159",
-        "45678901234",
         // other groups
         "2181/508/150",
         "21 81 508 150",
@@ -176,6 +178,8 @@ fn tax_number_after_its_field_name_follows_the_forms_of_the_laender() {
         ("Tax number: 9181081508155", "9181081508155"),
         ("Steuernummer: 75 815 08152", "75 815 08152"),
         ("Steuernummer: 133/8150/8159", "133/8150/8159"),
+        ("Tax number: 456/789/01234", "456/789/01234"),
+        ("Steuernummer: 0181508150000", "0181508150000"),
     ] {
         for mode in MODES {
             assert_eq!(
@@ -186,11 +190,11 @@ fn tax_number_after_its_field_name_follows_the_forms_of_the_laender() {
         }
     }
     for text in [
-        "Steuernummer: 0181508150000",
+        "Steuernummer: 0081508150001",
         "Steuernummer: 1781508150001",
         "Steuernummer: 2893181508152",
         "German Steuernummer: 1234/567/89012",
-        "Tax number: 456/789/01234",
+        "Tax number: 12/34/56789",
         "Tax number: 028150815012",
     ] {
         for mode in MODES {
@@ -199,6 +203,17 @@ fn tax_number_after_its_field_name_follows_the_forms_of_the_laender() {
                 "{mode:?}: {text}"
             );
         }
+    }
+}
+
+#[test]
+fn bare_slashed_tax_number_keeps_any_leading_digit_in_the_scored_modes() {
+    // Regression: test and sample values lead the Finanzamt number with any digit.
+    for value in ["987/654/32109", "456/7890/1234", "345/678/90123"] {
+        for mode in SCORED {
+            assert_eq!(values(value, mode, "TAX_NUMBER_DE"), [value], "{mode:?}");
+        }
+        assert!(spans(value, PiiMode::Strict, "TAX_NUMBER_DE").is_empty());
     }
 }
 

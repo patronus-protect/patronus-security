@@ -712,12 +712,12 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Steuernummer: 0181508150000",
+        "Steuernummer: 0081508150001",
         "Steuernummer: 2893181508152"
       ],
       "en": [
         "German Steuernummer: 1234/567/89012",
-        "Tax number: 456/789/01234"
+        "Tax number: 12/34/56789"
       ]
     }
   },

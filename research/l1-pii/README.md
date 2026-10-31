@@ -299,10 +299,12 @@ KVNR 100,0, LANR 98,1, RVNR 100,0, Steuer-ID 100,0, Steuernummer 94,2 → 98,1, 
 
 B-DEFMT (F13, B03): `validators::de_tax_number` prüft die Steuernummer gegen die Gruppen der Länder statt
 gegen 10 bis 13 beliebige Ziffern: `FF/BBB/UUUUP` (BE, HB, HH, NI, RP, SH), `FFBBB/UUUUP` (BW),
-`FFF/BBB/UUUUP` mit führender 0, 1 oder 2 (BY, BB, HE, MV, SL, SN, ST, TH), `FFF/BBBB/UUUP` mit führender
-1, 2 oder 3 (NW), dazu die 13-stellige ELSTER-Form: Länderpräfix der Bundesfinanzamtsnummer (10, 11,
-21–24, 26–28, 30–32, 40, 41, 51–53, 91–92), eine `0`, Bezirk und Unterscheidungsnummer. Die ELSTER-Form
-bleibt feldgebunden, `0181508150000` bleibt FN (kein Land hat das Präfix 01). Neu `COMMERCIAL_REGISTER_DE`:
+`FFF/BBB/UUUUP` (BY, BB, HE, MV, SL, SN, ST, TH), `FFF/BBBB/UUUP` (NW), jeweils mit beliebiger führender
+Ziffer (Test- und Beispielwerte wie `987/654/32109`; die erste Runde verlangte 0–2 bzw. 1–3 und verlor
+auf dem Holdout 1,1 pp Recall), dazu die 13-stellige ELSTER-Form: Länderpräfix der Bundesfinanzamtsnummer
+(21–24, 26–28, 30–32, 40, 41, 51–53, 91–92), eine `0`, Bezirk und Unterscheidungsnummer, oder der
+zweistellige Ländercode 01–16 vor elf Ziffern (Presidio-Schreibweise). Die ELSTER-Form bleibt
+feldgebunden, blank bleibt `0181508150000` FN. Neu `COMMERCIAL_REGISTER_DE`:
 `HRA`/`HRB`, eine bis sechs Ziffern ohne führende Null, optional das Gerichtskürzel (`B`, `FL`, `HL`, `KI`,
 `PI`); `pii_commercial_register_de` meldet in jedem Modus mit Register- oder Amtsgerichtsbegriff in der Nähe
 oder als Schlüssel, `pii_commercial_register_de_context_free` blank in `balanced`/`recall` (0,50).

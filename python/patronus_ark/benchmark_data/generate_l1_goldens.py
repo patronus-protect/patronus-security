@@ -4675,13 +4675,13 @@ for _row in A06_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # B-DEFMT: German format identifiers. The Steuernummer (TAX_NUMBER_DE) after its field name follows
-# the groups of one Land (FF/BBB/UUUUP, FFBBB/UUUUP for BW, FFF/BBB/UUUUP led by 0-2, FFF/BBBB/UUUP
-# led by 1-3 for NW) or the 13-digit ELSTER form: the Bundesfinanzamtsnummer with its Land prefix,
-# a 0, district and serial (F13). The commercial register number (COMMERCIAL_REGISTER_DE, HRA or
+# the groups of one Land (FF/BBB/UUUUP, FFBBB/UUUUP for BW, FFF/BBB/UUUUP, FFF/BBBB/UUUP for NW)
+# or the 13-digit ELSTER form: the Bundesfinanzamtsnummer with its Land prefix, a 0, district and
+# serial, or the two-digit Land code 01-16 and eleven digits (F13). The commercial register number (COMMERCIAL_REGISTER_DE, HRA or
 # HRB, one to six digits, an optional court suffix such as B for Berlin) is reported in every mode
 # with a register or local court term near it or as its key, and bare in balanced/recall (B03).
-# Hard negatives: twelve digits, no Land prefix or no 0 behind the Finanzamt number, leading digits
-# no Land prints, other register prefixes, lower case, a leading zero and parts of longer tokens.
+# Hard negatives: twelve digits, no Land prefix or no 0 behind the Finanzamt number, groups no Land
+# prints, other register prefixes, lower case, a leading zero and parts of longer tokens.
 B_DEFMT_CASES = [
     # ── Steuernummer: forms of the Länder and ELSTER ───────────────────────
     p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: ", "2893081508152"),
@@ -4694,15 +4694,15 @@ B_DEFMT_CASES = [
     p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "4151081508156", "\n", carrier="yaml"),
     p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "tax number=", "324/0307/4258", carrier="kv", mode="balanced"),
     p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: ", "1121081508150", mode="recall"),
-    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 0181508150000", "no Land prefix 01 in the ELSTER form"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 0081508150001", "no Land prefix 00 in the ELSTER form"),
     n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 2893181508152", "no 0 behind the Finanzamt number"),
-    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 456/789/01234", "three-digit Finanzamt number led by 4"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 12/34/56789", "groups no Land prints"),
     n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 028150815012", "twelve digits", mode="balanced"),
     n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Bitte 5133081508159 übernehmen.", "13 bare digits without a field name", carrier="prose", mode="recall"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German Steuernummer: 1234/567/89012", "twelve digits in groups no Land prints"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: 2893/081/50812\n", "twelve digits behind an ELSTER prefix", carrier="yaml"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 1781508150001", "no Land prefix 17 in the ELSTER form"),
-    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 433/8150/8159", "NW form led by 4"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 9381081508155", "no Land prefix 93 in the ELSTER form"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 2181/508/150", "ten digits in groups no Land prints", mode="balanced"),
     n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Timestamp 2893081508152 logged.", "13 bare digits without a field name", carrier="prose", mode="recall"),
     # ── Handelsregister ────────────────────────────────────────────────────
