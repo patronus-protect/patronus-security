@@ -625,6 +625,7 @@ tasks:
       employee IDs do not regress; neutral account number F1 rises in balanced
 
   - id: Q-FIN
+    status: done
     title: "Quality: card PAN 48 (neutral), CVV 0/68, expiry 0, IBAN 64/68, SWIFT/BIC 39/35, financial account number 8/0/72"
     type: recall-fix
     deps: [B-IBAN, B-ACCT]
