@@ -1706,6 +1706,14 @@ PROFILES = {
         "credential.ldap_bind_password", "CREDENTIAL", "secret", "ldap_bind", "LDAP bind", "LDAP-Bind",
         "ldapsearch -x -D cn=svc,dc=acme,dc=org -w <<value>>",
     ),
+    "dlp_cli_password": Profile(
+        "credential.cli_password", "CREDENTIAL", "secret", "upload_command", "curl upload command",
+        "curl-Upload-Befehl",
+        {
+            "curl_user_password": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
+            "curl_user_only": "curl -u <<value>> -T build.tgz https://nexus.example.com/repository/raw/",
+        },
+    ),
     "dlp_de_vat_id": Profile("identifier.de.vat_id", "dlp.de.vat_id", "identifier", "vat_id", "VAT ID", "USt-IdNr."),
     "dlp_de_commercial_register_number": Profile(
         "identifier.de.commercial_register", "dlp.de.commercial_register_number", "identifier", "commercial_register",
@@ -1889,14 +1897,6 @@ PROFILES = {
         "data.cloudant.credentials", "API_KEY", "secret", "cloudant_password", "Cloudant password", "Cloudant-Passwort",
     ),
     # GOLD-D6: credential and key entities without an ARK rule.
-    "credential.cli_password": Profile(
-        "credential.cli_password", "CREDENTIAL", "secret", "upload_command", "curl upload command",
-        "curl-Upload-Befehl",
-        {
-            "curl_user_password": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
-            "curl_user_only": "curl -u <<value>> -T build.tgz https://nexus.example.com/repository/raw/",
-        },
-    ),
     "credential.file.nuget_config": Profile(
         "credential.file.nuget_config", "CREDENTIAL", "secret", "nuget_source_credentials",
         "NuGet.Config credentials", "NuGet.Config-Zugangsdaten",

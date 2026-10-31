@@ -433,6 +433,11 @@
       "generators": ["password", "url_userinfo_password"],
       "probes": ["ldapsearch -x -H ldaps://ldap.internal -D \"cn=admin,dc=acme,dc=org\" -w <<secret:0>> -b \"dc=acme,dc=org\"", "binddn cn=nslcd,ou=dienste,dc=acme,dc=de\nbindpw <<secret:0>>", "ldap_default_authtok = <<secret:0>>", "AuthLDAPBindPassword \"<<secret:0>>\""]
     },
+    "dlp_cli_password": {
+      "generators": ["curl_user_password"],
+      "lookalike": ["curl_user_only"],
+      "probes": ["curl -u ci-deploy:<<secret:0>> -T build.tgz https://nexus.example.com/repository/raw/", "mysqldump -u backup -p<<secret:0>> --single-transaction shop > shop.sql", "PGPASSWORD=<<secret:0>> psql -h db.internal -U orders orders", "sshpass -p <<secret:0>> ssh deploy@10.0.4.12 uptime", "docker login -u ci-bot -p <<secret:0>> registry.example.com", "htpasswd -bc /etc/nginx/.htpasswd admin <<secret:0>>", "$pw = ConvertTo-SecureString \"<<secret:0>>\" -AsPlainText -Force", "net use Z: \\\\fs01.internal\\finance <<secret:0>> /user:ACME\\jana"]
+    },
     "dlp_de_vat_id": {
       "generators": ["de_vat_id"],
       "probes": ["USt-IdNr.: <<secret:0>>", "VAT ID: <<secret:0>>"]
@@ -535,7 +540,6 @@
     "data.algolia.api_key": {"generators": ["algolia_admin_api_key"], "lookalike": ["algolia_admin_api_key_short"]},
     "data.clickhouse.api_secret": {"generators": ["clickhouse_cloud_api_secret"], "lookalike": ["clickhouse_cloud_api_secret_short"]},
     "data.cloudant.credentials": {"generators": ["cloudant_password", "cloudant_api_key"], "lookalike": ["cloudant_password_short"]},
-    "credential.cli_password": {"generators": ["curl_user_password"], "lookalike": ["curl_user_only"]},
     "credential.file.nuget_config": {"generators": ["nuget_cleartext_password"], "lookalike": ["nuget_username"]},
     "credential.kubernetes_secret": {"generators": ["kubernetes_secret_data"], "lookalike": ["kubernetes_configmap_binary"]},
     "credential.high_entropy_string": {"generators": ["base64_high_entropy_string", "hex_high_entropy_string"], "lookalike": ["uuid_v4"]},

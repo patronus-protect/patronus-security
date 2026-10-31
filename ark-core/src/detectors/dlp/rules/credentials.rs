@@ -437,6 +437,75 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::Password)
         .with_value_gate(likeness::is_connection_password),
     },
+    DlpPattern {
+        name: "dlp_cli_password",
+        // G03: a password on a command line. After the tool name the option
+        // may follow within the line (also across `\`-continued lines, not
+        // past `|`, `;` or `&`): `curl -u/--user user:<password>`, the
+        // MySQL/MariaDB clients `-p<password>` (attached; `-p db` prompts)
+        // and `--password=`, a shell `PGPASSWORD=`, `sshpass -p`,
+        // `docker`/`podman login -p/--password` (not `--password-stdin`),
+        // `htpasswd` in batch mode (`-b`: the last of file, user and
+        // password, without the file under `-n`), PowerShell
+        // `ConvertTo-SecureString` with a literal and `-AsPlainText`, and
+        // `net use \\server\share` with a password before or after `/user:`
+        // (`*` prompts).
+        pattern: concat!(
+            r"(?i)(?:(?:(?-u:\b)curl(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t]",
+            r#"(?:(?-i:-u)[ \t]*|--user(?:[ \t]+|=))["']?[^\s"':]{0,64}:"#,
+            r"|(?-u:\b)(?:mysql(?:dump|admin|import|show|check|pump|binlog)?",
+            r"|mariadb(?:-dump|-admin|-import|-show|-check)?)(?:\.exe)?(?-u:\b)",
+            r"(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?:(?-i:-p)|--password=)",
+            r"|(?:(?m:^)|[ \t;&|(])(?:(?:export|env)[ \t]{1,4})?pgpassword=",
+            r"|(?-u:\b)sshpass(?-u:\b)(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?-i:-p)[ \t]*",
+            r"|(?-u:\b)(?:docker|podman|nerdctl|buildah|skopeo)(?:\.exe)?[ \t]+login(?-u:\b)",
+            r"(?:[^\r\n|;&]|\\\r?\n){0,300}?[ \t](?:(?-i:-p)[ \t]*|--password(?:[ \t]+|=))",
+            r"|(?-u:\b)htpasswd(?:\.exe)?(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
+            r"[ \t]+(?-i:-(?:[A-Za-z]*n[A-Za-z]*b|[A-Za-z]*b[A-Za-z]*n)[A-Za-z]*)",
+            r"(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
+            r#"[ \t]+[^\s<>"'-][^\s<>]{0,63}[ \t]+"#,
+            r"|(?-u:\b)htpasswd(?:\.exe)?(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
+            r"[ \t]+(?-i:-[A-Zac-mo-z]*b[A-Zac-mo-z]*)",
+            r"(?:[ \t]+(?-i:-[A-Zac-mo-z0-9]+)(?:[ \t]+[0-9]{1,3})?)*",
+            r#"[ \t]+[^\s<>"'-][^\s<>]{0,255}[ \t]+[^\s<>"'-][^\s<>]{0,63}[ \t]+"#,
+            r"|(?-u:\b)convertto-securestring[ \t]+(?:-asplaintext(?:[ \t]+-force)?",
+            r"|-force[ \t]+-asplaintext)[ \t]+(?:-string[ \t]+)?",
+            r#")(?:"([^"\r\n]{1,150})"|'([^'\r\n]{1,150})'|([^\s"'`|;&<>\\]{0,149}[^\s"'`|;&<>\\,]))"#,
+            r#"|(?-u:\b)convertto-securestring[ \t]+(?:-string[ \t]+)?"#,
+            r#"(?:\\?"([^"$\\\r\n]{1,150})\\?"|'([^'\r\n]{1,150})')[ \t]+(?:-force[ \t]+)?-asplaintext"#,
+            r#"|(?:"([ !#%-~]{1,48})"|'([ -&(-~]{1,48})')[ \t]?\|[ \t]?"#,
+            r"convertto-securestring[ \t]+(?:-force[ \t]+)?-asplaintext",
+            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]+"|\\\\[^\s"]+)[ \t]+"#,
+            r#"(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149}))[ \t]+(?:/[a-z]+(?::\S*)?[ \t]+)*?/u(?:ser)?:"#,
+            r#"|(?-u:\b)net use[ \t]+(?:[a-z]:[ \t]+)?(?:"\\\\[^"\r\n]+"|\\\\[^\s"]+)[ \t]+"#,
+            r#"(?:/[a-z]+(?::\S*)?[ \t]+)*?/u(?:ser)?:\S+[ \t]+(?:"([^"\r\n]{1,150})"|([^\s"/*][^\s"]{0,149})))"#,
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://curl.se/docs/manpage.html#-u",
+            &[
+                "curl",
+                "mysql",
+                "mariadb",
+                "pgpassword",
+                "sshpass",
+                "docker",
+                "podman",
+                "nerdctl",
+                "buildah",
+                "skopeo",
+                "htpasswd",
+                "convertto-securestring",
+                "net use",
+            ],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_connection_password),
+    },
 ];
 
 fn is_unredacted_url_credential(candidate: &str) -> bool {
