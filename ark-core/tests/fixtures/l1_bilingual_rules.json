@@ -2991,6 +2991,74 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_crypto_btc",
+    "de": "Bitte senden Sie die Zahlung an 12mYnVXGe8sorU7JgkEXm2LZh3n3TNicjf.",
+    "en": "BTC address: bc1qfsw3a7dp3sd7cyapuasws0evznccs55dzhacj8",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bitte senden Sie die Zahlung an 12mYnVXGe8sorU7JgkEXm2LZh3n3TNicjg.",
+        "Bitcoin-Adresse: bc1qfsw3a7dp3sd7cyapuasws0evznccs55dzhacj9"
+      ],
+      "en": [
+        "BTC address: bc1qfsw3a7dp3sd7cyapuasws0evznccs55dzhacJ8",
+        "Token x12mYnVXGe8sorU7JgkEXm2LZh3n3TNicjf was revoked."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_crypto_ltc",
+    "de": "Litecoin-Adresse: LQwYRQw8QQ5Di34r4V4JcXNJ6DLw1UfM3x",
+    "en": "Send the LTC to ltc1qktcfrf9f2pmhtqemjvjdut70gvwap03r8ftfn8.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Litecoin-Adresse: LQwYRQw8QQ5Di34r4V4JcXNJ6DLw1UfM3y",
+        "Litecoin-Adresse: ltc1qktcfrf9f2pmhtqemjvjdut70gvwap03r8ftfn9"
+      ],
+      "en": [
+        "Send the LTC to ltc1qktcfrf9f2pmhtqemjvjdut70gvwap03r8ftfn7.",
+        "Litecoin address: M9tbLUmsnzJLk6zkV2UAyNYFZbxukEQKi8"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_crypto_eth",
+    "de": "Ethereum-Adresse: 0x9ac64c6FCA067D28a33c277459AFD400cc472Df4",
+    "en": "Transfer to 0xE1De697c60E6e6d048e9B71100315dfac5d2b6C2.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Ethereum-Adresse: 0x9ac64c6FCA067D28a33c277459AFD400cc472DF4",
+        "Ethereum-Adresse: 0x9ac64c6FCA067D28a33c277459AFD400cc472Df"
+      ],
+      "en": [
+        "Transfer to 0xE1De697c60E6e6d048e9B71100315dfac5d2b6c2.",
+        "Tx hash: 0xe1de697c60e6e6d048e9b71100315dfac5d2b6c2e1de697c60e6e6d048e9b711"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_crypto_eth_unchecked",
+    "de": "Wallet-Adresse: 0x7206dbb8ede537e00bfe3cb8e2766d438ba8cdf8",
+    "en": "The wallet address is 0x666e5f88b4b90dc450d731205d43de200c6ee5a8.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Commit 0x7206dbb8ede537e00bfe3cb8e2766d438ba8cdf8 wurde übernommen.",
+        "Wallet-Adresse: 0x0000000000000000000000000000000000000000"
+      ],
+      "en": [
+        "Commit 0x666e5f88b4b90dc450d731205d43de200c6ee5a8 was merged.",
+        "Wallet address: 0x666e5f88b4b90dc450d731205d43de200c6ee5a"
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

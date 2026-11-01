@@ -888,6 +888,23 @@ def test_gold_validators_cover_every_checksum_validator():
       "00000000000000000000"]),
     ("de_pzn", ["01126111", "02532876", "43230555", "1126111", "2532876"],
      ["01126112", "1126112", "00000019", "00000000", "1111111", "123456", "123456789", "0112611A", "0112 6111"]),
+    # A02: crypto wallet addresses (rust/tests/pii_crypto_wallets.rs).
+    ("btc_address", ["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
+                     "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+                     "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0", "bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs"],
+     ["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNb", "16Yeky6GMjeNkAiNcBY7ZhrLoMSgg1BoyZ2", "LaEYR5j5A168XQWEq76xAhcpZyKbzSbWNc",
+      "mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn", "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5",
+      "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd", "bc1Qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx", "", "1"]),
+    ("ltc_address", ["LaEYR5j5A168XQWEq76xAhcpZyKbzSbWNc", "MLeXaUDTZRFNvvyqB5am3jXNwKvNwS9QJS",
+                     "ltc1qc3hd72r6gwumyyt4xpk8d2q627yexgj8q20d9g"],
+     ["LaEYR5j5A168XQWEq76xAhcpZyKbzSbWNd", "ltc1qc3hd72r6gwumyyt4xpk8d2q627yexgj8q20d9h",
+      "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy"]),
+    ("eth_checksum_address", ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+                              "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB", "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb"],
+     ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAeD", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+      "0x5AAEB6053F3E94C9B9A09F33669435E7EF1BEAED", "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAe",
+      "5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"]),
 ])
 def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
     check = MODULE.CHECKSUM_PORTS[name]

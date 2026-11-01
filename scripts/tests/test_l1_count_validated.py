@@ -182,7 +182,8 @@ def test_checked_in_ark_count():
     # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs), A13 the PL PESEL and REGON (the
     # NIP is the PL VAT ID), B-IN the IN Aadhaar number and GSTIN (the PAN and the voter ID are format only),
     # A06 the US DEA number and NPI, B-DEVID the IMEI, MEID and ICCID (the IMSI has no check digit),
-    # B-FIN the VIN (North American check digit), ISIN, LEI and DE PZN.
+    # B-FIN the VIN (North American check digit), ISIN, LEI and DE PZN, A02 the crypto wallet address
+    # (Base58Check, Bech32 and EIP-55).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -266,8 +267,9 @@ def test_checked_in_ark_count():
         Unit("pii.isin", None),
         Unit("pii.lei", None),
         Unit("pii.de.pzn", "de"),
+        Unit("pii.crypto_wallet", None),
     }
-    assert len(counts.ark) == 82
+    assert len(counts.ark) == 83
     # A13 reaches the M3 target (2 × 35 = 70).
     assert counts.m3_met is True
 
@@ -399,7 +401,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 82
+    assert payload["ark"]["count"] == 83
     assert payload["m3"] == {"factor": 2, "target": 70, "met": True}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -606,6 +608,13 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.lei": ["pii_lei: lei"],
         "pii.de.pzn": ["pii_pzn_de: de_pzn"],
     }
+    # A02: one international unit for the crypto wallet address; the lower-case Ethereum form has no checksum.
+    crypto = next(unit for unit in payload["ark"]["units"] if unit["entity_id"] == "pii.crypto_wallet")
+    assert crypto["sources"] == [
+        "pii_crypto_btc: btc_address",
+        "pii_crypto_eth: eth_checksum_address",
+        "pii_crypto_ltc: ltc_address",
+    ]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]

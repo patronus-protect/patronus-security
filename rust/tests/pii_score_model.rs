@@ -513,7 +513,10 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_vin",
             "pii_isin",
             "pii_lei",
-            "pii_pzn_de"
+            "pii_pzn_de",
+            "pii_crypto_btc",
+            "pii_crypto_ltc",
+            "pii_crypto_eth"
         ]
     );
 }
@@ -625,6 +628,10 @@ fn reference_scores_per_rule() {
         ("pii_isin", 0.60),
         ("pii_lei", 0.60),
         ("pii_pzn_de", 0.60),
+        ("pii_crypto_btc", 0.65),
+        ("pii_crypto_ltc", 0.65),
+        ("pii_crypto_eth", 0.65),
+        ("pii_crypto_eth_unchecked", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

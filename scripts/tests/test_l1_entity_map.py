@@ -321,6 +321,13 @@ def test_fin_identifiers_are_ark_only():
         assert entity_map.scope(entity_id) == "ark_only"
 
 
+def test_crypto_wallet_is_shared_with_presidio():
+    # A02: one label for Bitcoin, Litecoin and Ethereum addresses, Presidio's CRYPTO (Bitcoin only).
+    entity_map = MODULE.load()
+    assert entity_map.ark_label("CRYPTO") == "pii.crypto_wallet"
+    assert entity_map.scope("pii.crypto_wallet") == "shared"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -572,7 +579,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 178
+    assert len(expected) == 182
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
