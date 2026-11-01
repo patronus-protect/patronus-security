@@ -1399,6 +1399,37 @@ def us_npi(value: str) -> bool:
     )
 
 
+def imei(value: str) -> bool:
+    """Port of ``validators::imei`` (15 digits, plain or 2-6-6-1 with one separator, Luhn, not one digit)."""
+    grouped = len(value) == 18 and value[2] == value[9] == value[16] and value[2] in " -"
+    digits = _separated_digits(value, 15, " -") if grouped or len(value) == 15 else None
+    return digits is not None and len(set(digits)) > 1 and synth_goldset.luhn_valid("".join(map(str, digits)))
+
+
+def meid(value: str) -> bool:
+    """Port of ``validators::meid`` (15 upper-case hex digits, regional code A0-FF, Luhn in base 16)."""
+    if len(value) != 15 or value[0] not in "ABCDEF" or any(c not in "0123456789ABCDEF" for c in value):
+        return False
+    total = 0
+    for index, char in enumerate(reversed(value)):
+        digit = int(char, 16) * (2 if index % 2 else 1)
+        total += digit - 15 if digit >= 16 else digit
+    return total % 16 == 0
+
+
+def iccid(value: str) -> bool:
+    """Port of ``validators::iccid`` (19 or 20 digits led by 89, plain or in blocks of four, Luhn)."""
+    grouped = len(value) in (23, 24) and all((index % 5 == 4) == (char == " ") for index, char in enumerate(value))
+    plain = value if not grouped else value.replace(" ", "")
+    return (
+        len(plain) in (19, 20)
+        and plain.isascii()
+        and plain.isdigit()
+        and plain.startswith("89")
+        and synth_goldset.luhn_valid(plain)
+    )
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1479,6 +1510,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "in_gstin": in_gstin,
     "us_dea_number": us_dea_number,
     "us_npi": us_npi,
+    "imei": imei,
+    "meid": meid,
+    "iccid": iccid,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).

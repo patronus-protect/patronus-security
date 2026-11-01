@@ -513,6 +513,10 @@ entities:
   - {id: pii.ch.ahv_number, scope: ark_only, ark: [CH_AHV_NUMBER], presidio: [], corpora: {}}
   - {id: pii.pt.nif, scope: ark_only, ark: [PT_NIF], presidio: [], corpora: {}}
   - {id: pii.ie.ppsn, scope: ark_only, ark: [IE_PPSN], presidio: [], corpora: {}}
+  - {id: pii.imei, scope: ark_only, ark: [IMEI], presidio: [], corpora: {}}
+  - {id: pii.meid, scope: ark_only, ark: [MEID], presidio: [], corpora: {}}
+  - {id: pii.iccid, scope: ark_only, ark: [ICCID], presidio: [], corpora: {}}
+  - {id: pii.imsi, scope: ark_only, ark: [IMSI], presidio: [], corpora: {}}
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
@@ -672,6 +676,10 @@ checksums:
     in_voter_id: null                   # B-IN, EPIC: drei Buchstaben, sieben Ziffern, keine Prüfziffer
     us_dea_number: {algorithm: DEA-Prüfziffer}                     # A06, d1+d3+d5+2×(d2+d4+d6) mod 10, Registranttyp A–H/J–M/P/R–U/X
     us_npi: {algorithm: Luhn mit Präfix 80840}                     # A06, zehn Ziffern, erste 1 oder 2, blank oder 4-3-3
+    imei: {algorithm: Luhn}                                         # B-DEVID, 15 Ziffern, blank oder 2-6-6-1
+    meid: {algorithm: Luhn zur Basis 16}                            # B-DEVID, 14 Hex-Ziffern, Regionalcode A0–FF, Prüfziffer
+    iccid: {algorithm: Luhn}                                        # B-DEVID, 19 oder 20 Ziffern, Präfix 89, blank oder Viererblöcke
+    imsi: null                                                      # B-DEVID, 15 Ziffern, MCC 2xx–7xx, keine Prüfziffer
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

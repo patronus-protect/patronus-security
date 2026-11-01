@@ -1051,8 +1051,69 @@ pub fn us_npi(s: &str) -> bool {
         && grouped_digits::<10>(s).is_some_and(|digits| {
             matches!(digits[0], 1 | 2)
                 && !one_repeated_digit(&digits[..9])
-                && (luhn_checksum(&digits) + 24).is_multiple_of(10)
+                && (luhn_checksum(&digits, 10) + 24).is_multiple_of(10)
         })
+}
+
+/// IMEI (B-DEVID): fifteen digits, plain or grouped 2-6-6-1 with one kind of
+/// separator (space or hyphen), the last a Luhn check digit; one repeated digit
+/// is never allocated.
+pub fn imei(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let grouped = bytes.len() == 18
+        && bytes[2] == bytes[9]
+        && bytes[9] == bytes[16]
+        && matches!(bytes[2], b' ' | b'-');
+    (grouped || bytes.len() == 15) && grouped_digits::<15>(s).is_some_and(|d| issued_luhn(&d))
+}
+
+/// MEID (B-DEVID): fifteen upper-case hex digits, a regional code `A0`–`FF` (a
+/// decimal one makes the value an IMEI) and a Luhn check digit in base 16.
+pub fn meid(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut digits = [0u32; 15];
+    bytes.len() == 15
+        && matches!(bytes[0], b'A'..=b'F')
+        && digits.iter_mut().zip(bytes).all(|(digit, &byte)| {
+            matches!(byte, b'0'..=b'9' | b'A'..=b'F')
+                && char::from(byte)
+                    .to_digit(16)
+                    .map(|value| *digit = value)
+                    .is_some()
+        })
+        && luhn_checksum(&digits, 16) == 0
+}
+
+/// ICCID (B-DEVID): 19 or 20 digits led by the telecom industry prefix `89`,
+/// plain or in blocks of four separated by single spaces, the last a Luhn check
+/// digit.
+pub fn iccid(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let grouped = matches!(bytes.len(), 23 | 24)
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, &byte)| (index % 5 == 4) == (byte == b' '));
+    let digits = if grouped {
+        bytes.len() - 4
+    } else {
+        bytes.len()
+    };
+    bytes.starts_with(b"89")
+        && match digits {
+            19 => separated_digits::<19>(s, b" ").is_some_and(|d| luhn_checksum(&d, 10) == 0),
+            20 => separated_digits::<20>(s, b" ").is_some_and(|d| luhn_checksum(&d, 10) == 0),
+            _ => false,
+        }
+        && (grouped || !bytes.contains(&b' '))
+}
+
+/// IMSI (B-DEVID): fifteen digits led by a mobile country code `2xx`–`7xx`. It
+/// has no check digit, so this is a format check; one repeated digit is never
+/// allocated.
+pub fn imsi(s: &str) -> bool {
+    separated_digits::<15>(s, b"")
+        .is_some_and(|digits| (2..=7).contains(&digits[0]) && !one_repeated_digit(&digits))
 }
 
 pub fn uk_nino(s: &str) -> bool {
@@ -1297,7 +1358,7 @@ pub fn se_personnummer(s: &str) -> bool {
     centuries
         .iter()
         .any(|century| birth_date(day, month, century + year))
-        && luhn_checksum(ten) == 0
+        && luhn_checksum(ten, 10) == 0
 }
 
 /// Check characters of the Finnish personal identity code, indexed by the nine
@@ -1433,7 +1494,7 @@ pub fn fr_siren(s: &str) -> bool {
 /// Whether `digits` pass Luhn and are not one repeated digit, which passes it but
 /// is never issued (SIREN, SIN, organisationsnummer).
 fn issued_luhn(digits: &[u32]) -> bool {
-    !one_repeated_digit(digits) && luhn_checksum(digits) == 0
+    !one_repeated_digit(digits) && luhn_checksum(digits, 10) == 0
 }
 
 /// French SIRET (B-EU1): a SIREN and a five-digit establishment number (NIC),
@@ -1446,7 +1507,7 @@ pub fn fr_siret(s: &str) -> bool {
             && if decimal(&digits[..9]) == 356_000_000 {
                 digits.iter().sum::<u32>().is_multiple_of(5)
             } else {
-                luhn_checksum(&digits) == 0
+                luhn_checksum(&digits, 10) == 0
             }
     })
 }
@@ -1532,7 +1593,7 @@ pub fn za_id_number(s: &str) -> bool {
             .any(|century| birth_date(day, month, century + year))
             && digits[10] <= 2
             && matches!(digits[11], 8 | 9)
-            && luhn_checksum(&digits) == 0
+            && luhn_checksum(&digits, 10) == 0
     })
 }
 
@@ -1969,19 +2030,20 @@ fn vat_digits(s: &str, len: usize) -> Option<Vec<u32>> {
         .then(|| s.bytes().map(|byte| u32::from(byte - b'0')).collect())
 }
 
-/// Luhn checksum of `digits` with the last digit undoubled, in `0..10`.
-fn luhn_checksum(digits: &[u32]) -> u32 {
+/// Luhn checksum of `digits` in `base` (10, or 16 for the MEID) with the last
+/// digit undoubled, in `0..base`.
+fn luhn_checksum(digits: &[u32], base: u32) -> u32 {
     digits
         .iter()
         .rev()
         .enumerate()
         .map(|(index, &digit)| match index % 2 {
             0 => digit,
-            _ if digit > 4 => digit * 2 - 9,
+            _ if digit * 2 >= base => digit * 2 - (base - 1),
             _ => digit * 2,
         })
         .sum::<u32>()
-        % 10
+        % base
 }
 
 /// Sum of `digits` times `weights`, pairwise; the shorter of the two decides.
@@ -2025,7 +2087,7 @@ pub fn at_vat_id(s: &str) -> bool {
     let Some(digits) = body.strip_prefix('U').and_then(|body| vat_digits(body, 8)) else {
         return false;
     };
-    (16 - luhn_checksum(&digits[..7])) % 10 == digits[7]
+    (16 - luhn_checksum(&digits[..7], 10)) % 10 == digits[7]
 }
 
 /// Swiss UID (`CHE-123.456.789`, the MWST number without its `MWST`/`TVA`/`IVA`
@@ -2056,7 +2118,7 @@ pub fn fr_vat_id(s: &str) -> bool {
     let siren = &digits[2..];
     let number = decimal(siren);
     let key = u64::from(digits[0] * 10 + digits[1]);
-    (siren[..3] == [0, 0, 0] || luhn_checksum(siren) == 0) && key == (number * 100 + 12) % 97
+    (siren[..3] == [0, 0, 0] || luhn_checksum(siren, 10) == 0) && key == (number * 100 + 12) % 97
 }
 
 /// Dutch btw-id: `NL`, nine digits, `B` and a branch number `01`–`99`. Either the
@@ -2107,7 +2169,7 @@ pub fn it_vat_id(s: &str) -> bool {
     let office = digits[7] * 100 + digits[8] * 10 + digits[9];
     digits[..7].iter().any(|&digit| digit != 0)
         && matches!(office, 1..=100 | 120 | 121 | 888 | 999)
-        && luhn_checksum(&digits) == 0
+        && luhn_checksum(&digits, 10) == 0
 }
 
 /// Control letters of the Spanish DNI/NIE by remainder mod 23.
@@ -2579,7 +2641,7 @@ pub fn se_vat_id(s: &str) -> bool {
     let Some(digits) = vat_digits(&vat_body(s, "SE"), 12) else {
         return false;
     };
-    digits[10..] == [0, 1] && luhn_checksum(&digits[..10]) == 0
+    digits[10..] == [0, 1] && luhn_checksum(&digits[..10], 10) == 0
 }
 
 /// Slovenian ID za DDV: `SI` and eight digits without a leading zero, the last

@@ -3393,6 +3393,124 @@
     ]
   },
   {
+    "id": "pii.imei",
+    "description": "IMEI (International Mobile Equipment Identity, Gerätekennung eines Mobiltelefons)",
+    "en": [
+      "imei number",
+      "imei no",
+      "imei #",
+      "imei_number",
+      "device imei",
+      "phone imei",
+      "handset imei",
+      "international mobile equipment identity"
+    ],
+    "de": [
+      "imei-nummer",
+      "imei nummer",
+      "imei_nummer",
+      "geräte-imei",
+      "gerätenummer",
+      "geräteidentifikationsnummer",
+      "seriennummer des handys"
+    ],
+    "shared": [
+      "imei",
+      "imei#",
+      "imei1",
+      "imei2"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/device.rs"
+    ]
+  },
+  {
+    "id": "pii.meid",
+    "description": "MEID (Mobile Equipment Identifier, Gerätekennung von CDMA-Mobiltelefonen)",
+    "en": [
+      "meid number",
+      "meid no",
+      "meid_number",
+      "device meid",
+      "mobile equipment identifier",
+      "mobile equipment id"
+    ],
+    "de": [
+      "meid-nummer",
+      "meid nummer",
+      "meid_nummer",
+      "geräte-meid"
+    ],
+    "shared": [
+      "meid",
+      "meid#",
+      "meid hex",
+      "esn/meid"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/device.rs"
+    ]
+  },
+  {
+    "id": "pii.iccid",
+    "description": "ICCID (Integrated Circuit Card Identifier, Seriennummer einer SIM-Karte)",
+    "en": [
+      "iccid number",
+      "iccid_number",
+      "sim card number",
+      "sim number",
+      "sim serial",
+      "sim serial number",
+      "sim card serial",
+      "sim id",
+      "sim_iccid",
+      "integrated circuit card identifier"
+    ],
+    "de": [
+      "sim-kartennummer",
+      "sim-karten-nummer",
+      "sim-nummer",
+      "sim nummer",
+      "sim-seriennummer",
+      "sim-kartenseriennummer",
+      "sim_nummer",
+      "kartennummer der sim"
+    ],
+    "shared": [
+      "iccid",
+      "iccid#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/device.rs"
+    ]
+  },
+  {
+    "id": "pii.imsi",
+    "description": "IMSI (International Mobile Subscriber Identity, Teilnehmerkennung auf der SIM-Karte)",
+    "en": [
+      "imsi number",
+      "imsi_number",
+      "subscriber imsi",
+      "international mobile subscriber identity",
+      "mobile subscriber identity"
+    ],
+    "de": [
+      "imsi-nummer",
+      "imsi nummer",
+      "imsi_nummer",
+      "teilnehmerkennung",
+      "teilnehmerkennung (imsi)",
+      "teilnehmer-kennung"
+    ],
+    "shared": [
+      "imsi",
+      "imsi#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/device.rs"
+    ]
+  },
+  {
     "id": "pii.pl_nip",
     "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
     "en": [
