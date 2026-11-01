@@ -1116,6 +1116,81 @@ pub fn imsi(s: &str) -> bool {
         .is_some_and(|digits| (2..=7).contains(&digits[0]) && !one_repeated_digit(&digits))
 }
 
+/// Bitcoin address (A02): Base58Check with the version byte `0x00` (P2PKH,
+/// `1…`) or `0x05` (P2SH, `3…`) over a 20-byte hash, or a native segwit address
+/// with the human-readable part `bc` (BIP 173, BIP 350). Base58Check carries
+/// four bytes of double SHA-256, Bech32 a 30-bit BCH code.
+pub fn btc_address(s: &str) -> bool {
+    base58_address(s, &[0x00, 0x05]) || segwit_address(s, "bc")
+}
+
+/// Litecoin address (A02): Base58Check with the version byte `0x30` (P2PKH,
+/// `L…`) or `0x32` (P2SH, `M…`) over a 20-byte hash, or a native segwit address
+/// with the human-readable part `ltc`. The legacy P2SH form `3…` is the Bitcoin
+/// one and reported by [`btc_address`].
+pub fn ltc_address(s: &str) -> bool {
+    base58_address(s, &[0x30, 0x32]) || segwit_address(s, "ltc")
+}
+
+/// Base58Check of one of `versions` followed by a 20-byte hash.
+fn base58_address(s: &str, versions: &[u8]) -> bool {
+    crate::detectors::validators::base58check_decode(s)
+        .is_some_and(|payload| payload.len() == 21 && versions.contains(&payload[0]))
+}
+
+/// Segwit address of `hrp` (BIP 173, BIP 350): witness version 0 with Bech32 and
+/// a 20- or 32-byte program, versions 1 to 16 with Bech32m and 2 to 40 bytes.
+fn segwit_address(s: &str, hrp: &str) -> bool {
+    use crate::detectors::validators::{bech32_decode, convert_bits, Bech32Variant};
+    bech32_decode(s).is_some_and(|decoded| {
+        let Some((&version, program)) = decoded.data.split_first() else {
+            return false;
+        };
+        decoded.hrp == hrp
+            && version <= 16
+            && (version == 0) == (decoded.variant == Bech32Variant::Bech32)
+            && convert_bits(program, 5, 8, false).is_some_and(|program| match version {
+                0 => matches!(program.len(), 20 | 32),
+                _ => (2..=40).contains(&program.len()),
+            })
+    })
+}
+
+/// Ethereum address with its EIP-55 checksum (A02): `0x` and forty hex digits
+/// in mixed case, each letter upper case exactly where the matching nibble of
+/// the Keccak-256 digest of the lower-case address is 8 or more. One letter
+/// case alone carries no checksum.
+pub fn eth_checksum_address(s: &str) -> bool {
+    let Some(hex) = s.strip_prefix("0x") else {
+        return false;
+    };
+    if hex.len() != 40
+        || !hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || !hex.bytes().any(|byte| byte.is_ascii_lowercase())
+        || !hex.bytes().any(|byte| byte.is_ascii_uppercase())
+    {
+        return false;
+    }
+    let lower = hex.to_ascii_lowercase();
+    let digest = crate::detectors::validators::keccak256(lower.as_bytes());
+    hex.bytes().enumerate().all(|(index, byte)| {
+        let nibble = (digest[index / 2] >> (4 * (1 - index % 2))) & 0x0f;
+        !byte.is_ascii_alphabetic() || byte.is_ascii_uppercase() == (nibble >= 8)
+    })
+}
+
+/// Ethereum address without a checksum (A02): `0x` and forty lower-case hex
+/// digits, not one repeated digit (the zero address). A format check.
+pub fn eth_address(s: &str) -> bool {
+    s.strip_prefix("0x").is_some_and(|hex| {
+        hex.len() == 40
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            && hex.bytes().any(|byte| byte != hex.as_bytes()[0])
+    })
+}
+
 /// Vehicle identification number in its ISO 3779 form (B-FIN): seventeen
 /// characters of digits and capital letters without `I`, `O` and `Q`, at least
 /// one letter, the last four (the serial number of the VIS) digits. European

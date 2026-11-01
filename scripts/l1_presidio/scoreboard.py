@@ -1486,6 +1486,115 @@ def de_pzn(value: str) -> bool:
     return len(set(digits[:7])) > 1 and sum(d * w for d, w in zip(digits, range(1, 8))) % 11 == digits[7]
 
 
+_BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+_BECH32M_CONSTANT = 0x2BC830A3
+
+
+def _base58_address(value: str, versions: tuple[int, ...]) -> bool:
+    """Base58Check of one of ``versions`` followed by a 20-byte hash (``validators::base58_address``)."""
+    if not value or any(ch not in _BASE58 for ch in value):
+        return False
+    number = 0
+    for ch in value:
+        number = number * 58 + _BASE58.index(ch)
+    raw = b"\0" * (len(value) - len(value.lstrip("1"))) + number.to_bytes((number.bit_length() + 7) // 8, "big")
+    payload, checksum = raw[:-4], raw[-4:]
+    return (
+        len(payload) == 21
+        and payload[0] in versions
+        and hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] == checksum
+    )
+
+
+def _segwit_address(value: str, hrp: str) -> bool:
+    """Segwit address of ``hrp``, BIP 173 v0 or BIP 350 v1-16 (``validators::segwit_address``)."""
+    if len(value) > 90 or (value.lower() != value and value.upper() != value):
+        return False
+    lowered = value.lower()
+    head, separator, data = lowered.rpartition("1")
+    if head != hrp or not separator or len(data) < 7 or any(ch not in _BECH32 for ch in data):
+        return False
+    words = [_BECH32.index(ch) for ch in data]
+    check = 1
+    for word in [ord(ch) >> 5 for ch in hrp] + [0] + [ord(ch) & 31 for ch in hrp] + words:
+        top = check >> 25
+        check = (check & 0x1FFFFFF) << 5 ^ word
+        for bit, generator in enumerate((0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)):
+            check ^= generator if top >> bit & 1 else 0
+    version, program = words[0], words[1:-6]
+    if version > 16 or check != (1 if version == 0 else _BECH32M_CONSTANT):
+        return False
+    bits = "".join(f"{word:05b}" for word in program)
+    padding = len(bits) % 8
+    if padding >= 5 or (padding and int(bits[-padding:], 2)):
+        return False
+    length = len(bits) // 8
+    return length in (20, 32) if version == 0 else 2 <= length <= 40
+
+
+def btc_address(value: str) -> bool:
+    """Port of ``validators::btc_address`` (Base58Check version 0x00/0x05 or segwit ``bc``)."""
+    return _base58_address(value, (0x00, 0x05)) or _segwit_address(value, "bc")
+
+
+def ltc_address(value: str) -> bool:
+    """Port of ``validators::ltc_address`` (Base58Check version 0x30/0x32 or segwit ``ltc``)."""
+    return _base58_address(value, (0x30, 0x32)) or _segwit_address(value, "ltc")
+
+
+_KECCAK_ROUNDS = (
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+)
+# Rho rotation offsets, indexed by lane x + 5 * y.
+_KECCAK_ROTATIONS = (0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14)
+_LANE = (1 << 64) - 1
+
+
+def _keccak256(data: bytes) -> bytes:
+    """Keccak-256 with the original 0x01 padding (Ethereum), not hashlib's SHA3-256."""
+    rate = 136
+    padded = bytearray(data) + b"\x01" + bytes(-(len(data) + 1) % rate)
+    padded[-1] |= 0x80
+    state = [0] * 25
+    rotate = lambda lane, n: ((lane << n) | (lane >> (64 - n))) & _LANE if n else lane  # noqa: E731
+    for offset in range(0, len(padded), rate):
+        for index in range(rate // 8):
+            state[index] ^= int.from_bytes(padded[offset + 8 * index : offset + 8 * index + 8], "little")
+        for constant in _KECCAK_ROUNDS:
+            parity = [state[x] ^ state[x + 5] ^ state[x + 10] ^ state[x + 15] ^ state[x + 20] for x in range(5)]
+            for x in range(5):
+                d = parity[(x + 4) % 5] ^ rotate(parity[(x + 1) % 5], 1)
+                for y in range(5):
+                    state[x + 5 * y] ^= d
+            rotated = [0] * 25
+            for x in range(5):
+                for y in range(5):
+                    rotated[y + 5 * ((2 * x + 3 * y) % 5)] = rotate(state[x + 5 * y], _KECCAK_ROTATIONS[x + 5 * y])
+            state = [
+                rotated[i] ^ (~rotated[(i % 5 + 1) % 5 + 5 * (i // 5)] & rotated[(i % 5 + 2) % 5 + 5 * (i // 5)])
+                for i in range(25)
+            ]
+            state[0] ^= constant
+    return b"".join(lane.to_bytes(8, "little") for lane in state[:4])
+
+
+def eth_checksum_address(value: str) -> bool:
+    """Port of ``validators::eth_checksum_address`` (0x, forty hex digits in mixed case, EIP-55)."""
+    digits = value[2:]
+    if not value.startswith("0x") or len(digits) != 40 or any(ch not in "0123456789abcdefABCDEF" for ch in digits):
+        return False
+    if digits.lower() == digits or digits.upper() == digits:
+        return False
+    digest = _keccak256(digits.lower().encode()).hex()
+    return all(not ch.isalpha() or ch.isupper() == (int(digest[i], 16) >= 8) for i, ch in enumerate(digits))
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1573,6 +1682,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "isin": isin,
     "lei": lei,
     "de_pzn": de_pzn,
+    "btc_address": btc_address,
+    "ltc_address": ltc_address,
+    "eth_checksum_address": eth_checksum_address,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).

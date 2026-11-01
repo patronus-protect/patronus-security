@@ -2,7 +2,7 @@
 //! Shared validator library for DLP and PII rules.
 //!
 //! Offline structure and checksum primitives: CRC-32 and the CRC32-Base62
-//! suffix of GitHub/npm tokens, Base58/Base58Check, Bech32/Bech32m, strict
+//! suffix of GitHub/npm tokens, Base58/Base58Check, Bech32/Bech32m, Keccak-256, strict
 //! canonical base64, DER TLV parsing, JWT headers and compact JWS, Macaroon V2,
 //! the CRC32-hex suffix of Packagist tokens, Shannon
 //! entropy and character classes. Every function is pure, never panics on
@@ -18,6 +18,7 @@ mod checksum;
 mod der;
 mod entropy;
 mod jwt;
+mod keccak;
 mod macaroon;
 
 pub use base58::{base58_decode, base58check_decode};
@@ -33,6 +34,7 @@ pub use checksum::{crc32, crc32_base62, crc32_base62_valid, crc32_hex_valid, CRC
 pub use der::{der_integer_ok, der_parse, der_sequence, DerElement};
 pub use entropy::shannon_entropy;
 pub use jwt::{jwt_header, jwt_parse, Jwt, JwtHeader};
+pub use keccak::keccak256;
 pub use macaroon::{macaroon_v2_parse, MacaroonV2};
 
 #[cfg(test)]

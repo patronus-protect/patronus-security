@@ -10,9 +10,9 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, device, driver_license, es, fin, fr, identifiers, ie,
-    india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators,
-    vat, za,
+    at, au, be, ca, ch, common, context, crypto, de, device, driver_license, es, fin, fr,
+    identifiers, ie, india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk,
+    us, validators, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -234,6 +234,10 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     fin::ISIN,
     fin::LEI,
     fin::PZN,
+    crypto::BTC,
+    crypto::LTC,
+    crypto::ETH,
+    crypto::ETH_UNCHECKED,
 ];
 
 pub struct PiiPipeline {

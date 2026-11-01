@@ -17,6 +17,7 @@ mod ch;
 mod common;
 pub mod context;
 mod context_anchors;
+mod crypto;
 mod de;
 mod device;
 mod driver_license;

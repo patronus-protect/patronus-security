@@ -141,6 +141,7 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("ISIN", &["pii.isin"]),
     ("LEI", &["pii.lei"]),
     ("DE_PZN", &["pii.de_pzn"]),
+    ("CRYPTO", &["pii.crypto_wallet"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),
