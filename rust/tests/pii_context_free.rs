@@ -98,12 +98,13 @@ const CONTEXT_BOUND_LABELS: [&str; 11] = [
     "MEDICAL_LICENSE",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
-const FORMAT_RULES: [&str; 5] = [
+const FORMAT_RULES: [&str; 6] = [
     "pii_driver_license_number_uk_context_free",
     "pii_ssn_us_context_free",
     "pii_ni_uk_context_free",
     TAX_NUMBER,
     "pii_phone_regional",
+    "pii_commercial_register_de_context_free",
 ];
 
 /// Issued Steuer-IDs: check digit valid, one digit twice or three times (not
@@ -210,6 +211,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_aadhaar_in_context_free",
             "pii_gstin_in_context_free",
             "pii_npi_us_context_free",
+            "pii_commercial_register_de_context_free",
         ]
     );
     for pattern in scored_only {

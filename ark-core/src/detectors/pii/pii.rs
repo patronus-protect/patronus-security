@@ -39,14 +39,15 @@ pub struct PiiPattern {
     pub requires_context: bool,
     /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
     /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
-    /// value that strict reports only after its field name. Four format rules
+    /// value that strict reports only after its field name. Five format rules
     /// are here because their issuing rules stand in for a check digit: the
     /// grouped US SSN (B-SSN: separators and SSA ranges), the UK NINO (issued
     /// prefixes and suffixes, one letter case), the UK driving licence
-    /// (surname, birth date and initials, B-UK) and the slashed German
-    /// Steuernummer (the groups of the Länder, Q-DE). The regional phone rule (F01)
-    /// is here so that `strict` stays unchanged; its numbering plan and a phone term
-    /// stand in for a check digit.
+    /// (surname, birth date and initials, B-UK), the slashed German
+    /// Steuernummer (the groups of the Länder, Q-DE) and the German commercial
+    /// register number (the `HRA`/`HRB` prefix, B-DEFMT). The regional phone rule
+    /// (F01) is here so that `strict` stays unchanged; its numbering plan and a
+    /// phone term stand in for a check digit.
     pub scored_only: bool,
 }
 
@@ -221,6 +222,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     us::DEA_NUMBER,
     us::NPI,
     us::NPI_CONTEXT_FREE,
+    de::COMMERCIAL_REGISTER,
+    de::COMMERCIAL_REGISTER_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -808,7 +811,8 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"
             | "pii_health_insurance_number_de_context_free"
-            | "pii_steuernummer_de_context_free" => !context::foreign_field(
+            | "pii_steuernummer_de_context_free"
+            | "pii_commercial_register_de_context_free" => !context::foreign_field(
                 prepared.structure(),
                 text,
                 captures.get(0).unwrap().range(),

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! German national identifiers: phone numbers, Steuer-ID, Steuernummer, social and health
-//! insurance numbers, LANR, BSNR, passport, identity card. The driving licence lives in `driver_license`
+//! insurance numbers, LANR, BSNR, passport, identity card, commercial register number. The driving licence lives in `driver_license`
 //! with the other licence formats, the plate in `licence_plate` with the UK plate.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
@@ -90,7 +90,7 @@ pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
 /// only (Q-DE, K05). The value has no check digit common to all Länder; the slashed
 /// grouping stands in for one. A field that names another value keeps it silent
 /// (`Aktenzeichen: 123/456/78901`). The 13-digit ELSTER form stays field-bound:
-/// bare, it is as often a timestamp in milliseconds.
+/// bare, it is as often a timestamp in milliseconds or an EAN-13 (F13).
 pub(super) const STEUERNUMMER_CONTEXT_FREE: PiiPattern = PiiPattern {
     name: "pii_steuernummer_de_context_free",
     pattern: r"(?-u:\b)(?:[0-9]{2,3}/[0-9]{3}/[0-9]{5}|[0-9]{3}/[0-9]{4}/[0-9]{4})(?-u:\b)",
@@ -102,6 +102,42 @@ pub(super) const STEUERNUMMER_CONTEXT_FREE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: true,
 };
+
+// ── Handelsregister ──────────────────────────────────────────────────────────
+
+/// Commercial register number (B03): `HRA` (sole traders, partnerships) or `HRB`
+/// (corporations), the register number and the suffix some courts append (`B`
+/// Berlin, `FL`, `HL`, `KI`, `PI` in Schleswig-Holstein). Strict asks for a
+/// register or local court term near the value or as its key
+/// (`Amtsgericht München, HRB 123456`).
+pub(super) const COMMERCIAL_REGISTER: PiiPattern = PiiPattern {
+    name: "pii_commercial_register_de",
+    pattern: COMMERCIAL_REGISTER_PATTERN,
+    entity_group: "COMMERCIAL_REGISTER_DE",
+    validator: Some(validators::de_commercial_register),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A bare commercial register number in `balanced` and `recall` only; a field
+/// that names another value keeps it silent (`Aktenzeichen: HRB 12345`).
+pub(super) const COMMERCIAL_REGISTER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_commercial_register_de_context_free",
+    pattern: COMMERCIAL_REGISTER_PATTERN,
+    entity_group: "COMMERCIAL_REGISTER_DE",
+    validator: Some(validators::de_commercial_register),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+const COMMERCIAL_REGISTER_PATTERN: &str =
+    r"(?-u:\b)HR[AB][ \t]?[0-9]{1,7}(?:[ \t](?:B|FL|HL|KI|PI))?(?-u:\b)";
 
 // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
 pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {

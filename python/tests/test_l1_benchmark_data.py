@@ -11,6 +11,7 @@ from patronus_ark.dlp_synth import recipes
 PII_LABELS = {
     "APPLICANT_ID",
     "AT_SOCIAL_SECURITY_NUMBER",
+    "COMMERCIAL_REGISTER_DE",
     "AU_ABN",
     "AU_ACN",
     "AU_MEDICARE",

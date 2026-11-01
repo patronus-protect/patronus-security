@@ -774,6 +774,7 @@ tasks:
   # M2: D-M2 keeps presidio_favored DE; the tax number (shared) counts, the commercial register
   # (presidio_only) only once entity_map.yaml marks it shared with an Ark label, so not deferred
   - id: B-DEFMT
+    status: done
     title: "DE format ids: tax number (Steuernummer) formats per federal state + 13-digit ELSTER, commercial register HRA/HRB with local court context"
     type: precision-fix
     deps: [K03, D-M2]

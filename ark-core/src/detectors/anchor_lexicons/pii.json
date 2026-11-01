@@ -1883,6 +1883,47 @@
     ]
   },
   {
+    "id": "pii.commercial_register",
+    "description": "Handelsregisternummer (HRA/HRB) mit Registergericht",
+    "en": [
+      "commercial register",
+      "commercial register number",
+      "commercial-register",
+      "commercial_register",
+      "commercial registry",
+      "trade register",
+      "trade register number",
+      "companies register",
+      "company register",
+      "company registration number",
+      "register number",
+      "register court",
+      "registration court",
+      "local court",
+      "registered at the local court"
+    ],
+    "de": [
+      "handelsregister",
+      "handelsregisternummer",
+      "handelsregister-nr",
+      "handelsregisternr",
+      "handelsregistereintrag",
+      "handelsregister-eintrag",
+      "registernummer",
+      "register-nr",
+      "registernr",
+      "registergericht",
+      "amtsgericht",
+      "registereintrag",
+      "hr-nummer",
+      "hr-nr"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/pii/de.rs"
+    ]
+  },
+  {
     "id": "pii.vat_identifier",
     "description": "Umsatzsteuer-Identifikationsnummer (USt-IdNr., UID, MWST-Nummer)",
     "en": [

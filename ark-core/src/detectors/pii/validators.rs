@@ -503,12 +503,73 @@ fn valid_date(day: u8, month: u8, year: u16) -> bool {
     (1..=max_day).contains(&day)
 }
 
+/// German Steuernummer (F13) in the groups one Land prints or in the 13-digit
+/// ELSTER form. Länder: `FF/BBB/UUUUP` (BE, HB, HH, NI, RP, SH), `FFBBB/UUUUP`
+/// (BW), `FFF/BBB/UUUUP` (BY, BB, HE, MV, SL, SN, ST, TH) and `FFF/BBBB/UUUP`
+/// (NW), grouped by `/`, spaces or `-`, or ungrouped. The leading digit of the
+/// three-digit Finanzamt number is not checked: test and sample values
+/// (`987/654/32109`) use any. ELSTER: the four-digit Bundesfinanzamtsnummer
+/// with its Land prefix (SL 10, BE 11, SH 21, HH 22, NI 23, HB 24, HE 26, RP 27,
+/// BW 28, BB 30, ST 31, SN 32, MV 40, TH 41, NW 51–53, BY 91–92), a `0`, then
+/// district and serial, or the two-digit Land code 01–16 in front of eleven
+/// digits (`0181508150000`, the presidio-analyzer notation), grouped any way.
+/// One repeated digit is never issued.
 pub fn de_tax_number(s: &str) -> bool {
-    let digits = s
-        .chars()
-        .filter(|ch| ch.is_ascii_digit())
-        .collect::<Vec<_>>();
-    (10..=13).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
+    let mut digits = [0u8; 13];
+    let mut len = 0;
+    let mut groups = [0u8; 3];
+    let mut group_count = 0;
+    let mut in_group = false;
+    for byte in s.bytes() {
+        if byte.is_ascii_digit() {
+            if len == digits.len() {
+                return false;
+            }
+            digits[len] = byte - b'0';
+            len += 1;
+            if !in_group {
+                group_count += 1;
+                in_group = true;
+            }
+            if let Some(group) = groups.get_mut(group_count - 1) {
+                *group += 1;
+            }
+        } else {
+            in_group = false;
+        }
+    }
+    let digits = &digits[..len];
+    if digits.iter().all(|digit| *digit == digits[0]) {
+        return false;
+    }
+    let groups = groups.get(..group_count);
+    match (len, groups) {
+        (13, _) => {
+            let prefix = digits[0] * 10 + digits[1];
+            (1..=16).contains(&prefix)
+                || (matches!(prefix, 21..=24 | 26..=28 | 30..=32 | 40 | 41 | 51..=53 | 91 | 92)
+                    && digits[4] == 0)
+        }
+        (10, Some([10] | [2, 3, 5] | [5, 5])) | (11, Some([11] | [3, 3, 5] | [3, 4, 4])) => true,
+        _ => false,
+    }
+}
+
+/// German commercial register number (B03): `HRA` or `HRB`, the register number
+/// of one to six digits without a leading zero (the courts count from 1), an
+/// optional court suffix after a space.
+pub fn de_commercial_register(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("HRA").or_else(|| s.strip_prefix("HRB")) else {
+        return false;
+    };
+    let number = rest
+        .trim_start_matches([' ', '\t'])
+        .split([' ', '\t'])
+        .next()
+        .unwrap_or_default();
+    (1..=6).contains(&number.len())
+        && !number.starts_with('0')
+        && number.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// German pension insurance number (Rentenversicherungsnummer, VKVV § 4; B-DE1):

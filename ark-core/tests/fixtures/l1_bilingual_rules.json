@@ -709,7 +709,17 @@
     "rule_id": "pii_steuernummer_de",
     "de": "Steuernummer: 123/456/78901",
     "en": "German tax number: 123/456/78901",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Steuernummer: 0081508150001",
+        "Steuernummer: 2893181508152"
+      ],
+      "en": [
+        "German Steuernummer: 1234/567/89012",
+        "Tax number: 12/34/56789"
+      ]
+    }
   },
   {
     "category": "pii",
@@ -2793,6 +2803,37 @@
       "context": {
         "de": "Als NPI ist 2204 957 684 hinterlegt.",
         "en": "The National Provider Identifier on file is 2817-380-837."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_commercial_register_de",
+    "de": "Amtsgericht München, HRB 123456",
+    "en": "Commercial register: HRA 2136",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Amtsgericht München HRC 12345",
+        "Amtsgericht München HRB 012345"
+      ],
+      "en": [
+        "Commercial register: HR 12345",
+        "Ticket HRB-12345"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_commercial_register_de_context_free",
+    "de": "Die Schmidt GmbH (HRB 71234) liefert.",
+    "en": "Supplier HRA 9012 confirmed the order.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Amtsgericht Hamburg HRB 32375",
+        "en": "Registered at the local court of Hamburg, HRB 32375"
       }
     }
   },

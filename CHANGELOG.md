@@ -11,6 +11,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- German format identifiers (B-DEFMT). `validators::de_tax_number` checks the Steuernummer against the
+  groups the Länder print instead of any 10 to 13 digits (F13): `FF/BBB/UUUUP` (BE, HB, HH, NI, RP,
+  SH), `FFBBB/UUUUP` (BW), `FFF/BBB/UUUUP` (BY, BB, HE, MV, SL, SN, ST, TH),
+  `FFF/BBBB/UUUP` (NW), with any leading digit (test and sample values such as `987/654/32109` use
+  any), grouped by `/`, spaces or `-` or ungrouped, and the 13-digit ELSTER form: a Land prefix of
+  the Bundesfinanzamtsnummer (21–24, 26–28, 30–32, 40, 41, 51–53, 91–92), a `0`, district and serial,
+  or the two-digit Land code 01–16 in front of eleven digits (`0181508150000`, the presidio-analyzer
+  notation). Twelve digits, other groupings and ELSTER values without a Land prefix
+  (`0081508150001`) are rejected; the ELSTER form stays field-bound. New label
+  `COMMERCIAL_REGISTER_DE` (B03): `HRA`/`HRB`, one to six digits without a leading zero, optional
+  court suffix `B`, `FL`, `HL`, `KI` or `PI`. `pii_commercial_register_de` reports it in every mode
+  with a register or local court term (new lexicon entry `pii.commercial_register`, EN and DE) near
+  it or as its key; `pii_commercial_register_de_context_free` reports the bare value in
+  `balanced`/`recall` at 0.50 unless a field names another value. `pii.de.commercial_register`
+  becomes `shared` and counts for M2. New `rust/tests/pii_de_format_ids.rs`, new `pii_l1` rows
+  (DE, EN), the 12-digit golden `1234/567/89012` is now a hard negative. **Detection change**
+  (`strict`: fewer tax number forms after the field name, the register number with a term or key;
+  `balanced`/`recall`: also the bare register number). One new regex, linear and bounded; the
+  validator is a single pass without allocation.
+
 - US medical licence numbers (A06). Two new labels: `MEDICAL_LICENSE` (DEA registration number: a
   registrant type letter A–H, J–M, P, R–U or X, the initial of the last name or `9`, seven digits, the
   last the units digit of `d1 + d3 + d5 + 2 × (d2 + d4 + d6)`) and `US_NPI` (National Provider

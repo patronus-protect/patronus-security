@@ -607,6 +607,8 @@ fn reference_scores_per_rule() {
         ("pii_dea_number_us", 0.60),
         ("pii_npi_us", 0.60),
         ("pii_npi_us_context_free", 0.55),
+        ("pii_commercial_register_de", 0.50),
+        ("pii_commercial_register_de_context_free", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

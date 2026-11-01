@@ -908,7 +908,7 @@ PII_CASES = {
     "TAX_NUMBER_DE": [
         p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: ", "123/456/78901"),
         p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuer Nr. ", "12/345/67890"),
-        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German Steuernummer: ", "1234/567/89012"),
+        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German Steuernummer: ", "9181081508155"),
         n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 000/000/00000", "all-zero value is excluded"),
         n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 123/456", "too few digits for a German tax number"),
         p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Die Steuernummer der Praxis ist ", "21/815/08150", ".", carrier="prose", gap=True),
@@ -919,7 +919,7 @@ PII_CASES = {
         p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", '{"steuernummer": "', "123/456/78902", '"}', carrier="json"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: ", "21/815/08150"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "The German tax number of the branch is ", "143/208/30142", ".", carrier="prose", gap=True),
-        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "2893/081/50812", "\n", carrier="yaml"),
+        p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "2893/0815/08152", "\n", carrier="yaml"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "tax number=", "151/815/08156", carrier="kv"),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number:", "048/815/08153", "   Page 1", tags=("ocr",)),
         p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "| Tax number | ", "048/815/08154", " |", carrier="table"),
@@ -4672,6 +4672,64 @@ A06_CASES = [
     n("US_NPI", "de", "pii_npi_us_context_free", "Überweisung an 2500-030 897 folgt.", "mixed grouping", carrier="prose", mode="recall"),
 ]
 for _row in A06_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# B-DEFMT: German format identifiers. The Steuernummer (TAX_NUMBER_DE) after its field name follows
+# the groups of one Land (FF/BBB/UUUUP, FFBBB/UUUUP for BW, FFF/BBB/UUUUP, FFF/BBBB/UUUP for NW)
+# or the 13-digit ELSTER form: the Bundesfinanzamtsnummer with its Land prefix, a 0, district and
+# serial, or the two-digit Land code 01-16 and eleven digits (F13). The commercial register number (COMMERCIAL_REGISTER_DE, HRA or
+# HRB, one to six digits, an optional court suffix such as B for Berlin) is reported in every mode
+# with a register or local court term near it or as its key, and bare in balanced/recall (B03).
+# Hard negatives: twelve digits, no Land prefix or no 0 behind the Finanzamt number, groups no Land
+# prints, other register prefixes, lower case, a leading zero and parts of longer tokens.
+B_DEFMT_CASES = [
+    # ── Steuernummer: forms of the Länder and ELSTER ───────────────────────
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: ", "2893081508152"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: ", "75 815 08152", "   Finanzamt Bremen", tags=("ocr",)),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", '{"steuernummer": "', "5133081508159", '"}', carrier="json"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernr=", "18181508155", carrier="kv", mode="balanced"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: ", "3201012312340", mode="recall"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: ", "2475081508152"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German tax number: ", "013 815 08153"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: ", "4151081508156", "\n", carrier="yaml"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "tax number=", "324/0307/4258", carrier="kv", mode="balanced"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: ", "1121081508150", mode="recall"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 0081508150001", "no Land prefix 00 in the ELSTER form"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 2893181508152", "no 0 behind the Finanzamt number"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 12/34/56789", "groups no Land prints"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Steuernummer: 028150815012", "twelve digits", mode="balanced"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de", "Bitte 5133081508159 übernehmen.", "13 bare digits without a field name", carrier="prose", mode="recall"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "German Steuernummer: 1234/567/89012", "twelve digits in groups no Land prints"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "company:\n  tax number: 2893/081/50812\n", "twelve digits behind an ELSTER prefix", carrier="yaml"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 1781508150001", "no Land prefix 17 in the ELSTER form"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 9381081508155", "no Land prefix 93 in the ELSTER form"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Tax number: 2181/508/150", "ten digits in groups no Land prints", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de", "Timestamp 2893081508152 logged.", "13 bare digits without a field name", carrier="prose", mode="recall"),
+    # ── Handelsregister ────────────────────────────────────────────────────
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Amtsgericht München, ", "HRB 123456"),
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Registergericht: Amtsgericht Charlottenburg ", "HRB 98765 B"),
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Die Firma ist im Handelsregister unter ", "HRB 44020", " eingetragen.", carrier="prose"),
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "nr;name;handelsregister\n1;Grace Davies;", "HRB 32461", "", carrier="csv", mode="balanced"),
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Registernummer: ", "HRA 2136", mode="recall"),
+    p("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de_context_free", "Die Schmidt GmbH (", "HRB 71234", ") liefert.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Commercial register: ", "HRB 208472"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Registered at the local court of Hamburg, ", "HRB 32375", ".", carrier="prose"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", '{"commercial_register": "', "HRB 143241", '"}', carrier="json"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Register court Kiel, ", "HRB 1234 KI", mode="balanced"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "", "HRA12345", "", tags=("no_context",), mode="balanced"),
+    p("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Supplier ", "HRA 9012", " confirmed the order.", carrier="prose", tags=("no_context",), mode="recall"),
+    n("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Amtsgericht München HRC 12345", "HRC is no commercial register"),
+    n("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Amtsgericht München HR 12345", "HR without A or B"),
+    n("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Amtsgericht München hrb 12345", "lower-case prefix"),
+    n("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de", "Amtsgericht München HRB 012345", "leading zero", mode="balanced"),
+    n("COMMERCIAL_REGISTER_DE", "de", "pii_commercial_register_de_context_free", "Aktenzeichen: HRB 12345", "the field names another value", mode="balanced"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Commercial register: HRB 1234567", "seven digits"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de", "Commercial register: XHRB 12345", "part of a longer token"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "HRC 12345", "HRC is no commercial register", mode="balanced"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Ticket HRB-12345", "part of a hyphenated token", mode="recall"),
+    n("COMMERCIAL_REGISTER_DE", "en", "pii_commercial_register_de_context_free", "Build HR 12345 failed.", "HR without A or B", carrier="prose", mode="balanced"),
+]
+for _row in B_DEFMT_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
