@@ -10,8 +10,8 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, device, driver_license, es, fin, fr, identifiers,
-    ie, india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators,
+    at, au, be, ca, ch, common, context, de, device, driver_license, es, fin, fr, identifiers, ie,
+    india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators,
     vat, za,
 };
 use crate::detectors::anchors;
