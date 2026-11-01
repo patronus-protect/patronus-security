@@ -208,6 +208,13 @@ fn document_keys_reject_non_secret_values_in_config_documents() {
         "app.signing.private-key=classpath:keys/private.pem\napp.session.secret-key=changeme\n",
         "<configuration>\n  <privateKey>${env.PRIVATE_KEY}</privateKey>\n  <credentials>same-origin</credentials>\n</configuration>\n",
         "signing:\n  secret_key: secretKeyRef\n  private_key: signing.privateKey\n",
-        "{\"credentials\": \"include\", \"signingKey\": \"sha256:5d41402abc4b2a76b9719d911017c592\"}\n",
+        "{\"credentials\": \"include\", \"signingKey\": \"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"}\n",
+        // Key IDs and names: a GPG key ID in .gitconfig, KMS keys, identifiers.
+        "[user]\n\tname = Ada\n\tsigningkey = 3AA5C34371567BD2\n",
+        "signing:\n  private_key: arn:aws:kms:eu-central-1:111122223333:key/alias-signing\n",
+        "signing_key = \"projects/acme/locations/global/keyRings/ring/cryptoKeys/signer\"\n",
+        "registry:\n  credentials: gcp-registry-sa\n",
+        // Text with blanks: a PEM block in a JSON string.
+        "{\"private_key\": \"-----BEGIN PRIVATE KEY-----\\nEXAMPLE\\n-----END PRIVATE KEY-----\\n\"}\n",
     ]);
 }

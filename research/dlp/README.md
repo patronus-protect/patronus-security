@@ -209,6 +209,17 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `key`/`name`-Attribut (`<add key="PasswordSha256" value="…">`). Treffer tragen `structure`
   `hcl` oder `xml`; die XML-Tag-Grammatik teilt sich K05C mit der Dokumentstruktur von PII K04
   (`structure::xml_start_tag`, `structure::xml_attributes`).
+  Seit G02 bindet `dlp_generic_credential_assignment` in einem Config-Dokument zusätzlich die
+  Schlüssel `credentials`, `privateKey`/`private_key`, `secret_key`, `signing-key`, `passphrase`
+  und die deutschen Varianten `Zugangsdaten`, `Anmeldedaten`, `privater`/`geheimer Schlüssel`
+  (über die K05–K05C-Extraktion). Config-Dokument ist ein JSON-Objekt/-Array oder JSON Lines, ein
+  XML-Dokument ohne HTML-Markup oder ein Text, dessen Zeilen alle Config-Zeilen, Kommentare,
+  Sektionen, HCL-Blockköpfe und -Abschlüsse, YAML-Listeneinträge oder Blockskalar-Text sind
+  (`config_keys::is_config_document`). In Programmcode (Objektliterale, Keyword-Argumente,
+  Struct-Felder, Test-Fixtures) bleibt das Basisverhalten der Regel unverändert; ihre Regex
+  nimmt die neuen Schlüssel nicht. Werte unter ihnen durchlaufen Wert-Gate und
+  Wertform-Filter und sind kein Schlüssel-, Zertifikats- oder Config-Dateiname
+  (`classpath:keys/private.pem`), keine Schlüssel-ID (GPG-Key-ID, KMS-Schlüssel), kein Bezeichner und kein Text mit Leerzeichen.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
