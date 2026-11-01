@@ -240,7 +240,12 @@ fn the_device_rules_have_their_label_validator_and_strength() {
             ValidatorStrength::Checksum,
         ),
         (MEID, "MEID", validators::meid, ValidatorStrength::Checksum),
-        (ICCID, "ICCID", validators::iccid, ValidatorStrength::Checksum),
+        (
+            ICCID,
+            "ICCID",
+            validators::iccid,
+            ValidatorStrength::Checksum,
+        ),
         (IMSI, "IMSI", validators::imsi, ValidatorStrength::Format),
     ] {
         let rule = pattern(rule_id);
@@ -269,7 +274,11 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
             "86-292765-624217-0",
         ),
         (IMEI, "{\"imei\": \"015023733203876\"}", "015023733203876"),
-        (IMEI, "IMEI-Nummer: 99 022640 218816 6", "99 022640 218816 6"),
+        (
+            IMEI,
+            "IMEI-Nummer: 99 022640 218816 6",
+            "99 022640 218816 6",
+        ),
         (
             IMEI,
             "Die IMEI des gestohlenen Handys lautet 869962546895674.",
@@ -326,7 +335,11 @@ fn a_structural_cell_is_a_value_of_its_own_next_to_numeric_cells() {
             "356726082749946",
         ),
         (MEID, "meid,age\nA1000049A51C336,42", "A1000049A51C336"),
-        (ICCID, "iccid,age\n89430370932852231108,42", "89430370932852231108"),
+        (
+            ICCID,
+            "iccid,age\n89430370932852231108,42",
+            "89430370932852231108",
+        ),
         (IMSI, "imsi,age\n262011234567890,42", "262011234567890"),
     ] {
         assert_reports(rule_id, text, value);
