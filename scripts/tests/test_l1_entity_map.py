@@ -313,6 +313,14 @@ def test_device_identifiers_are_ark_only():
         assert entity_map.scope(entity_id) == "ark_only"
 
 
+def test_fin_identifiers_are_ark_only():
+    # B-FIN: VIN, ISIN, LEI and PZN, one id each; Presidio 2.2.364 has none of them.
+    entity_map = MODULE.load()
+    for label, entity_id in (("VIN", "pii.vin"), ("ISIN", "pii.isin"), ("LEI", "pii.lei"), ("DE_PZN", "pii.de.pzn")):
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.scope(entity_id) == "ark_only"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -564,7 +572,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 173
+    assert len(expected) == 178
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

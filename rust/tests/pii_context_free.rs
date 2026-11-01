@@ -83,8 +83,9 @@ const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
 /// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1),
 /// the SIREN (B-EU1), the T.C. Kimlik No (B-LUHN), the PT NIF and the IE PPSN
-/// (B-EU2), the PL PESEL and REGON (A13), the IMEI, MEID and ICCID (B-DEVID).
-const CONTEXT_BOUND_LABELS: [&str; 14] = [
+/// (B-EU2), the PL PESEL and REGON (A13), the IMEI, MEID and ICCID (B-DEVID), the
+/// VIN, ISIN, LEI and PZN (B-FIN).
+const CONTEXT_BOUND_LABELS: [&str; 18] = [
     "NHS_NUMBER",
     "AU_ACN",
     "AU_TFN",
@@ -99,6 +100,10 @@ const CONTEXT_BOUND_LABELS: [&str; 14] = [
     "IMEI",
     "MEID",
     "ICCID",
+    "VIN",
+    "ISIN",
+    "LEI",
+    "DE_PZN",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 6] = [
@@ -272,7 +277,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
     // in 23 (B-EU2). Two letters and seven digits pass the DEA mod-10 digit one
     // time in ten, like any letter-led document code (A06). Fifteen bare digits
     // pass the IMEI Luhn digit, fifteen hex digits the MEID digit and 19 or 20
-    // digits led by 89 the ICCID digit one time in ten or sixteen (B-DEVID).
+    // digits led by 89 the ICCID digit one time in ten or sixteen (B-DEVID). The
+    // VIN, ISIN, LEI and PZN checks pass one order, serial or article number in ten
+    // or eleven (B-FIN).
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)

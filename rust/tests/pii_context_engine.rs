@@ -473,7 +473,12 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_imei",
             "pii_meid",
             "pii_iccid",
-            "pii_imsi"
+            "pii_imsi",
+            "pii_vin",
+            "pii_vin_format",
+            "pii_isin",
+            "pii_lei",
+            "pii_pzn_de"
         ]
     );
     for pattern in bound {
