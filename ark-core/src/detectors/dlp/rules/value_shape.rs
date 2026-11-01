@@ -270,6 +270,32 @@ fn shape(
     None
 }
 
+/// G02: a key, certificate or config file name, also as a resource
+/// (`./certs/signing.pem`, `classpath:keys/private.pem`, `file:creds.json`).
+static FILE_REFERENCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:(?:classpath\*?|file|resource):)?[A-Za-z0-9._/\\-]*\.(?:pem|key|crt|cer|der|p8|p12|pfx|jks|keystore|json|ya?ml|txt|asc|gpg|pub)$").unwrap()
+});
+
+/// G02: a key ID: a GPG short or long key ID or a fingerprint in the
+/// upper case GnuPG prints (`signingkey = 3AA5C34371567BD2` in
+/// `.gitconfig`; 40 lower-case hex digits are a common API secret), an AWS
+/// KMS key ARN or a GCP KMS key resource name.
+static KEY_ID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?:(?:0x)?(?:[0-9A-F]{8}|[0-9A-F]{16}|[0-9A-F]{40}|[0-9a-f]{8}|[0-9a-f]{16})|arn:aws[a-z-]*:kms:\S+|projects/\S+/cryptoKeys/\S+)$").unwrap()
+});
+
+/// G02: whether `value`, bound by a key that holds a secret only in a
+/// config document, names a key instead of holding one: a key,
+/// certificate or config file name, a key ID, an identifier of letters
+/// and `_`/`-`/`.` only (`gcp-sa-key`, `same-origin`), or text with blanks
+/// (a PEM block in a JSON string, which its own rule judges).
+pub fn is_key_reference(value: &str) -> bool {
+    FILE_REFERENCE.is_match(value)
+        || KEY_ID.is_match(value)
+        || likeness::is_word_like(value)
+        || value.contains(char::is_whitespace)
+}
+
 /// The value at `range` without what lies outside it in source code: a
 /// quoted value loses only the backslash of an escaped closing quote
 /// (`\"12345678\"` in a JSON string), since `,`, `;` and `\` inside the

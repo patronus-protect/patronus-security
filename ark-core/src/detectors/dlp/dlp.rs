@@ -510,6 +510,9 @@ struct ConfigKeyRegexes {
     whole: Option<Regex>,
     /// The whole key in the plural (`DB_PASSWORDS`; K05B).
     whole_plural: Option<Regex>,
+    /// G02: the credential part as a whole, also in the plural, for nouns
+    /// that bind only in a config document.
+    document_only: Option<Regex>,
 }
 
 impl ConfigKeyRegexes {
@@ -518,30 +521,44 @@ impl ConfigKeyRegexes {
     /// with a word boundary that the plural `s` goes before.
     fn new(key: rules::ConfigKey) -> Self {
         const BOUNDARY: &str = "(?-u:\\b)";
-        let stem = key.pattern.strip_suffix(BOUNDARY).unwrap_or(key.pattern);
+        let stem = |pattern: &'static str| pattern.strip_suffix(BOUNDARY).unwrap_or(pattern);
+        // G02: the document-only nouns are alternatives of the key grammar.
+        let (stems, nouns) = match key.document_pattern {
+            None => (stem(key.pattern).to_owned(), key.pattern.to_owned()),
+            Some(document) => (
+                format!("(?:{})|(?:{})", stem(key.pattern), stem(document)),
+                format!("(?:{})|(?:{document})", key.pattern),
+            ),
+        };
         let find = match key.whole {
             true => key.pattern.to_owned(),
-            false => format!("(?:{stem})[sS]?{BOUNDARY}"),
+            false => format!("(?:{stems})[sS]?{BOUNDARY}"),
         };
         Self {
             find: Regex::new(&find).unwrap(),
-            singular: Regex::new(&format!("^(?:{})$", key.pattern)).unwrap(),
+            singular: Regex::new(&format!("^(?:{nouns})$")).unwrap(),
             whole: key
                 .whole
                 .then(|| Regex::new(&format!("^(?:{})$", key.pattern)).unwrap()),
             whole_plural: key
                 .whole
                 .then(|| Regex::new(&format!("^(?:{})S$", key.pattern)).unwrap()),
+            document_only: key
+                .document_pattern
+                .map(|document| Regex::new(&format!("^(?:{})[sS]?$", stem(document))).unwrap()),
         }
     }
 
     /// Whether the key binds a value: `Some(false)` for a singular key,
     /// `Some(true)` for a plural one, with the rule's key gate on the noun.
+    /// A document-only noun (G02) binds only where `in_document` holds: the
+    /// text is a config document and the value names no key.
     fn binds(
         &self,
         text: &str,
         config: &super::config_keys::ConfigValue,
         key_gate: Option<KeyGate>,
+        in_document: impl Fn() -> bool,
     ) -> Option<bool> {
         let key = &text[config.key.clone()];
         if let (Some(whole), Some(plural)) = (&self.whole, &self.whole_plural) {
@@ -558,6 +575,11 @@ impl ConfigKeyRegexes {
                 key_gate.is_none_or(|gate| {
                     gate(text, config.key.start + noun.start(), config.value.clone())
                 })
+            })
+            .filter(|noun| {
+                self.document_only
+                    .as_ref()
+                    .is_none_or(|only| !only.is_match(noun.as_str()) || in_document())
             })
             .map(|noun| !self.singular.is_match(noun.as_str()))
     }
@@ -890,8 +912,15 @@ impl NativeRegexDetector for DlpPipeline {
         let key_gate = self.metas[index].key_gate;
         let mut values = super::config_keys::config_values(text, &keys.find);
         let mut failed_lists = Vec::new();
+        // G02: whether the text is a config document, per family of formats.
+        let documents: [std::cell::OnceCell<bool>; 3] = Default::default();
         values.retain(|config| {
-            let binds = keys.binds(text, config, key_gate);
+            let binds = keys.binds(text, config, key_gate, || {
+                let family = super::config_keys::DocumentFamily::of(config.format);
+                *documents[family as usize]
+                    .get_or_init(|| super::config_keys::is_config_document(text, family))
+                    && !rules::is_key_reference(&text[config.value.clone()])
+            });
             let key = &text[config.key.clone()];
             // K05C: the shape check under the bound key, which need not stand
             // before the value on its line.
