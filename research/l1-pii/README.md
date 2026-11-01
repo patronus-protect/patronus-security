@@ -498,6 +498,17 @@ USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelz
 Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
 den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
 
+Stand B-DEVID: ARK 78, gemeinsam 32. Vier Labels für Mobilgeräte und SIM-Karten, alle `ark_only`
+(presidio-analyzer 2.2.364 hat keinen Recognizer dafür), neues Modul `ark-core/src/detectors/pii/device.rs`.
+Drei zählen als internationale Einheiten mit Prüfziffer: `IMEI` (`validators::imei`, 15 Ziffern, blank oder
+2-6-6-1 mit Leerzeichen oder Bindestrich, Luhn, keine wiederholte Ziffer), `MEID` (`meid`, 14 Hex-Ziffern in
+Großbuchstaben mit Regionalcode A0–FF und Luhn-Prüfziffer zur Basis 16; ein dezimaler Regionalcode macht den
+Wert zur IMEI) und `ICCID` (`iccid`, 19 oder 20 Ziffern mit Präfix 89, blank oder in Viererblöcken, Luhn).
+`IMSI` (`imsi`, 15 Ziffern mit Ländercode 2xx–7xx) hat keine Prüfziffer und bleibt Formprüfung. Jede Regel
+meldet nur mit einem Begriff ihres Labels in der Nähe oder als Schlüssel, in jedem Modus: jede zehnte blanke
+Fünfzehnerzahl besteht Luhn. Gold steht in `pii_l1` (DE, EN); kein Goldset und kein Fremdkorpus erzeugt die
+vier IDs.
+
 Stand A06: ARK 75, gemeinsam 32. Zwei Labels mit Prüfziffer, beide `shared` mit dem gleichnamigen
 Recognizer von presidio-analyzer 2.2.364: `MEDICAL_LICENSE` (`validators::us_dea_number`, DEA-Nummer:
 Registranttyp A–H/J–M/P/R–U/X, Initiale des Nachnamens oder `9`, sieben Ziffern, die letzte die Einerstelle

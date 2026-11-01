@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Mobile device and SIM identifiers (B-DEVID). Four new labels in the new module
+  `ark-core/src/detectors/pii/device.rs`: `IMEI` (fifteen digits, plain or grouped 2-6-6-1 with spaces
+  or hyphens, Luhn check digit, not one repeated digit), `MEID` (fourteen upper-case hex digits led by a
+  regional code `A0`–`FF` and a check digit computed by Luhn in base 16), `ICCID` (19 or 20 digits led
+  by the telecom prefix `89`, plain or in blocks of four, Luhn check digit) and `IMSI` (fifteen digits
+  led by a mobile country code `2xx`–`7xx`, format only). `pii_imei`, `pii_meid`, `pii_iccid` and
+  `pii_imsi` report the value in every mode only when a term of the label (new lexicon entries with EN
+  and DE terms) stands near it or is its key, also as a CSV cell: one bare fifteen-digit number in ten
+  passes Luhn, so none is reported bare. `validators::luhn_checksum` takes the base (10 or 16). Four
+  new `ark_only` ids (`pii.imei`, `pii.meid`, `pii.iccid`, `pii.imsi`); M3 ARK 75 → 78. New
+  `rust/tests/pii_device_ids.rs`, 80 new `pii_l1` rows (DE, EN), rule fixture entries, Python ports in
+  `scoreboard.py`. **Detection change** (`strict`, `balanced`, `recall`: the four labels with a term or
+  key). Four new regexes, linear and bounded (fixed-length character classes with word boundaries);
+  validators run only on matches, the context check only on validated values.
+
 - German format identifiers (B-DEFMT). `validators::de_tax_number` checks the Steuernummer against the
   groups the Länder print instead of any 10 to 13 digits (F13): `FF/BBB/UUUUP` (BE, HB, HH, NI, RP,
   SH), `FFBBB/UUUUP` (BW), `FFF/BBB/UUUUP` (BY, BB, HE, MV, SL, SN, ST, TH),
