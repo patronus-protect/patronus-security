@@ -506,7 +506,10 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_gstin_in_context_free",
             "pii_dea_number_us",
             "pii_npi_us",
-            "pii_npi_us_context_free"
+            "pii_npi_us_context_free",
+            "pii_imei",
+            "pii_meid",
+            "pii_iccid"
         ]
     );
 }
@@ -609,6 +612,10 @@ fn reference_scores_per_rule() {
         ("pii_npi_us_context_free", 0.55),
         ("pii_commercial_register_de", 0.50),
         ("pii_commercial_register_de_context_free", 0.50),
+        ("pii_imei", 0.60),
+        ("pii_meid", 0.60),
+        ("pii_iccid", 0.60),
+        ("pii_imsi", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

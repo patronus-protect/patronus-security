@@ -469,7 +469,11 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_voter_id_in",
             "pii_dea_number_us",
             "pii_npi_us",
-            "pii_commercial_register_de"
+            "pii_commercial_register_de",
+            "pii_imei",
+            "pii_meid",
+            "pii_iccid",
+            "pii_imsi"
         ]
     );
     for pattern in bound {

@@ -2838,6 +2838,74 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_imei",
+    "de": "Die IMEI des gestohlenen Handys lautet 869962546895674.",
+    "en": "IMEI: 356352080572311",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "IMEI-Nummer: 354536580759591",
+        "Vorgang 354536580759590 wurde abgeschlossen."
+      ],
+      "en": [
+        "IMEI: 356352080572312",
+        "Order 356352080572311 was shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_meid",
+    "de": "MEID-Nummer: A000001D57B3085",
+    "en": "The MEID printed on the handset is A0000031FF6A115.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "MEID-Nummer: A000001D57B3086",
+        "Prüfsumme A000001D57B3085 stimmt."
+      ],
+      "en": [
+        "MEID: 990000864321010",
+        "Commit A1000000929602E was merged."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_iccid",
+    "de": "Die SIM-Kartennummer lautet 8944862465073468475.",
+    "en": "ICCID: 89495988234014706821",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ICCID: 89491819323779737017",
+        "Sendung 89491819323779737016 wurde zugestellt."
+      ],
+      "en": [
+        "ICCID: 79495988234014706823",
+        "Tracking 89495988234014706821 was delivered."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_imsi",
+    "de": "Die IMSI der SIM-Karte lautet 262073901234567.",
+    "en": "IMSI: 310150123456789",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "IMSI: 162011234567890",
+        "Vorgang 262011234567890 wurde abgeschlossen."
+      ],
+      "en": [
+        "IMSI: 810150123456789",
+        "Order 310150123456789 was shipped."
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",
