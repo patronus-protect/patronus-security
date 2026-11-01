@@ -137,6 +137,10 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("MEID", &["pii.meid"]),
     ("ICCID", &["pii.iccid"]),
     ("IMSI", &["pii.imsi"]),
+    ("VIN", &["pii.vin"]),
+    ("ISIN", &["pii.isin"]),
+    ("LEI", &["pii.lei"]),
+    ("DE_PZN", &["pii.de_pzn"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),
@@ -723,6 +727,22 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next.is_some_and(joins) && digit(next2))
         || (numeric && prev == Some(' ') && digit(prev2))
         || (next == Some(' ') && digit(next2)))
+}
+
+/// Whether the value at byte `start` follows the short term `PZN` with blanks
+/// only (B-FIN): `Pantoprazol 40 mg, PZN 43230555` lists the product of a
+/// medication line, a field name ends in `:`, `-`, `=` or `#` (`PZN: 43230555`).
+pub(super) fn listed_after_pzn(text: &str, start: usize) -> bool {
+    let before = text[..start].trim_end_matches([' ', '\t']);
+    before.len() < start
+        && before
+            .len()
+            .checked_sub(3)
+            .and_then(|term| before.get(term..).zip(before.get(..term)))
+            .is_some_and(|(term, rest)| {
+                term.eq_ignore_ascii_case("pzn")
+                    && !rest.chars().next_back().is_some_and(char::is_alphanumeric)
+            })
 }
 
 /// Whether a card candidate at `value` (byte range) can be a card number by its

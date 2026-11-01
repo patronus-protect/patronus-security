@@ -1116,6 +1116,110 @@ pub fn imsi(s: &str) -> bool {
         .is_some_and(|digits| (2..=7).contains(&digits[0]) && !one_repeated_digit(&digits))
 }
 
+/// Vehicle identification number in its ISO 3779 form (B-FIN): seventeen
+/// characters of digits and capital letters without `I`, `O` and `Q`, at least
+/// one letter, the last four (the serial number of the VIS) digits. European
+/// VINs carry no check digit, so this is a format check.
+pub fn vin(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 17
+        && bytes.iter().all(|&byte| vin_value(byte).is_some())
+        && bytes[..13].iter().any(u8::is_ascii_uppercase)
+        && bytes[13..].iter().all(u8::is_ascii_digit)
+}
+
+/// North American VIN (B-FIN, 49 CFR 565): a [`vin`] whose ninth character is
+/// the check digit, the sum of the transliterated characters weighted
+/// 8 7 6 5 4 3 2 10 0 9 8 7 6 5 4 3 2 modulo 11, `X` for 10.
+pub fn vin_check_digit(s: &str) -> bool {
+    const WEIGHTS: [u32; 17] = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+    vin(s) && {
+        let sum: u32 = s
+            .bytes()
+            .zip(WEIGHTS)
+            .filter_map(|(byte, weight)| vin_value(byte).map(|value| value * weight))
+            .sum();
+        match sum % 11 {
+            10 => s.as_bytes()[8] == b'X',
+            check => u32::from(s.as_bytes()[8]) == u32::from(b'0') + check,
+        }
+    }
+}
+
+/// The VIN transliteration of a digit or capital letter; `None` for `I`, `O`,
+/// `Q` and any other byte.
+fn vin_value(byte: u8) -> Option<u32> {
+    match byte {
+        b'0'..=b'9' => Some(u32::from(byte - b'0')),
+        b'A'..=b'H' => Some(u32::from(byte - b'A') + 1),
+        b'J'..=b'N' => Some(u32::from(byte - b'J') + 1),
+        b'P' => Some(7),
+        b'R' => Some(9),
+        b'S'..=b'Z' => Some(u32::from(byte - b'S') + 2),
+        _ => None,
+    }
+}
+
+/// International Securities Identification Number (B-FIN, ISO 6166): two capital
+/// letters (the issuing country or `XS`/`EU`), nine digits or capital letters and
+/// a Luhn check digit over all characters, letters expanded to 10–35.
+pub fn isin(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() != 12
+        || !bytes[..2].iter().all(u8::is_ascii_uppercase)
+        || !bytes[2..11]
+            .iter()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+        || !bytes[11].is_ascii_digit()
+    {
+        return false;
+    }
+    let mut digits = Vec::with_capacity(24);
+    for &byte in bytes {
+        match byte {
+            b'0'..=b'9' => digits.push(u32::from(byte - b'0')),
+            _ => {
+                let value = u32::from(byte - b'A') + 10;
+                digits.extend([value / 10, value % 10]);
+            }
+        }
+    }
+    luhn_checksum(&digits, 10) == 0
+}
+
+/// Legal Entity Identifier (B-FIN, ISO 17442): eighteen digits or capital letters
+/// and two check digits, ISO 7064 MOD 97-10 over all twenty characters (as the
+/// IBAN, letters expanded to 10–35) leaves 1.
+pub fn lei(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 20
+        && bytes[..18]
+            .iter()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+        && bytes[18..].iter().all(u8::is_ascii_digit)
+        && alphanumeric_mod97(bytes.iter().copied()) == 1
+}
+
+/// Pharmazentralnummer (B-FIN): eight digits, the last the sum of the first seven
+/// weighted 1 to 7 modulo 11 (10 is never issued); the seven-digit PZN of before
+/// 2013 is the same number without its leading zero.
+pub fn de_pzn(s: &str) -> bool {
+    let mut digits = [0u32; 8];
+    let offset = match s.len() {
+        7 => 1,
+        8 => 0,
+        _ => return false,
+    };
+    for (slot, byte) in digits[offset..].iter_mut().zip(s.bytes()) {
+        if !byte.is_ascii_digit() {
+            return false;
+        }
+        *slot = u32::from(byte - b'0');
+    }
+    !one_repeated_digit(&digits[..7])
+        && weighted_sum(&digits[..7], &[1, 2, 3, 4, 5, 6, 7]) % 11 == digits[7]
+}
+
 pub fn uk_nino(s: &str) -> bool {
     let normalized = s.replace(' ', "").to_ascii_uppercase();
     if normalized.len() != 9 {
@@ -1926,37 +2030,25 @@ pub fn iban_end(s: &str) -> Option<usize> {
 /// ISO 13616 Mod-97 check — IBAN validation.
 /// Strips whitespace before checking.
 pub fn mod97(s: &str) -> bool {
-    let normalized: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    let normalized: Vec<u8> = s
+        .bytes()
+        .filter(|byte| !byte.is_ascii_whitespace())
+        .collect();
     if normalized.len() < 5 {
         return false;
     }
-    // Move first 4 characters to end
-    let rearranged = format!("{}{}", &normalized[4..], &normalized[..4]);
-    // Convert letters A–Z to 10–35
-    let numeric: String = rearranged
-        .chars()
-        .flat_map(|c| {
-            if c.is_ascii_uppercase() {
-                let n = c as u32 - b'A' as u32 + 10;
-                // n is always 10–35, so always two digits
-                vec![
-                    char::from_digit(n / 10, 10).unwrap(),
-                    char::from_digit(n % 10, 10).unwrap(),
-                ]
-            } else {
-                vec![c]
-            }
-        })
-        .collect();
+    // The first four characters move to the end.
+    alphanumeric_mod97(normalized[4..].iter().chain(&normalized[..4]).copied()) == 1
+}
 
-    // Compute mod 97 in chunks to avoid integer overflow
-    let mut remainder = 0u64;
-    for ch in numeric.chars() {
-        if let Some(d) = ch.to_digit(10) {
-            remainder = (remainder * 10 + d as u64) % 97;
-        }
-    }
-    remainder == 1
+/// ISO 7064 MOD 97-10 remainder of digits and capital letters, the letters
+/// A–Z read as 10–35; other bytes are skipped.
+fn alphanumeric_mod97(bytes: impl Iterator<Item = u8>) -> u64 {
+    bytes.fold(0, |remainder, byte| match byte {
+        b'0'..=b'9' => (remainder * 10 + u64::from(byte - b'0')) % 97,
+        b'A'..=b'Z' => (remainder * 100 + u64::from(byte - b'A') + 10) % 97,
+        _ => remainder,
+    })
 }
 
 /// ISO 7064 MOD 11,10 — German Steueridentifikationsnummer (11 digits).

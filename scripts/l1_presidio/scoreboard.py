@@ -1430,6 +1430,62 @@ def iccid(value: str) -> bool:
     )
 
 
+# VIN transliteration (49 CFR 565): digits as themselves, letters without I, O and Q.
+_VIN_VALUES = {
+    **{str(digit): digit for digit in range(10)},
+    **dict(zip("ABCDEFGH", range(1, 9))),
+    **dict(zip("JKLMN", range(1, 6))),
+    "P": 7,
+    "R": 9,
+    **dict(zip("STUVWXYZ", range(2, 10))),
+}
+_VIN_WEIGHTS = (8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2)
+
+
+def vin_check_digit(value: str) -> bool:
+    """Port of ``validators::vin_check_digit`` (17 VIN characters, a letter, last four digits, check digit at 9)."""
+    if len(value) != 17 or any(ch not in _VIN_VALUES for ch in value):
+        return False
+    if not any(ch.isalpha() for ch in value[:13]) or not value[13:].isdigit():
+        return False
+    check = sum(_VIN_VALUES[ch] * weight for ch, weight in zip(value, _VIN_WEIGHTS)) % 11
+    return value[8] == ("X" if check == 10 else str(check))
+
+
+def _alphanumeric(value: str) -> str | None:
+    """Digits and capital letters of ``value`` with the letters read as 10-35, if there is nothing else."""
+    if not all("0" <= ch <= "9" or "A" <= ch <= "Z" for ch in value):
+        return None
+    return "".join(ch if ch.isdigit() else str(ord(ch) - ord("A") + 10) for ch in value)
+
+
+def isin(value: str) -> bool:
+    """Port of ``validators::isin`` (two capital letters, nine alphanumerics, Luhn over the expanded letters)."""
+    expanded = _alphanumeric(value)
+    return (
+        expanded is not None
+        and len(value) == 12
+        and value[:2].isalpha()
+        and value[11].isdigit()
+        and synth_goldset.luhn_sum(expanded) == 0
+    )
+
+
+def lei(value: str) -> bool:
+    """Port of ``validators::lei`` (eighteen alphanumerics, two digits, ISO 7064 MOD 97-10 leaves 1)."""
+    expanded = _alphanumeric(value)
+    return expanded is not None and len(value) == 20 and value[18:].isdigit() and int(expanded) % 97 == 1
+
+
+def de_pzn(value: str) -> bool:
+    """Port of ``validators::de_pzn`` (eight or seven digits, not one repeated, weighted 1-7 mod 11)."""
+    digits = _separated_digits(value, len(value), "") if len(value) in (7, 8) else None
+    if digits is None:
+        return False
+    digits = [0] * (8 - len(digits)) + digits
+    return len(set(digits[:7])) > 1 and sum(d * w for d, w in zip(digits, range(1, 8))) % 11 == digits[7]
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1513,6 +1569,10 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "imei": imei,
     "meid": meid,
     "iccid": iccid,
+    "vin_check_digit": vin_check_digit,
+    "isin": isin,
+    "lei": lei,
+    "de_pzn": de_pzn,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).

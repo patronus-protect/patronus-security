@@ -3511,6 +3511,120 @@
     ]
   },
   {
+    "id": "pii.vin",
+    "description": "Fahrzeug-Identifizierungsnummer (VIN/FIN, ISO 3779)",
+    "en": [
+      "vin number",
+      "vin no",
+      "vin #",
+      "vin_number",
+      "vehicle identification number",
+      "vehicle identification no",
+      "vehicle id number",
+      "chassis number",
+      "chassis no",
+      "frame number"
+    ],
+    "de": [
+      "fahrzeug-identifizierungsnummer",
+      "fahrzeugidentifizierungsnummer",
+      "fahrzeug-identnummer",
+      "fahrzeugidentnummer",
+      "fahrgestellnummer",
+      "fahrgestell-nr",
+      "fahrgestell-nummer",
+      "fin-nummer"
+    ],
+    "shared": [
+      "vin",
+      "vin#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fin.rs"
+    ]
+  },
+  {
+    "id": "pii.isin",
+    "description": "International Securities Identification Number (ISIN, ISO 6166, Wertpapierkennung)",
+    "en": [
+      "isin code",
+      "isin number",
+      "isin no",
+      "isin_code",
+      "international securities identification number",
+      "securities identification number",
+      "security identifier"
+    ],
+    "de": [
+      "isin-code",
+      "isin-nummer",
+      "isin_nummer",
+      "internationale wertpapierkennnummer",
+      "wertpapier-identifikationsnummer",
+      "wertpapierkennung"
+    ],
+    "shared": [
+      "isin",
+      "isin#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fin.rs"
+    ]
+  },
+  {
+    "id": "pii.lei",
+    "description": "Legal Entity Identifier (LEI, ISO 17442, Rechtsträgerkennung)",
+    "en": [
+      "lei code",
+      "lei number",
+      "lei no",
+      "lei_code",
+      "legal entity identifier",
+      "legal entity id"
+    ],
+    "de": [
+      "lei-code",
+      "lei-nummer",
+      "lei_nummer",
+      "rechtsträgerkennung",
+      "rechtsträger-kennung",
+      "rechtsträgerkennzeichen"
+    ],
+    "shared": [
+      "lei",
+      "lei#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fin.rs"
+    ]
+  },
+  {
+    "id": "pii.de_pzn",
+    "description": "Pharmazentralnummer (PZN, deutsche Arzneimittel-Kennung)",
+    "en": [
+      "pzn number",
+      "pzn no",
+      "pharmaceutical central number",
+      "pharmacy central number",
+      "pharma central number"
+    ],
+    "de": [
+      "pzn-nummer",
+      "pzn nummer",
+      "pzn_nummer",
+      "pzn-nr",
+      "pharmazentralnummer",
+      "pharmazentral-nummer"
+    ],
+    "shared": [
+      "pzn",
+      "pzn#"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fin.rs"
+    ]
+  },
+  {
     "id": "pii.pl_nip",
     "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
     "en": [

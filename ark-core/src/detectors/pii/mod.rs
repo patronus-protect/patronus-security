@@ -21,6 +21,7 @@ mod de;
 mod device;
 mod driver_license;
 mod es;
+mod fin;
 mod fr;
 mod identifiers;
 mod ie;
