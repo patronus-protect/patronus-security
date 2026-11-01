@@ -12442,6 +12442,156 @@ DLP_G03_CASES = {
 for _label, _rows in DLP_G03_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# G02: structure-aware config keys. In a config document (YAML, JSON, TOML, HCL, XML,
+# INI/properties, .env; the whole text has config structure) the generic rule also binds the
+# credentials, private key, secret key, signing key and passphrase keys and their DE variants
+# (Zugangsdaten, Anmeldedaten, privater/geheimer Schlüssel). In program source these keys keep
+# the base behaviour (no binding): object literals, kwargs, struct fields and test fixtures are
+# hard negatives, and so are interpolations, file names, placeholders and expressions in config.
+DLP_G02_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "versand:\n  endpunkt: https://api.versand.intern\n  zugangsdaten: <<secret:0>>\n",
+            "generic_api_secret", 19801, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"signatur\": {\n    \"algorithmus\": \"ES256\",\n    \"geheimer_schluessel\": \"<<secret:0>>\"\n  }\n}\n",
+            "generic_api_secret", 19802, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerverwaltung, Signatur der Lieferscheine\nlager.signatur.aussteller=lager\n"
+            "lager.signatur.private-key=<<secret:0>>\n",
+            "generic_api_secret", 19803, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerdienst\nLAGER_UMGEBUNG=produktion\nLAGER_SIGNING_KEY=<<secret:0>>\n",
+            "generic_api_secret", 19804, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "<properties>\n  <entry key=\"lager.host\">lager.intern</entry>\n"
+            "  <entry key=\"lager.anmeldedaten\"><<secret:0>></entry>\n</properties>\n",
+            "generic_api_secret", 19805, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "[signatur]\naussteller = \"lager\"\nprivater_schluessel = \"<<secret:0>>\"\n",
+            "generic_api_secret", 19806, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "smtp:\n  host: mail.internal\n  port: 587\n  credentials: <<secret:0>>\n",
+            "generic_api_secret", 19811, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"issuer\": \"billing\",\n  \"jwt\": {\n    \"privateKey\": \"<<secret:0>>\"\n  }\n}\n",
+            "generic_api_secret", 19812, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[session]\ncookie_name = \"billing\"\nsecret_key = \"<<secret:0>>\"\n",
+            "generic_api_secret", 19813, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "provider \"acme\" {\n  server     = \"https://acme.internal/directory\"\n"
+            "  passphrase = \"<<secret:0>>\"\n}\n",
+            "generic_api_secret", 19814, carrier="hcl",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<configuration>\n  <signing>\n    <signingKey><<secret:0>></signingKey>\n  </signing>\n</configuration>\n",
+            "generic_api_secret", 19815, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# billing service\nspring.application.name=billing\nbilling.webhook.signing-key=<<secret:0>>\n",
+            "generic_api_secret", 19816, carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "// Lager-Client mit Zugang aus der Umgebung\nconst client = new LagerClient({\n"
+            "  apiKey: process.env.LAGER_API_KEY,\n  privateKey: fs.readFileSync(\"schluessel.pem\", \"utf8\"),\n"
+            "  credentials: \"include\",\n});\n",
+            "JS object literal with apiKey/privateKey/credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Signatur der Lieferscheine\nsigner = Signer(private_key=\"tests/fixtures/lager_private_key.pem\",\n"
+            "                passphrase=os.environ[\"LAGER_KEY_PASS\"], secret_key=lade_schluessel(pfad))\n",
+            "Python kwargs with private_key/passphrase/secret_key", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "// Testdaten für den Lager-Signierer\nconst fixture = {\n  \"credentials\": \"lager-test-zugangsdaten\",\n"
+            "  \"privateKey\": \"TEST_PRIVATE_KEY_LAGER\",\n};\n",
+            "test fixture object with quoted keys", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  zugangsdaten: ${LAGER_ZUGANGSDATEN}\n  private_key: ./schluessel/lager-signatur.pem\n",
+            "interpolation and file name in YAML", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"signatur\": {\n    \"privateKey\": \"<HIER_SCHLUESSEL_EINTRAGEN>\",\n"
+            "    \"signingKey\": \"550e8400-e29b-41d4-a716-446655440000\"\n  }\n}\n",
+            "placeholder and UUID key ID in JSON", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "provider \"lager\" {\n  passphrase = var.lager_passphrase\n  private_key = file(\"${path.module}/lager.pem\")\n}\n",
+            "HCL expressions under passphrase/private_key", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "export interface SignerOptions {\n  privateKey: string;\n  credentials?: Credentials;\n}\n"
+            "const defaults: SignerOptions = { privateKey: options.privateKey ?? loadKey(), credentials: undefined };\n",
+            "TS interface and object literal", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "public final class SigningConfig {\n    private final String privateKey;\n"
+            "    private String secretKey = config.getSecretKey();\n    private Credentials credentials = Credentials.empty();\n}\n",
+            "Java fields with privateKey/secretKey/credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "data class SigningConfig(\n    val privateKey: String,\n    val credentials: Credentials = Credentials.empty(),\n)\n",
+            "Kotlin data class fields", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "type Config struct {\n\tPrivateKey  string       `json:\"privateKey\" yaml:\"private_key\"`\n"
+            "\tCredentials *Credentials `json:\"credentials\"`\n}\n",
+            "Go struct fields with tags", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "def test_signer_rejects_bad_key():\n    signer = Signer(private_key=\"not-a-real-private-key\", secret_key=\"dummy-secret-key\")\n"
+            "    assert signer.sign(b\"x\") is None\n",
+            "test fixture kwargs", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "app.signing.private-key=classpath:keys/private.pem\napp.session.secret-key=changeme\n",
+            "classpath file and placeholder in properties", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<configuration>\n  <privateKey>${env.PRIVATE_KEY}</privateKey>\n  <credentials>same-origin</credentials>\n</configuration>\n",
+            "build placeholder and fetch mode in XML", carrier="xml",
+        ),
+    ],
+}
+for _label, _rows in DLP_G02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
