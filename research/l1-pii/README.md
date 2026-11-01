@@ -498,6 +498,15 @@ USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelz
 Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
 den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
 
+Stand A02: ARK 83, gemeinsam 33. `pii.crypto_wallet` wird `shared` (Presidio `CRYPTO`, nur Bitcoin), ein
+internationales Label `CRYPTO` für drei Prüfsummen-Regeln: `pii_crypto_btc` (`validators::btc_address`,
+Base58Check mit Version `0x00`/`0x05` oder Segwit `bc1…` in Bech32/Bech32m), `pii_crypto_ltc`
+(`ltc_address`, Version `0x30`/`0x32` oder `ltc1…`) und `pii_crypto_eth` (`eth_checksum_address`, EIP-55 über
+Keccak-256, nur gemischte Schreibung). Diese drei melden den blanken Wert in jedem Modus; die
+Ethereum-Adresse in Kleinschreibung (`pii_crypto_eth_unchecked`, `eth_address`, nur Format) braucht einen
+Wallet-Begriff oder Schlüssel. Gold steht in `pii_l1` (DE, EN), im E05-Goldset (Bitcoin, `ark_authored`)
+und in den Recognizer-Tests (`presidio_favored`).
+
 Stand B-FIN: ARK 82, gemeinsam 32. Vier `ark_only`-IDs mit Prüfziffer (Presidio 2.2.364 kennt keine):
 `pii.vin` (`validators::vin_check_digit`, nordamerikanische Prüfziffer an Stelle 9, gewichtet mod 11, `X`
 für 10; die europäische Form ohne Prüfziffer meldet `pii_vin_format` mit `vin`, nur Format), `pii.isin`

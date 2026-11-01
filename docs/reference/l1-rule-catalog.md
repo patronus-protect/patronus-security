@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (178)
+## PII rules (182)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -192,6 +192,10 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_isin` | `ISIN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_lei` | `LEI` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_pzn_de` | `DE_PZN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_crypto_btc` | `CRYPTO` | yes | checksum | 30 | key or proximity | 0.65–0.90 |
+| `pii_crypto_ltc` | `CRYPTO` | yes | checksum | 30 | key or proximity | 0.65–0.90 |
+| `pii_crypto_eth` | `CRYPTO` | yes | checksum | 30 | key or proximity | 0.65–0.90 |
+| `pii_crypto_eth_unchecked` | `CRYPTO` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 
 ### PII context lexicon
 
@@ -305,6 +309,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `ISIN` | `pii.isin` |
 | `LEI` | `pii.lei` |
 | `DE_PZN` | `pii.de_pzn` |
+| `CRYPTO` | `pii.crypto_wallet` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |
