@@ -70,24 +70,23 @@ fn keccak_f(state: &mut [u64; 25]) {
 pub fn keccak256(data: &[u8]) -> [u8; 32] {
     let mut state = [0u64; 25];
     let mut absorb = |block: &[u8; RATE]| {
-        for (lane, word) in state.iter_mut().zip(block.chunks_exact(8)) {
-            *lane ^= u64::from_le_bytes(word.try_into().unwrap());
+        for (lane, word) in state.iter_mut().zip(block.as_chunks::<8>().0) {
+            *lane ^= u64::from_le_bytes(*word);
         }
         keccak_f(&mut state);
     };
-    let mut blocks = data.chunks_exact(RATE);
-    for block in &mut blocks {
-        absorb(block.try_into().unwrap());
+    let (blocks, rest) = data.as_chunks::<RATE>();
+    for block in blocks {
+        absorb(block);
     }
-    let rest = blocks.remainder();
     let mut last = [0u8; RATE];
     last[..rest.len()].copy_from_slice(rest);
     last[rest.len()] ^= 0x01;
     last[RATE - 1] ^= 0x80;
     absorb(&last);
     let mut digest = [0u8; 32];
-    for (out, lane) in digest.chunks_exact_mut(8).zip(state) {
-        out.copy_from_slice(&lane.to_le_bytes());
+    for (out, lane) in digest.as_chunks_mut::<8>().0.iter_mut().zip(state) {
+        *out = lane.to_le_bytes();
     }
     digest
 }
