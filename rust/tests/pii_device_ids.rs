@@ -213,7 +213,7 @@ fn imsi_validator_checks_the_mobile_country_code_and_the_form() {
     for invalid in [
         // no mobile country code
         "001010123456789",
-        "162011234567890",
+        "162011234567891",
         "810150123456789",
         "962011234567890",
         // one repeated digit

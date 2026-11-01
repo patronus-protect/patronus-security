@@ -4820,7 +4820,7 @@ B_DEVID_CASES = [
     n("IMSI", "en", "pii_imsi", "Order 310150123456789 was shipped.", "fifteen bare digits without an IMSI term", carrier="prose", mode="balanced"),
     n("IMSI", "en", "pii_imsi", "IMSI: 3101501234567890", "part of a longer value", mode="recall"),
     n("IMSI", "en", "pii_imsi", "IMSI: 333333333333333", "one repeated digit"),
-    n("IMSI", "de", "pii_imsi", "IMSI: 162011234567890", "no mobile country code 1xx"),
+    n("IMSI", "de", "pii_imsi", "IMSI: 162011234567891", "no mobile country code 1xx"),
     n("IMSI", "de", "pii_imsi", "IMSI: 26201123456789", "fourteen digits"),
     n("IMSI", "de", "pii_imsi", "Vorgang 262011234567890 wurde abgeschlossen.", "fifteen bare digits without an IMSI term", carrier="prose", mode="balanced"),
     n("IMSI", "de", "pii_imsi", "IMSI: 262011234567890-1", "part of a longer value", mode="recall"),
