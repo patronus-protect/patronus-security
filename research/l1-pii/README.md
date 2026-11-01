@@ -507,7 +507,7 @@ Wert zur IMEI) und `ICCID` (`iccid`, 19 oder 20 Ziffern mit Präfix 89, blank od
 `IMSI` (`imsi`, 15 Ziffern mit Ländercode 2xx–7xx) hat keine Prüfziffer und bleibt Formprüfung. Jede Regel
 meldet nur mit einem Begriff ihres Labels in der Nähe oder als Schlüssel, in jedem Modus: jede zehnte blanke
 Fünfzehnerzahl besteht Luhn. Gold steht in `pii_l1` (DE, EN); kein Goldset und kein Fremdkorpus erzeugt die
-vier IDs.
+vier IDs (`NOT_GENERATED`).
 
 Stand A06: ARK 75, gemeinsam 32. Zwei Labels mit Prüfziffer, beide `shared` mit dem gleichnamigen
 Recognizer von presidio-analyzer 2.2.364: `MEDICAL_LICENSE` (`validators::us_dea_number`, DEA-Nummer:
