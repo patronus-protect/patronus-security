@@ -498,6 +498,11 @@ entities:
   - {id: pii.sk.vat_id, scope: ark_only, ark: [VAT_ID_SK], presidio: [], corpora: {}}
   - {id: pii.no.vat_id, scope: ark_only, ark: [VAT_ID_NO], presidio: [], corpora: {}}
   - {id: pii.uk.vat_id, scope: ark_only, ark: [VAT_ID_GB], presidio: [], corpora: {}}
+  # B-FIN: vehicle, securities, legal entity and pharmaceutical identifiers (Presidio has none).
+  - {id: pii.vin, scope: ark_only, ark: [VIN], presidio: [], corpora: {}}
+  - {id: pii.isin, scope: ark_only, ark: [ISIN], presidio: [], corpora: {}}
+  - {id: pii.lei, scope: ark_only, ark: [LEI], presidio: [], corpora: {}}
+  - {id: pii.de.pzn, scope: ark_only, ark: [DE_PZN], presidio: [], corpora: {}}
   # B-NORD: Danish CPR number and Norwegian fødselsnummer (Presidio has neither).
   - {id: pii.dk.cpr, scope: ark_only, ark: [DK_CPR], presidio: [], corpora: {}}
   - {id: pii.no.fodselsnummer, scope: ark_only, ark: [NO_FODSELSNUMMER], presidio: [], corpora: {}}
@@ -680,6 +685,11 @@ checksums:
     meid: {algorithm: Luhn zur Basis 16}                            # B-DEVID, 14 Hex-Ziffern, Regionalcode A0–FF, Prüfziffer
     iccid: {algorithm: Luhn}                                        # B-DEVID, 19 oder 20 Ziffern, Präfix 89, blank oder Viererblöcke
     imsi: null                                                      # B-DEVID, 15 Ziffern, MCC 2xx–7xx, keine Prüfziffer
+    vin_check_digit: {algorithm: "VIN-Prüfziffer gewichtet mod 11"}   # B-FIN, nordamerikanische VIN, Stelle 9, X für 10
+    vin: null                           # B-FIN, europäische VIN: 17 Zeichen ohne I/O/Q, letzte vier Ziffern, keine Prüfziffer
+    isin: {algorithm: Luhn über die Buchstabenwerte}              # B-FIN, ISO 6166, zwei Länderbuchstaben, zwölf Zeichen
+    lei: {algorithm: "ISO 7064 MOD 97-10"}                          # B-FIN, ISO 17442, zwanzig Zeichen
+    de_pzn: {algorithm: "gewichtet 1–7 mod 11"}                     # B-FIN, Pharmazentralnummer, acht (früher sieben) Ziffern
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

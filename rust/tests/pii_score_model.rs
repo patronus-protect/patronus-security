@@ -509,7 +509,11 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_npi_us_context_free",
             "pii_imei",
             "pii_meid",
-            "pii_iccid"
+            "pii_iccid",
+            "pii_vin",
+            "pii_isin",
+            "pii_lei",
+            "pii_pzn_de"
         ]
     );
 }
@@ -616,6 +620,11 @@ fn reference_scores_per_rule() {
         ("pii_meid", 0.60),
         ("pii_iccid", 0.60),
         ("pii_imsi", 0.50),
+        ("pii_vin", 0.60),
+        ("pii_vin_format", 0.50),
+        ("pii_isin", 0.60),
+        ("pii_lei", 0.60),
+        ("pii_pzn_de", 0.60),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

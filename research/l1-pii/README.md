@@ -498,6 +498,16 @@ USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelz
 Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
 den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
 
+Stand B-FIN: ARK 82, gemeinsam 32. Vier `ark_only`-IDs mit Prüfziffer (Presidio 2.2.364 kennt keine):
+`pii.vin` (`validators::vin_check_digit`, nordamerikanische Prüfziffer an Stelle 9, gewichtet mod 11, `X`
+für 10; die europäische Form ohne Prüfziffer meldet `pii_vin_format` mit `vin`, nur Format), `pii.isin`
+(`isin`, Luhn über die Buchstabenwerte 10–35), `pii.lei` (`lei`, ISO 7064 MOD 97-10) und `pii.de.pzn`
+(`de_pzn`, acht Ziffern gewichtet 1–7 mod 11, die siebenstellige PZN mit führender Null). Alle fünf Regeln
+melden in jedem Modus nur mit einem Begriff des Labels in der Nähe oder als Schlüssel; jede Prüfung trifft
+jede zehnte bzw. elfte Bestell-, Serien- oder Artikelnummer. `PZN` mit nur Leerraum vor dem Wert bleibt
+stumm: So listet der Arztbrief des E05-Goldsets Präparate (`Medikation: …, PZN <Ziffern>`, dort Hard
+Negative). Der ICD-10-Teil von C07 entfällt. Gold steht nur in `pii_l1` (DE, EN).
+
 Stand B-DEVID: ARK 78, gemeinsam 32. Vier Labels für Mobilgeräte und SIM-Karten, alle `ark_only`
 (presidio-analyzer 2.2.364 hat keinen Recognizer dafür), neues Modul `ark-core/src/detectors/pii/device.rs`.
 Drei zählen als internationale Einheiten mit Prüfziffer: `IMEI` (`validators::imei`, 15 Ziffern, blank oder

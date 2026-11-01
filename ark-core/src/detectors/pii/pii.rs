@@ -10,7 +10,7 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, device, driver_license, es, fr, identifiers, ie,
+    at, au, be, ca, ch, common, context, de, device, driver_license, es, fin, fr, identifiers, ie,
     india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators,
     vat, za,
 };
@@ -229,6 +229,11 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     device::MEID,
     device::ICCID,
     device::IMSI,
+    fin::VIN,
+    fin::VIN_FORMAT,
+    fin::ISIN,
+    fin::LEI,
+    fin::PZN,
 ];
 
 pub struct PiiPipeline {
@@ -771,7 +776,11 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_imei"
             | "pii_meid"
             | "pii_iccid"
-            | "pii_imsi") => {
+            | "pii_imsi"
+            | "pii_vin"
+            | "pii_vin_format"
+            | "pii_isin"
+            | "pii_lei") => {
                 let value = captures.get(0).unwrap().range();
                 if vat_body(rule_id, text, value.start) {
                     return false;
@@ -783,6 +792,19 @@ impl NativeRegexDetector for PiiPipeline {
                 )
                 .is_some_and(|evidence| evidence.context.supports())
                     || context::stands_alone(text, value)
+            }
+            // A structural key decides alone; in text the short term followed
+            // by blanks only lists the product of a medication line (K04).
+            "pii_pzn_de" => {
+                let value = captures.get(0).unwrap().range();
+                context::structure_evidence(
+                    prepared.structure(),
+                    value.clone(),
+                    pattern.entity_group,
+                )
+                .is_some_and(|evidence| evidence.context.supports())
+                    || (context::stands_alone(text, value.clone())
+                        && !context::listed_after_pzn(text, value.start))
             }
             rule_id @ ("pii_nif_es_context_free"
             | "pii_nie_es_context_free"

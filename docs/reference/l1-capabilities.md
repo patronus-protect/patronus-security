@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 102 | 23 |
-| Regex rules | 173 | 114 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 78 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 115 | 13 |
+| Result labels (entity groups) | 106 | 23 |
+| Regex rules | 178 | 114 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 82 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 119 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-29) | `balanced`: neutral 67.3, presidio_favored 69.7 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -128,6 +128,10 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.sk.vat_id` | ark_only | `VAT_ID_SK` | `pii_vat_id_sk` | checksum | on (`balanced`/`recall` only) | – |
 | `pii.no.vat_id` | ark_only | `VAT_ID_NO` | `pii_vat_id_no` | checksum | on (`balanced`/`recall` only) | – |
 | `pii.uk.vat_id` | ark_only | `VAT_ID_GB` | `pii_vat_id_gb` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.vin` | ark_only | `VIN` | `pii_vin`, `pii_vin_format` | checksum | on | – |
+| `pii.isin` | ark_only | `ISIN` | `pii_isin` | checksum | on | – |
+| `pii.lei` | ark_only | `LEI` | `pii_lei` | checksum | on | – |
+| `pii.de.pzn` | ark_only | `DE_PZN` | `pii_pzn_de` | checksum | on | – |
 | `pii.dk.cpr` | ark_only | `DK_CPR` | `pii_cpr_dk`, `pii_cpr_dk_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.no.fodselsnummer` | ark_only | `NO_FODSELSNUMMER` | `pii_fodselsnummer_no`, `pii_fodselsnummer_no_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.fr.nir` | ark_only | `FR_NIR` | `pii_nir_fr`, `pii_nir_fr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
@@ -160,7 +164,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 48 shared, 54 ARK only, 10 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
+Entities: 48 shared, 58 ARK only, 10 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -257,6 +261,10 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.sk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
 | `pii.no.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
 | `pii.uk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
+| `pii.vin` | ark_only | – | – | – | – |
+| `pii.isin` | ark_only | – | – | – | – |
+| `pii.lei` | ark_only | – | – | – | – |
+| `pii.de.pzn` | ark_only | – | – | – | – |
 | `pii.dk.cpr` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.no.fodselsnummer` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.fr.nir` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |

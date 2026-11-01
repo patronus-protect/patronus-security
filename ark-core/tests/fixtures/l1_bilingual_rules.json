@@ -2906,6 +2906,91 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_vin",
+    "de": "Fahrzeug-Identifizierungsnummer: 3FATSPJD6BZ045664",
+    "en": "The VIN of the vehicle is KMH475JW3PB581677.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Fahrzeug-Identifizierungsnummer: 3FATSPJD6BZ04566O",
+        "Vorgang 3FATSPJD6BZ045664 wurde abgeschlossen."
+      ],
+      "en": [
+        "VIN: KMH475JW3PB58167A",
+        "Reference KMH475JW3PB581677 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vin_format",
+    "de": "Fahrgestellnummer: VSSDMZY2PGW202719",
+    "en": "Chassis number: WDDNKMP0W5D872942",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Fahrgestellnummer: VSSDMZY2PGW20271Q",
+        "Vorgang VSSDMZY2PGW202719 wurde abgeschlossen."
+      ],
+      "en": [
+        "Chassis number: WDDNKMP0W5D87294",
+        "Reference WDDNKMP0W5D872942 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_isin",
+    "de": "Die Aktie mit der ISIN DE0007164600 wurde verkauft.",
+    "en": "ISIN: US0378331005",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ISIN: DE0007164601",
+        "Vorgang DE0007164600 wurde abgeschlossen."
+      ],
+      "en": [
+        "ISIN: US0378331006",
+        "Order US0378331005 was shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_lei",
+    "de": "LEI-Code: 5493001KJTIIGC8Y1R12",
+    "en": "The legal entity identifier of the issuer is 7LTWFZYICNSX8D621K86.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "LEI-Code: 5493001KJTIIGC8Y1R21",
+        "Vorgang 5493001KJTIIGC8Y1R12 wurde abgeschlossen."
+      ],
+      "en": [
+        "LEI: 7LTWFZYICNSX8D621K68",
+        "Reference 7LTWFZYICNSX8D621K86 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_pzn_de",
+    "de": "Die Pharmazentralnummer des Präparats lautet 02532876.",
+    "en": "PZN: 01126111",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "PZN: 02532877",
+        "Medikation: Pantoprazol 40 mg, PZN 02532876"
+      ],
+      "en": [
+        "PZN: 01126112",
+        "Order 01126111 was shipped."
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

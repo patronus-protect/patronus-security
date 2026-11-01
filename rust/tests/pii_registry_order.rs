@@ -204,6 +204,11 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_meid", "MEID"),
     ("pii_iccid", "ICCID"),
     ("pii_imsi", "IMSI"),
+    ("pii_vin", "VIN"),
+    ("pii_vin_format", "VIN"),
+    ("pii_isin", "ISIN"),
+    ("pii_lei", "LEI"),
+    ("pii_pzn_de", "DE_PZN"),
 ];
 
 #[test]

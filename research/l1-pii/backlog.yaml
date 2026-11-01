@@ -794,6 +794,7 @@ tasks:
 
   # M3 buffer +4 (79)
   - id: B-FIN
+    status: done
     title: "VIN (check digit NA, format EU), ISIN (Luhn) + LEI (mod 97), PZN (mod 11)"
     type: new-entity
     deps: [K05]

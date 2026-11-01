@@ -4829,6 +4829,102 @@ B_DEVID_CASES = [
 for _row in B_DEVID_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-FIN: vehicle, securities, legal entity and pharmaceutical identifiers. The VIN (VIN, seventeen
+# characters without I, O and Q, the last four digits; the North American check digit in the ninth
+# place for pii_vin, none for the European form of pii_vin_format), the ISIN (ISIN, Luhn over the
+# expanded letters), the LEI (LEI, ISO 7064 MOD 97-10) and the PZN (DE_PZN, eight digits weighted
+# 1 to 7 mod 11) are reported in every mode with a term of their label near them or as their key.
+# Hard negatives: failed checks, characters outside the alphabet, values without a term, parts of
+# longer values and the PZN listed after a drug with blanks only (E05 medication lines).
+B_FIN_CASES = [
+    # ── VIN ─────────────────────────────────────────────────────────────────
+    p("VIN", "en", "pii_vin", "VIN: ", "1HGFTJZE5EP534519"),
+    p("VIN", "en", "pii_vin", "The vehicle identification number of the car is ", "1FTYAZLW1VF876758", ".", carrier="prose"),
+    p("VIN", "en", "pii_vin", '{"vin": "', "4T1L9WS0XVU072449", '"}', carrier="json"),
+    p("VIN", "en", "pii_vin_format", "Chassis number: ", "YV11X0RYFMH595605", mode="balanced"),
+    p("VIN", "en", "pii_vin", "model,vin,km\nCivic,", "JHMVE4N49XR023470", ",42000", carrier="csv", mode="recall"),
+    p("VIN", "de", "pii_vin_format", "Fahrgestellnummer: ", "WAU2UZ3JU8F857800"),
+    p("VIN", "de", "pii_vin_format", "Die Fahrzeug-Identifizierungsnummer des Wagens lautet ", "TMBGF1JBV2B896295", ".", carrier="prose"),
+    p("VIN", "de", "pii_vin", "| Modell | VIN |\n|---|---|\n| Kombi 2.0 | ", "1G1D5PT18YL049160", " |", carrier="table"),
+    p("VIN", "de", "pii_vin_format", "Als FIN-Nummer ist ", "SALWU3C0LLB741051", " eingetragen.", carrier="prose", mode="balanced"),
+    p("VIN", "de", "pii_vin", "nr;modell;vin\n1;Kombi;", "2HGG991D3CE249096", "", carrier="csv", mode="recall"),
+    n("VIN", "en", "pii_vin", "VIN: 1HGFTJZE5EP53451O", "O is no VIN character"),
+    n("VIN", "en", "pii_vin", "VIN: 1HGFTJZE5EP5345A9", "the serial number ends in a letter"),
+    n("VIN", "en", "pii_vin", "Reference 1FTYAZLW1VF876758 was archived.", "VIN form without a VIN term", carrier="prose", mode="balanced"),
+    n("VIN", "en", "pii_vin", "VIN: 1HGFTJZE5EP534519-2", "part of a longer value", mode="recall"),
+    n("VIN", "en", "pii_vin", "VIN: 1HGFTJZE5EP53451", "sixteen characters"),
+    n("VIN", "de", "pii_vin_format", "Fahrgestellnummer: WAU2UZ3JU8F85780Q", "Q is no VIN character"),
+    n("VIN", "de", "pii_vin_format", "Fahrgestellnummer: WAU2UZ3JU8F857800A", "eighteen characters"),
+    n("VIN", "de", "pii_vin_format", "Vorgang TMBGF1JBV2B896295 wurde abgeschlossen.", "VIN form without a VIN term", carrier="prose", mode="balanced"),
+    n("VIN", "de", "pii_vin_format", "FIN-Nummer: SALWU3C0LLB741051/2", "part of a longer value", mode="recall"),
+    n("VIN", "de", "pii_vin_format", "Fahrgestellnummer: 12345678901234567", "seventeen digits without a letter"),
+    # ── ISIN ────────────────────────────────────────────────────────────────
+    p("ISIN", "en", "pii_isin", "ISIN: ", "GB0002634946"),
+    p("ISIN", "en", "pii_isin", "The fund holds the security with ISIN ", "IE3525623045", ".", carrier="prose"),
+    p("ISIN", "en", "pii_isin", '{"isin": "', "NL2352443521", '"}', carrier="json"),
+    p("ISIN", "en", "pii_isin", "isin,quantity\n", "XS1329094590", ",120", carrier="csv", mode="balanced"),
+    p("ISIN", "en", "pii_isin", "ISIN code ", "CHULWSB5XU52", mode="recall"),
+    p("ISIN", "de", "pii_isin", "ISIN: ", "DE7228763334"),
+    p("ISIN", "de", "pii_isin", "Verkauft wurde die Aktie mit der ISIN ", "FR1223189416", ".", carrier="prose"),
+    p("ISIN", "de", "pii_isin", "| Wertpapier | ISIN |\n|---|---|\n| Anleihe 2031 | ", "AT6166969107", " |", carrier="table"),
+    p("ISIN", "de", "pii_isin", "Als ISIN-Code ist ", "IT3GCN258XN6", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("ISIN", "de", "pii_isin", "nr;isin;stueck\n1;", "LUXAKBZCCAX4", ";250", carrier="csv", mode="recall"),
+    n("ISIN", "en", "pii_isin", "ISIN: GB0002634947", "check digit fails"),
+    n("ISIN", "en", "pii_isin", "ISIN: 1B0002634946", "no country letters"),
+    n("ISIN", "en", "pii_isin", "Order IE3525623045 was shipped.", "ISIN form without an ISIN term", carrier="prose", mode="balanced"),
+    n("ISIN", "en", "pii_isin", "ISIN: NL23524435210", "part of a longer value", mode="recall"),
+    n("ISIN", "en", "pii_isin", "ISIN: gb0002634946", "lower case"),
+    n("ISIN", "de", "pii_isin", "ISIN: DE7228763335", "check digit fails"),
+    n("ISIN", "de", "pii_isin", "ISIN: FR122318941A", "a letter as the check digit"),
+    n("ISIN", "de", "pii_isin", "Vorgang AT6166969107 wurde abgeschlossen.", "ISIN form without an ISIN term", carrier="prose", mode="balanced"),
+    n("ISIN", "de", "pii_isin", "ISIN: XDE7228763334", "part of a longer value", mode="recall"),
+    n("ISIN", "de", "pii_isin", "ISIN: DE722876333", "eleven characters"),
+    # ── LEI ─────────────────────────────────────────────────────────────────
+    p("LEI", "en", "pii_lei", "LEI: ", "81560042JW51AN87A254"),
+    p("LEI", "en", "pii_lei", "The legal entity identifier of the counterparty is ", "815600M0W75W3BJWUV36", ".", carrier="prose"),
+    p("LEI", "en", "pii_lei", '{"lei": "', "549300JL6ZVW23MGSR49", '"}', carrier="json"),
+    p("LEI", "en", "pii_lei", "counterparty,lei\nAcme Ltd,", "969500UG15EANCZRWH49", "", carrier="csv", mode="balanced"),
+    p("LEI", "en", "pii_lei", "LEI code ", "529900LCZHRKL96TYZ92", mode="recall"),
+    p("LEI", "de", "pii_lei", "LEI-Code: ", "969500Z4ZSZDSW2GJB24"),
+    p("LEI", "de", "pii_lei", "Die Rechtsträgerkennung des Emittenten lautet ", "391200TMJW531CNZZ653", ".", carrier="prose"),
+    p("LEI", "de", "pii_lei", "| Gegenpartei | LEI |\n|---|---|\n| Muster AG | ", "391200M29C53T2LL8138", " |", carrier="table"),
+    p("LEI", "de", "pii_lei", "Als LEI ist ", "969500Z2447U9E8Z0P22", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("LEI", "de", "pii_lei", "nr;firma;lei\n1;Beispiel GmbH;", "2138000KYLEGFCD44P43", "", carrier="csv", mode="recall"),
+    n("LEI", "en", "pii_lei", "LEI: 81560042JW51AN87A255", "check digits fail"),
+    n("LEI", "en", "pii_lei", "LEI: 81560042JW51AN87A2X4", "a letter in the check digits"),
+    n("LEI", "en", "pii_lei", "Reference 815600M0W75W3BJWUV36 was archived.", "LEI form without an LEI term", carrier="prose", mode="balanced"),
+    n("LEI", "en", "pii_lei", "LEI: 549300JL6ZVW23MGSR491", "part of a longer value", mode="recall"),
+    n("LEI", "en", "pii_lei", "LEI: 81560042JW51AN87A25", "nineteen characters"),
+    n("LEI", "de", "pii_lei", "LEI-Code: 969500Z4ZSZDSW2GJB42", "check digits fail"),
+    n("LEI", "de", "pii_lei", "LEI-Code: 969500z4zszdsw2gjb24", "lower case"),
+    n("LEI", "de", "pii_lei", "Vorgang 391200TMJW531CNZZ653 wurde abgeschlossen.", "LEI form without an LEI term", carrier="prose", mode="balanced"),
+    n("LEI", "de", "pii_lei", "LEI-Code: X969500Z4ZSZDSW2GJB24", "part of a longer value", mode="recall"),
+    n("LEI", "de", "pii_lei", "LEI-Code: 00000000000000000000", "zeros"),
+    # ── PZN ─────────────────────────────────────────────────────────────────
+    p("DE_PZN", "en", "pii_pzn_de", "PZN: ", "41339609"),
+    p("DE_PZN", "en", "pii_pzn_de", "The pharmaceutical central number of the product is ", "62072079", ".", carrier="prose"),
+    p("DE_PZN", "en", "pii_pzn_de", '{"pzn": "', "80137730", '"}', carrier="json"),
+    p("DE_PZN", "en", "pii_pzn_de", "product,pzn,qty\nIbuprofen 400,", "40746011", ",2", carrier="csv", mode="balanced"),
+    p("DE_PZN", "en", "pii_pzn_de", "PZN-", "27027889", mode="recall"),
+    p("DE_PZN", "de", "pii_pzn_de", "PZN: ", "32426396"),
+    p("DE_PZN", "de", "pii_pzn_de", "Die Pharmazentralnummer des Präparats lautet ", "92407821", ".", carrier="prose"),
+    p("DE_PZN", "de", "pii_pzn_de", "| Präparat | PZN |\n|---|---|\n| Pantoprazol 40 mg | ", "62121903", " |", carrier="table"),
+    p("DE_PZN", "de", "pii_pzn_de", "Als PZN-Nummer ist ", "32504452", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("DE_PZN", "de", "pii_pzn_de", "nr;praeparat;pzn;menge\n1;Metformin 500 mg;", "41039882", ";3", carrier="csv", mode="recall"),
+    n("DE_PZN", "en", "pii_pzn_de", "PZN: 41339600", "check digit fails"),
+    n("DE_PZN", "en", "pii_pzn_de", "PZN: 00000000", "one repeated digit"),
+    n("DE_PZN", "en", "pii_pzn_de", "Order 62072079 was shipped.", "eight digits without a PZN term", carrier="prose", mode="balanced"),
+    n("DE_PZN", "en", "pii_pzn_de", "PZN: 80137730-4", "part of a longer value", mode="recall"),
+    n("DE_PZN", "en", "pii_pzn_de", "Medication: Ibuprofen 400 mg, PZN 40746011", "PZN listed after a drug with blanks only"),
+    n("DE_PZN", "de", "pii_pzn_de", "PZN: 32426397", "check digit fails"),
+    n("DE_PZN", "de", "pii_pzn_de", "PZN: 324263961", "nine digits"),
+    n("DE_PZN", "de", "pii_pzn_de", "Vorgang 92407821 wurde abgeschlossen.", "eight digits without a PZN term", carrier="prose", mode="balanced"),
+    n("DE_PZN", "de", "pii_pzn_de", "PZN: 4/62121903", "part of a longer value", mode="recall"),
+    n("DE_PZN", "de", "pii_pzn_de", "Medikation: Pantoprazol 40 mg, PZN 32504452", "PZN listed after a drug with blanks only"),
+]
+for _row in B_FIN_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
