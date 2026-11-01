@@ -200,6 +200,10 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
         "pii_commercial_register_de_context_free",
         "COMMERCIAL_REGISTER_DE",
     ),
+    ("pii_imei", "IMEI"),
+    ("pii_meid", "MEID"),
+    ("pii_iccid", "ICCID"),
+    ("pii_imsi", "IMSI"),
 ];
 
 #[test]

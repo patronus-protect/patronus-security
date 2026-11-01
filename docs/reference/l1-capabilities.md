@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 98 | 23 |
-| Regex rules | 169 | 114 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 75 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 112 | 13 |
+| Result labels (entity groups) | 102 | 23 |
+| Regex rules | 173 | 114 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 78 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 115 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-29) | `balanced`: neutral 67.3, presidio_favored 69.7 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -139,6 +139,10 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.ch.ahv_number` | ark_only | `CH_AHV_NUMBER` | `pii_ahv_number_ch`, `pii_ahv_number_ch_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.pt.nif` | ark_only | `PT_NIF` | `pii_nif_pt` | checksum | on | – |
 | `pii.ie.ppsn` | ark_only | `IE_PPSN` | `pii_ppsn_ie` | checksum | on | – |
+| `pii.imei` | ark_only | `IMEI` | `pii_imei` | checksum | on | – |
+| `pii.meid` | ark_only | `MEID` | `pii_meid` | checksum | on | – |
+| `pii.iccid` | ark_only | `ICCID` | `pii_iccid` | checksum | on | – |
+| `pii.imsi` | ark_only | `IMSI` | `pii_imsi` | format | on | – |
 | `pii.url` | presidio_only | – | – | – | – | `URL` |
 | `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
 | `pii.us.itin` | presidio_only | – | – | – | – | `US_ITIN` |
@@ -156,7 +160,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 48 shared, 50 ARK only, 10 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
+Entities: 48 shared, 54 ARK only, 10 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -264,6 +268,10 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.ch.ahv_number` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.pt.nif` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.ie.ppsn` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.imei` | ark_only | – | – | – | – |
+| `pii.meid` | ark_only | – | – | – | – |
+| `pii.iccid` | ark_only | – | – | – | – |
+| `pii.imsi` | ark_only | – | – | – | – |
 | `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
 | `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.us.itin` | presidio_only | 0 / 2 / 22 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 58.1 |

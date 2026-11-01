@@ -4732,6 +4732,103 @@ B_DEFMT_CASES = [
 for _row in B_DEFMT_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-DEVID: mobile device and SIM identifiers. The IMEI (IMEI, fifteen digits, plain or grouped
+# 2-6-6-1, Luhn check digit), the MEID (MEID, fourteen hex digits led by a regional code A0-FF and
+# a hex Luhn check digit), the ICCID (ICCID, 19 or 20 digits led by the telecom prefix 89, plain or
+# in blocks of four, Luhn check digit) and the IMSI (IMSI, fifteen digits led by a mobile country
+# code 2xx-7xx, no check digit) are reported in every mode only when a term of their label stands
+# near them or is their key: a bare fifteen-digit Luhn number is one number in ten. Hard negatives:
+# failed check digits, other prefixes, a decimal MEID, lengths, values without a term and parts of
+# longer values.
+B_DEVID_CASES = [
+    # ── IMEI ───────────────────────────────────────────────────────────────
+    p("IMEI", "en", "pii_imei", "IMEI: ", "356352080572311"),
+    p("IMEI", "en", "pii_imei", "The IMEI of the lost phone is ", "86-292765-624217-0", ".", carrier="prose"),
+    p("IMEI", "en", "pii_imei", '{"imei": "', "015023733203876", '"}', carrier="json"),
+    p("IMEI", "en", "pii_imei", "device,imei\nPixel 8,", "358076867817262", "", carrier="csv", mode="balanced"),
+    p("IMEI", "en", "pii_imei", "Device IMEI ", "99 022640 218816 6", mode="recall"),
+    p("IMEI", "de", "pii_imei", "IMEI-Nummer: ", "354536580759590"),
+    p("IMEI", "de", "pii_imei", "Die IMEI des gestohlenen Handys lautet ", "869962546895674", ".", carrier="prose"),
+    p("IMEI", "de", "pii_imei", "| Gerät | IMEI |\n|---|---|\n| Galaxy S23 | ", "35-046365-005387-5", " |", carrier="table"),
+    p("IMEI", "de", "pii_imei", "Als Gerätenummer (IMEI) ist ", "014180420583308", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IMEI", "de", "pii_imei", "nr;gerät;imei\n1;iPhone 15;", "356726082749946", "", carrier="csv", mode="recall"),
+    n("IMEI", "en", "pii_imei", "IMEI: 356352080572312", "check digit fails"),
+    n("IMEI", "en", "pii_imei", "IMEI: 35635208057231", "fourteen digits"),
+    n("IMEI", "en", "pii_imei", "Order 356352080572311 was shipped.", "fifteen bare digits without an IMEI term", carrier="prose", mode="balanced"),
+    n("IMEI", "en", "pii_imei", "IMEI: 3563520805723115", "part of a longer value", mode="recall"),
+    n("IMEI", "en", "pii_imei", "IMEI: 35-635208 057231-1", "mixed grouping"),
+    n("IMEI", "de", "pii_imei", "IMEI-Nummer: 354536580759591", "check digit fails"),
+    n("IMEI", "de", "pii_imei", "IMEI-Nummer: 000000000000000", "one repeated digit"),
+    n("IMEI", "de", "pii_imei", "Vorgang 354536580759590 wurde abgeschlossen.", "fifteen bare digits without an IMEI term", carrier="prose", mode="balanced"),
+    n("IMEI", "de", "pii_imei", "IMEI-Nummer: 354536580759590-2", "part of a longer value", mode="recall"),
+    n("IMEI", "de", "pii_imei", "IMEI-Nummer: 3545365807595", "thirteen digits"),
+    # ── MEID ───────────────────────────────────────────────────────────────
+    p("MEID", "en", "pii_meid", "MEID: ", "A1000000929602E"),
+    p("MEID", "en", "pii_meid", "The MEID printed on the handset is ", "A0000031FF6A115", ".", carrier="prose"),
+    p("MEID", "en", "pii_meid", '{"meid": "', "A10000370B1E426", '"}', carrier="json"),
+    p("MEID", "en", "pii_meid", "device,meid\nMoto G,", "A1000049A51C336", "", carrier="csv", mode="balanced"),
+    p("MEID", "en", "pii_meid", "Mobile Equipment Identifier ", "AF0123450ABCDEC", mode="recall"),
+    p("MEID", "de", "pii_meid", "MEID-Nummer: ", "A000001D57B3085"),
+    p("MEID", "de", "pii_meid", "Die MEID des CDMA-Geräts lautet ", "A1000012CA4F07D", ".", carrier="prose"),
+    p("MEID", "de", "pii_meid", "| Gerät | MEID |\n|---|---|\n| Galaxy S9 | ", "A0000067E21A55B", " |", carrier="table"),
+    p("MEID", "de", "pii_meid", "Als MEID ist ", "A100002B7C9D403", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("MEID", "de", "pii_meid", "nr;gerät;meid\n1;Moto G;", "A1ACBBECCAC596C", "", carrier="csv", mode="recall"),
+    n("MEID", "en", "pii_meid", "MEID: A1000000929602F", "check digit fails"),
+    n("MEID", "en", "pii_meid", "MEID: 990000864321010", "a decimal regional code is an IMEI"),
+    n("MEID", "en", "pii_meid", "Commit A1000000929602E was merged.", "MEID form without a MEID term", carrier="prose", mode="balanced"),
+    n("MEID", "en", "pii_meid", "MEID: A1000000929602E7", "part of a longer value", mode="recall"),
+    n("MEID", "en", "pii_meid", "MEID: a1000000929602e", "lower-case hex"),
+    n("MEID", "de", "pii_meid", "MEID-Nummer: A000001D57B3086", "check digit fails"),
+    n("MEID", "de", "pii_meid", "MEID-Nummer: A000001D57B308", "fourteen hex digits without a check digit"),
+    n("MEID", "de", "pii_meid", "Prüfsumme A000001D57B3085 stimmt.", "MEID form without a MEID term", carrier="prose", mode="balanced"),
+    n("MEID", "de", "pii_meid", "MEID-Nummer: 0xA000001D57B3085", "part of a longer value", mode="recall"),
+    n("MEID", "de", "pii_meid", "MEID-Nummer: G000001D57B3085", "G is no hex digit"),
+    # ── ICCID ──────────────────────────────────────────────────────────────
+    p("ICCID", "en", "pii_iccid", "ICCID: ", "89495988234014706821"),
+    p("ICCID", "en", "pii_iccid", "The SIM card number is ", "8944184652734537308", ".", carrier="prose"),
+    p("ICCID", "en", "pii_iccid", '{"iccid": "', "89014454193125595750", '"}', carrier="json"),
+    p("ICCID", "en", "pii_iccid", "line,iccid\n1,", "8933762633143822658", "", carrier="csv", mode="balanced"),
+    p("ICCID", "en", "pii_iccid", "SIM serial number ", "8941 9503 6778 5996 7302", mode="recall"),
+    p("ICCID", "de", "pii_iccid", "ICCID: ", "89491819323779737016"),
+    p("ICCID", "de", "pii_iccid", "Die SIM-Kartennummer lautet ", "8944862465073468475", ".", carrier="prose"),
+    p("ICCID", "de", "pii_iccid", "| Vertrag | ICCID |\n|---|---|\n| 4711 | ", "89490592962799664299", " |", carrier="table"),
+    p("ICCID", "de", "pii_iccid", "Als SIM-Nummer ist ", "8901 8028 3604 6233 0459", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("ICCID", "de", "pii_iccid", "nr;tarif;iccid\n1;Prepaid;", "89430370932852231108", "", carrier="csv", mode="recall"),
+    n("ICCID", "en", "pii_iccid", "ICCID: 89495988234014706822", "check digit fails"),
+    n("ICCID", "en", "pii_iccid", "ICCID: 79495988234014706823", "no telecom prefix 89"),
+    n("ICCID", "en", "pii_iccid", "Tracking 89495988234014706821 was delivered.", "ICCID form without a SIM term", carrier="prose", mode="balanced"),
+    n("ICCID", "en", "pii_iccid", "ICCID: 894959882340147068213", "part of a longer value", mode="recall"),
+    n("ICCID", "en", "pii_iccid", "ICCID: 894959882340147068", "eighteen digits"),
+    n("ICCID", "de", "pii_iccid", "ICCID: 89491819323779737017", "check digit fails"),
+    n("ICCID", "de", "pii_iccid", "ICCID: 8949 1819 3237 79737016", "broken grouping"),
+    n("ICCID", "de", "pii_iccid", "Sendung 89491819323779737016 wurde zugestellt.", "ICCID form without a SIM term", carrier="prose", mode="balanced"),
+    n("ICCID", "de", "pii_iccid", "ICCID: 89491819323779737016-1", "part of a longer value", mode="recall"),
+    n("ICCID", "de", "pii_iccid", "ICCID: 8949181932377973702", "nineteen digits whose check digit fails"),
+    # ── IMSI ───────────────────────────────────────────────────────────────
+    p("IMSI", "en", "pii_imsi", "IMSI: ", "310150123456789"),
+    p("IMSI", "en", "pii_imsi", "The subscriber's IMSI is ", "234302345678901", ".", carrier="prose"),
+    p("IMSI", "en", "pii_imsi", '{"imsi": "', "310260987654321", '"}', carrier="json"),
+    p("IMSI", "en", "pii_imsi", "name,imsi\nGrace Davies,", "234150918273645", "", carrier="csv", mode="balanced"),
+    p("IMSI", "en", "pii_imsi", "International Mobile Subscriber Identity ", "440101234567890", mode="recall"),
+    p("IMSI", "de", "pii_imsi", "IMSI: ", "262011234567890"),
+    p("IMSI", "de", "pii_imsi", "Die IMSI der SIM-Karte lautet ", "262073901234567", ".", carrier="prose"),
+    p("IMSI", "de", "pii_imsi", "| Anschluss | IMSI |\n|---|---|\n| Mobil | ", "262029876543210", " |", carrier="table"),
+    p("IMSI", "de", "pii_imsi", "Als Teilnehmerkennung (IMSI) ist ", "228011234598765", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IMSI", "de", "pii_imsi", "nr;tarif;imsi\n1;Prepaid;", "208011712345678", "", carrier="csv", mode="recall"),
+    n("IMSI", "en", "pii_imsi", "IMSI: 810150123456789", "no mobile country code 8xx"),
+    n("IMSI", "en", "pii_imsi", "IMSI: 31015012345678", "fourteen digits"),
+    n("IMSI", "en", "pii_imsi", "Order 310150123456789 was shipped.", "fifteen bare digits without an IMSI term", carrier="prose", mode="balanced"),
+    n("IMSI", "en", "pii_imsi", "IMSI: 3101501234567890", "part of a longer value", mode="recall"),
+    n("IMSI", "en", "pii_imsi", "IMSI: 333333333333333", "one repeated digit"),
+    n("IMSI", "de", "pii_imsi", "IMSI: 162011234567891", "no mobile country code 1xx"),
+    n("IMSI", "de", "pii_imsi", "IMSI: 26201123456789", "fourteen digits"),
+    n("IMSI", "de", "pii_imsi", "Vorgang 262011234567890 wurde abgeschlossen.", "fifteen bare digits without an IMSI term", carrier="prose", mode="balanced"),
+    n("IMSI", "de", "pii_imsi", "IMSI: 262011234567890-1", "part of a longer value", mode="recall"),
+    n("IMSI", "de", "pii_imsi", "IMSI: 962011234567890", "no mobile country code 9xx"),
+]
+for _row in B_DEVID_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

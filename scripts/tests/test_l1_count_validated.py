@@ -181,7 +181,7 @@ def test_checked_in_ark_count():
     # KR resident, foreigner and business registration numbers, B-ESIT the ES NIF, the ES NIE and the IT
     # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs), A13 the PL PESEL and REGON (the
     # NIP is the PL VAT ID), B-IN the IN Aadhaar number and GSTIN (the PAN and the voter ID are format only),
-    # A06 the US DEA number and NPI.
+    # A06 the US DEA number and NPI, B-DEVID the IMEI, MEID and ICCID (the IMSI has no check digit).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -258,8 +258,11 @@ def test_checked_in_ark_count():
         Unit("pii.in.gstin", "in"),
         Unit("pii.us.medical_license", "us"),
         Unit("pii.us.npi", "us"),
+        Unit("pii.imei", None),
+        Unit("pii.meid", None),
+        Unit("pii.iccid", None),
     }
-    assert len(counts.ark) == 75
+    assert len(counts.ark) == 78
     # A13 reaches the M3 target (2 × 35 = 70).
     assert counts.m3_met is True
 
@@ -391,7 +394,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 75
+    assert payload["ark"]["count"] == 78
     assert payload["m3"] == {"factor": 2, "target": 70, "met": True}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -573,6 +576,17 @@ def test_cli_count_json_and_check(tmp_path):
     assert medical == {
         "pii.us.medical_license": ["pii_dea_number_us: us_dea_number"],
         "pii.us.npi": ["pii_npi_us: us_npi", "pii_npi_us_context_free: us_npi"],
+    }
+    # B-DEVID: the IMEI, MEID and ICCID are international and count once each; the IMSI is format only.
+    device = {
+        unit["entity_id"]: (unit["country"], unit["sources"])
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.imei", "pii.meid", "pii.iccid", "pii.imsi")
+    }
+    assert device == {
+        "pii.imei": (None, ["pii_imei: imei"]),
+        "pii.meid": (None, ["pii_meid: meid"]),
+        "pii.iccid": (None, ["pii_iccid: iccid"]),
     }
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]

@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (169)
+## PII rules (173)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -183,6 +183,10 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_npi_us_context_free` | `US_NPI` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_commercial_register_de` | `COMMERCIAL_REGISTER_DE` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_commercial_register_de_context_free` | `COMMERCIAL_REGISTER_DE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
+| `pii_imei` | `IMEI` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_meid` | `MEID` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_iccid` | `ICCID` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_imsi` | `IMSI` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 
 ### PII context lexicon
 
@@ -288,6 +292,10 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `MEDICAL_LICENSE` | `pii.us_dea_number` |
 | `US_NPI` | `pii.us_npi` |
 | `COMMERCIAL_REGISTER_DE` | `pii.commercial_register` |
+| `IMEI` | `pii.imei` |
+| `MEID` | `pii.meid` |
+| `ICCID` | `pii.iccid` |
+| `IMSI` | `pii.imsi` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

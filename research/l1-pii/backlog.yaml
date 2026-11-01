@@ -785,6 +785,7 @@ tasks:
 
   # M3 buffer +3 (75): overlaps and DK CPR make the count above uncertain
   - id: B-DEVID
+    status: done
     title: "IMEI (Luhn) + MEID, ICCID (Luhn) + IMSI (context)"
     type: new-entity
     deps: [K05]
