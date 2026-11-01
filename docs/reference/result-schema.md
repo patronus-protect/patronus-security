@@ -448,13 +448,12 @@ B-DEFMT: `HRA`/`HRB`, one to six digits, an optional court suffix such as `B`; `
 reported in every mode with a register or local court term (`Amtsgericht`, `Handelsregister`,
 `commercial register`) or as a key, and bare in `balanced`/`recall` only at `0.50`. The Steuernummer
 follows the groups of the Länder or the 13-digit ELSTER form with a Land prefix; the ELSTER form needs
-its field name. Four mobile device and SIM identifiers (B-DEVID) are reported in every mode only
-with a term of their label (`IMEI`, `MEID`, `ICCID`, `SIM card number`, `SIM-Kartennummer`, `IMSI`,
-`Teilnehmerkennung`) or as a key: the IMEI (`IMEI`, fifteen digits, plain or 2-6-6-1, Luhn;
-`490154203237518`), the MEID (`MEID`, fourteen upper-case hex digits with a regional code `A0`–`FF`
-and a base-16 Luhn check digit; `AF0123450ABCDEC`), the ICCID (`ICCID`, 19 or 20 digits led by `89`,
-plain or in blocks of four, Luhn; `89495988234014706821`) and the IMSI (`IMSI`, fifteen digits led
-by a mobile country code `2xx`–`7xx`, a format check; `262011234567890`). The German document number rules keep
+its field name. Four identifiers of B-FIN are reported in every mode only with a term of their label
+or as a key, never bare: the VIN (`VIN`, seventeen characters without `I`, `O`, `Q`, the last four
+digits; `1HGCM82633A004352` with the North American check digit or `WVWZZZ1JZXW000001` in the
+European form), the ISIN (`ISIN`, Luhn over the letters; `US0378331005`), the LEI (`LEI`, ISO 7064
+MOD 97-10; `529900T8BM49AURSDO55`) and the Pharmazentralnummer (`DE_PZN`, weighted mod 11;
+`PZN: 01126111`; `PZN` followed by blanks only lists a product and stays silent). The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

@@ -25,6 +25,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `scoreboard.py`. **Detection change** (`strict`, `balanced`, `recall`: the four labels with a term or
   key). Four new regexes, linear and bounded (fixed-length character classes with word boundaries);
   validators run only on matches, the context check only on validated values.
+- Vehicle, securities, legal entity and pharmaceutical identifiers (B-FIN). Four new labels: `VIN`
+  (seventeen characters without `I`, `O` and `Q`, at least one letter, the last four digits;
+  `pii_vin` checks the North American check digit in the ninth place, weighted mod 11 with `X` for
+  10, `pii_vin_format` accepts the European form without a check digit), `ISIN` (two capital letters,
+  nine alphanumerics, a Luhn digit over the letters read as 10–35), `LEI` (eighteen alphanumerics, two
+  digits, ISO 7064 MOD 97-10; `validators::mod97` and `lei` share one remainder function) and `DE_PZN`
+  (Pharmazentralnummer, eight digits or the seven of before 2013, weighted 1–7 mod 11). All five rules
+  report the value in every mode only when a term of the label (new lexicon entries with EN and DE
+  terms) stands near it or is its key, also as a CSV cell: every check passes one order, serial or
+  article number in ten or eleven, so none is reported bare. The short term `PZN` followed by blanks
+  only (`Pantoprazol 40 mg, PZN 43230555`, the medication line of the E05 doctor's letter, a hard
+  negative there) stays silent; `PZN:`, `PZN-`, the key `pzn` and `Pharmazentralnummer` report. The
+  ICD-10 part of C07 is dropped. Four new `ark_only` ids (`pii.vin`, `pii.isin`, `pii.lei`,
+  `pii.de.pzn`); M3 ARK 78 → 82. New `rust/tests/pii_fin_identifiers.rs`, 80 new `pii_l1` rows (DE,
+  EN), rule fixture entries, Python ports in `scoreboard.py`. **Detection change** (all modes: the
+  four labels with a term or key). Four new regexes, linear and bounded (fixed-length character
+  classes with word boundaries); validators run only on matches.
 
 - German format identifiers (B-DEFMT). `validators::de_tax_number` checks the Steuernummer against the
   groups the Länder print instead of any 10 to 13 digits (F13): `FF/BBB/UUUUP` (BE, HB, HH, NI, RP,
