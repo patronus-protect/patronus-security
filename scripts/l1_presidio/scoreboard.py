@@ -1773,16 +1773,15 @@ def row_validators(row: dict[str, Any], entity_id: str, checks: GoldChecks) -> t
 
 
 def unattainable(row: dict[str, Any], corpus: str, item: Span, emap: Any, checks: GoldChecks, where: str) -> str | None:
-    """Why a gold span is out of the attainable view (T27): ``checksum`` if it fails every validator
-    ``row_validators`` names, else the decision of a ``known_gaps`` entry covering it; None: attainable."""
+    """Why a gold span is out of the attainable view (T27): ``checksum`` if its value without markup
+    (``_gold_value``) fails every validator ``row_validators`` names, else the decision of a ``known_gaps``
+    entry covering it; None: attainable."""
     label, start, end = item
-    text = row.get("text")
-    if not isinstance(text, str):
-        raise ScoreboardError(f"{where}: gold row without text")
+    value = _gold_value(row, item, where)
     names = row_validators(row, label, checks)
-    if names and not any(CHECKSUM_PORTS[name](text[start:end]) for name in names):
+    if names and not any(CHECKSUM_PORTS[name](value) for name in names):
         return "checksum"
-    gap = emap.known_gap(label, corpus, str(row.get("id", "")), text, start, end)
+    gap = emap.known_gap(label, corpus, str(row.get("id", "")), row["text"], start, end)
     return gap.decision if gap else None
 
 

@@ -1493,6 +1493,24 @@ def test_attainable_view_leaves_out_the_same_gold_for_every_engine():
     assert MODULE.score_rows(rows, ark, EMAP) == raw["ark"]
 
 
+@pytest.mark.parametrize("text, value", [
+    ("IBAN: [DE89370400440532013000] bitte.", "[DE89370400440532013000]"),
+    ("Account (DE89 3704 0044 0532 0130 00).", "(DE89 3704 0044 0532 0130 00)."),
+])
+def test_attainable_view_checks_annotated_values_without_markup(text, value):
+    # Markup inside the gold span is no other value: the checksum sees the value, as for IGNORED_GOLD.
+    row = annotated("r", text, [("pii.iban", value, 0)])
+    predictions = [spans_of("r", text, [("pii.iban", value, 0)])]
+    checks = MODULE.gold_checks(EMAP)
+    item = ("pii.iban", text.index(value), text.index(value) + len(value))
+    assert MODULE.unattainable(row, GRETEL, item, EMAP, checks, "g") is None
+    raw = MODULE.score_rows([row], predictions, EMAP)["buckets"]["entity/pii.iban"]
+    assert MODULE.score_rows([row], predictions, EMAP, checks=checks)["buckets"]["entity/pii.iban"] == raw
+    assert raw["gold"] == raw["exact"] == 1
+    gaps = MODULE.gold_gaps([row], predictions, EMAP)[GRETEL]["pii.iban"]
+    assert gaps["gold_invalid"] == 0
+
+
 def test_gold_gaps_count_country_document_checks_and_known_gaps():
     rows, ark, presidio = attainable_rows()
     gaps = MODULE.gold_gaps(rows, presidio, EMAP)
