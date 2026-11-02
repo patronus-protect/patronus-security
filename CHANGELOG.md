@@ -11,6 +11,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Presidio `tuned` baseline enables the off-by-default English recognizers of shared ids (T32,
+  decided 2026-11-02, option a). `scripts/l1_presidio/profiles/tuned.yaml` now also runs US NPI,
+  CA SIN, SG NRIC/FIN, ZA ID, AU ABN/ACN/TFN/Medicare, IN PAN/Aadhaar/passport/GSTIN/voter ID and
+  the UK/IN/NG vehicle registration recognizers that Presidio 2.2.364 ships with `enabled: false`;
+  recognizers of `presidio_only` ids and of other languages stay off. Dev, balanced vs Presidio
+  tuned: presidio_favored exact F1 tuned 71.3 -> 77.6 (Ark 78.1), neutral 40.6 -> 40.5, no hard
+  negative hits; M1 attainable 24/24 -> 17/24 (AU ACN, CA SIN, Aadhaar, IN PAN, voter ID, licence
+  plate and NPI fall below tuned), M2 unchanged. Evaluation baseline only: no detection change.
 - L1 PII milestones on attainable gold (T27, decided 2026-11-02, option b). `scoreboard.py m1`,
   `m2` and `report` score a raw and an attainable view; M1, M2 and the F1 >= 80 quality floor are
   judged on the attainable one for every family and both engines alike. It leaves out gold that fails

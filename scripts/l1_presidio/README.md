@@ -30,7 +30,9 @@ lädt, UK-Postleitzahl, NG NIN, PH TIN/UMID), solche anderer Sprachen (ES, KR, S
 analysiert nur `en` und `de`) und die Modell-Recognizer mit fehlenden Abhängigkeiten
 (`HuggingFaceNerRecognizer`, `BasicLangExtractRecognizer`). Geprüft von
 `scripts/tests/test_l1_presidio_runner.py` (mit installiertem Presidio gegen dessen
-`default_recognizers.yaml`).
+`default_recognizers.yaml`). Wirkung auf Dev: `presidio_favored` exakt F1 tuned 71,3 → 77,6,
+`neutral` 40,6 → 40,5, keine Hard-Negative-Treffer; M1 erreichbar 24/24 → 17/24 (Details in
+[`research/l1-pii/README.md`](../../research/l1-pii/README.md), Abschnitt T32).
 
 ## Reproduzierbarkeit
 
