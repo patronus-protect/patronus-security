@@ -45,6 +45,22 @@ fn has_both_cases(body: &str) -> bool {
         && body.bytes().any(|byte| byte.is_ascii_lowercase())
 }
 
+/// F-PROV: a Discord bot token starts with the unpadded base64url of the
+/// bot's user ID, a snowflake: 17 to 20 decimal digits without a leading zero
+/// that fit in 64 bits.
+fn is_discord_bot_token(value: &str) -> bool {
+    value
+        .split_once('.')
+        .and_then(|(id, _)| base64_decode(id, Base64Kind::UrlSafe))
+        .and_then(|id| String::from_utf8(id).ok())
+        .is_some_and(|id| {
+            (17..=20).contains(&id.len())
+                && !id.starts_with('0')
+                && id.bytes().all(|byte| byte.is_ascii_digit())
+                && id.parse::<u64>().is_ok()
+        })
+}
+
 /// crates.io token: `cio` and a body with both cases.
 fn is_cratesio_token(value: &str) -> bool {
     value.strip_prefix("cio").is_some_and(has_both_cases)
@@ -1558,9 +1574,12 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Payment ───────────────────────────────────────────────────────────────
+    // F-PROV: secret (`sk_`) and restricted (`rk_`) keys in live or test mode
+    // with 20 to 99 base62 characters (gitleaks); test-mode keys have severity
+    // `test`. Publishable keys (`pk_`) are public by design and no match.
     DlpPattern {
         name: "dlp_stripe_key",
-        pattern: r"[sr]k[-_](live|test)[-_][a-zA-Z0-9]{20,}",
+        pattern: r"[sr]k_(?:live|test)_[a-zA-Z0-9]{20,99}",
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
@@ -1568,17 +1587,19 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:stripe-access-token",
-            &["k_live", "k-live", "k_test", "k-test"],
+            &["k_live_", "k_test_"],
         )
         .with_provider("stripe")
         .with_min_entropy(3.0)
-        .with_test_prefixes(&["sk_test", "sk-test", "rk_test", "rk-test"])
+        .with_test_prefixes(&["sk_test_", "rk_test_"])
         .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
+    // F-PROV: webhook signing secrets: `whsec_` and 32 base62 characters
+    // (Dashboard endpoints) or 64 hex digits (`stripe listen`).
     DlpPattern {
         name: "dlp_stripe_webhook",
-        pattern: r"whsec_[a-zA-Z0-9_\-]{20,}",
+        pattern: r"whsec_(?:[a-f0-9]{64}|[a-zA-Z0-9]{32})",
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
@@ -1594,9 +1615,19 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::SecretKey),
     },
     // ── Communication ────────────────────────────────────────────────────────
+    // F-PROV: the gitleaks Slack token shapes: bot tokens with numeric team
+    // and bot user IDs, legacy bot tokens with one ID, user tokens (`xoxp-`,
+    // `xoxe-`) with three IDs, legacy tokens (`xoxo-`, `xoxs-`) with a hex
+    // secret and workspace tokens (`xoxa-`, `xoxr-`).
     DlpPattern {
         name: "dlp_slack_token",
-        pattern: r"xox[bpras]-[0-9a-zA-Z\-]{15,}",
+        pattern: concat!(
+            r"xoxb-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,34}",
+            r"|xoxb-[0-9]{8,14}-[a-zA-Z0-9]{18,26}",
+            r"|xox[pe](?:-[0-9]{10,13}){3}-[a-zA-Z0-9\-]{28,34}",
+            r"|xox[os]-[0-9]{1,16}-[0-9]{1,16}-[0-9]{1,16}-[a-fA-F0-9]{16,64}",
+            r"|xox[ar]-(?:[0-9]-)?[a-zA-Z0-9]{8,48}",
+        ),
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
@@ -1604,25 +1635,55 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://api.slack.com/authentication/token-types",
-            &["xoxb-", "xoxp-", "xoxr-", "xoxa-", "xoxs-"],
+            &["xoxb-", "xoxp-", "xoxe-", "xoxo-", "xoxs-", "xoxa-", "xoxr-"],
         )
         .with_provider("slack")
         .with_min_entropy(3.0)
         .with_boundary("-")
         .with_subtype(SecretSubtype::AccessToken),
     },
+    // F-PROV: app-level tokens (`xapp-`, version, upper-case app ID, number,
+    // 64 hex digits) and app configuration access (`xoxe.xoxb-`/`xoxe.xoxp-`)
+    // and refresh (`xoxe-`) tokens (gitleaks).
     DlpPattern {
-        name: "dlp_discord_token",
-        pattern: r"[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}",
+        name: "dlp_slack_app_token",
+        pattern: concat!(
+            r"xapp-[0-9]-[A-Z0-9]{9,12}-[0-9]{10,14}-[a-f0-9]{64}",
+            r"|xoxe\.xox[bp]-[0-9]-[a-zA-Z0-9]{163,166}",
+            r"|xoxe-[0-9]-[a-zA-Z0-9]{146}",
+        ),
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:slack-app-token",
+            &["xapp-", "xoxe.xox", "xoxe-"],
+        )
+        .with_provider("slack")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // F-PROV: bot tokens are the base64url user ID, timestamp and HMAC; the
+    // first segment must decode to a snowflake.
+    DlpPattern {
+        name: "dlp_discord_token",
+        pattern: r"[MNO][A-Za-z0-9]{22,26}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,38}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_discord_bot_token),
+        span_group: None,
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &[])
-            .with_provider("discord")
-            .with_min_entropy(3.0)
-            .with_value_run(ValueClass::Alphanumeric, 24)
-            .with_boundary("-")
-            .with_subtype(SecretSubtype::AccessToken),
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/discordbottoken/discordbottoken.go",
+            &[],
+        )
+        .with_provider("discord")
+        .with_min_entropy(3.0)
+        .with_value_run(ValueClass::Alphanumeric, 23)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
     },
 ];

@@ -152,6 +152,7 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_stripe_key", "api_key"),
     ("dlp_stripe_webhook", "secret_key"),
     ("dlp_slack_token", "access_token"),
+    ("dlp_slack_app_token", "access_token"),
     ("dlp_discord_token", "access_token"),
     ("dlp_eth_private_key", "private_key"),
     ("dlp_btc_wif", "private_key"),

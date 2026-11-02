@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 182 | 114 (+5 relationship rules) |
+| Regex rules | 182 | 115 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 122 | 13 |
+| Rules with a `checksum` or `structure` check | 122 | 14 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -312,7 +312,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `API_KEY` | provider_secret | on | 19 | 14 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
-| `SECRET_TOKEN` | provider_secret | on | 35 | 28 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
+| `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
 | `CREDENTIAL` | generic_credential | on | 13 | 10 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
@@ -388,7 +388,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `observability.pagerduty.api_key` | shared | `API_KEY` | `dlp_pagerduty_api_key` | format | on | TruffleHog: `PagerDutyApiKey` |
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | gitleaks: `stripe-access-token`; TruffleHog: `Stripe`; detect-secrets: `StripeDetector` |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | gitleaks: `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token`; TruffleHog: `Slack`; detect-secrets: `SlackDetector` |
-| `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
+| `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | structure | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
 | `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | format | on | gitleaks: `private-key`; TruffleHog: `PrivateKey`; detect-secrets: `PrivateKeyDetector` |
 | `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | format | on | gitleaks: `jwt`, `jwt-base64`; TruffleHog: `JWT`; detect-secrets: `JwtTokenDetector` |
 | `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment`, `dlp_prose_secret` | none | on | gitleaks: `generic-api-key`; detect-secrets: `KeywordDetector` |
@@ -406,6 +406,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.source_code` | shared | `dlp.content.source_code` | `dlp_source_code_fence`, `dlp_source_code_statement`, `dlp_source_code_python_rust_assignment`, `dlp_source_code_declaration`, `dlp_source_code_import` | format | off | – |
 | `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
 | `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
+| `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | `dlp_slack_app_token` | format | on | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – |
 | `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | `dlp_dockerhub_token` | format | on | – |
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | `dlp_cratesio_token` | format | on | – |
@@ -431,7 +432,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.business_metric` | ark_only | `dlp.internal.business_metric` | `dlp_internal_business_metric` | format | off | – |
 | `content.sql` | ark_only | `dlp.content.sql` | `dlp_sql_statement`, `dlp_sql_multiline_statement` | structure | off | – |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `gitlab-session-cookie` |
-| `comm.slack.app_config_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
 | `llm.cohere.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `cohere-api-token` |
 | `llm.perplexity.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `perplexity-api-key` |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `privateai-api-token` |
@@ -535,7 +535,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 62 shared, 24 ARK only, 93 baseline only, 11 out of scope.
+Entities: 63 shared, 24 ARK only, 92 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -605,6 +605,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.source_code` | shared | `dlp.content.source_code` | 214 documents | ARK 99.1 (opt-in profile) | ARK 99.5 (opt-in profile) |
 | `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
 | `content.system_log` | shared | `dlp.content.system_log` | 456 documents | ARK 0.0 (opt-in profile) | ARK 0.0 (opt-in profile) |
+| `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
@@ -630,7 +631,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.business_metric` | ark_only | `dlp.internal.business_metric` | 0 | no gold | no gold |
 | `content.sql` | ark_only | `dlp.content.sql` | 10 documents | ARK 90.9 (opt-in profile) | ARK 100.0 (opt-in profile) |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
-| `comm.slack.app_config_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `llm.cohere.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `llm.perplexity.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |

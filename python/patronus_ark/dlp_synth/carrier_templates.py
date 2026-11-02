@@ -1653,6 +1653,7 @@ PROFILES = {
     "dlp_stripe_key": Profile("payment.stripe.secret_key", "PAYMENT_KEY", "secret", "stripe_secret_key", "Stripe secret key", "Stripe-Secret-Key"),
     "dlp_stripe_webhook": Profile("payment.stripe.webhook_secret", "PAYMENT_KEY", "secret", "stripe_webhook_secret", "Stripe webhook secret", "Stripe-Webhook-Secret"),
     "dlp_slack_token": Profile("comm.slack.token", "SECRET_TOKEN", "secret", "slack_token", "Slack token", "Slack-Token"),
+    "dlp_slack_app_token": Profile("comm.slack.app_config_token", "SECRET_TOKEN", "secret", "slack_app_token", "Slack app token", "Slack-App-Token"),
     "dlp_discord_token": Profile("comm.discord.bot_token", "SECRET_TOKEN", "secret", "discord_bot_token", "Discord bot token", "Discord-Bot-Token"),
     "dlp_eth_private_key": Profile("crypto.ethereum.private_key", "CRYPTO_KEY", "secret", "wallet_private_key", "wallet private key", "Wallet-Private-Key"),
     "dlp_btc_wif": Profile("crypto.bitcoin.wif", "CRYPTO_KEY", "secret", "btc_wif_key", "Bitcoin WIF key", "Bitcoin-WIF-Schlüssel"),

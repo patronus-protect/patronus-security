@@ -433,7 +433,7 @@ fn severity_follows_test_prefixes() {
         Severity::Test
     );
     assert_eq!(
-        stripe.meta.severity(&["rk-test-", &body].concat()),
+        stripe.meta.severity(&["rk_test_", &body].concat()),
         Severity::Test
     );
     assert_eq!(

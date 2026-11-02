@@ -69,6 +69,7 @@ const BOUNDED: &[(&str, &str)] = &[
     ("dlp_stripe_key", "-"),
     ("dlp_stripe_webhook", "-"),
     ("dlp_slack_token", "-"),
+    ("dlp_slack_app_token", "-"),
     ("dlp_discord_token", "-"),
     ("dlp_eth_private_key", ""),
     ("dlp_btc_wif", ""),

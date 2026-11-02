@@ -295,22 +295,25 @@ rules:
   dlp_stripe_key:
     provider: stripe
     source_ref: gitleaks:stripe-access-token
-    format: "sk_/rk_ prefix with live or test mode, base62 body; test mode is severity test"
+    format: "sk_/rk_ prefix with live or test mode and 20 to 99 base62 characters; test mode is severity test; publishable pk_ keys are public and no match (F-PROV)"
   dlp_stripe_webhook:
     provider: stripe
     source_ref: https://docs.stripe.com/webhooks
-    format: "whsec_ prefix, base64url body"
+    format: "whsec_ and 32 base62 characters (Dashboard endpoint secret) or 64 hex digits (stripe listen, https://docs.stripe.com/stripe-cli) (F-PROV)"
 
   # ── Communication ────────────────────────────────────────────────────────
   dlp_slack_token:
     provider: slack
     source_ref: https://api.slack.com/authentication/token-types
-    format: "xoxb-/xoxp-/xoxr-/xoxa-/xoxs- prefix, digit and alphanumeric segments"
+    format: "gitleaks slack-bot-token (xoxb-, two numeric IDs), slack-legacy-bot-token (xoxb-, one ID, 18 to 26 characters), slack-user-token (xoxp-/xoxe-, three IDs, 28 to 34 characters), slack-legacy-token (xoxo-/xoxs-, hex secret), slack-legacy-workspace-token (xoxa-/xoxr-, 8 to 48 characters) (F-PROV)"
+  dlp_slack_app_token:
+    provider: slack
+    source_ref: gitleaks:slack-app-token
+    format: "xapp-, version, upper-case app ID, number and 64 hex digits; gitleaks slack-config-access-token (xoxe.xoxb-/xoxe.xoxp-, version, 163 to 166 characters) and slack-config-refresh-token (xoxe-, version, 146 characters) (F-PROV)"
   dlp_discord_token:
     provider: discord
-    source_ref: ark
-    format: "three dot-separated base64url segments, first segment starts with M or N"
-    pending: F09
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/discordbottoken/discordbottoken.go
+    format: "three dot-separated segments: base64url user ID (M, N or O and 22 to 26 characters), 6-character timestamp, 27 to 38 character HMAC; the first segment decodes to a snowflake of 17 to 20 digits (https://discord.com/developers/docs/reference#snowflakes) (F-PROV)"
 
   # ── Key material ─────────────────────────────────────────────────────────
   dlp_eth_private_key:

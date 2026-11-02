@@ -42,7 +42,10 @@ const RULES: &[(&str, &[&str], &[&str])] = &[
             "slack_config_access_token",
             "slack_config_refresh_token",
         ],
-        &["slack_config_refresh_token_short", "slack_app_token_lower_id"],
+        &[
+            "slack_config_refresh_token_short",
+            "slack_app_token_lower_id",
+        ],
     ),
     (
         "dlp_discord_token",
@@ -148,8 +151,7 @@ fn reports(text: &str, value: &str) -> bool {
 
 /// Unpadded base64url, as in the first two segments of a Discord bot token.
 fn base64url(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::new();
     for chunk in bytes.chunks(3) {
         let n = chunk

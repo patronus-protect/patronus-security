@@ -464,7 +464,7 @@ entities:
     gitleaks: [stripe-access-token]
     trufflehog: [Stripe]
     detect_secrets: [StripeDetector]
-    backlog: F10
+    backlog: F-PROV
   - id: comm.slack.token
     scope: shared
     group: SECRET_TOKEN
@@ -473,14 +473,14 @@ entities:
       slack-legacy-workspace-token]
     trufflehog: [Slack]
     detect_secrets: [SlackDetector]
-    backlog: F09
+    backlog: F-PROV
   - id: comm.discord.bot_token
     scope: shared
     group: SECRET_TOKEN
     ark: [dlp_discord_token]
     trufflehog: [DiscordBotToken]
     detect_secrets: [DiscordBotTokenDetector]
-    backlog: F09
+    backlog: F-PROV
   - id: key.pem_private_key
     scope: shared
     group: PRIVATE_KEY
@@ -602,7 +602,7 @@ entities:
     scope: ark_only
     group: PAYMENT_KEY
     ark: [dlp_stripe_webhook]
-    backlog: F10
+    backlog: F-PROV
   - id: registry.dockerhub.access_token
     scope: ark_only
     group: SECRET_TOKEN
@@ -686,11 +686,12 @@ entities:
   # F09/F13: Varianten bestehender Provider
   - {id: vcs.gitlab.session_cookie, scope: baseline_only, group: CREDENTIAL, gitleaks: [gitlab-session-cookie], backlog: F13}
   - id: comm.slack.app_config_token
-    scope: baseline_only
+    scope: shared
     group: SECRET_TOKEN
+    ark: [dlp_slack_app_token]
     gitleaks: [slack-app-token, slack-config-access-token, slack-config-refresh-token]
     trufflehog: [Slack]
-    backlog: F09
+    backlog: F-PROV
   # P01/P02: LLM/AI
   - {id: llm.cohere.api_key, scope: baseline_only, group: API_KEY, gitleaks: [cohere-api-token], backlog: P01}
   - {id: llm.perplexity.api_key, scope: baseline_only, group: API_KEY, gitleaks: [perplexity-api-key], backlog: P01}
