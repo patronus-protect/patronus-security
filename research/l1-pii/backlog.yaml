@@ -868,14 +868,18 @@ tasks:
       (test that fails for an ungated rule); 100 KiB p95 (native and Python) at least halved versus
       scoreboard/latency.md on the VPS; latency.md updated; goldens and scoreboard unchanged
 
-  # M4 pass 2 after all rules
+  # M4 performance loop after all rules
   - id: H06
-    title: "Latency pass 2: 100 KiB p95 <= 10 ms (native and Python) with all rules"
+    title: "Performance loop: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
     type: perf
-    deps: [H03, A02]
+    deps: [H03, A02, T27, T32, T33]
     accept: >-
-      M4 met on the VPS per scripts/l1_presidio/latency.py; latency.md updated; goldens and scoreboard
-      unchanged; if 10 ms is out of reach, the PR documents the remaining hotspots for the next TRIAGE
+      Performance loop at the end of the programme (decided 2026-11-02): profile the 100 KiB DE and EN
+      workloads, remove the top hotspots without any quality change (dev and holdout scoreboard and goldens
+      unchanged, no new FP); M4 per scripts/l1_presidio/latency.py on the VPS; latency.md updated. If the
+      budget is not met and the profile still shows a hotspot worth >= 10 % of p95, the PR appends the next
+      pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
+      when the budget holds or no such hotspot remains (remaining hotspots documented).
 
   - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06]}
 
