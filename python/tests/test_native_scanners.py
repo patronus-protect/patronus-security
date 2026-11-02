@@ -115,9 +115,9 @@ class NativeScannerTests(unittest.TestCase):
                     "text": OPENAI_KEY,
                     "score": 1.0,
                     "start_byte": 7,
-                    "end_byte": 47,
+                    "end_byte": 7 + len(OPENAI_KEY),
                     "start_char": 7,
-                    "end_char": 47,
+                    "end_char": 7 + len(OPENAI_KEY),
                 }
             ],
         )
