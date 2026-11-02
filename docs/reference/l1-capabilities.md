@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 106 | 23 |
-| Regex rules | 178 | 114 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 82 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 119 | 13 |
+| Result labels (entity groups) | 107 | 23 |
+| Regex rules | 182 | 114 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 122 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-29) | `balanced`: neutral 67.3, presidio_favored 69.7 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -89,6 +89,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` |
 | `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` |
 | `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de`, `pii_vehicle_registration_uk` | format | on | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
+| `pii.crypto_wallet` | shared | `CRYPTO` | `pii_crypto_btc`, `pii_crypto_ltc`, `pii_crypto_eth`, `pii_crypto_eth_unchecked` | checksum | on | `CRYPTO` |
 | `pii.swift_bic` | ark_only | `SWIFT_CODE` | `pii_swift_bic_context` | format | on | – |
 | `pii.credit_card.cvv` | ark_only | `CREDITCARD_CVV` | `pii_credit_card_cvv` | format | on | – |
 | `pii.credit_card.expiry` | ark_only | `CREDITCARD_EXPIRY` | `pii_credit_card_expiry` | format | on | – |
@@ -148,7 +149,6 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.iccid` | ark_only | `ICCID` | `pii_iccid` | checksum | on | – |
 | `pii.imsi` | ark_only | `IMSI` | `pii_imsi` | format | on | – |
 | `pii.url` | presidio_only | – | – | – | – | `URL` |
-| `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
 | `pii.us.itin` | presidio_only | – | – | – | – | `US_ITIN` |
 | `pii.us.mbi` | presidio_only | – | – | – | – | `US_MBI` |
 | `pii.uk.postcode` | presidio_only | – | – | – | – | `UK_POSTCODE` |
@@ -164,7 +164,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 48 shared, 58 ARK only, 10 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
+Entities: 49 shared, 58 ARK only, 9 Presidio only, 6 semantic. Hard-negative false positives (2026-10-29): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -222,6 +222,7 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.de.vat_id` | shared | 0 / 5 / 87 | no gold | ARK 75.0 / Presidio 100.0 | ARK 100.0 / Presidio 65.1 |
 | `pii.it.vat_code` | shared | 0 / 1 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
 | `pii.license_plate` | shared | 0 / 21 / 19 | no gold | ARK 9.1 / Presidio 0.0 | ARK 100.0 / Presidio 69.0 |
+| `pii.crypto_wallet` | shared | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.swift_bic` | ark_only | 79 / 0 / 84 | ARK 38.5 / Presidio 0.0 | no gold | ARK 36.9 / Presidio 0.0 |
 | `pii.credit_card.cvv` | ark_only | 47 / 0 / 27 | ARK 0.0 / Presidio 0.0 | no gold | ARK 68.3 / Presidio 0.0 |
 | `pii.credit_card.expiry` | ark_only | 0 / 0 / 26 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
@@ -281,7 +282,6 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.iccid` | ark_only | – | – | – | – |
 | `pii.imsi` | ark_only | – | – | – | – |
 | `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
-| `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.us.itin` | presidio_only | 0 / 2 / 22 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 58.1 |
 | `pii.us.mbi` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.uk.postcode` | presidio_only | 0 / 4 / 249 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |

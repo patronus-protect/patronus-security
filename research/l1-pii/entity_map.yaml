@@ -503,6 +503,8 @@ entities:
   - {id: pii.isin, scope: ark_only, ark: [ISIN], presidio: [], corpora: {}}
   - {id: pii.lei, scope: ark_only, ark: [LEI], presidio: [], corpora: {}}
   - {id: pii.de.pzn, scope: ark_only, ark: [DE_PZN], presidio: [], corpora: {}}
+  # A02: crypto wallet addresses (BTC, LTC, ETH); Presidio's CRYPTO covers Bitcoin only.
+  - {id: pii.crypto_wallet, scope: shared, ark: [CRYPTO], presidio: [CRYPTO], corpora: {presidio-analyzer-recognizer-tests: [CRYPTO]}}
   # B-NORD: Danish CPR number and Norwegian fødselsnummer (Presidio has neither).
   - {id: pii.dk.cpr, scope: ark_only, ark: [DK_CPR], presidio: [], corpora: {}}
   - {id: pii.no.fodselsnummer, scope: ark_only, ark: [NO_FODSELSNUMMER], presidio: [], corpora: {}}
@@ -525,7 +527,6 @@ entities:
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
-  - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {presidio-analyzer-recognizer-tests: [CRYPTO]}}
   - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {presidio-analyzer-recognizer-tests: [US_ITIN]}}
   - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
@@ -690,6 +691,10 @@ checksums:
     isin: {algorithm: Luhn über die Buchstabenwerte}              # B-FIN, ISO 6166, zwei Länderbuchstaben, zwölf Zeichen
     lei: {algorithm: "ISO 7064 MOD 97-10"}                          # B-FIN, ISO 17442, zwanzig Zeichen
     de_pzn: {algorithm: "gewichtet 1–7 mod 11"}                     # B-FIN, Pharmazentralnummer, acht (früher sieben) Ziffern
+    btc_address: {algorithm: Base58Check / Bech32(m)}               # A02, Bitcoin P2PKH 1…, P2SH 3…, segwit bc1…
+    ltc_address: {algorithm: Base58Check / Bech32(m)}               # A02, Litecoin L…, M…, segwit ltc1…
+    eth_checksum_address: {algorithm: EIP-55 (Keccak-256)}          # A02, Ethereum 0x + 40 Hex-Ziffern in gemischter Schreibung
+    eth_address: null                                               # A02, Ethereum in Kleinschreibung, keine Prüfsumme
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

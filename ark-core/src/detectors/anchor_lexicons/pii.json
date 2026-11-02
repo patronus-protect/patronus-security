@@ -3625,6 +3625,51 @@
     ]
   },
   {
+    "id": "pii.crypto_wallet",
+    "description": "Krypto-Wallet-Adresse (Bitcoin, Litecoin, Ethereum)",
+    "en": [
+      "wallet address",
+      "wallet",
+      "crypto wallet",
+      "crypto address",
+      "bitcoin address",
+      "btc address",
+      "litecoin address",
+      "ltc address",
+      "ethereum address",
+      "eth address",
+      "receiving address",
+      "deposit address",
+      "payout address"
+    ],
+    "de": [
+      "wallet-adresse",
+      "walletadresse",
+      "krypto-wallet",
+      "kryptowallet",
+      "krypto-adresse",
+      "bitcoin-adresse",
+      "btc-adresse",
+      "litecoin-adresse",
+      "ethereum-adresse",
+      "eth-adresse",
+      "empfangsadresse",
+      "einzahlungsadresse",
+      "auszahlungsadresse"
+    ],
+    "shared": [
+      "bitcoin",
+      "btc",
+      "litecoin",
+      "ltc",
+      "ethereum",
+      "eth"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/crypto.rs"
+    ]
+  },
+  {
     "id": "pii.pl_nip",
     "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
     "en": [

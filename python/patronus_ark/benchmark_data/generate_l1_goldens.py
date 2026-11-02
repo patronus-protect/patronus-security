@@ -4925,6 +4925,39 @@ B_FIN_CASES = [
 for _row in B_FIN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# A02: crypto wallet addresses (CRYPTO). Bitcoin (P2PKH 1…, P2SH 3…, segwit bc1… in Bech32 or
+# Bech32m) and Litecoin (L…, M…, ltc1…) carry a Base58Check or Bech32 checksum, Ethereum addresses
+# in mixed case the EIP-55 checksum; these are reported bare in every mode. A lower-case Ethereum
+# address carries no checksum and is reported only with a wallet term near it or as its key.
+# Hard negatives: failed checksums, the wrong version or human-readable part, mixed case in
+# Bech32, a single letter case without a wallet term, 64 hex digits and parts of longer tokens.
+A02_CASES = [
+    p("CRYPTO", "en", "pii_crypto_btc", "Please send the payment to ", "1FMesZMcejdnbx7L39utq2RCTm98eTrVcj", " by Friday.", carrier="prose"),
+    p("CRYPTO", "en", "pii_crypto_btc", "BTC address: ", "bc1qd5knetdnv6wt658pvhjrgfya3wpf7sgkyvx29a"),
+    p("CRYPTO", "en", "pii_crypto_btc", '{"payout": "', "bc1pgnnpmx4npl9sdfkp4k8jjph8x2cs7ndh38f4af5vpz9t8ajgsx9sg7jx8m", '"}', carrier="json", mode="balanced"),
+    p("CRYPTO", "en", "pii_crypto_ltc", "Litecoin deposit address: ", "LSCL2hJdHouk8JH5nksh1fQ3xWAvwN812i"),
+    p("CRYPTO", "en", "pii_crypto_eth", "Refunds go to ", "0xAE40A235A49990Ab85A85844fE7Eaab34998c8eF", ".", carrier="prose", mode="recall"),
+    p("CRYPTO", "en", "pii_crypto_eth_unchecked", "name,wallet\nAlice,", "0xd8fafcaeaba5e5a5576f47127302f09be3ef8da2", "", carrier="csv"),
+    p("CRYPTO", "de", "pii_crypto_btc", "Bitte überweisen Sie den Betrag an ", "3AmUfjkQBVsEoLYMFuytaeiKBazDe4wdfY", ".", carrier="prose"),
+    p("CRYPTO", "de", "pii_crypto_btc", "Bitcoin-Adresse: ", "bc1qgxas6jejm4faft5fa6s85n6hnchl0t8zc8ff3h8srj29e06eekfsus07fl"),
+    p("CRYPTO", "de", "pii_crypto_ltc", "| Kunde | Wallet |\n|---|---|\n| Muster | ", "ltc1qmepg342p53j4m6dj5v5sstkytefstu66yw2x27", " |", carrier="table", mode="balanced"),
+    p("CRYPTO", "de", "pii_crypto_ltc", "Auszahlung an ", "MStBHi1syUuuutxx4viMacU78B2rnRrR4b", " erfolgt.", carrier="prose"),
+    p("CRYPTO", "de", "pii_crypto_eth", "Ethereum-Adresse: ", "0xf8Fa223F1999b7BE7bd2B58F686aFA89bC084343", mode="recall"),
+    p("CRYPTO", "de", "pii_crypto_eth_unchecked", "Die Wallet-Adresse lautet ", "0x064c3cbf796da795c7d6ad6d75b8d7e5f0696295", ".", carrier="prose", mode="balanced"),
+    n("CRYPTO", "en", "pii_crypto_btc", "BTC address: 1FMesZMcejdnbx7L39utq2RCTm98eTrVck", "Base58Check checksum fails"),
+    n("CRYPTO", "en", "pii_crypto_btc", "Wallet: bc1qd5knetdnv6wt658pvhjrgfya3wpf7sgkyvx29A", "mixed case in Bech32", mode="balanced"),
+    n("CRYPTO", "en", "pii_crypto_ltc", "Litecoin address: LSCL2hJdHouk8JH5nksh1fQ3xWAvwN812j", "Base58Check checksum fails", mode="recall"),
+    n("CRYPTO", "en", "pii_crypto_eth_unchecked", "Commit 0xd8fafcaeaba5e5a5576f47127302f09be3ef8da2 was merged.", "lower-case address form without a wallet term", carrier="prose", mode="balanced"),
+    n("CRYPTO", "en", "pii_crypto_eth", "Tx hash: 0x9ac64c6fca067d28a33c277459afd400cc472df49ac64c6fca067d28a33c2774", "64 hex digits, a hash", mode="recall"),
+    n("CRYPTO", "de", "pii_crypto_btc", "Bitcoin-Adresse: 3AmUfjkQBVsEoLYMFuytaeiKBazDe4wdfZ", "Base58Check checksum fails"),
+    n("CRYPTO", "de", "pii_crypto_btc", "Testnetz-Adresse: tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx", "testnet human-readable part", mode="balanced"),
+    n("CRYPTO", "de", "pii_crypto_ltc", "Litecoin-Adresse: ltc1qmepg342p53j4m6dj5v5sstkytefstu66yw2x28", "Bech32 checksum fails", mode="recall"),
+    n("CRYPTO", "de", "pii_crypto_eth", "Ethereum-Adresse: 0xf8Fa223F1999b7BE7bd2B58F686aFA89bC084344", "EIP-55 checksum fails"),
+    n("CRYPTO", "de", "pii_crypto_btc", "Token x3AmUfjkQBVsEoLYMFuytaeiKBazDe4wdfY wurde gesperrt.", "part of a longer token", carrier="prose", mode="balanced"),
+]
+for _row in A02_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

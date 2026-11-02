@@ -802,7 +802,7 @@ tasks:
     accept: count_validated.py count rises by >= 4; the ICD-10 part of C07 is dropped
 
   # M3 buffer +1 (80)
-  - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
+  - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05], status: done}
 
   # M4 pass 1 (100 KiB p95 76 ms vs 10 ms)
   - id: H03

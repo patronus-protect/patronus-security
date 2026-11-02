@@ -209,6 +209,10 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_isin", "ISIN"),
     ("pii_lei", "LEI"),
     ("pii_pzn_de", "DE_PZN"),
+    ("pii_crypto_btc", "CRYPTO"),
+    ("pii_crypto_ltc", "CRYPTO"),
+    ("pii_crypto_eth", "CRYPTO"),
+    ("pii_crypto_eth_unchecked", "CRYPTO"),
 ];
 
 #[test]

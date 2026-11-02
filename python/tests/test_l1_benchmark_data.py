@@ -64,6 +64,7 @@ PII_LABELS = {
     "ISIN",
     "LEI",
     "DE_PZN",
+    "CRYPTO",
     "KR_BRN",
     "KR_FRN",
     "KR_RRN",

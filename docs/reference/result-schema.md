@@ -453,7 +453,11 @@ or as a key, never bare: the VIN (`VIN`, seventeen characters without `I`, `O`, 
 digits; `1HGCM82633A004352` with the North American check digit or `WVWZZZ1JZXW000001` in the
 European form), the ISIN (`ISIN`, Luhn over the letters; `US0378331005`), the LEI (`LEI`, ISO 7064
 MOD 97-10; `529900T8BM49AURSDO55`) and the Pharmazentralnummer (`DE_PZN`, weighted mod 11;
-`PZN: 01126111`; `PZN` followed by blanks only lists a product and stays silent). The German document number rules keep
+`PZN: 01126111`; `PZN` followed by blanks only lists a product and stays silent). Crypto wallet
+addresses (`CRYPTO`, A02) are reported bare in every mode when their checksum holds: Bitcoin in
+Base58Check (`1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa`) or Bech32/Bech32m (`bc1q…`, `bc1p…`), Litecoin
+(`L…`, `M…`, `ltc1…`) and Ethereum with the mixed-case EIP-55 checksum
+(`0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed`); a lower-case Ethereum address needs a wallet term or key. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

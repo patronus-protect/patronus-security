@@ -373,6 +373,8 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("IN_AADHAAR", "5915 3375 9365", 0.55),
         ("IN_GSTIN", "10BAGFF2439K3ZL", 0.55),
         ("US_NPI", "1850-184-619", 0.55),
+        ("CRYPTO", "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", 0.65),
+        ("CRYPTO", "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", 0.65),
     ];
     for label in PII_PATTERNS
         .iter()

@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Crypto wallet addresses (A02). New label `CRYPTO` in the new module
+  `ark-core/src/detectors/pii/crypto.rs`: `pii_crypto_btc` (Bitcoin P2PKH `1…` and P2SH `3…` in
+  Base58Check with the version byte `0x00`/`0x05` over a 20-byte hash, segwit `bc1…` with witness
+  version 0 in Bech32 and a 20- or 32-byte program or versions 1–16 in Bech32m, BIP 173/350),
+  `pii_crypto_ltc` (Litecoin `L…`/`M…`, versions `0x30`/`0x32`, segwit `ltc1…`) and `pii_crypto_eth`
+  (Ethereum `0x` and forty hex digits in mixed case with the EIP-55 checksum over Keccak-256) report the
+  bare value in every mode: four bytes of double SHA-256 or a 30-bit BCH code pass a random string
+  about once in a billion. `pii_crypto_eth_unchecked` (lower case, no checksum) reports only with a
+  wallet term (new lexicon entry `pii.crypto_wallet`, EN and DE) near it or as its key. Keccak-256
+  joins the shared validator library (`validators::keccak256`). `pii.crypto_wallet` moves from
+  `presidio_only` to `shared` (Presidio's `CRYPTO` covers Bitcoin only); M3 ARK 82 → 83, shared 32 →
+  33. New `rust/tests/pii_crypto_wallets.rs`, 22 new `pii_l1` rows (DE, EN), rule fixture entries,
+  Python ports in `scoreboard.py`. **Detection change** (`strict`, `balanced`, `recall`: new `CRYPTO`
+  findings). Four new regexes, linear and bounded (fixed character classes and bounded repeats
+  between word boundaries); validators run only on matches.
 - Mobile device and SIM identifiers (B-DEVID). Four new labels in the new module
   `ark-core/src/detectors/pii/device.rs`: `IMEI` (fifteen digits, plain or grouped 2-6-6-1 with spaces
   or hyphens, Luhn check digit, not one repeated digit), `MEID` (fourteen upper-case hex digits led by a
