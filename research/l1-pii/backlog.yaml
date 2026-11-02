@@ -889,6 +889,7 @@ tasks:
 
   # M4 pass 1 (100 KiB p95 76 ms vs 10 ms)
   - id: H03
+    status: done
     title: "Latency pass 1: profile 100 KiB, AnchorGate/prefilter coverage for every rule, remove the top hotspots"
     type: perf
     deps: []

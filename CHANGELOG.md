@@ -11,6 +11,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- L1 PII latency pass 1 (H03). A Unicode word boundary (`\b`) sends the regex lazy DFA to the
+  NFA at the first non-ASCII byte, so on German prose (`ä`, `ß`) most PII rules ran on the slow
+  engine: 100 KiB DE took about four times as long as EN. Each PII rule with a Unicode word boundary
+  now searches its pattern without word boundaries on the DFA and probes each candidate start
+  anchored with its own regex; the matches equal `captures_iter`. Every PII rule is now behind an
+  anchor gate or a prefilter: rules without a lexical anchor or Unicode word boundary (bare checksum
+  numbers, e-mail) get a proven value run (`ValueClass::Digit` or `Alphanumeric`, the longest run is
+  measured once per text), and `every_rule_has_an_anchor_gate_or_prefilter` fails for an ungated
+  rule. The context-bound `pii_fiscal_code_it` folds case in ASCII only (`(?i-u)`), so it no longer
+  matches a code spelled with `ſ` or the Kelvin sign. The gateway checks the network-diagnostic
+  markers once per text instead of lowercasing the whole text for every private IP span, moves L1
+  results to the caller instead of cloning them, and moves `matched_rules` into the details instead
+  of deep-copying them. No detection change: goldens, the rule fixture and the scoreboard are
+  unchanged. 100 KiB p95 on the VPS in `research/l1-pii/scoreboard/latency.md`.
 - Crypto wallet addresses (A02). New label `CRYPTO` in the new module
   `ark-core/src/detectors/pii/crypto.rs`: `pii_crypto_btc` (Bitcoin P2PKH `1…` and P2SH `3…` in
   Base58Check with the version byte `0x00`/`0x05` over a 20-byte hash, segwit `bc1…` with witness

@@ -14,10 +14,15 @@ use super::{
     identifiers, ie, india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk,
     us, validators, vat, za,
 };
+use crate::detectors::anchor_gate::AnchorGate;
 use crate::detectors::anchors;
+use crate::detectors::dlp::prefilter::{required_value_run, RuleScan, ValueClass, ValueRun};
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
 use regex::Regex;
+use regex_automata::{meta, Anchored, Input};
+use regex_syntax::ast;
+use regex_syntax::hir::{Hir, HirKind, Look};
 
 /// A single PII heuristic pattern.
 pub struct PiiPattern {
@@ -242,8 +247,14 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
 
 pub struct PiiPipeline {
     regexes: Vec<Regex>,
-    anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
+    anchor_gates: Vec<AnchorGate>,
+    /// Per rule with a Unicode word boundary: the rule without it, the
+    /// candidate search, and the rule's own regex for anchored probes (H03).
     prefilters: Vec<Option<Regex>>,
+    anchored: Vec<Option<meta::Regex>>,
+    /// Per rule without a lexical anchor or word boundary: a run of value
+    /// characters that every match contains (H03).
+    value_runs: Vec<Option<ValueRun>>,
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
@@ -264,6 +275,8 @@ impl PiiPipeline {
         let mut regexes = Vec::new();
         let mut anchor_gates = Vec::new();
         let mut prefilters = Vec::new();
+        let mut anchored = Vec::new();
+        let mut value_runs = Vec::new();
         let mut entity_groups = Vec::new();
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
@@ -273,22 +286,22 @@ impl PiiPipeline {
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
-            anchor_gates.push(crate::detectors::anchor_gate::AnchorGate::regex(
-                p.pattern, false,
-            ));
-            // Audited positive word-boundary assertions only. The relaxed search
-            // is a necessary condition; original captures and validators decide.
-            prefilters.push(
-                matches!(
-                    p.name,
-                    "pii_ipv4"
-                        | "pii_phone_us"
-                        | "pii_steuer_id_de"
-                        | "pii_steuernummer_de"
-                        | "pii_rentenversicherung_de"
-                )
-                .then(|| Regex::new(&p.pattern.replace(r"\b", "")).unwrap()),
+            anchor_gates.push(AnchorGate::regex(p.pattern, false));
+            let relaxed = without_unicode_word_boundaries(p.pattern);
+            anchored.push(
+                relaxed
+                    .is_some()
+                    .then(|| meta::Regex::new(p.pattern).unwrap()),
             );
+            value_runs.push(
+                (anchor_gates
+                    .last()
+                    .is_some_and(AnchorGate::is_unconditional)
+                    && relaxed.is_none())
+                .then(|| value_run(p.pattern))
+                .flatten(),
+            );
+            prefilters.push(relaxed);
             entity_groups.push(p.entity_group);
             rule_ids.push(p.name);
             validators.push(p.validator);
@@ -312,6 +325,8 @@ impl PiiPipeline {
             regexes,
             anchor_gates,
             prefilters,
+            anchored,
+            value_runs,
             rule_ids,
             entity_groups,
             validators,
@@ -614,6 +629,107 @@ impl PiiPipeline {
     }
 }
 
+impl PiiPipeline {
+    /// The leftmost match of rule `index` from `at`, as `regex.captures_at`.
+    /// A Unicode word boundary sends the lazy DFA to the slow NFA at the first
+    /// non-ASCII byte (`ä` in German prose), for the rest of the text. The rule
+    /// without its word boundaries stays on the DFA and matches wherever the
+    /// rule does: each of its match starts is probed anchored with the rule's
+    /// own regex, and only a start that holds captures (H03).
+    fn captures_at<'t>(
+        &self,
+        index: usize,
+        regex: &Regex,
+        text: &'t str,
+        at: usize,
+    ) -> Option<regex::Captures<'t>> {
+        let (Some(relaxed), Some(anchored)) = (&self.prefilters[index], &self.anchored[index])
+        else {
+            return regex.captures_at(text, at);
+        };
+        let mut start = at;
+        loop {
+            let candidate = relaxed.find_at(text, start)?.start();
+            if anchored.is_match(Input::new(text).range(candidate..).anchored(Anchored::Yes)) {
+                // The match starts here, so it is the leftmost one from here.
+                return regex.captures_at(text, candidate);
+            }
+            start = candidate + text[candidate..].chars().next()?.len_utf8();
+        }
+    }
+}
+
+/// The run of value characters that every match of `pattern` contains: the
+/// longest run of digits, else of ASCII letters and digits, if it has at least
+/// two characters.
+fn value_run(pattern: &str) -> Option<ValueRun> {
+    [ValueClass::Digit, ValueClass::Alphanumeric]
+        .into_iter()
+        .map(|class| ValueRun {
+            class,
+            min_len: required_value_run(pattern, class),
+        })
+        .find(|run| run.min_len >= 2)
+}
+
+/// `pattern` without its word boundaries if it has a Unicode one, else `None`:
+/// a necessary condition of the rule that the lazy DFA searches on any text.
+/// The assertions are cut out of the pattern source at their syntax spans.
+fn without_unicode_word_boundaries(pattern: &str) -> Option<Regex> {
+    struct Boundaries(Vec<ast::Span>);
+    impl ast::Visitor for Boundaries {
+        type Output = Vec<ast::Span>;
+        type Err = ();
+        fn finish(self) -> Result<Self::Output, ()> {
+            Ok(self.0)
+        }
+        fn visit_pre(&mut self, node: &ast::Ast) -> Result<(), ()> {
+            if let ast::Ast::Assertion(assertion) = node {
+                if !matches!(
+                    assertion.kind,
+                    ast::AssertionKind::StartLine
+                        | ast::AssertionKind::EndLine
+                        | ast::AssertionKind::StartText
+                        | ast::AssertionKind::EndText
+                        | ast::AssertionKind::NotWordBoundary
+                ) {
+                    self.0.push(assertion.span);
+                }
+            }
+            Ok(())
+        }
+    }
+    fn unicode_boundary(hir: &Hir) -> bool {
+        match hir.kind() {
+            HirKind::Look(look) => matches!(
+                look,
+                Look::WordUnicode
+                    | Look::WordStartUnicode
+                    | Look::WordEndUnicode
+                    | Look::WordStartHalfUnicode
+                    | Look::WordEndHalfUnicode
+            ),
+            HirKind::Repetition(repetition) => unicode_boundary(&repetition.sub),
+            HirKind::Capture(capture) => unicode_boundary(&capture.sub),
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs.iter().any(unicode_boundary),
+            _ => false,
+        }
+    }
+    if !unicode_boundary(&regex_syntax::parse(pattern).ok()?) {
+        return None;
+    }
+    let syntax = ast::parse::Parser::new().parse(pattern).ok()?;
+    let boundaries = ast::visit(&syntax, Boundaries(Vec::new())).ok()?;
+    let mut relaxed = String::with_capacity(pattern.len());
+    let mut at = 0;
+    for span in boundaries {
+        relaxed.push_str(&pattern[at..span.start.offset]);
+        at = span.end.offset;
+    }
+    relaxed.push_str(&pattern[at..]);
+    Some(Regex::new(&relaxed).expect("a pattern without assertions stays valid"))
+}
+
 /// Whether the national number of `rule_id` at `start` is the body of a VAT ID
 /// after its country prefix: a Portuguese NIF after `PT ` (B16), a Spanish NIF
 /// or NIE and a bare CIF after `ES ` or `ES-` (B01), and eight digits and a letter after `CY `
@@ -642,14 +758,25 @@ impl NativeRegexDetector for PiiPipeline {
         index: usize,
         regex: &Regex,
         text: &'t str,
-        _scan: Option<&crate::detectors::dlp::prefilter::RuleScan>,
+        _scan: Option<&RuleScan>,
     ) -> Vec<regex::Captures<'t>> {
-        if self.rule_ids[index] != "pii_iban_generic" {
-            return regex.captures_iter(text).collect();
-        }
+        let next = |at| self.captures_at(index, regex, text, at);
         let mut found = Vec::new();
         let mut at = 0;
-        while let Some(captures) = regex.captures_at(text, at) {
+        if self.rule_ids[index] != "pii_iban_generic" {
+            while let Some(captures) = next(at) {
+                let whole = captures.get(0).unwrap();
+                // As `captures_iter`; PII rules never match the empty string.
+                debug_assert!(!whole.is_empty());
+                at = whole.end().max(whole.start() + 1);
+                found.push(captures);
+                if at > text.len() {
+                    break;
+                }
+            }
+            return found;
+        }
+        while let Some(captures) = next(at) {
             let whole = captures.get(0).unwrap();
             match validators::iban_end(whole.as_str()) {
                 Some(end) if end < whole.len() => {
@@ -929,8 +1056,24 @@ impl NativeRegexDetector for PiiPipeline {
         self.detect_prepared_with_mode(prepared, allows_rule, explain, PiiMode::Strict)
     }
 
-    fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
+    fn anchor_gates(&self) -> &[AnchorGate] {
         &self.anchor_gates
+    }
+
+    /// The value runs of the rules without a lexical anchor or word boundary:
+    /// the longest run of each class is measured once per text.
+    fn rule_scan(&self, text: &str) -> Option<RuleScan> {
+        let mut longest = [None; 2];
+        let mut longest_run = |class: ValueClass| {
+            let slot = &mut longest[usize::from(class == ValueClass::Alphanumeric)];
+            *slot.get_or_insert_with(|| class.longest_run(text))
+        };
+        Some(RuleScan::from_active(
+            self.value_runs
+                .iter()
+                .map(|run| run.is_none_or(|run| longest_run(run.class) >= run.min_len))
+                .collect(),
+        ))
     }
     fn prefilters(&self) -> Option<&[Option<Regex>]> {
         Some(&self.prefilters)
@@ -1058,6 +1201,7 @@ mod prefilter_tests {
         let optimized = PiiPipeline::new();
         let mut reference = PiiPipeline::new();
         reference.prefilters.iter_mut().for_each(|p| *p = None);
+        reference.value_runs.iter_mut().for_each(|run| *run = None);
         let cases: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/l1_bilingual_rules.json"
         ))
@@ -1083,7 +1227,6 @@ mod prefilter_tests {
                         );
                         for (re, pre) in optimized.regexes.iter().zip(&optimized.prefilters) {
                             if let Some(pre) = pre {
-                                assert_eq!(pre.as_str(), re.as_str().replace(r"\b", ""));
                                 assert!(!re.is_match(&text) || pre.is_match(&text), "{text}");
                             }
                         }
@@ -1091,5 +1234,26 @@ mod prefilter_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    #[test]
+    fn every_rule_has_an_anchor_gate_or_prefilter() {
+        let pipeline = PiiPipeline::new();
+        let ungated: Vec<_> = PII_PATTERNS
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| {
+                pipeline.anchor_gates[*index].is_unconditional()
+                    && pipeline.prefilters[*index].is_none()
+                    && pipeline.value_runs[*index].is_none()
+            })
+            .map(|(_, pattern)| pattern.name)
+            .collect();
+        assert!(ungated.is_empty(), "ungated PII rules: {ungated:?}");
     }
 }

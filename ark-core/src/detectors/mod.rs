@@ -337,7 +337,10 @@ pub trait NativeRegexDetector {
             self.resolve_overlaps(text, evidence_spans, &mut matched_rules)
         };
         if !matched_rules.is_empty() {
-            details.insert("matched_rules".into(), serde_json::json!(matched_rules));
+            details.insert(
+                "matched_rules".into(),
+                serde_json::Value::Array(matched_rules),
+            );
         }
         let Some(class_name) = class_name else {
             return NativeDetection {
