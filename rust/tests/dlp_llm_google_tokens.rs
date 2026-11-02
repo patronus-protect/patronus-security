@@ -170,7 +170,10 @@ fn lookalikes_with_wrong_length_marker_or_alphabet_are_not_reported() {
                     assert!(!rule_hit(&text, rule_id), "{rule_id}: {gen}/{seed}: {text}");
                 }
                 let text = NEUTRAL_CARRIER.replace("{}", &value);
-                assert!(scan(&text).evidence_spans.is_empty(), "{gen}/{seed}: {text}");
+                assert!(
+                    scan(&text).evidence_spans.is_empty(),
+                    "{gen}/{seed}: {text}"
+                );
             }
         }
     }
@@ -183,11 +186,7 @@ fn openai_keys_take_both_documented_half_lengths() {
     let (head, tail) = (&key[8..82], &key[90..164]);
     for (head_len, tail_len) in [(74, 74), (58, 74), (74, 58), (58, 58)] {
         for prefix in ["sk-proj-", "sk-admin-"] {
-            let value = format!(
-                "{prefix}{}T3BlbkFJ{}",
-                &head[..head_len],
-                &tail[..tail_len]
-            );
+            let value = format!("{prefix}{}T3BlbkFJ{}", &head[..head_len], &tail[..tail_len]);
             let text = format!("OPENAI_API_KEY={value}\n");
             assert!(rule_hit(&text, "dlp_openai_key"), "{head_len}/{tail_len}");
             assert!(reports(&text, &value), "{head_len}/{tail_len}");
@@ -202,11 +201,26 @@ fn openai_keys_take_both_documented_half_lengths() {
 fn shared_llm_validator_rejects_single_case_fills() {
     // A typed fill in the exact shape: no random part with both cases.
     let fills = [
-        ("dlp_anthropic_key", format!("sk-ant-api03-{}AA", "x".repeat(93))),
-        ("dlp_anthropic_key", format!("sk-ant-admin01-{}AA", "Y".repeat(93))),
-        ("dlp_openai_key", format!("sk-proj-{}T3BlbkFJ{}", "a".repeat(74), "b".repeat(74))),
-        ("dlp_openai_svc", format!("sk-svcacct-{}T3BlbkFJ{}", "a1".repeat(37), "C2".repeat(37))),
-        ("dlp_openai_legacy", format!("sk-{}T3BlbkFJ{}", "abc12".repeat(4), "ABC12".repeat(4))),
+        (
+            "dlp_anthropic_key",
+            format!("sk-ant-api03-{}AA", "x".repeat(93)),
+        ),
+        (
+            "dlp_anthropic_key",
+            format!("sk-ant-admin01-{}AA", "Y".repeat(93)),
+        ),
+        (
+            "dlp_openai_key",
+            format!("sk-proj-{}T3BlbkFJ{}", "a".repeat(74), "b".repeat(74)),
+        ),
+        (
+            "dlp_openai_svc",
+            format!("sk-svcacct-{}T3BlbkFJ{}", "a1".repeat(37), "C2".repeat(37)),
+        ),
+        (
+            "dlp_openai_legacy",
+            format!("sk-{}T3BlbkFJ{}", "abc12".repeat(4), "ABC12".repeat(4)),
+        ),
     ];
     for (rule_id, value) in &fills {
         let text = format!("Wert im Ticket: {value}\n");

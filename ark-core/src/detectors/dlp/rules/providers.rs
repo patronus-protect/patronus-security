@@ -10,7 +10,6 @@ use crate::{
     detectors::validators::{
         base64_decode, crc32, crc32_base62_valid, crc32_hex_valid, macaroon_v2_parse, Base64Kind,
     },
-    post_prediction::is_real_secret_assignment,
 };
 use serde_json::{Map, Value};
 use std::{borrow::Cow, ops::Range};
@@ -54,6 +53,41 @@ fn is_cratesio_token(value: &str) -> bool {
 /// Legacy Vault token: `s.` and a body with both cases.
 fn is_vault_legacy_token(value: &str) -> bool {
     value.strip_prefix("s.").is_some_and(has_both_cases)
+}
+
+/// F-LLM: prefixes of the OpenAI and Anthropic keys, longest first.
+const LLM_KEY_PREFIXES: &[&str] = &[
+    "sk-ant-admin01-",
+    "sk-ant-api03-",
+    "sk-svcacct-",
+    "sk-admin-",
+    "sk-proj-",
+    "sk-",
+];
+
+/// F-LLM: OpenAI (`sk-proj-`, `sk-admin-`, `sk-svcacct-`, legacy `sk-`) and
+/// Anthropic (`sk-ant-api03-`, `sk-ant-admin01-`) keys, whose marker and
+/// lengths the rule regex fixes (gitleaks openai-api-key, anthropic-api-key,
+/// anthropic-admin-api-key). Each random part, the halves around the OpenAI
+/// marker `T3BlbkFJ` or the Anthropic body before `AA`, holds upper- and
+/// lower-case letters; a typed fill of the same shape lacks one of them.
+fn is_llm_api_key(value: &str) -> bool {
+    let Some(body) = LLM_KEY_PREFIXES
+        .iter()
+        .find_map(|prefix| value.strip_prefix(prefix))
+    else {
+        return false;
+    };
+    match body.split_once("T3BlbkFJ") {
+        Some((head, tail)) => has_both_cases(head) && has_both_cases(tail),
+        None => body.strip_suffix("AA").is_some_and(has_both_cases),
+    }
+}
+
+/// Google OAuth 2.0 access token: `ya29.` and a random base64url body; the
+/// whole token takes at most 2048 bytes.
+fn is_google_access_token(value: &str) -> bool {
+    value.len() <= 2048 && value.strip_prefix("ya29.").is_some_and(has_both_cases)
 }
 
 /// Lines above the value's line in which a provider term counts.
@@ -234,15 +268,15 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── AI / LLM API Keys ────────────────────────────────────────────────────
     DlpPattern {
         name: "dlp_anthropic_key",
-        pattern: r"sk-ant-[a-zA-Z0-9\-_]{10,}",
+        pattern: r"sk-ant-(?:api03|admin01)-[A-Za-z0-9_\-]{93}AA",
         entity_group: "API_KEY",
-        validator: Some(is_real_secret_assignment),
+        validator: Some(is_llm_api_key),
         span_group: None,
         base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:anthropic-api-key",
-            &["sk-ant-"],
+            &["sk-ant-api03-", "sk-ant-admin01-"],
         )
         .with_provider("anthropic")
         .with_min_entropy(3.0)
@@ -251,15 +285,18 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_openai_key",
-        pattern: r"sk-proj-[a-zA-Z0-9\-_]{10,}",
+        pattern: concat!(
+            r"sk-(?:proj|admin)-(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+            r"T3BlbkFJ(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+        ),
         entity_group: "API_KEY",
-        validator: None,
+        validator: Some(is_llm_api_key),
         span_group: None,
         base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:openai-api-key",
-            &["sk-proj-"],
+            &["sk-proj-", "sk-admin-"],
         )
         .with_provider("openai")
         .with_min_entropy(3.0)
@@ -268,15 +305,15 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_openai_legacy",
-        pattern: r"sk-[a-zA-Z0-9]{48}",
+        pattern: r"sk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}",
         entity_group: "API_KEY",
-        validator: None,
+        validator: Some(is_llm_api_key),
         span_group: None,
         base_score: 45,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:openai-api-key",
-            &["sk-"],
+            &["t3blbkfj"],
         )
         .with_provider("openai")
         .with_min_entropy(3.0)
@@ -285,9 +322,12 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_openai_svc",
-        pattern: r"sk-svcacct-[a-zA-Z0-9\-]{10,}",
+        pattern: concat!(
+            r"sk-svcacct-(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+            r"T3BlbkFJ(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+        ),
         entity_group: "API_KEY",
-        validator: None,
+        validator: Some(is_llm_api_key),
         span_group: None,
         base_score: 55,
         meta: RuleMeta::new(
@@ -302,7 +342,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_huggingface",
-        pattern: r"hf_[A-Za-z0-9]{20,}",
+        pattern: r"(?:hf_|api_org_)[A-Za-z]{34}",
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
@@ -310,24 +350,30 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:huggingface-access-token",
-            &["hf_"],
+            &["hf_", "api_org_"],
         )
         .with_provider("huggingface")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_body_len(34, 24)
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
         name: "dlp_groq_key",
-        pattern: r"gsk_[a-zA-Z0-9]{48,}",
+        pattern: r"gsk_[A-Za-z0-9]{52}",
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
         base_score: 50,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gsk_"])
-            .with_provider("groq")
-            .with_min_entropy(3.0)
-            .with_boundary("")
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/groq/groq.go",
+            &["gsk_"],
+        )
+        .with_provider("groq")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_body_len(52, 40)
             .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -345,15 +391,20 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_replicate",
-        pattern: r"r8_[A-Za-z0-9]{20,}",
+        pattern: r"r8_[A-Za-z0-9]{37}",
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
         base_score: 45,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["r8_"])
-            .with_provider("replicate")
-            .with_min_entropy(3.0)
-            .with_boundary("")
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/replicate/replicate.go",
+            &["r8_"],
+        )
+        .with_provider("replicate")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_body_len(37, 28)
             .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
@@ -416,32 +467,42 @@ pub(super) const RULES: &[DlpPattern] = &[
             .with_provider("google")
             .with_min_entropy(3.0)
             .with_boundary("-")
+            .with_body_len(35, 28)
             .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
         name: "dlp_google_oauth_token",
-        pattern: r"ya29\.[a-zA-Z0-9_\-]{20,}",
+        pattern: r"ya29\.[A-Za-z0-9_\-]{30,}",
         entity_group: "CLOUD_KEY",
-        validator: None,
+        validator: Some(is_google_access_token),
         span_group: None,
         base_score: 50,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["ya29."])
-            .with_provider("google")
-            .with_min_entropy(3.0)
-            .with_boundary("-")
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://developers.google.com/identity/protocols/oauth2#size",
+            &["ya29."],
+        )
+        .with_provider("google")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
             .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
         name: "dlp_gcp_client_secret",
-        pattern: r"GOCSPX-[A-Za-z0-9_\-]{28,}",
+        pattern: r"GOCSPX-[A-Za-z0-9_\-]{28}",
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
         base_score: 55,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gocspx-"])
-            .with_provider("google")
-            .with_min_entropy(3.0)
-            .with_boundary("-")
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/mongodb/kingfisher/blob/main/data/rules/google.yml",
+            &["gocspx-"],
+        )
+        .with_provider("google")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_body_len(28, 20)
             .with_subtype(SecretSubtype::SecretKey),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────

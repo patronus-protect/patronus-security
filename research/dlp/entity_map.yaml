@@ -172,7 +172,7 @@ entities:
     ark: [dlp_anthropic_key]
     gitleaks: [anthropic-api-key, anthropic-admin-api-key]
     trufflehog: [Anthropic]
-    backlog: F06
+    backlog: F-LLM
   - id: llm.openai.api_key
     scope: shared
     group: API_KEY
@@ -180,13 +180,14 @@ entities:
     gitleaks: [openai-api-key]
     trufflehog: [OpenAI]
     detect_secrets: [OpenAIDetector]
-    backlog: F06
+    backlog: F-LLM
   - id: llm.huggingface.token
     scope: shared
     group: API_KEY
     ark: [dlp_huggingface]
     gitleaks: [huggingface-access-token, huggingface-organization-api-token]
     trufflehog: [HuggingFace]
+    backlog: F-LLM
   - id: llm.xai.api_key
     scope: shared
     group: API_KEY
@@ -198,11 +199,13 @@ entities:
     group: API_KEY
     ark: [dlp_groq_key]
     trufflehog: [Groq]
+    backlog: F-LLM
   - id: llm.replicate.api_token
     scope: shared
     group: API_KEY
     ark: [dlp_replicate]
     trufflehog: [Replicate]
+    backlog: F-LLM
   - id: cloud.aws.access_key_id
     scope: shared
     group: CLOUD_KEY
@@ -226,17 +229,20 @@ entities:
     ark: [dlp_google_api_key]
     gitleaks: [gcp-api-key]
     google_dlp: [GCP_API_KEY]
+    backlog: F-LLM
   - id: cloud.gcp.oauth_access_token
     scope: shared
     group: CLOUD_KEY
     ark: [dlp_google_oauth_token]
     trufflehog: [GoogleOauth2]
     google_dlp: [AUTH_TOKEN]
+    backlog: F-LLM
   - id: cloud.gcp.oauth_client_secret
     scope: shared
     group: CLOUD_KEY
     ark: [dlp_gcp_client_secret]
     google_dlp: [OAUTH_CLIENT_SECRET]
+    backlog: F-LLM
   - id: vcs.github.token
     scope: shared
     group: SECRET_TOKEN
