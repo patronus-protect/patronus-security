@@ -425,6 +425,7 @@ tasks:
       IP gold value found today stay found; presidio_favored IP precision rises in balanced and strict
 
   - id: T31
+    status: done
     title: "Gold-gap report: check gold against checksum validators only for ids whose rules all carry one (no ABA check for every account number, no DE check for every passport)"
     type: eval-infra
     deps: [B-EVAL]

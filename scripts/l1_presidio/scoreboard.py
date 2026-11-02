@@ -1698,17 +1698,23 @@ def count_validated_module() -> Any:
 
 
 def gold_validators(emap: Any) -> dict[str, tuple[str, ...]]:
-    """Checksum validators per benchmark id, from the PII_PATTERNS registry and ``checksums.ark``."""
+    """Checksum validators per benchmark id, from the PII_PATTERNS registry and ``checksums.ark``.
+
+    Only ids whose rules all carry a checksum validator: a mixed id (e.g. account numbers with an ABA
+    routing rule next to format rules) also finds values no checksum covers, so failing gold is no gap."""
     counter = count_validated_module()
     rules = counter.load_rules()
     found: dict[str, set[str]] = defaultdict(set)
+    mixed: set[str] = set()
     for rule in counter.ark_rules_from_source():
-        if rule.validator is None or rules.ark.get(rule.validator) is None:
-            continue
         entity_id = emap.ark_label(rule.label)
-        if entity_id is not None:
+        if entity_id is None:
+            continue
+        if rule.validator is None or rules.ark.get(rule.validator) is None:
+            mixed.add(entity_id)
+        else:
             found[entity_id].add(rule.validator)
-    return {entity_id: tuple(sorted(names)) for entity_id, names in sorted(found.items())}
+    return {entity_id: tuple(sorted(names)) for entity_id, names in sorted(found.items()) if entity_id not in mixed}
 
 
 # Markup around a value does not make it another value: Gretel annotates "[x@y.com]" or "mailto:x@y.com"
@@ -1734,7 +1740,7 @@ def gold_gaps(
     in the row (e.g. the unannotated ``mailto:`` copy of a mail link); values compare without
     surrounding brackets, quotes and punctuation (``VALUE_EDGES``) and without a ``mailto:`` prefix.
     ``gold_invalid``: gold values failing every checksum validator of their id, ``invalid_found``: those
-    the engine reports with the exact span; both None for ids without a checksum validator."""
+    the engine reports with the exact span; both None for ids outside ``gold_validators``."""
     gold_rows = list(gold_rows)
     predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
     validators = gold_validators(emap) if validators is None else validators
@@ -2612,8 +2618,8 @@ def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
         "",
         "### Gold values failing the entity's validator",
         "",
-        "Gold of ids with a checksum validator (Python ports of the Rust validators) that fails every one of",
-        "them; the engine columns count those gold values reported with the exact span.",
+        "Gold of ids whose rules all carry a checksum validator (Python ports of the Rust validators) that",
+        "fails every one of them; the engine columns count those gold values reported with the exact span.",
         "",
         "| Corpus | Entity | Validator | Gold | Invalid | " + " | ".join(names) + " |",
         "|---|---|---|---:|---:|" + "---:|" * len(names),
