@@ -753,6 +753,7 @@ tasks:
 
   # M1/M2 focus on presidio_favored (decided 2026-11-02 after the scoreboard of that day)
   - id: Q-M2
+    status: done
     title: "M2 on presidio_favored: DE/EU macro-F1 >= Presidio tuned in the attainable view"
     type: recall-fix
     deps: [T27, T32]
