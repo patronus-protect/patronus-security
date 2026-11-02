@@ -465,7 +465,7 @@ def vat_rows(name: str, split: str) -> tuple[dict, ...]:
 @lru_cache(maxsize=None)
 def vat_validators() -> dict:
     """The checksum ports of every VAT id, by the PII_PATTERNS registry and ``checksums.ark``."""
-    names = scoreboard.gold_validators(scoreboard.entity_map_module.load())
+    names = scoreboard.gold_checks(scoreboard.entity_map_module.load()).validators
     return {
         entity: [scoreboard.CHECKSUM_PORTS[name] for name in names[entity]]
         for entity in set().union(*VAT_IDS.values())

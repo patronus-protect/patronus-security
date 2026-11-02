@@ -38,6 +38,70 @@ source_families:
   neutral: [gretel-synthetic-pii-finance, ai4privacy-openpii-nano-1k, tab]
   presidio_favored: [presidio-evaluator-synth-v2, presidio-analyzer-recognizer-tests]
 
+# Bekannte Gold-Lücken (T27, entschieden 2026-11-02, Option b; research/l1-pii/README.md, Abschnitt
+# „Erreichbares Gold“). Meilensteine M1/M2 und die Untergrenze F1 >= 80 werden auf erreichbarem Gold
+# gewertet: Gold-Werte, die jeden Prüfziffer-Validator ihrer ID verfehlen (Pass und Ausweis nur gegen
+# den Validator des Ausstellerlandes), und Gold-Werte unter einer der folgenden Entscheidungen fallen
+# für ARK und Presidio gleichermaßen heraus; die Rohwerte werden daneben weiter berichtet. Ein Eintrag
+# nennt ID, Entscheidung, Grund und welches Gold er trifft (alle angegebenen Bedingungen zugleich):
+#   span     regulärer Ausdruck, den der annotierte Text vollständig trifft;
+#   bare     der Span ist der ganze Zeilentext (Leerraum außen ausgenommen);
+#   rows     regulärer Ausdruck am Anfang der Zeilen-ID (Recognizer-Tests: test_<land>_<name>_recognizer);
+#   corpora  nur diese Gold-Quellen.
+# Prüfung: scripts/l1_presidio/entity_map.py check; Wertung: scoreboard.py (Sicht `attainable`).
+known_gaps:
+  - id: pii.ip_address
+    decision: D-IP
+    reason: Loopback- und unspezifizierte Adressen (auch IPv4-gemappt und als Präfix) sind keine personenbezogene Adresse
+    span: '(?:127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1?|::ffff:(?:127(?:\.\d{1,3}){3}|0\.0\.0\.0))(?:/\d{1,3})?'
+  - id: pii.ip_address
+    decision: T28
+    reason: IPv4-Teil einer ungültigen IPv6-Kette (foo2001:db8::10.0.0.1) ergibt keinen Teilspan (B-IP)
+    rows: 'test_ip_recognizer:test_when_invalid_ip_then_no_match:'
+  - id: pii.uk.national_insurance_number
+    decision: T27
+    reason: Gold-Span mit Leerraum am Rand (z. B. ' YZ 61 48 68 B'); exakte Spans enden nie in Leerraum
+    span: '\s.*|.*\s'
+  - id: pii.us.social_security_number
+    decision: B-SSN
+    reason: Werte, die validators::us_ssn ablehnt (Werbebereich 987-65-4320 bis 4329, Gruppe 219-09-9999)
+    span: '987-65-432\d|219-09-9999'
+  - id: pii.us.social_security_number
+    decision: B-SSN
+    reason: blanke neun Ziffern ohne SSN-Kontext bleiben negativ
+    span: '\d{9}'
+    bare: true
+  - id: pii.us.social_security_number
+    decision: T27
+    reason: Gretels ssn-Gold enthält nationale Kennungen anderer Länder (SE, IT, UK, NL), keine US-SSN
+    span: '(?!\d{3}-\d{2}-\d{4}$|\d{9}$).*'
+    corpora: [gretel-synthetic-pii-finance]
+  - id: pii.de.bsnr
+    decision: B-DE1
+    reason: blanke BSNR ohne Kontext bleibt negativ (keine Prüfziffer)
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.de.lanr
+    decision: B-DE1
+    reason: blanke LANR ohne Kontext bleibt negativ (Prüfziffer zu schwach für kontextfreie Treffer)
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.de.tax_id
+    decision: K05
+    reason: blanke Steuer-ID ohne Kontext nur mit BZSt-Ziffernverteilung; der Testwert erfüllt sie nicht
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: entity.driver_license_number
+    decision: F15
+    reason: blanke deutsche Führerscheinnummer ohne Kontext bleibt negativ (keine Prüfziffer)
+    bare: true
+    rows: 'test_de_fuehrerschein_recognizer:'
+  - id: pii.license_plate
+    decision: T30
+    reason: blanke TR-, IN- und NG-Kennzeichen ohne Kennzeichen-Begriff bleiben negativ (Format ohne Prüfziffer, B-LUHN)
+    bare: true
+    rows: 'test_(?:tr_license_plate|in_vehicle_registration|ng_vehicle_registration)_recognizer:'
+
 entities:
   # ── shared ─────────────────────────────────────────────────────────────
   - id: pii.email

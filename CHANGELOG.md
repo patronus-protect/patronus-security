@@ -11,6 +11,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- L1 PII milestones on attainable gold (T27, decided 2026-11-02, option b). `scoreboard.py m1`,
+  `m2` and `report` score a raw and an attainable view; M1, M2 and the F1 >= 80 quality floor are
+  judged on the attainable one for every family and both engines alike. It leaves out gold that fails
+  every checksum validator of its id (a passport or identity card only the validator of its issuing
+  country, where the row names it) and gold under a recorded decision: the new `known_gaps` list in
+  `research/l1-pii/entity_map.yaml` (D-IP loopback, T28 IPv4 part of an invalid IPv6 chain, B-SSN, Gretel's foreign `ssn` gold, bare
+  BSNR/LANR/tax ID/DE driving licence, bare TR/IN/NG plates, a NINO span with a leading space), checked
+  by `entity_map.py check`. The gold-gap report no longer counts every passport as failing
+  `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
+  unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
+  raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
 - L1 PII latency pass 1 (H03). A Unicode word boundary (`\b`) sends the regex lazy DFA to the
   NFA at the first non-ASCII byte, so on German prose (`ä`, `ß`) most PII rules ran on the slow
   engine: 100 KiB DE took about four times as long as EN. Each PII rule with a Unicode word boundary

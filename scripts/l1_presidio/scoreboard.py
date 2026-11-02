@@ -54,6 +54,12 @@ unless both hold on balanced:
 
     scoreboard.py m2 --gold DIR --ark strict=DIR --ark balanced=DIR --presidio PRESIDIO_DIR [--language de]
 
+``m1``, ``m2`` and ``report`` score two views (T27): ``raw`` gold, and ``attainable`` gold, which
+leaves out for every engine alike the gold failing every checksum validator of its id (a passport or
+identity card only the validator of its issuing country, ``row_validators``) and the gold under a
+recorded decision (``known_gaps`` in entity_map.yaml). The milestones and the F1 >= 80 floor are
+judged on the attainable view; the raw view is printed next to it. ``gate`` and ``score`` stay raw.
+
 ``report`` renders the Markdown baseline (research/l1-pii/scoreboard/baseline.md): P/R/F1 per
 source family, corpus and entity for each Ark mode and each Presidio profile, hard-negative FP
 per family, M1 and M2 of every Ark mode against each profile, and the gold gaps per corpus and entity
@@ -71,6 +77,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -99,6 +106,14 @@ ARK_MODES = ("strict", "balanced", "recall")  # accepted by m1, m2 and report
 M2_SCOPES = ("shared", "ark_only")
 M2_MARGIN_PP = 15.0
 M2_PARITY_FAMILIES = ("presidio_favored",)
+# T27: milestones and the F1 >= 80 floor are judged on attainable gold; the raw view is reported next to it.
+VIEWS = ("raw", "attainable")
+MILESTONE_VIEW = "attainable"
+# Document classes spanning countries: their gold is checked against the validator of the issuing
+# country only (rules.country in entity_map.yaml), and only where the row names the country.
+DOCUMENT_IDS = ("entity.passport_number", "pii.identity_card_number")
+RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
+RECOGNIZER_COUNTRY = re.compile(r"test_([a-z]{2})_[a-z0-9_]+_recognizer:")
 # Everything that goes into the native module and the prediction runner.
 KEY_PATHS = (
     "Cargo.toml",
@@ -266,19 +281,22 @@ Span = tuple[str | None, int, int]
 
 
 def _row_spans(
-    row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str
+    row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str, checks: "GoldChecks | None" = None
 ) -> tuple[str, str, set[Span], set[Span], set[Span]]:
     """Corpus, family, scored gold, all predictions and scored predictions of one gold row.
 
     Gold of an ``IGNORED_GOLD`` id failing its check is dropped together with every scored prediction
-    of that id overlapping it, so it neither counts as missed nor as a false positive."""
+    of that id overlapping it, so it neither counts as missed nor as a false positive. With ``checks``
+    (attainable view, T27) unattainable gold is dropped the same way."""
     corpus, family, allowed = _row_scope(row, emap, where)
     gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
     gold = {item for item in gold if item[0] in allowed}
     predicted_all = {_span(s, resolve_label(s, emap), where) for s in spans}
     predicted = {item for item in predicted_all if item[0] in allowed}
     ignored = {
-        item for item in gold if item[0] in IGNORED_GOLD and not IGNORED_GOLD[item[0]](_gold_value(row, item, where))
+        item for item in gold
+        if (item[0] in IGNORED_GOLD and not IGNORED_GOLD[item[0]](_gold_value(row, item, where)))
+        or (checks is not None and unattainable(row, corpus, item, emap, checks, where) is not None)
     }
     if ignored:
         gold -= ignored
@@ -295,9 +313,12 @@ def _gold_value(row: dict[str, Any], item: Span, where: str) -> str:
 
 
 def score_rows(
-    gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = ""
+    gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = "",
+    checks: "GoldChecks | None" = None,
 ) -> dict[str, Any]:
-    """Count exact and overlap matches per bucket plus predictions on hard-negative spans."""
+    """Count exact and overlap matches per bucket plus predictions on hard-negative spans.
+
+    ``checks`` scores the attainable view (T27): unattainable gold is left out for every engine alike."""
     gold_rows = list(gold_rows)
     predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
     l1 = l1_ids(emap)
@@ -309,7 +330,7 @@ def score_rows(
         rows += 1
         row_id = row["id"]
         where = f"{dataset}:{row_id}"
-        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where)
+        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where, checks)
         for hn in row.get("hard_negatives", []) or []:
             _, start, end = _span(hn, None, where)
             # A hard negative with entity_type only forbids that id (a recognizer's negative case).
@@ -1697,24 +1718,71 @@ def count_validated_module() -> Any:
     return count_validated
 
 
-def gold_validators(emap: Any) -> dict[str, tuple[str, ...]]:
+class GoldChecks(NamedTuple):
+    """Checksum validators gold is checked against (gold-gap report, attainable view)."""
+
+    validators: dict[str, tuple[str, ...]]  # ids whose rules all carry a checksum validator
+    documents: dict[str, dict[str, tuple[str, ...]]]  # DOCUMENT_IDS: issuing country -> its validators
+
+
+def gold_checks(emap: Any) -> GoldChecks:
     """Checksum validators per benchmark id, from the PII_PATTERNS registry and ``checksums.ark``.
 
-    Only ids whose rules all carry a checksum validator: a mixed id (e.g. account numbers with an ABA
-    routing rule next to format rules) also finds values no checksum covers, so failing gold is no gap."""
+    ``validators``: only ids whose rules all carry a checksum validator: a mixed id (e.g. account numbers
+    with an ABA routing rule next to format rules) also finds values no checksum covers, so failing gold
+    is no gap. ``documents``: passports and identity cards are mixed, but a document of a country whose
+    validator has a ``country`` (``de_passport_number``: de) must pass that validator (``row_validators``)."""
     counter = count_validated_module()
     rules = counter.load_rules()
     found: dict[str, set[str]] = defaultdict(set)
+    documents: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     mixed: set[str] = set()
     for rule in counter.ark_rules_from_source():
         entity_id = emap.ark_label(rule.label)
         if entity_id is None:
             continue
-        if rule.validator is None or rules.ark.get(rule.validator) is None:
+        checksum = rules.ark.get(rule.validator) if rule.validator is not None else None
+        if checksum is None:
             mixed.add(entity_id)
-        else:
-            found[entity_id].add(rule.validator)
-    return {entity_id: tuple(sorted(names)) for entity_id, names in sorted(found.items()) if entity_id not in mixed}
+            continue
+        found[entity_id].add(rule.validator)
+        if entity_id in DOCUMENT_IDS and checksum.country is not None:
+            documents[entity_id][checksum.country].add(rule.validator)
+    return GoldChecks(
+        {entity_id: tuple(sorted(names)) for entity_id, names in sorted(found.items()) if entity_id not in mixed},
+        {entity_id: {country: tuple(sorted(names)) for country, names in sorted(by_country.items())}
+         for entity_id, by_country in sorted(documents.items())},
+    )
+
+
+def document_country(row: dict[str, Any]) -> str | None:
+    """Issuing country of the documents in a row, where the gold names it: a Presidio recognizer test
+    case of a national recognizer (``test_de_passport_recognizer:...``)."""
+    if row.get("corpus") != RECOGNIZER_TESTS:
+        return None
+    match = RECOGNIZER_COUNTRY.match(str(row.get("id", "")))
+    return match.group(1) if match else None
+
+
+def row_validators(row: dict[str, Any], entity_id: str, checks: GoldChecks) -> tuple[str, ...] | None:
+    """Validators a gold value of the id in this row must pass (one of them); None: not checked."""
+    if entity_id in checks.validators:
+        return checks.validators[entity_id]
+    country = document_country(row)
+    return checks.documents.get(entity_id, {}).get(country) if country else None
+
+
+def unattainable(row: dict[str, Any], corpus: str, item: Span, emap: Any, checks: GoldChecks, where: str) -> str | None:
+    """Why a gold span is out of the attainable view (T27): ``checksum`` if its value without markup
+    (``_gold_value``) fails every validator ``row_validators`` names, else the decision of a ``known_gaps``
+    entry covering it; None: attainable."""
+    label, start, end = item
+    value = _gold_value(row, item, where)
+    names = row_validators(row, label, checks)
+    if names and not any(CHECKSUM_PORTS[name](value) for name in names):
+        return "checksum"
+    gap = emap.known_gap(label, corpus, str(row.get("id", "")), row["text"], start, end)
+    return gap.decision if gap else None
 
 
 # Markup around a value does not make it another value: Gretel annotates "[x@y.com]" or "mailto:x@y.com"
@@ -1731,7 +1799,7 @@ def gap_value(value: str) -> str:
 
 def gold_gaps(
     gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = "",
-    validators: dict[str, tuple[str, ...]] | None = None,
+    checks: GoldChecks | None = None,
 ) -> dict[str, dict[str, dict[str, int | None]]]:
     """Gold gaps of one engine per corpus and scored id; reported next to the metrics, never part of them.
 
@@ -1739,16 +1807,22 @@ def gold_gaps(
     their id with the same value, and whose text equals an annotated gold value of the same id elsewhere
     in the row (e.g. the unannotated ``mailto:`` copy of a mail link); values compare without
     surrounding brackets, quotes and punctuation (``VALUE_EDGES``) and without a ``mailto:`` prefix.
-    ``gold_invalid``: gold values failing every checksum validator of their id, ``invalid_found``: those
-    the engine reports with the exact span; both None for ids outside ``gold_validators``."""
+    ``gold_invalid``: gold values failing every checksum validator of their id (``row_validators``; a
+    passport or identity card only against the validator of its issuing country), ``invalid_found``: those
+    the engine reports with the exact span; both None for ids ``gold_checks`` does not check.
+    ``known_gap``: other gold values a recorded decision leaves out of the attainable view (T27)."""
     gold_rows = list(gold_rows)
     predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
-    validators = gold_validators(emap) if validators is None else validators
-    unported = {name for names in validators.values() for name in names} - CHECKSUM_PORTS.keys()
+    checks = gold_checks(emap) if checks is None else checks
+    names_used = {name for names in checks.validators.values() for name in names}
+    names_used |= {name for by_country in checks.documents.values() for names in by_country.values() for name in names}
+    unported = names_used - CHECKSUM_PORTS.keys()
     if unported:
         raise ScoreboardError(f"no Python port in CHECKSUM_PORTS for checksum validator(s) {', '.join(sorted(unported))}")
     gaps: dict[str, dict[str, dict[str, int]]] = defaultdict(
-        lambda: defaultdict(lambda: {"gold": 0, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0})
+        lambda: defaultdict(
+            lambda: {"gold": 0, "gold_invalid": 0, "invalid_found": 0, "known_gap": 0, "duplicate_fp": 0}
+        )
     )
     for row in gold_rows:
         where = f"{dataset}:{row['id']}"
@@ -1761,10 +1835,12 @@ def gold_gaps(
             values[label].append((gap_value(text[start:end]), start, end))
             counts = gaps[corpus][label]
             counts["gold"] += 1
-            names = validators.get(label)
-            if names and not any(CHECKSUM_PORTS[name](text[start:end]) for name in names):
+            reason = unattainable(row, corpus, (label, start, end), emap, checks, where)
+            if reason == "checksum":
                 counts["gold_invalid"] += 1
                 counts["invalid_found"] += (label, start, end) in predicted
+            elif reason is not None:
+                counts["known_gap"] += 1
         for label, start, end in predicted - gold:
             value = gap_value(text[start:end])
             same = [(g_start, g_end) for g_value, g_start, g_end in values[label] if value and g_value == value]
@@ -1775,7 +1851,7 @@ def gold_gaps(
         result[corpus] = {}
         for label in sorted(gaps[corpus]):
             counts: dict[str, int | None] = dict(gaps[corpus][label])
-            if label not in validators:
+            if label not in checks.validators and label not in checks.documents:
                 counts["gold_invalid"] = counts["invalid_found"] = None
             result[corpus][label] = counts
     return result
@@ -2183,14 +2259,15 @@ def score_file(gold: Path, predictions: Path, emap: Any = None) -> tuple[list[st
 # ── M1 per source family ─────────────────────────────────────────────────
 
 
-def score_directory(gold_root: Path, predictions_root: Path, emap: Any) -> dict[str, Any]:
-    """Merged result of every frozen gold file below gold_root against predictions_root/<same name>."""
+def score_directory(gold_root: Path, predictions_root: Path, emap: Any, checks: GoldChecks | None = None) -> dict[str, Any]:
+    """Merged result of every frozen gold file below gold_root against predictions_root/<same name>
+    (attainable view with ``checks``)."""
     parts = []
     for dataset in discover("gold", gold_root):
         predictions = predictions_root / dataset.name
         if not predictions.is_file():
             raise ScoreboardError(f"no predictions {predictions} for {dataset.name}")
-        parts.append(score_rows(read_jsonl(dataset.path), read_jsonl(predictions), emap, dataset.name))
+        parts.append(score_rows(read_jsonl(dataset.path), read_jsonl(predictions), emap, dataset.name, checks))
     return merge(parts)
 
 
@@ -2363,6 +2440,27 @@ def m2_mode_lines(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── views: raw and attainable gold (T27) ───────────────────────────────
+
+
+def by_view(reports: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The milestone report of the attainable view with the raw one next to it (``raw``)."""
+    return {**reports[MILESTONE_VIEW], "view": MILESTONE_VIEW, "raw": reports["raw"]}
+
+
+def view_lines(report: dict[str, Any], mode_lines: Callable[[dict[str, Any]], list[str]], name: str) -> list[str]:
+    """Both views of an M1/M2 report; the verdict comes from balanced on attainable gold."""
+    lines = []
+    for view, item in (("raw", report["raw"]), (MILESTONE_VIEW, report)):
+        lines.append(f"=== {view} gold " + ("(milestone view, T27)" if view == MILESTONE_VIEW
+                                            else "(reported, decides no milestone)"))
+        *body, verdict = mode_lines(item)
+        lines += [*body, verdict.replace(f"{name}:", f"{name} {view}:", 1)]
+    lines.append(f"{name}: {'MET' if report['met'] else 'NOT MET'} "
+                 f"({MILESTONE_MODE}, {MILESTONE_VIEW} gold: {_deciding(report['modes'][MILESTONE_MODE])})")
+    return lines
+
+
 # ── baseline report ──────────────────────────────────────────────────────
 
 
@@ -2390,8 +2488,10 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
     """Every engine's merged result on every frozen gold file, hard-negative FP per family, M1, gold gaps.
 
     ``ark`` maps a PII mode, ``presidio`` a profile name to a prediction directory with the gold file
-    names. Every Ark mode is compared with every profile for M1; the milestone comes from balanced (T15).
-    The gold gaps (T16) are counted per corpus and entity for every engine and change no metric."""
+    names. Every Ark mode is compared with every profile for M1 and M2; the milestone comes from balanced
+    (T15) on attainable gold (T27, ``attainable`` holds every engine's result in that view; the raw view
+    of M1/M2 sits under ``raw``). The gold gaps (T16) are counted per corpus and entity for every engine
+    and change no raw metric."""
     if MILESTONE_MODE not in ark:
         raise ScoreboardError(f"report needs Ark predictions in {MILESTONE_MODE} mode (milestones are judged on it)")
     if not presidio:
@@ -2404,20 +2504,23 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
     datasets = discover("gold", gold_root)
     gold = {dataset.name: read_jsonl(dataset.path) for dataset in datasets}
     row_family = {(name, row["id"]): emap.family(str(row.get("corpus", ""))) for name, rows in gold.items() for row in rows}
-    validators = gold_validators(emap)
+    checks = gold_checks(emap)
     results: dict[str, Any] = {}
+    attainable: dict[str, Any] = {}
     gaps: dict[str, dict[str, dict[str, dict[str, int | None]]]] = {}
     hard_negative_fp: dict[str, dict[str, int]] = {}
     for engine, root in engines.items():
-        parts, gap_parts = [], []
+        parts, attainable_parts, gap_parts = [], [], []
         for name, rows in gold.items():
             predictions = root / name
             if not predictions.is_file():
                 raise ScoreboardError(f"{engine}: no predictions {predictions} for {name}")
             prediction_rows = read_jsonl(predictions)
             parts.append(score_rows(rows, prediction_rows, emap, name))
-            gap_parts.append(gold_gaps(rows, prediction_rows, emap, name, validators))
+            attainable_parts.append(score_rows(rows, prediction_rows, emap, name, checks))
+            gap_parts.append(gold_gaps(rows, prediction_rows, emap, name, checks))
         results[engine] = merge(parts)
+        attainable[engine] = merge(attainable_parts)
         gaps[engine] = merge_gaps(gap_parts)
         per_family: dict[str, int] = defaultdict(int)
         for name, row_id, *_ in results[engine]["hard_negative_fp"]:
@@ -2435,13 +2538,14 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
         ids = sorted({entity_id for engine_gaps in gaps.values() for entity_id in engine_gaps.get(corpus, {})})
         corpora[corpus] = {}
         for entity_id in ids:
-            checked = entity_id in validators
+            checked = entity_id in checks.validators or entity_id in checks.documents
             counts = {engine: gaps[engine].get(corpus, {}).get(entity_id) for engine in engines}
             # Gold counts do not depend on the engine; an engine without entry has no gap there.
             known = next(c for c in counts.values() if c is not None)
             corpora[corpus][entity_id] = {
                 "gold": known["gold"],
                 "gold_invalid": known["gold_invalid"],
+                "known_gap": known["known_gap"],
                 "engines": {
                     engine: {"duplicate_fp": c["duplicate_fp"] if c else 0,
                              "invalid_found": (c["invalid_found"] if c else 0) if checked else None}
@@ -2449,7 +2553,9 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
                 },
             }
     profiles = list(presidio)
-    ark_results = {mode: results[ark_engine(mode)] for mode in ARK_MODES if mode in ark}
+    views = {"raw": results, MILESTONE_VIEW: attainable}
+    ark_results = {view: {mode: by_engine[ark_engine(mode)] for mode in ARK_MODES if mode in ark}
+                   for view, by_engine in views.items()}
     return {
         "schema": SCHEMA,
         "datasets": {dataset.name: dataset.sha256 for dataset in datasets},
@@ -2458,11 +2564,19 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
         "family_rows": dict(sorted(family_rows.items())),
         "scopes": {entity_id: emap.entities[entity_id].scope for entity_id in sorted(l1_ids(emap))},
         "engines": results,
+        "attainable": attainable,
         "hard_negative_fp": hard_negative_fp,
         "milestone_mode": MILESTONE_MODE,
-        "m1": {profile: m1_by_mode(ark_results, results[profile], emap) for profile in profiles},
-        "m2": {profile: m2_by_mode(ark_results, results[profile], emap) for profile in profiles},
-        "gold_gaps": {"validators": {entity_id: list(names) for entity_id, names in validators.items()},
+        "milestone_view": MILESTONE_VIEW,
+        "m1": {profile: by_view({view: m1_by_mode(ark_results[view], views[view][profile], emap) for view in views})
+               for profile in profiles},
+        "m2": {profile: by_view({view: m2_by_mode(ark_results[view], views[view][profile], emap) for view in views})
+               for profile in profiles},
+        "gold_gaps": {"validators": {entity_id: list(names) for entity_id, names in checks.validators.items()},
+                      "documents": {entity_id: {country: list(names) for country, names in by_country.items()}
+                                    for entity_id, by_country in checks.documents.items()},
+                      "known_gaps": [{"id": gap.id, "decision": gap.decision, "reason": gap.reason}
+                                     for gap in emap.known_gaps],
                       "corpora": corpora},
     }
 
@@ -2524,8 +2638,24 @@ def report_lines(report: dict[str, Any]) -> list[str]:
         lines.append(f"| {corpus} | {family} | {report['corpus_rows'][corpus]} | {gold} | " + " | ".join(cells) + " |")
     lines.append("")
 
-    lines += [
-        "## Per entity (exact F1, best in bold)",
+    for title, view_engines in (("## Per entity (exact F1, best in bold)", engines),
+                                (f"## Per entity, {report['milestone_view']} gold (exact F1, best in bold; "
+                                 "the F1 >= 80 floor is judged here, T27)", report["attainable"])):
+        lines += entity_f1_lines(title, view_engines, names, families, report["scopes"])
+
+    # Milestone families first; ark_authored is shown last and decides nothing.
+    m1_families = [*entity_map_module.MILESTONE_FAMILIES,
+                   *(f for f in entity_map_module.FAMILIES if f not in entity_map_module.MILESTONE_FAMILIES)]
+    for view in (report["milestone_view"], "raw"):
+        lines += milestone_lines(report, view, m1_families)
+    lines += gold_gap_lines(report["gold_gaps"], names)
+    return lines
+
+
+def entity_f1_lines(title: str, engines: dict[str, Any], names: list[str], families: list[str],
+                    scopes: dict[str, str]) -> list[str]:
+    lines = [
+        title,
         "",
         "| Family | Entity | Scope | Gold | " + " | ".join(names) + " |",
         "|---|---|---|---:|" + "---:|" * len(names),
@@ -2541,22 +2671,28 @@ def report_lines(report: dict[str, Any]) -> list[str]:
             f1 = {engine: metrics(c)["exact"]["f1"] for engine, c in counts.items()}
             best = max(f1.values())
             cells = [f"**{_cell(f1[e])}**" if best > 0 and f1[e] == best else _cell(f1[e]) for e in names]
-            lines.append(f"| {family} | {entity_id} | {report['scopes'][entity_id]} | {gold} | " + " | ".join(cells) + " |")
+            lines.append(f"| {family} | {entity_id} | {scopes[entity_id]} | {gold} | " + " | ".join(cells) + " |")
     lines.append("")
+    return lines
 
-    # Milestone families first; ark_authored is shown last and decides nothing.
-    m1_families = [*entity_map_module.MILESTONE_FAMILIES,
-                   *(f for f in entity_map_module.FAMILIES if f not in entity_map_module.MILESTONE_FAMILIES)]
+
+def milestone_lines(report: dict[str, Any], view: str, m1_families: list[str]) -> list[str]:
+    """M1 and M2 tables of one view; the attainable view decides (T27), the raw one is reported."""
     milestone = report["milestone_mode"]
-    modes = list(next(iter(report["m1"].values()))["modes"])
-    lines += [
-        f"## M1 (each Ark mode vs each profile; EN rows, exact F1, shared ids with gold; milestone on {milestone})",
+    decides = view == report["milestone_view"]
+    reports = {name: {profile: item if decides else item["raw"] for profile, item in report[name].items()}
+               for name in ("m1", "m2")}
+    heading = f"{view} gold, " + ("milestone view" if decides else "reported, decides no milestone")
+    modes = list(next(iter(reports["m1"].values()))["modes"])
+    lines = [
+        f"## M1, {heading} (each Ark mode vs each profile; EN rows, exact F1, shared ids with gold; "
+        f"milestone on {milestone})",
         "",
         "| Ark mode | Profile | M1 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
         "|---|---|---|" + "---|" * len(m1_families),
     ]
     for mode in [milestone, *(m for m in modes if m != milestone)]:
-        for profile, by_mode in report["m1"].items():
+        for profile, by_mode in reports["m1"].items():
             m1 = by_mode["modes"][mode]
             cells = []
             for family in m1_families:
@@ -2568,14 +2704,14 @@ def report_lines(report: dict[str, Any]) -> list[str]:
             lines.append(f"| {mode_cell} | {profile} | {'MET' if m1['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
     lines += ["", f"² reported; milestones are judged on {milestone} (T15).", ""]
     lines += [
-        f"## M2 (each Ark mode vs each profile; DE rows, exact macro-F1 over {' + '.join(M2_SCOPES)} ids with gold; "
-        f"Ark vs target = Presidio + margin; milestone on {milestone})",
+        f"## M2, {heading} (each Ark mode vs each profile; DE rows, exact macro-F1 over {' + '.join(M2_SCOPES)} ids "
+        f"with gold; Ark vs target = Presidio + margin; milestone on {milestone})",
         "",
         "| Ark mode | Profile | M2 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
         "|---|---|---|" + "---|" * len(m1_families),
     ]
     for mode in [milestone, *(m for m in modes if m != milestone)]:
-        for profile, by_mode in report["m2"].items():
+        for profile, by_mode in reports["m2"].items():
             m2 = by_mode["modes"][mode]
             cells = []
             for family in m1_families:
@@ -2587,16 +2723,16 @@ def report_lines(report: dict[str, Any]) -> list[str]:
             mode_cell = mode if mode == milestone else f"{mode} ²"
             lines.append(f"| {mode_cell} | {profile} | {'MET' if m2['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
     lines += ["", "presidio_only ids stay out of the macro average until entity_map.yaml marks them shared (D-M2).", ""]
-    lines += gold_gap_lines(report["gold_gaps"], names)
     return lines
 
 
 def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
     """Markdown tables of the gold gaps per corpus and entity (T16); the metrics above include them unchanged."""
     lines = [
-        "## Gold gaps (reported only; no metric changes, T16)",
+        "## Gold gaps (T16, T27)",
         "",
-        "The frozen corpora are never edited; these counts are already part of the scores above.",
+        "The frozen corpora are never edited; these counts are part of the raw scores above. The attainable",
+        "view leaves out the gold failing its validator and the gold under a recorded decision (T27).",
         "",
         "### Predictions equal to an annotated gold value elsewhere in the row",
         "",
@@ -2619,7 +2755,9 @@ def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
         "### Gold values failing the entity's validator",
         "",
         "Gold of ids whose rules all carry a checksum validator (Python ports of the Rust validators) that",
-        "fails every one of them; the engine columns count those gold values reported with the exact span.",
+        "fails every one of them; passports and identity cards only against the validator of the issuing",
+        "country where the row names it (Presidio recognizer tests). The engine columns count those gold",
+        "values reported with the exact span.",
         "",
         "| Corpus | Entity | Validator | Gold | Invalid | " + " | ".join(names) + " |",
         "|---|---|---|---:|---:|" + "---:|" * len(names),
@@ -2631,12 +2769,35 @@ def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
                 continue
             rows += 1
             found = [str(item["engines"][engine]["invalid_found"]) for engine in names]
+            validators = gaps["validators"].get(entity_id) or [
+                f"{country}: {', '.join(by_country)}" for country, by_country in gaps["documents"][entity_id].items()
+            ]
             lines.append(
-                f"| {corpus} | {entity_id} | {', '.join(gaps['validators'][entity_id])} | {item['gold']} | "
+                f"| {corpus} | {entity_id} | {'; '.join(validators)} | {item['gold']} | "
                 f"{item['gold_invalid']} | " + " | ".join(found) + " |"
             )
     if not rows:
         lines.append("| – | – | – | – | – |" + " – |" * len(names))
+    lines += [
+        "",
+        "### Gold under a recorded decision (known_gaps in entity_map.yaml)",
+        "",
+        "| Corpus | Entity | Gold | Known gap | Decisions recorded for the id |",
+        "|---|---|---:|---:|---|",
+    ]
+    decisions: dict[str, list[str]] = defaultdict(list)
+    for gap in gaps["known_gaps"]:
+        if gap["decision"] not in decisions[gap["id"]]:
+            decisions[gap["id"]].append(gap["decision"])
+    rows = 0
+    for corpus, entities in gaps["corpora"].items():
+        for entity_id, item in entities.items():
+            if item["known_gap"]:
+                rows += 1
+                lines.append(f"| {corpus} | {entity_id} | {item['gold']} | {item['known_gap']} | "
+                             f"{', '.join(decisions[entity_id])} |")
+    if not rows:
+        lines.append("| – | – | – | – | – |")
     return lines
 
 
@@ -2714,11 +2875,17 @@ def main(argv: list[str] | None = None) -> int:
                 raise ScoreboardError(f"{args.command} needs --ark {MILESTONE_MODE}=DIR "
                                       f"(milestones are judged on {MILESTONE_MODE})")
             emap = entity_map_module.load()
-            ark_results = {mode: score_directory(args.gold, directory, emap) for mode, directory in ark.items()}
+            checks = gold_checks(emap)
             by_mode, mode_lines = (m1_by_mode, m1_mode_lines) if args.command == "m1" else (m2_by_mode, m2_mode_lines)
-            report = by_mode(ark_results, score_directory(args.gold, args.presidio, emap), emap,
-                             args.language, args.metric)
-            print("\n".join(mode_lines(report)))
+            reports = {}
+            for view in VIEWS:
+                view_checks = checks if view == MILESTONE_VIEW else None
+                ark_results = {mode: score_directory(args.gold, directory, emap, view_checks)
+                               for mode, directory in ark.items()}
+                reports[view] = by_mode(ark_results, score_directory(args.gold, args.presidio, emap, view_checks), emap,
+                                        args.language, args.metric)
+            report = by_view(reports)
+            print("\n".join(view_lines(report, mode_lines, args.command.upper())))
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
             # m1 fails only with --check; m2 always exits 1 unless both family rules hold (D-M2).

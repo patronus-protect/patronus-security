@@ -19,7 +19,46 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
 - **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU; GOLD-VAT2: `ark-synthetic-vat-2` für IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK und UK (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)). Damit erzeugen die drei Goldsets zusammen jede ID der Entity-Map außer DK CPR und NO fødselsnummer aus B-NORD (`NOT_GENERATED`).
-- **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung.
+- **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung. Seit T27 (2026-11-02) gilt die Untergrenze auf **erreichbarem Gold** (Abschnitt unten; PII-Tabelle „Per entity, attainable gold“ in `scoreboard.py report`); die Rohwerte werden daneben berichtet.
+
+## Erreichbares Gold: Meilensteine und Untergrenze (T27)
+
+Entschieden am 2026-11-02 (TRIAGE 2026-W44, Buckets 1–4, 10, 15): **Option (b), global für jede
+Familie und beide Engines.** Auf Dev, `balanced`, mit allen offenen Aufgaben als erfolgreich
+angenommen, lagen M1 und M2 auf `presidio_favored` außer Reichweite, weil Presidio Gold trifft, das ARK
+nach festgehaltenen Entscheidungen nie melden soll: M1 IP höchstens 87,7 gegen tuned 96,2 (9 von 41
+Gold-Werten Loopback/unspezifiziert, D-IP), NINO 80,0 gegen 100 (Gold-Span ` YZ 61 48 68 B` mit
+führendem Leerzeichen), SSN 75,0 gegen 88,9 (`987-65-4322`, `987-65-4329`, `219-09-9999` verfehlen
+`validators::us_ssn`, blankes `078051121` bleibt nach B-SSN negativ); M2 etwa 63,7 gegen 85,7 (Ausweis
+8 von 11 und DE-USt-IdNr. 2 von 5 Gold-Werten mit falscher Prüfziffer, blanke BSNR, LANR,
+Führerschein und Steuer-ID bleiben nach B-DE1, F15, K05 negativ). Die Untergrenze war u. a. für
+neutrale PAN (86 von 90 FN Luhn/IIN-ungültig, Obergrenze 53,3), neutrale US-SSN (Gretels `ssn`-Gold
+enthält SE-, IT-, UK- und NL-Kennungen) und auf `presidio_favored` für Kennzeichen (blanke TR/IN/NG-Werte)
+unerreichbar.
+
+- **Erreichbares Gold:** Meilensteine (M1, M2) und die Untergrenze F1 ≥ 80 werden auf erreichbarem
+  Gold geurteilt. Für ARK (je Modus) und Presidio (je Profil) gleich fallen heraus: Gold-Werte, die jeden
+  Prüfziffer-Validator ihrer ID verfehlen (nur IDs, deren Regeln alle einen tragen, T31; Pass und
+  Ausweis nur gegen den Validator ihres Ausstellerlandes und nur, wo die Zeile das Land nennt), und
+  Gold-Werte unter einer festgehaltenen Entscheidung. Vorhersagen derselben ID, die solches Gold
+  überlappen, zählen nicht als FP (wie bei B-IBAN).
+- **Liste der bekannten Lücken:** `known_gaps` in [`entity_map.yaml`](entity_map.yaml), je Eintrag
+  ID, Entscheidung, Grund und Bedingungen (Span-Muster, blanker Wert, Zeilen-ID, Korpus); geprüft von
+  `entity_map.py check`. Heute: D-IP (Loopback/unspezifiziert, auch mit Präfixlänge), T28 (IPv4-Teil
+  einer ungültigen IPv6-Kette), B-SSN (von `validators::us_ssn`
+  abgelehnte Werte, blanke neun Ziffern), Gretels `ssn`-Gold mit Kennungen anderer Länder, NINO-Span
+  mit Leerraum am Rand, blanke BSNR und LANR (B-DE1), blanke Steuer-ID (K05), blanker deutscher
+  Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30). Eine neue Ausnahme braucht eine Entscheidung
+  und einen Eintrag dort, keine Prosa-Ausnahme im README.
+- **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
+  (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
+  Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen weiter auf allem Gold (`raw`).
+- **Wirkung auf Dev** (`presidio_favored`, `balanced` gegen Presidio tuned, Stand dieser Aufgabe):
+  M1 roh 22/25, erreichbar 24/24; M2 roh Macro-F1 63,2 gegen 87,0 (11 IDs), erreichbar 96,3 gegen
+  100,0 (9 IDs; offen bleibt die Steuernummer mit 66,7 gegen 100).
+- **Validatoren werden nicht gelockert**, die Korpora nicht bearbeitet. Nicht erfasst werden FP auf
+  nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
+  (T16) und in der Untergrenze sichtbar.
 
 ## Definition „besser als Presidio“
 
@@ -29,8 +68,8 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 
 | Meilenstein | Kriterium |
 |---|---|
-| M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned) |
-| M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio tuned + 15 pp und auf `presidio_favored` ≥ Presidio tuned (Regel unten) |
+| M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned), auf erreichbarem Gold (T27) |
+| M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio tuned + 15 pp und auf `presidio_favored` ≥ Presidio tuned, auf erreichbarem Gold (Regel unten, T27) |
 | M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
