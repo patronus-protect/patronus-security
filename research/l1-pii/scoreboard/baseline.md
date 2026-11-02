@@ -6,28 +6,36 @@ SHA-256 `87496da37aef…`, Paket 0.1.10, Release-Build, Modus `strict`). Presidi
 angesehen. Die Tabellen ab [Anhang](#anhang-tabellen) erzeugt `scoreboard.py report` (Befehle unter
 [Reproduktion](#reproduktion)); Fehler-Buckets und Kandidaten sind Handarbeit für die nächste TRIAGE.
 
-## Aktueller Stand: Scoreboard 2026-10-29
+## Aktueller Stand: Scoreboard 2026-11-02
 
-Gemessen auf `main` `9cb48cc`, Dev-Split, Meilensteine auf `balanced`; Snapshot
-[`research/scoreboard/2026-10-29.json`](../../scoreboard/2026-10-29.json). Die Abschnitte darunter sind die
-Historie (E11 am 2026-10-19, B-EVAL am 2026-10-21).
+Gemessen auf `main` `3eda3e8`, Dev-Split, Meilensteine auf `balanced`; Snapshot
+[`research/scoreboard/2026-11-02.json`](../../scoreboard/2026-11-02.json). Presidio-Vorhersagen wie am
+2026-10-29 (Dev-Daten und Profile unverändert), aber gegen das aktuelle Gold neu bewertet (`pii.iban`-Gold
+außerhalb des SWIFT-IBAN-Registers ignoriert, #216). Die Abschnitte darunter sind die Historie (2026-10-29,
+E11 am 2026-10-19, B-EVAL am 2026-10-21).
 
-| Familie | ARK balanced P/R/F1 | F1 am 2026-10-24 | Presidio tuned P/R/F1 | HN-FP ARK / tuned |
+| Familie | ARK balanced P/R/F1 | F1 am 2026-10-29 | Presidio tuned P/R/F1 (2026-10-29) | HN-FP ARK / tuned |
 |---|---|---:|---|---|
-| neutral | 71.2 / 63.8 / **67.3** | 63.2 | 35.3 / 47.4 / 40.5 | 0 / 0 |
-| presidio_favored | 99.6 / 53.7 / 69.7 | 54.3 | 92.1 / 58.2 / **71.4** | 0 / 0 |
-| ark_authored ¹ | 99.7 / 68.4 / **81.1** | – | 54.0 / 31.3 / 39.6 | 2 / 215 |
+| neutral | 72.2 / 67.9 / **70.0** | 67.3 | 35.3 / 47.7 / 40.6 (40.5) | 0 / 0 |
+| presidio_favored | 99.7 / 64.2 / **78.1** | 69.7 | 92.1 / 58.2 / 71.3 (71.4) | 0 / 0 |
+| ark_authored ¹ | 99.9 / 79.0 / **88.2** | 81.1 | 54.0 / 31.3 / 39.6 (39.6) | 0 / 215 |
 
 ¹ berichtet, entscheidet keinen Meilenstein.
 
-- **M1 (EN, vs. tuned):** nicht erreicht. neutral 9/9 (2026-10-24: 6/9), presidio_favored 14/19 (5/12);
-  darunter liegen `entity.passport_number`, `pii.iban`, `pii.ip_address`, `pii.uk.national_insurance_number`,
-  `pii.us.social_security_number`.
-- **M2 (DE, Macro-F1):** gegen `default` erreicht, gegen `tuned` nicht: neutral 58.0 ≥ 33.6, presidio_favored
-  59.6 < 85.7 (2026-10-24: 54.1 / 24.7).
-- **M3:** 69 prüfziffervalidierte Einheiten gegen Presidio 35, Ziel 70 (2026-10-24: 35).
-- **M4:** nicht neu gemessen (2026-10-24: 100 KiB p95 145.9 ms Bindings).
+- **M1 (EN, vs. tuned):** nicht erreicht. neutral 9/9 (2026-10-29: 9/9), presidio_favored 22/25 (14/19);
+  darunter liegen `pii.ip_address`, `pii.uk.national_insurance_number`, `pii.us.social_security_number`.
+- **M2 (DE, Macro-F1):** gegen `default` erreicht, gegen `tuned` nicht: neutral 63.0 ≥ 36.2, presidio_favored
+  63.2 < 87.0 (2026-10-29: 58.0 / 59.6; Ziele wachsen mit den gemeinsamen IDs).
+- **M3:** erreicht, 83 prüfziffervalidierte Einheiten gegen Presidio 35, Ziel 70 (2026-10-29: 69).
+- **M4:** nicht erreicht, 100 KiB p95 215.1 ms Bindings, 213.1 ms nativ (DE 236.0, EN 56.8), gemessen unter
+  Runner-Last (2026-10-24: 145.9 / 150.0 ms).
 - **Immer:** HN-FP auf den entscheidenden Familien 0 (Presidio 0).
+
+### Scoreboard 2026-10-29
+
+Gemessen auf `main` `9cb48cc`; Snapshot [`research/scoreboard/2026-10-29.json`](../../scoreboard/2026-10-29.json).
+ARK balanced F1 neutral 67.3, presidio_favored 69.7, ark_authored 81.1 gegen Presidio tuned 40.5 / 71.4 / 39.6
+(Gold vor #216). M1 neutral 9/9, presidio_favored 14/19; M2 58.0 / 59.6; M3 69 gegen 35.
 
 ## Datenlage
 

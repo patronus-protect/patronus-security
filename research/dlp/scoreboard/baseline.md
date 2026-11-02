@@ -8,25 +8,29 @@ code). Alle Zahlen stammen aus dem **Dev-Split** (`$ARK_L1_DEV_DATA`, Manifest-S
 kommt mit H06. Lücken stehen am Ende als TRIAGE-Kandidaten; der Backlog wird erst im nächsten
 `TRIAGE`-Lauf ergänzt.
 
-## Aktueller Stand: Scoreboard 2026-10-29
+## Aktueller Stand: Scoreboard 2026-11-02
 
-Gemessen auf `main` `9cb48cc`, Dev-Split, Default-Profil; Snapshot
-[`research/scoreboard/2026-10-29.json`](../../scoreboard/2026-10-29.json). Die Abschnitte darunter sind die
-Historie (E14, Stand 2026-10-19/20).
+Gemessen auf `main` `3eda3e8`, Dev-Split (Daten unverändert seit 2026-10-29), Default-Profil; Snapshot
+[`research/scoreboard/2026-11-02.json`](../../scoreboard/2026-11-02.json). Die Abschnitte darunter sind die
+Historie (2026-10-29, E14 am 2026-10-19/20).
 
 | Tool | P | R | F1 exakt | HN-FP (Spans) | Code-FP/MB | Doku-FP/MB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| ark | 99,3 | 80,0 | **88,6** | 10 | 0,053 | 0,133 |
+| ark | 99,3 | 81,3 | **89,4** | 10 | 0,053 | 0,133 |
+| ark `extended` | 90,7 | 85,4 | 88,0 | 154 | – | 13,139 |
 | gitleaks | 49,1 | 53,4 | 51,1 | 974 | 0,212 | 0,0 |
 | trufflehog | 63,2 | 36,4 | 46,2 | 326 | 1,430 | 0,0 |
 | detect-secrets | 33,9 | 51,6 | 40,9 | 1 731 | 36,283 | 0,0 |
 
-| Meilenstein | Stand 2026-10-29 (2026-10-24) | Urteil |
+`extended` = alle 44 Opt-in-Regeln der Entity-Map (kein Benign-Code-Lauf); die Baselines sind unverändert.
+Am 2026-10-29 (`9cb48cc`) lag ARK bei P 99,3, R 80,0, F1 88,6 (HN-FP 10, Code-FP/MB 0,053, Doku-FP/MB 0,133).
+
+| Meilenstein | Stand 2026-11-02 (2026-10-29) | Urteil |
 |---|---|---|
-| M1 Provider-Parität | Recall ≥ max(gitleaks, TruffleHog) auf allen 20 gemeinsamen Entitäten mit Gold; Code-FP/MB 0,053 (0,13) gegen gitleaks 0,21 | erfüllt |
-| M2 Generische Secrets | CREDENTIAL F1 ARK 96,8 (96,8) gegen gitleaks 23,7 | erfüllt |
-| M3 Breite | 62/206 gitleaks-Regeln gemappt, 30,1 % (38/206); 72 Secret-Regeln / 60 Entitäten (40 / 36); 7 Offline-Strukturprüfungen (4); 15 Klassen ohne Baseline-Pendant (15) | verfehlt |
-| M4 Latenz | 100 KiB p95 11,7 ms (14,0), gemessen unter Runner-Last; Durchsatz 8,16 MiB/s (8,18) gegen gitleaks 4,16 | erfüllt |
+| M1 Provider-Parität | Recall ≥ max(gitleaks, TruffleHog) auf allen 20 gemeinsamen Entitäten mit Gold; Code-FP/MB 0,053 (0,053) gegen gitleaks 0,21 | erfüllt |
+| M2 Generische Secrets | CREDENTIAL F1 ARK 98,8 (96,8) gegen gitleaks 23,7 | erfüllt |
+| M3 Breite | 73/206 gitleaks-Regeln gemappt, 35,4 % (62/206); 92 Secret-Regeln / 71 Entitäten (72 / 60); 12 Offline-Strukturprüfungen (7); 15 Klassen ohne Baseline-Pendant (15) | verfehlt |
+| M4 Latenz | 100 KiB p95 27,7 ms (11,7); Durchsatz 2,76 MiB/s gegen gitleaks 2,97 im selben Lauf (8,16 gegen 4,16), unter starker Runner-Last (Load 4–6 auf 6 CPUs). Der Build vom 2026-10-29 kam direkt danach unter derselben Last auf 38,3 ms und 3,88 MiB/s | unter Last verfehlt; ruhige Nachmessung offen |
 
 ## Datenlage und Reproduktion
 
