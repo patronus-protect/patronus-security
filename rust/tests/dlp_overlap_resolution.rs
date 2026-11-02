@@ -639,7 +639,7 @@ fn content_classes_keep_their_spans_over_secrets() {
     gateway.set_execution_gates(gates);
     let (text, value) = fill(
         "import os\n\nclient = Client(api_key=\"<<secret:0>>\")\n",
-        "openai_project_key",
+        "openai_project_api_key",
         61,
     );
     let result = gateway

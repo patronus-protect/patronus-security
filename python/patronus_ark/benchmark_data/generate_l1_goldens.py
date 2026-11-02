@@ -5155,6 +5155,10 @@ DLP_LOOKALIKE_GENERATORS = (
     "splunk_hec_token_short", "elastic_api_key_short", "honeycomb_api_key_short", "pagerduty_api_key_short",
     # G03: a shell variable reference in the password position
     "cli_password_env_ref",
+    # F-LLM: wrong length, marker or alphabet of the LLM and Google formats
+    "anthropic_api_key_short", "anthropic_admin_key_long", "openai_project_key", "openai_service_account_key_short",
+    "openai_legacy_key_no_marker", "huggingface_token_digit", "groq_key_short", "replicate_api_token_long",
+    "google_api_key_long", "google_oauth_access_token_short", "gcp_oauth_client_secret_long",
 )
 
 
@@ -5210,7 +5214,7 @@ def dn(
 
 DLP_CASES = {
     "API_KEY": [
-        ds("API_KEY", "en", "dlp_openai_key", "OPENAI_API_KEY=<<secret:0>>", "openai_project_key", 101),
+        ds("API_KEY", "en", "dlp_openai_key", "OPENAI_API_KEY=<<secret:0>>", "openai_project_api_key", 101),
         ds("API_KEY", "de", "dlp_huggingface", "Modellschlüssel: <<secret:0>>", "huggingface_token", 102),
         ds("API_KEY", "en", "dlp_groq_key", "GROQ_API_KEY=<<secret:0>>", "groq_key", 103),
         dn("API_KEY", "en", "dlp_openai_key", "Truncated OpenAI prefix in the docs: sk-proj-short", "provider token is too short"),
@@ -7051,12 +7055,12 @@ DLP_T06_CASES = {
         dx(
             "API_KEY", "de", "dlp_openai_key",
             "Kopiere .env.beispiel nach .env:\nOPENAI_API_KEY=<<secret:0>>\n",
-            "openai_project_key", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
+            "openai_project_api_key", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
         ),
         dx(
             "API_KEY", "en", "dlp_openai_key",
             "client = OpenAI(api_key=\"<<secret:0>>\")\n",
-            "openai_project_key", "DUMMY", "dummy value in a unit test", carrier="code",
+            "openai_project_api_key", "DUMMY", "dummy value in a unit test", carrier="code",
         ),
         dx(
             "API_KEY", "de", "dlp_openai_legacy",
@@ -7680,7 +7684,7 @@ DLP_K04_CASES = {
     "API_KEY": [
         ds(
             "API_KEY", "en", "dlp_openai_key", "OPENAI_API_KEY=<<secret:0>>\nOPENAI_MODEL=gpt\n",
-            "openai_project_key", 8021, carrier="env", mode="balanced",
+            "openai_project_api_key", 8021, carrier="env", mode="balanced",
         ),
     ],
     "SECRET_TOKEN": [
@@ -12623,6 +12627,190 @@ DLP_G02_CASES = {
     ],
 }
 for _label, _rows in DLP_G02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# F-LLM: OpenAI/Anthropic keys with marker and lengths per gitleaks (one shared validator for the
+# random parts), HuggingFace hf_/api_org_ with 34 letters, Groq gsk_ + 52, Replicate r8_ + 37,
+# Google AIza + 35, ya29. access tokens of 30 to 2043 characters, GOCSPX- + 28. Hard negatives
+# are lookalikes with a wrong length, marker or alphabet, placeholders and env references.
+DLP_FLLM_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "# .env für den Support-Bot\nANTHROPIC_API_KEY=<<secret:0>>\nMODEL=claude\n",
+            "anthropic_admin_key", 19401, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_anthropic_key",
+            "llm:\n  provider: anthropic\n  api_key: \"<<secret:0>>\"\n",
+            "anthropic_api_key", 19402, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_openai_key",
+            "Hallo Team,\n\nder neue Admin-Schlüssel für die OpenAI-Organisation lautet <<secret:0>>\n\nGruß\n",
+            "openai_admin_key", 19403, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_openai_key",
+            "{\n  \"openai\": {\n    \"apiKey\": \"<<secret:0>>\",\n    \"model\": \"gpt-4o\"\n  }\n}\n",
+            "openai_project_api_key", 19404, carrier="json",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_openai_svc",
+            "$ curl https://api.openai.com/v1/models -H \"Authorization: Bearer <<secret:0>>\"\n",
+            "openai_service_account_key", 19405, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_openai_legacy",
+            "import openai\n\nopenai.api_key = \"<<secret:0>>\"\n",
+            "openai_legacy_key", 19406, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_huggingface",
+            "2026-11-02T08:12:44Z INFO hub: Anmeldung mit Organisations-Token <<secret:0>> erfolgreich\n",
+            "huggingface_org_token", 19407, carrier="log",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_huggingface",
+            "$ huggingface-cli login --token <<secret:0>>\n",
+            "huggingface_token", 19408, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_groq_key",
+            "[groq]\napi_key = \"<<secret:0>>\"\n",
+            "groq_key", 19409, carrier="toml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_replicate",
+            "# replicate client\nREPLICATE_API_TOKEN=<<secret:0>>\n",
+            "replicate_api_token", 19410, carrier="env",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "2026-11-02T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "anthropic_api_key_short", 19411, "sk-ant-api03- shape with 92 instead of 93 body characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_anthropic_key",
+            "2026-11-02T08:12:44Z WARN gateway: rejected <<secret:0>> (length)\n",
+            "anthropic_admin_key_long", 19412, "sk-ant-admin01- shape with 94 instead of 93 body characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_openai_key",
+            "2026-11-02T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Format)\n",
+            "openai_project_key", 19413, "sk-proj- shape without the T3BlbkFJ marker", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_openai_svc",
+            "2026-11-02T08:12:44Z WARN gateway: rejected <<secret:0>> (format)\n",
+            "openai_service_account_key_short", 19414, "sk-svcacct- shape with a 73-character first half", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_openai_legacy",
+            "2026-11-02T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Format)\n",
+            "openai_legacy_key_no_marker", 19415, "sk- and 48 base62 characters without the T3BlbkFJ marker",
+            carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_huggingface",
+            "2026-11-02T08:12:44Z WARN hub: rejected <<secret:0>> (alphabet)\n",
+            "huggingface_token_digit", 19416, "hf_ shape with a digit among the 34 letters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_groq_key",
+            "2026-11-02T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "groq_key_short", 19417, "gsk_ shape with 51 instead of 52 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_replicate",
+            "2026-11-02T08:12:44Z WARN gateway: rejected <<secret:0>> (length)\n",
+            "replicate_api_token_long", 19418, "r8_ shape with 38 instead of 37 characters", carrier="log",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "# Schlüssel kommt aus dem Tresor\nANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_openai_key",
+            "Set OPENAI_API_KEY to your key (it starts with sk-proj- and contains T3BlbkFJ).\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_huggingface",
+            "Token in der Doku gekürzt: hf_abcdefgh… (34 Buchstaben nach hf_)\n",
+            "truncated token in the docs", carrier="markdown",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_groq_key",
+            "groq:\n  api_key: \"{{ groq_api_key }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            "<meta-data android:name=\"com.google.android.geo.API_KEY\" android:value=\"<<secret:0>>\"/>\n",
+            "google_api_key", 19421, carrier="xml",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_google_oauth_token",
+            "GET /drive/v3/files HTTP/1.1\nHost: www.googleapis.com\nAuthorization: Bearer <<secret:0>>\n",
+            "google_oauth_access_token", 19422, carrier="http",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_gcp_client_secret",
+            "{\"web\": {\"client_id\": \"1234-abc.apps.googleusercontent.com\", \"client_secret\": \"<<secret:0>>\"}}\n",
+            "gcp_oauth_client_secret", 19423, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_gcp_client_secret",
+            "GOOGLE_CLIENT_SECRET=<<secret:0>>\n",
+            "gcp_oauth_client_secret", 19424, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_google_oauth_token",
+            "Das Access-Token aus dem Playground war <<secret:0>>, bitte widerrufen.\n",
+            "google_oauth_access_token", 19425, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            "const map = new Maps({ key: \"<<secret:0>>\" });\n",
+            "google_api_key", 19426, carrier="code",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            "2026-11-02T08:12:44Z WARN maps: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "google_api_key_long", 19427, "AIza shape with 36 instead of 35 characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_google_oauth_token",
+            "2026-11-02T08:12:44Z WARN auth: rejected <<secret:0>> (length)\n",
+            "google_oauth_access_token_short", 19428, "ya29. shape with 29 body characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_gcp_client_secret",
+            "2026-11-02T08:12:44Z WARN auth: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "gcp_oauth_client_secret_long", 19429, "GOCSPX- shape with 29 instead of 28 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_gcp_client_secret",
+            "# client secret from Secret Manager\nGOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_google_oauth_token",
+            "Google-Access-Tokens beginnen mit ya29. und sind höchstens 2048 Byte lang.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            "maps:\n  api_key: ${GOOGLE_MAPS_API_KEY}\n",
+            "environment reference", carrier="yaml",
+        ),
+    ],
+}
+for _label, _rows in DLP_FLLM_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

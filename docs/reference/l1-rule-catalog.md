@@ -365,18 +365,18 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | Rule ID | Result entity group | Subtype | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `dlp_anthropic_key` | `API_KEY` | `api_key` | `anthropic` | `format` | `gitleaks:anthropic-api-key` | yes | on | 55 | proximity | 0.70–0.95 |
-| `dlp_openai_key` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_openai_legacy` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_openai_svc` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_openai_key` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | yes | on | 55 | proximity | 0.70–0.95 |
+| `dlp_openai_legacy` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | yes | on | 45 | proximity | 0.60–0.85 |
+| `dlp_openai_svc` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | yes | on | 55 | proximity | 0.70–0.95 |
 | `dlp_huggingface` | `API_KEY` | `api_key` | `huggingface` | `format` | `gitleaks:huggingface-access-token` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_groq_key` | `API_KEY` | `api_key` | `groq` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_groq_key` | `API_KEY` | `api_key` | `groq` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/groq/groq.go) | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_xai_key` | `API_KEY` | `api_key` | `xai` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_replicate` | `API_KEY` | `api_key` | `replicate` | `format` | `ark` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_replicate` | `API_KEY` | `api_key` | `replicate` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/replicate/replicate.go) | no | on | 45 | proximity | 0.60–0.85 |
 | `dlp_aws_access_key` | `CLOUD_KEY` | `api_key` | `aws` | `format` | `gitleaks:aws-access-token` | no | on | 55 | proximity | 0.70–0.95 |
 | `dlp_aws_secret_key` | `CLOUD_KEY` | `secret_key` | `aws` | `format` | [docs.aws.amazon.com](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) | yes | on | 35 | field | 0.75 |
 | `dlp_google_api_key` | `CLOUD_KEY` | `api_key` | `google` | `format` | `gitleaks:gcp-api-key` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_google_oauth_token` | `CLOUD_KEY` | `access_token` | `google` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_gcp_client_secret` | `CLOUD_KEY` | `secret_key` | `google` | `format` | `ark` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_google_oauth_token` | `CLOUD_KEY` | `access_token` | `google` | `format` | [developers.google.com](https://developers.google.com/identity/protocols/oauth2#size) | yes | on | 50 | proximity | 0.65–0.90 |
+| `dlp_gcp_client_secret` | `CLOUD_KEY` | `secret_key` | `google` | `format` | [github.com](https://github.com/mongodb/kingfisher/blob/main/data/rules/google.yml) | no | on | 55 | proximity | 0.70–0.95 |
 | `dlp_github_token` | `SECRET_TOKEN` | `access_token` | `github` | `checksum` | `gitleaks:github-pat` | yes | on | 55 | proximity | 0.90–1.00 |
 | `dlp_github_pat` | `SECRET_TOKEN` | `access_token` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on | 60 | proximity | 0.75–1.00 |
 | `dlp_gitlab_pat` | `SECRET_TOKEN` | `access_token` | `gitlab` | `format` | `gitleaks:gitlab-pat` | no | on | 55 | proximity | 0.70–0.95 |

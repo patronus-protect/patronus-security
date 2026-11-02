@@ -44,6 +44,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
   results to the caller instead of cloning them, and moves `matched_rules` into the details instead
   of deep-copying them. No detection change: goldens, the rule fixture and the scoreboard are
   unchanged. 100 KiB p95 on the VPS in `research/l1-pii/scoreboard/latency.md`.
+- LLM and Google provider formats (F-LLM, F06 + T02). `dlp_openai_key` (`sk-proj-`, now also
+  `sk-admin-`) and `dlp_openai_svc` (`sk-svcacct-`) require two halves of 74 or 58 base64url
+  characters around the `T3BlbkFJ` marker, `dlp_openai_legacy` `sk-`, 20 base62 characters, the
+  marker and 20 more (keyword `T3BlbkFJ` instead of `sk-`), `dlp_anthropic_key` `sk-ant-api03-` or
+  `sk-ant-admin01-`, 93 base64url characters and `AA` (gitleaks openai-api-key, anthropic-api-key,
+  anthropic-admin-api-key). One shared validator (`is_llm_api_key`) checks that every random part
+  holds upper- and lower-case letters, so typed fills of the shape are no findings.
+  `dlp_huggingface` takes `hf_` and `api_org_` with exactly 34 letters, `dlp_groq_key` `gsk_` and 52,
+  `dlp_replicate` `r8_` and 37 base62 characters, `dlp_gcp_client_secret` `GOCSPX-` and 28,
+  `dlp_google_oauth_token` `ya29.` and at least 30 characters up to 2048 bytes with both cases
+  instead of open `{20,}`/`{28,}`/`{48,}` runs; with `dlp_google_api_key` (`AIza` and 35) these
+  prefix rules carry their body length, so generic rules skip prefixed values of another length.
+  Format sources in `research/dlp/rule_sources.yaml`, entity map backlog `F-LLM`. New
+  `rust/tests/dlp_llm_google_tokens.rs`, eleven lookalike generators (wrong length, marker or
+  alphabet), generators for OpenAI admin keys and HuggingFace organization tokens, 34 new `dlp_l1`
+  rows (DE, EN). **Detection change** (all modes: OpenAI/Anthropic/HuggingFace/Groq/Replicate/Google
+  values of another length, without the OpenAI marker or with a single-case body are no longer
+  reported by their provider rule; HuggingFace `api_org_` tokens and OpenAI `sk-admin-` keys are new
+  findings). Regexes stay linear with bounded repeats; the legacy OpenAI rule runs only where
+  `T3BlbkFJ` occurs.
 - Crypto wallet addresses (A02). New label `CRYPTO` in the new module
   `ark-core/src/detectors/pii/crypto.rs`: `pii_crypto_btc` (Bitcoin P2PKH `1…` and P2SH `3…` in
   Base58Check with the version byte `0x00`/`0x05` over a 20-byte hash, segwit `bc1…` with witness

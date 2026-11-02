@@ -366,6 +366,18 @@
     "yandex_api_key_short": "f6c56df0b24c213f4c4865e1",
     "yandex_static_access_key_secret": "69c70a6eb7fcd0a6854d60b5",
     "dotted_tilde_password": "9071f81cf8584e296b9c94fc",
-    "dotted_digit_password": "0143158f9743145a7aa4bc96"
+    "dotted_digit_password": "0143158f9743145a7aa4bc96",
+    "anthropic_admin_key_long": "7922fb30238f8b5cd58bb6e7",
+    "anthropic_api_key_short": "85421964a4b7d7944846d2da",
+    "gcp_oauth_client_secret_long": "089439af90a1a7f6d5936082",
+    "google_api_key_long": "10ada8e6ed1b80f17d9e8863",
+    "google_oauth_access_token_short": "b56ed4081722918fb2156a4b",
+    "groq_key_short": "573ceefc12619449dc1be590",
+    "huggingface_org_token": "a47a0b80da3fecd00226c010",
+    "huggingface_token_digit": "efff21777cb32d8ed1783486",
+    "openai_admin_key": "5daad2abb10d75015b641b51",
+    "openai_legacy_key_no_marker": "a9f1c90e7e468574ff4d8a7c",
+    "openai_service_account_key_short": "ee159e6c671b510885a5de24",
+    "replicate_api_token_long": "c052f5076650c4a43786ebc1"
   }
 }

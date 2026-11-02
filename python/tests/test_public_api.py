@@ -11,7 +11,7 @@ from patronus_ark import (
 )
 
 # Assembled at test time from obviously synthetic pieces; not a real token.
-OPENAI_KEY = "sk-proj-" + "q7mzk2xv9pwd" + "4hrt8nyc3bja6ufs0ge1"
+OPENAI_KEY = "sk-" + "q7mZk2xV9pWd4hRt8nYc" + "T3BlbkFJ" + "3bJa6uFs0gE1aB2cD3eF"
 
 
 def assert_result_schema(test_case, result):

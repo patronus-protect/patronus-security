@@ -593,7 +593,7 @@ fn proximity_decides_secrets_without_a_field_name() {
     assert_eq!(context["anchor"], "dlp.private_key");
 
     // A provider token keeps balanced without context, and only a counter term drops it.
-    let token = |template: &str| value(&generators, template, "openai_project_key", 5);
+    let token = |template: &str| value(&generators, template, "openai_project_api_key", 5);
     let openai = |text: &str, mode: DlpMode| {
         rule(&matched_rules(&dlp_result(text, mode)), "dlp_openai_key")
             .map(|rule| rule["score"].as_f64().unwrap_or(1.0))

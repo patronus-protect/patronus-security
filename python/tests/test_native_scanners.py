@@ -4,7 +4,7 @@ from patronus_ark import SecurityGateway
 
 
 # Assembled at test time from obviously synthetic pieces; not a real token.
-OPENAI_KEY = "sk-proj-" + "q7mzk2xv9pwd" + "4hrt8nyc3bja6ufs0ge1"
+OPENAI_KEY = "sk-" + "q7mZk2xV9pWd4hRt8nYc" + "T3BlbkFJ" + "3bJa6uFs0gE1aB2cD3eF"
 
 
 def classes(results):
@@ -115,9 +115,9 @@ class NativeScannerTests(unittest.TestCase):
                     "text": OPENAI_KEY,
                     "score": 1.0,
                     "start_byte": 7,
-                    "end_byte": 47,
+                    "end_byte": 7 + len(OPENAI_KEY),
                     "start_char": 7,
-                    "end_char": 47,
+                    "end_char": 7 + len(OPENAI_KEY),
                 }
             ],
         )

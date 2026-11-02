@@ -18,28 +18,27 @@ rules:
   dlp_anthropic_key:
     provider: anthropic
     source_ref: gitleaks:anthropic-api-key
-    format: "sk-ant- prefix, base64url body"
+    format: "sk-ant-api03- (API key) or sk-ant-admin01- (Admin key, gitleaks anthropic-admin-api-key), 93 base64url characters and AA; the body holds upper- and lower-case letters (shared LLM validator, F-LLM)"
   dlp_openai_key:
     provider: openai
     source_ref: gitleaks:openai-api-key
-    format: "sk-proj- prefix, base64url body"
+    format: "sk-proj- (project) or sk-admin- (Admin key), two halves of 74 or 58 base64url characters around T3BlbkFJ, each with upper- and lower-case letters (shared LLM validator, F-LLM)"
   dlp_openai_legacy:
     provider: openai
     source_ref: gitleaks:openai-api-key
-    format: "sk- prefix, 48 base62 characters"
+    format: "sk-, 20 base62 characters, T3BlbkFJ, 20 base62 characters, each half with upper- and lower-case letters (shared LLM validator, F-LLM)"
   dlp_openai_svc:
     provider: openai
     source_ref: gitleaks:openai-api-key
-    format: "sk-svcacct- prefix, base64url body"
+    format: "sk-svcacct-, two halves of 74 or 58 base64url characters around T3BlbkFJ, each with upper- and lower-case letters (shared LLM validator, F-LLM)"
   dlp_huggingface:
     provider: huggingface
     source_ref: gitleaks:huggingface-access-token
-    format: "hf_ prefix, base62 body"
+    format: "hf_ (access token) or api_org_ (organization token, gitleaks huggingface-organization-api-token) and exactly 34 letters"
   dlp_groq_key:
     provider: groq
-    source_ref: ark
-    format: "gsk_ prefix, at least 48 base62 characters"
-    pending: T02
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/groq/groq.go
+    format: "gsk_ and exactly 52 base62 characters (TruffleHog Groq)"
   dlp_xai_key:
     provider: xai
     source_ref: ark
@@ -47,9 +46,8 @@ rules:
     pending: F06
   dlp_replicate:
     provider: replicate
-    source_ref: ark
-    format: "r8_ prefix, base62 body"
-    pending: T02
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/replicate/replicate.go
+    format: "r8_ and exactly 37 base62 characters (TruffleHog Replicate)"
 
   # ── Cloud ────────────────────────────────────────────────────────────────
   dlp_aws_access_key:
@@ -63,17 +61,15 @@ rules:
   dlp_google_api_key:
     provider: google
     source_ref: gitleaks:gcp-api-key
-    format: "AIza prefix, 35 base64url characters"
+    format: "AIza and exactly 35 base64url characters (39 in all) as a whole token"
   dlp_google_oauth_token:
     provider: google
-    source_ref: ark
-    format: "ya29. prefix, base64url body"
-    pending: T02
+    source_ref: https://developers.google.com/identity/protocols/oauth2#size
+    format: "ya29. and at least 30 base64url characters with upper- and lower-case letters, at most 2048 bytes in all (Google OAuth 2.0 token sizes; minimum as TruffleHog GoogleOauth2)"
   dlp_gcp_client_secret:
     provider: google
-    source_ref: ark
-    format: "GOCSPX- prefix, base64url body"
-    pending: T02
+    source_ref: https://github.com/mongodb/kingfisher/blob/main/data/rules/google.yml
+    format: "GOCSPX- and exactly 28 base64url characters (Kingfisher Google OAuth client secret)"
 
   # ── Source control and registries ────────────────────────────────────────
   dlp_github_token:
