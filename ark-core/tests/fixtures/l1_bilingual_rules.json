@@ -3071,7 +3071,7 @@
     ],
     "hard_negatives": {
       "de": [
-        "ANTHROPIC_API_KEY=sk-ant-api03-…gekürzt…AA"
+        "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
       ],
       "en": [
         "Keys look like sk-ant-api03-<93 characters>AA."
@@ -3095,7 +3095,7 @@
         "Der Schlüssel beginnt mit sk-proj- und enthält T3BlbkFJ, Wert siehe Tresor."
       ],
       "en": [
-        "OPENAI_API_KEY=sk-proj-...your-key..."
+        "OPENAI_API_KEY=${OPENAI_API_KEY}"
       ]
     },
     "language_neutral": true
@@ -3285,10 +3285,10 @@
     ],
     "hard_negatives": {
       "de": [
-        "client_secret: GOCSPX-dein-geheimnis"
+        "Client-Secrets von Google beginnen mit GOCSPX- und haben 28 weitere Zeichen."
       ],
       "en": [
-        "GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx"
+        "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
       ]
     },
     "language_neutral": true
