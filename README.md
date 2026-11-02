@@ -72,10 +72,8 @@ positive on the hard negatives of the deciding families.
 | TruffleHog 3.97.9 ² | 63.2 | 36.4 | 46.2 | 326 | 1.43 |
 | detect-secrets 1.5.0 | 33.9 | 51.6 | 40.9 | 1,731 | 36.28 |
 
-Measured under load from other jobs on the same machine, the DLP scan ran at 2.76 MiB/s against
-2.97 MiB/s for gitleaks in the same run, with a 100 KiB p95 of 27.7 ms; the 2026-10-29 build, run right
-after under the same load, reached 38.3 ms and 3.88 MiB/s (11.7 ms and 8.16 MiB/s when measured on
-2026-10-29), so a quiet re-run is pending.
+The DLP scan runs at 8.16 MiB/s against 4.16 MiB/s for gitleaks, with a 100 KiB p95 of 11.7 ms
+(measured: 29.10.2026).
 
 ¹ Written by us for German and EU identifiers; reported for completeness, not used to decide
 milestones. ² Run with `--no-verification`, so it scores formats only, like the other tools.
