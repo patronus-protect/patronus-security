@@ -359,6 +359,7 @@ tasks:
 
   # M1/M2 on presidio_favored and the F1 >= 80 floor are out of reach under the current decisions
   - id: T27
+    status: done
     title: "Reachability of M1/M2 on presidio_favored and exceptions to the F1 >= 80 quality floor (gold failing validators, decided known gaps)"
     type: eval-infra
     deps: [B-EVAL, D-M2]
