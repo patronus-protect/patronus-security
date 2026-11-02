@@ -378,6 +378,17 @@
     "openai_admin_key": "5daad2abb10d75015b641b51",
     "openai_legacy_key_no_marker": "a9f1c90e7e468574ff4d8a7c",
     "openai_service_account_key_short": "ee159e6c671b510885a5de24",
-    "replicate_api_token_long": "c052f5076650c4a43786ebc1"
+    "replicate_api_token_long": "c052f5076650c4a43786ebc1",
+    "stripe_webhook_secret_cli": "40a9643f34b4a30417a5b4eb",
+    "slack_legacy_bot_token": "56d46b98d041ba9c9922fc97",
+    "slack_workspace_token": "3d140156f4f8cbf323356f1a",
+    "slack_bot_token_no_ids": "f8b7cd3590a97b741ed18f1d",
+    "slack_user_token_short": "f234841d5d85b28b7a3a82b9",
+    "slack_app_token_lower_id": "962306581881d47d5fdfbef4",
+    "discord_bot_token_non_snowflake": "fc96694e116e6e314c07f96b",
+    "stripe_secret_live_long": "ac78007bb2acd56d4a682f79",
+    "stripe_restricted_dash": "576593c3aa60f53dc510be26",
+    "stripe_publishable_live": "d4d7a8ef838f3f0ab9aa32de",
+    "stripe_webhook_secret_short": "d801f9ebe0caaf7854cccac9"
   }
 }

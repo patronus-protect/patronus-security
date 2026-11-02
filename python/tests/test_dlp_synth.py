@@ -596,6 +596,12 @@ CHECKS = {
     "slack_bot_token": lambda v: [len(p) for p in v.split("-")] == [4, 12, 13, 24] and v.startswith("xoxb-"),
     "slack_user_token": lambda v: [len(p) for p in v.split("-")] == [4, 12, 12, 13, 32] and v.startswith("xoxp-"),
     "discord_bot_token": discord,
+    # F-PROV: Stripe CLI webhook secrets and the legacy Slack bot and workspace tokens
+    "stripe_webhook_secret_cli": prefixed("whsec_", HEX, 64),
+    "slack_legacy_bot_token": lambda v: v.startswith("xoxb-")
+    and [len(p) for p in v.split("-")] == [4, 11, 24]
+    and v.split("-")[1].isdigit(),
+    "slack_workspace_token": prefixed("xoxr-2-", ALNUM, 40),
     "eth_private_key_hex": checks.is_valid_eth_private_key,
     "btc_wif_mainnet_uncompressed": lambda v: v[0] == "5" and len(v) == 51 and checks.is_valid_btc_wif(v),
     "btc_wif_mainnet_compressed": lambda v: v[0] in "KL" and len(v) == 52 and checks.is_valid_btc_wif(v),
@@ -833,6 +839,15 @@ LOOKALIKE_FAILURES = {
     "google_api_key_long": CHECKS["google_api_key"],
     "google_oauth_access_token_short": lambda v: len(v) >= 35,
     "gcp_oauth_client_secret_long": CHECKS["gcp_oauth_client_secret"],
+    # F-PROV: Slack, Discord and Stripe shapes with a wrong segment, length or prefix
+    "slack_bot_token_no_ids": lambda v: CHECKS["slack_bot_token"](v) or CHECKS["slack_legacy_bot_token"](v),
+    "slack_user_token_short": CHECKS["slack_user_token"],
+    "slack_app_token_lower_id": CHECKS["slack_app_token"],
+    "discord_bot_token_non_snowflake": discord,
+    "stripe_secret_live_long": lambda v: v.startswith(("sk_live_", "sk_test_")) and len(v) <= 107,
+    "stripe_restricted_dash": lambda v: v.startswith(("rk_live_", "rk_test_")),
+    "stripe_publishable_live": lambda v: v.startswith(("sk_", "rk_")),
+    "stripe_webhook_secret_short": lambda v: CHECKS["stripe_webhook_secret"](v) or CHECKS["stripe_webhook_secret_cli"](v),
     # GOLD-D2: wrong prefix, length or character set of a baseline entity's format
     "slack_config_refresh_token_short": CHECKS["slack_config_refresh_token"],
     "slack_webhook_url_short": CHECKS["slack_webhook_url"],
