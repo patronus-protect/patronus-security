@@ -335,7 +335,7 @@ mod tests {
         fs::write(dir.file(), b"old").unwrap();
         let (url, server) = serve(vec![(
             "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nnew",
-            Duration::from_millis(400),
+            Duration::from_millis(2_000),
         )]);
         let started = Instant::now();
         assert!(download_url(
@@ -348,7 +348,8 @@ mod tests {
             }
         )
         .is_err());
-        assert!(started.elapsed() < Duration::from_millis(350));
+        // Far below the stalled body, with headroom for loaded CI runners.
+        assert!(started.elapsed() < Duration::from_millis(1_000));
         server.join().unwrap();
         assert_eq!(fs::read(dir.file()).unwrap(), b"old");
         assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 2);
