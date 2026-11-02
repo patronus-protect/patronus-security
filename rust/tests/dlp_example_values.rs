@@ -98,15 +98,20 @@ fn random(seed: u64, alphabet: &str, length: usize) -> String {
 const ALNUM: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const ALPHA: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const HEX: &str = "0123456789abcdef";
-/// The OpenAI marker and a fixed second half of 58 (project and service
-/// account keys) or 20 characters (legacy keys); the body before it varies.
-const OPENAI_TAIL: &str = concat!(
-    "T3BlbkFJ",
-    "Qm4XzT8bLp2WcV7nRk5HsJ9dFg3Ya",
-    "E6uN1tB0oZiMqLw4KxPe8Cv2Rj5Ds"
-);
-const OPENAI_LEGACY_TAIL: &str = concat!("T3BlbkFJ", "Vb7KqM2xLw", "9PzR4tNc6J");
 const BASE58: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/// The value of `shape` around `body`; OpenAI keys carry the `T3BlbkFJ`
+/// marker between the two halves of the body.
+fn shaped(shape: &Shape, body: &str) -> String {
+    let body = match shape.rule_id {
+        "dlp_openai_key" | "dlp_openai_svc" | "dlp_openai_legacy" => {
+            let (head, tail) = body.split_at(body.len() / 2);
+            format!("{head}T3BlbkFJ{tail}")
+        }
+        _ => body.to_owned(),
+    };
+    format!("{}{body}{}", shape.prefix, shape.suffix)
+}
 
 /// A provider shape: rule, carrier with `{}` for the value, prefix, body
 /// alphabet and length, suffix.
@@ -136,8 +141,8 @@ const SHAPES: &[Shape] = &[
         carrier_en: "client = OpenAI(api_key=\"{}\")",
         prefix: "sk-proj-",
         alphabet: ALNUM,
-        length: 58,
-        suffix: OPENAI_TAIL,
+        length: 116,
+        suffix: "",
     },
     Shape {
         rule_id: "dlp_openai_legacy",
@@ -145,8 +150,8 @@ const SHAPES: &[Shape] = &[
         carrier_en: "openai.api_key = \"{}\"",
         prefix: "sk-",
         alphabet: ALNUM,
-        length: 20,
-        suffix: OPENAI_LEGACY_TAIL,
+        length: 40,
+        suffix: "",
     },
     Shape {
         rule_id: "dlp_openai_svc",
@@ -154,8 +159,8 @@ const SHAPES: &[Shape] = &[
         carrier_en: "OPENAI_API_KEY={}",
         prefix: "sk-svcacct-",
         alphabet: ALNUM,
-        length: 58,
-        suffix: OPENAI_TAIL,
+        length: 116,
+        suffix: "",
     },
     Shape {
         rule_id: "dlp_huggingface",
@@ -404,13 +409,13 @@ fn provider_example_and_test_values_are_silent_in_de_and_en() {
         let (markers, low_variety) = example_bodies(shape.alphabet, shape.length);
         for carrier in [shape.carrier_de, shape.carrier_en] {
             for body in &markers {
-                let value = format!("{}{body}{}", shape.prefix, shape.suffix);
+                let value = shaped(shape, body);
                 assert_silent(&carrier.replace("{}", &value));
             }
             // Generic assignment rules in the carrier check a provider-shaped
             // value like the provider rule does.
             for body in &low_variety {
-                let value = format!("{}{body}{}", shape.prefix, shape.suffix);
+                let value = shaped(shape, body);
                 assert_silent(&carrier.replace("{}", &value));
             }
         }
@@ -427,7 +432,7 @@ fn provider_values_with_a_random_body_stay_detected_in_de_and_en() {
         let value = match shape.rule_id {
             "dlp_github_token" => github_token(&body),
             "dlp_npm_token" => crc_token("npm_", &body),
-            _ => format!("{}{body}{}", shape.prefix, shape.suffix),
+            _ => shaped(shape, &body),
         };
         for carrier in [shape.carrier_de, shape.carrier_en] {
             assert_reported(&carrier.replace("{}", &value), shape.rule_id, &value);
