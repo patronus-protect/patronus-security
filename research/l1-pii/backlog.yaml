@@ -362,7 +362,11 @@ tasks:
     title: "Reachability of M1/M2 on presidio_favored and exceptions to the F1 >= 80 quality floor (gold failing validators, decided known gaps)"
     type: eval-infra
     deps: [B-EVAL, D-M2]
-    needs_decision: true
+    decision: >-
+      2026-11-02: option (b), globally for every family and both engines: milestones and the F1 >= 80
+      floor are judged on attainable gold (gold values that fail every validator of their id or fall under
+      a recorded decision are left out for ARK and Presidio alike, known-gap list in entity_map.yaml); the
+      raw view stays reported next to it. Validators are not loosened.
     source: "TRIAGE 2026-W44 (research/l1-pii/triage/2026-W44.md, buckets 1-4, 10, 15)"
     question: >-
       Dev, balanced, with every open task assumed to succeed: M1 IP on presidio_favored is capped at 87.7 vs
@@ -391,7 +395,10 @@ tasks:
     title: "Presidio tuned: enable the off-by-default English recognizers of ids the entity map marks shared (AU, SG FIN, IN, CA SIN, ZA ID, US NPI)?"
     type: eval-infra
     deps: [E01, B-EVAL]
-    needs_decision: true
+    decision: >-
+      2026-11-02: option (a): tuned is the strongest fair baseline, so profiles/tuned.yaml enables every
+      off-by-default recognizer of a shared id that loads in the pinned Presidio version; the lower M1
+      count is accepted and the new gaps become Q-M1 work.
     source: "TRIAGE 2026-W45 (research/l1-pii/triage/2026-W45.md, bucket 1)"
     question: >-
       profiles/tuned.yaml enables the UK and DE recognizers that presidio-analyzer 2.2.364 ships with
@@ -737,6 +744,28 @@ tasks:
       separator. Validators are never loosened, bare digit runs get no context-free form without a measured
       hard-negative check; strict shows no regression
 
+  # M1/M2 focus on presidio_favored (decided 2026-11-02 after the scoreboard of that day)
+  - id: Q-M2
+    title: "M2 on presidio_favored: DE/EU macro-F1 >= Presidio tuned in the attainable view"
+    type: recall-fix
+    deps: [T27, T32]
+    source: "scoreboard 2026-11-02: macro-F1 63.2 vs tuned 87.0 on 11 ids with 38 gold values"
+    accept: >-
+      scoreboard.py m2 holds on neutral and presidio_favored in the attainable view (balanced). Per-id gaps
+      on 2026-11-02 (ARK vs tuned, raw): tax ID 0 vs 100, identity card below tuned, LANR 50 vs 100, tax
+      number 67 vs 100, VAT ID 75 vs 100, passport 92 vs 100, BSNR 57 vs 57, driver's licence 0 vs 0.
+      Validators are never loosened; strict shows no regression; no new hard-negative FP
+  - id: Q-M1
+    title: "M1 on presidio_favored: every shared id F1 >= Presidio tuned (with the T32 profile) in the attainable view"
+    type: recall-fix
+    deps: [T27, T32, T33]
+    source: "scoreboard 2026-11-02 and T32 experiment: 22/25 today, 14/25 with the T32 profile"
+    accept: >-
+      scoreboard.py m1 holds on neutral and presidio_favored in the attainable view (balanced). Open ids
+      on 2026-11-02 with the T32 profile: IP address, UK NINO, US SSN, AU ACN, CA SIN, Aadhaar, GSTIN, IN
+      PAN, voter ID, SG NRIC/FIN, US NPI (T33 covers part of them). Validators are never loosened; strict
+      shows no regression; no new hard-negative FP
+
   # M3 +3 (53)
   - id: B-NORD
     status: done
@@ -872,7 +901,7 @@ tasks:
   - id: H06
     title: "Performance loop: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
     type: perf
-    deps: [H03, A02, T27, T32, T33]
+    deps: [H03, A02, T27, T32, T33, Q-M1, Q-M2]
     accept: >-
       Performance loop at the end of the programme (decided 2026-11-02): profile the 100 KiB DE and EN
       workloads, remove the top hotspots without any quality change (dev and holdout scoreboard and goldens
