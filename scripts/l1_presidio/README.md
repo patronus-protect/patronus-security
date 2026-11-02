@@ -18,7 +18,19 @@ cd python && ../.venv/bin/python -m patronus_ark.external_pii_eval evaluate \
 | Profil | Datei | Inhalt |
 |---|---|---|
 | `default` | `profiles/default.yaml` | `AnalyzerEngine()` unverändert: `en_core_web_lg`, englische Recognizer, Schwelle 0. Jede Zeile wird als `en` analysiert. |
-| `tuned` | `profiles/tuned.yaml` | `en_core_web_lg` + `de_core_news_lg`, alle deutschen Recognizer, deutsche Kontextwörter, DACH-Telefonregionen, Lemma-Kontext-Enhancer mit Suffix-Fenster, Schwelle 0,4. Andere Sprachen als `en`. |
+| `tuned` | `profiles/tuned.yaml` | `en_core_web_lg` + `de_core_news_lg`, alle deutschen Recognizer, jeder ab Werk abgeschaltete englische Recognizer einer `shared`-ID (T32), deutsche Kontextwörter, DACH-Telefonregionen, Lemma-Kontext-Enhancer mit Suffix-Fenster, Schwelle 0,4. Andere Sprachen als `en`. |
+
+`tuned` ist die stärkste faire Presidio-Baseline (T32, entschieden 2026-11-02, Option a): Jeder
+Recognizer, den Presidio 2.2.364 mit `enabled: false` ausliefert, läuft, wenn er Englisch oder
+Deutsch unterstützt, in der gepinnten Version lädt und seine Entität in `entity_map.yaml` eine
+`shared`-ID hat. Neben den UK- und DE-Recognizern sind das US NPI, CA SIN, SG NRIC/FIN, ZA ID,
+AU ABN/ACN/TFN/Medicare, IN PAN/Aadhaar/Pass/GSTIN/Voter-ID sowie die UK-, IN- und NG-Kennzeichen.
+Aus bleiben die Recognizer von `presidio_only`-IDs (`UsMbiRecognizer`, der in 2.2.364 ohnehin nicht
+lädt, UK-Postleitzahl, NG NIN, PH TIN/UMID), solche anderer Sprachen (ES, KR, SE, TH, TR: das Profil
+analysiert nur `en` und `de`) und die Modell-Recognizer mit fehlenden Abhängigkeiten
+(`HuggingFaceNerRecognizer`, `BasicLangExtractRecognizer`). Geprüft von
+`scripts/tests/test_l1_presidio_runner.py` (mit installiertem Presidio gegen dessen
+`default_recognizers.yaml`).
 
 ## Reproduzierbarkeit
 

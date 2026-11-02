@@ -64,7 +64,8 @@ unerreichbar.
 
 Gemessen auf einem eingefrorenen Holdout, den der Agent nie sieht (nur auf der VPS unter `~/ark-l1/holdout`,
 SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en_core_web_lg` +
-`de_core_news_lg`, Kontext-Enhancer, DE-Recognizer-Konfiguration).
+`de_core_news_lg`, Kontext-Enhancer, DE-Recognizer-Konfiguration, seit T32 jeder ab Werk abgeschaltete
+englische Recognizer einer `shared`-ID).
 
 | Meilenstein | Kriterium |
 |---|---|
