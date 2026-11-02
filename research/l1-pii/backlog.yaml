@@ -387,6 +387,30 @@ tasks:
       against the validator of the document's country (today every passport counts as failing
       de_passport_number); Q-task targets updated to the decided view; tests
 
+  - id: T32
+    title: "Presidio tuned: enable the off-by-default English recognizers of ids the entity map marks shared (AU, SG FIN, IN, CA SIN, ZA ID, US NPI)?"
+    type: eval-infra
+    deps: [E01, B-EVAL]
+    needs_decision: true
+    source: "TRIAGE 2026-W45 (research/l1-pii/triage/2026-W45.md, bucket 1)"
+    question: >-
+      profiles/tuned.yaml enables the UK and DE recognizers that presidio-analyzer 2.2.364 ships with
+      `enabled: false`, but not AuAbn, AuAcn, AuTfn, AuMedicare, SgFin, InPan, InAadhaar, InPassport, InGstin,
+      InVoter, CaSin, ZaIdNumber and UsNpi, although entity_map.yaml marks their ids shared since B-APAC,
+      B-LUHN, B-IN and A06. M1 on presidio_favored counts 11 of its 25 shared ids against Presidio 0.0 for
+      that reason. Dev experiment with those 13 recognizers on (profile copy outside the repo; UsMbiRecognizer
+      fails to load in 2.2.364): M1 presidio_favored 22/25 -> 14/25 (AU ACN 0 vs 100, CA SIN 57.1 vs 88.9,
+      Aadhaar 85.7 vs 100, GSTIN 0 vs 100, IN PAN 50 vs 80, voter ID 0 vs 50, NRIC/FIN 50 vs 80, NPI 88.9 vs
+      100), presidio_favored overall tuned 71.3 -> 75.9 (Ark balanced 78.1), neutral unchanged (9/9, 0 HN-FP).
+      Options: (a) enable them in tuned ("strongest fair baseline") and accept the lower M1 count; (b) keep
+      tuned as the EN + DE profile and move those ids out of M1 (e.g. scope ark_only for M1 or a separate
+      profile column in report); (c) leave as is and record why. Which applies?
+    accept: >-
+      Decision recorded in research/l1-pii/README.md (milestone section) and scripts/l1_presidio/README.md;
+      if (a): profiles/tuned.yaml enables the recognizers that load in the pinned version, the profile test
+      in scripts/tests covers it, baseline numbers in the README and the next snapshot use the new profile;
+      if (b): entity_map.py check and scoreboard.py m1 implement the chosen scope; tests
+
   - id: T28
     status: done
     title: "IPv6: no sub-span after a further `:` group (foo2001:db8::10.0.0.1 reports db8::10.0.0.1)"
@@ -399,6 +423,20 @@ tasks:
       rules; the presidio_favored gold `10.0.0.1` stays a known FN, the FP goes); hard negatives DE + EN for
       `<word>2001:db8::…` shapes; `2001:db8::10.0.0.1`, `::ffff:10.0.0.1`, `fe80::1%eth0` and every
       IP gold value found today stay found; presidio_favored IP precision rises in balanced and strict
+
+  - id: T31
+    title: "Gold-gap report: check gold against checksum validators only for ids whose rules all carry one (no ABA check for every account number, no DE check for every passport)"
+    type: eval-infra
+    deps: [B-EVAL]
+    source: "TRIAGE 2026-W45 (research/l1-pii/triage/2026-W45.md, bucket 4; TRIAGE 2026-W44 bucket 15)"
+    accept: >-
+      scoreboard.py gold_validators leaves out ids that also have rules without a checksum validator
+      (today entity.passport_number, pii.identity_card_number, pii.financial_account_number,
+      pii.crypto_wallet, pii.vin); their gold-gap columns read "–" like ids without a validator; the
+      "invalid" counts for Gretel account numbers (124/126 against aba_routing_number) and Nano/Gretel
+      passports (53/53, 45/45 against de_passport_number) disappear, PAN, IBAN, DE and VAT ids keep theirs;
+      no metric, gate or milestone value changes; scripts/tests/test_l1_scoreboard.py covers a mixed id
+      and a pure checksum id; scripts/l1_presidio/README.md describes the rule
 
   - id: GOLD-VAT1
     status: done
@@ -682,6 +720,21 @@ tasks:
       `My car reg is AB51 ABC`). Plate F1 >= 80 in balanced on ark_authored; bare values without a plate term stay
       negative in strict; the presidio_favored TR/IN/NG bare values follow the T27 decision; strict shows no
       regression; no district-code list (F16 stays deferred)
+
+  - id: T33
+    title: "Quality floor on presidio_favored for the country ids added since W44: AU ACN 0, IN PAN 50, voter ID 0, GSTIN 0, KR BRN 67, KR RRN 57, PESEL 50, codice fiscale 50, IT VAT ID 0, SG NRIC/FIN 50"
+    type: recall-fix
+    deps: [T27, T32]
+    source: "TRIAGE 2026-W45 (research/l1-pii/triage/2026-W45.md, bucket 3); quality floor 2026-10-25"
+    accept: >-
+      Every listed id reaches exact F1 >= 80 in balanced on presidio_favored, or its exception is recorded
+      as the T27 decision prescribes (README with numbers, or the attainable view). Dev evidence: bare
+      checksum-valid ACN (`000 000 019`, `006249976`, `000000180`), KR BRN `1048656659` and PESEL
+      (`44051401458`, `11111111116`) need a term by B-APAC, B-KR and A13; IN PAN and voter ID are format +
+      context (B-IN; `You can vote with your CPJ4467918 number`); GSTIN 3/3, NRIC/FIN 2/3, KR RRN 3/5 and
+      codice fiscale 2/3 gold values fail the check digit; IT VAT ID `01333550_323` has an underscore
+      separator. Validators are never loosened, bare digit runs get no context-free form without a measured
+      hard-negative check; strict shows no regression
 
   # M3 +3 (53)
   - id: B-NORD
