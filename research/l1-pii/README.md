@@ -57,7 +57,7 @@ Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14;
   einem annotierten Gold-Wert derselben ID an anderer Stelle der Zeile gleicht (ohne umgebende Klammern,
   Anführungszeichen, Satzzeichen und `mailto:`; z. B. die nicht annotierte Kopie in
   `[x@y.com](mailto:x@y.com)`), und Gold-Werte, die keinen Prüfziffer-Validator ihrer ID bestehen (mit
-  der Zahl, die jede Engine trotzdem exakt meldet). Kein Gate- oder Meilenstein-Wert ändert sich dadurch.
+  der Zahl, die jede Engine trotzdem exakt meldet; nur IDs, deren Regeln alle einen tragen, T31). Kein Gate- oder Meilenstein-Wert ändert sich dadurch.
   Die Validatoren laufen als Python-Ports der Rust-Funktionen (`CHECKSUM_PORTS` in `scoreboard.py`); eine
   Aufgabe, die in `checksums.ark` einen Prüfziffer-Validator einstuft, portiert ihn dort, sonst ist
   `scripts/tests/test_l1_scoreboard.py` rot.
@@ -332,7 +332,7 @@ und die US-Kontonummer `945456787654` bleiben FN), Kundennummer neutral 46,7 →
 und Benutzername unverändert. Offen (Q-FIN): Werte in SWIFT-MT-, FIX- und EDIFACT-Feldern ohne
 Feldnamen, Feldnamen mit Zusatz (`Bank Routing Number for Direct Deposit:`) und nicht annotierte
 Platzhalter (`Account Number: 123456789`), die Gretel nicht als Gold führt. Der Gold-Lücken-Bericht
-(T16) wertet Konto-Gold jetzt mit dem ABA-Port und zählt BBANs dort als prüfzifferungültig.
+(T16) prüft Konto-Gold nicht gegen den ABA-Port, weil neben der Routing-Regel Formatregeln stehen (T31).
 
 Stand B-EU1: ARK 55, gemeinsam 19 (B09, B10, B11). Fünf Labels mit Prüfziffer, alle `ark_only`
 (presidio-analyzer 2.2.364 kennt keine der Nummern): `FR_NIR` (`validators::fr_nir`, Schlüssel

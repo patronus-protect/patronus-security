@@ -377,7 +377,11 @@ python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
   diesem Gold-Span ist ein Grenzfehler und zählt nicht), sowie Gold-Werte, die jeden
   Prüfziffer-Validator ihrer ID verfehlen, mit der Zahl, die jede Engine exakt meldet. Die Validatoren je
   ID kommen aus der `PII_PATTERNS`-Registry und `checksums.ark` (wie bei `count_validated.py`), gerechnet
-  wird mit den Python-Ports in `CHECKSUM_PORTS`. Metriken und Gate bleiben unverändert.
+  wird mit den Python-Ports in `CHECKSUM_PORTS`. Geprüft werden nur IDs, deren Regeln alle einen
+  Prüfziffer-Validator tragen (T31): hat eine ID daneben Format- oder Kontextregeln (heute
+  `entity.passport_number`, `pii.identity_card_number`, `pii.financial_account_number`,
+  `pii.crypto_wallet`, `pii.vin`), sagt ein verfehlter Validator nichts über den Gold-Wert, und ihre
+  Spalten zeigen „–“ wie bei IDs ohne Validator. Metriken und Gate bleiben unverändert.
 
 Engines heißen `ark-<modus>` und dann wie die Profile; `--ark balanced=DIR` und mindestens ein
 `--engine` sind Pflicht, Namen eindeutig, fehlende Vorhersagedateien sind Exit 2.
