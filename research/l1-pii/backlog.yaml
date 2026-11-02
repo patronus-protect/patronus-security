@@ -393,6 +393,7 @@ tasks:
       de_passport_number); Q-task targets updated to the decided view; tests
 
   - id: T32
+    status: done
     title: "Presidio tuned: enable the off-by-default English recognizers of ids the entity map marks shared (AU, SG FIN, IN, CA SIN, ZA ID, US NPI)?"
     type: eval-infra
     deps: [E01, B-EVAL]
