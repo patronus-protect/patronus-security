@@ -1063,6 +1063,155 @@ fn in_http_head(text: &str, line_start: usize) -> bool {
 }
 
 /// The byte range of the line that holds `offset`, without its line break.
+/// G02: the families of config formats whose documents
+/// [`is_config_document`] tells apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentFamily {
+    /// A JSON document or JSON Lines.
+    Json,
+    /// An XML document.
+    Xml,
+    /// A document of config lines: YAML, TOML, HCL, INI/properties, .env and
+    /// HTTP header fields.
+    Lines,
+}
+
+impl DocumentFamily {
+    pub const fn of(format: ConfigFormat) -> Self {
+        match format {
+            ConfigFormat::Json => Self::Json,
+            ConfigFormat::Xml => Self::Xml,
+            _ => Self::Lines,
+        }
+    }
+}
+
+/// G02: an HTML page or a script in markup is no XML config.
+static HTML_MARKUP: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)<(?:script|html|!doctype[ \t]+html)\b").unwrap());
+
+/// G02: a config line `key: value`, `key = value`, `KEY=value`, `export
+/// KEY=value`, `"key": value` or `- key: value`: a bare key without blanks
+/// or a quoted one, its separator and the raw value.
+static CONFIG_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(?:-[ \t]+)?(?:export[ \t]+)?(?:"[^"\r\n]{1,64}"|'[^'\r\n]{1,64}'|[A-Za-z0-9_][A-Za-z0-9_.\-/]*)[ \t]*(?::(?:[ \t]+|$)|=)(.*)$"#)
+        .unwrap()
+});
+
+/// G02: a quoted string alone on its line, as an item of an array over
+/// several lines (`"a",`).
+static QUOTED_ITEM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^(?:"[^"\r\n]*"|'[^'\r\n]*')[ \t]*,?$"#).unwrap());
+
+/// G02: whether `text` as a whole is a config document of `family`, as a
+/// config file is: a JSON object or array (or JSON Lines), an XML document
+/// without HTML markup, or lines that are all config lines, comments,
+/// sections, HCL block heads and closers, YAML list items and block scalar
+/// text. Program source fails: declarations, calls, statements ending in
+/// `;` or `,`, and blocks other than HCL ones (`class X {`, `const x = {`).
+pub fn is_config_document(text: &str, family: DocumentFamily) -> bool {
+    let trimmed = text.trim();
+    match family {
+        DocumentFamily::Json => trimmed.starts_with(['{', '[']) && trimmed.ends_with(['}', ']']),
+        DocumentFamily::Xml => {
+            trimmed.starts_with('<') && trimmed.ends_with('>') && !HTML_MARKUP.is_match(text)
+        }
+        DocumentFamily::Lines => !trimmed.is_empty() && config_lines(text),
+    }
+}
+
+/// G02: whether every line of `text` is a line of a config document
+/// ([`is_config_document`]).
+fn config_lines(text: &str) -> bool {
+    let indent_of = |line: &str| line.len() - line.trim_start_matches([' ', '\t']).len();
+    // The indent of a key whose YAML block scalar (`key: |`) is open.
+    let mut block_scalar = None;
+    for line in text.lines() {
+        let body = line.trim();
+        let indent = indent_of(line);
+        if body.is_empty() {
+            continue;
+        }
+        if let Some(key_indent) = block_scalar {
+            if indent > key_indent {
+                continue;
+            }
+            block_scalar = None;
+        }
+        if body.starts_with(['#', ';', '!'])
+            || body.starts_with("//")
+            || body == "---"
+            || body == "..."
+            || (body.starts_with('[') && body.ends_with(']') && !body.contains('('))
+            || body
+                .trim_end_matches(',')
+                .bytes()
+                .all(|byte| matches!(byte, b'}' | b']'))
+            || QUOTED_ITEM.is_match(body)
+        {
+            continue;
+        }
+        if let Some(head) = body.strip_suffix('{').map(str::trim_end) {
+            let block = match indent {
+                0 => HCL_BLOCK.is_match(head),
+                _ => HCL_NESTED.is_match(head),
+            };
+            if block {
+                continue;
+            }
+            return false;
+        }
+        let entry = match body.strip_prefix("- ") {
+            Some(item) => item.trim_start(),
+            None => body,
+        };
+        if let Some(captures) = CONFIG_LINE.captures(entry) {
+            let raw = captures.get(1).map_or("", |raw| raw.as_str()).trim();
+            match config_line_value(raw) {
+                Some(true) => block_scalar = Some(indent),
+                Some(false) => {}
+                None => return false,
+            }
+            continue;
+        }
+        // A plain YAML list item (`- item`).
+        if body.starts_with("- ") && !entry.contains(char::is_whitespace) && !entry.contains('(') {
+            continue;
+        }
+        return false;
+    }
+    true
+}
+
+/// G02: whether the raw value of a config line suits a config document:
+/// `Some(true)` when it opens a YAML block scalar, `Some(false)` for any
+/// other config value, `None` for code (a call, `;`/`,` at the end, an
+/// operator such as `==`).
+fn config_line_value(raw: &str) -> Option<bool> {
+    let Some(first) = raw.chars().next() else {
+        return Some(false);
+    };
+    if matches!(first, '"' | '\'') {
+        let close = raw[1..].find(first)? + 1;
+        let rest = raw[close + 1..].trim();
+        return (rest.is_empty() || rest.starts_with(['#', ';']) || rest.starts_with("//"))
+            .then_some(false);
+    }
+    let value = match yaml_comment(raw) {
+        Some(comment) => raw[..comment].trim_end(),
+        None => raw,
+    };
+    if value.starts_with(['|', '>'])
+        && value[1..]
+            .bytes()
+            .all(|byte| matches!(byte, b'-' | b'+') || byte.is_ascii_digit())
+    {
+        return Some(true);
+    }
+    (!(matches!(first, '=' | '~') || value.contains(['(', ')']) || value.ends_with([',', ';'])))
+        .then_some(false)
+}
+
 fn line_at(text: &str, offset: usize) -> Range<usize> {
     let start = text[..offset].rfind('\n').map_or(0, |index| index + 1);
     let end = text[offset..]
@@ -1073,7 +1222,10 @@ fn line_at(text: &str, offset: usize) -> Range<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{config_line, config_values, is_item, line_at, ConfigFormat};
+    use super::{
+        config_line, config_values, is_config_document, is_item, line_at, ConfigFormat,
+        DocumentFamily,
+    };
     use regex::Regex;
 
     /// K05B: key, value, format and item flag of every config value whose
@@ -1398,5 +1550,57 @@ mod tests {
             .map(|value| (&request[value.key], value.format))
             .collect();
         assert_eq!(values, vec![("X-Api-Key", ConfigFormat::HttpHeader)]);
+    }
+
+    #[test]
+    fn config_documents_are_told_from_program_source() {
+        let lines = |text| is_config_document(text, DocumentFamily::Lines);
+        for text in [
+            "smtp:\n  host: mail.internal\n  credentials: abc\n",
+            "# env\nexport APP_ENV=prod\nSIGNING_KEY=abc\n",
+            "[session]\nname = \"x\"\nsecret_key = 'abc' # rotated\n",
+            "app.signing.private-key=abc\n! comment\n",
+            "provider \"acme\" {\n  passphrase = \"abc\"\n  nested {\n    a = 1\n  }\n}\n",
+            "---\nkeys:\n  - first\n  - name: second\nnote: |\n  free text (with parens);\nnext: 1\n",
+            "list = [\n  \"a\",\n  \"b\",\n]\n",
+        ] {
+            assert!(lines(text), "{text:?}");
+        }
+        for text in [
+            "",
+            "import os\nsecret_key = \"abc\"\n",
+            "signer = Signer(private_key=\"abc\")\n",
+            "const cfg = {\n  privateKey: \"abc\"\n}\n",
+            "export interface O {\n  privateKey: string;\n}\n",
+            "type Config struct {\n\tPrivateKey string\n}\n",
+            "data class C(\n    val privateKey: String,\n)\n",
+            "cfg = {\n  \"privateKey\": \"abc\",\n}\n",
+            "if a == b:\n    token = x\n",
+            "Bitte den Schlüssel nicht teilen.\nsecret_key: abc\n",
+        ] {
+            assert!(!lines(text), "{text:?}");
+        }
+        assert!(is_config_document(" {\"a\": 1}\n", DocumentFamily::Json));
+        assert!(is_config_document(
+            "{\"a\": 1}\n{\"b\": 2}\n",
+            DocumentFamily::Json
+        ));
+        assert!(!is_config_document(
+            "const a = {\"a\": 1}\n",
+            DocumentFamily::Json
+        ));
+        assert!(is_config_document(
+            "<?xml version=\"1.0\"?>\n<c><k>v</k></c>\n",
+            DocumentFamily::Xml
+        ));
+        assert!(!is_config_document(
+            "<html><script>x</script></html>",
+            DocumentFamily::Xml
+        ));
+        assert!(!is_config_document(
+            "<!DOCTYPE html>\n<div></div>",
+            DocumentFamily::Xml
+        ));
+        assert!(!is_config_document("x = \"<k>v</k>\"", DocumentFamily::Xml));
     }
 }
