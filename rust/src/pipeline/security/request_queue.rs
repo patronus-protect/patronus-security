@@ -375,17 +375,24 @@ impl SecurityGateway {
                 l1_failures.len()
             ),
         );
-        self.publish_phase_results(&request_id, &l1_results, l1_failures);
-        metrics.checkpoint(
-            "after_publish_l1",
-            format!("request_id={request_id} results={}", l1_results.len()),
-        );
-
+        // What later phases need of the L1 results; the results themselves move
+        // to the caller instead of being cloned with all their evidence (H03).
         let mut conditional_results = l1_results
             .iter()
             .filter_map(gate_result)
             .collect::<Vec<_>>();
         conditional_results.extend(rejected_l1_candidate_gate_results(&l1_results));
+        let l1_classes = l1_results
+            .iter()
+            .map(|result| (result.category.clone(), result.class_name.clone()))
+            .collect::<Vec<_>>();
+        let l1_count = l1_results.len();
+        self.publish_phase_results(&request_id, l1_results, l1_failures);
+        metrics.checkpoint(
+            "after_publish_l1",
+            format!("request_id={request_id} results={l1_count}"),
+        );
+
         metrics.checkpoint("before_l2", format!("request_id={request_id}"));
         let raw_l2 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.scan_l2_inputs(&inputs, &execution, &metadata, &conditional_results)
@@ -455,11 +462,11 @@ impl SecurityGateway {
             .map(|job| (job.job_id, job.category.clone()))
             .collect::<HashMap<_, _>>();
         let mut gate_results = HashMap::<String, Vec<String>>::new();
-        for result in l1_results.iter().chain(l2_results.iter()) {
-            gate_results
-                .entry(result.category.clone())
-                .or_default()
-                .push(result.class_name.clone());
+        let l2_classes = l2_results
+            .iter()
+            .map(|result| (result.category.clone(), result.class_name.clone()));
+        for (category, class_name) in l1_classes.into_iter().chain(l2_classes) {
+            gate_results.entry(category).or_default().push(class_name);
         }
 
         let mut registry = self
@@ -498,7 +505,7 @@ impl SecurityGateway {
     fn publish_phase_results(
         &self,
         request_id: &str,
-        results: &[SecurityScanResult],
+        results: Vec<SecurityScanResult>,
         failures: Vec<SecurityFailure>,
     ) {
         let mut registry = self
@@ -509,7 +516,7 @@ impl SecurityGateway {
         if let Some(state) = registry.requests.get_mut(request_id) {
             state.usable_results += results.len();
             state.failures.extend(failures);
-            registry.ready.extend(results.iter().cloned().map(|result| {
+            registry.ready.extend(results.into_iter().map(|result| {
                 QueuedSecurityEvent::Result(QueuedSecurityScanResult {
                     request_id: request_id.to_string(),
                     result,

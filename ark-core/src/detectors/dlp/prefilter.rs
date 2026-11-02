@@ -50,12 +50,15 @@ pub enum ValueClass {
     Alphanumeric,
     /// The Bitcoin Base58 alphabet (`[1-9A-HJ-NP-Za-km-z]`).
     Base58,
+    /// `[0-9]`.
+    Digit,
 }
 
 impl ValueClass {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Alphanumeric => "alphanumeric",
+            Self::Digit => "digit",
             Self::Base58 => "base58",
         }
     }
@@ -63,6 +66,7 @@ impl ValueClass {
     pub const fn contains(self, byte: u8) -> bool {
         match self {
             Self::Alphanumeric => byte.is_ascii_alphanumeric(),
+            Self::Digit => byte.is_ascii_digit(),
             Self::Base58 => {
                 byte.is_ascii_alphanumeric() && !matches!(byte, b'0' | b'O' | b'I' | b'l')
             }
@@ -71,6 +75,15 @@ impl ValueClass {
 
     fn contains_char(self, c: char) -> bool {
         c.is_ascii() && self.contains(c as u8)
+    }
+
+    /// The longest run of class characters in `text`.
+    pub fn longest_run(self, text: &str) -> usize {
+        text.as_bytes()
+            .split(|&byte| !self.contains(byte))
+            .map(<[u8]>::len)
+            .max()
+            .unwrap_or(0)
     }
 }
 
@@ -245,6 +258,12 @@ pub struct RuleScan {
 }
 
 impl RuleScan {
+    /// A scan that only gates rules: rule `i` may match if `active[i]`.
+    pub fn from_active(active: Vec<bool>) -> Self {
+        let hits = active.iter().map(|_| None).collect();
+        Self { active, hits }
+    }
+
     /// Whether rule `index` may match. A rule marked `false` has no match.
     pub fn is_active(&self, index: usize) -> bool {
         self.active[index]

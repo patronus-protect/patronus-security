@@ -10,10 +10,12 @@
 //! ID (`vat::VAT_ID_IT_PROXIMITY`, B01).
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
-/// Codice fiscale with a fiscal code term near the value or as its key.
+/// Codice fiscale with a fiscal code term near the value or as its key. ASCII
+/// case folding (`(?i-u)`): a code has no `ſ` or Kelvin sign, so every match
+/// holds a run of ASCII letters and digits, its prefilter (H03).
 pub(super) const FISCAL_CODE: PiiPattern = PiiPattern {
     name: "pii_fiscal_code_it",
-    pattern: r"(?i)(?-u:\b)[A-Z]{6}[0-9LMNP-V]{2}[ABCDEHLMPRST][0-9LMNP-V]{2}[A-Z][0-9LMNP-V]{3}[A-Z](?-u:\b)",
+    pattern: r"(?i-u)\b[A-Z]{6}[0-9LMNP-V]{2}[ABCDEHLMPRST][0-9LMNP-V]{2}[A-Z][0-9LMNP-V]{3}[A-Z]\b",
     entity_group: "IT_FISCAL_CODE",
     validator: Some(validators::it_fiscal_code),
     strength: ValidatorStrength::Checksum,

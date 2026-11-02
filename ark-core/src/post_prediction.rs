@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use std::net::{IpAddr, Ipv4Addr};
+use std::sync::{LazyLock, OnceLock};
+
+use aho_corasick::AhoCorasick;
 
 use crate::{EvidenceSpan, SecurityCategory};
 
@@ -78,10 +81,24 @@ impl PostPredictionHook for LocalPathPersonHook {
 
 impl PostPredictionHook for PrivateNetworkDiagnosticHook {
     fn retain(&self, category: SecurityCategory, text: &str, span: &EvidenceSpan) -> bool {
+        self.retain_with(category, span, || looks_like_network_diagnostic(text))
+    }
+}
+
+impl PrivateNetworkDiagnosticHook {
+    /// [`PostPredictionHook::retain`] with the text's diagnostic marker check
+    /// supplied by the caller, so that one text is searched once for all its
+    /// spans (H03).
+    fn retain_with(
+        &self,
+        category: SecurityCategory,
+        span: &EvidenceSpan,
+        network_diagnostic: impl FnOnce() -> bool,
+    ) -> bool {
         if category != SecurityCategory::Pii || !span.label.eq_ignore_ascii_case("IP_ADDRESS") {
             return true;
         }
-        !(is_private_or_local_ip(&span.text) && looks_like_network_diagnostic(text))
+        !(is_private_or_local_ip(&span.text) && network_diagnostic())
     }
 }
 
@@ -104,19 +121,22 @@ fn is_private_or_local_ip(value: &str) -> bool {
 }
 
 fn looks_like_network_diagnostic(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    [
-        "networkstate",
-        "network state",
-        "network diagnostic",
-        "local endpoint",
-        "private endpoint",
-        "network interface",
-        "interface address",
-        "lan address",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
+    static MARKERS: LazyLock<AhoCorasick> = LazyLock::new(|| {
+        AhoCorasick::builder()
+            .ascii_case_insensitive(true)
+            .build([
+                "networkstate",
+                "network state",
+                "network diagnostic",
+                "local endpoint",
+                "private endpoint",
+                "network interface",
+                "interface address",
+                "lan address",
+            ])
+            .expect("valid network diagnostic markers")
+    });
+    MARKERS.is_match(text)
 }
 
 fn is_local_path_span(text: &str, span: &EvidenceSpan) -> bool {
@@ -146,11 +166,13 @@ pub fn filter_evidence(
     spans: Vec<EvidenceSpan>,
 ) -> Vec<EvidenceSpan> {
     let hook = LocalPathPersonHook;
+    let diagnostic = OnceLock::new();
+    let network_diagnostic = || *diagnostic.get_or_init(|| looks_like_network_diagnostic(text));
     spans
         .into_iter()
         .filter(|span| hook.retain(category, text, span))
         .filter(|span| CredentialTemplateHook.retain(category, text, span))
-        .filter(|span| PrivateNetworkDiagnosticHook.retain(category, text, span))
+        .filter(|span| PrivateNetworkDiagnosticHook.retain_with(category, span, network_diagnostic))
         .collect()
 }
 
