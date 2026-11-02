@@ -551,7 +551,9 @@ CHECKS = {
     "openai_project_api_key": lambda v: prefixed("sk-proj-", B64URL, 156)(v) and v[82:90] == "T3BlbkFJ",
     "openai_service_account_key": lambda v: prefixed("sk-svcacct-", ALNUM + "-", 156)(v) and v[85:93] == "T3BlbkFJ",
     "openai_legacy_key": lambda v: prefixed("sk-", ALNUM, 48)(v) and v[23:31] == "T3BlbkFJ",
+    "openai_admin_key": lambda v: prefixed("sk-admin-", B64URL, 124)(v) and v[67:75] == "T3BlbkFJ",
     "huggingface_token": prefixed("hf_", ALNUM[:52], 34),
+    "huggingface_org_token": prefixed("api_org_", ALNUM[:52], 34),
     "groq_key": prefixed("gsk_", ALNUM, 52),
     "xai_api_key": prefixed("xai-", ALNUM, 80),
     "replicate_api_token": prefixed("r8_", ALNUM, 37),
@@ -819,6 +821,18 @@ LOOKALIKE_FAILURES = {
     "aws_secret_access_key_hex": lambda v: any(c.isupper() for c in v),
     # F-HTTP: random base64 that decodes to no user:password pair
     "http_basic_credentials": lambda v: checks.basic_auth_pair(v) is not None,
+    # F-LLM: wrong length, marker or alphabet of the LLM and Google formats
+    "anthropic_api_key_short": CHECKS["anthropic_api_key"],
+    "anthropic_admin_key_long": CHECKS["anthropic_admin_key"],
+    "openai_project_key": CHECKS["openai_project_api_key"],
+    "openai_service_account_key_short": CHECKS["openai_service_account_key"],
+    "openai_legacy_key_no_marker": CHECKS["openai_legacy_key"],
+    "huggingface_token_digit": CHECKS["huggingface_token"],
+    "groq_key_short": CHECKS["groq_key"],
+    "replicate_api_token_long": CHECKS["replicate_api_token"],
+    "google_api_key_long": CHECKS["google_api_key"],
+    "google_oauth_access_token_short": lambda v: len(v) >= 35,
+    "gcp_oauth_client_secret_long": CHECKS["gcp_oauth_client_secret"],
     # GOLD-D2: wrong prefix, length or character set of a baseline entity's format
     "slack_config_refresh_token_short": CHECKS["slack_config_refresh_token"],
     "slack_webhook_url_short": CHECKS["slack_webhook_url"],

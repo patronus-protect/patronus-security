@@ -3069,6 +3069,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "ANTHROPIC_API_KEY=sk-ant-api03-…gekürzt…AA"
+      ],
+      "en": [
+        "Keys look like sk-ant-api03-<93 characters>AA."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -3082,6 +3090,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Der Schlüssel beginnt mit sk-proj- und enthält T3BlbkFJ, Wert siehe Tresor."
+      ],
+      "en": [
+        "OPENAI_API_KEY=sk-proj-...your-key..."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -3246,6 +3262,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Authorization: Bearer ya29.<ZUGRIFFSTOKEN>"
+      ],
+      "en": [
+        "Access tokens start with ya29. and are up to 2048 bytes long."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -3259,6 +3283,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "client_secret: GOCSPX-dein-geheimnis"
+      ],
+      "en": [
+        "GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx"
+      ]
+    },
     "language_neutral": true
   },
   {
