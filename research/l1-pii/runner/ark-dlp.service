@@ -8,6 +8,7 @@ Type=oneshot
 User=ubuntu
 Group=ubuntu
 Environment=HOME=/home/ubuntu
+EnvironmentFile=-/home/ubuntu/ark-l1/host.env
 ExecStart=/home/ubuntu/ark-l1/bin/run.sh --program dlp
 TimeoutStartSec=24h
 Nice=5

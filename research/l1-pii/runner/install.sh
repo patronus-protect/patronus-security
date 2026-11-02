@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Install the runner from a reviewed checkout. Runs on the VPS as ubuntu.
 # The runner is copied, not linked: agent branches cannot change the gate.
+# Host settings (written to ~/ark-l1/host.env, loaded by the units; see run.sh):
+#   ARK_L1_LANE=a|b       lane of the DLP programme when two hosts share its backlog (unset: all tasks)
+#   ARK_L1_WHEN_IDLE=pii  the other programmes start new work only while PII has nothing to do
+# e.g. `ARK_L1_LANE=a ./install.sh` on the DLP host, `ARK_L1_LANE=b ARK_L1_WHEN_IDLE=pii ./install.sh`
+# on the PII host that also runs the second DLP lane.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -23,16 +28,27 @@ install -m 755 "$SRC/run.sh" "$ROOT/bin/"
 sed "1s|.*|#!$ROOT/runner-venv/bin/python|" "$SRC/ark-l1" > "$ROOT/bin/ark-l1"
 chmod 755 "$ROOT/bin/ark-l1"
 install -m 755 "$SRC/secret_check.py" "$ROOT/bin/"
+# Health check and repair ("doctor") per programme: ark-doctor@pii.timer, ark-doctor@dlp.timer.
+install -m 755 "$SRC/ark-doctor.sh" "$ROOT/bin/"
+install -m 644 "$SRC/ark-doctor-check.py" "$SRC/DOCTOR_PROMPT.md" "$ROOT/bin/"
+mkdir -p "$ROOT/doctor"
+{
+  echo "# Host settings for the ARK runner units (see run.sh); written by install.sh."
+  [ -z "${ARK_L1_LANE:-}" ] || echo "ARK_L1_LANE=$ARK_L1_LANE"
+  [ -z "${ARK_L1_WHEN_IDLE:-}" ] || echo "ARK_L1_WHEN_IDLE=$ARK_L1_WHEN_IDLE"
+} > "$ROOT/host.env.new"
+mv "$ROOT/host.env.new" "$ROOT/host.env"
 install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 install -m 644 "$SRC/../../dlp/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.dlp.md"
 install -m 644 "$SRC/AGENT_PROMPT.restack.md" "$ROOT/bin/AGENT_PROMPT.restack.md"
 install -m 644 "$SRC/AGENT_PROMPT.review.md" "$ROOT/bin/AGENT_PROMPT.review.md"
 sudo install -m 644 "$SRC/ark-l1.service" "$SRC/ark-l1.timer" "$SRC/ark-dlp.service" "$SRC/ark-dlp.timer" \
-  /etc/systemd/system/
+  "$SRC/ark-doctor@.service" "$SRC/ark-doctor@.timer" /etc/systemd/system/
 sudo systemctl daemon-reload
 gh label create ark-l1 --repo patronus-protect/patronus-security --color 5319e7 \
   --description "Scheduled L1-PII run" --force >/dev/null || echo "label not created (token lacks Issues permission); create it once by hand"
 gh label create ark-dlp --repo patronus-protect/patronus-security --color 0e8a16 \
   --description "Scheduled L1-DLP run" --force >/dev/null || echo "label ark-dlp not created; create it once by hand"
 [ -f "$ROOT/secrets.env" ] || echo "missing $ROOT/secrets.env (CLAUDE_CODE_OAUTH_TOKEN=...)"
-echo "installed; enable with: sudo systemctl enable --now ark-l1.timer ark-dlp.timer"
+echo "installed; enable the timers of the programmes this host runs, e.g.:"
+echo "  sudo systemctl enable --now ark-l1.timer ark-dlp.timer ark-doctor@pii.timer ark-doctor@dlp.timer"

@@ -942,8 +942,9 @@ run.sh
 - **Review-Läufe** (seit 2026-10-23): Nach Auto-Merge und Restack prüft `ark-l1 next` den Stack von
   unten nach oben. Hat ein PR unaufgelöste Review-Threads (Codex, CodeQL, Menschen) oder rote CI, wird
   er zur Aufgabe des Laufs (`REVIEW:<branch>`, Prompt `runner/AGENT_PROMPT.review.md`), vor jeder neuen
-  Backlog-Aufgabe. Rote CI mit Runner-/Toolchain-Fehler im Log (z. B. `failed to install component`)
-  wird stattdessen einmal neu gestartet. Der Agent committet den Fix auf dem PR-Branch, Gate und CI
+  Backlog-Aufgabe. Rote CI, bei der jeder fehlgeschlagene Job einen Runner-/Toolchain-/Download-Fehler
+  zeigt (z. B. `failed to install component`), wird stattdessen einmal neu angestoßen: per leerem Commit
+  auf dem PR-Branch bzw. erneutem Push des Task-Branches (der Runner-Token darf `gh run rerun` nicht). Der Agent committet den Fix auf dem PR-Branch, Gate und CI
   prüfen wie sonst, `ci` pusht mit Lease auf den alten Head, `publish` antwortet in jedem Thread mit dem
   Commit (plus der Notiz des Agenten aus `.git/ark-review.json`) und löst ihn auf. Drei rote Runden
   blockieren `REVIEW:<branch>`; der PR bleibt dann bis `unblock` unmergebar, neue Aufgaben laufen weiter.
@@ -980,6 +981,17 @@ run.sh
   `ext_deps: [<programm>:<id>]` auf Aufgaben warten, die im anderen Programm auf `main` erledigt sind.
   Für DLP legt der Gate-Schritt `external-corpora` die externen Content-Goldens einmalig unter
   `~/ark-dlp/data/dev/external` an (nur Dev, erst nach Neuinstallation des Runners).
+- **Lanes** (seit 2026-11-02): Zwei Hosts können sich das DLP-Backlog teilen. `ARK_L1_LANE` in
+  `~/ark-l1/host.env` (von `install.sh` geschrieben) legt die Lane fest: Lane `b` übernimmt die Aufgaben
+  `M*`, `P*` und `C*` (`PROGRAMS["dlp"]["lanes"]` in `ark-l1`), Lane `a` alle übrigen samt `TRIAGE`.
+  Jede Lane wählt, reviewt, restackt und merged nur ihre eigenen Aufgaben und PRs; Branch-Nummern werden
+  reihum vergeben (Nummer mod 2 = Lane), sodass zwei Hosts nie denselben Branch anlegen. Abhängigkeiten
+  über Lanes hinweg gelten wie sonst erst, wenn sie auf `main` erledigt sind. Mit
+  `ARK_L1_WHEN_IDLE=pii` startet ein Host neue DLP-Arbeit nur, solange PII nichts zu tun hat
+  (`ark-l1 --program pii idle`); das gemeinsame Lock bleibt.
+- **Doctor:** `ark-doctor@<programm>.timer` prüft alle 20 Minuten mit `ark-doctor-check.py`, ob ein
+  Programm hängt (kein Fortschritt, wiederholter Fehler, PR ohne Änderung), und startet dann einen
+  Claude-Lauf mit `DOCTOR_PROMPT.md`, der die Ursache behebt und in `~/ark-l1/doctor/REPORT.md` berichtet.
 
 ## Reihenfolge
 

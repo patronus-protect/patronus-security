@@ -29,6 +29,12 @@ EXTRA_PATTERNS = {
     "huggingface-token": re.compile(r"\bhf_[A-Za-z0-9]{34}\b"),
     "openai-api-key": re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}T3BlbkFJ[A-Za-z0-9_-]{20,}"),
     "anthropic-api-key": re.compile(r"\bsk-ant-(?:api|admin)[0-9]{2}-[A-Za-z0-9_-]{80,}"),
+    # gitleaks' mailgun rules need the keyword "mailgun" nearby; push protection does not (T18, 2026-10-28).
+    "mailgun-api-key": re.compile(r"\bkey-[0-9a-f]{32}\b"),
+    "mailgun-private-key": re.compile(r"\b[0-9a-f]{32}-[0-9a-f]{8}-[0-9a-f]{8}\b"),
+    # Push protection rejected a Mailchimp-shaped hard negative gitleaks did not report (T18, 2026-10-28).
+    "mailchimp-api-key": re.compile(r"\b[0-9a-f]{32}-us[0-9]{1,2}\b"),
+    "twilio-api-key": re.compile(r"\bSK[0-9a-fA-F]{32}\b"),
 }
 
 
