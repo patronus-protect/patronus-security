@@ -1471,7 +1471,7 @@ def test_gold_checks_check_documents_against_their_country_only():
     assert checks.documents == {"entity.passport_number": {"de": ("de_passport_number",)},
                                 "pii.identity_card_number": {"de": ("de_identity_card_number",)}}
     rows, _, _ = attainable_rows()
-    assert [MODULE.document_country(row) for row in rows] == ["ip", "de", "de", "de", "us", None]
+    assert [MODULE.document_country(row) for row in rows] == [None, "de", "de", "de", "us", None]
     assert MODULE.row_validators(rows[3], "entity.passport_number", checks) == ("de_passport_number",)
     assert MODULE.row_validators(rows[4], "entity.passport_number", checks) is None
     assert MODULE.row_validators(rows[5], "entity.passport_number", checks) is None
@@ -1556,5 +1556,5 @@ def test_report_shows_both_views_and_the_known_gaps(tmp_path):
     assert attainable < lines.index("## M1, raw gold, reported, decides no milestone (each Ark mode vs each profile; "
                                     "EN rows, exact F1, shared ids with gold; milestone on balanced)")
     assert f"| {RECOGNIZER_TESTS} | pii.identity_card_number | de: de_identity_card_number | 2 | 1 | 0 | 1 |" in lines
-    assert "| Corpus | Entity | Gold | Known gap | Decisions |" in lines
-    assert f"| {RECOGNIZER_TESTS} | pii.ip_address | 2 | 1 | D-IP |" in lines
+    assert "| Corpus | Entity | Gold | Known gap | Decisions recorded for the id |" in lines
+    assert f"| {RECOGNIZER_TESTS} | pii.ip_address | 2 | 1 | D-IP, T28 |" in lines

@@ -690,6 +690,14 @@ RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
         ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Host 192.168.1.1", "192.168.1.1", None),
         ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "2001:db8::1", "2001:db8::1", None),
         ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Host 127.0.0.10", "127.0.0.10", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "::1/128", "::1/128", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "127.0.0.0/8", "127.0.0.0/8", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "2001:db8::/32", "2001:db8::/32", None),
+        # T28: the IPv4 part of an invalid IPv6 chain is no partial span.
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:test_when_invalid_ip_then_no_match:10",
+         "foo2001:db8::10.0.0.1", "10.0.0.1", "T28"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:test_when_valid_ip_then_match:3",
+         "Host 10.0.0.1", "10.0.0.1", None),
         # Gold span with a leading space.
         ("pii.uk.national_insurance_number", RECOGNIZER_TESTS, "test_uk_nino_recognizer:x:0",
          "NINO: YZ 61 48 68 B", " YZ 61 48 68 B", "T27"),

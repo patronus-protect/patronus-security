@@ -44,7 +44,8 @@ unerreichbar.
   überlappen, zählen nicht als FP (wie bei B-IBAN).
 - **Liste der bekannten Lücken:** `known_gaps` in [`entity_map.yaml`](entity_map.yaml), je Eintrag
   ID, Entscheidung, Grund und Bedingungen (Span-Muster, blanker Wert, Zeilen-ID, Korpus); geprüft von
-  `entity_map.py check`. Heute: D-IP (Loopback/unspezifiziert), B-SSN (von `validators::us_ssn`
+  `entity_map.py check`. Heute: D-IP (Loopback/unspezifiziert, auch mit Präfixlänge), T28 (IPv4-Teil
+  einer ungültigen IPv6-Kette), B-SSN (von `validators::us_ssn`
   abgelehnte Werte, blanke neun Ziffern), Gretels `ssn`-Gold mit Kennungen anderer Länder, NINO-Span
   mit Leerraum am Rand, blanke BSNR und LANR (B-DE1), blanke Steuer-ID (K05), blanker deutscher
   Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30). Eine neue Ausnahme braucht eine Entscheidung
@@ -52,6 +53,9 @@ unerreichbar.
 - **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
   (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
   Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen weiter auf allem Gold (`raw`).
+- **Wirkung auf Dev** (`presidio_favored`, `balanced` gegen Presidio tuned, Stand dieser Aufgabe):
+  M1 roh 22/25, erreichbar 24/24; M2 roh Macro-F1 63,2 gegen 87,0 (11 IDs), erreichbar 96,3 gegen
+  100,0 (9 IDs; offen bleibt die Steuernummer mit 66,7 gegen 100).
 - **Validatoren werden nicht gelockert**, die Korpora nicht bearbeitet. Nicht erfasst werden FP auf
   nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
   (T16) und in der Untergrenze sichtbar.

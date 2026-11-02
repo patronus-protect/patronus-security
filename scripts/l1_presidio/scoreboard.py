@@ -113,7 +113,7 @@ MILESTONE_VIEW = "attainable"
 # country only (rules.country in entity_map.yaml), and only where the row names the country.
 DOCUMENT_IDS = ("entity.passport_number", "pii.identity_card_number")
 RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
-RECOGNIZER_COUNTRY = re.compile(r"test_([a-z]{2})_")
+RECOGNIZER_COUNTRY = re.compile(r"test_([a-z]{2})_[a-z0-9_]+_recognizer:")
 # Everything that goes into the native module and the prediction runner.
 KEY_PATHS = (
     "Cargo.toml",
@@ -2783,7 +2783,7 @@ def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
         "",
         "### Gold under a recorded decision (known_gaps in entity_map.yaml)",
         "",
-        "| Corpus | Entity | Gold | Known gap | Decisions |",
+        "| Corpus | Entity | Gold | Known gap | Decisions recorded for the id |",
         "|---|---|---:|---:|---|",
     ]
     decisions: dict[str, list[str]] = defaultdict(list)
@@ -2880,7 +2880,7 @@ def main(argv: list[str] | None = None) -> int:
             by_mode, mode_lines = (m1_by_mode, m1_mode_lines) if args.command == "m1" else (m2_by_mode, m2_mode_lines)
             reports = {}
             for view in VIEWS:
-                view_checks = checks if view == "attainable" else None
+                view_checks = checks if view == MILESTONE_VIEW else None
                 ark_results = {mode: score_directory(args.gold, directory, emap, view_checks)
                                for mode, directory in ark.items()}
                 reports[view] = by_mode(ark_results, score_directory(args.gold, args.presidio, emap, view_checks), emap,

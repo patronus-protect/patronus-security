@@ -758,6 +758,7 @@ tasks:
       scoreboard.py m2 holds on neutral and presidio_favored in the attainable view (balanced). Per-id gaps
       on 2026-11-02 (ARK vs tuned, raw): tax ID 0 vs 100, identity card below tuned, LANR 50 vs 100, tax
       number 67 vs 100, VAT ID 75 vs 100, passport 92 vs 100, BSNR 57 vs 57, driver's licence 0 vs 0.
+      Attainable view after T27: 96.3 vs 100.0 on 9 ids, open only tax number 67 vs 100.
       Validators are never loosened; strict shows no regression; no new hard-negative FP
   - id: Q-M1
     title: "M1 on presidio_favored: every shared id F1 >= Presidio tuned (with the T32 profile) in the attainable view"
@@ -767,7 +768,8 @@ tasks:
     accept: >-
       scoreboard.py m1 holds on neutral and presidio_favored in the attainable view (balanced). Open ids
       on 2026-11-02 with the T32 profile: IP address, UK NINO, US SSN, AU ACN, CA SIN, Aadhaar, GSTIN, IN
-      PAN, voter ID, SG NRIC/FIN, US NPI (T33 covers part of them). Validators are never loosened; strict
+      PAN, voter ID, SG NRIC/FIN, US NPI (T33 covers part of them). Attainable view after T27 with the
+      current profile: presidio_favored 24/24 (IP, NINO and SSN gaps are known_gaps). Validators are never loosened; strict
       shows no regression; no new hard-negative FP
 
   # M3 +3 (53)
