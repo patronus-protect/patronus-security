@@ -106,6 +106,31 @@ def test_both_profiles_are_checked_in_and_load():
         MODULE.load_profile("fast")
 
 
+def tuned_recognizers():
+    return {
+        item if isinstance(item, str) else item["name"]: item
+        for item in MODULE.load_profile("tuned")["presidio"]["recognizer_registry"]["recognizers"]
+    }
+
+
+def test_tuned_enables_the_off_by_default_english_recognizers_of_shared_ids():
+    # T32 (option a): tuned is the strongest fair baseline, so the English recognizers that
+    # Presidio 2.2.364 ships with `enabled: false` run whenever entity_map.yaml marks their id shared.
+    recognizers = tuned_recognizers()
+    shared = {
+        "UsNpiRecognizer", "CaSinRecognizer", "SgFinRecognizer", "ZaIdNumberRecognizer",
+        "AuAbnRecognizer", "AuAcnRecognizer", "AuTfnRecognizer", "AuMedicareRecognizer",
+        "InPanRecognizer", "InAadhaarRecognizer", "InPassportRecognizer", "InGstinRecognizer",
+        "InVoterRecognizer", "UkVehicleRegistrationRecognizer", "InVehicleRegistrationRecognizer",
+        "NgVehicleRegistrationRecognizer",
+    }
+    assert shared <= set(recognizers)
+    for name in shared:
+        assert recognizers[name]["supported_languages"] == ["en"], name
+    # presidio_only ids stay off; UsMbiRecognizer also fails to load in 2.2.364.
+    assert not {"UsMbiRecognizer", "UkPostcodeRecognizer", "NgNinRecognizer", "PhTinRecognizer"} & set(recognizers)
+
+
 def test_requirements_pin_every_package_exactly():
     pins = MODULE.parse_requirements(MODULE.REQUIREMENTS_PATH)
     assert pins["presidio-analyzer"]
@@ -272,3 +297,34 @@ def test_real_presidio_profiles_are_reproducible(tmp_path, profile_name):
         assert ("pii.credit_card.pan", 30, 49) in predicted["en"]
         assert ("pii.iban", 30, 52) in predicted["de"]
     assert digests[0] == digests[1]
+
+
+@pytest.mark.skipif(not presidio_available(), reason="presidio_analyzer is not installed")
+def test_real_presidio_off_by_default_english_recognizers_of_shared_ids_are_enabled_in_tuned():
+    import presidio_analyzer
+    import yaml
+    from presidio_analyzer import predefined_recognizers
+
+    spec = importlib.util.spec_from_file_location("entity_map", ROOT / "scripts" / "l1_presidio" / "entity_map.py")
+    entity_map = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(entity_map)
+    mapping = entity_map.load()
+    defaults = yaml.safe_load(
+        (Path(presidio_analyzer.__file__).parent / "conf" / "default_recognizers.yaml").read_text(encoding="utf-8")
+    )
+    expected = set()
+    for entry in defaults["recognizers"]:
+        if not isinstance(entry, dict) or entry.get("enabled", True):
+            continue
+        if "en" not in (entry.get("supported_languages") or ["en"]):
+            continue  # the tuned analyzer only runs en and de
+        try:
+            entities = getattr(predefined_recognizers, entry["name"])().supported_entities
+        except Exception:  # noqa: BLE001 - optional dependencies (transformers, langextract)
+            continue
+        ids = {mapping.presidio_entity(entity) for entity in entities}
+        if any(mapping.scope(entity_id) == "shared" for entity_id in ids if entity_id):
+            expected.add(entry["name"])
+    assert {"UkNinoRecognizer", "AuAcnRecognizer", "InGstinRecognizer", "CaSinRecognizer"} <= expected
+    assert expected <= set(tuned_recognizers())
