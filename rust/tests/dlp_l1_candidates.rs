@@ -67,11 +67,17 @@ dlp_golden!(
     "API_KEY",
     concat!(
         "OPENAI_API_KEY=",
-        "sk-proj-",
-        "q7mzk2xv9pwd",
-        "4hrt8nyc3bja6ufs0ge1"
+        "sk-",
+        "q7mZk2xV9pWd4hRt8nYc",
+        "T3BlbkFJ",
+        "3bJa6uFs0gE1aB2cD3eF"
     ),
-    concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1")
+    concat!(
+        "sk-",
+        "q7mZk2xV9pWd4hRt8nYc",
+        "T3BlbkFJ",
+        "3bJa6uFs0gE1aB2cD3eF"
+    )
 );
 dlp_golden!(
     detects_password_assignment,
@@ -307,9 +313,10 @@ fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
     let text = concat!(
         concat!(
             "OPENAI_API_KEY=",
-            "sk-proj-",
-            "q7mzk2xv9pwd",
-            "4hrt8nyc3bja6ufs0ge1",
+            "sk-",
+            "q7mZk2xV9pWd4hRt8nYc",
+            "T3BlbkFJ",
+            "3bJa6uFs0gE1aB2cD3eF",
             "\n"
         ),
         "Zugang Testsystem: passwort = Sommer2026!\n",
@@ -321,7 +328,12 @@ fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
     assert_span(
         &result,
         "API_KEY",
-        concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1"),
+        concat!(
+            "sk-",
+            "q7mZk2xV9pWd4hRt8nYc",
+            "T3BlbkFJ",
+            "3bJa6uFs0gE1aB2cD3eF"
+        ),
     );
     assert_span(&result, "CREDENTIAL", "Sommer2026!");
     assert_span(&result, "CREDENTIAL", "s3cr3t-value");
@@ -631,9 +643,10 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
         "```env\n",
         concat!(
             "OPENAI_API_KEY=",
-            "sk-proj-",
-            "q7mzk2xv9pwd",
-            "4hrt8nyc3bja6ufs0ge1",
+            "sk-",
+            "q7mZk2xV9pWd4hRt8nYc",
+            "T3BlbkFJ",
+            "3bJa6uFs0gE1aB2cD3eF",
             "\n"
         ),
         "```"
@@ -643,7 +656,12 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
     assert_span(
         &result,
         "API_KEY",
-        concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1"),
+        concat!(
+            "sk-",
+            "q7mZk2xV9pWd4hRt8nYc",
+            "T3BlbkFJ",
+            "3bJa6uFs0gE1aB2cD3eF"
+        ),
     );
 }
 

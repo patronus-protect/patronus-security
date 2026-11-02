@@ -59,9 +59,10 @@ fn dlp_native_detects_secret_patterns_and_safe_text() {
         &pipe
             .evaluate(concat!(
                 "OPENAI_API_KEY=",
-                "sk-proj-",
-                "q7mzk2xv9pwd",
-                "4hrt8nyc3bja6ufs0ge1"
+                "sk-",
+                "q7mZk2xV9pWd4hRt8nYc",
+                "T3BlbkFJ",
+                "3bJa6uFs0gE1aB2cD3eF"
             ))
             .class_name,
         "API_KEY",

@@ -96,7 +96,16 @@ fn random(seed: u64, alphabet: &str, length: usize) -> String {
 }
 
 const ALNUM: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const ALPHA: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const HEX: &str = "0123456789abcdef";
+/// The OpenAI marker and a fixed second half of 58 (project and service
+/// account keys) or 20 characters (legacy keys); the body before it varies.
+const OPENAI_TAIL: &str = concat!(
+    "T3BlbkFJ",
+    "Qm4XzT8bLp2WcV7nRk5HsJ9dFg3Ya",
+    "E6uN1tB0oZiMqLw4KxPe8Cv2Rj5Ds"
+);
+const OPENAI_LEGACY_TAIL: &str = concat!("T3BlbkFJ", "Vb7KqM2xLw", "9PzR4tNc6J");
 const BASE58: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 /// A provider shape: rule, carrier with `{}` for the value, prefix, body
@@ -127,8 +136,8 @@ const SHAPES: &[Shape] = &[
         carrier_en: "client = OpenAI(api_key=\"{}\")",
         prefix: "sk-proj-",
         alphabet: ALNUM,
-        length: 64,
-        suffix: "",
+        length: 58,
+        suffix: OPENAI_TAIL,
     },
     Shape {
         rule_id: "dlp_openai_legacy",
@@ -136,8 +145,8 @@ const SHAPES: &[Shape] = &[
         carrier_en: "openai.api_key = \"{}\"",
         prefix: "sk-",
         alphabet: ALNUM,
-        length: 48,
-        suffix: "",
+        length: 20,
+        suffix: OPENAI_LEGACY_TAIL,
     },
     Shape {
         rule_id: "dlp_openai_svc",
@@ -145,15 +154,15 @@ const SHAPES: &[Shape] = &[
         carrier_en: "OPENAI_API_KEY={}",
         prefix: "sk-svcacct-",
         alphabet: ALNUM,
-        length: 60,
-        suffix: "",
+        length: 58,
+        suffix: OPENAI_TAIL,
     },
     Shape {
         rule_id: "dlp_huggingface",
         carrier_de: "HF_TOKEN={}",
         carrier_en: "huggingface-cli login --token {}",
         prefix: "hf_",
-        alphabet: ALNUM,
+        alphabet: ALPHA,
         length: 34,
         suffix: "",
     },
