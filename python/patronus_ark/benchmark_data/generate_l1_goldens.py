@@ -5160,7 +5160,7 @@ DLP_LOOKALIKE_GENERATORS = (
     "openai_legacy_key_no_marker", "huggingface_token_digit", "groq_key_short", "replicate_api_token_long",
     "google_api_key_long", "google_oauth_access_token_short", "gcp_oauth_client_secret_long",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
-    "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "discord_bot_token_non_snowflake",
+    "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
 )
 

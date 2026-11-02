@@ -1736,9 +1736,6 @@ PROFILES = {
     "dlp_project_id": Profile("identifier.project", "dlp.project_id", "identifier", "project_id", "project ID", "Projekt-ID"),
     "dlp_organization_id": Profile("identifier.organization", "dlp.organization_id", "identifier", "tenant_id", "tenant ID", "Mandanten-ID"),
     # Baseline entities (GOLD-D2): no ARK rule yet, keyed by their entity id.
-    "comm.slack.app_config_token": Profile(
-        "comm.slack.app_config_token", "SECRET_TOKEN", "secret", "slack_app_token", "Slack app token", "Slack-App-Token"
-    ),
     "comm.webhook_url": Profile(
         "comm.webhook_url", "SECRET_TOKEN", "secret", "notify_webhook_url", "chat webhook URL", "Chat-Webhook-URL"
     ),
