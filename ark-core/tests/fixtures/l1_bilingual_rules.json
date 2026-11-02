@@ -4730,7 +4730,10 @@
         "verschluesselung:\n  geheimnis: deaktiviert",
         "<lager>\n  <api_token>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</api_token>",
         "<verschluesselung>\n  <geheimnis>deaktiviert</geheimnis>",
-        "module \"versand\" {\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\""
+        "module \"versand\" {\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\"",
+        "const client = new LagerClient({\n  privateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n  credentials: \"Tz8Wm4K93RVqe7xAb2Lp\"\n});",
+        "signer = Signer(private_key=\"Tz8Wm4K93RVqe7xAb2Lp\", passphrase=\"Tz8Wm4K93RVqe7xAb2Lp\")",
+        "lager:\n  zugangsdaten: ${LAGER_ZUGANGSDATEN}\n  private_key: ./schluessel/lager.pem"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -4753,7 +4756,10 @@
         "{\"tokens\": [\"<|endoftext|>\", \"Ġconstructor\", \"ing</w>\", \"abc12345\"]}",
         "<PropertyGroup>\n  <ApiToken>$(BillingApiToken)</ApiToken>",
         "<idp>\n  <client_secret>https://auth.internal/realms/acme/protocol/openid-connect/token</client_secret>",
-        "provider \"vault\" {\n  token = \"${var.vault_token}\""
+        "provider \"vault\" {\n  token = \"${var.vault_token}\"",
+        "public final class SigningConfig {\n    private String secretKey = \"Tz8Wm4K93RVqe7xAb2Lp\";\n}",
+        "type Config struct {\n\tPrivateKey string\n}\n\nvar cfg = Config{\n\tPrivateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n}",
+        "app.signing.private-key=classpath:keys/private.pem"
       ]
     },
     "language_neutral": false

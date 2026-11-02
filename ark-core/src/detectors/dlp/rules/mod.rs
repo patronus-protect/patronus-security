@@ -125,7 +125,9 @@ pub fn placeholder_check(rule_id: &str) -> bool {
 
 pub use likeness::is_item_value;
 pub use placeholders::is_placeholder_match;
-pub use value_shape::{key_names_digest, non_secret_shape, non_secret_shape_under};
+pub use value_shape::{
+    is_key_reference, key_names_digest, non_secret_shape, non_secret_shape_under,
+};
 
 /// K05: how config lines (`dlp::config_keys`) bind a value to a generic
 /// key-bound rule.
@@ -133,6 +135,9 @@ pub use value_shape::{key_names_digest, non_secret_shape, non_secret_shape_under
 pub struct ConfigKey {
     /// The key grammar of the rule's regex.
     pub pattern: &'static str,
+    /// G02: nouns that bind only in a config document
+    /// (`config_keys::is_config_document`), with the same word boundary.
+    pub document_pattern: Option<&'static str>,
     /// The grammar matches the whole key (`DB_PASSWORD` for
     /// `dlp_env_var_secret`) rather than its last word (`password` of
     /// `app.db.password`).

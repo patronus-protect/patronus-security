@@ -93,6 +93,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `sshpass`, `docker`, `podman`, `nerdctl`, `buildah`, `skopeo`, `htpasswd`,
   `convertto-securestring`, `net use`), bounded gaps (≤ 300 characters within a line) and bounded
   values.
+- Structure-aware config keys (G02). In a config document `dlp_generic_credential_assignment`
+  also binds the keys `credentials`, `privateKey`/`private_key`, `secret_key`, `signing-key`,
+  `passphrase` and the DE variants `Zugangsdaten`, `Anmeldedaten`, `privater`/`geheimer
+  Schlüssel` (also compound and camelCase: `jwt.privateKey`, `LAGER_SIGNING_KEY`), through the
+  K05–K05C extraction of YAML, JSON, TOML, HCL, XML, INI/properties and .env. A text is a config
+  document when it is a JSON object/array or JSON Lines, an XML document without HTML markup, or
+  when every line is a config line, comment, section, HCL block head or closer, YAML list item or
+  block scalar text (`config_keys::is_config_document`); program source (declarations, calls,
+  statements ending in `;`/`,`, `class X {`, `const x = {`) never is, so object literals, kwargs,
+  struct fields and test fixtures keep the base behaviour, and the rule regex is unchanged.
+  Values under these keys pass the existing value gate and shape check and must not name a key
+  (`value_shape::is_key_reference`): no key, certificate or config file name
+  (`./certs/signing.pem`, `classpath:keys/private.pem`), no GPG key ID or upper-case fingerprint
+  (`signingkey = …` in `.gitconfig`), AWS/GCP KMS key name, identifier or text with blanks. New `rust/tests/dlp_config_document_keys.rs`, 25 new
+  `dlp_l1` rows (DE, EN; 13 hard negatives, 9 from program source), 6 rule fixture hard
+  negatives. **Detection change** (every mode): values under these keys in config documents are
+  new `CREDENTIAL` findings; on dev benign code, benign docs, the external corpora and the
+  synthetic carriers every finding is byte-identical to the base (0 new
+  `dlp_generic_credential_assignment` hits). The document check runs once per text and family
+  of formats, only when one of these keys holds a config value.
 
 - Indian identifiers (B-IN). Four new labels: `IN_AADHAAR` (twelve digits, first digit 2–9, plain or
   grouped 4-4-4 with spaces, hyphens or colons, no palindrome, Verhoeff check digit), `IN_GSTIN`

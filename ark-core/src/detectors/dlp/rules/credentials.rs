@@ -31,6 +31,16 @@ macro_rules! generic_key {
     };
 }
 
+/// G02: secret-like nouns that `dlp_generic_credential_assignment` binds
+/// only in a config document (`config_keys::is_config_document`): its regex
+/// does not take them, so object literals, kwargs and fields in program
+/// source keep the base behaviour.
+macro_rules! config_document_key {
+    () => {
+        r"(?i)(?:credentials?|private[ _-]?key|secret[ _-]?key|signing[ _-]?key|passphrase|zugangsdaten|anmeldedaten|privater?[ _-]?schl(?:ü|ue)ssel|geheimer?[ _-]?schl(?:ü|ue)ssel)(?-u:\b)"
+    };
+}
+
 /// G-PROSE (G06): a value handed over after a credential noun in a chat,
 /// ticket or mail: after a `:` on the noun's line or the next one, at the
 /// end of its line or alone up to two lines further, optionally after a
@@ -56,14 +66,21 @@ macro_rules! prose_value_end {
 /// K05: how config lines bind a value to a generic key-bound rule: its key
 /// grammar and the value lengths of its regex.
 pub(super) fn config_key(rule_id: &str) -> Option<ConfigKey> {
-    let (pattern, whole, min_len, max_len) = match rule_id {
-        "dlp_env_var_secret" => (env_key!(), true, 8, None),
-        "dlp_password_assignment" => (password_key!(), false, 4, Some(150)),
-        "dlp_generic_credential_assignment" => (generic_key!(), false, 8, Some(150)),
+    let (pattern, document_pattern, whole, min_len, max_len) = match rule_id {
+        "dlp_env_var_secret" => (env_key!(), None, true, 8, None),
+        "dlp_password_assignment" => (password_key!(), None, false, 4, Some(150)),
+        "dlp_generic_credential_assignment" => (
+            generic_key!(),
+            Some(config_document_key!()),
+            false,
+            8,
+            Some(150),
+        ),
         _ => return None,
     };
     Some(ConfigKey {
         pattern,
+        document_pattern,
         whole,
         min_len,
         max_len,
