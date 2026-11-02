@@ -484,8 +484,9 @@ tasks:
       Analyse why presidio_favored gold for these ids is missed (formats, separators, context) and fix the 
       rules. Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on 
       every source family where it has gold (snapshot research/scoreboard/*.json); strict shows no 
-      regression; validators are never loosened; an entity that cannot reach 80 by a recorded decision is 
-      documented in the README
+      regression; validators are never loosened; the floor is judged
+      on attainable gold (T27): gold out of reach by a recorded decision is a known_gaps entry in
+      entity_map.yaml (scoreboard.py report, table "Per entity, attainable gold")
 
   # M1 IBAN (presidio_favored 63.9 vs 100; 35 of 66 FN are grouped non-DE IBAN)
   - id: B-IBAN
@@ -609,8 +610,9 @@ tasks:
     accept: >-
       Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
       source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
-      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
-      in the README
+      validators are never loosened; the floor is judged
+      on attainable gold (T27): gold out of reach by a recorded decision is a known_gaps entry in
+      entity_map.yaml (scoreboard.py report, table "Per entity, attainable gold")
 
   # M3 +6 (42)
   - id: B-APAC
@@ -679,8 +681,9 @@ tasks:
     accept: >-
       Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
       source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
-      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
-      in the README
+      validators are never loosened; the floor is judged
+      on attainable gold (T27): gold out of reach by a recorded decision is a known_gaps entry in
+      entity_map.yaml (scoreboard.py report, table "Per entity, attainable gold")
 
   # M3 +4 (50)
   - id: B-EU1
@@ -712,8 +715,9 @@ tasks:
     accept: >-
       Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
       source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
-      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
-      in the README
+      validators are never loosened; the floor is judged
+      on attainable gold (T27): gold out of reach by a recorded decision is a known_gaps entry in
+      entity_map.yaml (scoreboard.py report, table "Per entity, attainable gold")
 
   - id: T30
     status: done
@@ -735,8 +739,8 @@ tasks:
     deps: [T27, T32]
     source: "TRIAGE 2026-W45 (research/l1-pii/triage/2026-W45.md, bucket 3); quality floor 2026-10-25"
     accept: >-
-      Every listed id reaches exact F1 >= 80 in balanced on presidio_favored, or its exception is recorded
-      as the T27 decision prescribes (README with numbers, or the attainable view). Dev evidence: bare
+      Every listed id reaches exact F1 >= 80 in balanced on presidio_favored, in the attainable view
+      (T27), where gold out of reach by a recorded decision is a known_gaps entry in entity_map.yaml. Dev evidence: bare
       checksum-valid ACN (`000 000 019`, `006249976`, `000000180`), KR BRN `1048656659` and PESEL
       (`44051401458`, `11111111116`) need a term by B-APAC, B-KR and A13; IN PAN and voter ID are format +
       context (B-IN; `You can vote with your CPJ4467918 number`); GSTIN 3/3, NRIC/FIN 2/3, KR RRN 3/5 and

@@ -54,6 +54,12 @@ unless both hold on balanced:
 
     scoreboard.py m2 --gold DIR --ark strict=DIR --ark balanced=DIR --presidio PRESIDIO_DIR [--language de]
 
+``m1``, ``m2`` and ``report`` score two views (T27): ``raw`` gold, and ``attainable`` gold, which
+leaves out for every engine alike the gold failing every checksum validator of its id (a passport or
+identity card only the validator of its issuing country, ``row_validators``) and the gold under a
+recorded decision (``known_gaps`` in entity_map.yaml). The milestones and the F1 >= 80 floor are
+judged on the attainable view; the raw view is printed next to it. ``gate`` and ``score`` stay raw.
+
 ``report`` renders the Markdown baseline (research/l1-pii/scoreboard/baseline.md): P/R/F1 per
 source family, corpus and entity for each Ark mode and each Presidio profile, hard-negative FP
 per family, M1 and M2 of every Ark mode against each profile, and the gold gaps per corpus and entity
