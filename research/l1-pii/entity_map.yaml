@@ -101,6 +101,42 @@ known_gaps:
     reason: blanke TR-, IN- und NG-Kennzeichen ohne Kennzeichen-Begriff bleiben negativ (Format ohne Prüfziffer, B-LUHN)
     bare: true
     rows: 'test_(?:tr_license_plate|in_vehicle_registration|ng_vehicle_registration)_recognizer:'
+  - id: pii.au.acn
+    decision: B-APAC
+    reason: blanke neun Ziffern ohne ACN-Begriff bleiben negativ, auch mit gültiger Prüfziffer
+    span: '\d{3} ?\d{3} ?\d{3}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.kr.brn
+    decision: B-KR
+    reason: blanke zehn Ziffern ohne BRN-Begriff bleiben negativ; die Form 3-2-5 mit Bindestrichen bleibt Gold
+    span: '\d{10}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.pl.pesel
+    decision: A13
+    reason: blanke elf Ziffern ohne PESEL-Begriff bleiben negativ, auch mit gültiger Prüfziffer
+    span: '\d{11}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.in.pan
+    decision: B-IN
+    reason: blanke PAN ohne PAN-Begriff bleibt negativ (Format ohne Prüfziffer)
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.in.voter_id
+    decision: B-IN
+    reason: blanke Wähler-ID (EPIC) ohne Wähler-ID-Begriff bleibt negativ (Format ohne Prüfziffer)
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.in.voter_id
+    decision: B-IN
+    reason: Wähler-ID ohne Wähler-ID-Begriff am Wert ('this …', 'vote with your … number'); 'vote' ist kein Begriff der EPIC
+    rows: 'test_in_voter_recognizer:test_when_voter_in_text_then_all_voter_found:[34]$'
+  - id: pii.it.vat_code
+    decision: T33
+    reason: Unterstrich ist kein Trennzeichen der Partita IVA (elf Ziffern am Stück, mit oder ohne IT)
+    span: '[0-9 ]*_[0-9_ ]*'
 
 entities:
   # ── shared ─────────────────────────────────────────────────────────────

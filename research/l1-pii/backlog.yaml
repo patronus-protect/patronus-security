@@ -736,6 +736,7 @@ tasks:
       regression; no district-code list (F16 stays deferred)
 
   - id: T33
+    status: done
     title: "Quality floor on presidio_favored for the country ids added since W44: AU ACN 0, IN PAN 50, voter ID 0, GSTIN 0, KR BRN 67, KR RRN 57, PESEL 50, codice fiscale 50, IT VAT ID 0, SG NRIC/FIN 50"
     type: recall-fix
     deps: [T27, T32]

@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- L1 PII quality floor on presidio_favored for the country ids added since W44 (T33). New
+  `known_gaps` in `research/l1-pii/entity_map.yaml` record the gold that existing decisions keep out
+  of reach: bare ACN (B-APAC), bare ten-digit KR BRN (B-KR), bare PESEL (A13), bare IN PAN and voter
+  ID gold without a voter ID term (B-IN), and a Partita IVA with an underscore separator (T33). GSTIN,
+  NRIC/FIN, KR RRN and codice fiscale gold failing the check digit already left the attainable view.
+  Dev, presidio_favored, balanced, attainable: every listed id is at exact F1 >= 80 or keeps no
+  attainable gold (IN PAN 50 -> 100, KR BRN 66.7 -> 100, PESEL 50 -> 100; ACN, voter ID, GSTIN and
+  IT VAT ID without attainable gold); M1 attainable 17/24 -> 18/22. Raw view, gate and validators
+  unchanged. Evaluation only: no detection change, strict and balanced output bit-identical.
 - Presidio `tuned` baseline enables the off-by-default English recognizers of shared ids (T32,
   decided 2026-11-02, option a). `scripts/l1_presidio/profiles/tuned.yaml` now also runs US NPI,
   CA SIN, SG NRIC/FIN, ZA ID, AU ABN/ACN/TFN/Medicare, IN PAN/Aadhaar/passport/GSTIN/voter ID and

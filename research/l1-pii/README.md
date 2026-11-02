@@ -48,7 +48,9 @@ unerreichbar.
   einer ungültigen IPv6-Kette), B-SSN (von `validators::us_ssn`
   abgelehnte Werte, blanke neun Ziffern), Gretels `ssn`-Gold mit Kennungen anderer Länder, NINO-Span
   mit Leerraum am Rand, blanke BSNR und LANR (B-DE1), blanke Steuer-ID (K05), blanker deutscher
-  Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30). Eine neue Ausnahme braucht eine Entscheidung
+  Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30), blanke ACN (B-APAC), blanke KR-BRN mit
+  zehn Ziffern (B-KR), blanke PESEL (A13), IN-PAN und Voter-ID ohne Begriff (B-IN), Partita IVA mit
+  Unterstrich (T33). Eine neue Ausnahme braucht eine Entscheidung
   und einen Eintrag dort, keine Prosa-Ausnahme im README.
 - **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
   (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
@@ -59,6 +61,28 @@ unerreichbar.
 - **Validatoren werden nicht gelockert**, die Korpora nicht bearbeitet. Nicht erfasst werden FP auf
   nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
   (T16) und in der Untergrenze sichtbar.
+
+## Untergrenze `presidio_favored` für die Länder-IDs seit W44 (T33)
+
+TRIAGE 2026-W45, Bucket 3. Unter `tuned` (T32) lagen zehn Länder-IDs auf `presidio_favored` unter
+F1 80. Jeder Rückstand ist Gold, das eine bestehende Entscheidung außer Reichweite legt; T33 trägt ihn
+als `known_gaps` ein, ohne Validator oder Erkennung zu ändern:
+
+- blanke Ziffernfolgen ohne Begriff, auch mit gültiger Prüfziffer: ACN `000 000 019`, `006249976`,
+  `000000180` (B-APAC), KR-BRN `1048656659` (B-KR; die Form `104-82-13138` bleibt Gold und wird in
+  `balanced` gefunden), PESEL `44051401458`, `11111111116` (A13). Eine kontextfreie Form für blanke
+  Ziffernfolgen bräuchte eine gemessene Hard-Negative-Prüfung und ist nicht Teil von T33;
+- IN-PAN und Voter-ID sind Format + Kontext (B-IN): blanke Werte (`AAASA1111R`, `uzb2345117`) und
+  die Zeilen `this MUP5632811` und `You can vote with your CPJ4467918 number` (`vote` ist kein Begriff
+  der EPIC, die B-IN-Goldens schreiben `EPIC number` dazu);
+- Partita IVA `01333550_323`: der Unterstrich ist kein Trennzeichen (Entscheidung T33);
+- GSTIN 3/3, NRIC/FIN 2/3, KR-RRN 3/5 und Codice Fiscale 2/3 Gold-Werte verfehlen die Prüfziffer und
+  fehlen der erreichbaren Sicht schon seit T27.
+
+Wirkung auf Dev (`presidio_favored`, `balanced`, erreichbar): IN-PAN 50 → 100, KR-BRN 66,7 → 100,
+PESEL 50 → 100; Codice Fiscale, KR-RRN und NRIC/FIN lagen schon bei 100; ACN, Voter-ID, GSTIN und
+IT-USt-IdNr. behalten kein erreichbares Gold. M1 erreichbar 17/24 → 18/22 (offen: CA SIN, Aadhaar,
+Kennzeichen, NPI, `Q-M1`). Rohsicht und Gate unverändert, `strict` bitgleich.
 
 ## Presidio tuned: abgeschaltete Recognizer gemeinsamer IDs (T32)
 
