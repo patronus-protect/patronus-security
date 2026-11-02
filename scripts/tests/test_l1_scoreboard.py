@@ -277,7 +277,7 @@ def test_main_m1_subcommand_prints_every_mode_and_decides_on_balanced(tmp_path, 
     assert "neutral: NOT MET, 1/2 shared ids" in strict
     assert "M1 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
     assert "M1 balanced: MET (neutral holds, presidio_favored holds)" in lines
-    assert lines[-1] == "M1: MET (balanced: neutral holds, presidio_favored holds)"
+    assert lines[-1] == "M1: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
     report = json.loads((tmp_path / "m1.json").read_text())
     assert report["milestone_mode"] == "balanced" and report["met"] is True
     assert report["modes"]["strict"]["met"] is False and report["modes"]["balanced"]["met"] is True
@@ -285,7 +285,7 @@ def test_main_m1_subcommand_prints_every_mode_and_decides_on_balanced(tmp_path, 
     # Swapped: strict meets M1, balanced does not, so M1 is not met.
     swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
     assert MODULE.main(swapped + ["--check"]) == 1
-    assert capsys.readouterr().out.strip().endswith("M1: NOT MET (balanced: neutral not met, presidio_favored holds)")
+    assert capsys.readouterr().out.strip().endswith("M1: NOT MET (balanced, attainable gold: neutral not met, presidio_favored holds)")
     # Balanced is required; modes are named once and must exist.
     assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
     assert MODULE.main(base + ["--ark", f"balanced={dirs['weak']}"]) == 0
@@ -426,7 +426,7 @@ def test_main_m2_subcommand_prints_every_mode_and_exits_1_unless_balanced_holds(
     assert any(line.startswith("neutral: NOT MET, macro-F1 Ark  59.1 < target  65.0") for line in strict)
     assert "M2 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
     assert "M2 balanced: MET (neutral holds, presidio_favored holds)" in lines
-    assert lines[-1] == "M2: MET (balanced: neutral holds, presidio_favored holds)"
+    assert lines[-1] == "M2: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
     report = json.loads((tmp_path / "m2.json").read_text())
     assert report["milestone_mode"] == "balanced" and report["met"] is True and report["language"] == "de"
     assert report["modes"]["strict"]["met"] is False
@@ -434,7 +434,7 @@ def test_main_m2_subcommand_prints_every_mode_and_exits_1_unless_balanced_holds(
     # Swapped: balanced misses the rule, so m2 exits 1 without any extra flag.
     swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
     assert MODULE.main(swapped) == 1
-    assert capsys.readouterr().out.strip().endswith("M2: NOT MET (balanced: neutral not met, presidio_favored holds)")
+    assert capsys.readouterr().out.strip().endswith("M2: NOT MET (balanced, attainable gold: neutral not met, presidio_favored holds)")
     # Balanced is required; modes are named once and must exist.
     assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
     assert MODULE.main(base + ["--ark", f"balanced={dirs['perfect']}"]) == 0
@@ -608,10 +608,10 @@ def test_gold_gaps_count_duplicate_values_and_checksum_invalid_gold():
     # Two further copies of the annotated value count, and the mailto copy of the bracketed link value;
     # bob@ is an ordinary FP, the value inside the gold bracket a boundary error, and a phone span on
     # the e-mail value is another id.
-    assert gaps["pii.email"] == {"gold": 2, "gold_invalid": None, "invalid_found": None, "duplicate_fp": 3}
-    assert gaps["pii.credit_card.pan"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
+    assert gaps["pii.email"] == {"gold": 2, "gold_invalid": None, "invalid_found": None, "known_gap": 0, "duplicate_fp": 3}
+    assert gaps["pii.credit_card.pan"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "known_gap": 0, "duplicate_fp": 0}
     # The IBAN failing MOD-97 is no registry IBAN: ignored gold, not a gap (IGNORED_GOLD).
-    assert gaps["pii.iban"] == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0}
+    assert gaps["pii.iban"] == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "known_gap": 0, "duplicate_fp": 0}
     assert "pii.phone" not in gaps
     # Gold on the mailto copy: the bracketed copy is the gap.
     text = "Mail [dee@bank.example](mailto:dee@bank.example)"
@@ -630,7 +630,7 @@ def test_gold_gaps_follow_the_scored_ids_of_a_row():
     row["scored_entities"] = ["pii.credit_card.pan"]
     gaps = MODULE.gold_gaps([row], [spans_of("r", text, [("pii.email", "ann@bank.example", 1)])], EMAP)
     assert gaps == {RECOGNIZER_TESTS: {"pii.credit_card.pan": {"gold": 1, "gold_invalid": 1, "invalid_found": 0,
-                                                               "duplicate_fp": 0}}}
+                                                               "known_gap": 0, "duplicate_fp": 0}}}
 
 
 def test_gold_gaps_change_no_metric(tmp_path):
@@ -648,7 +648,7 @@ def test_gold_gaps_change_no_metric(tmp_path):
                                 "ark-balanced": {"duplicate_fp": 3, "invalid_found": None},
                                 "presidio-tuned": {"duplicate_fp": 1, "invalid_found": None}}
     lines = MODULE.report_lines(report)
-    assert "## Gold gaps (reported only; no metric changes, T16)" in lines
+    assert "## Gold gaps (T16, T27)" in lines
     assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-tuned |" in lines
     assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
     assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
@@ -656,8 +656,8 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert f"| {GRETEL} | pii.iban | iban | 1 | 0 | 0 | 0 | 0 |" in lines
 
 
-def test_gold_validators_cover_every_checksum_validator():
-    validators = MODULE.gold_validators(EMAP)
+def test_gold_checks_cover_every_checksum_validator():
+    validators = MODULE.gold_checks(EMAP).validators
     assert validators["pii.iban"] == ("iban",)
     assert validators["pii.credit_card.pan"] == ("payment_card",)
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
@@ -675,7 +675,7 @@ def test_gold_validators_cover_every_checksum_validator():
     assert {v for ids in validators.values() for v in ids} <= checksum
 
 
-def test_gold_validators_leave_out_ids_with_a_rule_without_checksum(monkeypatch):
+def test_gold_checks_leave_out_ids_with_a_rule_without_checksum(monkeypatch):
     counter = MODULE.count_validated_module()
     rules = [counter.ArkRule("aba", "FINANCIAL_ACCOUNT_NUMBER", "aba_routing_number"),
              counter.ArkRule("bban", "FINANCIAL_ACCOUNT_NUMBER", "uk_bban"),
@@ -683,14 +683,14 @@ def test_gold_validators_leave_out_ids_with_a_rule_without_checksum(monkeypatch)
              counter.ArkRule("iban", "IBAN", "iban"),
              counter.ArkRule("iban_ctx", "IBAN", "iban")]
     monkeypatch.setattr(counter, "ark_rules_from_source", lambda: rules)
-    validators = MODULE.gold_validators(EMAP)
+    validators = MODULE.gold_checks(EMAP).validators
     # Mixed id: an ABA routing number check says nothing about every account number.
     assert validators == {"pii.iban": ("iban",)}
     text = "Account 12345678 and IBAN DE89370400440532013000"
     row = annotated("r", text, [("pii.financial_account_number", "12345678", 0), ("pii.iban", "DE89370400440532013000", 0)])
     gaps = MODULE.gold_gaps([row], [spans_of("r", text, [("pii.financial_account_number", "12345678", 0)])], EMAP)
     assert gaps[GRETEL]["pii.financial_account_number"] == {"gold": 1, "gold_invalid": None, "invalid_found": None,
-                                                            "duplicate_fp": 0}
+                                                            "known_gap": 0, "duplicate_fp": 0}
 
 
 @pytest.mark.parametrize("name,valid,invalid", [
@@ -1415,9 +1415,146 @@ def test_non_registry_iban_gold_is_neither_missed_nor_a_false_positive():
     assert counts["predicted"] == 2 and counts["exact"] == 1
     # Gold gaps follow the same rule.
     gaps = MODULE.gold_gaps([row], engines["presidio"], EMAP)[GRETEL]["pii.iban"]
-    assert gaps == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0}
+    assert gaps == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "known_gap": 0, "duplicate_fp": 0}
 
 
 def _span_of(text, value):
     start = text.index(value)
     return "pii.iban", start, start + len(value)
+
+
+# ── attainable view (T27) ────────────────────────────────────────────────
+
+
+def recognizer_row(row_id, text, items):
+    row = annotated(row_id, text, items, corpus=RECOGNIZER_TESTS)
+    row["scored_entities"] = sorted({label for label, _, _ in items})
+    return row
+
+
+def attainable_rows():
+    """Gold the attainable view leaves out (loopback IP under D-IP, a DE identity card and a DE passport
+    failing their country's validator) next to gold it keeps; Ark misses the unattainable values,
+    Presidio reports them."""
+    rows = [
+        recognizer_row("test_ip_recognizer:a:0", "Hosts 127.0.0.1 and 10.0.0.1",
+                       [("pii.ip_address", "127.0.0.1", 0), ("pii.ip_address", "10.0.0.1", 0)]),
+        recognizer_row("test_de_id_card_recognizer:a:0", "CZ6311T03", [("pii.identity_card_number", "CZ6311T03", 0)]),
+        recognizer_row("test_de_id_card_recognizer:a:1", "L01X00T44", [("pii.identity_card_number", "L01X00T44", 0)]),
+        recognizer_row("test_de_passport_recognizer:a:0", "C01X00T47", [("entity.passport_number", "C01X00T47", 0)]),
+        # No validator for a US passport, and no issuing country in a Gretel row: both stay gold.
+        recognizer_row("test_us_passport_recognizer:a:0", "A12803456", [("entity.passport_number", "A12803456", 0)]),
+        annotated("gretel-pass", "Passport 140679109 on file", [("entity.passport_number", "140679109", 0)]),
+    ]
+    ark = [
+        spans_of("test_ip_recognizer:a:0", rows[0]["text"], [("pii.ip_address", "10.0.0.1", 0)]),
+        spans_of("test_de_id_card_recognizer:a:0", "CZ6311T03", []),
+        spans_of("test_de_id_card_recognizer:a:1", "L01X00T44", [("pii.identity_card_number", "L01X00T44", 0)]),
+        spans_of("test_de_passport_recognizer:a:0", "C01X00T47", []),
+        spans_of("test_us_passport_recognizer:a:0", "A12803456", [("entity.passport_number", "A12803456", 0)]),
+        spans_of("gretel-pass", rows[5]["text"], [("entity.passport_number", "140679109", 0)]),
+    ]
+    presidio = [
+        spans_of("test_ip_recognizer:a:0", rows[0]["text"], [("pii.ip_address", "127.0.0.1", 0),
+                                                              ("pii.ip_address", "10.0.0.1", 0)]),
+        spans_of("test_de_id_card_recognizer:a:0", "CZ6311T03", [("pii.identity_card_number", "CZ6311T03", 0)]),
+        spans_of("test_de_id_card_recognizer:a:1", "L01X00T44", [("pii.identity_card_number", "L01X00T44", 0)]),
+        spans_of("test_de_passport_recognizer:a:0", "C01X00T47", [("entity.passport_number", "C01X00T47", 0)]),
+        spans_of("test_us_passport_recognizer:a:0", "A12803456", []),
+        spans_of("gretel-pass", rows[5]["text"], []),
+    ]
+    return rows, ark, presidio
+
+
+def test_gold_checks_check_documents_against_their_country_only():
+    checks = MODULE.gold_checks(EMAP)
+    assert checks.documents == {"entity.passport_number": {"de": ("de_passport_number",)},
+                                "pii.identity_card_number": {"de": ("de_identity_card_number",)}}
+    rows, _, _ = attainable_rows()
+    assert [MODULE.document_country(row) for row in rows] == ["ip", "de", "de", "de", "us", None]
+    assert MODULE.row_validators(rows[3], "entity.passport_number", checks) == ("de_passport_number",)
+    assert MODULE.row_validators(rows[4], "entity.passport_number", checks) is None
+    assert MODULE.row_validators(rows[5], "entity.passport_number", checks) is None
+    assert MODULE.row_validators(rows[5], "pii.iban", checks) == ("iban",)
+
+
+def test_attainable_view_leaves_out_the_same_gold_for_every_engine():
+    rows, ark, presidio = attainable_rows()
+    checks = MODULE.gold_checks(EMAP)
+    raw = {name: MODULE.score_rows(rows, preds, EMAP) for name, preds in (("ark", ark), ("presidio", presidio))}
+    view = {name: MODULE.score_rows(rows, preds, EMAP, checks=checks) for name, preds in (("ark", ark), ("presidio", presidio))}
+    assert raw["ark"]["buckets"]["all"] == {"gold": 7, "predicted": 4, "exact": 4, "gold_found": 4, "predicted_correct": 4}
+    assert raw["presidio"]["buckets"]["all"]["exact"] == 5
+    # Out: 127.0.0.1 (D-IP), CZ6311T03 and C01X00T47 (DE check digit); Presidio's hits on them drop as well.
+    assert view["ark"]["buckets"]["all"] == {"gold": 4, "predicted": 4, "exact": 4, "gold_found": 4, "predicted_correct": 4}
+    assert view["presidio"]["buckets"]["all"] == {"gold": 4, "predicted": 2, "exact": 2, "gold_found": 2,
+                                                  "predicted_correct": 2}
+    # The raw view is the default and stays the gate's view.
+    assert MODULE.score_rows(rows, ark, EMAP) == raw["ark"]
+
+
+def test_gold_gaps_count_country_document_checks_and_known_gaps():
+    rows, ark, presidio = attainable_rows()
+    gaps = MODULE.gold_gaps(rows, presidio, EMAP)
+    tests = gaps[RECOGNIZER_TESTS]
+    assert tests["pii.ip_address"] == {"gold": 2, "gold_invalid": None, "invalid_found": None, "known_gap": 1,
+                                       "duplicate_fp": 0}
+    assert tests["pii.identity_card_number"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 1, "known_gap": 0,
+                                                 "duplicate_fp": 0}
+    # Only the DE passport is checked: the US passport has no validator, the Gretel one no country.
+    assert tests["entity.passport_number"]["gold_invalid"] == 1
+    assert gaps[GRETEL]["entity.passport_number"]["gold_invalid"] == 0
+
+
+def test_main_m1_and_m2_judge_the_attainable_view_and_print_the_raw_one(tmp_path, capsys):
+    rows, _, presidio = m1_rows()
+    # A loopback address Presidio finds and Ark leaves out (D-IP): raw M1 fails on presidio_favored.
+    text = "Host 127.0.0.1 answered"
+    rows.append(annotated("favored-ip", text, [("pii.ip_address", "127.0.0.1", 0)], corpus=EVALUATOR))
+    presidio.append(spans_of("favored-ip", text, [("pii.ip_address", "127.0.0.1", 0)]))
+    ark = [pred(row["id"], [(e["entity_type"], e["start"], e["end"]) for e in row["entities"]
+                            if e["entity_type"] != "pii.ip_address"]) for row in rows]
+    dirs = write_tree(tmp_path, rows, {"ark": ark, "presidio": presidio})
+    args = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"]), "--ark",
+            f"balanced={dirs['ark']}", "--check", "--json", str(tmp_path / "m1.json")]
+    assert MODULE.main(args) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    raw = lines[lines.index("=== raw gold (reported, decides no milestone)"):
+                lines.index("=== attainable gold (milestone view, T27)")]
+    assert "M1 raw: NOT MET (balanced: neutral holds, presidio_favored not met)" in raw
+    assert "M1 attainable: MET (balanced: neutral holds, presidio_favored holds)" in lines
+    assert lines[-1] == "M1: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
+    report = json.loads((tmp_path / "m1.json").read_text())
+    assert report["view"] == "attainable" and report["met"] is True and report["raw"]["met"] is False
+    assert "pii.ip_address" in report["raw"]["modes"]["balanced"]["families"]["presidio_favored"]["entities"]
+    assert "pii.ip_address" not in report["modes"]["balanced"]["families"]["presidio_favored"]["entities"]
+    args[0] = "m2"
+    args.remove("--check")
+    MODULE.main(args)
+    out = capsys.readouterr().out
+    assert "=== raw gold (reported, decides no milestone)" in out and out.strip().splitlines()[-1].startswith(
+        "M2: NOT MET (balanced, attainable gold: ")
+
+
+def test_report_shows_both_views_and_the_known_gaps(tmp_path):
+    rows, ark, presidio = attainable_rows()
+    dirs = write_tree(tmp_path, rows, {"ark": ark, "tuned": presidio})
+    # write_tree knows the three corpora of BY_CORPUS only; the recognizer rows go to their own file.
+    write_jsonl(tmp_path / "gold" / "presidio_favored" / "r.jsonl", rows[:5])
+    write_jsonl(tmp_path / "ark" / "presidio_favored" / "r.jsonl", ark[:5])
+    write_jsonl(tmp_path / "tuned" / "presidio_favored" / "r.jsonl", presidio[:5])
+    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]}, {"presidio-tuned": dirs["tuned"]}, EMAP)
+    assert report["milestone_view"] == "attainable"
+    assert report["attainable"]["ark-balanced"]["buckets"]["all"]["gold"] == 4
+    assert report["engines"]["ark-balanced"]["buckets"]["all"]["gold"] == 7
+    assert report["m1"]["presidio-tuned"]["view"] == "attainable" and "raw" in report["m1"]["presidio-tuned"]
+    lines = MODULE.report_lines(report)
+    assert lines.index("## Per entity (exact F1, best in bold)") < lines.index(
+        "## Per entity, attainable gold (exact F1, best in bold; the F1 >= 80 floor is judged here, T27)")
+    attainable = lines.index("## M1, attainable gold, milestone view (each Ark mode vs each profile; EN rows, exact F1, "
+                             "shared ids with gold; milestone on balanced)")
+    assert attainable < lines.index("## M1, raw gold, reported, decides no milestone (each Ark mode vs each profile; "
+                                    "EN rows, exact F1, shared ids with gold; milestone on balanced)")
+    assert f"| {RECOGNIZER_TESTS} | pii.identity_card_number | de: de_identity_card_number | 2 | 1 | 0 | 1 |" in lines
+    assert "| Corpus | Entity | Gold | Known gap | Decisions |" in lines
+    assert f"| {RECOGNIZER_TESTS} | pii.ip_address | 2 | 1 | D-IP |" in lines

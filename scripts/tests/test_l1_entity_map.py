@@ -621,3 +621,130 @@ def test_every_presidio_entity_of_the_pinned_registry_is_mapped():
     registry = MODULE.presidio_registry_entities()
     assert {"EMAIL_ADDRESS", "DE_TAX_ID", "PERSON"} <= registry
     assert MODULE.check(entity_map, presidio_entities=registry) == []
+
+
+# ── known gaps (T27) ─────────────────────────────────────────────────────────
+
+
+def known_gap_map(*gaps):
+    payload = minimal_map()
+    payload["known_gaps"] = list(gaps)
+    return payload
+
+
+@pytest.mark.parametrize(
+    "gap,message",
+    [
+        ({"id": "pii.email", "decision": "X", "reason": "r"}, "needs span, rows or bare"),
+        ({"id": "pii.email", "decision": "X", "reason": "r", "span": "("}, "invalid span pattern"),
+        ({"id": "pii.email", "decision": "X", "reason": "r", "rows": "["}, "invalid rows pattern"),
+        ({"id": "pii.email", "decision": "", "reason": "r", "bare": True}, "decision must be a non-empty string"),
+        ({"id": "pii.email", "decision": "X", "bare": True}, "missing keys \\['reason'\\]"),
+        ({"id": "pii.email", "decision": "X", "reason": "r", "bare": "yes"}, "bare must be true or false"),
+        ({"id": "pii.email", "decision": "X", "reason": "r", "bare": True, "values": []}, "unknown keys \\['values'\\]"),
+        ({"id": "pii.phone", "decision": "X", "reason": "r", "bare": True}, "no L1 id"),
+        ({"id": "entity.person_name", "decision": "X", "reason": "r", "bare": True}, "no L1 id"),
+    ],
+)
+def test_malformed_known_gaps_are_rejected(gap, message):
+    with pytest.raises(ValueError, match=message):
+        MODULE.EntityMap.from_dict(known_gap_map(gap))
+
+
+def test_known_gap_needs_every_given_condition():
+    entity_map = MODULE.EntityMap.from_dict(known_gap_map(
+        {"id": "pii.email", "decision": "D-A", "reason": "r", "span": r"[a-z]+@test\.example", "bare": True,
+         "rows": "case_", "corpora": ["tab"]},
+        {"id": "pii.email", "decision": "D-B", "reason": "r", "span": r"\s.*"},
+    ))
+    text = "  ann@test.example "
+    value = (2, 18)
+    assert entity_map.known_gap("pii.email", "tab", "case_1", text, *value).decision == "D-A"
+    assert entity_map.known_gap("pii.email", "tab", "case_1", text, 1, 18).decision == "D-B"  # leading space
+    assert entity_map.known_gap("pii.email", "gretel-synthetic-pii-finance", "case_1", text, *value) is None
+    assert entity_map.known_gap("pii.email", "tab", "row_1", text, *value) is None
+    assert entity_map.known_gap("pii.email", "tab", "case_1", "Mail ann@test.example", 5, 21) is None  # not bare
+    assert entity_map.known_gap("pii.swift_bic", "tab", "case_1", text, *value) is None
+
+
+def test_check_finds_known_gaps_on_unknown_gold_sources():
+    entity_map = MODULE.EntityMap.from_dict(known_gap_map(
+        {"id": "pii.email", "decision": "D-A", "reason": "r", "bare": True, "corpora": ["nowhere"]}))
+    problems = MODULE.check(entity_map, ark_labels={"EMAIL", "SWIFT_CODE"}, ark_output_map={},
+                            presidio_output_map={}, benchmark_aliases={}, manifest={})
+    assert "known gap pii.email (D-A) names unknown gold source nowhere" in problems
+
+
+RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
+
+
+@pytest.mark.parametrize(
+    "entity_id,corpus,row_id,text,value,decision",
+    [
+        # D-IP: loopback and unspecified addresses, also mapped and as prefix.
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Host 127.0.0.1 up", "127.0.0.1", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Bind :: now", "::", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Bind ::1 now", "::1", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "::ffff:0.0.0.0", "::ffff:0.0.0.0", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "::/128", "::/128", "D-IP"),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Host 192.168.1.1", "192.168.1.1", None),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "2001:db8::1", "2001:db8::1", None),
+        ("pii.ip_address", RECOGNIZER_TESTS, "test_ip_recognizer:x:0", "Host 127.0.0.10", "127.0.0.10", "D-IP"),
+        # Gold span with a leading space.
+        ("pii.uk.national_insurance_number", RECOGNIZER_TESTS, "test_uk_nino_recognizer:x:0",
+         "NINO: YZ 61 48 68 B", " YZ 61 48 68 B", "T27"),
+        ("pii.uk.national_insurance_number", RECOGNIZER_TESTS, "test_uk_nino_recognizer:x:0",
+         "tw987654a", "tw987654a", None),
+        # B-SSN: values validators::us_ssn rejects, and bare nine digits.
+        ("pii.us.social_security_number", RECOGNIZER_TESTS, "test_us_ssn_recognizer:x:0",
+         "987-65-4329", "987-65-4329", "B-SSN"),
+        ("pii.us.social_security_number", RECOGNIZER_TESTS, "test_us_ssn_recognizer:x:0",
+         "219-09-9999", "219-09-9999", "B-SSN"),
+        ("pii.us.social_security_number", RECOGNIZER_TESTS, "test_us_ssn_recognizer:x:0",
+         " 078051121 ", "078051121", "B-SSN"),
+        ("pii.us.social_security_number", RECOGNIZER_TESTS, "test_us_ssn_recognizer:x:0",
+         "my ssn is 078051121", "078051121", None),
+        ("pii.us.social_security_number", RECOGNIZER_TESTS, "test_us_ssn_recognizer:x:0",
+         "078-05-1120", "078-05-1120", None),
+        # Gretel's ssn gold with national ids of other countries; US forms stay gold.
+        ("pii.us.social_security_number", "gretel-synthetic-pii-finance", "English:1",
+         "NINO AB 12 34 56 C", "AB 12 34 56 C", "T27"),
+        ("pii.us.social_security_number", "gretel-synthetic-pii-finance", "English:1",
+         "personnummer 811228-9874", "811228-9874", "T27"),
+        ("pii.us.social_security_number", "gretel-synthetic-pii-finance", "English:1",
+         "SSN 123-45-6789", "123-45-6789", None),
+        ("pii.us.social_security_number", "gretel-synthetic-pii-finance", "English:1",
+         "SSN 123456789", "123456789", None),
+        # B-DE1, K05, F15: bare values without context in the recognizer tests.
+        ("pii.de.bsnr", RECOGNIZER_TESTS, "test_de_bsnr_recognizer:x:0", "021234568", "021234568", "B-DE1"),
+        ("pii.de.bsnr", RECOGNIZER_TESTS, "test_de_bsnr_recognizer:x:0", "BSNR 021234568", "021234568", None),
+        ("pii.de.lanr", RECOGNIZER_TESTS, "test_de_lanr_recognizer:x:0", "234567701", "234567701", "B-DE1"),
+        ("pii.de.lanr", "pii_l1", "test_de_lanr_recognizer:x:0", "234567701", "234567701", None),
+        ("pii.de.tax_id", RECOGNIZER_TESTS, "test_de_tax_id_recognizer:x:0", "98765432106", "98765432106", "K05"),
+        ("entity.driver_license_number", RECOGNIZER_TESTS, "test_de_fuehrerschein_recognizer:x:0",
+         "KO12345678X", "KO12345678X", "F15"),
+        ("entity.driver_license_number", RECOGNIZER_TESTS, "test_uk_driving_licence_recognizer:x:0",
+         "MORGA657054SM9IJ", "MORGA657054SM9IJ", None),
+        # T30: bare TR/IN/NG plates; UK plates stay gold.
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_tr_license_plate_recognizer:x:0", "34 ABC 1234", "34 ABC 1234", "T30"),
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:0", "APP-456CV",
+         "APP-456CV", "T30"),
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_in_vehicle_registration_recognizer:x:0", "KA53ME3456",
+         "KA53ME3456", "T30"),
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:0",
+         "My plate is APP-456CV", "APP-456CV", None),
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_uk_vehicle_registration_recognizer:x:0", "AB51 ABC", "AB51 ABC", None),
+    ],
+)
+def test_checked_in_known_gaps(entity_id, corpus, row_id, text, value, decision):
+    start = text.index(value)
+    gap = MODULE.load().known_gap(entity_id, corpus, row_id, text, start, start + len(value))
+    assert (gap.decision if gap else None) == decision
+
+
+def test_checked_in_known_gaps_name_a_decision_and_a_reason():
+    entity_map = MODULE.load()
+    assert entity_map.known_gaps
+    for gap in entity_map.known_gaps:
+        assert re.fullmatch(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*", gap.decision), gap
+        assert gap.reason.strip() and (gap.span or gap.bare or gap.rows), gap
