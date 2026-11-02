@@ -737,6 +737,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn longest_run_counts_ascii_class_characters_only() {
+        assert_eq!(ValueClass::Digit.longest_run("Nr. 12 und 4567, ٣٤٥٦٧٨"), 4);
+        assert_eq!(ValueClass::Digit.longest_run("keine Ziffern"), 0);
+        assert_eq!(ValueClass::Alphanumeric.longest_run("ab1 ä xyz42"), 5);
+        assert_eq!(
+            required_value_run(
+                r"(?-u:\b)[0-9]{3} [0-9]{3} [0-9]{3}(?-u:\b)",
+                ValueClass::Digit
+            ),
+            3
+        );
+        assert_eq!(required_value_run(r"\d{9}", ValueClass::Digit), 0);
+    }
+
+    #[test]
     fn keywords_must_be_required_by_every_branch() {
         assert!(keywords_are_required(r"sk-ant-[a-z]{10,}", &["sk-ant-"]));
         assert!(keywords_are_required(r"(?i)\bapi[ _-]?key\b", &["api"]));
