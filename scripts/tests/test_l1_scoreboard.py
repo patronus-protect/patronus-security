@@ -663,13 +663,34 @@ def test_gold_validators_cover_every_checksum_validator():
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
     assert validators["pii.de.vat_id"] == ("de_vat_id",)
     assert validators["pii.it.vat_code"] == ("it_vat_id",)
-    assert validators["entity.passport_number"] == ("de_passport_number",)
-    assert validators["pii.identity_card_number"] == ("de_identity_card_number",)
+    assert validators["pii.kr.rrn"] == ("kr_rrn",)
+    # T31: ids with a rule without checksum validator are left out, their gold is no checksum gap.
+    for mixed in ("entity.passport_number", "pii.identity_card_number", "pii.financial_account_number",
+                  "pii.crypto_wallet", "pii.vin"):
+        assert mixed not in validators, mixed
     rules = MODULE.count_validated_module().load_rules()
     checksum = {name for name, rule in rules.ark.items() if rule is not None}
     # A task that adds a checksum validator ports it to CHECKSUM_PORTS for the gold-gap report.
     assert checksum <= set(MODULE.CHECKSUM_PORTS), sorted(checksum - set(MODULE.CHECKSUM_PORTS))
     assert {v for ids in validators.values() for v in ids} <= checksum
+
+
+def test_gold_validators_leave_out_ids_with_a_rule_without_checksum(monkeypatch):
+    counter = MODULE.count_validated_module()
+    rules = [counter.ArkRule("aba", "FINANCIAL_ACCOUNT_NUMBER", "aba_routing_number"),
+             counter.ArkRule("bban", "FINANCIAL_ACCOUNT_NUMBER", "uk_bban"),
+             counter.ArkRule("plain", "FINANCIAL_ACCOUNT_NUMBER", None),
+             counter.ArkRule("iban", "IBAN", "iban"),
+             counter.ArkRule("iban_ctx", "IBAN", "iban")]
+    monkeypatch.setattr(counter, "ark_rules_from_source", lambda: rules)
+    validators = MODULE.gold_validators(EMAP)
+    # Mixed id: an ABA routing number check says nothing about every account number.
+    assert validators == {"pii.iban": ("iban",)}
+    text = "Account 12345678 and IBAN DE89370400440532013000"
+    row = annotated("r", text, [("pii.financial_account_number", "12345678", 0), ("pii.iban", "DE89370400440532013000", 0)])
+    gaps = MODULE.gold_gaps([row], [spans_of("r", text, [("pii.financial_account_number", "12345678", 0)])], EMAP)
+    assert gaps[GRETEL]["pii.financial_account_number"] == {"gold": 1, "gold_invalid": None, "invalid_found": None,
+                                                            "duplicate_fp": 0}
 
 
 @pytest.mark.parametrize("name,valid,invalid", [
