@@ -60,11 +60,34 @@ unerreichbar.
   nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
   (T16) und in der Untergrenze sichtbar.
 
+## Presidio tuned: abgeschaltete Recognizer gemeinsamer IDs (T32)
+
+Entschieden am 2026-11-02 (TRIAGE 2026-W45, Bucket 1): **Option (a).** `tuned` ist die stärkste
+faire Baseline, also schaltet [`profiles/tuned.yaml`](../../scripts/l1_presidio/profiles/tuned.yaml)
+jeden Recognizer ein, den Presidio 2.2.364 mit `enabled: false` ausliefert, wenn er Englisch
+unterstützt, in der gepinnten Version lädt und seine Entität in `entity_map.yaml` eine `shared`-ID
+hat: neben UK und DE nun US NPI, CA SIN, SG NRIC/FIN, ZA ID, AU ABN/ACN/TFN/Medicare, IN
+PAN/Aadhaar/Pass/GSTIN/Voter-ID und die UK-, IN- und NG-Kennzeichen (`pii.license_plate`). Aus
+bleiben Recognizer von `presidio_only`-IDs (u. a. `UsMbiRecognizer`) und anderer Sprachen (das Profil
+analysiert nur `en` und `de`). Die niedrigere M1-Zahl wird angenommen; die neuen Lücken werden
+`Q-M1`-Arbeit.
+
+- **Wirkung auf Dev** (`balanced` gegen Presidio tuned vorher → nachher): `presidio_favored` exakt F1
+  tuned 71,3 → 77,6 (ARK 78,1), HN-FP 0 → 0; `neutral` 40,6 → 40,5, HN-FP 0. M1 erreichbar
+  24/24 → **17/24** (neu unter tuned: AU-ACN 0,0 vs. 100,0, CA SIN 57,1 vs. 88,9, Aadhaar 85,7 vs.
+  100,0, IN-PAN 50,0 vs. 80,0, Voter-ID 0,0 vs. 50,0, Kennzeichen 22,2 vs. 76,9, NPI 88,9 vs. 100,0),
+  roh 22/25 → 13/25 (zusätzlich GSTIN 0,0 vs. 100,0 und NRIC/FIN 50,0 vs. 80,0, deren unter tuned
+  gefundenes Gold die Prüfziffer verfehlt). M2 unverändert (keine DE-Recognizer dazu). `neutral` hält
+  M1 mit 9/9.
+- Baseline-Zahlen und der nächste Snapshot (`research/scoreboard/`) rechnen mit dem neuen Profil;
+  ältere Snapshots und Triage-Berichte bleiben auf dem alten Stand.
+
 ## Definition „besser als Presidio“
 
 Gemessen auf einem eingefrorenen Holdout, den der Agent nie sieht (nur auf der VPS unter `~/ark-l1/holdout`,
 SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en_core_web_lg` +
-`de_core_news_lg`, Kontext-Enhancer, DE-Recognizer-Konfiguration).
+`de_core_news_lg`, Kontext-Enhancer, DE-Recognizer-Konfiguration, seit T32 jeder ab Werk abgeschaltete
+englische Recognizer einer `shared`-ID).
 
 | Meilenstein | Kriterium |
 |---|---|

@@ -1,5 +1,6 @@
 # Strongest fair Presidio baseline for EN + DE without training: large spaCy models
-# for both languages, all German recognizers of the pinned presidio_analyzer, German
+# for both languages, all German recognizers of the pinned presidio_analyzer, every
+# off-by-default English recognizer whose entity the entity map marks shared (T32), German
 # context words for the generic recognizers, DACH phone regions, a lemma context
 # enhancer that also looks behind the value, and a 0.4 cut-off so weak patterns
 # (scores below 0.4 without context, e.g. US_BANK_NUMBER 0.05) only count with context.
@@ -109,6 +110,25 @@ presidio:
       - {name: UkNinoRecognizer, type: predefined, supported_languages: [en]}
       - {name: UkPassportRecognizer, type: predefined, supported_languages: [en]}
       - {name: UkDrivingLicenceRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UkVehicleRegistrationRecognizer, type: predefined, supported_languages: [en]}
+      # Off-by-default English recognizers of ids entity_map.yaml marks shared (T32).
+      # UsMbiRecognizer (US_MBI, presidio_only) and the UK postcode, NG NIN and PH ones
+      # stay off: their ids are not shared.
+      - {name: UsNpiRecognizer, type: predefined, supported_languages: [en]}
+      - {name: CaSinRecognizer, type: predefined, supported_languages: [en]}
+      - {name: SgFinRecognizer, type: predefined, supported_languages: [en]}
+      - {name: AuAbnRecognizer, type: predefined, supported_languages: [en]}
+      - {name: AuAcnRecognizer, type: predefined, supported_languages: [en]}
+      - {name: AuTfnRecognizer, type: predefined, supported_languages: [en]}
+      - {name: AuMedicareRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InPanRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InAadhaarRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InPassportRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InGstinRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InVoterRecognizer, type: predefined, supported_languages: [en]}
+      - {name: InVehicleRegistrationRecognizer, type: predefined, supported_languages: [en]}
+      - {name: NgVehicleRegistrationRecognizer, type: predefined, supported_languages: [en]}
+      - {name: ZaIdNumberRecognizer, type: predefined, supported_languages: [en]}
       # German recognizers of the pinned presidio_analyzer.
       - {name: DeTaxIdRecognizer, type: predefined, supported_languages: [de]}
       - {name: DeTaxNumberRecognizer, type: predefined, supported_languages: [de]}
