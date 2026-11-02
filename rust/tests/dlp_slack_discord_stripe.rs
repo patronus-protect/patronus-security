@@ -195,14 +195,17 @@ fn lookalikes_with_wrong_segments_length_or_prefix_are_not_reported() {
         for gen in *lookalikes {
             for seed in 0..8 {
                 let value = generated(gen, seed);
-                for carrier in CARRIERS {
+                for (index, carrier) in CARRIERS.iter().enumerate() {
                     let text = carrier.replace("{}", &value);
-                    assert!(!rule_hit(&text, rule_id), "{rule_id}: {gen}/{seed}: {text}");
+                    assert!(
+                        !rule_hit(&text, rule_id),
+                        "{rule_id}: {gen}/{seed}: carrier {index}"
+                    );
                 }
                 let text = NEUTRAL_CARRIER.replace("{}", &value);
                 assert!(
                     scan(&text).evidence_spans.is_empty(),
-                    "{gen}/{seed}: {text}"
+                    "{gen}/{seed}: neutral carrier"
                 );
             }
         }
@@ -273,14 +276,17 @@ fn stripe_publishable_keys_are_no_secret() {
     for seed in 0..6 {
         let body = &generated("stripe_secret_live", seed)[8..];
         for key in [format!("pk_live_{body}"), format!("pk_test_{body}")] {
-            for text in [
+            for (index, text) in [
                 format!("STRIPE_PUBLISHABLE_KEY={key}\n"),
                 format!("NEXT_PUBLIC_STRIPE_KEY={key}\n"),
                 format!("const stripe = Stripe(\"{key}\");\n"),
                 format!("stripe:\n  publishable_key: \"{key}\"\n"),
                 format!("Der öffentliche Stripe-Schlüssel lautet {key}.\n"),
-            ] {
-                assert!(scan(&text).evidence_spans.is_empty(), "{text}");
+            ]
+            .iter()
+            .enumerate()
+            {
+                assert!(scan(text).evidence_spans.is_empty(), "{seed}: text {index}");
             }
         }
     }
@@ -306,19 +312,25 @@ fn stripe_keys_stop_at_the_gitleaks_length() {
 fn stripe_webhook_secrets_take_the_dashboard_and_cli_lengths() {
     let alnum = generated("stripe_secret_test_long", 6)[8..].to_owned();
     let hex = generated("stripe_webhook_secret_cli", 6)[6..].to_owned();
-    for secret in [format!("whsec_{}", &alnum[..32]), format!("whsec_{hex}")] {
+    for (index, secret) in [format!("whsec_{}", &alnum[..32]), format!("whsec_{hex}")]
+        .iter()
+        .enumerate()
+    {
         let text = format!("STRIPE_WEBHOOK_SECRET={secret}\n");
-        assert!(rule_hit(&text, "dlp_stripe_webhook"), "{secret}");
-        assert!(reports(&text, &secret), "{secret}");
+        assert!(rule_hit(&text, "dlp_stripe_webhook"), "positive {index}");
+        assert!(reports(&text, secret), "positive {index}");
     }
-    for secret in [
+    for (index, secret) in [
         format!("whsec_{}", &alnum[..31]),
         format!("whsec_{}", &alnum[..33]),
         format!("whsec_{}", &alnum[..48]),
         format!("whsec_{}", &hex[..63]),
-    ] {
+    ]
+    .iter()
+    .enumerate()
+    {
         let text = format!("Log: {secret}\n");
-        assert!(!rule_hit(&text, "dlp_stripe_webhook"), "{secret}");
+        assert!(!rule_hit(&text, "dlp_stripe_webhook"), "negative {index}");
     }
 }
 
@@ -337,10 +349,10 @@ fn slack_tokens_follow_the_gitleaks_shapes() {
             &alnum[..34]
         ),
     ];
-    for token in &positives {
+    for (index, token) in positives.iter().enumerate() {
         let text = format!("SLACK_TOKEN={token}\n");
-        assert!(rule_hit(&text, "dlp_slack_token"), "{token}");
-        assert!(reports(&text, token), "{token}");
+        assert!(rule_hit(&text, "dlp_slack_token"), "positive {index}");
+        assert!(reports(&text, token), "positive {index}");
     }
     let negatives = [
         // Bot token with one numeric ID and a 12-character secret.
@@ -350,8 +362,8 @@ fn slack_tokens_follow_the_gitleaks_shapes() {
         // Retired or undocumented letters.
         format!("xoxz-{}", &alnum[..36]),
     ];
-    for token in &negatives {
+    for (index, token) in negatives.iter().enumerate() {
         let text = format!("Log: {token}\n");
-        assert!(!rule_hit(&text, "dlp_slack_token"), "{token}");
+        assert!(!rule_hit(&text, "dlp_slack_token"), "negative {index}");
     }
 }
