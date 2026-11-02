@@ -783,6 +783,13 @@ RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
         # Q-M1: Nigerian plates with a plate term stay gold.
         ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:6",
          "Plates: APP-456CV and KJA-999PZ", "KJA-999PZ", None),
+        # Q-M2: the bare 13-digit ELSTER form stays field-bound (Q-DE); the slashed groups stay gold.
+        ("pii.de.tax_number", RECOGNIZER_TESTS, "test_de_tax_number_recognizer:x:3", "0181508150000", "0181508150000",
+         "Q-DE"),
+        ("pii.de.tax_number", RECOGNIZER_TESTS, "test_de_tax_number_recognizer:x:7", "123/456/78901", "123/456/78901",
+         None),
+        ("pii.de.tax_number", RECOGNIZER_TESTS, "test_de_tax_number_recognizer:x:3", "Steuernummer: 0181508150000",
+         "0181508150000", None),
     ],
 )
 def test_checked_in_known_gaps(entity_id, corpus, row_id, text, value, decision):
