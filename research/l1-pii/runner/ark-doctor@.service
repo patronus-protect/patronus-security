@@ -1,0 +1,9 @@
+[Unit]
+Description=ARK runner doctor for %i (health check; repairs a stuck programme)
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=-/home/ubuntu/ark-l1/host.env
+ExecStart=/home/ubuntu/ark-l1/bin/ark-doctor.sh %i
+TimeoutStartSec=2h

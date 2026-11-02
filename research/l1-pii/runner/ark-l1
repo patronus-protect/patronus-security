@@ -26,14 +26,23 @@ Subcommands:
   abort           drop the current worktree without blocking the task
   unblock ID      make a blocked task selectable again
   status          print stack, blocked tasks and the next candidate
+  idle            exit 0 when the programme's last `next` found nothing to do (NOTHING_TO_DO,
+                  NO_BACKLOG); run.sh starts a second programme only then (ARK_L1_WHEN_IDLE)
+  own BRANCH...   print the given task branches that belong to this host's lane
 
 Exit codes of `next`: 0 = task ready, 10 = nothing to do (reason on stdout),
 11 = the previous run passed the gate but was not published yet (run `publish`).
+
+Lanes: two hosts can share a programme's backlog (ARK_L1_LANE, see PROGRAMS[...]["lanes"]). A lane
+selects only its own tasks and reviews, restacks and merges only their PRs; branch numbers are
+dealt round-robin over the lanes, so two hosts never create the same branch. Without ARK_L1_LANE
+a host works on every task.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import json
 import os
 import re
@@ -42,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import yaml
@@ -58,6 +68,9 @@ PROGRAMS = {
         "backlog": "research/dlp/backlog.yaml", "readme": "research/dlp/README.md",
         "prompt": "AGENT_PROMPT.dlp.md", "golden": "dlp", "eval_dir": "scripts/l1_dlp",
         "eval_venv": "baselines-venv",
+        # Task id patterns per lane besides "a"; lane "a" owns every other task, TRIAGE included.
+        # M01 goes with the M-* tasks that all depend on it.
+        "lanes": {"b": ("M*", "P*", "C*")},
     },
 }
 
@@ -108,11 +121,22 @@ NOTHING = 10
 # Squash-merge the bottom stack PR once its GitHub CI is green (decided 2026-10-21); 0 turns it off.
 AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
 MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
-LAND_CI_WAIT = 45 * 60   # seconds `land` waits for the PR's own CI runs (pull_request event)
+RESUME_LIMIT = 3         # resumes of an unpublished gated run before the watchdog drops it
+DROP_LIMIT = 2           # watchdog drops of the same task on the same base before it is blocked
+LAND_CI_WAIT = 90 * 60   # seconds `land` waits for the PR's own CI runs (pull_request event); the rust
+                         # job's integration tests alone took 55-75 min on 2026-11-01
+MERGEABLE_RETRIES = 4    # re-reads of a PR whose `mergeable` GitHub has not computed yet (UNKNOWN)
 RETARGET_TIMEOUT = 300   # seconds to wait for GitHub to move the PRs above onto main
 MERGE_PENDING = -1       # auto_merge result: GitHub is still merging, the run must stop
 
 CURRENT = STATE / "current.json"
+IDLE = STATE / "idle"                 # written by `next` when it found nothing to do
+
+LANE_TASKS: dict[str, tuple[str, ...]] = P.get("lanes", {})
+LANES = ["a", *sorted(LANE_TASKS)] if LANE_TASKS else []
+LANE = os.environ.get("ARK_L1_LANE", "") if LANES else ""
+if LANE and LANE not in LANES:
+    sys.exit(f"unknown lane {LANE!r} for {PROGRAM}; expected one of {', '.join(LANES)}")
 
 
 def program_root(name: str) -> Path:
@@ -144,6 +168,7 @@ def run(cmd: list[str], cwd: Path | None = None, check: bool = True, env: dict |
 # Host-side git only touches the trusted repository and checkouts it created itself; these
 # flags keep it from running configured commands even so.
 GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"]
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  # git hash-object -t tree /dev/null
 
 
 def git(*args: str, cwd: Path = REPO, check: bool = True) -> str:
@@ -236,8 +261,12 @@ def sha(ref: str) -> str:
 
 def conflicts_with(base: str, head: str) -> bool:
     """True when `head` does not merge cleanly into `base`. Checked locally: GitHub reports
-    `mergeable` as UNKNOWN for a while after every push to main, which hid real conflicts."""
-    proc = subprocess.run(["git", *GIT_SAFE, "merge-tree", "--write-tree", base, head],
+    `mergeable` as UNKNOWN for a while after every push to main, which hid real conflicts.
+    Attributes come from the empty tree: GitHub ignores merge drivers such as the repository's
+    `CHANGELOG.md merge=union`, so two PRs that add a CHANGELOG bullet at the same place conflict
+    there although a local merge is clean. The rebase in `restack` still uses the union driver."""
+    proc = subprocess.run(["git", *GIT_SAFE, f"--attr-source={EMPTY_TREE}", "merge-tree", "--write-tree",
+                           base, head],
                           cwd=REPO, capture_output=True, text=True)
     if proc.returncode > 1:
         raise RuntimeError(f"git merge-tree failed: {proc.stderr.strip()}")
@@ -246,7 +275,37 @@ def conflicts_with(base: str, head: str) -> bool:
 
 def nothing(reason: str) -> int:
     print(f"RESULT={reason}")
+    if reason.split()[0] in ("NOTHING_TO_DO", "NO_BACKLOG"):
+        IDLE.write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
     return NOTHING
+
+
+def task_lane(task_id: str) -> str:
+    """The lane that owns a task id (any case; branch names carry it lower-cased)."""
+    return next((lane for lane, patterns in LANE_TASKS.items()
+                 if any(fnmatch.fnmatchcase(task_id.lower(), pat.lower()) for pat in patterns)), "a")
+
+
+def in_lane(task_id: str) -> bool:
+    """True when this host's lane owns the task; always true without a lane setting."""
+    return not LANE or task_lane(task_id) == LANE
+
+
+def own(pulls: list[dict]) -> list[dict]:
+    """The PRs of this host's lane: the others are reviewed, restacked and merged by their own lane."""
+    return [p for p in pulls if in_lane(task_of_branch(p["headRefName"]))]
+
+
+def next_branch_number(all_prs: list[dict]) -> int:
+    """Above every number in use (PRs in any state, remote task branches, the local counter). With
+    lanes, number % len(LANES) is the lane's index: hosts never pick the same number, even for runs
+    that have not pushed their branch yet."""
+    remote = git("for-each-ref", "--format=%(refname:lstrip=3)", f"refs/remotes/origin/{BRANCH_PREFIX.rstrip('/')}")
+    used = [branch_number(name) for name in [p["headRefName"] for p in all_prs] + remote.split()]
+    number = max([*used, load(STATE / "counter.json", 0)], default=0) + 1
+    while LANE and number % len(LANES) != LANES.index(LANE):
+        number += 1
+    return number
 
 
 # ── restack ──────────────────────────────────────────────────────────────
@@ -378,32 +437,86 @@ def start_restack(conflict: dict) -> int:
 
 # ── review ───────────────────────────────────────────────────────────────
 
-# Log lines of a failed CI job that point at the GitHub runner, not at the code: rerun once.
+# Log lines or annotations of a failed CI job that point at the GitHub runner, not at the code.
 INFRA_FAILURES = ("failed to install component", "No space left on device",
                   "The runner has received a shutdown signal", "Could not resolve host",
-                  "The operation was canceled", "lost communication with the server")
+                  "The operation was canceled", "lost communication with the server",
+                  # Downloads in build scripts (ort-sys fetches ONNX Runtime from cdn.pyke.io).
+                  "prebuilt binaries downloaded from", "Peer disconnected", "timeout: global",
+                  "Connection reset by peer",
+                  # A hosted runner never picked the job up (macos-latest capacity, T18 2026-10-28): no
+                  # log at all, only a check-run annotation, and the job ends "cancelled".
+                  "was not acquired by Runner")
+BAD_CONCLUSIONS = ("failure", "cancelled", "timed_out", "startup_failure")
+NO_RESTART = "no-restart"  # rerun_infra_failures: runner failure, but CI could not be restarted
 
 
-def rerun_infra_failures(head: str) -> bool:
-    """Rerun the failed CI runs on head once when their logs show a runner or toolchain failure."""
+def run_is_infra_failure(run_id: int) -> bool:
+    """Every failed or cancelled job of the run shows a runner or toolchain failure in its log or its
+    annotations (a job that never got a runner has no log). Judged per job: a real failure cancels its
+    matrix siblings ("The operation was canceled"), which must not turn the whole run into infra."""
+    view = json.loads(run(["gh", "run", "view", str(run_id), "--repo", GH_REPO, "--json", "jobs"],
+                          check=False) or "{}")
+    bad = [j for j in view.get("jobs", []) if j.get("conclusion") in BAD_CONCLUSIONS]
+    for job in bad:
+        text = run(["gh", "run", "view", str(run_id), "--repo", GH_REPO, "--job", str(job["databaseId"]),
+                    "--log-failed"], check=False) + run(
+            ["gh", "api", f"repos/{GH_REPO}/check-runs/{job['databaseId']}/annotations", "--jq", ".[].message"],
+            check=False)
+        if not any(marker in text for marker in INFRA_FAILURES):
+            return False
+    return bool(bad)
+
+
+def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None = None) -> str | None:
+    """Restart CI on head once when every failed job of its failed runs is a runner, toolchain or
+    download failure (run_is_infra_failure). Returns the commit whose CI to wait for; NO_RESTART for
+    such a failure that could not be restarted (no verdict on the code); None for a real failure or
+    a head that was restarted before.
+
+    The runner token may not rerun workflow runs (no actions:write), so a restart is a push. For a
+    PR branch an empty commit on top of head: pull_request runs filter paths on the whole PR diff.
+    A task branch without a PR (push: the current run) only gets push runs, whose path filter sees
+    nothing in an empty commit, and pushing it as a new branch is refused when main changed a
+    workflow since its base. Moving the branch back to its main base and then to head again starts
+    a push run on head (plus one on the base commit, which is already on main)."""
     reruns = load(STATE / "ci-reruns.json", {})
     if head in reruns:
-        return False
+        return None
     runs = json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", head, "--json",
                            "databaseId,conclusion"], check=False) or "[]")
-    failed = [r["databaseId"] for r in runs if r.get("conclusion") == "failure"]
-    if not failed:
-        return False
-    logs = "".join(run(["gh", "run", "view", str(r), "--repo", GH_REPO, "--log-failed"], check=False)
-                   for r in failed)
-    if not any(marker in logs for marker in INFRA_FAILURES):
-        return False
-    for r in failed:
-        run(["gh", "run", "rerun", str(r), "--repo", GH_REPO, "--failed"], check=False)
-    reruns[head] = dt.datetime.now(dt.timezone.utc).isoformat()
+    failed = [r["databaseId"] for r in runs if r.get("conclusion") in BAD_CONCLUSIONS]
+    if not failed or not all(run_is_infra_failure(r) for r in failed):
+        return None
+    new = head
+    if branch is None:
+        if not (push and push["branch"].startswith(BRANCH_PREFIX) and push.get("base") == "main"):
+            # Only a main base: a push run on a stacked base would add checks to another PR's head.
+            print(f"WARN=CI on {head[:12]} failed on the runner; no branch to restart it on")
+            return NO_RESTART
+        ref = f"refs/heads/{push['branch']}"
+        try:
+            git("push", "--quiet", f"--force-with-lease={ref}:{head}", "origin", f"{push['base_sha']}:{ref}")
+            git("push", "--quiet", f"--force-with-lease={ref}:{push['base_sha']}", "origin", f"{head}:{ref}")
+        except RuntimeError as err:
+            print(f"WARN=CI retrigger on {push['branch']} failed: {push_error_reason(err)}")
+            return NO_RESTART
+        print(f"CI_RETRIGGER={push['branch']} {head[:12]} pushed again via its base (runner/toolchain failure)")
+    else:
+        try:
+            git("fetch", "--quiet", "origin", f"refs/heads/{branch}")
+            new = git_raw("commit-tree", f"{head}^{{tree}}", "-p", head, "-m",
+                          "ci: retrigger after a runner or download failure").strip()
+            git("push", "--quiet", f"--force-with-lease=refs/heads/{branch}:{head}",
+                "origin", f"{new}:refs/heads/{branch}")
+        except RuntimeError as err:
+            print(f"WARN=CI retrigger on {branch} failed: {push_error_reason(err)}")
+            return NO_RESTART
+        print(f"CI_RETRIGGER={branch} {head[:12]} → {new[:12]} (runner/toolchain failure)")
+    # The retrigger commit counts as the restart too: a CDN that stays down must not stack them.
+    reruns[head] = reruns[new] = dt.datetime.now(dt.timezone.utc).isoformat()
     save(STATE / "ci-reruns.json", reruns)
-    print(f"CI_RERUN={head[:12]} (runner/toolchain failure)")
-    return True
+    return new
 
 
 def find_review(open_prs: list[dict]) -> dict | None:
@@ -414,7 +527,8 @@ def find_review(open_prs: list[dict]) -> dict | None:
     blocked = load(BLOCKED, {})
     for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
         threads = review_threads(pr["number"])
-        ci_red = ci_state(pr["headRefOid"]) == "red" and not rerun_infra_failures(pr["headRefOid"])
+        ci_red = (ci_state(pr["headRefOid"]) == "red"
+                  and rerun_infra_failures(pr["headRefOid"], pr["headRefName"]) is None)
         if not threads and not ci_red:
             continue
         if f"REVIEW:{pr['headRefName']}" in blocked:
@@ -484,11 +598,12 @@ def pick(backlog: dict, blocked: dict, in_flight: set[str] = frozenset()) -> dic
     done = {t["id"] for t in tasks if t.get("status") == "done"}
     today = dt.date.today()
     week = f"{today.isocalendar().year}-W{today.isocalendar().week:02d}"
-    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done:
+    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done and in_lane("TRIAGE"):
         rec = next(r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE")
         return {**rec, "type": "triage", "week": week}
     for t in tasks:
-        if t.get("status", "todo") != "todo" or t["id"] in blocked or t["id"].lower() in in_flight:
+        if t.get("status", "todo") != "todo" or t["id"] in blocked or t["id"].lower() in in_flight \
+                or not in_lane(t["id"]):
             continue
         if t.get("needs_decision"):
             continue
@@ -532,7 +647,8 @@ def ci_state(head: str) -> str:
     names = {c["name"] for c in checks}
     if not CI_REQUIRED <= names or any(c["status"] != "completed" for c in checks):
         return "pending"
-    return "green" if all(c["conclusion"] in OK_CONCLUSIONS for c in checks) else "red"
+    return "green" if all(c["conclusion"] in OK_CONCLUSIONS or c["name"] in CI_NON_BLOCKING
+                          for c in checks) else "red"
 
 
 def review_threads(number: int) -> list[dict]:
@@ -587,7 +703,8 @@ CODEX_POLL = 30
 
 
 def codex_reviewed(number: int, head: str) -> bool:
-    """True once the Codex review summary on the PR reports a completed review of `head`."""
+    """True once the Codex review summary on the PR reports a finished review of `head`: completed,
+    or failed (usage limit, 2026-11-01), after which no review comes and waiting only delays the merge."""
     out = run(["gh", "api", f"repos/{GH_REPO}/issues/{number}/comments", "--paginate", "--jq",
                f'[.[] | select(.user.login == "{CODEX_LOGIN}") | .body]'], check=False)
     try:
@@ -600,7 +717,7 @@ def codex_reviewed(number: int, head: str) -> bool:
                 review = json.loads(raw).get("code_review") or {}
             except ValueError:
                 continue
-            if review.get("commit_sha") == head and review.get("status") == "completed":
+            if review.get("commit_sha") == head and review.get("status") in ("completed", "failed"):
                 return True
     return False
 
@@ -656,6 +773,20 @@ def wait_for_retarget(merged_branch: str) -> None:
     print(f"WARN=PRs on {merged_branch} not retargeted after {RETARGET_TIMEOUT}s; restack takes over")
 
 
+def pr_mergeable(pr: dict) -> str:
+    """The PR's `mergeable`; GitHub computes it lazily and answers UNKNOWN on the first read after a
+    push or a merge to main, which used to skip a green PR for a whole run (#229, 2026-11-01)."""
+    state = pr.get("mergeable")
+    for _ in range(MERGEABLE_RETRIES):
+        if state != "UNKNOWN":
+            break
+        subprocess.run(["sleep", "10"])
+        state = run(["gh", "pr", "view", str(pr["number"]), "--repo", GH_REPO, "--json", "mergeable",
+                     "--jq", ".mergeable"], check=False).strip() or "UNKNOWN"
+    pr["mergeable"] = state
+    return state
+
+
 def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING or None
     """Squash-merge the oldest open PR that targets main, is mergeable and has green CI.
 
@@ -668,7 +799,7 @@ def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING 
         label = f"#{pr['number']} {pr['headRefName']}"
         if pr["baseRefName"] != "main" or pr.get("isDraft"):
             print(f"AUTO_MERGE_SKIP={label} (base {pr['baseRefName']}, draft {pr.get('isDraft')})")
-        elif pr.get("mergeable") != "MERGEABLE":
+        elif pr_mergeable(pr) != "MERGEABLE":
             print(f"AUTO_MERGE_WAIT={label} mergeable={pr.get('mergeable')}")
         elif (state := ci_state(pr["headRefOid"])) != "green":
             print(f"AUTO_MERGE_WAIT={label} CI {state}")
@@ -707,14 +838,34 @@ def cmd_next() -> int:
     for d in (WORKTREES, GATE_TREES, TRANSFER, STATE, LOGS, TARGET, CACHE, DEV_DATA, HOLDOUT):
         d.mkdir(parents=True, exist_ok=True)
     if CURRENT.exists():
+        # Watchdog: a run that died before its gate, or whose CI/publish step keeps failing, must
+        # not pin the programme; drop it and pick work again from the current GitHub state.
         cur = load(CURRENT, {})
-        if cur.get("gated_commit"):
-            print(f"RESULT=RESUME_PUBLISH {cur.get('task_id')}")
+        attempts = cur.get("resume_attempts", 0) + 1
+        if cur.get("gated_commit") and attempts <= RESUME_LIMIT:
+            cur["resume_attempts"] = attempts
+            save(CURRENT, cur)
+            print(f"RESULT=RESUME_PUBLISH {cur.get('task_id')} (attempt {attempts}/{RESUME_LIMIT})")
             return 11
-        return nothing(f"STALE_RUN {cur.get('task_id')} (run `ark-l1 abort`)")
+        reason = "gated run not published" if cur.get("gated_commit") else "run died before its gate"
+        print(f"WATCHDOG={cur.get('task_id')}: {reason} after {attempts - 1} resume(s); run dropped")
+        # The next `next` would pick the same task on the same base again (a review of the same PR
+        # head, say) and repeat the agent round and the failing publish forever: block it instead.
+        drops = load(STATE / "watchdog.json", {})
+        key = f"{cur.get('task_id')}@{cur.get('base_sha', '')}"
+        drops[key] = drops.get(key, 0) + 1
+        save(STATE / "watchdog.json", drops)
+        if cur.get("gated_commit") and drops[key] >= DROP_LIMIT:
+            print(f"WATCHDOG_BLOCK={cur.get('task_id')}: dropped {drops[key]} times on {cur.get('base_sha', '')[:12]}")
+            cmd_block(cur["task_id"], f"{reason} in {drops[key]} watchdog rounds on the same base; "
+                                      f"see PUBLISH_ERROR in the logs; needs a person")
+        else:
+            drop_worktree(cur)
+    IDLE.unlink(missing_ok=True)
     git("fetch", "--quiet", "--prune", "origin")
     git("checkout", "--quiet", "--detach", "origin/main")
-    open_prs = prs("open")
+    every = prs("open")      # all lanes: the PR limit and the tasks in flight
+    open_prs = own(every)
     merged = auto_merge(open_prs)
     if merged == MERGE_PENDING:
         return nothing("MERGE_PENDING (asynchronous merge still running; the next run continues)")
@@ -723,7 +874,8 @@ def cmd_next() -> int:
         git("checkout", "--quiet", "--detach", "origin/main")
         # GitHub may still list the PR as open for a moment; a merged (and deleted) branch must
         # never become the stack top a new task is based on.
-        open_prs = [p for p in prs("open") if p["number"] != merged]
+        every = [p for p in prs("open") if p["number"] != merged]
+        open_prs = own(every)
     top, conflict = restack(open_prs)
     if conflict is not None:
         if conflict.get("push_error"):
@@ -732,22 +884,21 @@ def cmd_next() -> int:
             return nothing(f"REBASE_CONFLICT {conflict['branch']} (agent failed; resolve by hand, then unblock)")
         return start_restack(conflict)
     # Heads may have moved in restack; read them again before judging threads and CI.
-    review = find_review([p for p in prs("open") if p["number"] != merged])
+    review = find_review(own([p for p in prs("open") if p["number"] != merged]))
     if review is not None:
         return start_review(review)
-    if len(open_prs) >= MAX_OPEN:
-        return nothing(f"PAUSED {len(open_prs)} open stack PRs (limit {MAX_OPEN})")
+    if len(every) >= MAX_OPEN:
+        return nothing(f"PAUSED {len(every)} open stack PRs (limit {MAX_OPEN})")
     top_name, top_sha = top
     backlog = backlog_at(top_sha)
     if backlog is None:
         return nothing(f"NO_BACKLOG on {top_name}")
-    in_flight = {task_of_branch(p["headRefName"]) for p in open_prs}
+    in_flight = {task_of_branch(p["headRefName"]) for p in every}
     task = pick(backlog, load(BLOCKED, {}), in_flight)
     if task is None:
         return nothing("NOTHING_TO_DO")
 
-    used = [branch_number(p["headRefName"]) for p in prs("all")]
-    number = max([*used, load(STATE / "counter.json", 0)], default=0) + 1
+    number = next_branch_number(prs("all"))
     save(STATE / "counter.json", number)
     branch = f"{BRANCH_PREFIX}{number:03d}-{task['id'].lower()}"
     worktree = WORKTREES / branch.replace("/", "-")
@@ -778,6 +929,9 @@ def cmd_env() -> int:
     return 0
 
 
+GATE_TEST_MAX_SEC = 3 * 3600  # cargo test step; other gate steps keep the 1 h sandbox default
+
+
 def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     """(name, command, sandbox options); every step runs sandboxed in the trusted checkout wt."""
     py = str(ROOT / P["eval_venv"] / "bin" / "python")
@@ -793,8 +947,11 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
         # The following steps mirror .github/workflows/ci.yml (rust and python jobs); GitHub CI on
         # the pushed branch is checked again before a PR is opened (`ark-l1 ci`).
+        # The suite grows with every task (26 min on 2026-10-25, 57 min on 2026-10-29 under the
+        # 5-CPU quota, over 120 min unoptimised on 2026-11-01); the default 1 h cap would turn every
+        # gate red on time alone. A cold gate build plus the full test run also passed 60 minutes.
         ("test", [str(CARGO), "test", "-p", "patronus-ark", "-p", "ark-api", "-p", "ark-coordinator",
-                  "-p", "ark-distributed-protocol"], build),
+                  "-p", "ark-distributed-protocol"], {**build, "max_sec": GATE_TEST_MAX_SEC}),
         ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --locked --example 13_l1_golden_eval -- all"],
          build),
         ("python-ext", [gpy, "-m", "maturin", "develop", "--quiet", "--manifest-path", "python/Cargo.toml"],
@@ -852,10 +1009,27 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     return steps
 
 
+def failure_output(proc: subprocess.CompletedProcess, timed_out: bool, elapsed: float, max_sec: int) -> str:
+    """Tail of a failed gate step: stdout and stderr each, so cargo's test failures on stdout
+    are not pushed out by its `Running ...` lines on stderr; a sandbox timeout is named."""
+    parts = []
+    if timed_out:
+        parts.append(f"TIMEOUT: the step was stopped after {int(elapsed)} s (limit {max_sec} s); "
+                     "this is not a test failure in the output below")
+    if proc.stdout.strip():
+        parts.append("--- stdout (tail) ---\n" + proc.stdout.strip()[-4000:])
+    if proc.stderr.strip():
+        parts.append("--- stderr (tail) ---\n" + proc.stderr.strip()[-2500:])
+    return "\n".join(parts)
+
+
 def gate_env() -> dict[str, str]:
+    # Test binaries at opt-level 1 (debug assertions and overflow checks stay on): the unoptimised
+    # suite grew from ~22 to over 120 minutes (2026-11-01); opt-level 1 runs the slow regex-heavy
+    # test binaries about 6x faster. Only the `test` profile changes; run.sh sets it for the agent too.
     return {"CARGO_TARGET_DIR": str(GATE_TARGET), "CARGO_HOME": str(GATE_HOME / "cargo"),
             "XDG_CACHE_HOME": str(GATE_HOME / "cache"), "VIRTUAL_ENV": str(GATE_VENV),
-            "PIP_NO_CACHE_DIR": "1"}
+            "PIP_NO_CACHE_DIR": "1", "CARGO_PROFILE_TEST_OPT_LEVEL": "1"}
 
 
 def import_agent_commits(cur: dict) -> str | None:
@@ -913,15 +1087,22 @@ def cmd_gate() -> int:
         git("worktree", "add", "--quiet", "--detach", str(tree), commit)
         try:
             for name, cmd, opts in gate_steps(tree):
+                max_sec = opts.get("max_sec", 3600)
+                started = time.monotonic()
                 proc = sandbox(cmd, tree, opts["rw"], gate_env(), network=opts.get("network", True),
-                               readable=opts.get("readable", ()))
+                               readable=opts.get("readable", ()), max_sec=max_sec)
+                elapsed = time.monotonic() - started
                 if proc.returncode == 0:
                     tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
                     lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
                 else:
-                    # The scoreboard reads the holdout: report its exit code, never its output.
-                    out = "" if name == "scoreboard" else (proc.stdout + "\n" + proc.stderr).strip()[-6000:]
-                    lines.append(f"- ❌ {name} (exit {proc.returncode}): `{shlex.join(cmd)}`\n```\n{out}\n```")
+                    # The scoreboard reads the holdout: report its exit code, never its output. The
+                    # failed checks come from the stored results, summarised by runner code.
+                    timed_out = elapsed >= max_sec - 5
+                    out = scoreboard_regressions(commit, cur["base_sha"]) if name == "scoreboard" \
+                        else failure_output(proc, timed_out, elapsed, max_sec)
+                    result = f"timeout {int(elapsed)} s" if timed_out else f"exit {proc.returncode}"
+                    lines.append(f"- ❌ {name} ({result}): `{shlex.join(cmd)}`\n```\n{out}\n```")
                     ok = False
                     break
         finally:
@@ -933,6 +1114,132 @@ def cmd_gate() -> int:
     report.write_text("\n".join(lines) + "\n")
     print(report.read_text())
     return 0 if ok else 1
+
+
+# Identifiers that may leave the holdout through the gate report: gated bucket, check, entity and
+# rule ids, each with a strict pattern so an agent-controlled scoreboard cannot smuggle holdout text
+# into the report through names. Values are numbers only.
+GATED_BUCKET = re.compile(r"all|language/(de|en)|entity/(pii|entity)(\.[a-z0-9_]{1,32}){1,3}|family/[a-z0-9_]{1,32}")
+ENTITY_ID = re.compile(r"(pii|entity)(\.[a-z0-9_]{1,32}){1,3}")
+DLP_CHECK = re.compile(r"[a-z0-9_.]{1,32}(:[A-Za-z0-9_.]{1,64}){1,2}")
+DLP_RULE = re.compile(r"dlp_[a-z0-9_]{1,64}")
+SCOREBOARD_TOLERANCE_PP = 0.5
+SCOREBOARD_MAX_LINES = 20
+
+
+def _f1(hits: int, predicted: int, found: int, gold: int) -> tuple[float, float, float]:
+    precision = hits / predicted if predicted else 1.0
+    recall = found / gold if gold else 1.0
+    return precision, recall, (2 * precision * recall / (precision + recall) if precision + recall else 0.0)
+
+
+def _num(value) -> str:
+    """A number for the gate report; anything else (text from a report) is withheld."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "?"
+    return str(value) if isinstance(value, int) else f"{value:.4g}"
+
+
+def scoreboard_regressions(head: str, base: str) -> str:
+    """The failed checks of a red scoreboard gate, summarised by runner code from what the gate stored.
+
+    Aggregates only: split, check, bucket/entity/rule ids and base → head numbers. Never holdout
+    text, values, spans, row ids, document or file names, so the next agent round learns which
+    check failed without seeing holdout data.
+    """
+    try:
+        lines = _dlp_failed_checks(head, base) if PROGRAM == "dlp" else _pii_failed_checks(head, base)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return "(stored scoreboard results unreadable)"
+    if lines is None:
+        return "(no stored scoreboard results for head and base; infrastructure error or crash)"
+    if not lines:
+        return "(no failed check in the stored results; infrastructure error or crash)"
+    more = len(lines) - SCOREBOARD_MAX_LINES
+    return ("Failed scoreboard checks (aggregates only, no holdout data):\n"
+            + "\n".join(lines[:SCOREBOARD_MAX_LINES]) + (f"\n… {more} more" if more > 0 else ""))
+
+
+def _pii_failed_checks(head: str, base: str) -> list[str] | None:
+    """Regressed gated buckets and new hard-negative FP per entity, from CACHE/scoreboard/results
+    (scoreboard.py `compare` over the per-commit results the gate stored)."""
+    results = CACHE / "scoreboard" / "results"
+    try:
+        sides = [json.loads((results / f"{sha}.json").read_text())["modes"] for sha in (base, head)]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    lines = []
+    for mode in sorted(sides[1]):
+        for split in sorted(sides[1][mode]):
+            before = sides[0].get(mode, {}).get(split, {})
+            after = sides[1][mode][split]
+            keys = set(before.get("buckets", {})) | set(after.get("buckets", {}))
+            for key in sorted(k for k in keys if GATED_BUCKET.fullmatch(k)):
+                b, a = before["buckets"].get(key), after["buckets"].get(key)
+                if not b or not a:
+                    continue
+                for metric, fields in (("exact", ("exact", "predicted", "exact", "gold")),
+                                       ("overlap", ("predicted_correct", "predicted", "gold_found", "gold"))):
+                    pb, rb, fb = _f1(*(int(b[f]) for f in fields))
+                    pa, ra, fa = _f1(*(int(a[f]) for f in fields))
+                    delta = (fa - fb) * 100
+                    if delta < -SCOREBOARD_TOLERANCE_PP - 1e-9:
+                        lines.append(f"- {mode} {split} f1 {key} {metric}: {fb * 100:.1f} → {fa * 100:.1f} % "
+                                     f"({delta:+.1f} pp; precision {(pa - pb) * 100:+.1f} pp, "
+                                     f"recall {(ra - rb) * 100:+.1f} pp; gold {int(a['gold'])})")
+            old = {json.dumps(x) for x in before.get("hard_negative_fp", [])}
+            new = [x for x in after.get("hard_negative_fp", []) if json.dumps(x) not in old]
+            if new:
+                # Items are [dataset, row id, entity, start, end]: only the entity id is reported.
+                per_entity: dict[str, int] = {}
+                for item in new:
+                    entity = item[2] if isinstance(item[2], str) and ENTITY_ID.fullmatch(item[2]) else "(other id)"
+                    per_entity[entity] = per_entity.get(entity, 0) + 1
+                lines.append(f"- {mode} {split} hard_negatives:new_fp: {len(new)} new (HN-FP {len(old)} → "
+                             f"{len(after.get('hard_negative_fp', []))}): "
+                             + ", ".join(f"{k} {v}" for k, v in sorted(per_entity.items())))
+    return lines
+
+
+def _dlp_failed_checks(head: str, base: str) -> list[str] | None:
+    """The `ok: false` checks of scoreboard.py `compare`, from CACHE/scoreboard/reports/<head>-<base>/,
+    with the per-rule FP counts behind a failed benign FP check."""
+    reports = CACHE / "scoreboard" / "reports" / f"{head[:12]}-{base[:12]}"
+    lines, found = [], False
+    for split in ("dev", "holdout"):
+        path = reports / f"{split}.json"
+        if not path.is_file():
+            continue
+        found = True
+        report = json.loads(path.read_text())
+        for check in report["checks"]:
+            if check.get("ok") is not False:
+                continue
+            name = check.get("check")
+            name = name if isinstance(name, str) and DLP_CHECK.fullmatch(name) else "(unnamed check)"
+            detail = []
+            if "delta_pp" in check:
+                detail.append(f"{_num(check['delta_pp'])} pp, gold {_num(check.get('gold'))}")
+            if isinstance(check.get("new"), list):
+                detail.append(f"{len(check['new'])} new")
+            for bound in ("limit", "budget"):
+                if bound in check:
+                    detail.append(f"{bound} {_num(check[bound])}")
+            lines.append(f"- {split} {name}: {_num(check.get('base'))} → {_num(check.get('head'))}"
+                         + (f" ({'; '.join(detail)})" if detail else ""))
+            corpus = {"fp:benign_code": ("benign_code",), "fp:benign_docs": ("benign_docs", "default")}.get(name)
+            if corpus:
+                sides = []
+                for side in ("base", "head"):
+                    node = report[side]
+                    for part in corpus:
+                        node = node.get(part) or {}
+                    sides.append(node.get("by_rule") or {})
+                for rule in sorted(set(sides[1]) | set(sides[0])):
+                    b, h = (s.get(rule, {}).get("fp", 0) for s in sides)
+                    if DLP_RULE.fullmatch(rule) and _num(h) != "?" and _num(b) != "?" and h > b:
+                        lines.append(f"  - rule {rule}: {b} → {h} FP")
+    return lines if found else None
 
 
 def done_commit(commit: str, task: dict) -> str:
@@ -955,6 +1262,9 @@ CI_REQUIRED = {"rust", "python"}     # jobs of .github/workflows/ci.yml that mus
 CI_TIMEOUT = 75 * 60                 # native-throughput alone may take 30 minutes
 CI_POLL = 60
 OK_CONCLUSIONS = {"success", "skipped", "neutral"}
+# The ARK API image job: main's ruleset does not require it and it flakes on toolchain installs.
+# Agents cannot fix it either (workflow files are outside the runner token's scope).
+CI_NON_BLOCKING = {"validate"}
 
 
 def publish_head(cur: dict) -> str:
@@ -976,6 +1286,35 @@ def publish_head(cur: dict) -> str:
     return head
 
 
+def push_error_reason(err: Exception) -> str:
+    """The lines of a failed push that say why (`! [remote rejected] ... (reason)`, `remote: error`,
+    `stale info`); git's last line alone ("failed to push some refs") hides the cause."""
+    lines = [line.strip() for line in str(err).splitlines() if line.strip()]
+    why = [line for line in lines
+           if line.startswith("!") or "rejected" in line or "stale info" in line
+           or line.startswith(("remote: error", "error: src refspec", "fatal:"))]
+    return " | ".join(why[:4])[:600] if why else (lines[-1] if lines else str(err))
+
+
+def push_protection_hits(err: Exception) -> list[str]:
+    """`rule: commit path:line` for each secret GitHub push protection reported in a rejected push
+    (GH013, "Push cannot contain secrets"); empty for any other rejection. Unblock URLs are left out:
+    allowing a secret is a person's decision, the agent removes the literal instead."""
+    text = str(err)
+    if "GH013" not in text or "Push cannot contain secrets" not in text:
+        return []
+    hits, rule, commit = [], "", ""
+    for line in text.splitlines():
+        line = line.removeprefix("remote:").strip()
+        if match := re.fullmatch(r"—— (.+?) —+", line):
+            rule = match.group(1)
+        elif line.startswith("- commit:"):
+            commit = line.split(":", 1)[1].strip()[:12]
+        elif line.startswith("path:") and rule:
+            hits.append(f"{rule}: {commit} {line.split(':', 1)[1].strip()}")
+    return hits or ["(push protection named no location)"]
+
+
 def ci_failure_log(head: str) -> str:
     """Tail of the failed job logs of the CI runs on head, for the agent's next round."""
     runs = json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", head, "--json",
@@ -986,6 +1325,46 @@ def ci_failure_log(head: str) -> str:
             log = run(["gh", "run", "view", str(r["databaseId"]), "--repo", GH_REPO, "--log-failed"], check=False)
             out.append(f"### {r['name']} ({r.get('conclusion')})\n{log[-5000:]}")
     return "\n".join(out)[-9000:]
+
+
+def rebase_onto_main(cur: dict) -> int:
+    """Replay the gated task commits onto the current origin/main and push them for CI.
+
+    The local gate ran on the old base; GitHub CI on the rebased head still decides before any PR.
+    A conflicting replay drops the run without blocking: the next run redoes the task on main."""
+    git("fetch", "--quiet", "--prune", "origin")
+    onto = sha("origin/main")
+    if onto == cur["base_sha"]:
+        print(f"PUBLISH_ERROR=push refused for .github/workflows although {cur['task_id']} changes none "
+              f"and its base is main; needs a person")
+        return 3
+    # `ci` runs without the run lock: rebase in a private checkout, not in the shared clone.
+    tree = GATE_TREES / "rebase"
+    shutil.rmtree(tree, ignore_errors=True)
+    git("worktree", "prune")
+    git("worktree", "add", "--quiet", "--detach", str(tree), cur["gated_commit"])
+    try:
+        proc = subprocess.run(["git", *GIT_SAFE, "rebase", "--quiet", "--onto", onto, cur["base_sha"]],
+                              cwd=tree, text=True, capture_output=True)
+        if proc.returncode != 0:
+            git("rebase", "--abort", cwd=tree, check=False)
+        gated = git("rev-parse", "HEAD", cwd=tree) if proc.returncode == 0 else ""
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+        git("worktree", "prune", check=False)
+    if not gated:
+        print(f"PUBLISH_ERROR={cur['task_id']} is behind a .github/workflows change on main and does "
+              f"not rebase onto {onto[:12]} cleanly; run dropped, the task stays selectable")
+        drop_worktree(cur)
+        return 3
+    git("update-ref", f"refs/ark/{PROGRAM}/gate", gated)
+    print(f"REBASED={cur['branch']} onto main {onto[:12]} (behind a .github/workflows change): "
+          f"{cur['gated_commit'][:12]} → {gated[:12]}")
+    for key in ("publish_commit", "publish_of", "ci_green"):
+        cur.pop(key, None)
+    cur["base_sha"], cur["gated_commit"] = onto, gated
+    save(CURRENT, cur)
+    return cmd_ci()
 
 
 def cmd_ci() -> int:
@@ -1017,11 +1396,42 @@ def cmd_ci() -> int:
         else:
             git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
     except RuntimeError as err:
-        print(f"PUBLISH_ERROR={str(err).strip().splitlines()[-1]}")
+        if cur["task"].get("type") in ("review", "restack"):
+            remote = git("ls-remote", "origin", f"refs/heads/{cur['branch']}", check=False).split("\t")[0]
+            if remote and remote not in (lease, head):
+                # The PR branch moved since this run started: its fix is stale and the push can never
+                # succeed. Drop the run; the next `next` looks at the PR again from its new head.
+                print(f"STALE_RUN={cur['task_id']}: {cur['branch']} is now {remote[:12]}; run dropped")
+                drop_worktree(cur)
+                return 3
+        if "workflow" in str(err) and cur["task"].get("type") not in ("review", "restack"):
+            if not git("diff", "--name-only", cur["base_sha"], cur["gated_commit"], "--",
+                       ".github/workflows"):
+                # GitHub checks a new branch against main: a branch cut before a workflow change
+                # landed on main "reverts" it and is refused, although the task never touched one.
+                return rebase_onto_main(cur)
+            # The token may not push .github/workflows changes; retrying the same task loops forever.
+            print(f"PUBLISH_ERROR=push touches .github/workflows, which the runner token cannot push")
+            cmd_block(cur["task_id"], "fix changes .github/workflows; needs a person")
+            return 3
+        if hits := push_protection_hits(err):
+            # The same commits are rejected on every retry; only a new agent round can remove the
+            # literal, so this counts as red (T18 resumed 3 times on the same GH013, 2026-10-28).
+            (STATE / "gate-report.md").write_text(
+                f"# GitHub push protection {cur['task_id']} ({cur['branch']} @ {head[:12]})\n\n"
+                f"- ❌ GitHub rejected the push: plaintext secrets in commits of the branch. The local\n"
+                f"  plaintext-secrets step did not know these formats. Remove the literal from every commit\n"
+                f"  of the branch (rewrite the commits; goldens as generator recipes, test values assembled\n"
+                f"  at test time):\n" + "".join(f"  - {h}\n" for h in hits))
+            print((STATE / "gate-report.md").read_text())
+            print(f"PUBLISH_ERROR=push protection: {'; '.join(hits)[:500]}")
+            return 1
+        print(f"PUBLISH_ERROR={push_error_reason(err)}")
         return 3
     print(f"== waiting for GitHub CI on {cur['branch']} @ {head[:12]}")
     deadline = dt.datetime.now() + dt.timedelta(seconds=CI_TIMEOUT)
     checks: list[dict] = []
+    rerun_at = ""  # UTC timestamp of a CI restart, in GitHub's format
     while dt.datetime.now() < deadline:
         subprocess.run(["sleep", str(CI_POLL)])
         try:
@@ -1033,7 +1443,32 @@ def cmd_ci() -> int:
         names = {c["name"] for c in checks}
         if not CI_REQUIRED <= names or any(c["status"] != "completed" for c in checks):
             continue
-        failed = [c["name"] for c in checks if c["conclusion"] not in OK_CONCLUSIONS]
+        failed = [c["name"] for c in checks
+                  if c["conclusion"] not in OK_CONCLUSIONS and c["name"] not in CI_NON_BLOCKING]
+        if failed and rerun_at and any((c.get("completed_at") or "") < rerun_at for c in checks
+                                       if c["name"] in failed):
+            continue  # the restart has not replaced the failed check runs yet
+        pr_branch = cur["branch"] if cur["task"].get("type") in ("review", "restack") else None
+        restarted = rerun_infra_failures(head, pr_branch, None if pr_branch else cur) if failed else None
+        if restarted == NO_RESTART:
+            # Red would cost an agent round and finally block gate-green work (T18 after round 3,
+            # 2026-10-28). No verdict: the run stays resumable, a person restarts the failed jobs.
+            print(f"CI=no_verdict {head[:12]}: runner failure in {', '.join(failed)}; CI could not be "
+                  f"restarted, rerun the failed jobs by hand")
+            return 3
+        if restarted:
+            # A runner or download failure is no verdict on the code; before, it went back to the agent
+            # as red CI, or blocked a resumed run (T18, 2026-10-28). Wait for the restart in full.
+            if restarted != head:
+                # An empty retrigger commit with the gated tree: it is what publish lands now.
+                head = restarted
+                cur["gated_commit"] = cur["publish_commit"] = cur["publish_of"] = head
+                cur["review_pushed"] = head
+                save(CURRENT, cur)
+                print(f"== waiting for GitHub CI on {cur['branch']} @ {head[:12]}")
+            rerun_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            deadline = dt.datetime.now() + dt.timedelta(seconds=CI_TIMEOUT)
+            continue
         report = STATE / "gate-report.md"
         if not failed:
             cur["ci_green"] = head
@@ -1190,6 +1625,17 @@ def publish_review(cur: dict) -> int:
 
 
 def drop_worktree(cur: dict) -> None:
+    # Keep the agent's commits before deleting the clone: a run killed mid-gate (2026-10-29, A13)
+    # otherwise loses every round. The bundle import runs sandboxed like the gate's.
+    if Path(cur.get("worktree", "")).is_dir() and cur.get("base_sha"):
+        try:
+            commit = import_agent_commits(cur)
+            if commit and commit != cur["base_sha"]:
+                ref = f"refs/ark/{PROGRAM}/salvage/{cur['branch'].replace('/', '-')}"
+                git("update-ref", ref, commit)
+                print(f"SALVAGED={ref} {commit[:12]}")
+        except (RuntimeError, OSError) as err:
+            print(f"SALVAGE_ERROR={cur.get('branch')}: {str(err).strip()[-300:]}")
     # Plain deletes: the host never runs git inside the agent clone.
     shutil.rmtree(cur["worktree"], ignore_errors=True)
     shutil.rmtree(GATE_TREES / "current", ignore_errors=True)
@@ -1226,13 +1672,17 @@ def cmd_unblock(task_id: str) -> int:
     blocked = load(BLOCKED, {})
     blocked.pop(task_id, None)
     save(BLOCKED, blocked)
+    drops = load(STATE / "watchdog.json", {})
+    save(STATE / "watchdog.json", {k: v for k, v in drops.items() if not k.startswith(f"{task_id}@")})
     print(f"UNBLOCKED={task_id}")
     return 0
 
 
 def cmd_status() -> int:
     git("fetch", "--quiet", "--prune", "origin")
-    open_prs = sorted(prs("open"), key=lambda p: branch_number(p["headRefName"]))
+    every = prs("open")
+    open_prs = sorted(own(every), key=lambda p: branch_number(p["headRefName"]))
+    print(f"Lane: {LANE or '(all tasks)'}")
     print("Stack (open):")
     for p in open_prs:
         print(f"  #{p['number']} {p['headRefName']} ← {p['baseRefName']}  {p['url']}")
@@ -1240,10 +1690,16 @@ def cmd_status() -> int:
     print("Current:", load(CURRENT, None))
     # Same choice as `next`: flat tasks start from main and skip tasks that already have a PR.
     backlog = backlog_at("origin/main")
-    in_flight = {task_of_branch(p["headRefName"]) for p in open_prs}
+    in_flight = {task_of_branch(p["headRefName"]) for p in every}
     task = pick(backlog, load(BLOCKED, {}), in_flight) if backlog else None
     print("Next:", task and f"{task['id']} {task.get('title', '')}")
     return 0
+
+
+def cmd_idle() -> int:
+    idle = IDLE.exists() and not CURRENT.exists()
+    print(f"IDLE={PROGRAM} since {IDLE.read_text().strip()}" if idle else f"BUSY={PROGRAM}")
+    return 0 if idle else 1
 
 
 def main(argv: list[str]) -> int:
@@ -1253,7 +1709,7 @@ def main(argv: list[str]) -> int:
     cmd, args = argv[0], argv[1:]
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
-        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci,
+        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci, "idle": cmd_idle,
     }
     if cmd in table:
         return table[cmd]()
@@ -1261,6 +1717,9 @@ def main(argv: list[str]) -> int:
         return cmd_block(args[0], " ".join(args[1:]))
     if cmd == "unblock" and len(args) == 1:
         return cmd_unblock(args[0])
+    if cmd == "own":
+        print("\n".join(b for b in args if b.startswith(BRANCH_PREFIX) and in_lane(task_of_branch(b))))
+        return 0
     print(__doc__)
     return 2
 

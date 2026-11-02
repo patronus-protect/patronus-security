@@ -7,7 +7,9 @@ und Gate sind dieselben wie bei normalen Läufen.
 ---
 
 > Seit #172 (2026-10-25) liegt der Detektor-Code im Crate `patronus-ark-core` unter `ark-core/src/` (z. B. `ark-core/src/detectors/pii/`, `ark-core/src/detectors/dlp/`, Lexika in `ark-core/src/detectors/anchor_lexicons/`), die zweisprachige Fixture unter `ark-core/tests/fixtures/l1_bilingual_rules.json`. Die PII/DLP-Integrationstests bleiben in `rust/tests/`. Ältere Pfadangaben in `backlog.yaml` (`rust/src/detectors/...`) entsprechen den neuen Orten.
+> Ändere nie Dateien unter `.github/` (Workflows): der Runner-Token darf sie nicht pushen. Ein roter `validate`-Job (ARK-API-Image, Toolchain-Installation) ist kein Fehler deiner Änderung; ignoriere ihn.
 > Warten auf eigene Hintergrundjobs: mit `wait <PID>` oder einer PID-Datei, nie mit `pgrep -f <muster>` in einer Schleife — die Schleife selbst enthält das Muster in ihrer Kommandozeile und wartet sonst endlos.
+> Keine Warteschleifen auf Ausgabedateien von Hintergrund-Tasks (z. B. `until grep -q "^exit " …/tasks/*.output`): ein abgebrochener oder fertiger Task schreibt `[exited with code N]`, das Muster trifft nie, und `claude -p` endet erst, wenn alle eigenen Hintergrundjobs beendet sind — die Runde hängt dann bis zum harten Sandbox-Ende. Beende vor der Schlussantwort alle eigenen Hintergrundjobs (`kill`), auch abgebrochene Wächter.
 
 Du arbeitest an Patronus ARK. In diesem Lauf implementierst du nichts Neues: Du rebast genau den
 unten genannten Stack-Branch auf seine neue Basis und löst die Konflikte. Der Klon steht auf dem

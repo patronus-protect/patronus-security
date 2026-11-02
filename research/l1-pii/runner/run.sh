@@ -3,6 +3,9 @@
 # work on it, gate the result independently, wait for green GitHub CI, publish a ready stacked PR
 # or block the task.
 # Usage: run.sh [--program pii|dlp]
+# Host settings (units: EnvironmentFile ~/ark-l1/host.env, written by install.sh): ARK_L1_LANE, the
+# lane of a programme shared by two hosts (see ark-l1); ARK_L1_WHEN_IDLE, the programme with priority
+# on this host: the other programmes start new work only while it is idle.
 set -uo pipefail
 
 PROGRAM="${ARK_L1_PROGRAM:-pii}"
@@ -17,28 +20,50 @@ DLP_ROOT="$(dirname "$SHARED")/ark-dlp"
 BIN="$SHARED/bin"
 L1=("$BIN/ark-l1" --program "$PROGRAM")
 MAX_ROUNDS=3
+# Hard limit of one agent round. The unit's TimeoutStartSec (24h) must cover the lock wait plus
+# MAX_ROUNDS x (agent round + gate) and the CI wait: 3 x (1.5 h + a gate of about 1.5 h) + 1.25 h CI
+# is about 10 h for the run itself, and the lock wait can be one such run of the other programme.
+# At 4h a second red gate was killed mid-gate and the watchdog dropped the run with all its commits
+# (A13, 2026-10-29); 14h still left no room for the lock wait.
+AGENT_MAX_SEC=5400
 MODEL="${ARK_L1_MODEL:-claude-opus-5-5}"
 
 mkdir -p "$ROOT/logs" "$ROOT/state" "$SHARED/state"
 # One lock for all programmes: two agents with MemoryMax=9G do not fit on the VPS.
 # A busy lock queues the run instead of dropping the slot: a long run of one programme
-# (three rounds of agent, gate and CI wait, up to about nine hours) used to swallow several
+# (three rounds of agent, gate and CI wait, up to about ten hours) used to swallow several
 # slots of the other. The wait has no limit of its own; the unit's TimeoutStartSec bounds wait
 # plus run. systemd starts no second instance while this one waits, so at most one run per
 # programme queues, and the programmes alternate. Taken before the log exists.
 exec 9>"$SHARED/state/run.lock"
 flock -n 9 || { echo "== run lock busy; queued until the other run ends"; flock 9; }
+# A second programme on this host (e.g. a DLP lane next to PII) starts a new task only while the
+# priority programme's last run found nothing to do; a run in progress (resume) always finishes.
+if [ -n "${ARK_L1_WHEN_IDLE:-}" ] && [ "$ARK_L1_WHEN_IDLE" != "$PROGRAM" ] \
+    && [ ! -e "$ROOT/state/current.json" ] && ! "$BIN/ark-l1" --program "$ARK_L1_WHEN_IDLE" idle; then
+  echo "== $ARK_L1_WHEN_IDLE has work; no $PROGRAM run"
+  exit 0
+fi
 LOG="$ROOT/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 find "$ROOT/logs" -name '*.log' -mtime +30 -delete
-# A full disk kills the gate halfway and leaves a STALE_RUN; the debug caches rebuild on demand.
-MIN_FREE_GB=15
+# A full disk kills the gate halfway (the linker dies with a Bus error) and costs a round; the
+# debug caches rebuild on demand. One agent round can fill 40 GB, so the check runs before every
+# agent round and every gate, not only at the start of the run. The agent cache goes first; the
+# gate cache only when that is not enough (a cold gate build is slow but cannot fail on space).
+MIN_FREE_GB=20
 free_gb() { df -P -BG "$SHARED" | awk 'NR==2 { sub("G", "", $4); print $4 }'; }
-if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
-  echo "== only $(free_gb) GB free; removing debug build caches"
-  rm -rf "$SHARED"/target*/debug "$DLP_ROOT"/target*/debug
+ensure_free_space() {  # $1: what comes next
+  [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && return 0
+  echo "== only $(free_gb) GB free before $1; removing the agent debug build caches"
+  rm -rf "$SHARED/target/debug" "$DLP_ROOT"/target/debug
+  if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
+    echo "== only $(free_gb) GB free; removing the gate debug build caches too"
+    rm -rf "$SHARED"/target*/debug "$DLP_ROOT"/target*/debug
+  fi
   echo "== $(free_gb) GB free"
-fi
+}
+ensure_free_space "the run"
 
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
 "${L1[@]}" next
@@ -66,6 +91,11 @@ eval "$("${L1[@]}" env)"
 feedback=""
 for round in $(seq 1 "$MAX_ROUNDS"); do
   echo "== round $round/$MAX_ROUNDS: $TASK_ID on $BRANCH (base $BASE)"
+  ensure_free_space "agent round $round"
+  # The sandbox kills the agent at AGENT_MAX_SEC; work that is not committed by then is lost
+  # and the run is aborted. Tell the agent the clock time so it commits in time.
+  deadline="$(date -u -d "+$AGENT_MAX_SEC seconds" +%H:%M)"
+  commit_by="$(date -u -d "+$((AGENT_MAX_SEC - 20 * 60)) seconds" +%H:%M)"
   prompt="$(cat "$BIN/$PROMPT_FILE")
 
 ## Deine Aufgabe in diesem Lauf
@@ -75,6 +105,13 @@ Branch: $BRANCH (Base: $BASE)
 \`\`\`yaml
 $TASK_YAML
 \`\`\`
+
+## Zeitlimit dieser Runde
+Die Sandbox wird um $deadline UTC hart beendet ($((AGENT_MAX_SEC / 60)) Minuten nach Start). Nicht committete
+Arbeit geht dann verloren, und der Lauf wird ohne Ergebnis abgebrochen. Committe den Testbereich
+(Schritt 2), sobald er steht, und danach jeden Zwischenstand, der baut. Spätestens um $commit_by UTC
+committest du alles, auch Unfertiges, und prüfst danach nur noch. Ein rotes Gate kostet nichts: Du bekommst den
+Bericht und eine weitere Runde. Die Uhrzeit liefert \`date -u\`; vermeide unnötige Voll-Builds.
 $feedback"
 
   sudo systemd-run --uid="$(id -u)" --gid="$(id -g)" --pipe --wait --collect --quiet \
@@ -86,12 +123,13 @@ $feedback"
     -p PrivateTmp=yes \
     -p "ReadWritePaths=-$WORKTREE -$SHARED/target -$HOME/.cargo -$HOME/.rustup -$HOME/.cache -$HOME/.claude -$HOME/.claude.json -$HOME/.local/state" \
     -p "InaccessiblePaths=-$SHARED/holdout -$SHARED/secrets.env -$SHARED/state -$SHARED/cache -$SHARED/gate -$SHARED/transfer -$DLP_ROOT/holdout -$DLP_ROOT/state -$DLP_ROOT/cache -$DLP_ROOT/gate -$DLP_ROOT/transfer -$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
-    -p RuntimeMaxSec=5400 \
+    -p RuntimeMaxSec="$AGENT_MAX_SEC" \
     -p CPUQuota=500% \
     -p MemoryMax=9G \
     -E HOME="$HOME" \
     -E PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" \
     -E CARGO_TARGET_DIR="$SHARED/target" \
+    -E CARGO_PROFILE_TEST_OPT_LEVEL=1 \
     -E ARK_L1_DEV_DATA="$ROOT/data/dev" \
     -E DISABLE_AUTOUPDATER=1 \
     "$HOME/.local/bin/claude" -p "$prompt" --model "$MODEL" --dangerously-skip-permissions --max-turns 250
@@ -104,6 +142,7 @@ $feedback"
     exit 1
   fi
 
+  ensure_free_space "the gate"
   if "${L1[@]}" gate; then
     # A PR only for green GitHub CI: red CI goes back to the agent like a red gate.
     unlock
