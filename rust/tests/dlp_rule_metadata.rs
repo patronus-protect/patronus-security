@@ -457,17 +457,17 @@ fn severity_follows_test_prefixes() {
 fn min_entropy_drops_low_entropy_provider_values() {
     let rule = DLP_PATTERNS
         .iter()
-        .find(|rule| rule.name == "dlp_openai_legacy")
+        .find(|rule| rule.name == "dlp_groq_key")
         .unwrap();
     assert!(rule.meta.min_entropy.is_some());
 
-    let random = ["sk-", &random_body(31, BASE62, 48)].concat();
-    assert!(matched_rule(&format!("OPENAI_API_KEY={random}"), "dlp_openai_legacy").is_some());
+    let random = ["gsk_", &random_body(31, BASE62, 52)].concat();
+    assert!(matched_rule(&format!("GROQ_API_KEY={random}"), "dlp_groq_key").is_some());
 
     for seed in 0..8 {
-        let low = ["sk-", &random_body(seed, "aBcDe5", 48)].concat();
+        let low = ["gsk_", &random_body(seed, "aBcDe5", 52)].concat();
         assert!(
-            matched_rule(&format!("OPENAI_API_KEY={low}"), "dlp_openai_legacy").is_none(),
+            matched_rule(&format!("GROQ_API_KEY={low}"), "dlp_groq_key").is_none(),
             "low-entropy value reported: seed {seed}"
         );
     }
