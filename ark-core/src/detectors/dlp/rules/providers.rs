@@ -286,8 +286,8 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_openai_key",
         pattern: concat!(
-            r"sk-(?:proj|admin)-(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
-            r"T3BlbkFJ(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+            r"sk-(?:proj|admin)-[A-Za-z0-9_\-]{58}(?:[A-Za-z0-9_\-]{16})?",
+            r"T3BlbkFJ[A-Za-z0-9_\-]{58}(?:[A-Za-z0-9_\-]{16})?",
         ),
         entity_group: "API_KEY",
         validator: Some(is_llm_api_key),
@@ -323,8 +323,8 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_openai_svc",
         pattern: concat!(
-            r"sk-svcacct-(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
-            r"T3BlbkFJ(?:[A-Za-z0-9_\-]{74}|[A-Za-z0-9_\-]{58})",
+            r"sk-svcacct-[A-Za-z0-9_\-]{58}(?:[A-Za-z0-9_\-]{16})?",
+            r"T3BlbkFJ[A-Za-z0-9_\-]{58}(?:[A-Za-z0-9_\-]{16})?",
         ),
         entity_group: "API_KEY",
         validator: Some(is_llm_api_key),
