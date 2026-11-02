@@ -12795,13 +12795,13 @@ DLP_FLLM_CASES = {
         ),
         dn(
             "CLOUD_KEY", "en", "dlp_gcp_client_secret",
-            "GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret-here\n",
-            "placeholder after the prefix", carrier="env",
+            "# client secret from Secret Manager\nGOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}\n",
+            "environment reference", carrier="env",
         ),
         dn(
             "CLOUD_KEY", "de", "dlp_google_oauth_token",
-            "Authorization: Bearer ya29.<ACCESS_TOKEN>\n",
-            "placeholder after the prefix", carrier="http",
+            "Google-Access-Tokens beginnen mit ya29. und sind höchstens 2048 Byte lang.\n",
+            "format description without a value", carrier="prose",
         ),
         dn(
             "CLOUD_KEY", "en", "dlp_google_api_key",

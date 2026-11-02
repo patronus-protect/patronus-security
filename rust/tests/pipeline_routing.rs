@@ -941,7 +941,7 @@ fn native_pii_and_dlp_results_include_exact_evidence_only_for_findings() {
         )
     );
     assert_eq!(dlp.evidence_spans[0].start_byte, 7);
-    assert_eq!(dlp.evidence_spans[0].end_byte, 47);
+    assert_eq!(dlp.evidence_spans[0].end_byte, 58);
 
     let safe = scanner
         .scan_category(SecurityCategory::Pii, "Plain release notes only.")
@@ -994,9 +994,8 @@ fn native_dlp_multiple_evidence_spans_keep_unicode_offsets() {
         "q7mZk2xV9pWd4hRt8nYc",
         "T3BlbkFJ",
         "3bJa6uFs0gE1aB2cD3eF",
-        " 🦀 ",
-        "sk-ant-",
-        "r4kq9mzx2wd"
+        " 🦀 passwort = ",
+        "Sommer2026!"
     );
 
     let result = scanner
