@@ -15,6 +15,12 @@ manifest. ``check`` verifies the map against those sources:
 ``--presidio`` additionally compares the mapped Presidio entities with the predefined
 recognizers of the installed Presidio. Exit code 1 on any problem.
 
+``known_gaps`` lists gold the milestones and the F1 >= 80 floor leave out by a recorded decision
+(T27, attainable view): each entry names an id, the deciding task, a reason and which gold it
+covers (``span``: regular expression the annotated text matches in full; ``bare``: the span is the
+whole row text; ``rows``: regular expression the row id starts with; ``corpora``: only these gold
+sources); all given conditions must hold. ``check`` verifies ids and gold sources.
+
 ``source_families`` tags every gold source (each corpus of the manifest and the Ark-authored
 gold sets) with the family it belongs to: ``ark_authored``, ``neutral`` or
 ``presidio_favored``. Milestones are decided on neutral and presidio_favored data only
@@ -41,6 +47,7 @@ PII_SOURCE_PATH = ROOT / "ark-core" / "src" / "detectors" / "pii" / "pii.rs"
 SCHEMA = "ark-l1-entity-map-v1"
 SCOPES = ("shared", "ark_only", "presidio_only", "semantic")
 ENTITY_KEYS = {"id", "scope", "ark", "presidio", "corpora"}
+KNOWN_GAP_KEYS = {"id", "decision", "reason", "span", "bare", "rows", "corpora"}
 ID_PATTERN = re.compile(r"^(?:pii|entity)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
 FAMILIES = ("ark_authored", "neutral", "presidio_favored")
 # Families that decide a milestone; ark_authored results are reported only.
@@ -61,6 +68,56 @@ class Entity(NamedTuple):
     ark: tuple[str, ...]
     presidio: tuple[str, ...]
     corpora: dict[str, tuple[str, ...]]
+
+
+class KnownGap(NamedTuple):
+    """Gold left out of the attainable view by a recorded decision (T27)."""
+
+    id: str
+    decision: str
+    reason: str
+    span: re.Pattern[str] | None  # full match on the annotated text
+    bare: bool  # the span covers the whole row text (surrounding whitespace aside)
+    rows: re.Pattern[str] | None  # matched at the start of the row id
+    corpora: tuple[str, ...]  # empty: every gold source
+
+    def covers(self, corpus: str, row_id: str, text: str, start: int, end: int) -> bool:
+        value = text[start:end]
+        return (
+            (not self.corpora or corpus in self.corpora)
+            and (self.rows is None or self.rows.match(row_id) is not None)
+            and (self.span is None or self.span.fullmatch(value) is not None)
+            and (not self.bare or text.strip() == value.strip())
+        )
+
+
+def _known_gap(raw: Any) -> KnownGap:
+    if not isinstance(raw, dict):
+        raise ValueError(f"known gap must be a mapping: {raw!r}")
+    unknown = sorted(set(raw) - KNOWN_GAP_KEYS)
+    missing = sorted({"id", "decision", "reason"} - set(raw))
+    where = f"known gap {raw.get('id')!r}"
+    if unknown or missing:
+        raise ValueError(f"{where}: unknown keys {unknown}, missing keys {missing}")
+    for key in ("id", "decision", "reason"):
+        if not isinstance(raw[key], str) or not raw[key].strip():
+            raise ValueError(f"{where}: {key} must be a non-empty string")
+    bare = raw.get("bare", False)
+    if not isinstance(bare, bool):
+        raise ValueError(f"{where}: bare must be true or false")
+    patterns = {}
+    for key in ("span", "rows"):
+        value = raw.get(key)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"{where}: {key} must be a regular expression")
+        try:
+            patterns[key] = re.compile(value) if value is not None else None
+        except re.error as error:
+            raise ValueError(f"{where}: invalid {key} pattern: {error}") from None
+    if patterns["span"] is None and patterns["rows"] is None and not bare:
+        raise ValueError(f"{where}: needs span, rows or bare, otherwise it would cover every gold value of the id")
+    corpora = _names(raw["corpora"], f"{where}.corpora") if "corpora" in raw else ()
+    return KnownGap(raw["id"], raw["decision"], raw["reason"], patterns["span"], bare, patterns["rows"], corpora)
 
 
 def _names(value: Any, where: str) -> tuple[str, ...]:
@@ -108,7 +165,8 @@ def _entity(raw: Any) -> Entity:
 class EntityMap:
     """Validated entity map with lookups from each vocabulary to the benchmark id."""
 
-    def __init__(self, presidio_version: str, entities: Iterable[Entity], families: dict[str, str] | None = None):
+    def __init__(self, presidio_version: str, entities: Iterable[Entity], families: dict[str, str] | None = None,
+                 known_gaps: Iterable[KnownGap] = ()):
         self.presidio_version = presidio_version
         self.families: dict[str, str] = dict(families or {})  # gold source -> family
         self.entities: dict[str, Entity] = {}
@@ -132,6 +190,10 @@ class EntityMap:
                     if key in target:
                         raise ValueError(f"duplicate {corpus} label {label!r} in {target[key]} and {entity.id}")
                     target[key] = entity.id
+        self.known_gaps: tuple[KnownGap, ...] = tuple(known_gaps)
+        for gap in self.known_gaps:
+            if gap.id not in self.entities or self.entities[gap.id].scope == "semantic":
+                raise ValueError(f"known gap {gap.id!r} ({gap.decision}) is no L1 id of the entity map")
 
     @classmethod
     def from_dict(cls, payload: Any) -> "EntityMap":
@@ -143,7 +205,11 @@ class EntityMap:
         entities = payload.get("entities")
         if not isinstance(entities, list) or not entities:
             raise ValueError("entity map requires a non-empty entities list")
-        return cls(version, (_entity(raw) for raw in entities), _families(payload.get("source_families", {})))
+        known_gaps = payload.get("known_gaps", [])
+        if not isinstance(known_gaps, list):
+            raise ValueError("known_gaps must be a list")
+        return cls(version, (_entity(raw) for raw in entities), _families(payload.get("source_families", {})),
+                   (_known_gap(raw) for raw in known_gaps))
 
     def ark_label(self, label: str) -> str | None:
         return self._ark.get(label)
@@ -177,6 +243,12 @@ class EntityMap:
     def family(self, source: str) -> str | None:
         """Source family of a gold source (corpus id or Ark gold set name)."""
         return self.families.get(source)
+
+    def known_gap(self, entity_id: str, corpus: str, row_id: str, text: str, start: int, end: int) -> KnownGap | None:
+        """First recorded decision that leaves this gold span out of the attainable view."""
+        return next(
+            (gap for gap in self.known_gaps if gap.id == entity_id and gap.covers(corpus, row_id, text, start, end)), None
+        )
 
 
 def _families(raw: Any) -> dict[str, str]:
@@ -301,6 +373,10 @@ def check(
     problems += [f"Ark gold source {name} not found at {path}" for name, path in ARK_GOLD_SOURCES.items() if not path.is_file()]
     problems += [f"gold source {source} has no source family" for source in sorted(sources - entity_map.families.keys())]
     problems += [f"source family entry {source} is not a known gold source" for source in sorted(entity_map.families.keys() - sources)]
+    problems += [
+        f"known gap {gap.id} ({gap.decision}) names unknown gold source {corpus}"
+        for gap in entity_map.known_gaps for corpus in gap.corpora if corpus not in sources
+    ]
 
     if presidio_entities is not None:
         known = entity_map.presidio_entities()
