@@ -51,14 +51,17 @@ unerreichbar.
   Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30), blanke ACN (B-APAC), blanke KR-BRN mit
   zehn Ziffern (B-KR), blanke PESEL (A13), IN-PAN und Voter-ID ohne Begriff (B-IN), Partita IVA mit
   Unterstrich (T33), blanke SIN-Ziffernfolgen am Stück oder mit Leerzeichen (B-LUHN), blanke Aadhaar
-  mit zwölf Ziffern am Stück (B-IN), blanke NPI mit zehn Ziffern am Stück (A06, Q-M1). Eine neue Ausnahme braucht eine Entscheidung
+  mit zwölf Ziffern am Stück (B-IN), blanke NPI mit zehn Ziffern am Stück (A06, Q-M1), blanke 13-stellige
+  ELSTER-Steuernummer (Q-DE, eingetragen mit Q-M2). Eine neue Ausnahme braucht eine Entscheidung
   und einen Eintrag dort, keine Prosa-Ausnahme im README.
 - **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
   (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
   Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen weiter auf allem Gold (`raw`).
 - **Wirkung auf Dev** (`presidio_favored`, `balanced` gegen Presidio tuned, Stand dieser Aufgabe):
   M1 roh 22/25, erreichbar 24/24; M2 roh Macro-F1 63,2 gegen 87,0 (11 IDs), erreichbar 96,3 gegen
-  100,0 (9 IDs; offen bleibt die Steuernummer mit 66,7 gegen 100).
+  100,0 (9 IDs; offen bleibt die Steuernummer mit 66,7 gegen 100). Seit Q-M2 steht die blanke
+  ELSTER-Form `0181508150000` unter der Entscheidung Q-DE in `known_gaps`: Steuernummer erreichbar
+  100 gegen 100, **M2 erreichbar 100,0 gegen 100,0, erfüllt** (`neutral` 66,1 gegen Ziel 36,2).
 - **Validatoren werden nicht gelockert**, die Korpora nicht bearbeitet. Nicht erfasst werden FP auf
   nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
   (T16) und in der Untergrenze sichtbar.
