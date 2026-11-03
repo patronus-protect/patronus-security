@@ -230,12 +230,6 @@ entities:
     ark: [dlp_deepseek_key]
     trufflehog: [DeepSeek]
     backlog: P01
-  - id: llm.fireworks.api_key
-    scope: shared
-    group: API_KEY
-    ark: [dlp_fireworks_key]
-    trufflehog: [Fireworks]
-    backlog: P01
   - id: cloud.aws.access_key_id
     scope: shared
     group: CLOUD_KEY
@@ -718,6 +712,11 @@ entities:
   - {id: identifier.organization, scope: ark_only, group: dlp.organization_id, ark: [dlp_organization_id], backlog: F16}
   - {id: content.business_metric, scope: ark_only, group: dlp.internal.business_metric,
      ark: [dlp_internal_business_metric], backlog: M21}
+  - id: llm.fireworks.api_key
+    scope: ark_only
+    group: API_KEY
+    ark: [dlp_fireworks_key]
+    backlog: P01
   - id: content.sql
     scope: ark_only
     group: dlp.content.sql
