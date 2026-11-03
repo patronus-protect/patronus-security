@@ -3226,7 +3226,7 @@
     "category": "dlp",
     "rule_id": "dlp_cohere_key",
     "de": "CO_API_KEY=<<secret\u003a0>>",
-    "en": "cohere:\n  api_key: \"<<secret\u003a0>>\"",
+    "en": "cohere:\n  cohere_api_key: \"<<secret\u003a0>>\"",
     "secrets": [
       {
         "gen": "cohere_api_key",
@@ -3270,7 +3270,7 @@
     "category": "dlp",
     "rule_id": "dlp_deepseek_key",
     "de": "DEEPSEEK_API_KEY=<<secret\u003a0>>",
-    "en": "deepseek:\n  api_key: \"<<secret\u003a0>>\"",
+    "en": "llm:\n  deepseek_api_key: \"<<secret\u003a0>>\"",
     "secrets": [
       {
         "gen": "deepseek_api_key",

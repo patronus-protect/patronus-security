@@ -44,7 +44,7 @@
     "dlp_cohere_key": {
       "generators": ["cohere_api_key"],
       "lookalike": ["cohere_api_key_short"],
-      "probes": ["CO_API_KEY=<<secret:0>>", "cohere:\n  api_key: \"<<secret:0>>\""]
+      "probes": ["CO_API_KEY=<<secret:0>>", "cohere:\n  cohere_api_key: \"<<secret:0>>\""]
     },
     "dlp_perplexity_key": {
       "generators": ["perplexity_api_key"],
@@ -54,7 +54,7 @@
     "dlp_deepseek_key": {
       "generators": ["deepseek_api_key"],
       "lookalike": ["deepseek_api_key_short"],
-      "probes": ["DEEPSEEK_API_KEY=<<secret:0>>", "{\"deepseek\": {\"api_key\": \"<<secret:0>>\"}}"]
+      "probes": ["DEEPSEEK_API_KEY=<<secret:0>>", "{\"llm\": {\"deepseekApiKey\": \"<<secret:0>>\"}}"]
     },
     "dlp_openrouter_key": {
       "generators": ["openrouter_api_key"],
