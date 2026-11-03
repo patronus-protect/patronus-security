@@ -13271,6 +13271,115 @@ DLP_GURL_CASES = {
 for _label, _rows in DLP_GURL_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T16: URL query credentials in XML/HTML attribute values and .config files,
+# where the parameter separator is the entity `&amp;` or `&#38;`.
+DLP_T16_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Einstellungen für den Rechnungsexport -->\n<configuration>\n  <appSettings>\n    <add key=\"ExportUrl\" value=\"https://api.example.de/v1/export?format=csv&amp;api_key=<<secret:0>>\" />\n  </appSettings>\n</configuration>\n",
+            "url_token", 19701, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<!-- Kundenportal: Download der Monatsberichte -->\n<a href=\"https://portal.example.de/berichte?monat=10&#38;token=<<secret:0>>\">Bericht Oktober</a>\n",
+            "url_token", 19702, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "<exporter>\n  <!-- vorsignierter Link, 15 Minuten gültig -->\n  <bericht url=\"https://berichte.s3.eu-central-1.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&#38;X-Amz-Expires=900&#38;X-Amz-Signature=<<secret:0>>\" />\n</exporter>\n",
+            "aws_sigv4_signature", 19703, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "<?xml version=\"1.0\"?>\n<configuration>\n  <connectionStrings>\n    <add name=\"Archiv\" connectionString=\"https://archiv.blob.core.windows.net/belege?sv=2022-11-02&amp;se=2026-12-01T00%3A00%3A00Z&amp;sp=r&amp;sig=<<secret:0>>\" />\n  </connectionStrings>\n</configuration>\n",
+            "aws_sigv4_signature", 19704, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "<img alt=\"Vorschau\" src=\"https://storage.googleapis.com/lager/vorschau.png?X-Goog-Algorithm=GOOG4-RSA-SHA256&amp;X-Goog-Expires=600&amp;X-Goog-Signature=<<secret:0>>\">\n",
+            "aws_sigv4_signature", 19705, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- connection settings for the report exporter -->\n<exporter>\n  <credentials exportUrl=\"https://api.example.com/v1/export?format=csv&amp;api_key=<<secret:0>>\" />\n</exporter>\n",
+            "url_token", 19706, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "<!-- Web.config of the billing service -->\n<configuration>\n  <appSettings>\n    <add key=\"WebhookUrl\" value=\"https://hooks.example.com/notify?channel=ops&#38;secret=<<secret:0>>\" />\n  </appSettings>\n</configuration>\n",
+            "url_token", 19707, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "<credentials reportUrl=\"https://reports.s3.us-east-1.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Expires=900&amp;X-Amz-Signature=<<secret:0>>\" />\n",
+            "aws_sigv4_signature", 19708, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "<a href=\"https://acct.blob.core.windows.net/exports/q3.csv?sv=2022-11-02&#38;sp=r&#38;se=2026-12-01T00%3A00%3A00Z&#38;sig=<<secret:0>>\">Download Q3 export</a>\n",
+            "aws_sigv4_signature", 19709, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "<video controls src=\"https://d111111abcdef8.cloudfront.net/intro.mp4?Expires=1767225600&amp;Key-Pair-Id=K2JCJMDEHXQW5F&amp;Signature=<<secret:0>>\"></video>\n",
+            "aws_sigv4_signature", 19710, carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<a href=\"/rechnungen?cursor=b2Zmc2V0OjUw&amp;token=b2Zmc2V0OjUw\">Weiter</a>\n",
+            "pagination cursor token", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<form action=\"/abmelden?_csrf=8f3kQ2mZ&#38;token=8f3kQ2mZ\" method=\"post\"></form>\n",
+            "CSRF form token", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<configuration>\n  <appSettings>\n    <add key=\"ExportUrl\" value=\"https://api.example.de/v1/export?format=csv&amp;api_key=BITTE_AENDERN\" />\n  </appSettings>\n</configuration>\n",
+            "placeholder", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<add key=\"ExportUrl\" value=\"https://api.example.de/v1/export?format=csv&amp;api_key=$(EXPORT_API_KEY)\" />\n",
+            "environment reference", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "<img src=\"https://cdn.example.de/bild.png?seite=2&amp;sig=a1b2c3d4e5f6a7b8c9d0\">\n",
+            "cache-busting signature without signed-URL structure", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "<link rel=\"next\" href=\"https://api.example.com/v2/orders?page=3&amp;per_page=50&amp;token=eyJwYWdlIjozfQ\">\n",
+            "pagination cursor token", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "<a href=\"/logout?authenticity_token=RkNTUkZ0b2tlbg&#38;token=RkNTUkZ0b2tlbg\">Sign out</a>\n",
+            "CSRF form token", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "<credentials exportUrl=\"https://api.example.com/v1/export?format=csv&amp;api_key=&lt;your-api-key&gt;\" />\n",
+            "placeholder", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "<a href=\"https://hooks.example.com/incoming?source=ci&amp;Signature=QmVpc3BpZWxTaWduYXR1cg\">hook</a>\n",
+            "signature parameter without Expires or key pair", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "<add key=\"ReportUrl\" value=\"https://reports.s3.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Signature=REPLACE_ME\" />\n",
+            "placeholder", carrier="xml",
+        ),
+    ],
+}
+for _label, _rows in DLP_T16_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
