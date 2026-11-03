@@ -40,8 +40,16 @@ pub struct NativeDetection {
     pub details: HashMap<String, serde_json::Value>,
 }
 
+/// Texts from this size on search their rules in parallel (H06): below it the
+/// fork-join costs more than the scans it spreads.
+pub const PARALLEL_RULES_MIN_BYTES: usize = 32 * 1024;
+
+/// Regex matches of one rule: `None` for a rule that is off or gated without
+/// structural values; a gated rule with structural values has none.
+pub type RuleMatches<'t> = Option<Vec<regex::Captures<'t>>>;
+
 /// Shared detection contract for native regex scanners that return exact evidence.
-pub trait NativeRegexDetector {
+pub trait NativeRegexDetector: Sync {
     fn regexes(&self) -> &[Regex];
     fn anchor_gates(&self) -> &[anchor_gate::AnchorGate] {
         &[]
@@ -193,6 +201,53 @@ pub trait NativeRegexDetector {
         self.detect_prepared_scored(prepared, allows_rule, explain, None)
     }
 
+    /// The regex matches of every rule in rule order, for the rules `allowed`.
+    /// Rules are searched independently, so with `parallel` they run on the
+    /// rayon pool; the result is the same either way.
+    fn rule_matches<'t>(
+        &self,
+        prepared: &'t crate::threat::NativeText<'_>,
+        allowed: &[bool],
+        parallel: bool,
+    ) -> Vec<RuleMatches<'t>> {
+        let text = prepared.text();
+        let scan = self.rule_scan(text);
+        let search = |index: usize| {
+            if !allowed[index] {
+                return None;
+            }
+            let gated = scan.as_ref().is_some_and(|scan| !scan.is_active(index))
+                || self.anchor_gates().get(index).is_some_and(|gate| {
+                    !gate.is_unconditional() && !gate.allows(prepared.anchors())
+                })
+                || self
+                    .prefilters()
+                    .and_then(|filters| filters[index].as_ref())
+                    .is_some_and(|filter| !filter.is_match(text));
+            // Structural values carry their key outside the regex, so the anchor
+            // gate and prefilter of the regex do not apply to them.
+            if gated
+                && self
+                    .structured_regexes()
+                    .is_none_or(|regexes| regexes[index].is_none())
+            {
+                return None;
+            }
+            Some(if gated {
+                Vec::new()
+            } else {
+                self.rule_captures(index, &self.regexes()[index], text, scan.as_ref())
+            })
+        };
+        let rules = 0..self.regexes().len();
+        if parallel {
+            use rayon::prelude::*;
+            rules.into_par_iter().map(search).collect()
+        } else {
+            rules.map(search).collect()
+        }
+    }
+
     /// `min_score: None` is the unscored contract: every finding scores `1.0`.
     /// With `Some(threshold)`, findings carry `match_score`, matches below the
     /// threshold are dropped, and `matched_rules` entries record the score and
@@ -216,32 +271,16 @@ pub trait NativeRegexDetector {
         let mut matched_rules = Vec::new();
         let mut class_name = None;
         let mut evidence_spans = Vec::new();
-        let scan = self.rule_scan(text);
-        for (index, regex) in self.regexes().iter().enumerate() {
-            if !allows_rule(self.rule_ids()[index]) {
+        let allowed: Vec<bool> = self.rule_ids().iter().map(|id| allows_rule(id)).collect();
+        let searched =
+            self.rule_matches(prepared, &allowed, text.len() >= PARALLEL_RULES_MIN_BYTES);
+        for ((index, regex), searched) in self.regexes().iter().enumerate().zip(searched) {
+            let Some(regex_matches) = searched else {
                 continue;
-            }
-            let gated = scan.as_ref().is_some_and(|scan| !scan.is_active(index))
-                || self.anchor_gates().get(index).is_some_and(|gate| {
-                    !gate.is_unconditional() && !gate.allows(prepared.anchors())
-                })
-                || self
-                    .prefilters()
-                    .and_then(|filters| filters[index].as_ref())
-                    .is_some_and(|filter| !filter.is_match(text));
-            // Structural values carry their key outside the regex, so the anchor
-            // gate and prefilter of the regex do not apply to them.
+            };
             let structured = self
                 .structured_regexes()
                 .and_then(|regexes| regexes[index].as_ref());
-            if gated && structured.is_none() {
-                continue;
-            }
-            let regex_matches: Vec<_> = if gated {
-                Vec::new()
-            } else {
-                self.rule_captures(index, regex, text, scan.as_ref())
-            };
             let regex_values: Vec<_> = regex_matches
                 .iter()
                 .filter_map(|captures| captures.get(self.value_group(index, captures).unwrap_or(0)))
