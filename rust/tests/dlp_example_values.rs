@@ -796,7 +796,12 @@ fn base64_payload_values(body: impl Fn(usize) -> String) -> Vec<String> {
     vec![
         base64(body(24).as_bytes(), false),
         base64(
-            format!("{{\"k\":\"{}\",\"n\":\"deploy\",\"id\":1}}", body(32)).as_bytes(),
+            format!(
+                "{{\"k\":\"{}\",\"n\":\"{}\",\"id\":101}}",
+                body(32),
+                body(8).to_lowercase()
+            )
+            .as_bytes(),
             false,
         ),
         format!(
@@ -863,11 +868,23 @@ fn base64_values_with_a_random_payload_stay_detected() {
     for seed in 0..20 {
         let values =
             base64_payload_values(|length| random(seed * 100 + length as u64, ALNUM, length));
-        // Kubernetes data and Elastic keys: the provider-prefixed values belong
-        // to their provider rules.
+        // Grafana, PyPI and 1Password values keep the finding of some rule.
+        for value in &values[1..5] {
+            let result = scan(&format!("LAGER_API_TOKEN={value}\n"));
+            assert!(
+                result.evidence_spans.iter().any(|span| &span.text == value),
+                "random payload lost: {value}"
+            );
+        }
+        // Kubernetes data and Elastic keys stay with the generic rules.
         for value in [&values[0], &values[5]] {
             assert_reported(
                 &format!("apiVersion: v1\nkind: Secret\ndata:\n  password: {value}\n"),
+                "dlp_password_assignment",
+                value,
+            );
+            assert_reported(
+                &format!("apiVersion: v1\nkind: Secret\ndata:\n  api_token: {value}\n"),
                 "dlp_generic_credential_assignment",
                 value,
             );

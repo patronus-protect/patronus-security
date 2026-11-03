@@ -957,7 +957,8 @@ pub fn is_decoded_example(value: &str) -> bool {
 
 /// T22: whether decoded bytes carry an example or test value: a printable
 /// ASCII run (split at control and non-ASCII bytes and at JSON quotes) holds a
-/// marker word ([`has_example_marker`]) or is covered by repeated chunks
+/// marker word ([`has_example_marker`]; a dotted host name such as the
+/// TestPyPI location `test.pypi.org` is none) or is covered by repeated chunks
 /// ([`LowVariety::Repeated`]) over at least [`DECODED_REPEATED_MIN_LEN`]
 /// alphanumeric characters. Random bytes and random printable secrets have
 /// neither.
@@ -967,11 +968,19 @@ pub fn is_example_payload(decoded: &[u8]) -> bool {
         .filter(|run| run.len() >= 4)
         .filter_map(|run| std::str::from_utf8(run).ok())
         .any(|run| {
-            has_example_marker(run)
+            (!is_host_name(run) && has_example_marker(run))
                 || (run.bytes().filter(u8::is_ascii_alphanumeric).count()
                     >= DECODED_REPEATED_MIN_LEN
                     && low_variety(run) == LowVariety::Repeated)
         })
+}
+
+/// A dotted host name (`test.pypi.org`, `my.1password.com`).
+fn is_host_name(run: &str) -> bool {
+    run.contains('.')
+        && run
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
 }
 
 /// Alphanumeric words of `value` with their byte offsets, split at every other
@@ -1369,13 +1378,26 @@ mod tests {
         for value in [
             // Too short, a broken alphabet, a padded body without padding
             // room, an unknown prefix.
-            base64(b"TESTKEYTEST", false),
+            base64(b"TESTKEYTE", false),
             format!("{encoded}!"),
             format!("{encoded}="),
-            format!("xyz_{encoded}"),
+            format!("ab_{encoded}"),
         ] {
             assert!(!is_decoded_example(&value), "{value}");
         }
+    }
+
+    #[test]
+    fn host_names_in_decoded_payloads_are_no_markers() {
+        let mut macaroon = b"\x02\x01\x0dtest.pypi.org\x02\x24".to_vec();
+        macaroon.extend(b"\x00\x00\x06\x20");
+        macaroon.extend(random_bytes(7, 32));
+        assert!(!is_example_payload(&macaroon));
+        assert!(!is_decoded_example(&format!(
+            "pypi-{}",
+            base64(&macaroon, true)
+        )));
+        assert!(is_example_payload(b"\x02\x01TESTKEY for ci.yaml\x00"));
     }
 
     #[test]

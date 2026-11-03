@@ -13946,7 +13946,7 @@ for _label, _rows in DLP_P01_CASES.items():
 DLP_T22_CASES = {
     "CREDENTIAL": [
         ds(
-            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: kunden-db\ndata:\n  password: <<secret:0>>\n",
             "kubernetes_secret_data", 22101, carrier="yaml",
         ),
@@ -13971,7 +13971,7 @@ DLP_T22_CASES = {
             "kubernetes_secret_data", 22105, carrier="hcl",
         ),
         ds(
-            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "CREDENTIAL", "en", "dlp_password_assignment",
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: billing-db\ndata:\n  password: <<secret:0>>\n",
             "kubernetes_secret_data", 22106, carrier="yaml",
         ),
@@ -13998,7 +13998,7 @@ DLP_T22_CASES = {
     ],
 }
 _T22_NEGATIVES = [
-    ("de", "dlp_generic_credential_assignment",
+    ("de", "dlp_password_assignment",
      "apiVersion: v1\nkind: Secret\nmetadata:\n  name: kunden-db\ndata:\n  password: <<secret:0>>\n",
      "kubernetes_secret_data", "EXAMPLEKEY", "yaml"),
     ("de", "dlp_generic_credential_assignment",
@@ -14018,7 +14018,7 @@ _T22_NEGATIVES = [
     ("de", "dlp_prose_secret",
      "Hallo Team, für die Suche gilt ab heute: der API-Schlüssel ist <<secret:0>> – bitte im Tresor ablegen.",
      "elastic_api_key", "1234567890", "prose"),
-    ("en", "dlp_generic_credential_assignment",
+    ("en", "dlp_password_assignment",
      "apiVersion: v1\nkind: Secret\nmetadata:\n  name: billing-db\ndata:\n  password: <<secret:0>>\n",
      "kubernetes_secret_data", "TESTKEY", "yaml"),
     ("en", "dlp_generic_credential_assignment",
