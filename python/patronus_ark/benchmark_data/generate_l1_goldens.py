@@ -13824,7 +13824,7 @@ DLP_P01_CASES = {
         ),
         ds(
             "API_KEY", "en", "dlp_deepseek_key",
-            "from openai import OpenAI\n\nDEEPSEEK_API_KEY = \"<<secret:0>>\"\nclient = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=\"https://api.deepseek.com\")\n",
+            "from openai import OpenAI\n\nDEEPSEEK_API_KEY = \"<<secret:0>>\"\nclient = OpenAI(base_url=\"https://api.deepseek.com\")\n",
             "deepseek_api_key", 20107, carrier="code",
         ),
         ds(
