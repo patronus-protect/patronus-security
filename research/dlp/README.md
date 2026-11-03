@@ -122,6 +122,16 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Bindestrich; `credentials::machine_issued_run`). Wiederholte Blöcke in diesem Lauf machen den
   Wert zum Beispiel; ein Wert mit anderen Zeichen (`Passwort123!`) oder ohne Präfix/Suffix bleibt
   ein gewähltes Passwort. Übergangslösung, bis K05 die Werte strukturell extrahiert.
+  Seit T22 prüfen die generischen Regeln einen Base64-Wert auch dekodiert
+  (`credentials::is_decoded_example`): kanonisches Standard- oder URL-sicheres Base64, optional
+  nach `pypi-`, `glc_` oder `ops_`, dekodiert mit `validators::base64_decode`. Ein druckbarer
+  ASCII-Lauf der Bytes (getrennt an Steuer-, Nicht-ASCII-Bytes und JSON-Anführungszeichen) mit
+  Markerwort oder ein Lauf ab 16 alphanumerischen Zeichen aus wiederholten Blöcken macht den
+  Wert zum Beispiel (Kubernetes-`data:`, Grafana-Legacy-Key/`glc_`, PyPI-Macaroon, 1Password
+  `ops_`, Elastic `id:api_key` mit `EXAMPLEKEY`/`TESTKEY`/`deadbeef`-Füllung). Zufällige Bytes
+  und zufällige druckbare Secrets bleiben Funde. Dekodiert wird nur ein Wert, der alle übrigen
+  Prüfungen der Regel bestanden hat; `credentials::is_example_payload` auf den Bytes ist für
+  PEM-Körper (T14) gedacht.
   Seit T09 beginnen `dlp_password_assignment`, `dlp_generic_credential_assignment`,
   `dlp_csrf_token` und `dlp_password_hash` am Credential-Nomen ohne `\b`: zusammengesetzte
   (`db_password`, `service_secret`) und camelCase-Schlüssel (`dbPassword`, `ClientSecret`,

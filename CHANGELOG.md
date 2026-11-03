@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: example/test check on decoded base64 values for the generic rules (T22).
+  `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
+  `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or
+  URL-safe base64 (optionally after `pypi-`, `glc_` or `ops_`) and drop it when a printable run of
+  the decoded bytes holds an example/test marker word or is covered by repeated chunks
+  (Kubernetes Secret `data:` values, Grafana legacy keys and `glc_` tokens, PyPI macaroons,
+  1Password `ops_` tokens, Elastic `id:api_key` with an `EXAMPLEKEY`, `TESTKEY`, `deadbeef` or
+  `1234567890` fill). Random base64 secrets stay findings. Dev hard-negative FP of the generic
+  rules on these base64 values 274 -> 0.
 - Detection change: key-bound provider values in XML config elements (T21). The `provider_key!`
   rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
   `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,

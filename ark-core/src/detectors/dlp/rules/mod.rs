@@ -239,10 +239,12 @@ pub fn is_example_match(
         // hex value, the run of `SK…`, `…-us10`, `shippo_live_…`) takes the
         // fixed-format check, so repeated chunks (`deadbeef…`) mark it as an
         // example; hand-typed passwords (`abcabcabcabc`) have no such run.
+        // T22: a base64 value is also checked on its decoded payload.
         ExampleCheck::Generic => {
             credentials::machine_issued_run(&value).is_some_and(|run| {
                 credentials::low_variety(run) == credentials::LowVariety::Repeated
             }) || credentials::is_example_value(&value, false, example_context)
+                || credentials::is_decoded_example(&value)
         }
         ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
     }

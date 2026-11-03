@@ -3,6 +3,7 @@
 //! cookies and connection strings.
 use super::{auth_url, connection, http_auth, likeness, ConfigKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
+use crate::detectors::validators::{base64_decode, Base64Kind};
 
 // K05: the key parts of the generic key-bound rules. The rule regexes start
 // with them, and config lines (`dlp::config_keys`) bind a value through the
@@ -918,6 +919,61 @@ pub fn is_example_value(
         }
 }
 
+/// Prefixes of provider tokens whose body is base64 (T22): PyPI macaroons,
+/// Grafana Cloud and 1Password service account tokens.
+const BASE64_TOKEN_PREFIXES: &[&str] = &["pypi-", "glc_", "ops_"];
+
+/// Base64 characters (12 bytes) from which a value is decoded for the
+/// example check (T22); shorter values carry no hidden marker run.
+const DECODED_MIN_LEN: usize = 16;
+
+/// Base64 characters up to which a value is decoded (T22).
+const DECODED_MAX_LEN: usize = 16 * 1024;
+
+/// Alphanumeric characters of a decoded printable run that the repetition
+/// check needs (T22): a 16-character fill, not a short word.
+const DECODED_REPEATED_MIN_LEN: usize = 16;
+
+/// T22: whether `value`, canonical standard or URL-safe base64, optionally
+/// after a known token prefix ([`BASE64_TOKEN_PREFIXES`]), decodes to an
+/// example or test payload ([`is_example_payload`]). A Kubernetes Secret
+/// `data:` value, a Grafana key or an `ops_` token shows its fill only after
+/// decoding.
+pub fn is_decoded_example(value: &str) -> bool {
+    let body = BASE64_TOKEN_PREFIXES
+        .iter()
+        .find_map(|prefix| value.strip_prefix(prefix))
+        .unwrap_or(value);
+    (DECODED_MIN_LEN..=DECODED_MAX_LEN).contains(&body.len())
+        && [
+            Base64Kind::Standard,
+            Base64Kind::StandardUnpadded,
+            Base64Kind::UrlSafe,
+        ]
+        .into_iter()
+        .find_map(|kind| base64_decode(body, kind))
+        .is_some_and(|decoded| is_example_payload(&decoded))
+}
+
+/// T22: whether decoded bytes carry an example or test value: a printable
+/// ASCII run (split at control and non-ASCII bytes and at JSON quotes) holds a
+/// marker word ([`has_example_marker`]) or is covered by repeated chunks
+/// ([`LowVariety::Repeated`]) over at least [`DECODED_REPEATED_MIN_LEN`]
+/// alphanumeric characters. Random bytes and random printable secrets have
+/// neither.
+pub fn is_example_payload(decoded: &[u8]) -> bool {
+    decoded
+        .split(|byte| !(b' '..=b'~').contains(byte) || *byte == b'"')
+        .filter(|run| run.len() >= 4)
+        .filter_map(|run| std::str::from_utf8(run).ok())
+        .any(|run| {
+            has_example_marker(run)
+                || (run.bytes().filter(u8::is_ascii_alphanumeric).count()
+                    >= DECODED_REPEATED_MIN_LEN
+                    && low_variety(run) == LowVariety::Repeated)
+        })
+}
+
 /// Alphanumeric words of `value` with their byte offsets, split at every other
 /// character, at lower→upper and letter↔digit changes and before the last
 /// capital of an upper-case run that continues in lower case (`AKIATest`).
@@ -996,8 +1052,8 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_example_context, has_example_marker, is_example_value, is_low_variety, low_variety,
-        machine_issued_run, LowVariety,
+        has_example_context, has_example_marker, is_decoded_example, is_example_payload,
+        is_example_value, is_low_variety, low_variety, machine_issued_run, LowVariety,
     };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
@@ -1246,5 +1302,97 @@ mod tests {
         ));
         assert!(is_example_value("example-password-1", false, || false));
         assert!(!is_example_value("Kx7!pQ2#vL9@rT4$", true, || true));
+    }
+
+    /// Canonical base64 of `bytes` (standard padded or URL-safe unpadded).
+    fn base64(bytes: &[u8], url_safe: bool) -> String {
+        let alphabet: &[u8] = if url_safe {
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        } else {
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        };
+        let mut encoded = String::new();
+        for chunk in bytes.chunks(3) {
+            let word = chunk.iter().enumerate().fold(0u32, |word, (index, byte)| {
+                word | u32::from(*byte) << (16 - 8 * index)
+            });
+            for index in 0..=chunk.len() {
+                encoded.push(alphabet[(word >> (18 - 6 * index) & 63) as usize] as char);
+            }
+            if !url_safe {
+                encoded.push_str(&"=".repeat(3 - chunk.len()));
+            }
+        }
+        encoded
+    }
+
+    /// Deterministic pseudo-random bytes (SplitMix64 via [`random_base62`]).
+    fn random_bytes(seed: u64, length: usize) -> Vec<u8> {
+        random_base62(seed, 2 * length)
+            .as_bytes()
+            .chunks(2)
+            .map(|pair| pair[0].wrapping_mul(31) ^ pair[1].wrapping_mul(7))
+            .collect()
+    }
+
+    #[test]
+    fn decoded_payloads_with_markers_or_repeated_chunks_are_examples() {
+        for payload in [
+            "EXAMPLEKEYEXAMPLEKEYEXAM",
+            "TESTKEYTESTKEYTESTKEYTES",
+            "deadbeefdeadbeefdeadbeef",
+            "123456789012345678901234",
+            "{\"k\":\"0123456789012345678901234567890\",\"n\":\"ci\",\"id\":1}",
+            "abcdefghijklmnopqrst:TESTKEYTESTKEYTESTKEY",
+        ] {
+            assert!(is_example_payload(payload.as_bytes()), "{payload}");
+            let encoded = base64(payload.as_bytes(), false);
+            assert!(is_decoded_example(&encoded), "{encoded}");
+            assert!(
+                is_decoded_example(encoded.trim_end_matches('=')),
+                "{encoded}"
+            );
+            assert!(is_decoded_example(&format!("glc_{encoded}")), "{encoded}");
+        }
+        // A macaroon: binary fields around the printable runs.
+        let mut macaroon = b"\x02\x01\x08pypi.org\x02\x24".to_vec();
+        macaroon.extend(b"\x00\x00\x06\x20EXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEX");
+        assert!(is_decoded_example(&format!(
+            "pypi-{}",
+            base64(&macaroon, true)
+        )));
+    }
+
+    #[test]
+    fn values_that_are_no_canonical_base64_are_not_decoded() {
+        let encoded = base64(b"EXAMPLEKEYEXAMPLEKEYEXAM", false);
+        for value in [
+            // Too short, a broken alphabet, a padded body without padding
+            // room, an unknown prefix.
+            base64(b"TESTKEYTEST", false),
+            format!("{encoded}!"),
+            format!("{encoded}="),
+            format!("xyz_{encoded}"),
+        ] {
+            assert!(!is_decoded_example(&value), "{value}");
+        }
+    }
+
+    #[test]
+    fn random_base64_secrets_are_never_examples() {
+        for seed in 0..5000 {
+            for value in [
+                base64(random_base62(seed, 24).as_bytes(), false),
+                base64(
+                    format!("{}:{}", random_base62(seed, 20), random_base62(!seed, 22)).as_bytes(),
+                    false,
+                ),
+                base64(&random_bytes(seed, 32), false),
+                format!("pypi-{}", base64(&random_bytes(seed, 96), true)),
+                format!("glc_{}", base64(&random_bytes(seed, 48), false)),
+            ] {
+                assert!(!is_decoded_example(&value), "{seed}: {value}");
+            }
+        }
     }
 }
