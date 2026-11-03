@@ -30,6 +30,23 @@ const PAGINATION_OR_CSRF: &[&str] = &[
     "authenticity_token",
 ];
 
+/// Query and fragment parameters of `dlp_auth_url_token` (its regex), whose
+/// values that rule checks as issued tokens.
+const AUTH_URL_PARAMS: &[&str] = &[
+    "access_token",
+    "id_token",
+    "refresh_token",
+    "reset_token",
+    "reset_password_token",
+    "password_reset_token",
+    "magic_token",
+    "login_token",
+    "invite_token",
+    "invitation_token",
+    "confirmation_token",
+    "verification_token",
+];
+
 /// Path words of an OAuth redirect that carries an authorization `code`.
 const OAUTH_REDIRECT_PATH: &[&str] = &["callback", "redirect", "oauth", "authorize"];
 
@@ -79,8 +96,9 @@ fn has_param(url: &str, names: &[&str]) -> bool {
 
 /// `dlp_credential_in_url` and `dlp_generic_credential_assignment` (F12): a
 /// URL parameter is no credential when it is a CSRF parameter itself, a
-/// `token` next to a pagination, cursor or CSRF parameter, or the `secret`
-/// of an otpauth:// URI, which `dlp_otp_secret` checks as Base32. A value
+/// `token` next to a pagination, cursor or CSRF parameter, the `secret` of
+/// an otpauth:// URI, which `dlp_otp_secret` checks as Base32, or a token
+/// parameter of an auth URL, which `dlp_auth_url_token` checks. A value
 /// outside a URL query passes.
 pub(super) fn is_credential_parameter(text: &str, range: Range<usize>) -> bool {
     let Some(name) = param_name(text, range.start) else {
@@ -89,6 +107,7 @@ pub(super) fn is_credential_parameter(text: &str, range: Range<usize>) -> bool {
     let is = |names: &[&str]| names.iter().any(|n| name.eq_ignore_ascii_case(n));
     let url = || url_around(text, range.clone());
     !(is(PAGINATION_OR_CSRF)
+        || is(AUTH_URL_PARAMS)
         || (is(&["token"]) && has_param(url(), PAGINATION_OR_CSRF))
         || (is(&["secret"]) && url().to_ascii_lowercase().contains("otpauth://")))
 }
@@ -161,7 +180,7 @@ pub(super) fn is_otp_secret(text: &str, range: Range<usize>) -> bool {
     let valid_padding = if padding == 0 {
         matches!(body.len() % 8, 0 | 2 | 4 | 5 | 7)
     } else {
-        value.len() % 8 == 0 && matches!(padding, 1 | 3 | 4 | 6)
+        value.len().is_multiple_of(8) && matches!(padding, 1 | 3 | 4 | 6)
     };
     let whole = !text[range.end..]
         .chars()
@@ -232,6 +251,7 @@ mod tests {
             "https://app.example.com/form?authenticity_token=x&amp;token={v}",
             "GET /logout?authenticity_token={v} 302",
             "otpauth://totp/ACME:ada?secret={v}&issuer=ACME",
+            "https://app.example.com/cb#access_token={v}&token_type=bearer",
         ] {
             assert!(
                 !gate(template, TOKEN, is_credential_parameter),

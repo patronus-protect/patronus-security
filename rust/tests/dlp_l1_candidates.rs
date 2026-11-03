@@ -128,7 +128,7 @@ dlp_golden!(
 dlp_golden!(
     detects_signed_url,
     "CREDENTIAL",
-    "https://storage.test/a?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "https://storage.test/a?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
     "9f3a1c7e4b20d86f5ea9c3172b4d08e6"
 );
 dlp_golden!(
@@ -579,7 +579,7 @@ fn generic_credential_families_emit_only_the_secret_value() {
             "YWRhOnNlY3JldC04ODQy",
         ),
         (
-            "https://storage.test/a?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+            "https://storage.test/a?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
             "CREDENTIAL",
             "9f3a1c7e4b20d86f5ea9c3172b4d08e6",
         ),
