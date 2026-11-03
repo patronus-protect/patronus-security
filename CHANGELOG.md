@@ -18,8 +18,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the decoded bytes holds an example/test marker word or is covered by repeated chunks
   (Kubernetes Secret `data:` values, Grafana legacy keys and `glc_` tokens, PyPI macaroons,
   1Password `ops_` tokens, Elastic `id:api_key` with an `EXAMPLEKEY`, `TESTKEY`, `deadbeef` or
-  `1234567890` fill). Random base64 secrets stay findings. Dev hard-negative FP of the generic
-  rules on these base64 values 274 -> 0.
+  `1234567890` fill). The fixed-format check of the provider rules applies the same decoded check,
+  so `dlp_grafana_api_key`, the Grafana Cloud, PyPI and 1Password rules drop such fills as well.
+  A dotted host name in the payload (`test.pypi.org`) is no marker. Random base64 secrets stay
+  findings. Dev hard-negative FP of the generic rules on these base64 values 274 -> 0.
 - Detection change: key-bound provider values in XML config elements (T21). The `provider_key!`
   rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
   `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,
