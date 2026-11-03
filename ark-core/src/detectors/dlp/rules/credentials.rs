@@ -346,7 +346,8 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
-        pattern: r"(?i)[?&](?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
+        // F12: also after `&amp;` in XML/HTML attributes.
+        pattern: r"(?i)(?:[?&]|&amp;)(?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),

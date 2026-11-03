@@ -213,6 +213,7 @@ fn signatures_need_signed_url_structure() {
         "https://storage.googleapis.com/b/o.csv?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature={}",
         "Download-Link (15 Minuten gültig): https://files.example.de/bericht.zip?Expires=1767225600&Signature={}",
         "https://acct.blob.core.windows.net/c/b.txt?sv=2022-11-02&se=2026-12-01T00%3A00%3A00Z&sp=r&sig={}",
+        "<add key=\"ReportUrl\" value=\"https://b.s3.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Signature={}\" />",
     ] {
         let text = template.replace("{}", &value);
         assert!(reports(&text, "dlp_signed_url_signature", &value), "{template}");
