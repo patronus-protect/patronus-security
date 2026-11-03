@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Licence plates (T30).
+//! Licence plates (T30, Q-M1).
 //!
 //! A plate carries no check digit, and ARK keeps no district-code list (F16 stays
-//! deferred): both plate rules are field-bound in every mode. They share one field
+//! deferred): in `strict` both plate rules are field-bound. They share one field
 //! part, the DE/EN plate field names before the value (`Kfz-Kennzeichen:`,
 //! `Number plate |`, `The Vehicle registration on file is`, `My car, registration`,
 //! `My car reg is`) or as its structural key (`kennzeichen`, `license_plate`). The
 //! German value may carry a hyphen before the digits (`K-MH-2476`) and the `E`/`H`
 //! suffix; the UK current form (`AB51 ABC`) needs an issued age identifier. A bare
-//! value without a plate term is no finding in any mode, also the TR, IN and NG
-//! values of the presidio-analyzer tests.
+//! value without a plate term is no finding in `strict`, also the TR, IN and NG
+//! values of the presidio-analyzer tests. In `balanced` and `recall` (Q-M1) the UK
+//! current form is also reported bare at the threshold, and the Nigerian plate
+//! (`APP-456CV`) with a plate term near it, a later plate of a list with the term
+//! of the first.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -23,6 +26,9 @@ use serde_json::Value;
 
 const DE: &str = "pii_kfz_kennzeichen_de";
 const UK: &str = "pii_vehicle_registration_uk";
+const UK_CONTEXT_FREE: &str = "pii_vehicle_registration_uk_context_free";
+const NG: &str = "pii_vehicle_registration_ng";
+const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 const LABEL: &str = "LICENSEPLATE";
 const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
 
@@ -99,7 +105,11 @@ fn assert_reports(rule_id: &str, text: &str, value: &str) {
 }
 
 fn assert_silent(text: &str) {
-    for mode in MODES {
+    assert_silent_in(text, &MODES);
+}
+
+fn assert_silent_in(text: &str, modes: &[PiiMode]) {
+    for &mode in modes {
         assert!(
             plates(text, mode).is_empty(),
             "{mode}: no plate expected in {text:?}"
@@ -339,10 +349,12 @@ fn uk_plates_under_a_structural_key() {
 
 #[test]
 fn uk_plate_lookalikes_stay_silent() {
+    // presidio-analyzer values reported bare in the scored modes only (Q-M1)
+    for text in ["AB51 ABC", "BD62XYZ"] {
+        assert_silent_in(text, &[PiiMode::Strict]);
+    }
     for text in [
-        // presidio-analyzer values: bare, also the valid ones, and its negatives
-        "AB51 ABC",
-        "BD62XYZ",
+        // presidio-analyzer negatives
         "IB51 ABC",
         "AQ51 ABC",
         "AB00 ABC",
@@ -371,10 +383,160 @@ fn bare_plates_of_other_countries_stay_silent() {
         "MN2412",
         "APP-456CV",
         "ABJ-001AA",
-        "Plates: APP-456CV and KJA-999PZ",
+        "APP-456CV and KJA-999PZ",
         "A123 BCD",
         "K1 ABC",
         "ABC 1D",
+    ] {
+        assert_silent(text);
+    }
+    // A Nigerian plate with a plate term is a scored-mode finding only (Q-M1).
+    assert_silent_in("Plates: APP-456CV and KJA-999PZ", &[PiiMode::Strict]);
+}
+
+// ── Scored modes: bare UK plates, Nigerian plates with a plate term (Q-M1) ──
+
+#[test]
+fn scored_plate_rules_run_in_balanced_and_recall_only() {
+    let bare = pattern(UK_CONTEXT_FREE);
+    assert!(bare.scored_only && !bare.requires_context && !bare.captured_value);
+    assert_eq!(
+        bare.validator.map(|check| check as usize),
+        Some(validators::uk_vehicle_registration as usize)
+    );
+    // Without context the bare form just reaches the balanced threshold.
+    assert_eq!(score::rule_score(bare), 0.50);
+    let ng = pattern(NG);
+    assert!(ng.scored_only && ng.requires_context && !ng.captured_value);
+    assert_eq!(score::rule_score(ng), 0.40);
+    assert_eq!(bare.strength, ValidatorStrength::Format);
+    // No validator: the plate term carries the Nigerian form.
+    assert!(ng.validator.is_none() && ng.strength == ValidatorStrength::None);
+    for rule in [bare, ng] {
+        assert_eq!(rule.entity_group, LABEL);
+    }
+}
+
+/// `rule_id` reports exactly `values` as the plate spans of `text` in the scored
+/// modes, at `score`, and `strict` reports none.
+fn assert_scored(rule_id: &str, text: &str, values: &[&str], score: f64) {
+    for mode in SCORED {
+        let found = plates(text, mode);
+        let expected: Vec<(String, f64)> = values
+            .iter()
+            .map(|value| (value.to_string(), score))
+            .collect();
+        assert_eq!(found, expected, "{mode}: plates of {text:?}");
+        for value in values {
+            assert!(
+                rules(text, mode)
+                    .iter()
+                    .any(|(rule, found)| rule == rule_id && found == value),
+                "{mode}: {rule_id} must report {value:?} in {text:?}"
+            );
+        }
+    }
+    assert_silent_in(text, &[PiiMode::Strict]);
+}
+
+#[test]
+fn bare_uk_plates_in_the_scored_modes() {
+    for (text, value) in [
+        // presidio-analyzer test cases
+        ("AB51 ABC", "AB51 ABC"),
+        ("BD62XYZ", "BD62XYZ"),
+        (
+            "The blue van LW02 ULF was seen leaving at noon.",
+            "LW02 ULF",
+        ),
+        ("Der Transporter KS54 WLS stand vor dem Tor.", "KS54 WLS"),
+        ("YB68-TXM", "YB68-TXM"),
+    ] {
+        assert_scored(UK_CONTEXT_FREE, text, &[value], 0.50);
+    }
+}
+
+#[test]
+fn bare_uk_plate_lookalikes_stay_silent_in_the_scored_modes() {
+    for text in [
+        // never issued area letters and age identifiers, I/Q as random letters
+        "IB51 ABC",
+        "AQ51 ABC",
+        "AB00 ABC",
+        "AB80 ABC",
+        "AB51 IBC",
+        // a nearer counter-context term, lowercase, part of a longer value
+        "Order number: AB51 ABC",
+        "Bestellnummer: AB51 ABC",
+        "ab51 abc",
+        "AB51 ABCD",
+        "XAB51 ABC",
+        "AB51 ABC-7",
+    ] {
+        assert_silent(text);
+    }
+}
+
+#[test]
+fn nigerian_plates_with_a_plate_term_in_the_scored_modes() {
+    for (text, values) in [
+        // presidio-analyzer test case: the second plate takes the term of the first
+        (
+            "Plates: APP-456CV and KJA-999PZ",
+            &["APP-456CV", "KJA-999PZ"][..],
+        ),
+        (
+            "Plates: APP-456CV, KJA-999PZ, ABJ-001AA",
+            &["APP-456CV", "KJA-999PZ", "ABJ-001AA"],
+        ),
+        (
+            "Kennzeichen: APP-456CV und KJA-999PZ",
+            &["APP-456CV", "KJA-999PZ"],
+        ),
+        (
+            "The car with number plate ABJ-001AA was towed.",
+            &["ABJ-001AA"],
+        ),
+        ("Plates: APP 456CV", &["APP 456CV"]),
+        (
+            "Das Fahrzeug mit dem Kennzeichen ABJ-001AA stand im Halteverbot.",
+            &["ABJ-001AA"],
+        ),
+    ] {
+        assert_scored(NG, text, values, 0.65);
+    }
+}
+
+#[test]
+fn nigerian_plate_lookalikes_stay_silent() {
+    for text in [
+        // no plate term, also for a list
+        "APP-456CV",
+        "APP-456CV and KJA-999PZ",
+        "Artikel ABJ-001AA und KJA-999PZ",
+        "Order number: APP-456CV",
+        "Bestellnummer: KJA-999PZ",
+        // lowercase, no separator, four digits, part of a longer value
+        "Plates: app-456cv",
+        "Plates: APP456CV",
+        "Kennzeichen: APP-4567CV",
+        "Plates: XAPP-456CV",
+        // a list joined by something other than a comma, `and`, `und` or `&`
+        "Plates: APP-456CV or KJA-999PZ",
+    ] {
+        let found = plates(text, PiiMode::Recall);
+        assert!(
+            found
+                .iter()
+                .all(|(value, _)| value == "APP-456CV" && text.starts_with("Plates: APP-456CV")),
+            "unexpected plates in {text:?}: {found:?}"
+        );
+    }
+    for text in [
+        "APP-456CV",
+        "APP-456CV and KJA-999PZ",
+        "Order number: APP-456CV",
+        "Plates: app-456cv",
     ] {
         assert_silent(text);
     }

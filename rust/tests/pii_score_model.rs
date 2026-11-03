@@ -192,8 +192,11 @@ fn expected_score_of(
     let context = if pattern.captured_value {
         Context::Field
     } else {
-        let start = rule["start_byte"].as_u64().unwrap() as usize;
+        let mut start = rule["start_byte"].as_u64().unwrap() as usize;
         let end = rule["end_byte"].as_u64().unwrap() as usize;
+        if pattern.name == "pii_vehicle_registration_ng" {
+            start = context::plate_list_start(text, start);
+        }
         context::key_context(text, (start, end), pattern.entity_group)
             .unwrap_or_else(|| context::proximity(text, (start, end), pattern.entity_group))
     };
@@ -552,6 +555,8 @@ fn reference_scores_per_rule() {
         ("pii_steuernummer_de_context_free", 0.50),
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_vehicle_registration_uk", 0.65),
+        ("pii_vehicle_registration_uk_context_free", 0.50),
+        ("pii_vehicle_registration_ng", 0.40),
         ("pii_ssn_us", 0.85),
         ("pii_ssn_us_context_free", 0.50),
         ("pii_ni_uk", 0.90),

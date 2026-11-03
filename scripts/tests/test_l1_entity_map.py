@@ -765,6 +765,24 @@ RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
         # T33: an underscore is no separator of the Partita IVA.
         ("pii.it.vat_code", RECOGNIZER_TESTS, "test_it_vat_code_recognizer:x:4", "01333550_323", "01333550_323", "T33"),
         ("pii.it.vat_code", RECOGNIZER_TESTS, "test_it_vat_code_recognizer:x:0", "01333550323", "01333550323", None),
+        # Q-M1: bare digit runs of SIN (B-LUHN), Aadhaar (B-IN) and NPI (A06); grouped forms and
+        # values with their term stay gold.
+        ("pii.ca.sin", RECOGNIZER_TESTS, "test_ca_sin_recognizer:x:0", "130 692 544", "130 692 544", "B-LUHN"),
+        ("pii.ca.sin", RECOGNIZER_TESTS, "test_ca_sin_recognizer:x:5", "130692544", "130692544", "B-LUHN"),
+        ("pii.ca.sin", RECOGNIZER_TESTS, "test_ca_sin_recognizer:x:4", "731-530-150", "731-530-150", None),
+        ("pii.ca.sin", RECOGNIZER_TESTS, "test_ca_sin_recognizer:x:7", "my SIN is 130-692-544", "130-692-544", None),
+        ("pii.ca.sin", RECOGNIZER_TESTS, "test_ca_sin_recognizer:x:0", "SIN 130 692 544", "130 692 544", None),
+        ("pii.in.aadhaar", RECOGNIZER_TESTS, "test_in_aadhaar_recognizer:x:2", "399876543211", "399876543211", "B-IN"),
+        ("pii.in.aadhaar", RECOGNIZER_TESTS, "test_in_aadhaar_recognizer:x:5", "3998 7654 3211", "3998 7654 3211", None),
+        ("pii.in.aadhaar", RECOGNIZER_TESTS, "test_in_aadhaar_recognizer:x:2", "Aadhaar 399876543211",
+         "399876543211", None),
+        ("pii.us.npi", RECOGNIZER_TESTS, "test_us_npi_recognizer:x:2", "1003000126", "1003000126", "A06"),
+        ("pii.us.npi", RECOGNIZER_TESTS, "test_us_npi_recognizer:x:3", "1234-567-893", "1234-567-893", None),
+        ("pii.us.npi", RECOGNIZER_TESTS, "test_us_npi_recognizer:x:6", "Provider identifier 1245319599",
+         "1245319599", None),
+        # Q-M1: Nigerian plates with a plate term stay gold.
+        ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:6",
+         "Plates: APP-456CV and KJA-999PZ", "KJA-999PZ", None),
     ],
 )
 def test_checked_in_known_gaps(entity_id, corpus, row_id, text, value, decision):
