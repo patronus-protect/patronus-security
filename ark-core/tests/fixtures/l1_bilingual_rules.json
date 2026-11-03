@@ -4041,6 +4041,7 @@
       "en": [
         "\"heroku_api_key\": \"${HEROKU_API_KEY}\"",
         "heroku:\n  app_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c",
+        "<appSettings>\n  <add key=\"HerokuAppId\" value=\"3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\" />\n</appSettings>",
         "the Heroku API key was rotated. App id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
       ]
     },
@@ -4164,7 +4165,7 @@
   {
     "category": "dlp",
     "rule_id": "dlp_datadog_api_key",
-    "de": "DD_API_KEY=<<secret\u003a0>>",
+    "de": "<bereitstellung>\n  <DatadogApiKey><<secret\u003a0>></DatadogApiKey>\n</bereitstellung>",
     "en": "Datadog API key: <<secret\u003a0>>",
     "secrets": [
       {
@@ -4175,7 +4176,8 @@
     "hard_negatives": {
       "de": [
         "DD_API_KEY=${DD_API_KEY}",
-        "Der Datadog-API-Schlüssel steht im Tresor."
+        "Der Datadog-API-Schlüssel steht im Tresor.",
+        "<bereitstellung>\n  <DatadogApiKey>${DD_API_KEY}</DatadogApiKey>\n</bereitstellung>"
       ],
       "en": [
         "DD_ENV=production",
@@ -4463,7 +4465,7 @@
   {
     "category": "dlp",
     "rule_id": "dlp_splunk_hec_token",
-    "de": "SPLUNK_HEC_TOKEN=<<secret\u003a0>>",
+    "de": "<appSettings>\n  <add value=\"<<secret\u003a0>>\" key=\"SplunkHecToken\" />\n</appSettings>",
     "en": "Authorization: Splunk <<secret\u003a0>>",
     "secrets": [
       {
@@ -4474,6 +4476,7 @@
     "hard_negatives": {
       "de": [
         "SPLUNK_INDEX_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c",
+        "<appSettings>\n  <add key=\"SplunkIndexId\" value=\"3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c\" />\n</appSettings>",
         "Das HEC-Token von Splunk ist eine GUID."
       ],
       "en": [
