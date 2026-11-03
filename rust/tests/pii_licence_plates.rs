@@ -197,6 +197,32 @@ fn uk_vehicle_registration_validator_checks_the_age_identifier() {
 }
 
 #[test]
+fn ng_vehicle_registration_validator_checks_the_form() {
+    for valid in ["APP-456CV", "KJA-999PZ", "ABJ-001AA", "LSR 123AB"] {
+        assert!(
+            validators::ng_vehicle_registration(valid),
+            "{valid} must be valid"
+        );
+    }
+    for invalid in [
+        "APP-000CV",
+        "app-456cv",
+        "APP456CV",
+        "APP_456CV",
+        "AP-456CV",
+        "APP-4567CV",
+        "APP-456C",
+        "AP1-456CV",
+        "",
+    ] {
+        assert!(
+            !validators::ng_vehicle_registration(invalid),
+            "{invalid} must be invalid"
+        );
+    }
+}
+
+#[test]
 fn plate_rules_are_field_bound_format_rules_in_every_mode() {
     for rule_id in [DE, UK] {
         let rule = pattern(rule_id);
@@ -409,10 +435,9 @@ fn scored_plate_rules_run_in_balanced_and_recall_only() {
     assert!(ng.scored_only && ng.requires_context && !ng.captured_value);
     assert_eq!(score::rule_score(ng), 0.40);
     assert_eq!(bare.strength, ValidatorStrength::Format);
-    // No validator: the plate term carries the Nigerian form.
-    assert!(ng.validator.is_none() && ng.strength == ValidatorStrength::None);
     for rule in [bare, ng] {
         assert_eq!(rule.entity_group, LABEL);
+        assert_eq!(rule.strength, ValidatorStrength::Format);
     }
 }
 

@@ -5005,6 +5005,7 @@ Q_M1_CASES = [
     n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Bestellnummer: KJA-999PZ", "order number, no plate term", mode="balanced"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: app-456cv", "lowercase is no printed plate", mode="balanced"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: APP-4567CV", "four digits", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: APP-000CV", "serial 000 is never issued", mode="balanced"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Artikel ABJ-001AA und KJA-999PZ", "a list without a plate term", mode="balanced"),
 ]
 for _row in Q_M1_CASES:

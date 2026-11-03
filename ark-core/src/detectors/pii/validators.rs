@@ -984,6 +984,18 @@ pub fn uk_vehicle_registration(s: &str) -> bool {
         && random.iter().all(letter)
 }
 
+/// Nigerian plate (Q-M1): three letters of the local government area, a hyphen or
+/// a space, a serial of three digits other than `000` and two letters.
+pub fn ng_vehicle_registration(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes[..3].iter().all(u8::is_ascii_uppercase)
+        && matches!(bytes[3], b'-' | b' ')
+        && bytes[4..7].iter().all(u8::is_ascii_digit)
+        && &bytes[4..7] != b"000"
+        && bytes[7..].iter().all(u8::is_ascii_uppercase)
+}
+
 pub fn us_ssn(s: &str) -> bool {
     let digits = s
         .chars()

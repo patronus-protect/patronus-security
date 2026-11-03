@@ -60,7 +60,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | yes | format | 25 | field or key | 0.65 |
 | `pii_vehicle_registration_uk` | `LICENSEPLATE` | yes | format | 25 | field or key | 0.65 |
 | `pii_vehicle_registration_uk_context_free` | `LICENSEPLATE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
-| `pii_vehicle_registration_ng` | `LICENSEPLATE` | no | none | 40 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
+| `pii_vehicle_registration_ng` | `LICENSEPLATE` | yes | format | 25 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
 | `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
 | `pii_ssn_us_proximity` | `SSN` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_ssn_us_context_free` | `SSN` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
