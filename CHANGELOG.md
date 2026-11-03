@@ -29,6 +29,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   otpauth:// URIs and after TOTP/2FA secret names with an RFC 4648 length and padding check; the
   Google Authenticator Key Uri Format example seed is a documented value. 2FA recovery code lists
   are not covered yet.
+- Detection change: M1 on presidio_favored (Q-M1), `balanced` and `recall` only; `strict` output
+  bit-identical. `pii_vehicle_registration_uk_context_free` reports the UK current form (`AB51 ABC`,
+  `BD62XYZ`) without a plate term, validated by `validators::uk_vehicle_registration` (issued area
+  letters and age identifier), at score 0.50; a nearer counter-context term drops it.
+  `pii_vehicle_registration_ng` reports the Nigerian plate (three letters, three digits, two letters,
+  joined by a hyphen or a space) with a plate term near the value; a later plate of a list (`, `,
+  `and`, `und`, `&`) takes the term of the first (`Plates: APP-456CV and KJA-999PZ`). The plate
+  lexicon gains `plate` and `plates`. New `known_gaps` in `research/l1-pii/entity_map.yaml` for bare
+  SIN digit runs (B-LUHN), bare twelve-digit Aadhaar (B-IN) and bare ten-digit NPI (A06). Dev,
+  balanced vs Presidio tuned, attainable: M1 presidio_favored 18/22 -> 22/22 (CA SIN 57.1 -> 100,
+  Aadhaar 85.7 -> 100, NPI 88.9 -> 100, licence plate 22.2 -> 76.9 vs 76.9), neutral 9/9; raw
+  licence plate 11.8 -> 47.6. Only the presidio_favored recognizer-test predictions change;
+  validators unchanged.
 - L1 PII quality floor on presidio_favored for the country ids added since W44 (T33). New
   `known_gaps` in `research/l1-pii/entity_map.yaml` record the gold that existing decisions keep out
   of reach: bare ACN (B-APAC), bare ten-digit KR BRN (B-KR), bare PESEL (A13), bare IN PAN and voter
