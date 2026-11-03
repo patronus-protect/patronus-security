@@ -64,7 +64,8 @@ fn url_around(text: &str, range: Range<usize>) -> &str {
 fn param_name(text: &str, value_start: usize) -> Option<&str> {
     let before = text[..value_start].strip_suffix('=')?;
     let name_start = before.rfind(['?', '&', ';', '#'])? + 1;
-    Some(&before[name_start..])
+    let name = &before[name_start..];
+    (!name.is_empty() && !name.contains(|c: char| c.is_whitespace())).then_some(name)
 }
 
 /// Whether the query or fragment of `url` has a parameter named like one of
@@ -76,11 +77,20 @@ fn has_param(url: &str, names: &[&str]) -> bool {
     })
 }
 
-/// `dlp_credential_in_url` (F12): a `token` parameter next to a pagination,
-/// cursor or CSRF parameter is no credential.
+/// `dlp_credential_in_url` and `dlp_generic_credential_assignment` (F12): a
+/// URL parameter is no credential when it is a CSRF parameter itself, a
+/// `token` next to a pagination, cursor or CSRF parameter, or the `secret`
+/// of an otpauth:// URI, which `dlp_otp_secret` checks as Base32. A value
+/// outside a URL query passes.
 pub(super) fn is_credential_parameter(text: &str, range: Range<usize>) -> bool {
-    !param_name(text, range.start).is_some_and(|name| name.eq_ignore_ascii_case("token"))
-        || !has_param(url_around(text, range), PAGINATION_OR_CSRF)
+    let Some(name) = param_name(text, range.start) else {
+        return true;
+    };
+    let is = |names: &[&str]| names.iter().any(|n| name.eq_ignore_ascii_case(n));
+    let url = || url_around(text, range.clone());
+    !(is(PAGINATION_OR_CSRF)
+        || (is(&["token"]) && has_param(url(), PAGINATION_OR_CSRF))
+        || (is(&["secret"]) && url().to_ascii_lowercase().contains("otpauth://")))
 }
 
 /// `dlp_signed_url_signature` (F12): the signature parameter stands in a
@@ -220,6 +230,8 @@ mod tests {
             "/search?q=x&cursor=abc&token={v}",
             "https://app.example.com/logout?_csrf=1&token={v}",
             "https://app.example.com/form?authenticity_token=x&amp;token={v}",
+            "GET /logout?authenticity_token={v} 302",
+            "otpauth://totp/ACME:ada?secret={v}&issuer=ACME",
         ] {
             assert!(
                 !gate(template, TOKEN, is_credential_parameter),
@@ -231,6 +243,8 @@ mod tests {
             "https://app.example.com/login?next=/home&token={v}",
             "https://api.example.com/items?limit=50&api_key={v}",
             "https://api.example.com/items?page=2&password={v}",
+            "token={v}",
+            "x = 1; token={v}",
         ] {
             assert!(gate(template, TOKEN, is_credential_parameter), "{template}");
         }

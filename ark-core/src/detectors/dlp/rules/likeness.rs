@@ -928,7 +928,8 @@ fn suits_field_key(value: &str) -> bool {
 /// T09: [`is_assignment_key`] for `dlp_generic_credential_assignment`, and
 /// no compound `…token` key of a cursor, handle or count and no `…secret`
 /// key of a secret object (see [`NON_SECRET_TOKEN_PREFIXES`],
-/// [`SECRET_OBJECT_PREFIXES`]).
+/// [`SECRET_OBJECT_PREFIXES`]); F12: no pagination, cursor or CSRF URL
+/// parameter (`auth_url::is_credential_parameter`).
 pub fn is_credential_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
     if let KeyShape::Compound(head) = key_shape(text, key_start) {
         let noun: String = text[key_start..]
@@ -951,7 +952,8 @@ pub fn is_credential_key(text: &str, key_start: usize, value: Range<usize>) -> b
             return false;
         }
     }
-    is_assignment_key(text, key_start, value)
+    is_assignment_key(text, key_start, value.clone())
+        && super::auth_url::is_credential_parameter(text, value)
 }
 
 /// T09: [`is_key_prefix`] for the assignment rules, whose bare value stops
