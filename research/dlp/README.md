@@ -322,7 +322,14 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Groß-/Kleinwechsel). Ein Wert direkt nach dem Nomen bleibt bei den Zuweisungsregeln; ein Hash-
   oder anderes Wert-Nomen dazwischen („Passwort-Hash“, „Kennwort (Client-Secret)“) und ein eigenes
   Feld-Label auf einer späteren Zeile („Fundstelle: …“) verwerfen ihn. PIN/TAN/PUK und WLAN-Schlüssel
-  (G07) sind noch offen.
+  (G07) sind noch offen. Seit T20 lesen die schlüsselgebundenen Provider-Regeln (`provider_key!`)
+  und `dlp_csrf_token` dieselbe Übergabe (`prose_handover!`) nach Provider-Name und
+  Credential-Nomen („(Heroku-API-Schlüssel): …“, „Wie lautet der Wert für „CSRF-Token“?“); der Wert
+  durchläuft das Format, den Validator und die Beispielprüfung der Provider-Regel, behält also deren
+  `rule_id` (Elastic `id:api_key` als ein Span). Ein ID-Nomen zwischen Nomen und Wert („App-ID:“,
+  „project id:“) verwirft ihn bei Provider- und Prosa-Regeln. Dev: die 16 Provider-Entitäten und
+  CSRF auf den Prosa-Familien des aktuellen Generators 136/136, `credential.csrf_token` auf dem
+  eingefrorenen Dev-Split 40/40.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
