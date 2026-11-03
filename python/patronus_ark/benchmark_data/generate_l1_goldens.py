@@ -13433,6 +13433,222 @@ DLP_T16_CASES = {
 for _label, _rows in DLP_T16_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T20: provider and CSRF values handed over in DE/EN chats, tickets and mails
+# after the provider name and a credential noun; the provider rule keeps the
+# value. Hard negatives: the provider name without a credential noun, IDs under
+# the provider name, values that fail the provider format, references.
+T20_PROVIDERS = (
+    ("CLOUD_KEY", "dlp_heroku_legacy_api_key", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel"),
+    ("CLOUD_KEY", "dlp_railway_token", "railway_token", "Railway token", "Railway-Token"),
+    ("CLOUD_KEY", "dlp_netlify_legacy_token", "netlify_access_token", "Netlify access token", "Netlify-Zugriffstoken"),
+    ("SECRET_TOKEN", "dlp_travis_token", "travisci_access_token", "Travis CI API token", "Travis-CI-API-Token"),
+    ("SECRET_TOKEN", "dlp_circleci_legacy_token", "circleci_legacy_token", "CircleCI API token", "CircleCI-API-Token"),
+    ("CLOUD_KEY", "dlp_vercel_legacy_token", "vercel_legacy_token", "Vercel access token", "Vercel-Zugriffstoken"),
+    ("SECRET_TOKEN", "dlp_azure_devops_legacy_pat", "azure_devops_legacy_pat", "Azure DevOps PAT", "Azure-DevOps-PAT"),
+    ("CLOUD_KEY", "dlp_cloudflare_api_key", "cloudflare_api_token", "Cloudflare API token", "Cloudflare-API-Token"),
+    ("API_KEY", "dlp_bitbucket_client_secret", "bitbucket_client_secret", "Bitbucket client secret", "Bitbucket-Client-Secret"),
+    ("API_KEY", "dlp_datadog_api_key", "datadog_api_key", "Datadog API key", "Datadog-API-Schlüssel"),
+    ("API_KEY", "dlp_newrelic_legacy_license_key", "newrelic_legacy_license_key", "New Relic license key", "New-Relic-Lizenzschlüssel"),
+    ("SECRET_TOKEN", "dlp_sentry_auth_token", "sentry_auth_token", "Sentry auth token", "Sentry-Auth-Token"),
+    ("SECRET_TOKEN", "dlp_splunk_hec_token", "splunk_hec_token", "Splunk HEC token", "Splunk-HEC-Token"),
+    ("API_KEY", "dlp_elastic_api_key", "elastic_api_key_pair", "Elastic API key", "Elastic-API-Schlüssel"),
+    ("API_KEY", "dlp_honeycomb_api_key", "honeycomb_api_key", "Honeycomb API key", "Honeycomb-API-Schlüssel"),
+    ("API_KEY", "dlp_pagerduty_api_key", "pagerduty_api_key", "PagerDuty API key", "PagerDuty-API-Schlüssel"),
+    ("SECRET_TOKEN", "dlp_csrf_token", "csrf_token", "CSRF token", "CSRF-Token"),
+)
+T20_CARRIERS = {
+    "en": (
+        "[09:41] maria.k: anyone have the {label} for the staging box? CI is red\n"
+        "[09:43] tom.w: here you go: <<secret:0>>\n"
+        "[09:43] tom.w: please don't paste it anywhere else\n",
+        "Ticket #48213 — Integration failing after key rotation\nPriority: High | Component: billing-sync\n\n"
+        "Note from reporter: the job still uses the old {label}. Current value in the config: <<secret:0>>\n",
+        "Hi team,\n\nas discussed, here is the {label} for the reporting job:\n\n<<secret:0>>\n\n"
+        "It's only needed until the vault integration is live.\n\nThanks,\nAlex\n",
+    ),
+    "de": (
+        "[08:15] lena.s: Kurze Frage: Wie lautet der Wert für „{label}“ in der Testumgebung?\n"
+        "[08:17] daniel.r: <<secret:0>>\n[08:17] daniel.r: Aber bitte nur lokal verwenden.\n",
+        "Ticket #20931 – Schnittstelle liefert 403\nPriorität: hoch · Komponente: edi-gateway\n\n"
+        "Seit dem Update schlägt der Abruf fehl. Laut Konfiguration hinterlegt ({label}): <<secret:0>>\n"
+        "Bitte prüfen, ob der Wert noch gültig ist.\n",
+        "Hallo zusammen,\n\nanbei wie besprochen die Zugangsdaten für den Abschlusslauf ({label}):\n\n"
+        "<<secret:0>>\n\nBitte nach dem Lauf löschen.\n\nViele Grüße\nKatrin\n",
+    ),
+}
+DLP_T20_CASES = {"API_KEY": [], "CLOUD_KEY": [], "SECRET_TOKEN": []}
+for _index, (_label, _rule, _recipe, _en, _de) in enumerate(T20_PROVIDERS):
+    for _language, _name in (("en", _en), ("de", _de)):
+        _template = T20_CARRIERS[_language][(_index + (_language == "de")) % 3]
+        DLP_T20_CASES[_label].append(
+            ds(
+                _label, _language, _rule, _template.format(label=_name), _recipe,
+                19801 + 2 * _index + (_language == "de"), carrier="prose",
+            )
+        )
+DLP_T20_CASES["CLOUD_KEY"] += [
+    dn(
+        "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+        "[10:02] maria.k: which Heroku app is the staging box?\n[10:03] tom.w: app id: 3f2b8c1e-9d4a-4e7b-8a6c-1b2d3e4f5a6b\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "CLOUD_KEY", "en", "dlp_railway_token",
+        "Ticket #48215 — Railway deploy stuck\nthe Railway token was rotated yesterday. Project id: 7c9e6679-7425-40de-944b-e07fc1f90ae7\n",
+        "project id under the provider name", carrier="prose",
+    ),
+    dn(
+        "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+        "Hi team,\n\nthe Heroku API key for the reporting job:\n\n${HEROKU_API_KEY}\n\nThanks,\nAlex\n",
+        "environment reference", carrier="prose",
+    ),
+    dl(
+        "CLOUD_KEY", "en", "dlp_netlify_legacy_token",
+        "[09:43] tom.w: the Netlify access token for staging: <<secret:0>>\n",
+        "netlify_access_token_short", 19851, "Netlify token shape with 39 instead of 40 to 46 characters",
+        carrier="prose",
+    ),
+    dl(
+        "CLOUD_KEY", "en", "dlp_cloudflare_api_key",
+        "Note from reporter: the old Cloudflare API token. Current value in the config: <<secret:0>>\n",
+        "cloudflare_api_token_short", 19852, "Cloudflare API token shape with 39 instead of 40 characters",
+        carrier="prose",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_heroku_legacy_api_key",
+        "[08:20] lena.s: Welche Heroku-App ist das?\n[08:21] daniel.r: App-ID: 3f2b8c1e-9d4a-4e7b-8a6c-1b2d3e4f5a6b\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_railway_token",
+        "Ticket #20933 – Railway-Deployment hängt\nDas Railway-Token wurde gestern getauscht. Projekt-ID: 7c9e6679-7425-40de-944b-e07fc1f90ae7\n",
+        "project id under the provider name", carrier="prose",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_heroku_legacy_api_key",
+        "Hallo zusammen,\n\nanbei der Heroku-API-Schlüssel für den Abschlusslauf:\n\n<HEROKU_API_KEY>\n\nViele Grüße\nKatrin\n",
+        "placeholder", carrier="prose",
+    ),
+    dl(
+        "CLOUD_KEY", "de", "dlp_netlify_legacy_token",
+        "Laut Konfiguration hinterlegt (Netlify-Zugriffstoken): <<secret:0>>\n",
+        "netlify_access_token_short", 19853, "Netlify token shape with 39 instead of 40 to 46 characters",
+        carrier="prose",
+    ),
+    dl(
+        "CLOUD_KEY", "de", "dlp_cloudflare_api_key",
+        "[08:17] daniel.r: Cloudflare-API-Token für Staging:\n<<secret:0>>\n",
+        "cloudflare_api_token_short", 19854, "Cloudflare API token shape with 39 instead of 40 characters",
+        carrier="prose",
+    ),
+]
+DLP_T20_CASES["API_KEY"] += [
+    dn(
+        "API_KEY", "en", "dlp_datadog_api_key",
+        "Datadog dashboard for the checkout service: 4f1c2b9a8e7d6c5b4a3f2e1d0c9b8a7f\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "API_KEY", "en", "dlp_honeycomb_api_key",
+        "the Honeycomb API key belongs to this dataset. Trace id: 0af7651916cd43dd8448eb211c80319c\n",
+        "trace id under the provider name", carrier="prose",
+    ),
+    dl(
+        "API_KEY", "en", "dlp_honeycomb_api_key",
+        "here is the Honeycomb API key for the collector:\n\n<<secret:0>>\n",
+        "honeycomb_api_key_short", 19855, "Honeycomb key shape with 21 instead of 22 characters", carrier="prose",
+    ),
+    dl(
+        "API_KEY", "en", "dlp_pagerduty_api_key",
+        "Note from on-call: the PagerDuty API key in the config: <<secret:0>>\n",
+        "pagerduty_api_key_short", 19856, "PagerDuty key shape with 19 instead of 20 characters", carrier="prose",
+    ),
+    dl(
+        "API_KEY", "en", "dlp_datadog_api_key",
+        "[09:43] tom.w: Datadog API key for staging: <<secret:0>>\n",
+        "datadog_api_key_short", 19857, "Datadog key shape with 31 instead of 32 hex digits", carrier="prose",
+    ),
+    dn(
+        "API_KEY", "de", "dlp_datadog_api_key",
+        "Datadog-Dashboard des Bestelldienstes: 4f1c2b9a8e7d6c5b4a3f2e1d0c9b8a7f\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "API_KEY", "de", "dlp_pagerduty_api_key",
+        "Der PagerDuty-API-Schlüssel gehört zu diesem Dienst. Service-ID: 0af7651916cd43dd8448eb211c80319c\n",
+        "service id under the provider name", carrier="prose",
+    ),
+    dl(
+        "API_KEY", "de", "dlp_honeycomb_api_key",
+        "anbei der Honeycomb-API-Schlüssel für den Collector:\n\n<<secret:0>>\n",
+        "honeycomb_api_key_short", 19858, "Honeycomb key shape with 21 instead of 22 characters", carrier="prose",
+    ),
+    dl(
+        "API_KEY", "de", "dlp_elastic_api_key",
+        "Laut Konfiguration hinterlegt (Elastic-API-Schlüssel): <<secret:0>>\n",
+        "elastic_api_key_short", 19859, "base64 of id:api_key with a 21-character api_key", carrier="prose",
+    ),
+    dn(
+        "API_KEY", "de", "dlp_datadog_api_key",
+        "[08:17] daniel.r: Datadog-API-Schlüssel steht in der .env:\n$DD_API_KEY\n",
+        "environment reference", carrier="prose",
+    ),
+]
+DLP_T20_CASES["SECRET_TOKEN"] += [
+    dn(
+        "SECRET_TOKEN", "en", "dlp_sentry_auth_token",
+        "Sentry project for the checkout service. Project id: 4505281256090153\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
+        "the Splunk HEC token is configured for this index. Request id: 9b2c7e1a-4f3d-4c8b-9e2a-5d6f7a8b9c0d\n",
+        "request id under the provider name", carrier="prose",
+    ),
+    dl(
+        "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
+        "here is the Splunk HEC token for the forwarder:\n\n<<secret:0>>\n",
+        "splunk_hec_token_short", 19860, "GUID-shaped HEC token with 11 digits in the last group", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "en", "dlp_csrf_token",
+        "[09:43] tom.w: the CSRF token comes from the form:\n{{ csrf_token() }}\n",
+        "template reference", carrier="prose",
+    ),
+    dl(
+        "SECRET_TOKEN", "en", "dlp_azure_devops_legacy_pat",
+        "Note from reporter: the old Azure DevOps PAT. Current value in the config: <<secret:0>>\n",
+        "azure_devops_legacy_pat_short", 19861, "legacy PAT shape with 51 instead of 52 characters", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_travis_token",
+        "Travis-CI-Build für den Bestelldienst: Build-ID: 81234567\n",
+        "provider name without a credential noun", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_splunk_hec_token",
+        "Das Splunk-HEC-Token ist für diesen Index eingerichtet. Anfrage-ID: 9b2c7e1a-4f3d-4c8b-9e2a-5d6f7a8b9c0d\n",
+        "request id under the provider name", carrier="prose",
+    ),
+    dl(
+        "SECRET_TOKEN", "de", "dlp_splunk_hec_token",
+        "anbei das Splunk-HEC-Token für den Forwarder:\n\n<<secret:0>>\n",
+        "splunk_hec_token_short", 19862, "GUID-shaped HEC token with 11 digits in the last group", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_csrf_token",
+        "[08:17] daniel.r: Das CSRF-Token steht im Formular:\n${CSRF_TOKEN}\n",
+        "environment reference", carrier="prose",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_csrf_token",
+        "Wie lautet der Wert für „CSRF-Token“?\n[08:17] daniel.r: <csrf-token>\n",
+        "placeholder", carrier="prose",
+    ),
+]
+for _label, _rows in DLP_T20_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

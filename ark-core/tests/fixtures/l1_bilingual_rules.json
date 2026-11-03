@@ -4024,7 +4024,7 @@
   {
     "category": "dlp",
     "rule_id": "dlp_heroku_legacy_api_key",
-    "de": "HEROKU_API_KEY=<<secret\u003a0>>",
+    "de": "Laut Konfiguration hinterlegt (Heroku-API-Schlüssel): <<secret\u003a0>>\nBitte prüfen.",
     "en": "\"heroku_api_key\": \"<<secret\u003a0>>\"",
     "secrets": [
       {
@@ -4035,11 +4035,13 @@
     "hard_negatives": {
       "de": [
         "HEROKU_API_KEY=${HEROKU_API_KEY}",
-        "# Heroku-App\nAPP_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+        "# Heroku-App\nAPP_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c",
+        "[08:20] lena.s: Welche Heroku-App ist das?\n[08:21] daniel.r: App-ID: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
       ],
       "en": [
         "\"heroku_api_key\": \"${HEROKU_API_KEY}\"",
-        "heroku:\n  app_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+        "heroku:\n  app_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c",
+        "the Heroku API key was rotated. App id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
       ]
     },
     "language_neutral": false
@@ -5118,7 +5120,8 @@
       "de": [
         "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
         "csrf_token = System.getenv(\"CSRF_TOKEN\")",
-        "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">"
+        "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">",
+        "Wie lautet der Wert für „CSRF-Token“?\n[08:17] daniel.r: ${CSRF_TOKEN}"
       ],
       "en": [
         "X-CSRF-Token: YOUR_CSRF_TOKEN_HERE",
