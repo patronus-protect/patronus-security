@@ -11,6 +11,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: URL credentials (G-URL, F12 + G08 + G09). `dlp_credential_in_url` and
+  `dlp_generic_credential_assignment` no longer report a URL parameter that is a CSRF parameter, a
+  `token` next to a pagination, cursor or CSRF parameter, or the `secret` of an otpauth:// URI.
+  `dlp_signed_url_signature` needs signed-URL structure (X-Amz-*/X-Goog-* companions, CloudFront
+  `Expires`/`Key-Pair-Id`/`Policy`, Azure SAS `sv` with `se` or `sp`); a bare `sig=` or `Signature=`
+  is no signature. New rule `dlp_auth_url_token` (`credential.auth_url`, subtype `auth_url`): OAuth
+  redirect tokens and codes, reset, magic-link, invitation and confirmation tokens in queries and
+  paths. New rule `dlp_otp_secret` (`credential.otp_secret`, subtype `otp_secret`): Base32 seeds of
+  otpauth:// URIs and after TOTP/2FA secret names with an RFC 4648 length and padding check; the
+  Google Authenticator Key Uri Format example seed is a documented value. 2FA recovery code lists
+  are not covered yet.
 - L1 PII quality floor on presidio_favored for the country ids added since W44 (T33). New
   `known_gaps` in `research/l1-pii/entity_map.yaml` record the gold that existing decisions keep out
   of reach: bare ACN (B-APAC), bare ten-digit KR BRN (B-KR), bare PESEL (A13), bare IN PAN and voter

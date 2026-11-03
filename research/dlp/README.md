@@ -225,6 +225,17 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
+  Seit G-URL (F12 + G08 + G09) verwerfen `dlp_credential_in_url` und die generische Zuweisung
+  einen URL-Parameter, der selbst ein CSRF-Parameter ist, ein `token` neben einem Paginierungs-,
+  Cursor- oder CSRF-Parameter (`page`, `cursor`, `offset`, `limit`, `_csrf`, `authenticity_token` …)
+  und das `secret` einer otpauth://-URI. `dlp_signed_url_signature` braucht die Struktur einer
+  signierten URL (X-Amz-*/X-Goog-*-Begleiter, CloudFront `Expires`/`Key-Pair-Id`/`Policy`,
+  Azure-SAS `sv` mit `se` oder `sp`). Neu: `dlp_auth_url_token` (Untertyp `auth_url`: OAuth-
+  Redirect-Tokens, `code` mit `state` oder Callback-Pfad, Reset-, Magic-Link-, Einladungs- und
+  Bestätigungstokens in Query und Pfad; ausgestelltes Token, keine UUID, kein Hex-Digest) und
+  `dlp_otp_secret` (Untertyp `otp_secret`: Base32-Seed von otpauth://-URIs und nach TOTP-/2FA-
+  Secret-Namen, RFC-4648-Länge/Padding, ≥ 80 Bit, keine Wiederholungs-/Folgeläufe; der Beispiel-Seed
+  des Key-Uri-Formats ist ein dokumentierter Wert). Offen: Listen von 2FA-Wiederherstellungscodes.
   Seit G01 meldet `dlp_connection_string_password` (Untertyp `connection_string`, Stärke
   `structure`) das Passwort eines Connection-Strings je Schema: `password`/`pwd` in einem
   `;`-getrennten Key/Value-String mit Server-, Data-Source-, Host-, DSN-, Driver- oder
@@ -317,7 +328,8 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   angebunden werden sie regelweise in F01–F09.
 - Bekannte Präzisionslücken: `dlp_eth_private_key` traf bis F01 jeden 0x-64-Hex-Wert, also auch
   Tx- und Block-Hashes. `dlp_btc_wif` validierte bis K08 die Prüfsumme nicht. `dlp_signed_url_signature`
-  (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
+  (`sig=`) und `dlp_credential_in_url` (`token=`) trafen bis G-URL auch Paginierungs- und
+  CSRF-Parameter.
   `dlp_password_assignment` nahm bis F-GEN1 in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250
   SQL-Statements aus SchemaPile. Beide liegen als Dev-Komponente `external/` im Scoreboard
