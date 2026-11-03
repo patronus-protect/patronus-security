@@ -171,6 +171,31 @@ def onepassword_secret_key(prefix):
     return check
 
 
+def groups(prefix, alphabet, *lengths, sep="-"):
+    """``prefix`` and ``sep``-separated groups of ``alphabet`` with the given lengths."""
+
+    def check(value):
+        parts = value.removeprefix(prefix).split(sep)
+        return (
+            value.startswith(prefix)
+            and [len(part) for part in parts] == list(lengths)
+            and all(set(part) <= set(alphabet) for part in parts)
+        )
+
+    return check
+
+
+def facebook_app_access_token(value):
+    app_id, _, secret = value.partition("|")
+    return prefixed("", DIGITS, 15)(app_id) and app_id[0] != "0" and prefixed("", HEX, 32)(secret)
+
+
+def dropbox_long_lived_token(value):
+    return (
+        prefixed("", ALNUM, 11)(value[:11]) and value[11:21] == "A" * 10 and prefixed("", B64URL, 43)(value[21:])
+    )
+
+
 def uuid_shaped(value):
     return [len(part) for part in value.split("-")] == [8, 4, 4, 4, 12] and set(value) <= set(HEX + "-")
 
@@ -458,6 +483,7 @@ HEX = "0123456789abcdef"
 DIGITS = "0123456789"
 BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
 LOWER = "abcdefghijklmnopqrstuvwxyz"
+HEX_UPPER = "0123456789ABCDEF"
 BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 OID_RSA_ENCRYPTION = bytes.fromhex("2a864886f70d010101")
 OID_PKCS7_DATA = bytes.fromhex("2a864886f70d010701")
@@ -793,7 +819,55 @@ CHECKS = {
     "laravel_app_key": base64_bytes("base64:", 32),
     "fernet_key": lambda v: v.endswith("=") and base64url_bytes(32)(v[:-1]),
     "aes256_hex_key": prefixed("", HEX, 64),
+    # GOLD-D1 baseline entities (saas)
+    "atlassian_api_token": lambda v: prefixed("ATATT3", B64URL, 177, "=")(v[:-8]) and prefixed("", HEX_UPPER, 8)(v[-8:]),
+    "atlassian_api_token_legacy": lambda v: prefixed("", BASE36, 20)(v[:20]) and prefixed("", HEX, 4)(v[20:]),
+    "notion_api_token": lambda v: prefixed("ntn_", DIGITS, 11)(v[:15]) and prefixed("", ALNUM, 35)(v[15:]),
+    "linear_api_key": prefixed("lin_api_", ALNUM, 40),
+    "linear_client_secret": prefixed("", HEX, 32),
+    "airtable_personal_access_token": lambda v: prefixed("pat", ALNUM, 14)(v.partition(".")[0])
+    and prefixed("", HEX, 64)(v.partition(".")[2]),
+    "airtable_api_key": prefixed("key", ALNUM, 14),
+    "asana_client_secret": prefixed("", BASE36, 32),
+    "hubspot_api_key": groups("", HEX_UPPER, 8, 4, 4, 4, 12),
+    "zendesk_secret_key": prefixed("", ALNUM, 40),
+    "intercom_api_key": prefixed("", B64URL, 59, "="),
+    "postman_api_token": groups("PMAK-", HEX, 24, 34),
+    "mapbox_access_token": groups("pk.", ALNUM, 60, 22, sep="."),
+    "launchdarkly_access_token": lambda v: v.startswith("api-") and uuid_shaped(v[4:]),
+    "launchdarkly_sdk_key": lambda v: v.startswith("sdk-") and uuid_shaped(v[4:]),
+    "typeform_api_token": prefixed("tfp_", B64URL, 59),
+    "contentful_delivery_token": prefixed("", B64URL, 43),
+    "dropbox_api_token": prefixed("", BASE36, 15),
+    "dropbox_long_lived_token": dropbox_long_lived_token,
+    "dropbox_short_lived_token": prefixed("sl.", B64URL, 135),
+    "adobe_client_secret": prefixed("p8e-", ALNUM, 32),
+    "facebook_app_access_token": facebook_app_access_token,
+    "facebook_page_access_token": prefixed("EAAC", ALNUM, 160),
+    "facebook_app_secret": prefixed("", HEX, 32),
+    "twitter_api_key": prefixed("", ALNUM, 25),
+    "twitter_api_secret": prefixed("", ALNUM, 50),
+    "twitter_access_token": lambda v: groups("", ALNUM, 19, 31)(v) and prefixed("", DIGITS, 19)(v[:19]) and v[0] != "0",
+    "twitter_access_secret": prefixed("", ALNUM, 45),
+    "twitter_bearer_token": prefixed("A" * 22, ALNUM, 90),
+    "linkedin_client_secret": prefixed("", ALNUM, 16),
+    "looker_client_secret": prefixed("", ALNUM, 24),
+    "twitch_api_token": prefixed("", BASE36, 30),
+    "etsy_access_token": prefixed("", BASE36, 24),
+    "freshbooks_access_token": prefixed("", BASE36, 64),
+    "squarespace_access_token": uuid_shaped,
+    "frameio_api_token": prefixed("fio-u-", B64URL, 64),
+    "intra42_client_secret": prefixed("s-s4t2ud-", HEX, 64),
+    "maxmind_license_key": lambda v: v.endswith("_mmk") and groups("", ALNUM, 6, 29, sep="_")(v[:-4]),
+    "readme_api_token": prefixed("rdme_", BASE36, 70),
+    "sidekiq_gems_credentials": groups("", HEX, 8, 8, sep=":"),
+    "sidekiq_gems_url_credentials": groups("", HEX, 8, 8, sep=":"),
 }
+
+def any_check(*names):
+    """True if the value passes the check of any of the named generators."""
+    return lambda value: any(CHECKS[name](value) for name in names)
+
 
 # Pre-E03 shape generators that must not pass the structural check they lack.
 SHAPE_ONLY_FAILURES = {
@@ -972,6 +1046,40 @@ LOOKALIKE_FAILURES = {
     "age_public_key": lambda v: CHECKS["age_secret_key"](v) or checks.bech32_decode(v)[0] != "age",
     "x509_certificate": CHECKS["pkcs12_keystore"],
     "sha1_hex_digest": lambda v: any(CHECKS[name](v) for name in ("laravel_app_key", "fernet_key", "aes256_hex_key")),
+    # GOLD-D1
+    "atlassian_api_token_short": any_check("atlassian_api_token", "atlassian_api_token_legacy"),
+    "notion_api_token_short": CHECKS["notion_api_token"],
+    "linear_api_key_short": any_check("linear_api_key", "linear_client_secret"),
+    "airtable_personal_access_token_short": any_check("airtable_personal_access_token", "airtable_api_key"),
+    "asana_client_secret_short": CHECKS["asana_client_secret"],
+    "hubspot_api_key_short": CHECKS["hubspot_api_key"],
+    "zendesk_secret_key_short": CHECKS["zendesk_secret_key"],
+    "intercom_api_key_short": CHECKS["intercom_api_key"],
+    "postman_api_token_short": CHECKS["postman_api_token"],
+    "mapbox_access_token_short": CHECKS["mapbox_access_token"],
+    "launchdarkly_access_token_short": any_check("launchdarkly_access_token", "launchdarkly_sdk_key"),
+    "typeform_api_token_short": CHECKS["typeform_api_token"],
+    "contentful_delivery_token_short": CHECKS["contentful_delivery_token"],
+    "dropbox_short_lived_token_short": any_check(
+        "dropbox_api_token", "dropbox_long_lived_token", "dropbox_short_lived_token"
+    ),
+    "adobe_client_secret_short": CHECKS["adobe_client_secret"],
+    "facebook_app_secret_short": any_check(
+        "facebook_app_access_token", "facebook_page_access_token", "facebook_app_secret"
+    ),
+    "twitter_api_key_short": any_check(
+        "twitter_api_key", "twitter_api_secret", "twitter_access_token", "twitter_access_secret", "twitter_bearer_token"
+    ),
+    "linkedin_client_secret_short": CHECKS["linkedin_client_secret"],
+    "looker_client_secret_short": CHECKS["looker_client_secret"],
+    "twitch_api_token_short": CHECKS["twitch_api_token"],
+    "etsy_access_token_short": CHECKS["etsy_access_token"],
+    "freshbooks_access_token_short": CHECKS["freshbooks_access_token"],
+    "squarespace_access_token_short": CHECKS["squarespace_access_token"],
+    "readme_api_token_short": any_check(
+        "frameio_api_token", "intra42_client_secret", "maxmind_license_key", "readme_api_token"
+    ),
+    "sidekiq_gems_credentials_short": any_check("sidekiq_gems_credentials", "sidekiq_gems_url_credentials"),
 }
 
 
@@ -1028,7 +1136,7 @@ class GeneratorSpecTests(unittest.TestCase):
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_baseline_entities_are_baseline_only_entities_with_a_format_source(self):
-        # GOLD-D2/D3/D4/D6: gold for entities without an ARK rule follows a baseline rule of the
+        # GOLD-D1 to D6: gold for entities without an ARK rule follows a baseline rule of the
         # entity (gitleaks, or the TruffleHog detector or detect-secrets plugin of an entity
         # without a gitleaks rule) or, for an entity no baseline detects, vendor documentation
         # (docs:<url>); lookalikes name what they get wrong.
@@ -1050,7 +1158,7 @@ class GeneratorSpecTests(unittest.TestCase):
                 if tool != "gitleaks":
                     self.assertNotIn("gitleaks", by_id[entity], name)
             for name in entry["lookalike"]:
-                self.assertRegex(generators[name]["source"], r"^GOLD-D[2-6] lookalike: ", name)
+                self.assertRegex(generators[name]["source"], r"^GOLD-D[1-6] lookalike: ", name)
 
     def test_every_valid_generator_has_an_independent_check(self):
         self.assertEqual(set(CHECKS), valid_generators())
@@ -1194,9 +1302,9 @@ class StructureTests(unittest.TestCase):
     def test_python_and_rust_generators_match_pinned_vectors(self):
         vectors = json.loads(VECTORS_PATH.read_text(encoding="utf-8"))
         self.assertEqual(set(vectors["generators"]), set(recipes.load_generators()))
-        for name, fingerprint in vectors["generators"].items():
+        for name, pinned in vectors["generators"].items():
             joined = "\n".join(recipes.generate(name, seed) for seed in vectors["seeds"])
-            self.assertEqual(recipes.fingerprint(joined), fingerprint, name)
+            self.assertEqual(recipes.fingerprint(joined), pinned["sha256_96"], name)
 
 
 class RuleProbeTests(unittest.TestCase):

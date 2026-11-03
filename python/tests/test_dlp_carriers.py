@@ -204,10 +204,10 @@ class ProfileTests(unittest.TestCase):
             self.assertLessEqual(set(family.content), content, family.id)
 
     def test_entity_families_with_synthetic_gold_have_a_profile_for_every_entity(self):
-        # GOLD-D2/D3/D4/D6: every entity of these families gets carrier gold, with or without an ARK rule.
+        # GOLD-D1 to D6: every entity of these families gets carrier gold, with or without an ARK rule.
         families = {
-            "comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data", "credential",
-            "key",
+            "saas", "comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data",
+            "credential", "key",
         }
         entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
         expected = {entity["id"] for entity in entity_map["entities"] if entity["id"].split(".")[0] in families}
