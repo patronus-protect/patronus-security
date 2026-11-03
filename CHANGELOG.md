@@ -11,6 +11,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: URL query credentials in XML and HTML attribute values (T16).
+  `dlp_credential_in_url`, `dlp_signed_url_signature` and the query branch of
+  `dlp_connection_string_password` take the entities `&amp;` and `&#38;` as the parameter
+  separator: an `api_key`, `token` or `secret` parameter of `<add value="https://…&amp;api_key=…">`
+  keeps `dlp_credential_in_url` instead of `dlp_generic_credential_assignment`, and SigV4, GCS V4,
+  Azure SAS and CloudFront signatures after `&#38;` are reported. Pagination, cursor, CSRF and
+  signed-URL structure checks are unchanged.
 - Detection change: URL credentials (G-URL, F12 + G08 + G09). `dlp_credential_in_url` and
   `dlp_generic_credential_assignment` no longer report a URL parameter that is a CSRF parameter, a
   `token` next to a pagination, cursor or CSRF parameter, or the `secret` of an otpauth:// URI.

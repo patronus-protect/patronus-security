@@ -236,13 +236,16 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `dlp_otp_secret` (Untertyp `otp_secret`: Base32-Seed von otpauth://-URIs und nach TOTP-/2FA-
   Secret-Namen, RFC-4648-Länge/Padding, ≥ 80 Bit, keine Wiederholungs-/Folgeläufe; der Beispiel-Seed
   des Key-Uri-Formats ist ein dokumentierter Wert). Offen: Listen von 2FA-Wiederherstellungscodes.
+  Seit T16 trennen `&amp;` und `&#38;` in XML-/HTML-Attributwerten und `.config`-Dateien die
+  Query-Parameter beider Regeln wie `?` und `&`; ein `api_key=` in `<add value="…&amp;api_key=…">`
+  bleibt bei `dlp_credential_in_url` statt bei der generischen Zuweisung.
   Seit G01 meldet `dlp_connection_string_password` (Untertyp `connection_string`, Stärke
   `structure`) das Passwort eines Connection-Strings je Schema: `password`/`pwd` in einem
   `;`-getrennten Key/Value-String mit Server-, Data-Source-, Host-, DSN-, Driver- oder
   Provider-Schlüssel oder nach einer `jdbc:`-URL (ADO.NET, ODBC mit `{…}`, OLE DB, JDBC SQL
   Server/DB2), in einem libpq-Keyword/Value-String mit Host und Datenbank, User oder Port
   (Keyword-Argumente eines Aufrufs zählen nicht), als Query-Parameter einer Datenbank- oder
-  Broker-URL (`jdbc:mysql://…?user=…&password=…`, auch `&amp;`; Web-URLs bleiben bei
+  Broker-URL (`jdbc:mysql://…?user=…&password=…`, auch `&amp;` und `&#38;`; Web-URLs bleiben bei
   `dlp_credential_in_url`) und in Oracle-Thin/OCI-URLs (`jdbc:oracle:thin:user/…@host`).
   `dlp_ldap_bind_password` meldet LDAP-Bind-Passwörter (`ldapsearch … -w`, `bindpw`, `bind_pw`,
   `bindCredential`, `ldap_default_authtok`, `AuthLDAPBindPassword`). Beide verwerfen
