@@ -69,6 +69,12 @@ values:
     sha256: b26ab6529d20ebebb4192256f202984754f785481c64b1a1aed58cac93b3617e
     source: https://hardhat.org/hardhat-network/docs/reference
     note: "Hardhat Network / Foundry Anvil default account #2 (address 0x3C44…93BC), publicly known"
+  - id: google_authenticator_key_uri_example
+    rule_id: dlp_otp_secret
+    kind: example
+    sha256: 8be5d113c0871ce1a122d68a7dff940ab7b09ad8dfcfd9a85aa5c1acc026279e
+    source: https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+    note: "example secret of the Key Uri Format (Base32 of Hello! and 0xDEADBEEF)"
 
 # JWTs der Doku tragen feste Claims; erkannt wird jede Signatur und jeder Header (der
 # jwt.io-Debugger signiert dieselben Claims mit HS256, RS256, ES256 …). Ein JWT gilt als

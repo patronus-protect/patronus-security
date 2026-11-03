@@ -82,6 +82,12 @@ const DOCUMENTED_VALUES: &[DocumentedValue] = &[
         kind: DocumentedKind::Test,
         sha256: "b26ab6529d20ebebb4192256f202984754f785481c64b1a1aed58cac93b3617e",
     },
+    DocumentedValue {
+        id: "google_authenticator_key_uri_example",
+        rule_id: "dlp_otp_secret",
+        kind: DocumentedKind::Example,
+        sha256: "8be5d113c0871ce1a122d68a7dff940ab7b09ad8dfcfd9a85aa5c1acc026279e",
+    },
 ];
 
 /// A documented claim value.

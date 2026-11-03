@@ -336,6 +336,15 @@ rules:
   dlp_bearer_token:
     source_ref: https://www.rfc-editor.org/rfc/rfc6750#section-2.1
     format: "Bearer followed by a b64token (letters, digits, -._~+/ and trailing =) anywhere: in an Authorization header, under authorization/proxy_authorization keys, in logs and standalone in prose (F-HTTP); the token has at least 16 characters, two character classes, 3 bits of entropy per character, no sequential or repeated runs and is no identifier; a value that parses as a JWT is left to dlp_jwt_token"
+  dlp_signed_url_signature:
+    source_ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+    format: "signature parameter of a signed URL with the structure of its scheme (F12): SigV4 X-Amz-Signature next to another X-Amz-Algorithm/Credential/Date/Expires/SignedHeaders parameter, GCS V4 X-Goog-Signature next to X-Goog-Algorithm/Credential/Date/Expires (https://cloud.google.com/storage/docs/authentication/signatures), CloudFront and legacy Signature next to Expires, Key-Pair-Id, Policy, AWSAccessKeyId or GoogleAccessId (https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-creating-signed-url-canned-policy.html), Azure SAS sig next to sv and se or sp (https://learn.microsoft.com/en-us/rest/api/storageservices/create-service-sas)"
+  dlp_auth_url_token:
+    source_ref: https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2
+    format: "token of an auth URL (G09): OAuth access_token/id_token/refresh_token in a redirect query or fragment (RFC 6749 section 4.2.2), the authorization code next to state or on a callback/redirect path (section 4.1.2), reset, magic-link, invitation, confirmation and verification tokens as a query parameter or a path segment after /reset-password/, /magic-link/, /invite/ …; the token has at least 16 characters, two character classes, 3 bits of entropy per character and is no identifier"
+  dlp_otp_secret:
+    source_ref: https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+    format: "Base32 secret parameter of an otpauth://totp or otpauth://hotp key URI, and an upper-case Base32 seed after a TOTP/OTP/2FA/MFA/authenticator secret, seed or key name (G08); RFC 4648 Base32 (https://www.rfc-editor.org/rfc/rfc4648#section-6) with at least 16 characters (80 bits), a valid length or padding, as a whole value and without repeated or sequential runs"
   dlp_basic_auth:
     source_ref: https://www.rfc-editor.org/rfc/rfc7617#section-2
     format: "Basic followed by canonical padded base64 (RFC 4648 section 4) anywhere, as a whole token; it decodes to printable UTF-8 user-id:password with a non-empty user-id (no colon) and password; the password is no stand-in, credential name or metasyntactic word, also read without leetspeak (user:p@ss), and differs from the user-id (F-HTTP)"
