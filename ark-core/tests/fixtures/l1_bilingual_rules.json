@@ -4737,16 +4737,18 @@
   {
     "category": "dlp",
     "rule_id": "dlp_credential_in_url",
-    "de": "https://example.test?passwort=actual-secret",
+    "de": "<add key=\"ExportUrl\" value=\"https://example.test/export?format=csv&amp;passwort=actual-secret\" />",
     "en": "https://example.test?password=actual-secret",
     "hard_negatives": {
       "de": [
         "https://example.test?passwort=HIER_PASSWORT_EINTRAGEN",
-        "curl \"https://example.test/export?api_key=$EXPORT_API_KEY\""
+        "curl \"https://example.test/export?api_key=$EXPORT_API_KEY\"",
+        "<a href=\"/rechnungen?cursor=b2Zmc2V0OjUw&amp;token=b2Zmc2V0OjUw\">Weiter</a>"
       ],
       "en": [
         "https://example.test?password=YOUR_PASSWORD_HERE",
-        "https://example.test/export?token={{exportToken}}"
+        "https://example.test/export?token={{exportToken}}",
+        "<add key=\"ExportUrl\" value=\"https://example.test/export?format=csv&#38;api_key=YOUR_API_KEY\" />"
       ]
     },
     "language_neutral": false
@@ -4999,11 +5001,13 @@
     "hard_negatives": {
       "de": [
         "https://example.test/a.zip?Signature=HIER_SIGNATUR_EINTRAGEN",
-        "Vorschaubild: https://cdn.example.test/bild.png?seite=2&sig=a1b2c3d4e5f6a7b8c9d0"
+        "Vorschaubild: https://cdn.example.test/bild.png?seite=2&sig=a1b2c3d4e5f6a7b8c9d0",
+        "<img src=\"https://cdn.example.test/bild.png?seite=2&amp;sig=a1b2c3d4e5f6a7b8c9d0\">"
       ],
       "en": [
         "https://example.test/a.zip?X-Amz-Signature=YOUR_URL_SIGNATURE_HERE",
-        "https://example.test/a.zip?sig=QWxsZXNHdXRlWnVtR2VidXJ0c3RhZw"
+        "https://example.test/a.zip?sig=QWxsZXNHdXRlWnVtR2VidXJ0c3RhZw",
+        "<a href=\"https://example.test/a.zip?source=ci&#38;Signature=QmVpc3BpZWxTaWduYXR1cg\">hook</a>"
       ]
     },
     "language_neutral": true

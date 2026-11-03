@@ -241,3 +241,61 @@ fn plain_urls_carry_no_secret() {
         assert!(no_secret(text), "{text}");
     }
 }
+
+/// T16: XML and HTML attribute values separate query parameters with the
+/// entity `&amp;` or `&#38;`; the parameter value is the span and keeps the
+/// URL rule's id.
+#[test]
+fn url_query_credentials_after_xml_entity_separators_keep_their_rule() {
+    let token = generated("url_token", 16);
+    for template in [
+        "<add key=\"ExportUrl\" value=\"https://api.example.de/v1/export?format=csv&amp;api_key={}\" />",
+        "<credentials exportUrl=\"https://api.example.com/v1/export?format=csv&amp;api_key={}\" />",
+        "<a href=\"https://portal.example.de/berichte?monat=10&#38;token={}\">Bericht</a>",
+        "<add key=\"WebhookUrl\" value=\"https://hooks.example.com/notify?channel=ops&#38;secret={}\" />",
+    ] {
+        let text = template.replace("{}", &token);
+        assert!(reports(&text, "dlp_credential_in_url", &token), "{template}");
+        assert!(
+            rule_entry(&text, "dlp_generic_credential_assignment").is_none(),
+            "{template}"
+        );
+    }
+    let signature = generated("aws_sigv4_signature", 16);
+    for template in [
+        "<bericht url=\"https://b.s3.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&#38;X-Amz-Expires=900&#38;X-Amz-Signature={}\" />",
+        "<add value=\"https://acct.blob.core.windows.net/c/b.txt?sv=2022-11-02&amp;se=2026-12-01T00%3A00%3A00Z&amp;sp=r&amp;sig={}\" />",
+        "<img src=\"https://storage.googleapis.com/b/o.png?X-Goog-Algorithm=GOOG4-RSA-SHA256&amp;X-Goog-Expires=600&amp;X-Goog-Signature={}\">",
+        "<video src=\"https://d111111abcdef8.cloudfront.net/a.mp4?Expires=1767225600&#38;Key-Pair-Id=K2JCJMDEHXQW5F&#38;Signature={}\">",
+    ] {
+        let text = template.replace("{}", &signature);
+        assert!(reports(&text, "dlp_signed_url_signature", &signature), "{template}");
+    }
+}
+
+#[test]
+fn xml_entity_separated_pagination_csrf_and_unsigned_parameters_stay_negative() {
+    let value = generated("auth_url_opaque_token", 16);
+    for template in [
+        "<a href=\"/orders?cursor=b2Zmc2V0&#38;token={}\">Next</a>",
+        "<link rel=\"next\" href=\"https://api.example.com/v2/orders?page=3&amp;per_page=50&amp;token={}\">",
+        "<form action=\"/logout?authenticity_token=x&#38;token={}\"></form>",
+    ] {
+        let text = template.replace("{}", &value);
+        assert!(
+            rule_entry(&text, "dlp_credential_in_url").is_none(),
+            "{template}"
+        );
+    }
+    let signature = generated("aws_sigv4_signature", 17);
+    for template in [
+        "<img src=\"https://cdn.example.de/bild.png?seite=2&amp;sig={}\">",
+        "<a href=\"https://hooks.example.com/incoming?source=ci&#38;Signature={}\">hook</a>",
+    ] {
+        let text = template.replace("{}", &signature);
+        assert!(
+            rule_entry(&text, "dlp_signed_url_signature").is_none(),
+            "{template}"
+        );
+    }
+}

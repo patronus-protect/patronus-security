@@ -30,6 +30,14 @@ macro_rules! xml_value_attribute {
     };
 }
 
+/// The separator before a URL query parameter: `?`, `&` and, in XML and
+/// HTML attribute values, the entities `&amp;` and `&#38;` (T16).
+macro_rules! query_separator {
+    () => {
+        r"(?:[?&]|&amp;|&#38;)"
+    };
+}
+
 mod auth_url;
 mod connection;
 mod content;
