@@ -23,6 +23,7 @@ use regex::Regex;
 use regex_automata::{meta, Anchored, Input};
 use regex_syntax::ast;
 use regex_syntax::hir::{Hir, HirKind, Look};
+use std::ops::Range;
 
 /// A single PII heuristic pattern.
 pub struct PiiPattern {
@@ -106,6 +107,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     driver_license::UK_CONTEXT_FREE,
     licence_plate::DE,
     licence_plate::UK,
+    licence_plate::UK_CONTEXT_FREE,
+    licence_plate::NG,
     us::SSN,
     us::SSN_PROXIMITY,
     us::SSN_CONTEXT_FREE,
@@ -412,19 +415,30 @@ impl PiiPipeline {
         let value = captures
             .get(self.capture_groups[index].unwrap_or(0))
             .unwrap();
+        let value = self.context_range(index, text, value.range());
         let structure =
-            context::structure_evidence(prepared.structure(), value.range(), pattern.entity_group);
+            context::structure_evidence(prepared.structure(), value.clone(), pattern.entity_group);
         if pattern.captured_value {
             // A regex match includes its field name; a structural match is the value
             // alone, and its key is the field.
-            let structural = captures.get(0).unwrap().start() == value.start();
+            let structural = captures.get(0).unwrap().start() == value.start;
             return structure
                 .filter(|evidence| structural && evidence.context.supports())
                 .unwrap_or_else(|| Evidence::field_at(structural));
         }
         structure.unwrap_or_else(|| {
-            context::evidence(text, (value.start(), value.end()), pattern.entity_group)
+            context::evidence(text, (value.start, value.end), pattern.entity_group)
         })
+    }
+
+    /// Range whose context a match of rule `index` at `value` takes: the value,
+    /// or for a later Nigerian plate of a list the list from its first plate.
+    fn context_range(&self, index: usize, text: &str, value: Range<usize>) -> Range<usize> {
+        if self.rule_ids[index] == "pii_vehicle_registration_ng" {
+            context::plate_list_start(text, value.start)..value.end
+        } else {
+            value
+        }
     }
 }
 
@@ -814,14 +828,14 @@ impl NativeRegexDetector for PiiPipeline {
         if pattern.requires_context {
             // Context-bound rules emit the whole match; it is the value. A
             // structural key decides before proximity.
-            let value = captures.get(0).unwrap();
+            let value = self.context_range(index, text, captures.get(0).unwrap().range());
             let supported = context::structure_evidence(
                 prepared.structure(),
-                value.range(),
+                value.clone(),
                 pattern.entity_group,
             )
             .map_or_else(
-                || context::supports(text, (value.start(), value.end()), pattern.entity_group),
+                || context::supports(text, (value.start, value.end), pattern.entity_group),
                 |evidence| evidence.context.supports(),
             );
             if !supported {

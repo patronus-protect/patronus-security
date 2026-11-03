@@ -50,7 +50,8 @@ unerreichbar.
   mit Leerraum am Rand, blanke BSNR und LANR (B-DE1), blanke Steuer-ID (K05), blanker deutscher
   Führerschein (F15), blanke TR/IN/NG-Kennzeichen (T30), blanke ACN (B-APAC), blanke KR-BRN mit
   zehn Ziffern (B-KR), blanke PESEL (A13), IN-PAN und Voter-ID ohne Begriff (B-IN), Partita IVA mit
-  Unterstrich (T33). Eine neue Ausnahme braucht eine Entscheidung
+  Unterstrich (T33), blanke SIN-Ziffernfolgen am Stück oder mit Leerzeichen (B-LUHN), blanke Aadhaar
+  mit zwölf Ziffern am Stück (B-IN), blanke NPI mit zehn Ziffern am Stück (A06, Q-M1). Eine neue Ausnahme braucht eine Entscheidung
   und einen Eintrag dort, keine Prosa-Ausnahme im README.
 - **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
   (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
@@ -83,6 +84,30 @@ Wirkung auf Dev (`presidio_favored`, `balanced`, erreichbar): IN-PAN 50 → 100,
 PESEL 50 → 100; Codice Fiscale, KR-RRN und NRIC/FIN lagen schon bei 100; ACN, Voter-ID, GSTIN und
 IT-USt-IdNr. behalten kein erreichbares Gold. M1 erreichbar 17/24 → 18/22 (offen: CA SIN, Aadhaar,
 Kennzeichen, NPI, `Q-M1`). Rohsicht und Gate unverändert, `strict` bitgleich.
+
+## M1 auf `presidio_favored` (Q-M1)
+
+Nach T33 lagen auf `presidio_favored` (`balanced`, erreichbar, gegen tuned) noch CA SIN, Aadhaar, NPI
+und Kennzeichen unter Presidio. Die Rückstände bei SIN, Aadhaar und NPI sind blanke Ziffernfolgen,
+die nach bestehenden Entscheidungen ohne Begriff negativ bleiben, und werden `known_gaps`: SIN am
+Stück oder in 3-3-3-Gruppen mit Leerzeichen (B-LUHN; Luhn trifft jede zehnte Folge, SIREN, BSN),
+Aadhaar mit zwölf Ziffern am Stück (B-IN), NPI mit zehn Ziffern am Stück (A06). Die gruppierten Formen
+bleiben Gold und werden gefunden. Beim Kennzeichen (kein Prüfziffer-Validator) kommt der Recall aus
+Struktur und Kontext, nur in `balanced` und `recall`:
+
+- `pii_vehicle_registration_uk_context_free`: die aktuelle UK-Form (`AB51 ABC`, `BD62XYZ`) auch ohne
+  Kennzeichen-Begriff; vergebene Bereichsbuchstaben und Altersziffern
+  (`validators::uk_vehicle_registration`) stehen für die Prüfziffer, Score 0,50, ein näherer
+  Gegenkontext-Begriff verwirft sie. Die T30-Entscheidung „UK-Kennzeichen bleiben Gold“ gilt weiter.
+- `pii_vehicle_registration_ng`: das nigerianische Kennzeichen (drei Buchstaben, drei Ziffern, zwei
+  Buchstaben, mit Bindestrich oder Leerzeichen) mit Kennzeichen-Begriff in der Nähe; ein späteres
+  Kennzeichen einer Liste (`, `, `and`, `und`, `&`) übernimmt den Begriff des ersten
+  (`Plates: APP-456CV and KJA-999PZ`). Blanke TR/IN/NG-Werte bleiben nach T30 negativ.
+
+Wirkung auf Dev (`balanced` gegen tuned, erreichbar): M1 `presidio_favored` 18/22 → **22/22** (CA SIN
+57,1 → 100, Aadhaar 85,7 → 100, NPI 88,9 → 100, Kennzeichen 22,2 → 76,9 gegen 76,9), `neutral` 9/9.
+Roh: Kennzeichen 11,8 → 47,6. `strict` bitgleich, HN-FP unverändert, Validatoren unverändert. Das
+Kennzeichen bleibt unter der Untergrenze F1 80 (Präfix-, datumslose und Suffix-Form der UK fehlen).
 
 ## Presidio tuned: abgeschaltete Recognizer gemeinsamer IDs (T32)
 

@@ -3718,8 +3718,8 @@ for _row in T29_CASES:
 # structural key (`kennzeichen`, `license_plate`, `licensePlate`), joined by `:`, `|`, a tab, `is`,
 # `ist`, `as` or `on file is`. The DE value may carry a hyphen before the digits (`K-MH-2476`)
 # and the `E`/`H` suffix; the UK current form (`AB51 ABC`) needs an issued age identifier
-# (02–29, 51–79). A bare value without a plate term stays negative in every mode. Appended so
-# existing ids stay stable.
+# (02–29, 51–79). A bare value without a plate term stays negative in strict (Q-M1 reports the UK
+# current form bare in balanced and recall). Appended so existing ids stay stable.
 T30_CASES = [
     p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", '{"kennzeichen": "', "K-MZ-2471", '"}', carrier="json"),
     p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", '{"fahrzeug": {"kfzKennzeichen": "', "H-J-6816E", '"}}', carrier="json"),
@@ -3746,8 +3746,8 @@ T30_CASES = [
     n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kennzeichen: K-MZ-24710", "five digits"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "Kennzeichen: AB00 ABC", "age identifier 00 is never issued"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "Bestellnummer: AB51 ABC", "order number, no plate term", mode="balanced"),
-    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term", mode="recall"),
-    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term (strict; Q-M1 reports it in balanced)"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term (strict; Q-M1 reports it in balanced)"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Order number: AB51 ABC", "order number, no plate term"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Vehicle registration: AB80 ABC", "age identifier 80 is not issued yet", mode="balanced"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Number plate: IB51 ABC", "I is no area letter"),
@@ -4956,6 +4956,59 @@ A02_CASES = [
     n("CRYPTO", "de", "pii_crypto_btc", "Token x3AmUfjkQBVsEoLYMFuytaeiKBazDe4wdfY wurde gesperrt.", "part of a longer token", carrier="prose", mode="balanced"),
 ]
 for _row in A02_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# Q-M1: in balanced and recall the UK current form is also reported bare (its issued area letters
+# and age identifier stand in for a check digit; score 0.50, a nearer counter-context term drops
+# it), and the Nigerian plate (three letters, three digits, two letters, joined by a hyphen or a
+# space) with a plate term near it; a later plate of a list (`Plates: APP-456CV and KJA-999PZ`)
+# takes the term of the first (rust/tests/pii_licence_plates.rs: a golden row holds one value).
+# strict is unchanged. Appended so existing ids stay stable.
+Q_M1_CASES = [
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "", "AB51 ABC", "", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "The blue van ", "LW02 ULF", " was seen leaving at noon.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "Seen at the depot: ", "KS54 WLS", "", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "", "BD62XYZ", "", tags=("no_context",), mode="recall"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "The witness statement mentions ", "YB68 TXM", " twice.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "Der Transporter ", "LW02 ULF", " stand vor dem Tor.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "Gesehen: ", "KS54 WLS", "", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "", "BD62XYZ", "", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "Am Hafen parkte ", "YB68 TXM", " über Nacht.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "", "AB51 ABD", "", tags=("no_context",), mode="recall"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "AB80 ABC", "age identifier 80 is not issued yet", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "IB51 ABC", "I is no area letter", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "Order number: AB51 ABC", "counter-context nearer", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "AB51 ABCD", "four random letters", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "ab51 abc", "lowercase is no printed plate", mode="recall"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AB00 ABC", "age identifier 00 is never issued", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AQ51 ABC", "Q is no area letter", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "Bestellnummer: AB51 ABC", "counter-context nearer", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AB51 IBC", "I is no random letter", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AB51 ABC", "bare value in strict"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: ", "APP-456CV", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Registered plates: ", "KJA-999PZ", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "The car with number plate ", "ABJ-001AA", " was towed.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Nigerian licence plate ", "LSR 123AB", "", mode="recall"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", '{"license_plate": "', "EKY-245BC", '"}', carrier="json", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: ", "APP-456CV", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Nummernschild ", "KJA-999PZ", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Das Fahrzeug mit dem Kennzeichen ", "ABJ-001AA", " stand im Halteverbot.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", '{"kennzeichen": "', "EKY-245BC", '"}', carrier="json", mode="recall"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Fahrzeug-Kennzeichen ", "LSR-123AB", "", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "APP-456CV", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Order number: APP-456CV", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: app-456cv", "lowercase is no printed plate", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: APP456CV", "no separator", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "APP-456CV and KJA-999PZ", "a list without a plate term", mode="recall"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: APP-456CV", "strict reports no Nigerian plate"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "KJA-999PZ", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Bestellnummer: KJA-999PZ", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: app-456cv", "lowercase is no printed plate", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: APP-4567CV", "four digits", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: APP-000CV", "serial 000 is never issued", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Artikel ABJ-001AA und KJA-999PZ", "a list without a plate term", mode="balanced"),
+]
+for _row in Q_M1_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

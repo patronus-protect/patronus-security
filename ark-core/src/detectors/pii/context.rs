@@ -730,6 +730,41 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next == Some(' ') && digit(next2)))
 }
 
+/// Start of the list of Nigerian plates that ends right before `start`
+/// (`APP-456CV and KJA-999PZ`, `APP-456CV, KJA-999PZ`, `… und …`, `… & …`), or
+/// `start` itself (Q-M1). A later plate of the list takes its plate term from the
+/// first one, as the proximity context stops at the digits of the plates in
+/// between.
+pub fn plate_list_start(text: &str, start: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut first = start;
+    loop {
+        let before = &bytes[..first];
+        let Some(rest) = [&b", "[..], b",", b" and ", b" und ", b" & "]
+            .into_iter()
+            .find_map(|separator| before.strip_suffix(separator))
+        else {
+            return first;
+        };
+        let Some(plate_start) = rest.len().checked_sub(9) else {
+            return first;
+        };
+        let plate = &rest[plate_start..];
+        let is_plate = plate[..3].iter().all(u8::is_ascii_uppercase)
+            && matches!(plate[3], b'-' | b' ')
+            && plate[4..7].iter().all(u8::is_ascii_digit)
+            && plate[7..].iter().all(u8::is_ascii_uppercase);
+        if !is_plate
+            || rest[..plate_start]
+                .last()
+                .is_some_and(u8::is_ascii_alphanumeric)
+        {
+            return first;
+        }
+        first = plate_start;
+    }
+}
+
 /// Whether the value at byte `start` follows the short term `PZN` with blanks
 /// only (B-FIN): `Pantoprazol 40 mg, PZN 43230555` lists the product of a
 /// medication line, a field name ends in `:`, `-`, `=` or `#` (`PZN: 43230555`).

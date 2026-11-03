@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Licence plates (T30): the German plate and the UK current form.
+//! Licence plates (T30, Q-M1): the German plate, the UK current form and the
+//! Nigerian plate.
 //!
 //! The two rules share one field part, so a plate field name binds either form: a
 //! German form may name a UK plate (`Kennzeichen: LW02 ULF`), an English one a
@@ -8,8 +9,11 @@
 //! them to the value with `is`, `ist`, `lautet`, `as` or `on file is` ("The vehicle
 //! registration on file is …", "My car, registration …", "My car reg is …"). A
 //! generic `registration number` names no plate. No form carries a check digit and
-//! ARK keeps no district-code list (F16 deferred), so a value without a plate field
-//! name is no finding in any mode. Values are uppercase as printed on the plate.
+//! ARK keeps no district-code list (F16 deferred), so in `strict` a value without a
+//! plate field name is no finding. In `balanced` and `recall` (Q-M1) the UK current
+//! form is also reported bare, as its issued age identifier stands in for a check,
+//! and the Nigerian plate with a plate term near it (`Plates: APP-456CV and
+//! KJA-999PZ`). Values are uppercase as printed on the plate.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// Pattern of a field-bound plate rule with the value regex `$value`. The word
@@ -62,4 +66,35 @@ pub(super) const UK: PiiPattern = PiiPattern {
     captured_value: true,
     requires_context: false,
     scored_only: false,
+};
+
+/// A bare UK plate in the current form, in `balanced` and `recall` only. The issued
+/// area letters and age identifier of `validators::uk_vehicle_registration` stand
+/// in for a check digit: the value just reaches the `balanced` threshold and a
+/// nearer counter-context term drops it.
+pub(super) const UK_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_uk_context_free",
+    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{2}[- ]?[A-Z]{3}(?-u:\b)",
+    entity_group: "LICENSEPLATE",
+    validator: Some(validators::uk_vehicle_registration),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// Nigerian plate: three letters of the local government area, three digits and
+/// two letters, joined by a hyphen or a space (`APP-456CV`), with a plate term near
+/// the value, in `balanced` and `recall` only.
+pub(super) const NG: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_ng",
+    pattern: r"(?-u:\b)[A-Z]{3}[- ][0-9]{3}[A-Z]{2}(?-u:\b)",
+    entity_group: "LICENSEPLATE",
+    validator: Some(validators::ng_vehicle_registration),
+    strength: ValidatorStrength::Format,
+    base_score: 25,
+    captured_value: false,
+    requires_context: true,
+    scored_only: true,
 };

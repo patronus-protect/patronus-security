@@ -106,8 +106,10 @@ const CONTEXT_BOUND_LABELS: [&str; 18] = [
     "DE_PZN",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
-const FORMAT_RULES: [&str; 6] = [
+const FORMAT_RULES: [&str; 8] = [
     "pii_driver_license_number_uk_context_free",
+    "pii_vehicle_registration_uk_context_free",
+    "pii_vehicle_registration_ng",
     "pii_ssn_us_context_free",
     "pii_ni_uk_context_free",
     TAX_NUMBER,
@@ -149,6 +151,8 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_phone_regional",
             STEUER_ID,
             "pii_driver_license_number_uk_context_free",
+            "pii_vehicle_registration_uk_context_free",
+            "pii_vehicle_registration_ng",
             "pii_ssn_us_context_free",
             "pii_ni_uk_context_free",
             "pii_vat_id_de",
@@ -238,6 +242,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             pattern.requires_context,
             [
                 "pii_phone_regional",
+                "pii_vehicle_registration_ng",
                 "pii_vat_id_it_proximity",
                 "pii_vat_id_es_proximity",
                 "pii_vat_id_pl_proximity",
@@ -251,9 +256,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         );
         // Bare, the checksum alone reaches the balanced threshold. The regional
         // phone rule has no checksum and never emits bare; with support it does
-        // (`pii_context_engine.rs`) ...
+        // (`pii_context_engine.rs`), as the Nigerian plate (Q-M1) ...
         assert!(
-            pattern.name == "pii_phone_regional"
+            ["pii_phone_regional", "pii_vehicle_registration_ng"].contains(&pattern.name)
                 || score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
             "{}",
             pattern.name

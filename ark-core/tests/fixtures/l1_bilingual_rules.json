@@ -926,6 +926,42 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk_context_free",
+    "de": "Der Transporter LW02 ULF stand vor dem Tor.",
+    "en": "The blue van LW02 ULF was seen leaving at noon.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer: AB51 ABC",
+        "AB00 ABC"
+      ],
+      "en": [
+        "Order number: AB51 ABC",
+        "IB51 ABC"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_ng",
+    "de": "Kennzeichen: APP-456CV, KJA-999PZ",
+    "en": "Plates: APP-456CV and KJA-999PZ",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "Artikel ABJ-001AA und KJA-999PZ",
+        "Bestellnummer: KJA-999PZ"
+      ],
+      "en": [
+        "APP-456CV and KJA-999PZ",
+        "Plates: APP456CV"
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_ssn_us",
     "de": "US-Sozialversicherungsnummer: 123-45-6789",
     "en": "Social security number: 123-45-6789",
