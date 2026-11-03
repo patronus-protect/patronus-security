@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: provider and CSRF values handed over in DE/EN prose (T20). The key-bound
+  provider rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
+  `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,
+  `dlp_azure_devops_legacy_pat`, `dlp_cloudflare_api_key`, `dlp_bitbucket_client_secret`,
+  `dlp_datadog_api_key`, `dlp_newrelic_legacy_license_key`, `dlp_sentry_auth_token`,
+  `dlp_splunk_hec_token`, `dlp_elastic_api_key`, `dlp_honeycomb_api_key`, `dlp_pagerduty_api_key`)
+  and `dlp_csrf_token` also read the G-PROSE handover of chats, tickets and mails: the provider name
+  and a credential noun on the line or up to two lines before, the value after a colon at the end of
+  its line or alone (`the Heroku API key for the job:` and the value below it,
+  `(Heroku-API-Schlüssel): …`, `Wie lautet der Wert für „CSRF-Token“?` and the reply). The value
+  must pass the provider's own format, validator and example checks, so it keeps its provider rule
+  instead of `dlp_prose_secret`, and Elastic keeps `id:api_key` as one span. The prose rules and
+  the provider handover drop a value after an ID noun (`App-ID:`, `project id:`, `Service-ID:`).
 - Detection change: URL query credentials in XML and HTML attribute values (T16).
   `dlp_credential_in_url`, `dlp_signed_url_signature` and the query branch of
   `dlp_connection_string_password` take the entities `&amp;` and `&#38;` as the parameter

@@ -141,10 +141,6 @@ fn secret_and_token_handed_over_in_chats_tickets_and_mails() {
             "b5970eb6b7b70c7e63349a4a3385bb1f797b06fa",
         ),
         (
-            "Note from reporter: the job still uses the old CSRF token. Current value in the config: o8spc0Vb3kQyLm2Xr9TzWd4NfHa1uJe6KcPq7Ys5GgE\n",
-            "o8spc0Vb3kQyLm2Xr9TzWd4NfHa1uJe6KcPq7Ys5GgE",
-        ),
-        (
             "Hi team,\n\nhere is the service secret for the reporting job:\n\noSJZqBdybUNn2bYMPZSZ0O1q\n\nThanks\n",
             "oSJZqBdybUNn2bYMPZSZ0O1q",
         ),

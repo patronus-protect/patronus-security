@@ -14,6 +14,8 @@ use crate::{
 use serde_json::{Map, Value};
 use std::{borrow::Cow, ops::Range};
 
+use super::likeness;
+
 /// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) and npm token
 /// (`npm_`, F04): after the four-character prefix, 30 random base62
 /// characters and their CRC32 as six base62 digits.
@@ -242,18 +244,36 @@ fn has_pagerduty_context(text: &str, value: Range<usize>) -> bool {
 /// `Heroku-API-Schlüssel:`, `Circle-Token:`), an optional opening quote and
 /// the value in group 1, which no further value character continues.
 /// `HEROKU_APP_ID`, `CIRCLE_SHA1` or `travis_build_id` name no credential.
+/// T20: the same name and noun hand the value over in a chat, ticket or mail
+/// (`the Heroku API key for the job:` and the value below it,
+/// `(Heroku-API-Schlüssel): …`) at the end of its line, group 2; the key gate
+/// [`likeness::is_provider_handover`] drops IDs under the provider name.
 macro_rules! provider_key {
     ($provider:literal, $value:expr) => {
         concat!(
             "(?i:",
             $provider,
             r")[A-Za-z0-9_.\- ]{0,30}?",
-            r"(?i:token|key|secret|pat|password|passwort|kennwort|schlüssel|schluessel)",
+            provider_noun!(),
             key_suffix!(),
             r"(?:=>|:=|[=:,])[ \t]*\\?[\x22'`]?(",
             $value,
-            r")(?:[^A-Za-z0-9_\-+/=]|$)",
+            r")(?:[^A-Za-z0-9_\-+/=]|$)|(?i:",
+            $provider,
+            r")[A-Za-z0-9_.\- ]{0,30}?",
+            provider_noun!(),
+            prose_handover!(),
+            "(",
+            $value,
+            r")[.,;]?[ \t]*\r?(?m:$)",
         )
+    };
+}
+
+/// P06: the credential noun of a provider key.
+macro_rules! provider_noun {
+    () => {
+        r"(?i:token|key|secret|pat|password|passwort|kennwort|schlüssel|schluessel)"
     };
 }
 
@@ -901,6 +921,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("bitbucket")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::SecretKey),
     },
     // Azure DevOps personal access tokens since 2024: 84 alphanumerics with
@@ -939,6 +960,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("azure_devops")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // CircleCI personal (`CCIPAT_`) and project (`CCIPRJ_`) API tokens: a
@@ -976,6 +998,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("circleci")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Travis CI API tokens: 22 alphanumerics under a Travis key.
@@ -993,6 +1016,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("travisci")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Vercel personal (`vcp_`), integration (`vci_`), app access (`vca_`),
@@ -1031,6 +1055,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("vercel")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Netlify personal access tokens: `nfp_` and 36 characters.
@@ -1067,6 +1092,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("netlify")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Fly.io OAuth tokens: `fo1_` and 43 base64url characters.
@@ -1138,6 +1164,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("heroku")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // Render API keys: `rnd_` and a random body, only with Render context.
@@ -1174,6 +1201,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("railway")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Cloudflare API tokens (40 characters) and Global API Keys (37 hex
@@ -1192,6 +1220,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("cloudflare")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // Cloudflare Origin CA keys: `v1.0-`, 24 hex digits, `-` and 146 hex
@@ -1253,6 +1282,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("datadog")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // New Relic user API keys: `NRAK-` and 27 alphanumerics.
@@ -1327,6 +1357,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("newrelic")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // Sentry user auth tokens: `sntryu_` and 64 hex digits.
@@ -1382,6 +1413,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("sentry")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // The secret key of a legacy Sentry DSN
@@ -1500,6 +1532,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("splunk")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::AccessToken),
     },
     // Elasticsearch API keys under an Elastic key (`id:api_key` or its
@@ -1525,6 +1558,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("elastic")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // Honeycomb configuration and ingest keys (22 alphanumerics) and Classic
@@ -1548,6 +1582,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("honeycomb")
         .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // PagerDuty REST API keys (20 characters, user tokens `u+…`) and Events
@@ -1571,6 +1606,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("pagerduty")
         .with_min_entropy(3.0)
         .with_context_gate(has_pagerduty_context)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Payment ───────────────────────────────────────────────────────────────
