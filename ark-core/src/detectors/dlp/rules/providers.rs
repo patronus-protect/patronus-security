@@ -1869,7 +1869,7 @@ mod tests {
             .iter()
             .filter_map(|rule| xml_key(rule.pattern).map(|key| (rule.name, key)))
             .collect();
-        assert_eq!(keyed.len(), 16);
+        assert_eq!(keyed.len(), 18);
         let (_, heroku) = keyed
             .iter()
             .find(|(name, _)| *name == "dlp_heroku_legacy_api_key")
