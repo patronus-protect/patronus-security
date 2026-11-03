@@ -20,6 +20,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   attainable gold (IN PAN 50 -> 100, KR BRN 66.7 -> 100, PESEL 50 -> 100; ACN, voter ID, GSTIN and
   IT VAT ID without attainable gold); M1 attainable 17/24 -> 18/22. Raw view, gate and validators
   unchanged. Evaluation only: no detection change, strict and balanced output bit-identical.
+- Detection change: Slack, Discord and Stripe formats (F-PROV, F09 + F10). `dlp_slack_token`
+  takes the gitleaks Slack shapes instead of `xox[bpras]-` and 15 open characters: bot tokens with
+  numeric team and bot user IDs, legacy bot tokens (one ID, 18 to 26 characters), user tokens
+  (`xoxp-`/`xoxe-`, three IDs, 28 to 34 characters), legacy `xoxo-`/`xoxs-` tokens with a hex
+  secret and workspace `xoxa-`/`xoxr-` tokens (8 to 48 characters). The new rule
+  `dlp_slack_app_token` reports app-level tokens (`xapp-`, upper-case app ID, 64 hex digits) and app
+  configuration access and refresh tokens (`xoxe.xoxp-`, `xoxe-`); `comm.slack.app_config_token`
+  moves from baseline-only to shared. `dlp_discord_token` decodes the first segment of a bot token
+  to the bot's snowflake ID (17 to 20 digits, no leading zero, within 64 bits; validator strength
+  `structure`) and takes `M`/`N`/`O` leads, 6-character timestamps and 27 to 38 character HMACs.
+  `dlp_stripe_key` takes `sk_`/`rk_` with `live`/`test` and 20 to 99 base62 characters (underscores
+  only, test keys keep severity `test`); publishable `pk_` keys stay no secret. `dlp_stripe_webhook`
+  takes `whsec_` with 32 base62 characters (Dashboard) or 64 hex digits (Stripe CLI) instead of 20
+  or more. Format sources in `research/dlp/rule_sources.yaml`.
 - Presidio `tuned` baseline enables the off-by-default English recognizers of shared ids (T32,
   decided 2026-11-02, option a). `scripts/l1_presidio/profiles/tuned.yaml` now also runs US NPI,
   CA SIN, SG NRIC/FIN, ZA ID, AU ABN/ACN/TFN/Medicare, IN PAN/Aadhaar/passport/GSTIN/voter ID and

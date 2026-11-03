@@ -5159,6 +5159,9 @@ DLP_LOOKALIKE_GENERATORS = (
     "anthropic_api_key_short", "anthropic_admin_key_long", "openai_project_key", "openai_service_account_key_short",
     "openai_legacy_key_no_marker", "huggingface_token_digit", "groq_key_short", "replicate_api_token_long",
     "google_api_key_long", "google_oauth_access_token_short", "gcp_oauth_client_secret_long",
+    # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
+    "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
+    "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
 )
 
 
@@ -12811,6 +12814,181 @@ DLP_FLLM_CASES = {
     ],
 }
 for _label, _rows in DLP_FLLM_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# F-PROV: Slack bot/user/legacy/workspace tokens with numeric IDs per gitleaks, app-level and
+# configuration tokens (xapp-, xoxe.xoxp-, xoxe-), Discord bot tokens whose first segment decodes
+# to a snowflake ID, Stripe sk_/rk_ live and test keys of 20 to 99 characters (test keys with
+# severity test) and whsec_ webhook secrets of 32 base62 or 64 hex characters. Hard negatives
+# are lookalikes, publishable keys (pk_), placeholders and env references.
+DLP_FPROV_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_slack_token",
+            "# .env für den Benachrichtigungs-Bot\nSLACK_BOT_TOKEN=<<secret:0>>\nSLACK_CHANNEL=#alerts\n",
+            "slack_bot_token", 19501, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_slack_token",
+            "slack:\n  user_token: \"<<secret:0>>\"\n  workspace: acme\n",
+            "slack_user_token", 19502, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_slack_token",
+            "Hallo Team,\n\nder alte Slack-Bot nutzt noch das Token <<secret:0>>, bitte widerrufen.\n",
+            "slack_legacy_bot_token", 19503, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_slack_token",
+            "{\n  \"slack\": {\n    \"refresh_token\": \"<<secret:0>>\"\n  }\n}\n",
+            "slack_workspace_token", 19504, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_slack_app_token",
+            "$ slack-cli connect --app-token <<secret:0>> --socket-mode\n",
+            "slack_app_token", 19505, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_slack_app_token",
+            "2026-11-02T08:12:44Z INFO manifest: rotated config token <<secret:0>>\n",
+            "slack_config_refresh_token", 19506, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_slack_app_token",
+            "# app manifest deploy\nSLACK_CONFIG_TOKEN=<<secret:0>>\n",
+            "slack_config_access_token", 19507, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_discord_token",
+            "import discord\n\nclient = discord.Client(intents=intents)\nclient.run(\"<<secret:0>>\")\n",
+            "discord_bot_token", 19508, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "[discord]\nbot_token = \"<<secret:0>>\"\n",
+            "discord_bot_token", 19509, carrier="toml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_slack_token",
+            "2026-11-02T08:12:44Z WARN bot: Wert <<secret:0>> abgelehnt (Format)\n",
+            "slack_bot_token_no_ids", 19510, "xoxb- shape without numeric team and bot user IDs", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_slack_token",
+            "2026-11-02T08:12:44Z WARN bot: rejected <<secret:0>> (length)\n",
+            "slack_user_token_short", 19511, "xoxp- shape with a 20-character secret", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_slack_app_token",
+            "2026-11-02T08:12:44Z WARN bot: Wert <<secret:0>> abgelehnt (Format)\n",
+            "slack_app_token_lower_id", 19512, "xapp- shape with a lower-case app ID", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "2026-11-02T08:12:44Z WARN gateway: rejected <<secret:0>> (format)\n",
+            "discord_bot_token_non_snowflake", 19513, "first segment decodes to letters, not a snowflake ID",
+            carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_slack_token",
+            "# Token kommt aus dem Tresor\nSLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_slack_token",
+            "Bot tokens start with xoxb- followed by the team ID, the bot user ID and a secret.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_discord_token",
+            "discord:\n  token: \"{{ discord_bot_token }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "Discord user ID 175928847299117063 joined the guild 80351110224678912.\n",
+            "snowflake IDs without a token", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_slack_app_token",
+            "Kanal-ID C0123ABCD45 und App-ID A0123ABCDEF im Manifest eintragen.\n",
+            "Slack IDs without a token", carrier="prose",
+        ),
+    ],
+    "PAYMENT_KEY": [
+        ds(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "# Zahlungen (Produktion)\nSTRIPE_SECRET_KEY=<<secret:0>>\nSTRIPE_CURRENCY=eur\n",
+            "stripe_secret_live", 19521, carrier="env",
+        ),
+        ds(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "import stripe\n\nstripe.api_key = \"<<secret:0>>\"\n",
+            "stripe_secret_test_long", 19522, carrier="code",
+        ),
+        ds(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "$ curl https://api.stripe.com/v1/charges -u <<secret:0>>:\n",
+            "stripe_restricted_test", 19523, carrier="cli",
+        ),
+        ds(
+            "PAYMENT_KEY", "en", "dlp_stripe_webhook",
+            "$ stripe listen --forward-to localhost:4242/webhook\n> Ready! Your webhook signing secret is <<secret:0>>\n",
+            "stripe_webhook_secret_cli", 19524, carrier="cli",
+        ),
+        ds(
+            "PAYMENT_KEY", "de", "dlp_stripe_webhook",
+            "payments:\n  stripe:\n    webhook_secret: \"<<secret:0>>\"\n",
+            "stripe_webhook_secret", 19525, carrier="yaml",
+        ),
+        ds(
+            "PAYMENT_KEY", "en", "dlp_stripe_webhook",
+            "{\n  \"stripe\": {\n    \"endpointSecret\": \"<<secret:0>>\"\n  }\n}\n",
+            "stripe_webhook_secret", 19526, carrier="json",
+        ),
+        dl(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "<script>\n  const stripe = Stripe('<<secret:0>>');\n</script>\n",
+            "stripe_publishable_live", 19527, "publishable key (pk_), public by design", carrier="code",
+        ),
+        dl(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "# client side\nNEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<<secret:0>>\n",
+            "stripe_publishable_live", 19528, "publishable key (pk_), public by design", carrier="env",
+        ),
+        dl(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "2026-11-02T08:12:44Z WARN payments: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "stripe_secret_live_long", 19529, "sk_live_ shape with 100 instead of at most 99 characters", carrier="log",
+        ),
+        dl(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "2026-11-02T08:12:44Z WARN payments: rejected <<secret:0>> (format)\n",
+            "stripe_restricted_dash", 19530, "rk-live- with dashes instead of underscores", carrier="log",
+        ),
+        dl(
+            "PAYMENT_KEY", "de", "dlp_stripe_webhook",
+            "2026-11-02T08:12:44Z WARN payments: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "stripe_webhook_secret_short", 19531, "whsec_ shape with 31 instead of 32 characters", carrier="log",
+        ),
+        dn(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "payments:\n  stripe_secret_key: ${STRIPE_SECRET_KEY}\n",
+            "environment reference", carrier="yaml",
+        ),
+        dn(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "Geheime Stripe-Schlüssel beginnen mit sk_live_ oder sk_test_, öffentliche mit pk_.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "PAYMENT_KEY", "en", "dlp_stripe_webhook",
+            "Copy the signing secret (whsec_...) from the Dashboard into STRIPE_WEBHOOK_SECRET.\n",
+            "truncated example in the docs", carrier="markdown",
+        ),
+    ],
+}
+for _label, _rows in DLP_FPROV_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

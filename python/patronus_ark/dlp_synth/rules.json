@@ -325,18 +325,27 @@
     },
     "dlp_stripe_key": {
       "generators": ["stripe_secret_live", "stripe_restricted_test", "stripe_secret_test_long"],
+      "lookalike": ["stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live"],
       "probes": ["STRIPE_SECRET_KEY=<<secret:0>>", "Stripe.api_key = \"<<secret:0>>\""]
     },
     "dlp_stripe_webhook": {
-      "generators": ["stripe_webhook_secret"],
+      "generators": ["stripe_webhook_secret", "stripe_webhook_secret_cli"],
+      "lookalike": ["stripe_webhook_secret_short"],
       "probes": ["STRIPE_WEBHOOK_SECRET=<<secret:0>>", "endpoint_secret = '<<secret:0>>'"]
     },
     "dlp_slack_token": {
-      "generators": ["slack_bot_token", "slack_user_token"],
+      "generators": ["slack_bot_token", "slack_user_token", "slack_legacy_bot_token", "slack_workspace_token"],
+      "lookalike": ["slack_bot_token_no_ids", "slack_user_token_short"],
       "probes": ["SLACK_BOT_TOKEN=<<secret:0>>", "Bitte den Slack-Token <<secret:0>> widerrufen."]
+    },
+    "dlp_slack_app_token": {
+      "generators": ["slack_app_token", "slack_config_access_token", "slack_config_refresh_token"],
+      "lookalike": ["slack_config_refresh_token_short", "slack_app_token_lower_id"],
+      "probes": ["SLACK_APP_TOKEN=<<secret:0>>", "Bitte das Slack-Konfigurationstoken <<secret:0>> widerrufen."]
     },
     "dlp_discord_token": {
       "generators": ["discord_bot_token"],
+      "lookalike": ["discord_bot_token_non_snowflake"],
       "probes": ["DISCORD_TOKEN=<<secret:0>>", "client.run('<<secret:0>>')"]
     },
     "dlp_eth_private_key": {
@@ -503,7 +512,6 @@
     "dlp_structured_system_log": "content class, E04 carrier templates"
   },
   "baseline_entities": {
-    "comm.slack.app_config_token": {"generators": ["slack_app_token", "slack_config_access_token", "slack_config_refresh_token"], "lookalike": ["slack_config_refresh_token_short"]},
     "comm.webhook_url": {"generators": ["slack_webhook_url", "teams_webhook_url"], "lookalike": ["slack_webhook_url_short"]},
     "comm.discord.api_credentials": {"generators": ["discord_api_token", "discord_client_secret"], "lookalike": ["discord_client_secret_short"]},
     "comm.telegram.bot_token": {"generators": ["telegram_bot_token"], "lookalike": ["telegram_bot_token_short"]},

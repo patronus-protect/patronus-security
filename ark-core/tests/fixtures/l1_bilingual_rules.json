@@ -4525,6 +4525,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "STRIPE_PUBLISHABLE_KEY=pk_live_Qm8vR2tXe5LbN7wKc3HzYp1d",
+        "Geheime Stripe-Schlüssel beginnen mit sk_live_."
+      ],
+      "en": [
+        "const stripe = Stripe('pk_test_Zr4nW9qLs2VxT6bJm8KfHc3g');",
+        "STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -4538,6 +4548,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Signatur-Secret (whsec_...) aus dem Dashboard kopieren."
+      ],
+      "en": [
+        "STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -4551,6 +4569,37 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}",
+        "Bot-Tokens beginnen mit xoxb-, danach Team-ID und Bot-ID."
+      ],
+      "en": [
+        "slack:\n  bot_token: \"{{ slack_bot_token }}\"",
+        "Channel C0123ABCD45 belongs to team T0123ABCD."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_slack_app_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "slack_app_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SLACK_APP_TOKEN=${SLACK_APP_TOKEN}"
+      ],
+      "en": [
+        "App-level tokens start with xapp-1- and the app ID."
+      ]
+    },
     "language_neutral": true
   },
   {

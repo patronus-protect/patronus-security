@@ -328,9 +328,9 @@ const SHAPES: &[Shape] = &[
         rule_id: "dlp_slack_token",
         carrier_de: "SLACK_TOKEN={}",
         carrier_en: "slack:\n  bot_token: {}\n",
-        prefix: "xoxb-",
+        prefix: concat!("xox", "b-4161823004-", "4161823010123-"),
         alphabet: ALNUM,
-        length: 40,
+        length: 24,
         suffix: "",
     },
     Shape {
