@@ -109,7 +109,7 @@ pub(super) fn is_session_id(text: &str, range: Range<usize>) -> bool {
     is_issued_token(&text[range])
 }
 
-fn is_issued_token(value: &str) -> bool {
+pub(super) fn is_issued_token(value: &str) -> bool {
     value.len() >= MIN_TOKEN_LENGTH
         && !likeness::is_identifier(value)
         && likeness::is_token_like(value)

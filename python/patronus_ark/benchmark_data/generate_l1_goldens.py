@@ -5162,6 +5162,8 @@ DLP_LOOKALIKE_GENERATORS = (
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
+    # G-URL: Base32 seed and auth URL token shorter than the rules take
+    "totp_base32_secret_short", "auth_url_token_short",
 )
 
 
@@ -12989,6 +12991,284 @@ DLP_FPROV_CASES = {
     ],
 }
 for _label, _rows in DLP_FPROV_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# G-URL (F12 + G08 + G09): otpauth:// URIs and TOTP seeds after a 2FA key (Base32 of at least
+# 80 bits), auth URLs (reset, magic-link, invitation and e-mail confirmation path tokens, OAuth
+# access tokens in redirect fragments, authorization codes with `state` or on a callback path).
+# Hard negatives: pagination, cursor and CSRF companions of a `token` parameter, signatures
+# without signed-URL structure, the documented Google Authenticator seed, UUID and digest path
+# segments, placeholders, template and env references.
+DLP_GURL_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "# .env – Zwei-Faktor für den Service-Account\nAPP_ENV=production\nTOTP_SECRET=<<secret:0>>\n",
+            "totp_base32_secret", 19601, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "zwei_faktor:\n  # aus dem QR-Code beim Einrichten\n  uri: \"otpauth://totp/Lager:ada@example.de?secret=<<secret:0>>&issuer=Lager\"\n",
+            "totp_base32_secret", 19602, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "Hallo Tom,\n\nfür den Notfallzugang hier der 2FA-Schlüssel: <<secret:0>>\n\nBitte nach dem Einrichten löschen.\n",
+            "totp_base32_secret", 19603, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "{\n  \"benutzer\": \"lager-bot\",\n  \"mfa_secret\": \"<<secret:0>>\"\n}\n",
+            "totp_base32_secret", 19604, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "2026-11-03T08:12:44Z DEBUG mfa: QR-Code erzeugt für otpauth://totp/Portal:ada?secret=<<secret:0>>&issuer=Portal&digits=6\n",
+            "totp_base32_secret", 19605, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "$ qrencode -o mfa.png 'otpauth://totp/ACME:ops@example.com?secret=<<secret:0>>&issuer=ACME'\n",
+            "totp_base32_secret", 19606, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "{\n  \"user\": \"deploy\",\n  \"totp_seed\": \"<<secret:0>>\"\n}\n",
+            "totp_base32_secret", 19607, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "Hi Sam,\n\nif the QR code does not scan, enter the authenticator key: <<secret:0>>\n",
+            "totp_base32_secret", 19608, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "import pyotp\n\nOTP_SECRET = \"<<secret:0>>\"\ntotp = pyotp.TOTP(OTP_SECRET)\n",
+            "totp_base32_secret", 19609, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "hardware_tokens:\n  - serial: 4711\n    uri: otpauth://hotp/ACME:vpn?secret=<<secret:0>>&counter=0&issuer=ACME\n",
+            "totp_base32_secret", 19610, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "Hallo Ada,\n\nüber diesen Link kannst du dein Passwort zurücksetzen:\nhttps://konto.example.de/passwort-zuruecksetzen/<<secret:0>>\n\nDer Link ist 24 Stunden gültig.\n",
+            "auth_url_opaque_token", 19611, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "2026-11-03T08:12:44Z INFO mailer: Einladung versendet, Link https://app.example.de/einladung/<<secret:0>>\n",
+            "auth_url_opaque_token", 19612, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "{\n  \"weiterleitung\": \"https://app.example.de/oauth/callback#access_token=<<secret:0>>&token_type=Bearer&expires_in=3600\"\n}\n",
+            "auth_url_opaque_token", 19613, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "# Testlink aus der Mail\nMAGIC_LINK_URL=https://app.example.de/magic-link/<<secret:0>>\n",
+            "auth_url_opaque_token", 19614, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "$ curl -i 'https://app.example.de/auth/callback?code=<<secret:0>>&state=lagerweb'\n",
+            "auth_url_opaque_token", 19615, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "team:\n  einladung_url: https://app.example.de/invitations/accept/<<secret:0>>\n",
+            "auth_url_opaque_token", 19616, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "Hi Sam,\n\nsomeone asked to reset your password. Use this link:\nhttps://accounts.example.com/reset-password/<<secret:0>>\n",
+            "auth_url_opaque_token", 19617, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "2026-11-03T08:12:44Z INFO auth: redirect to https://app.example.com/login/callback?code=<<secret:0>>&state=web\n",
+            "auth_url_opaque_token", 19618, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "def test_confirm_link(client):\n    response = client.get(\"https://app.example.com/verify-email/<<secret:0>>\")\n    assert response.status_code == 200\n",
+            "auth_url_opaque_token", 19619, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "{\n  \"redirect_uri\": \"https://client.example.com/cb#access_token=<<secret:0>>&state=42&token_type=bearer\"\n}\n",
+            "auth_url_opaque_token", 19620, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "HTTP/1.1 302 Found\r\nLocation: https://app.example.com/magic?login_token=<<secret:0>>\r\n\r\n",
+            "auth_url_opaque_token", 19621, carrier="http",
+        ),
+        dl(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "2026-11-03T08:12:44Z WARN mfa: Schlüssel otpauth://totp/Portal:ada?secret=<<secret:0>> abgelehnt (zu kurz)\n",
+            "totp_base32_secret_short", 19622, "Base32 seed below 80 bits", carrier="log",
+        ),
+        dl(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "Your invitation: https://app.example.com/invite/<<secret:0>>\n",
+            "auth_url_token_short", 19623, "path token shorter than an issued token", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "# Seed kommt aus dem Tresor\nTOTP_SECRET=${TOTP_SECRET}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "Bitte den sechsstelligen Code aus der Authenticator-App eingeben (z. B. 482913).\n",
+            "one-time code, not a seed", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "mfa:\n  vorlage: \"otpauth://totp/Lager:{benutzer}?issuer=Lager&digits=6&period=30\"\n",
+            "otpauth template without a secret", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "Beispiel aus der Dokumentation: otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example\n",
+            "documented Google Authenticator example seed", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_otp_secret",
+            "{\n  \"otp_secret\": \"<base32-secret>\"\n}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "totp = pyotp.TOTP(os.environ[\"TOTP_SECRET\"])\n",
+            "environment reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "The secret parameter of an otpauth URI is the Base32-encoded shared key (RFC 4648).\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "Example: otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example\n",
+            "documented Google Authenticator example seed", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "mfa:\n  totp_secret: \"{{ totp_secret }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_otp_secret",
+            "2026-11-03T08:12:44Z INFO mfa: user 4711 verified code 482913 (window 1)\n",
+            "one-time code, not a seed", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "team:\n  einladung_url: https://app.example.de/einladung/3f2b8c1e-9d4a-4e7b-8c2d-1a5f6e7b9c0d\n",
+            "invitation ID is a UUID", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "Den Link zum Zurücksetzen findest du unter https://konto.example.de/passwort-zuruecksetzen/ – er ist 24 Stunden gültig.\n",
+            "reset path without a token", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "reset_url = f\"https://app.example.de/reset-password/{token}\"\n",
+            "template reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "# Einladungslink aus dem Tresor\nINVITE_URL=https://app.example.de/invite/${INVITE_TOKEN}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_auth_url_token",
+            "Gutschein einlösen: https://shop.example.de/einloesen?code=WINTERAKTION2026XL\n",
+            "voucher code without OAuth state or callback", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "The confirmation link looks like https://app.example.com/confirm-email/098f6bcd4621d373cade4e832627b4f6\n",
+            "hex digest path segment", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "{\n  \"redirect_uri\": \"https://app.example.com/callback#access_token=YOUR_ACCESS_TOKEN&token_type=bearer\"\n}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "reset_link: \"https://app.example.com/reset-password/{{ reset_token }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "2026-11-03T08:12:44Z INFO http: GET /oauth/callback?code=<code>&state=<state> 302\n",
+            "placeholder", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_auth_url_token",
+            "Redeem your gift card at https://shop.example.com/redeem?code=SPRINGSALE2026XL\n",
+            "voucher code without OAuth state or callback", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "{\n  \"next\": \"https://api.example.de/v1/rechnungen?limit=50&token=eyJvZmZzZXQiOjUwfQ\"\n}\n",
+            "pagination cursor token", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "2026-11-03T08:12:44Z INFO http: GET /api/v1/kunden?page=3&per_page=25&token=c3RhcnQ9NzU 200\n",
+            "pagination cursor token", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "<a href=\"/abmelden?_csrf=8f3kQ2mZ&token=8f3kQ2mZ\">Abmelden</a>\n",
+            "CSRF form token", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "Vorschaubild: https://cdn.example.de/bild.png?seite=2&sig=a1b2c3d4e5f6a7b8c9d0\n",
+            "cache-busting signature without signed-URL structure", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "vertrag_url: https://docs.example.de/vertrag.pdf?version=3&Signature=QmVpc3BpZWxTaWduYXR1cg\n",
+            "signature parameter without Expires or key pair", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "{\n  \"next_page\": \"https://api.example.com/v2/orders?cursor=3&token=eyJwYWdlIjozfQ\"\n}\n",
+            "pagination cursor token", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "$ curl 'https://api.example.com/v1/events?offset=100&limit=100&token=MTAwOjIwMjYtMTE'\n",
+            "pagination cursor token", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "2026-11-03T08:12:44Z INFO http: GET /logout?authenticity_token=RkNTUkZ0b2tlbg&token=RkNTUkZ0b2tlbg 302\n",
+            "CSRF form token", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "Download: https://files.example.com/a.zip?sig=QWxsZXNHdXRlWnVtR2VidXJ0c3RhZw\n",
+            "sig parameter without Azure SAS sv/se/sp", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "preview_url = \"https://bucket.example.com/x.png?X-Amz-Signature=e3b0c44298fc1c149afbf4c8\"\n",
+            "X-Amz-Signature without the other SigV4 parameters", carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_GURL_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

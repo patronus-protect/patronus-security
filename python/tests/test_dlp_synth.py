@@ -623,6 +623,9 @@ CHECKS = {
     "url_token": prefixed("", ALNUM, 24),
     "generic_api_secret": prefixed("", HEX, 40),
     "aws_sigv4_signature": prefixed("", HEX, 64),
+    # G-URL: otpauth/TOTP Base32 seeds and opaque auth URL tokens
+    "totp_base32_secret": prefixed("", BASE32, 32),
+    "auth_url_opaque_token": base64url_bytes(32),
     "java_session_id": prefixed("", "0123456789ABCDEF", 32),
     "php_session_id": prefixed("", "0123456789abcdefghijklmnopqrstuv", 26),
     "express_session_id": express_session_id,
@@ -848,6 +851,9 @@ LOOKALIKE_FAILURES = {
     "stripe_restricted_dash": lambda v: v.startswith(("rk_live_", "rk_test_")),
     "stripe_publishable_live": lambda v: v.startswith(("sk_", "rk_")),
     "stripe_webhook_secret_short": lambda v: CHECKS["stripe_webhook_secret"](v) or CHECKS["stripe_webhook_secret_cli"](v),
+    # G-URL: Base32 seed and auth URL token shorter than the rules take
+    "totp_base32_secret_short": lambda v: len(v) >= 16,
+    "auth_url_token_short": lambda v: len(v) >= 16,
     # GOLD-D2: wrong prefix, length or character set of a baseline entity's format
     "slack_config_refresh_token_short": CHECKS["slack_config_refresh_token"],
     "slack_webhook_url_short": CHECKS["slack_webhook_url"],

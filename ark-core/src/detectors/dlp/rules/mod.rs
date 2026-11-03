@@ -30,6 +30,7 @@ macro_rules! xml_value_attribute {
     };
 }
 
+mod auth_url;
 mod connection;
 mod content;
 mod credentials;

@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 182 | 115 (+5 relationship rules) |
+| Regex rules | 182 | 117 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 122 | 14 |
+| Rules with a `checksum` or `structure` check | 122 | 15 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -313,7 +313,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
-| `CREDENTIAL` | generic_credential | on | 13 | 10 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
+| `CREDENTIAL` | generic_credential | on | 15 | 12 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
 | `CRYPTO_KEY` | key_material | on | 2 | 2 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
@@ -419,6 +419,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | `dlp_btc_wif` | checksum | on | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | `dlp_credential_in_url` | none | on | – |
+| `credential.auth_url` | ark_only | `CREDENTIAL` | `dlp_auth_url_token` | none | on | – |
+| `credential.otp_secret` | ark_only | `CREDENTIAL` | `dlp_otp_secret` | structure | on | – |
 | `identifier.de.vat_id` | ark_only | `dlp.de.vat_id` | `dlp_de_vat_id` | format | off | – |
 | `identifier.de.commercial_register` | ark_only | `dlp.de.commercial_register_number` | `dlp_de_commercial_register_number` | format | off | – |
 | `identifier.de.bsnr` | ark_only | `dlp.de.facility_number_bsnr` | `dlp_de_facility_number_bsnr` | format | off | – |
@@ -535,7 +537,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 63 shared, 24 ARK only, 92 baseline only, 11 out of scope.
+Entities: 63 shared, 26 ARK only, 92 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -618,6 +620,8 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
+| `credential.auth_url` | ark_only | `CREDENTIAL` | – | – | – |
+| `credential.otp_secret` | ark_only | `CREDENTIAL` | – | – | – |
 | `identifier.de.vat_id` | ark_only | `dlp.de.vat_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
 | `identifier.de.commercial_register` | ark_only | `dlp.de.commercial_register_number` | 32 | ARK 50.0 (opt-in profile) | ARK 100.0 (opt-in profile) |
 | `identifier.de.bsnr` | ark_only | `dlp.de.facility_number_bsnr` | 32 | ARK 28.6 (opt-in profile) | ARK 25.0 (opt-in profile) |

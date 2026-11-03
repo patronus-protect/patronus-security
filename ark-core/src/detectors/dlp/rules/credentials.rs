@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::{connection, http_auth, likeness, ConfigKey};
+use super::{auth_url, connection, http_auth, likeness, ConfigKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 
 // K05: the key parts of the generic key-bound rules. The rule regexes start
@@ -105,7 +105,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_credential_in_url",
         pattern: r#"(?i)[?&](?:password|passwd|passwort|kennwort|secret|geheimnis|token|apikey|api_key|api-key)=([^\\\s&"'\]},]{4,})"#,
         entity_group: "CREDENTIAL",
-        validator: Some(is_unredacted_url_credential),
+        validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
         meta: RuleMeta::new(
@@ -113,7 +113,67 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["passw", "kennwort", "secret", "geheimnis", "token", "api"],
         )
-        .with_subtype(SecretSubtype::AuthUrl),
+        .with_subtype(SecretSubtype::AuthUrl)
+        .with_context_gate(auth_url::is_credential_parameter),
+    },
+    DlpPattern {
+        name: "dlp_auth_url_token",
+        // G09: the token of an auth URL: OAuth implicit/redirect parameters
+        // (`#access_token=`, `?code=` with `state` or a callback path), reset,
+        // magic-link, invitation and confirmation tokens as query parameter or
+        // path segment (`/reset-password/<token>`, `/invite/accept/<token>`).
+        pattern: concat!(
+            r"(?i)(?:[#?&](?:access_token|id_token|refresh_token|reset_token|reset_password_token",
+            r"|password_reset_token|magic_token|login_token|invite_token|invitation_token",
+            r"|confirmation_token|verification_token|code)=([A-Za-z0-9._~+/%=-]{15,511}[A-Za-z0-9_~+/%=-])",
+            r"|/(?:reset[-_]?password|password[-_]?reset|passwort[-_]?zur(?:ue|ü)cksetzen|magic[-_]?link|magic",
+            r"|invite|invitations?|einladung(?:en)?|verify[-_]?email|confirm[-_]?email)",
+            r"(?:/[a-z]{1,16})?/([A-Za-z0-9_-]{20,128}))",
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 25,
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2",
+            &[
+                "token",
+                "code",
+                "reset",
+                "passwort",
+                "magic",
+                "invit",
+                "einladung",
+                "verify",
+                "confirm",
+            ],
+        )
+        .with_subtype(SecretSubtype::AuthUrl)
+        .with_value_gate(auth_url::is_auth_url_token),
+    },
+    DlpPattern {
+        name: "dlp_otp_secret",
+        // G08: the Base32 seed of an otpauth:// key URI (`secret=`, also
+        // after `&amp;`) and an upper-case seed after a TOTP/OTP/2FA/MFA
+        // secret, seed or key name, in prose up to 40 characters before the
+        // `:` (`2FA-Schlüssel für den Notfallzugang: …`).
+        pattern: concat!(
+            r#"(?i)otpauth://(?:totp|hotp)/[^\s?"'<>]{0,200}\?(?:[^\s"'<>#]{0,400}?[&;])?secret=([A-Za-z2-7]{16,128}={0,6})"#,
+            r"|(?:totp|otp|2fa|mfa|authenticator)[ _-]?(?:secret|seed|key|schl(?:ü|ue)ssel)(?-u:\b)",
+            r#"(?:\\?["']\]?|[ \t][^\r\n:="'<>]{1,40}?)?\s*(?::|=>|=)\s*(?:\\?["'])?(?-i:([A-Z2-7]{16,128}={0,6}))"#,
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://github.com/google/google-authenticator/wiki/Key-Uri-Format",
+            &["otp", "2fa", "mfa", "authenticator"],
+        )
+        .with_subtype(SecretSubtype::OtpSecret)
+        .with_value_gate(auth_url::is_otp_secret),
     },
     DlpPattern {
         name: "dlp_env_var_secret",
@@ -286,13 +346,19 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
-        pattern: r"(?i)[?&](?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
+        // F12: also after `&amp;` in XML/HTML attributes.
+        pattern: r"(?i)(?:[?&]|&amp;)(?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["sig"])
-            .with_subtype(SecretSubtype::Signature),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html",
+            &["sig"],
+        )
+        .with_subtype(SecretSubtype::Signature)
+        .with_context_gate(auth_url::has_signed_url_structure),
     },
     DlpPattern {
         name: "dlp_session_cookie",
@@ -526,10 +592,6 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         .with_value_gate(likeness::is_cli_password),
     },
 ];
-
-fn is_unredacted_url_credential(candidate: &str) -> bool {
-    is_secret_value(candidate)
-}
 
 /// Shared value check of the credential and hash rules.
 pub(super) fn is_secret_value(candidate: &str) -> bool {
