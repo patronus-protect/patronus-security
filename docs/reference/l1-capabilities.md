@@ -482,30 +482,30 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` |
 | `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `freemius-secret-key` |
 | `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key`; TruffleHog: `DuffelToken`, `Shippo`, `Lob` |
-| `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `atlassian-api-token` |
+| `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `atlassian-api-token`; TruffleHog: `Atlassian`, `JiraToken` |
 | `saas.notion.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `notion-api-token` |
-| `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linear-api-key`, `linear-client-secret` |
-| `saas.airtable.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `airtable-api-key`, `airtable-personnal-access-token` |
+| `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linear-api-key`, `linear-client-secret`; TruffleHog: `LinearAPI` |
+| `saas.airtable.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `airtable-api-key`, `airtable-personnal-access-token`; TruffleHog: `AirtablePersonalAccessToken` |
 | `saas.asana.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `asana-client-secret` |
-| `saas.hubspot.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `hubspot-api-key` |
+| `saas.hubspot.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `hubspot-api-key`; TruffleHog: `HubSpotApiKey` |
 | `saas.zendesk.secret_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `zendesk-secret-key` |
 | `saas.intercom.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `intercom-api-key` |
-| `saas.postman.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `postman-api-token` |
+| `saas.postman.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `postman-api-token`; TruffleHog: `Postman` |
 | `saas.mapbox.secret_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mapbox-api-token` |
-| `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `launchdarkly-access-token` |
-| `saas.typeform.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `typeform-api-token` |
+| `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `launchdarkly-access-token`; TruffleHog: `LaunchDarkly` |
+| `saas.typeform.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `typeform-api-token`; TruffleHog: `Typeform` |
 | `saas.contentful.delivery_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `contentful-delivery-api-token` |
-| `saas.dropbox.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dropbox-api-token`, `dropbox-long-lived-api-token`, `dropbox-short-lived-api-token` |
+| `saas.dropbox.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dropbox-api-token`, `dropbox-long-lived-api-token`, `dropbox-short-lived-api-token`; TruffleHog: `Dropbox` |
 | `saas.adobe.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adobe-client-secret` |
-| `saas.facebook.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `facebook-access-token`, `facebook-page-access-token`, `facebook-secret` |
+| `saas.facebook.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `facebook-access-token`, `facebook-page-access-token`, `facebook-secret`; TruffleHog: `FacebookOAuth` |
 | `saas.twitter.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twitter-access-secret`, `twitter-access-token`, `twitter-api-key`, `twitter-api-secret`, `twitter-bearer-token` |
 | `saas.linkedin.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linkedin-client-secret` |
 | `saas.looker.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `looker-client-secret` |
-| `saas.twitch.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twitch-api-token` |
+| `saas.twitch.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twitch-api-token`; TruffleHog: `TwitchAccessToken` |
 | `saas.etsy.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `etsy-access-token` |
 | `saas.freshbooks.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `freshbooks-access-token` |
-| `saas.squarespace.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `squarespace-access-token` |
-| `saas.misc.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adafruit-api-key`, `beamer-api-token`, `cisco-meraki-api-key`, `finnhub-access-token`, `flickr-access-token`, `frameio-api-token`, `intra42-client-secret`, `maxmind-license-key`, `nytimes-access-token`, `rapidapi-access-token`, `readme-api-token` |
+| `saas.squarespace.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `squarespace-access-token`; TruffleHog: `Squarespace` |
+| `saas.misc.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adafruit-api-key`, `beamer-api-token`, `cisco-meraki-api-key`, `finnhub-access-token`, `flickr-access-token`, `frameio-api-token`, `intra42-client-secret`, `maxmind-license-key`, `nytimes-access-token`, `rapidapi-access-token`, `readme-api-token`; TruffleHog: `FrameIO`, `MaxMindLicense`, `ReadMe` |
 | `saas.sidekiq.credentials` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `sidekiq-secret`, `sidekiq-sensitive-url` |
 | `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `okta-access-token`; TruffleHog: `Okta` |
 | `identity.authress.access_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `authress-service-client-access-key` |

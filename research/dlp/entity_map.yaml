@@ -802,40 +802,51 @@ entities:
      gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key],
      trufflehog: [DuffelToken, Shippo, Lob], backlog: P09}
   # P10: Produktivität/SaaS
-  - {id: saas.atlassian.api_token, scope: baseline_only, group: API_KEY, gitleaks: [atlassian-api-token], backlog: P10}
+  - {id: saas.atlassian.api_token, scope: baseline_only, group: API_KEY, gitleaks: [atlassian-api-token],
+     trufflehog: [Atlassian, JiraToken], backlog: P10}
   - {id: saas.notion.api_token, scope: baseline_only, group: API_KEY, gitleaks: [notion-api-token], backlog: P10}
   - {id: saas.linear.secret, scope: baseline_only, group: API_KEY,
-     gitleaks: [linear-api-key, linear-client-secret], backlog: P10}
+     gitleaks: [linear-api-key, linear-client-secret], trufflehog: [LinearAPI], backlog: P10}
   - {id: saas.airtable.token, scope: baseline_only, group: API_KEY,
-     gitleaks: [airtable-api-key, airtable-personnal-access-token], backlog: P10}
+     gitleaks: [airtable-api-key, airtable-personnal-access-token],
+     trufflehog: [AirtablePersonalAccessToken], backlog: P10}
   - {id: saas.asana.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [asana-client-secret], backlog: P10}
-  - {id: saas.hubspot.api_key, scope: baseline_only, group: API_KEY, gitleaks: [hubspot-api-key], backlog: P10}
+  - {id: saas.hubspot.api_key, scope: baseline_only, group: API_KEY, gitleaks: [hubspot-api-key],
+     trufflehog: [HubSpotApiKey], backlog: P10}
   - {id: saas.zendesk.secret_key, scope: baseline_only, group: API_KEY, gitleaks: [zendesk-secret-key], backlog: P10}
   - {id: saas.intercom.api_key, scope: baseline_only, group: API_KEY, gitleaks: [intercom-api-key], backlog: P10}
-  - {id: saas.postman.api_token, scope: baseline_only, group: API_KEY, gitleaks: [postman-api-token], backlog: P10}
+  - {id: saas.postman.api_token, scope: baseline_only, group: API_KEY, gitleaks: [postman-api-token],
+     trufflehog: [Postman], backlog: P10}
   - {id: saas.mapbox.secret_token, scope: baseline_only, group: API_KEY, gitleaks: [mapbox-api-token], backlog: P10}
-  - {id: saas.launchdarkly.access_token, scope: baseline_only, group: API_KEY, gitleaks: [launchdarkly-access-token], backlog: P10}
-  - {id: saas.typeform.api_token, scope: baseline_only, group: API_KEY, gitleaks: [typeform-api-token], backlog: P10}
+  - {id: saas.launchdarkly.access_token, scope: baseline_only, group: API_KEY, gitleaks: [launchdarkly-access-token],
+     trufflehog: [LaunchDarkly], backlog: P10}
+  - {id: saas.typeform.api_token, scope: baseline_only, group: API_KEY, gitleaks: [typeform-api-token],
+     trufflehog: [Typeform], backlog: P10}
   - {id: saas.contentful.delivery_token, scope: baseline_only, group: API_KEY,
      gitleaks: [contentful-delivery-api-token], backlog: P10}
   - {id: saas.dropbox.api_token, scope: baseline_only, group: API_KEY,
-     gitleaks: [dropbox-api-token, dropbox-long-lived-api-token, dropbox-short-lived-api-token], backlog: P10}
+     gitleaks: [dropbox-api-token, dropbox-long-lived-api-token, dropbox-short-lived-api-token],
+     trufflehog: [Dropbox], backlog: P10}
   - {id: saas.adobe.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [adobe-client-secret], backlog: P10}
   - {id: saas.facebook.secret, scope: baseline_only, group: API_KEY,
-     gitleaks: [facebook-access-token, facebook-page-access-token, facebook-secret], backlog: P10}
+     gitleaks: [facebook-access-token, facebook-page-access-token, facebook-secret],
+     trufflehog: [FacebookOAuth], backlog: P10}
   - {id: saas.twitter.secret, scope: baseline_only, group: API_KEY,
      gitleaks: [twitter-access-secret, twitter-access-token, twitter-api-key, twitter-api-secret,
        twitter-bearer-token], backlog: P10}
   - {id: saas.linkedin.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [linkedin-client-secret], backlog: P10}
   - {id: saas.looker.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [looker-client-secret], backlog: P10}
-  - {id: saas.twitch.api_token, scope: baseline_only, group: API_KEY, gitleaks: [twitch-api-token], backlog: P10}
+  - {id: saas.twitch.api_token, scope: baseline_only, group: API_KEY, gitleaks: [twitch-api-token],
+     trufflehog: [TwitchAccessToken], backlog: P10}
   - {id: saas.etsy.access_token, scope: baseline_only, group: API_KEY, gitleaks: [etsy-access-token], backlog: P10}
   - {id: saas.freshbooks.access_token, scope: baseline_only, group: API_KEY, gitleaks: [freshbooks-access-token], backlog: P10}
-  - {id: saas.squarespace.access_token, scope: baseline_only, group: API_KEY, gitleaks: [squarespace-access-token], backlog: P10}
+  - {id: saas.squarespace.access_token, scope: baseline_only, group: API_KEY, gitleaks: [squarespace-access-token],
+     trufflehog: [Squarespace], backlog: P10}
   - {id: saas.misc.api_token, scope: baseline_only, group: API_KEY,
      gitleaks: [adafruit-api-key, beamer-api-token, cisco-meraki-api-key, finnhub-access-token,
        flickr-access-token, frameio-api-token, intra42-client-secret, maxmind-license-key,
-       nytimes-access-token, rapidapi-access-token, readme-api-token], backlog: P10}
+       nytimes-access-token, rapidapi-access-token, readme-api-token],
+     trufflehog: [FrameIO, MaxMindLicense, ReadMe], backlog: P10}
   - {id: saas.sidekiq.credentials, scope: baseline_only, group: CREDENTIAL,
      gitleaks: [sidekiq-secret, sidekiq-sensitive-url], backlog: P10}
   # P11: Identity/Auth

@@ -377,6 +377,32 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 25 saas entities without an ARK rule and without gold (GOLD-D1):
+  `saas.atlassian.api_token`, `saas.notion.api_token`, `saas.linear.secret`,
+  `saas.airtable.token`, `saas.asana.client_secret`, `saas.hubspot.api_key`,
+  `saas.zendesk.secret_key`, `saas.intercom.api_key`, `saas.postman.api_token`,
+  `saas.mapbox.secret_token`, `saas.launchdarkly.access_token`, `saas.typeform.api_token`,
+  `saas.contentful.delivery_token`, `saas.dropbox.api_token`, `saas.adobe.client_secret`,
+  `saas.facebook.secret`, `saas.twitter.secret`, `saas.linkedin.client_secret`,
+  `saas.looker.client_secret`, `saas.twitch.api_token`, `saas.etsy.access_token`,
+  `saas.freshbooks.access_token`, `saas.squarespace.access_token`, `saas.misc.api_token`,
+  `saas.sidekiq.credentials` (package P10). `baseline_entities` in `dlp_synth/rules.json` gains
+  41 generators in the format of each entity's gitleaks rule (Atlassian `ATATT3` and legacy
+  tokens, Notion `ntn_`, Linear `lin_api_`, Airtable `pat….<64 hex>`, Postman `PMAK-`, Mapbox
+  `pk.`, LaunchDarkly `api-`/`sdk-` + UUID, Dropbox `sl.` and long-lived tokens, Adobe `p8e-`,
+  Facebook `<app id>|<secret>` and `EAAC` page tokens, the five Twitter shapes, 42 intra,
+  MaxMind `_mmk`, ReadMe `rdme_`, Frame.io `fio-u-` and the keyed shapes of the other rules);
+  Sidekiq gem credentials sit in `BUNDLE_ENTERPRISE__CONTRIBSYS__COM=…` or
+  `https://…@enterprise.contribsys.com/`. Each entity has one lookalike with a wrong length.
+  Per split and entity the carriers give 44 positives (DE and EN) and 220 hard negatives.
+  `entity_map.yaml` maps the TruffleHog detectors that report these formats (Atlassian,
+  JiraToken, LinearAPI, AirtablePersonalAccessToken, HubSpotApiKey, Postman, LaunchDarkly,
+  Typeform, Dropbox, FacebookOAuth, TwitchAccessToken, Squarespace, FrameIO, MaxMindLicense,
+  ReadMe; `check-entity-map` passes on the pinned binaries). No detection change: evaluation
+  data only, the Rust detector is untouched (no latency effect). Dev rows: ARK exact F1 0 on
+  all 25 (no rule yet), gitleaks 44.6 to 97.7, TruffleHog 0 to 96.5, detect-secrets 0. Frozen
+  corpora change only when the operator re-freezes them (T19).
+
 - Polish PESEL and REGON with check digits, bare NIP (A13). Two new labels: `PL_PESEL` (eleven
   digits `YYMMDDZZZXC`, a birth date from 1900 to 2100 with the century in the month, check digit
   weighted 1-3-7-9 mod 10) and `PL_REGON` (nine digits weighted 8-9-2-3-4-5-6-7 mod 11, or fourteen
