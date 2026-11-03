@@ -1936,6 +1936,103 @@ PROFILES = {
     "key.symmetric_key": Profile(
         "key.symmetric_key", "CRYPTO_KEY", "secret", "encryption_key", "encryption key", "Verschlüsselungsschlüssel"
     ),
+    # GOLD-D1: saas entities without an ARK rule.
+    "saas.atlassian.api_token": Profile(
+        "saas.atlassian.api_token", "API_KEY", "secret", "atlassian_api_token", "Atlassian API token",
+        "Atlassian-API-Token",
+    ),
+    "saas.notion.api_token": Profile(
+        "saas.notion.api_token", "API_KEY", "secret", "notion_api_token", "Notion integration secret",
+        "Notion-Integrations-Secret",
+    ),
+    "saas.linear.secret": Profile(
+        "saas.linear.secret", "API_KEY", "secret", "linear_api_key", "Linear API key", "Linear-API-Schlüssel",
+    ),
+    "saas.airtable.token": Profile(
+        "saas.airtable.token", "API_KEY", "secret", "airtable_api_token", "Airtable access token",
+        "Airtable-Zugriffstoken",
+    ),
+    "saas.asana.client_secret": Profile(
+        "saas.asana.client_secret", "API_KEY", "secret", "asana_client_secret", "Asana client secret",
+        "Asana-Client-Secret",
+    ),
+    "saas.hubspot.api_key": Profile(
+        "saas.hubspot.api_key", "API_KEY", "secret", "hubspot_api_key", "HubSpot API key", "HubSpot-API-Schlüssel",
+    ),
+    "saas.zendesk.secret_key": Profile(
+        "saas.zendesk.secret_key", "API_KEY", "secret", "zendesk_api_token", "Zendesk API token", "Zendesk-API-Token",
+    ),
+    "saas.intercom.api_key": Profile(
+        "saas.intercom.api_key", "API_KEY", "secret", "intercom_access_token", "Intercom access token",
+        "Intercom-Zugriffstoken",
+    ),
+    "saas.postman.api_token": Profile(
+        "saas.postman.api_token", "API_KEY", "secret", "postman_api_key", "Postman API key", "Postman-API-Schlüssel",
+    ),
+    "saas.mapbox.secret_token": Profile(
+        "saas.mapbox.secret_token", "API_KEY", "secret", "mapbox_access_token", "Mapbox access token",
+        "Mapbox-Zugriffstoken",
+    ),
+    "saas.launchdarkly.access_token": Profile(
+        "saas.launchdarkly.access_token", "API_KEY", "secret", "launchdarkly_access_token",
+        "LaunchDarkly access token", "LaunchDarkly-Zugriffstoken",
+    ),
+    "saas.typeform.api_token": Profile(
+        "saas.typeform.api_token", "API_KEY", "secret", "typeform_api_token", "Typeform personal token",
+        "Typeform-Token",
+    ),
+    "saas.contentful.delivery_token": Profile(
+        "saas.contentful.delivery_token", "API_KEY", "secret", "contentful_delivery_token",
+        "Contentful delivery token", "Contentful-Delivery-Token",
+    ),
+    "saas.dropbox.api_token": Profile(
+        "saas.dropbox.api_token", "API_KEY", "secret", "dropbox_access_token", "Dropbox access token",
+        "Dropbox-Zugriffstoken",
+    ),
+    "saas.adobe.client_secret": Profile(
+        "saas.adobe.client_secret", "API_KEY", "secret", "adobe_client_secret", "Adobe client secret",
+        "Adobe-Client-Secret",
+    ),
+    "saas.facebook.secret": Profile(
+        "saas.facebook.secret", "API_KEY", "secret", "facebook_app_secret", "Facebook app secret",
+        "Facebook-App-Secret",
+    ),
+    "saas.twitter.secret": Profile(
+        "saas.twitter.secret", "API_KEY", "secret", "twitter_api_secret", "Twitter API secret", "Twitter-API-Secret",
+    ),
+    "saas.linkedin.client_secret": Profile(
+        "saas.linkedin.client_secret", "API_KEY", "secret", "linkedin_client_secret", "LinkedIn client secret",
+        "LinkedIn-Client-Secret",
+    ),
+    "saas.looker.client_secret": Profile(
+        "saas.looker.client_secret", "API_KEY", "secret", "looker_client_secret", "Looker client secret",
+        "Looker-Client-Secret",
+    ),
+    "saas.twitch.api_token": Profile(
+        "saas.twitch.api_token", "API_KEY", "secret", "twitch_oauth_token", "Twitch OAuth token", "Twitch-OAuth-Token",
+    ),
+    "saas.etsy.access_token": Profile(
+        "saas.etsy.access_token", "API_KEY", "secret", "etsy_api_key", "Etsy API keystring", "Etsy-API-Schlüssel",
+    ),
+    "saas.freshbooks.access_token": Profile(
+        "saas.freshbooks.access_token", "API_KEY", "secret", "freshbooks_access_token", "FreshBooks access token",
+        "FreshBooks-Zugriffstoken",
+    ),
+    "saas.squarespace.access_token": Profile(
+        "saas.squarespace.access_token", "API_KEY", "secret", "squarespace_api_key", "Squarespace API key",
+        "Squarespace-API-Schlüssel",
+    ),
+    "saas.misc.api_token": Profile(
+        "saas.misc.api_token", "API_KEY", "secret", "partner_api_token", "partner API token", "Partner-API-Token",
+    ),
+    "saas.sidekiq.credentials": Profile(
+        "saas.sidekiq.credentials", "CREDENTIAL", "secret", "sidekiq_bundle_credentials",
+        "Sidekiq Enterprise gem credentials", "Sidekiq-Enterprise-Gem-Zugangsdaten",
+        {
+            "sidekiq_gems_credentials": "BUNDLE_ENTERPRISE__CONTRIBSYS__COM=<<value>>",
+            "sidekiq_gems_url_credentials": "https://<<value>>@enterprise.contribsys.com/",
+        },
+    ),
 }
 
 

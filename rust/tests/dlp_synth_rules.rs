@@ -65,7 +65,12 @@ struct RuleEntry {
 #[derive(Deserialize)]
 struct Vectors {
     seeds: Vec<u64>,
-    generators: BTreeMap<String, String>,
+    generators: BTreeMap<String, Pinned>,
+}
+
+#[derive(Deserialize)]
+struct Pinned {
+    sha256_96: String,
 }
 
 fn repo_root() -> PathBuf {
@@ -195,7 +200,7 @@ fn rust_generators_match_the_pinned_python_vectors() {
             .collect::<Vec<_>>(),
         generators.names()
     );
-    for (name, expected) in &vectors.generators {
+    for (name, pinned) in &vectors.generators {
         let values = vectors
             .seeds
             .iter()
@@ -208,7 +213,7 @@ fn rust_generators_match_the_pinned_python_vectors() {
                 "{name}"
             );
         }
-        assert_eq!(&fingerprint(&values.join("\n")), expected, "{name}");
+        assert_eq!(fingerprint(&values.join("\n")), pinned.sha256_96, "{name}");
     }
 }
 
