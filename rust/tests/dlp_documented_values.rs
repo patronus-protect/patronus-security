@@ -246,6 +246,29 @@ const HARDHAT_KEYS: [&str; 3] = [
     ),
 ];
 
+/// Secret bytes of the Google Authenticator Key Uri Format example.
+const KEY_URI_SECRET: &[u8] = b"Hello!\xde\xad\xbe\xef";
+
+/// RFC 4648 Base32 with padding.
+fn base32(raw: &[u8]) -> String {
+    const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let mut out = String::new();
+    for chunk in raw.chunks(5) {
+        let mut block = [0u8; 5];
+        block[..chunk.len()].copy_from_slice(chunk);
+        let n = block.iter().fold(0u64, |n, &b| n << 8 | u64::from(b));
+        let chars = (chunk.len() * 8).div_ceil(5);
+        for i in 0..8 {
+            out.push(if i < chars {
+                ALPHABET[(n >> (35 - 5 * i) & 31) as usize] as char
+            } else {
+                '='
+            });
+        }
+    }
+    out
+}
+
 /// Deterministic pseudo-random bytes (SplitMix64).
 fn random_bytes(seed: u64, length: usize) -> Vec<u8> {
     let mut state = seed;
@@ -279,6 +302,11 @@ fn documented_example_values_are_silent() {
             jwt_io_token()
         ),
         format!("ID_TOKEN={}\n", jwt_io_token()),
+        format!(
+            "otpauth://totp/Example:alice@google.com?secret={}&issuer=Example",
+            base32(KEY_URI_SECRET)
+        ),
+        format!("TOTP_SECRET={}\n", base32(KEY_URI_SECRET)),
         format!("Das Token aus der Doku: {}", jwt_io_token()),
         format!("{{\"access_token\": \"{}\"}}", rfc7515_token()),
         format!(
@@ -412,6 +440,7 @@ fn documented_values_yaml_lists_exactly_the_built_values() {
         wif(&key, true),
         ed25519_pkcs8(&hex(RFC8410_KEY)),
         base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true),
+        base32(KEY_URI_SECRET),
     ]
     .into_iter()
     .chain(

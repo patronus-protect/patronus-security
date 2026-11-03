@@ -160,9 +160,9 @@ subtypes:
   session_token: {groups: [SECRET_TOKEN, CREDENTIAL]}
   signature: {groups: [CREDENTIAL]}
   connection_string: {groups: [CREDENTIAL]}  # G01
-  auth_url: {groups: [CREDENTIAL]}  # dlp_credential_in_url; G09
+  auth_url: {groups: [CREDENTIAL]}  # dlp_credential_in_url, dlp_auth_url_token; G09
   webhook_url: {groups: [SECRET_TOKEN], planned: true}  # P08
-  otp_secret: {groups: [CREDENTIAL], planned: true}  # G08
+  otp_secret: {groups: [CREDENTIAL]}  # dlp_otp_secret; G08
 
 entities:
   # ── shared: ARK + Baseline ──────────────────────────────────────────────
@@ -558,7 +558,7 @@ entities:
     group: CREDENTIAL
     ark: [dlp_signed_url_signature]
     google_dlp: [STORAGE_SIGNED_URL, STORAGE_SIGNED_POLICY_DOCUMENT]
-    backlog: F12
+    backlog: G-URL
   - id: credential.session_cookie
     scope: shared
     group: CREDENTIAL
@@ -659,7 +659,19 @@ entities:
     group: CREDENTIAL
     subtype: auth_url
     ark: [dlp_credential_in_url]
-    backlog: F12
+    backlog: G-URL
+  - id: credential.auth_url
+    scope: ark_only
+    group: CREDENTIAL
+    subtype: auth_url
+    ark: [dlp_auth_url_token]
+    backlog: G-URL
+  - id: credential.otp_secret
+    scope: ark_only
+    group: CREDENTIAL
+    subtype: otp_secret
+    ark: [dlp_otp_secret]
+    backlog: G-URL
   - {id: identifier.de.vat_id, scope: ark_only, group: dlp.de.vat_id, ark: [dlp_de_vat_id], backlog: F15}
   - {id: identifier.de.commercial_register, scope: ark_only, group: dlp.de.commercial_register_number,
      ark: [dlp_de_commercial_register_number], backlog: F15}

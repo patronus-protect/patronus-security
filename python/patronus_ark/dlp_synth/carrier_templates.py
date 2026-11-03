@@ -1680,6 +1680,14 @@ PROFILES = {
         "credential.signed_url_signature", "CREDENTIAL", "secret", "report_url", "download link", "Download-Link",
         "https://reports.s3.eu-central-1.amazonaws.com/q3.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<value>>",
     ),
+    "dlp_auth_url_token": Profile(
+        "credential.auth_url", "CREDENTIAL", "secret", "reset_link", "password reset link", "Link zum Zurücksetzen",
+        "https://app.example.com/reset-password/<<value>>",
+    ),
+    "dlp_otp_secret": Profile(
+        "credential.otp_secret", "CREDENTIAL", "secret", "otp_uri", "authenticator URI", "Authenticator-URI",
+        "otpauth://totp/ACME:ada@example.com?secret=<<value>>&issuer=ACME",
+    ),
     "dlp_session_cookie": Profile(
         "credential.session_cookie", "CREDENTIAL", "secret", "session_cookie", "session cookie", "Session-Cookie",
         {

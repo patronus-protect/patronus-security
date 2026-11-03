@@ -421,6 +421,16 @@
       "generators": ["aws_sigv4_signature"],
       "probes": ["https://bucket.s3.eu-central-1.amazonaws.com/report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<secret:0>>", "Download-Link (15 min gültig): https://files.example.de/a.zip?Expires=1767225600&Signature=<<secret:0>>"]
     },
+    "dlp_auth_url_token": {
+      "generators": ["auth_url_opaque_token"],
+      "lookalike": ["auth_url_token_short"],
+      "probes": ["Passwort zurücksetzen: https://app.example.de/reset-password/<<secret:0>>", "Location: https://app.example.com/callback#access_token=<<secret:0>>&token_type=bearer&expires_in=3600", "You're invited: https://app.example.com/invitations/accept/<<secret:0>>"]
+    },
+    "dlp_otp_secret": {
+      "generators": ["totp_base32_secret"],
+      "lookalike": ["totp_base32_secret_short"],
+      "probes": ["otpauth://totp/ACME:ada@example.com?secret=<<secret:0>>&issuer=ACME", "TOTP_SECRET=<<secret:0>>", "2FA-Schlüssel: <<secret:0>>"]
+    },
     "dlp_session_cookie": {
       "generators": ["java_session_id", "php_session_id", "express_session_id", "laravel_session"],
       "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly", "SESSION_COOKIE=JSESSIONID=<<secret:0>>", "Cookie aus dem Browser: PHPSESSID=<<secret:0>>", "Set-Cookie: connect.sid=<<secret:0>>; Path=/; HttpOnly", "curl -b 'laravel_session=<<secret:0>>' https://shop.example.com/account", "Cookie: __Host-session=<<secret:0>>"]

@@ -88,6 +88,8 @@ const REGISTRY_ORDER: &[&str] = &[
     // credentials
     "dlp_jwt_token",
     "dlp_credential_in_url",
+    "dlp_auth_url_token",
+    "dlp_otp_secret",
     "dlp_env_var_secret",
     "dlp_password_assignment",
     "dlp_generic_credential_assignment",
