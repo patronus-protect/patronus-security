@@ -42,6 +42,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Aadhaar 85.7 -> 100, NPI 88.9 -> 100, licence plate 22.2 -> 76.9 vs 76.9), neutral 9/9; raw
   licence plate 11.8 -> 47.6. Only the presidio_favored recognizer-test predictions change;
   validators unchanged.
+- L1 PII M2 on presidio_favored (Q-M2). A new `known_gaps` entry in
+  `research/l1-pii/entity_map.yaml` records the bare 13-digit ELSTER tax number (`0181508150000`)
+  that the Q-DE decision keeps field-bound (bare, 13 digits are as often a millisecond timestamp or an
+  EAN-13); the slashed Länder groups stay gold. Dev, balanced, attainable: tax number 66.7 -> 100
+  (tuned 100), M2 macro-F1 presidio_favored 96.3 -> 100.0 (tuned 100.0), neutral 66.1 (target
+  36.2), M2 met. Raw view, gate and validators unchanged. Evaluation only: no detection change,
+  strict and balanced output bit-identical.
 - L1 PII quality floor on presidio_favored for the country ids added since W44 (T33). New
   `known_gaps` in `research/l1-pii/entity_map.yaml` record the gold that existing decisions keep out
   of reach: bare ACN (B-APAC), bare ten-digit KR BRN (B-KR), bare PESEL (A13), bare IN PAN and voter

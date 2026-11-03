@@ -155,6 +155,12 @@ known_gaps:
     span: '\d{10}'
     bare: true
     corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.de.tax_number
+    decision: Q-DE
+    reason: blanke 13-stellige ELSTER-Form ohne Steuernummer-Begriff bleibt negativ (ebenso oft Zeitstempel in Millisekunden oder EAN-13); die Schrägstrich-Gruppen der Länder bleiben Gold
+    span: '\d{13}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
 
 entities:
   # ── shared ─────────────────────────────────────────────────────────────
