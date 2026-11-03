@@ -248,6 +248,8 @@ fn has_pagerduty_context(text: &str, value: Range<usize>) -> bool {
 /// (`the Heroku API key for the job:` and the value below it,
 /// `(Heroku-API-Schlüssel): …`) at the end of its line, group 2; the key gate
 /// [`likeness::is_provider_handover`] drops IDs under the provider name.
+/// T21: [`xml_key`] reads the key and value regexes back for XML config
+/// elements.
 macro_rules! provider_key {
     ($provider:literal, $value:expr) => {
         concat!(
@@ -255,10 +257,9 @@ macro_rules! provider_key {
             $provider,
             r")[A-Za-z0-9_.\- ]{0,30}?",
             provider_noun!(),
-            key_suffix!(),
-            r"(?:=>|:=|[=:,])[ \t]*\\?[\x22'`]?(",
+            provider_value_open!(),
             $value,
-            r")(?:[^A-Za-z0-9_\-+/=]|$)|(?i:",
+            provider_value_close!(),
             $provider,
             r")[A-Za-z0-9_.\- ]{0,30}?",
             provider_noun!(),
@@ -267,6 +268,22 @@ macro_rules! provider_key {
             $value,
             r")[.,;]?[ \t]*\r?(?m:$)",
         )
+    };
+}
+
+/// P06: what stands between the credential noun of a provider key and its
+/// value group on a key=value line.
+macro_rules! provider_value_open {
+    () => {
+        concat!(key_suffix!(), r"(?:=>|:=|[=:,])[ \t]*\\?[\x22'`]?(")
+    };
+}
+
+/// P06: the end of the value group on a key=value line and the start of the
+/// T20 prose alternative.
+macro_rules! provider_value_close {
+    () => {
+        r")(?:[^A-Za-z0-9_\-+/=]|$)|(?i:"
     };
 }
 
@@ -283,6 +300,24 @@ macro_rules! uuid {
     () => {
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     };
+}
+
+/// T21: the key and value regexes of a [`provider_key`] pattern.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProviderKey {
+    /// The provider name, key characters and the credential noun.
+    pub key: &'static str,
+    /// The provider's value.
+    pub value: &'static str,
+}
+
+/// T21: the key and value regexes of `pattern` if a [`provider_key`] opens
+/// it; `None` for every other pattern.
+pub(super) fn xml_key(pattern: &'static str) -> Option<ProviderKey> {
+    let (key, rest) = pattern.split_once(provider_value_open!())?;
+    let (value, _) = rest.split_once(provider_value_close!())?;
+    (key.starts_with("(?i:") && key.ends_with(provider_noun!()))
+        .then_some(ProviderKey { key, value })
 }
 
 /// P07: the value after an HTTP `Authorization` header and its scheme
@@ -1723,3 +1758,41 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::AccessToken),
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// T21: every `provider_key!` rule yields its key and value regexes; a
+    /// prefix rule yields none.
+    #[test]
+    fn xml_key_reads_the_key_and_value_of_provider_key_rules() {
+        let keyed: Vec<_> = RULES
+            .iter()
+            .filter_map(|rule| xml_key(rule.pattern).map(|key| (rule.name, key)))
+            .collect();
+        assert_eq!(keyed.len(), 16);
+        let (_, heroku) = keyed
+            .iter()
+            .find(|(name, _)| *name == "dlp_heroku_legacy_api_key")
+            .unwrap();
+        assert_eq!(
+            heroku.key,
+            concat!(r"(?i:heroku)[A-Za-z0-9_.\- ]{0,30}?", provider_noun!())
+        );
+        assert_eq!(heroku.value, uuid!());
+        let (_, elastic) = keyed
+            .iter()
+            .find(|(name, _)| *name == "dlp_elastic_api_key")
+            .unwrap();
+        assert_eq!(
+            elastic.value,
+            r"[A-Za-z0-9+/]{56,120}={0,2}|[A-Za-z0-9_\-]{20}:[A-Za-z0-9_\-]{22}"
+        );
+        let anthropic = RULES
+            .iter()
+            .find(|rule| rule.name == "dlp_anthropic_key")
+            .unwrap();
+        assert_eq!(xml_key(anthropic.pattern), None);
+    }
+}

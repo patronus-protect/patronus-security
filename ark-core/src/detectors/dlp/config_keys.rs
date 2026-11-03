@@ -161,6 +161,22 @@ pub fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
     values
 }
 
+/// T21: the XML values ([`xml_value`]) whose key holds a match of `key`,
+/// ordered by position; the other config formats are not read.
+pub fn xml_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
+    if !text.contains('<') {
+        return Vec::new();
+    }
+    let xml_comments = OnceCell::new();
+    let mut values: Vec<_> = key
+        .find_iter(text)
+        .filter_map(|found| xml_value(text, &found.range(), &xml_comments))
+        .collect();
+    values.sort_by_key(|value| (value.value.start, value.key.start));
+    values.dedup_by(|a, b| a.value == b.value && a.key == b.key);
+    values
+}
+
 /// A cheap precondition of [`config_line`] for a key match at `found`: only
 /// key characters and blanks stand before the match and between it and the
 /// first `=` or `:` of the line, as in every env, INI/properties or header
@@ -1223,7 +1239,7 @@ fn line_at(text: &str, offset: usize) -> Range<usize> {
 #[cfg(test)]
 mod tests {
     use super::{
-        config_line, config_values, is_config_document, is_item, line_at, ConfigFormat,
+        config_line, config_values, is_config_document, is_item, line_at, xml_values, ConfigFormat,
         DocumentFamily,
     };
     use regex::Regex;
@@ -1602,5 +1618,39 @@ mod tests {
             DocumentFamily::Xml
         ));
         assert!(!is_config_document("x = \"<k>v</k>\"", DocumentFamily::Xml));
+    }
+
+    /// T21: XML values only, under a key in either attribute order and as
+    /// element text; no HTML form, other config format or XML comment.
+    #[test]
+    fn xml_values_read_keyed_elements_only() {
+        let key = Regex::new(r"(?i:heroku)[A-Za-z0-9_.\- ]{0,30}?(?i:key|token)").unwrap();
+        let read = |text: &str| -> Vec<(String, String)> {
+            xml_values(text, &key)
+                .into_iter()
+                .map(|value| (text[value.key].to_owned(), text[value.value].to_owned()))
+                .collect()
+        };
+        let pair = |key: &str, value: &str| vec![(key.to_owned(), value.to_owned())];
+        assert_eq!(
+            read("<appSettings>\n  <add key=\"HerokuApiKey\" value=\"v1\" />\n</appSettings>"),
+            pair("HerokuApiKey", "v1")
+        );
+        assert_eq!(
+            read("<appSettings>\n  <add value=\"v2\" key=\"HerokuApiKey\" />\n</appSettings>"),
+            pair("HerokuApiKey", "v2")
+        );
+        assert_eq!(
+            read("<deploy>\n  <HerokuApiKey>v3</HerokuApiKey>\n</deploy>"),
+            pair("HerokuApiKey", "v3")
+        );
+        for text in [
+            "<form>\n  <input name=\"HerokuApiKey\" value=\"v4\">\n</form>",
+            "<!--\n  <add key=\"HerokuApiKey\" value=\"v5\" />\n-->",
+            "HEROKU_API_KEY=v6",
+            "var xml = \"<entry key=\\\"HerokuApiKey\\\">v7</entry>\";",
+        ] {
+            assert!(read(text).is_empty(), "{text}");
+        }
     }
 }

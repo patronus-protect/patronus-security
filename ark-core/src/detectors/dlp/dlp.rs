@@ -493,10 +493,31 @@ pub struct DlpPipeline {
     tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
     anchor_regexes: Vec<Regex>,
-    /// K05: per generic key-bound rule, the value regex of config-line values.
+    /// K05: per generic key-bound rule, the value regex of config-line values;
+    /// T21: per key-bound provider rule, its value regex for XML values.
     structured_regexes: Vec<Option<Regex>>,
     /// K05: per generic key-bound rule, its key grammar for config lines.
     config_keys: Vec<Option<ConfigKeyRegexes>>,
+    /// T21: per key-bound provider rule, its key for XML config elements.
+    provider_xml_keys: Vec<Option<ProviderXmlKey>>,
+}
+
+/// T21: the key of a key-bound provider rule (`provider_key!`), compiled for
+/// the `key`/`name` attribute or element name of an XML config element.
+struct ProviderXmlKey {
+    /// Finds the key in the text.
+    find: Regex,
+    /// The key at the end of a bound key (`HerokuApiKey`, `App.HerokuApiKey`).
+    whole: Regex,
+}
+
+impl ProviderXmlKey {
+    fn new(key: rules::ProviderKey) -> Self {
+        Self {
+            find: Regex::new(key.key).unwrap(),
+            whole: Regex::new(&format!("(?:{})$", key.key)).unwrap(),
+        }
+    }
 }
 
 /// K05: the key grammar of a rule, compiled for config lines.
@@ -585,6 +606,48 @@ impl ConfigKeyRegexes {
     }
 }
 
+impl DlpPipeline {
+    /// T21: the XML values of a key-bound provider rule: the value of a keyed
+    /// element whose `key`/`name` attribute ends with the provider name and
+    /// credential noun (`<add key="HerokuApiKey" value="…"/>` in either
+    /// attribute order, `<entry key="…">…</entry>`) or the text of an element
+    /// so named, read by `config_keys` (K05C: no HTML form, XML in code or XML
+    /// comment). The key gate of the rule reads the key alone, as the value may
+    /// stand before it. The anchor gate of the rule's regex applies, since the
+    /// key holds the provider name.
+    fn provider_xml_values(
+        &self,
+        index: usize,
+        key: &ProviderXmlKey,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<crate::detectors::StructuredValue> {
+        let gate = &self.anchor_gates[index];
+        if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+            return Vec::new();
+        }
+        let text = prepared.text();
+        let key_gate = self.metas[index].key_gate;
+        super::config_keys::xml_values(text, &key.find)
+            .into_iter()
+            .filter(|config| {
+                key.whole
+                    .find(&text[config.key.clone()])
+                    .is_some_and(|found| {
+                        let end = config.key.end;
+                        key_gate.is_none_or(|gate| {
+                            gate(text, config.key.start + found.start(), end..end)
+                        })
+                    })
+            })
+            .map(|config| crate::detectors::StructuredValue {
+                key: config.key,
+                value: config.value,
+                carrier: config.format.as_str(),
+            })
+            .collect()
+    }
+}
+
 impl Default for DlpPipeline {
     fn default() -> Self {
         Self::new()
@@ -605,6 +668,7 @@ impl DlpPipeline {
         let mut tiers = Vec::new();
         let mut structured_regexes = Vec::new();
         let mut config_keys = Vec::new();
+        let mut provider_xml_keys = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -620,15 +684,18 @@ impl DlpPipeline {
             metas.push(p.meta);
             tiers.push(rules::overlap_tier(p.name));
             let config_key = rules::config_key(p.name);
-            structured_regexes.push(config_key.map(|key| {
-                let max = key.max_len.map_or(String::new(), |max| max.to_string());
-                Regex::new(&format!(
-                    r"(?P<structured>[^\r\n]{{{},{max}}})\z",
-                    key.min_len
-                ))
-                .unwrap()
-            }));
+            let xml_key = rules::provider_xml_key(p.name);
+            structured_regexes.push(
+                config_key
+                    .map(|key| {
+                        let max = key.max_len.map_or(String::new(), |max| max.to_string());
+                        format!(r"(?P<structured>[^\r\n]{{{},{max}}})\z", key.min_len)
+                    })
+                    .or_else(|| xml_key.map(|key| format!(r"(?P<structured>(?:{}))\z", key.value)))
+                    .map(|pattern| Regex::new(&pattern).unwrap()),
+            );
             config_keys.push(config_key.map(ConfigKeyRegexes::new));
+            provider_xml_keys.push(xml_key.map(ProviderXmlKey::new));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -651,6 +718,7 @@ impl DlpPipeline {
             anchor_regexes,
             structured_regexes,
             config_keys,
+            provider_xml_keys,
         }
     }
 
@@ -905,6 +973,9 @@ impl NativeRegexDetector for DlpPipeline {
         index: usize,
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
+        if let Some(key) = &self.provider_xml_keys[index] {
+            return self.provider_xml_values(index, key, prepared);
+        }
         let Some(keys) = &self.config_keys[index] else {
             return Vec::new();
         };
