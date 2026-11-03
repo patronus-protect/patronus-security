@@ -207,7 +207,7 @@ class ProfileTests(unittest.TestCase):
         # GOLD-D1 to D6: every entity of these families gets carrier gold, with or without an ARK rule.
         families = {
             "saas", "comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data",
-            "credential", "key",
+            "payment", "observability", "llm", "credential", "key",
         }
         entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
         expected = {entity["id"] for entity in entity_map["entities"] if entity["id"].split(".")[0] in families}

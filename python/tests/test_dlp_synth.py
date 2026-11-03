@@ -862,6 +862,31 @@ CHECKS = {
     "readme_api_token": prefixed("rdme_", BASE36, 70),
     "sidekiq_gems_credentials": groups("", HEX, 8, 8, sep=":"),
     "sidekiq_gems_url_credentials": groups("", HEX, 8, 8, sep=":"),
+    # GOLD-D5 baseline entities (payment, observability, llm)
+    "cohere_api_key": prefixed("", ALNUM, 40),
+    "perplexity_api_key": prefixed("pplx-", ALNUM, 48),
+    "privateai_api_key": prefixed("", BASE36, 32),
+    "sumologic_access_token": prefixed("", BASE36, 64),
+    "square_access_token": prefixed("EAAA", B64URL, 60),
+    "square_legacy_access_token": prefixed("sq0atp-", B64URL, 22),
+    "shopify_access_token": prefixed("shpat_", HEX, 32),
+    "shopify_custom_access_token": prefixed("shpca_", HEX, 32),
+    "shopify_private_app_access_token": prefixed("shppa_", HEX, 32),
+    "shopify_shared_secret": prefixed("shpss_", HEX, 32),
+    "coinbase_access_token": prefixed("", BASE36, 64),
+    "plaid_access_token": lambda v: v.startswith("access-production-") and uuid_shaped(v[18:]),
+    "plaid_secret_key": prefixed("", BASE36, 30),
+    "gocardless_api_token": prefixed("live_", B64URL, 40),
+    "flutterwave_secret_key": prefixed("FLWSECK_TEST-", HEX, 32, "-X"),
+    "flutterwave_encryption_key": prefixed("FLWSECK_TEST-", HEX, 12),
+    "finicity_api_token": prefixed("", HEX, 32),
+    "finicity_client_secret": prefixed("", BASE36, 20),
+    "kraken_access_token": base64_bytes("", 64),
+    "kucoin_access_key": prefixed("", HEX, 24),
+    "kucoin_secret_key": uuid_shaped,
+    "bittrex_access_key": prefixed("", BASE36, 32),
+    "bittrex_secret_key": prefixed("", BASE36, 32),
+    "freemius_secret_key": prefixed("sk_", ALNUM, 29),
 }
 
 def any_check(*names):
@@ -1080,6 +1105,24 @@ LOOKALIKE_FAILURES = {
         "frameio_api_token", "intra42_client_secret", "maxmind_license_key", "readme_api_token"
     ),
     "sidekiq_gems_credentials_short": any_check("sidekiq_gems_credentials", "sidekiq_gems_url_credentials"),
+    # GOLD-D5
+    "cohere_api_key_short": CHECKS["cohere_api_key"],
+    "perplexity_api_key_short": CHECKS["perplexity_api_key"],
+    "privateai_api_key_short": CHECKS["privateai_api_key"],
+    "sumologic_access_token_short": CHECKS["sumologic_access_token"],
+    "square_access_token_short": any_check("square_access_token", "square_legacy_access_token"),
+    "shopify_access_token_short": any_check(
+        "shopify_access_token", "shopify_custom_access_token", "shopify_private_app_access_token", "shopify_shared_secret"
+    ),
+    "coinbase_access_token_short": CHECKS["coinbase_access_token"],
+    "plaid_secret_key_short": any_check("plaid_access_token", "plaid_secret_key"),
+    "gocardless_api_token_short": CHECKS["gocardless_api_token"],
+    "flutterwave_secret_key_short": any_check("flutterwave_secret_key", "flutterwave_encryption_key"),
+    "finicity_client_secret_short": any_check("finicity_api_token", "finicity_client_secret"),
+    "kraken_access_token_short": any_check(
+        "kraken_access_token", "kucoin_access_key", "kucoin_secret_key", "bittrex_access_key", "bittrex_secret_key"
+    ),
+    "freemius_secret_key_short": CHECKS["freemius_secret_key"],
 }
 
 
