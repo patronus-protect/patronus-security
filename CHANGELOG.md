@@ -377,6 +377,29 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 13 payment, observability and llm entities without an ARK rule and
+  without gold (GOLD-D5): `llm.cohere.api_key`, `llm.perplexity.api_key`, `llm.privateai.api_key`,
+  `observability.sumologic.access_token`, `payment.square.access_token`, `payment.shopify.token`,
+  `payment.coinbase.access_token`, `payment.plaid.secret`, `payment.gocardless.api_token`,
+  `payment.flutterwave.secret`, `payment.finicity.secret`, `payment.crypto_exchange.secret`,
+  `payment.freemius.secret_key` (packages P07, P08, P09). `baseline_entities` in
+  `dlp_synth/rules.json` gains 24 generators in the format of each entity's gitleaks rule (Perplexity
+  `pplx-`, Square `EAAA` and `sq0atp-`, Shopify `shpat_`/`shpca_`/`shppa_`/`shpss_`, Plaid
+  `access-production-` + UUID, GoCardless `live_`, Flutterwave `FLWSECK_TEST-` secret and encryption
+  key, Kraken base64 private key, KuCoin, Bittrex, Freemius `sk_` and the keyed shapes of the other
+  rules); KuCoin and Bittrex keys sit in `KUCOIN_…`/`BITTREX_…` variables and the Freemius key in a
+  PHP `'secret_key' => '…'` entry (profile wrapper). Each entity has one lookalike with a wrong
+  length (Flutterwave: no dash after the prefix). Per split and entity the carriers give 44
+  positives (DE and EN) and 220 hard negatives. `entity_map.yaml` maps the TruffleHog detectors
+  that report these formats (SumoLogicKey, Square, GoCardless; `check-entity-map` passes on the
+  pinned binaries). The other entities of the three families already had carrier profiles. No
+  detection change: evaluation data only, the Rust detector is untouched (no latency effect). Dev
+  rows (exact, untyped value spans): ARK has no provider rule, its generic rules find 9 of the 13
+  (F1 66.7 to 97.7; 0 on Sumo Logic, Finicity, Flutterwave, Freemius) and report 42 hard-negative
+  spans on the KuCoin/Bittrex and Plaid test-key, example and placeholder rows; gitleaks 22.7 to
+  98.9, TruffleHog 0 except Sumo Logic 88.9, GoCardless 91.3, Square 61.1, detect-secrets 0 to
+  69.9. Frozen corpora change only when the operator re-freezes them (T19).
+
 - Synthetic DLP gold for the 25 saas entities without an ARK rule and without gold (GOLD-D1):
   `saas.atlassian.api_token`, `saas.notion.api_token`, `saas.linear.secret`,
   `saas.airtable.token`, `saas.asana.client_secret`, `saas.hubspot.api_key`,

@@ -597,6 +597,19 @@
     "saas.freshbooks.access_token": {"generators": ["freshbooks_access_token"], "lookalike": ["freshbooks_access_token_short"]},
     "saas.squarespace.access_token": {"generators": ["squarespace_access_token"], "lookalike": ["squarespace_access_token_short"]},
     "saas.misc.api_token": {"generators": ["frameio_api_token", "intra42_client_secret", "maxmind_license_key", "readme_api_token"], "lookalike": ["readme_api_token_short"]},
-    "saas.sidekiq.credentials": {"generators": ["sidekiq_gems_credentials", "sidekiq_gems_url_credentials"], "lookalike": ["sidekiq_gems_credentials_short"]}
+    "saas.sidekiq.credentials": {"generators": ["sidekiq_gems_credentials", "sidekiq_gems_url_credentials"], "lookalike": ["sidekiq_gems_credentials_short"]},
+    "llm.cohere.api_key": {"generators": ["cohere_api_key"], "lookalike": ["cohere_api_key_short"]},
+    "llm.perplexity.api_key": {"generators": ["perplexity_api_key"], "lookalike": ["perplexity_api_key_short"]},
+    "llm.privateai.api_key": {"generators": ["privateai_api_key"], "lookalike": ["privateai_api_key_short"]},
+    "observability.sumologic.access_token": {"generators": ["sumologic_access_token"], "lookalike": ["sumologic_access_token_short"]},
+    "payment.square.access_token": {"generators": ["square_access_token", "square_legacy_access_token"], "lookalike": ["square_access_token_short"]},
+    "payment.shopify.token": {"generators": ["shopify_access_token", "shopify_custom_access_token", "shopify_private_app_access_token", "shopify_shared_secret"], "lookalike": ["shopify_access_token_short"]},
+    "payment.coinbase.access_token": {"generators": ["coinbase_access_token"], "lookalike": ["coinbase_access_token_short"]},
+    "payment.plaid.secret": {"generators": ["plaid_access_token", "plaid_secret_key"], "lookalike": ["plaid_secret_key_short"]},
+    "payment.gocardless.api_token": {"generators": ["gocardless_api_token"], "lookalike": ["gocardless_api_token_short"]},
+    "payment.flutterwave.secret": {"generators": ["flutterwave_secret_key", "flutterwave_encryption_key"], "lookalike": ["flutterwave_secret_key_short"]},
+    "payment.finicity.secret": {"generators": ["finicity_api_token", "finicity_client_secret"], "lookalike": ["finicity_client_secret_short"]},
+    "payment.crypto_exchange.secret": {"generators": ["kraken_access_token", "kucoin_access_key", "kucoin_secret_key", "bittrex_access_key", "bittrex_secret_key"], "lookalike": ["kraken_access_token_short"]},
+    "payment.freemius.secret_key": {"generators": ["freemius_secret_key"], "lookalike": ["freemius_secret_key_short"]}
   }
 }

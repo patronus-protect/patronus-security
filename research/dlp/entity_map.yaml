@@ -753,7 +753,8 @@ entities:
      gitleaks: [settlemint-application-access-token, settlemint-personal-access-token,
        settlemint-service-access-token], backlog: P06}
   # P07: Observability (ohne ARK-Regel)
-  - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token], backlog: P07}
+  - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token],
+     trufflehog: [SumoLogicKey], backlog: P07}
   # P08: Kommunikation/Webhooks
   - {id: comm.webhook_url, scope: baseline_only, group: SECRET_TOKEN, subtype: webhook_url,
      gitleaks: [slack-webhook-url, microsoft-teams-webhook], trufflehog: [SlackWebhook, MicrosoftTeamsWebhook],
@@ -782,14 +783,15 @@ entities:
      trufflehog: [Gitter], backlog: P08}
   # P09: Payment/Commerce
   - {id: payment.square.access_token, scope: baseline_only, group: PAYMENT_KEY,
-     gitleaks: [square-access-token], detect_secrets: [SquareOAuthDetector], backlog: P09}
+     gitleaks: [square-access-token], trufflehog: [Square], detect_secrets: [SquareOAuthDetector], backlog: P09}
   - {id: payment.shopify.token, scope: baseline_only, group: PAYMENT_KEY,
      gitleaks: [shopify-access-token, shopify-custom-access-token, shopify-private-app-access-token,
        shopify-shared-secret], backlog: P09}
   - {id: payment.coinbase.access_token, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [coinbase-access-token], backlog: P09}
   - {id: payment.plaid.secret, scope: baseline_only, group: PAYMENT_KEY,
      gitleaks: [plaid-api-token, plaid-secret-key], backlog: P09}
-  - {id: payment.gocardless.api_token, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [gocardless-api-token], backlog: P09}
+  - {id: payment.gocardless.api_token, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [gocardless-api-token],
+     trufflehog: [GoCardless], backlog: P09}
   - {id: payment.flutterwave.secret, scope: baseline_only, group: PAYMENT_KEY,
      gitleaks: [flutterwave-secret-key, flutterwave-encryption-key], backlog: P09}
   - {id: payment.finicity.secret, scope: baseline_only, group: PAYMENT_KEY,

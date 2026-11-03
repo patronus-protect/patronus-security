@@ -459,7 +459,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `defined-networking-api-token` |
 | `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `fastly-api-token`; TruffleHog: `FastlyPersonalToken` |
 | `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `settlemint-application-access-token`, `settlemint-personal-access-token`, `settlemint-service-access-token` |
-| `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sumologic-access-token` |
+| `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sumologic-access-token`; TruffleHog: `SumoLogicKey` |
 | `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-webhook-url`, `microsoft-teams-webhook`; TruffleHog: `SlackWebhook`, `MicrosoftTeamsWebhook`; detect-secrets: `SlackDetector` |
 | `comm.discord.api_credentials` | baseline_only | `API_KEY` | – | – | – | gitleaks: `discord-api-token`, `discord-client-secret` |
 | `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `telegram-bot-api-token`; TruffleHog: `TelegramBotToken`; detect-secrets: `TelegramBotTokenDetector` |
@@ -472,11 +472,11 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `comm.mattermost.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mattermost-access-token`; TruffleHog: `MattermostPersonalToken` |
 | `comm.sendbird.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendbird-access-token`; TruffleHog: `Sendbird`, `SendbirdOrganizationAPI` |
 | `comm.gitter.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `gitter-access-token`; TruffleHog: `Gitter` |
-| `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `square-access-token`; detect-secrets: `SquareOAuthDetector` |
+| `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `square-access-token`; TruffleHog: `Square`; detect-secrets: `SquareOAuthDetector` |
 | `payment.shopify.token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `shopify-access-token`, `shopify-custom-access-token`, `shopify-private-app-access-token`, `shopify-shared-secret` |
 | `payment.coinbase.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `coinbase-access-token` |
 | `payment.plaid.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `plaid-api-token`, `plaid-secret-key` |
-| `payment.gocardless.api_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `gocardless-api-token` |
+| `payment.gocardless.api_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `gocardless-api-token`; TruffleHog: `GoCardless` |
 | `payment.flutterwave.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `flutterwave-secret-key`, `flutterwave-encryption-key` |
 | `payment.finicity.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `finicity-api-token`, `finicity-client-secret` |
 | `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` |
