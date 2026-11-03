@@ -13645,6 +13645,143 @@ DLP_T20_CASES["SECRET_TOKEN"] += [
 for _label, _rows in DLP_T20_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T21: provider values in XML config elements whose `key`/`name` attribute or
+# element name carries the provider name and a credential noun (`<add key value>`
+# in both attribute orders, `<entry key>`, `<setting name>`, element text); the
+# provider rule keeps the value. Hard negatives: provider IDs without a
+# credential noun, references, masked values, HTML forms, XML in code strings
+# and in XML comments.
+T21_XML_KEYS = (
+    "HerokuApiKey", "RailwayToken", "NetlifyAuthToken", "TravisApiToken", "CircleCiToken", "VercelToken",
+    "AzureDevOpsPat", "CloudflareApiToken", "BitbucketClientSecret", "DatadogApiKey", "NewRelicLicenseKey",
+    "SentryAuthToken", "SplunkHecToken", "ElasticApiKey", "HoneycombApiKey", "PagerDutyApiKey",
+)
+T21_CARRIERS = {
+    "en": (
+        '<?xml version="1.0" encoding="utf-8"?>\n<!-- Settings for the invoice export -->\n<configuration>\n'
+        '  <appSettings>\n    <add key="Environment" value="Production" />\n'
+        '    <add key="{key}" value="<<secret:0>>" />\n  </appSettings>\n</configuration>\n',
+        '<?xml version="1.0" encoding="utf-8"?>\n<configuration>\n  <!-- deployment job -->\n  <appSettings>\n'
+        '    <add value="<<secret:0>>" key="{key}" />\n    <add key="Region" value="eu-west-1" />\n'
+        '  </appSettings>\n</configuration>\n',
+        '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">\n'
+        '<properties>\n  <comment>reporting service</comment>\n  <entry key="region">eu-west-1</entry>\n'
+        '  <entry key="{key}"><<secret:0>></entry>\n</properties>\n',
+        '<?xml version="1.0" encoding="utf-8"?>\n<!-- release pipeline -->\n<deployment>\n'
+        '  <region>eu-west-1</region>\n  <{key}><<secret:0>></{key}>\n</deployment>\n',
+    ),
+    "de": (
+        '<?xml version="1.0" encoding="utf-8"?>\n<!-- Einstellungen für den Rechnungsexport -->\n<configuration>\n'
+        '  <appSettings>\n    <add key="Umgebung" value="Produktion" />\n'
+        '    <add key="{key}" value="<<secret:0>>" />\n  </appSettings>\n</configuration>\n',
+        '<?xml version="1.0" encoding="utf-8"?>\n<configuration>\n  <!-- Bereitstellung Abschlusslauf -->\n'
+        '  <appSettings>\n    <add value="<<secret:0>>" key="{key}" />\n'
+        '    <add key="Region" value="eu-central-1" />\n  </appSettings>\n</configuration>\n',
+        '<?xml version="1.0" encoding="utf-8"?>\n<!-- Zugangsdaten Berichtsdienst, nicht einchecken -->\n<settings>\n'
+        '  <setting name="Mandant" value="0815" />\n  <setting name="{key}" type="string" value="<<secret:0>>" />\n'
+        '</settings>\n',
+        '<?xml version="1.0" encoding="utf-8"?>\n<!-- Freigabe-Pipeline -->\n<bereitstellung>\n'
+        '  <region>eu-central-1</region>\n  <{key}><<secret:0>></{key}>\n</bereitstellung>\n',
+    ),
+}
+DLP_T21_CASES = {"API_KEY": [], "CLOUD_KEY": [], "SECRET_TOKEN": []}
+for _index, ((_label, _rule, _recipe, _en, _de), _key) in enumerate(zip(T20_PROVIDERS, T21_XML_KEYS)):
+    for _language in ("en", "de"):
+        _template = T21_CARRIERS[_language][(_index + 2 * (_language == "de")) % 4]
+        DLP_T21_CASES[_label].append(
+            ds(
+                _label, _language, _rule, _template.replace("{key}", _key), _recipe,
+                21001 + 2 * _index + (_language == "de"), carrier="xml",
+            )
+        )
+DLP_T21_CASES["CLOUD_KEY"] += [
+    dn(
+        "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+        '<configuration>\n  <appSettings>\n    <add key="HerokuAppId" value="3f2b8c1e-9d4a-4e7b-8a6c-1b2d3e4f5a6b" />\n'
+        '  </appSettings>\n</configuration>\n',
+        "provider id attribute without a credential noun", carrier="xml",
+    ),
+    dn(
+        "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+        '<configuration>\n  <appSettings>\n    <add key="HerokuApiKey" value="%HEROKU_API_KEY%" />\n'
+        '  </appSettings>\n</configuration>\n',
+        "environment reference", carrier="xml",
+    ),
+    dn(
+        "CLOUD_KEY", "en", "dlp_heroku_legacy_api_key",
+        '<form action="/settings" method="post">\n  <label for="key">Heroku API key</label>\n'
+        '  <input type="text" id="key" name="HerokuApiKey" value="{{ form.heroku_api_key }}">\n</form>\n',
+        "HTML form field", carrier="xml",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_railway_token",
+        '<!-- Bereitstellung -->\n<bereitstellung>\n  <RailwayProjectId>7c9e6679-7425-40de-944b-e07fc1f90ae7</RailwayProjectId>\n'
+        '</bereitstellung>\n',
+        "provider id element without a credential noun", carrier="xml",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_railway_token",
+        '<settings>\n  <setting name="RailwayToken" type="string" value="${RAILWAY_TOKEN}" />\n</settings>\n',
+        "template reference", carrier="xml",
+    ),
+    dn(
+        "CLOUD_KEY", "de", "dlp_netlify_legacy_token",
+        '<!-- Beispielkonfiguration, Wert aus dem Tresor eintragen -->\n<appSettings>\n'
+        '  <add key="NetlifyAuthToken" value="" />\n</appSettings>\n',
+        "empty value", carrier="xml",
+    ),
+]
+DLP_T21_CASES["API_KEY"] += [
+    dn(
+        "API_KEY", "en", "dlp_datadog_api_key",
+        "/// <summary>Sends the metrics.</summary>\n/// <param name=\"datadogApiKey\">The Datadog API key.</param>\n"
+        "public void Send(string datadogApiKey) { }\n",
+        "XML doc comment in code", carrier="code",
+    ),
+    dn(
+        "API_KEY", "en", "dlp_honeycomb_api_key",
+        '<properties>\n  <entry key="HoneycombDataset">checkout-service</entry>\n'
+        '  <entry key="HoneycombApiKey">00000000000000000000000000000000</entry>\n</properties>\n',
+        "masked value in the provider format", carrier="xml",
+    ),
+    dn(
+        "API_KEY", "de", "dlp_pagerduty_api_key",
+        '<bereitstellung>\n  <PagerDutyServiceId>PX1Y2Z3</PagerDutyServiceId>\n  <PagerDutyApiKey>${PAGERDUTY_API_KEY}</PagerDutyApiKey>\n'
+        '</bereitstellung>\n',
+        "service id element and environment reference", carrier="xml",
+    ),
+    dn(
+        "API_KEY", "de", "dlp_elastic_api_key",
+        '<!-- Platzhalter: id:api_key aus Kibana eintragen -->\n<appSettings>\n'
+        '  <add key="ElasticApiKey" value="&lt;id&gt;:&lt;api_key&gt;" />\n</appSettings>\n',
+        "placeholder", carrier="xml",
+    ),
+]
+DLP_T21_CASES["SECRET_TOKEN"] += [
+    dn(
+        "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
+        '<appSettings>\n  <add key="SplunkHecToken" value="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" />\n</appSettings>\n',
+        "masked value in the provider format", carrier="xml",
+    ),
+    dn(
+        "SECRET_TOKEN", "en", "dlp_sentry_auth_token",
+        '<deployment>\n  <SentryProjectId>4505281256090153</SentryProjectId>\n  <SentryOrg>acme</SentryOrg>\n</deployment>\n',
+        "provider id element without a credential noun", carrier="xml",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_travis_token",
+        'string Vorlage = "<entry key=\\"TravisApiToken\\">" + token + "</entry>";\n',
+        "XML built in a code string", carrier="code",
+    ),
+    dn(
+        "SECRET_TOKEN", "de", "dlp_sentry_auth_token",
+        '<settings>\n  <setting name="SentryAuthToken" type="string" value="&lt;SENTRY_AUTH_TOKEN&gt;" />\n</settings>\n',
+        "placeholder", carrier="xml",
+    ),
+]
+for _label, _rows in DLP_T21_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

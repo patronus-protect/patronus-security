@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: key-bound provider values in XML config elements (T21). The `provider_key!`
+  rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
+  `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,
+  `dlp_azure_devops_legacy_pat`, `dlp_cloudflare_api_key`, `dlp_bitbucket_client_secret`,
+  `dlp_datadog_api_key`, `dlp_newrelic_legacy_license_key`, `dlp_sentry_auth_token`,
+  `dlp_splunk_hec_token`, `dlp_elastic_api_key`, `dlp_honeycomb_api_key`, `dlp_pagerduty_api_key`)
+  read the K05C XML binding: a keyed element whose `key`/`name` attribute ends with the provider
+  name and a credential noun (`<add key="HerokuApiKey" value="…"/>` in either attribute order,
+  `<entry key>`, `<setting name>`) and the text of an element so named
+  (`<SplunkHecToken>…</SplunkHecToken>`). The value must pass the provider's format, validator and
+  example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
+  finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
+  strings stay silent. Matches carry `structure: "xml"`.
 - Detection change: provider and CSRF values handed over in DE/EN prose (T20). The key-bound
   provider rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
   `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,

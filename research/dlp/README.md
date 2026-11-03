@@ -208,7 +208,16 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   (`variable "passwort_sha256"`, `<hashed_password>`), und ein XML-`value`-Attribut unter seinem
   `key`/`name`-Attribut (`<add key="PasswordSha256" value="…">`). Treffer tragen `structure`
   `hcl` oder `xml`; die XML-Tag-Grammatik teilt sich K05C mit der Dokumentstruktur von PII K04
-  (`structure::xml_start_tag`, `structure::xml_attributes`).
+  (`structure::xml_start_tag`, `structure::xml_attributes`). Seit T21 lesen die
+  schlüsselgebundenen Provider-Regeln (`provider_key!`) dieselbe XML-Bindung
+  (`config_keys::xml_values`): Endet das `key`/`name`-Attribut oder der Elementname auf
+  Provider-Name und Credential-Nomen (`<add key="HerokuApiKey" value="…"/>`, auch
+  `value` zuerst, `<entry key="DatadogApiKey">…`, `<setting name="SentryAuthToken" …>`,
+  `<SplunkHecToken>…</SplunkHecToken>`), prüft die Provider-Regel den Wert mit ihrer eigenen
+  Wert-Regex, ihrem Validator und ihrer Beispielprüfung; Schlüssel- und Wert-Regex liest
+  `providers::xml_key` aus dem `provider_key!`-Muster zurück, das Key-Gate verwirft IDs
+  (`HerokuAppId`, `RailwayProjectId`). Der Treffer behält die Provider-`rule_id`, die generische
+  Regel verliert die Überlappung.
   Seit G02 bindet `dlp_generic_credential_assignment` in einem Config-Dokument zusätzlich die
   Schlüssel `credentials`, `privateKey`/`private_key`, `secret_key`, `signing-key`, `passphrase`
   und die deutschen Varianten `Zugangsdaten`, `Anmeldedaten`, `privater`/`geheimer Schlüssel`

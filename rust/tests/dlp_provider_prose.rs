@@ -3,7 +3,9 @@
 //! after the provider name and a credential noun keeps its provider rule
 //! (the G-PROSE grammar: noun on the line or up to two lines before, value
 //! after a colon, at the line end or alone). Elastic keeps `id:api_key` as
-//! one span. Values come from the golden generator.
+//! one span. T21: the same rules read the value of an XML config element
+//! whose `key`/`name` attribute or element name carries the provider name and
+//! credential noun. Values come from the golden generator.
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -269,5 +271,75 @@ fn values_failing_the_provider_format_are_no_provider_finding() {
         let value = generated(recipe, 3);
         let text = format!("here is the {label} for the collector:\n\n{value}\n");
         assert!(!rule_ids(&text).iter().any(|id| id == rule_id), "{text}");
+    }
+}
+
+/// T21: the XML key of each provider rule (without the CSRF rule).
+const XML_KEYS: &[&str] = &[
+    "HerokuApiKey",
+    "RailwayToken",
+    "NetlifyAuthToken",
+    "TravisApiToken",
+    "CircleCiToken",
+    "VercelToken",
+    "AzureDevOpsPat",
+    "CloudflareApiToken",
+    "BitbucketClientSecret",
+    "DatadogApiKey",
+    "NewRelicLicenseKey",
+    "SentryAuthToken",
+    "SplunkHecToken",
+    "ElasticApiKey",
+    "HoneycombApiKey",
+    "PagerDutyApiKey",
+];
+
+/// T21: keyed XML elements in both attribute orders and element text.
+const XML_CARRIERS: &[&str] = &[
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Einstellungen für den Rechnungsexport -->\n<configuration>\n  <appSettings>\n    <add key=\"Umgebung\" value=\"Produktion\" />\n    <add key=\"{key}\" value=\"{}\" />\n  </appSettings>\n</configuration>\n",
+    "<configuration>\n  <appSettings>\n    <add value=\"{}\" key=\"{key}\" />\n  </appSettings>\n</configuration>\n",
+    "<properties>\n  <entry key=\"region\">eu-central-1</entry>\n  <entry key=\"{key}\">{}</entry>\n</properties>\n",
+    "<settings>\n  <setting name=\"{key}\" type=\"string\" value=\"{}\" />\n</settings>\n",
+    "<deployment>\n  <region>eu-central-1</region>\n  <{key}>{}</{key}>\n</deployment>\n",
+];
+
+#[test]
+fn provider_values_in_xml_config_elements_keep_their_provider_rule() {
+    for (index, ((rule_id, recipe, _, _), key)) in PROVIDERS.iter().zip(XML_KEYS).enumerate() {
+        let value = generated(recipe, 4000 + index as u64);
+        for carrier in XML_CARRIERS {
+            let text = carrier.replace("{key}", key).replace("{}", &value);
+            assert_reported(&text, rule_id, &value);
+            assert!(
+                !rule_ids(&text)
+                    .iter()
+                    .any(|id| id == "dlp_generic_credential_assignment"),
+                "{text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn xml_ids_html_forms_and_xml_in_code_are_no_provider_finding() {
+    let heroku = generated("heroku_api_key", 9);
+    let datadog = generated("datadog_api_key", 9);
+    for text in [
+        "<appSettings>\n  <add key=\"HerokuAppId\" value=\"3f2b8c1e-9d4a-4e7b-8a6c-1b2d3e4f5a6b\" />\n</appSettings>\n".to_owned(),
+        "<deployment>\n  <RailwayProjectId>7c9e6679-7425-40de-944b-e07fc1f90ae7</RailwayProjectId>\n</deployment>\n".to_owned(),
+        "<appSettings>\n  <add key=\"HerokuApiKey\" value=\"%HEROKU_API_KEY%\" />\n</appSettings>\n".to_owned(),
+        "<appSettings>\n  <add key=\"SplunkHecToken\" value=\"XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX\" />\n</appSettings>\n".to_owned(),
+        format!("<form>\n  <input type=\"hidden\" name=\"HerokuApiKey\" value=\"{heroku}\">\n</form>\n"),
+        format!("var xml = \"<entry key=\\\"DatadogApiKey\\\">{datadog}</entry>\";\n"),
+        format!("<!--\n  <add key=\"HerokuApiKey\" value=\"{heroku}\" />\n-->\n"),
+    ] {
+        let ids = rule_ids(&text);
+        assert!(
+            !ids.iter().any(|id| id == "dlp_heroku_legacy_api_key"
+                || id == "dlp_railway_token"
+                || id == "dlp_splunk_hec_token"
+                || id == "dlp_datadog_api_key"),
+            "{text}: {ids:?}"
+        );
     }
 }

@@ -171,6 +171,18 @@ pub fn config_key(rule_id: &str) -> Option<ConfigKey> {
     credentials::config_key(rule_id)
 }
 
+pub use providers::ProviderKey;
+
+/// T21: the key and value regexes of a key-bound provider rule
+/// (`provider_key!`), which also binds the value of an XML config element
+/// under its key; `None` for every other rule.
+pub fn provider_xml_key(rule_id: &str) -> Option<ProviderKey> {
+    providers::RULES
+        .iter()
+        .find(|rule| rule.name == rule_id)
+        .and_then(|rule| providers::xml_key(rule.pattern))
+}
+
 /// Credential rules that take any value under a secret-like key or variable
 /// name: the generic tier of the overlap resolution (K08).
 const GENERIC_CREDENTIALS: &[&str] = &[
