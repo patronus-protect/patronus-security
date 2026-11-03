@@ -137,6 +137,24 @@ known_gaps:
     decision: T33
     reason: Unterstrich ist kein Trennzeichen der Partita IVA (elf Ziffern am Stück, mit oder ohne IT)
     span: '[0-9 ]*_[0-9_ ]*'
+  - id: pii.ca.sin
+    decision: B-LUHN
+    reason: blanke neun Ziffern, am Stück oder mit Leerzeichen gruppiert, bleiben ohne SIN-Begriff negativ (Luhn trifft jede zehnte Folge; SIREN, BSN); die Gruppen mit Bindestrich bleiben Gold
+    span: '\d{3} ?\d{3} ?\d{3}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.in.aadhaar
+    decision: B-IN
+    reason: blanke zwölf Ziffern am Stück bleiben ohne Aadhaar-Begriff negativ; die gruppierte Form bleibt Gold
+    span: '\d{12}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
+  - id: pii.us.npi
+    decision: A06
+    reason: blanke zehn Ziffern am Stück bleiben ohne NPI-Begriff negativ; die Form 4-3-3 bleibt Gold
+    span: '\d{10}'
+    bare: true
+    corpora: [presidio-analyzer-recognizer-tests]
 
 entities:
   # ── shared ─────────────────────────────────────────────────────────────
