@@ -274,9 +274,8 @@ SQLite), and DE/EN chat, tickets and mail.
 - Each value rule of `rules.json` has a profile with its entity, group and key
   name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
   an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
-- Each baseline entity of `rules.json` (GOLD-D1, GOLD-D2, GOLD-D3, GOLD-D4,
-  GOLD-D6: an entity map entity with scope `baseline_only`, such as
-  `comm.telegram.bot_token`)
+- Each baseline entity of `rules.json` (GOLD-D1 to GOLD-D6: an entity map
+  entity with scope `baseline_only`, such as `comm.telegram.bot_token`)
   has a profile under its entity id. Its generators follow the gitleaks rule of
   the entity, or the TruffleHog detector or detect-secrets plugin of an entity
   without one, or vendor documentation (`docs:<url>`) for an entity no baseline
@@ -286,7 +285,8 @@ SQLite), and DE/EN chat, tickets and mail.
   `curl -u user:…` command, the NuGet.Config `<add key="ClearTextPassword" …/>`
   entry, a one-line Kubernetes Secret manifest and the Sidekiq
   `BUNDLE_ENTERPRISE__CONTRIBSYS__COM=…` variable or `https://…@enterprise.contribsys.com/`
-  gem source. So ARK and every baseline are
+  gem source, the `KUCOIN_API_KEY=…`/`BITTREX_API_KEY=…` exchange variables and
+  the Freemius `'secret_key' => '…'` PHP entry. So ARK and every baseline are
   measured on it before ARK has a rule; its rows carry `rule_id` null.
 - Positives carry one entity whose `start`/`end` are code points in `text` and
   cover only the value, without key, quotes or wrapper. `encoding` lists the

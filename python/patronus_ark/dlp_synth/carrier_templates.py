@@ -2033,6 +2033,63 @@ PROFILES = {
             "sidekiq_gems_url_credentials": "https://<<value>>@enterprise.contribsys.com/",
         },
     ),
+    # GOLD-D5: payment, observability and llm entities without an ARK rule.
+    "llm.cohere.api_key": Profile(
+        "llm.cohere.api_key", "API_KEY", "secret", "cohere_api_key", "Cohere API key", "Cohere-API-Schlüssel",
+    ),
+    "llm.perplexity.api_key": Profile(
+        "llm.perplexity.api_key", "API_KEY", "secret", "perplexity_api_key", "Perplexity API key",
+        "Perplexity-API-Schlüssel",
+    ),
+    "llm.privateai.api_key": Profile(
+        "llm.privateai.api_key", "API_KEY", "secret", "private_ai_api_key", "Private AI API key",
+        "Private-AI-API-Schlüssel",
+    ),
+    "observability.sumologic.access_token": Profile(
+        "observability.sumologic.access_token", "API_KEY", "secret", "sumologic_access_key", "Sumo Logic access key",
+        "Sumo-Logic-Zugriffsschlüssel",
+    ),
+    "payment.square.access_token": Profile(
+        "payment.square.access_token", "PAYMENT_KEY", "secret", "square_access_token", "Square access token",
+        "Square-Zugriffstoken",
+    ),
+    "payment.shopify.token": Profile(
+        "payment.shopify.token", "PAYMENT_KEY", "secret", "shopify_access_token", "Shopify access token",
+        "Shopify-Zugriffstoken",
+    ),
+    "payment.coinbase.access_token": Profile(
+        "payment.coinbase.access_token", "PAYMENT_KEY", "secret", "coinbase_access_token", "Coinbase access token",
+        "Coinbase-Zugriffstoken",
+    ),
+    "payment.plaid.secret": Profile(
+        "payment.plaid.secret", "PAYMENT_KEY", "secret", "plaid_secret", "Plaid secret", "Plaid-Secret",
+    ),
+    "payment.gocardless.api_token": Profile(
+        "payment.gocardless.api_token", "PAYMENT_KEY", "secret", "gocardless_access_token",
+        "GoCardless access token", "GoCardless-Zugriffstoken",
+    ),
+    "payment.flutterwave.secret": Profile(
+        "payment.flutterwave.secret", "PAYMENT_KEY", "secret", "flutterwave_secret_key", "Flutterwave secret key",
+        "Flutterwave-Secret-Key",
+    ),
+    "payment.finicity.secret": Profile(
+        "payment.finicity.secret", "PAYMENT_KEY", "secret", "finicity_app_key", "Finicity app key",
+        "Finicity-App-Schlüssel",
+    ),
+    "payment.crypto_exchange.secret": Profile(
+        "payment.crypto_exchange.secret", "PAYMENT_KEY", "secret", "kraken_private_key", "exchange API secret",
+        "Börsen-API-Secret",
+        {
+            "kucoin_access_key": "KUCOIN_API_KEY=<<value>>",
+            "kucoin_secret_key": "KUCOIN_API_SECRET=<<value>>",
+            "bittrex_access_key": "BITTREX_API_KEY=<<value>>",
+            "bittrex_secret_key": "BITTREX_API_SECRET=<<value>>",
+        },
+    ),
+    "payment.freemius.secret_key": Profile(
+        "payment.freemius.secret_key", "PAYMENT_KEY", "secret", "freemius_secret_key", "Freemius secret key",
+        "Freemius-Secret-Key", "'secret_key' => '<<value>>'",
+    ),
 }
 
 
