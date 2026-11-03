@@ -764,6 +764,7 @@ tasks:
       Attainable view after T27: 96.3 vs 100.0 on 9 ids, open only tax number 67 vs 100.
       Validators are never loosened; strict shows no regression; no new hard-negative FP
   - id: Q-M1
+    status: done
     title: "M1 on presidio_favored: every shared id F1 >= Presidio tuned (with the T32 profile) in the attainable view"
     type: recall-fix
     deps: [T27, T32, T33]
