@@ -41,6 +41,31 @@
       "lookalike": ["replicate_api_token_long"],
       "probes": ["REPLICATE_API_TOKEN=<<secret:0>>", "replicate token: <<secret:0>>"]
     },
+    "dlp_cohere_key": {
+      "generators": ["cohere_api_key"],
+      "lookalike": ["cohere_api_key_short"],
+      "probes": ["CO_API_KEY=<<secret:0>>", "cohere:\n  api_key: \"<<secret:0>>\""]
+    },
+    "dlp_perplexity_key": {
+      "generators": ["perplexity_api_key"],
+      "lookalike": ["perplexity_api_key_short"],
+      "probes": ["PERPLEXITY_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_deepseek_key": {
+      "generators": ["deepseek_api_key"],
+      "lookalike": ["deepseek_api_key_short"],
+      "probes": ["DEEPSEEK_API_KEY=<<secret:0>>", "{\"deepseek\": {\"api_key\": \"<<secret:0>>\"}}"]
+    },
+    "dlp_openrouter_key": {
+      "generators": ["openrouter_api_key"],
+      "lookalike": ["openrouter_api_key_short"],
+      "probes": ["OPENROUTER_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_fireworks_key": {
+      "generators": ["fireworks_api_key"],
+      "lookalike": ["fireworks_api_key_short"],
+      "probes": ["FIREWORKS_API_KEY=<<secret:0>>", "fireworks.client.api_key = \"<<secret:0>>\""]
+    },
     "dlp_aws_access_key": {
       "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id", "aws_access_key_id_non_base32"],
       "lookalike": ["aws_access_key_id_long", "aws_iam_user_unique_id"],
@@ -598,8 +623,6 @@
     "saas.squarespace.access_token": {"generators": ["squarespace_access_token"], "lookalike": ["squarespace_access_token_short"]},
     "saas.misc.api_token": {"generators": ["frameio_api_token", "intra42_client_secret", "maxmind_license_key", "readme_api_token"], "lookalike": ["readme_api_token_short"]},
     "saas.sidekiq.credentials": {"generators": ["sidekiq_gems_credentials", "sidekiq_gems_url_credentials"], "lookalike": ["sidekiq_gems_credentials_short"]},
-    "llm.cohere.api_key": {"generators": ["cohere_api_key"], "lookalike": ["cohere_api_key_short"]},
-    "llm.perplexity.api_key": {"generators": ["perplexity_api_key"], "lookalike": ["perplexity_api_key_short"]},
     "llm.privateai.api_key": {"generators": ["privateai_api_key"], "lookalike": ["privateai_api_key_short"]},
     "observability.sumologic.access_token": {"generators": ["sumologic_access_token"], "lookalike": ["sumologic_access_token_short"]},
     "payment.square.access_token": {"generators": ["square_access_token", "square_legacy_access_token"], "lookalike": ["square_access_token_short"]},

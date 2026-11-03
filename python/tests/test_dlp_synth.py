@@ -866,6 +866,10 @@ CHECKS = {
     "cohere_api_key": prefixed("", ALNUM, 40),
     "perplexity_api_key": prefixed("pplx-", ALNUM, 48),
     "privateai_api_key": prefixed("", BASE36, 32),
+    # P01 LLM provider keys
+    "openrouter_api_key": prefixed("sk-or-v1-", HEX, 64),
+    "deepseek_api_key": prefixed("sk-", HEX, 32),
+    "fireworks_api_key": lambda v: any(prefixed("fw_", ALNUM, n)(v) for n in range(20, 41)),
     "sumologic_access_token": prefixed("", BASE36, 64),
     "square_access_token": prefixed("EAAA", B64URL, 60),
     "square_legacy_access_token": prefixed("sq0atp-", B64URL, 22),
@@ -1109,6 +1113,10 @@ LOOKALIKE_FAILURES = {
     "cohere_api_key_short": CHECKS["cohere_api_key"],
     "perplexity_api_key_short": CHECKS["perplexity_api_key"],
     "privateai_api_key_short": CHECKS["privateai_api_key"],
+    # P01
+    "openrouter_api_key_short": CHECKS["openrouter_api_key"],
+    "deepseek_api_key_short": CHECKS["deepseek_api_key"],
+    "fireworks_api_key_short": CHECKS["fireworks_api_key"],
     "sumologic_access_token_short": CHECKS["sumologic_access_token"],
     "square_access_token_short": any_check("square_access_token", "square_legacy_access_token"),
     "shopify_access_token_short": any_check(
