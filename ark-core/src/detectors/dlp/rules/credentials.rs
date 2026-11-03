@@ -103,7 +103,12 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_credential_in_url",
-        pattern: r#"(?i)[?&](?:password|passwd|passwort|kennwort|secret|geheimnis|token|apikey|api_key|api-key)=([^\\\s&"'\]},]{4,})"#,
+        // T16: also after `&amp;` and `&#38;` in XML/HTML attributes.
+        pattern: concat!(
+            r"(?i)",
+            query_separator!(),
+            r#"(?:password|passwd|passwort|kennwort|secret|geheimnis|token|apikey|api_key|api-key)=([^\\\s&"'\]},]{4,})"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -346,8 +351,12 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
-        // F12: also after `&amp;` in XML/HTML attributes.
-        pattern: r"(?i)(?:[?&]|&amp;)(?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
+        // F12, T16: also after `&amp;` and `&#38;` in XML/HTML attributes.
+        pattern: concat!(
+            r"(?i)",
+            query_separator!(),
+            r"(?:X-Amz-Signature|X-Goog-Signature|Signature|sig)=([A-Fa-f0-9]{16,}|[A-Za-z0-9_~+/%=-]{20,})",
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -455,7 +464,7 @@ pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[
 pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_connection_string_password",
-        // A `password`/`pwd` key of a URL query (also `&amp;` in XML) or of a
+        // A `password`/`pwd` key of a URL query (also `&amp;`/`&#38;` in XML) or of a
         // key/value string, the value quoted, in ODBC braces or bare: a bare
         // value runs to `;`, a quote or backtick, the line end or the next libpq
         // `key=` and may hold spaces (ADO.NET); after a `;` the bare value
@@ -463,7 +472,9 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         // carry it as `user/<password>@`. `connection::is_connection_string`
         // checks that the key belongs to a connection string.
         pattern: concat!(
-            r#"(?i)(?:(?:[?&]|&amp;)(?:password|pwd)=([^&#\s"'<>]{1,150})"#,
+            r"(?i)(?:",
+            query_separator!(),
+            r#"(?:password|pwd)=([^&#\s"'<>]{1,150})"#,
             r#"|;[ \t]*(?:password|pwd)[ \t]*=[ \t]*"#,
             r#"([^;"'`\s{][^;"'`\r\n]{0,149}?)[ \t]*(?:;|\\?["'`]|\r|(?m:$))"#,
             r#"|(?:(?m:^)|[;\s"'{(])(?:password|pwd)[ \t]*=[ \t]*"#,

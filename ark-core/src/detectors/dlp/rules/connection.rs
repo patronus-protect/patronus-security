@@ -100,7 +100,7 @@ pub(super) fn is_connection_string(text: &str, range: Range<usize>) -> bool {
         return false;
     };
     let lead = &before[..key.start()];
-    if lead.ends_with(['?', '&']) || lead.ends_with("&amp;") {
+    if lead.ends_with(['?', '&']) || lead.ends_with("&amp;") || lead.ends_with("&#38;") {
         return is_database_url(lead);
     }
     let line = &text[line_start..line_end];
@@ -225,6 +225,10 @@ mod tests {
         ));
         assert!(gate(
             "<url>jdbc:mariadb://db/app?user=app&amp;password=Kx7pQ2vL9!</url>",
+            "Kx7pQ2vL9!"
+        ));
+        assert!(gate(
+            "<url>jdbc:mariadb://db/app?user=app&#38;password=Kx7pQ2vL9!</url>",
             "Kx7pQ2vL9!"
         ));
         assert!(!gate(

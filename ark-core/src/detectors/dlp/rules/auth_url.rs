@@ -77,7 +77,7 @@ fn url_around(text: &str, range: Range<usize>) -> &str {
 }
 
 /// The name of the query or fragment parameter whose value starts at
-/// `value_start` (`?name=`, `&name=`, `&amp;name=`, `#name=`).
+/// `value_start` (`?name=`, `&name=`, `&amp;name=`, `&#38;name=`, `#name=`).
 fn param_name(text: &str, value_start: usize) -> Option<&str> {
     let before = text[..value_start].strip_suffix('=')?;
     let name_start = before.rfind(['?', '&', ';', '#'])? + 1;
