@@ -761,3 +761,121 @@ fn hand_typed_repetitions_without_a_machine_run_stay_detected() {
         assert_reported(text, rule_id, value);
     }
 }
+
+/// Canonical base64 of `bytes`, standard (`url_safe` false, padded) or
+/// URL-safe without padding.
+fn base64(bytes: &[u8], url_safe: bool) -> String {
+    let alphabet: &[u8] = if url_safe {
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    } else {
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    };
+    let mut encoded = String::new();
+    for chunk in bytes.chunks(3) {
+        let word = chunk.iter().enumerate().fold(0u32, |word, (index, byte)| {
+            word | u32::from(*byte) << (16 - 8 * index)
+        });
+        for index in 0..=chunk.len() {
+            encoded.push(alphabet[(word >> (18 - 6 * index) & 63) as usize] as char);
+        }
+        if !url_safe {
+            encoded.push_str(&"=".repeat(3 - chunk.len()));
+        }
+    }
+    encoded
+}
+
+/// T22: base64 values of the five entities whose decoded payload is `body`
+/// (Kubernetes Secret data, Grafana legacy key, Grafana Cloud `glc_`, PyPI
+/// macaroon, 1Password `ops_`, Elastic `id:api_key`).
+fn base64_payload_values(body: impl Fn(usize) -> String) -> Vec<String> {
+    let mut macaroon = b"\x02\x01\x08pypi.org\x02\x24".to_vec();
+    macaroon.extend(format!("{}-{}", body(8), body(27)).bytes());
+    macaroon.extend(b"\x00\x02\x25{\"version\": 1, \"permissions\": \"user\"}\x00\x00\x06\x20");
+    macaroon.extend(body(32).bytes());
+    vec![
+        base64(body(24).as_bytes(), false),
+        base64(
+            format!("{{\"k\":\"{}\",\"n\":\"deploy\",\"id\":1}}", body(32)).as_bytes(),
+            false,
+        ),
+        format!(
+            "glc_{}",
+            base64(
+                format!(
+                    "{{\"o\":\"123456\",\"n\":\"stack-1-read\",\"k\":\"{}\",\"m\":{{\"r\":\"prod-eu-west-2\"}}}}",
+                    body(24)
+                )
+                .as_bytes(),
+                false
+            )
+        ),
+        format!("pypi-{}", base64(&macaroon, true)),
+        format!(
+            "ops_{}",
+            base64(
+                format!(
+                    "{{\"signInAddress\":\"my.1password.com\",\"email\":\"{}@1passwordserviceaccounts.com\",\"srpX\":\"{}\"}}",
+                    body(13).to_lowercase(),
+                    body(64)
+                )
+                .as_bytes(),
+                false
+            )
+        ),
+        base64(format!("{}:{}", body(20), body(22)).as_bytes(), false),
+    ]
+}
+
+/// Generic carriers of a base64 value in DE and EN.
+fn base64_carriers(value: &str) -> Vec<String> {
+    vec![
+        format!("apiVersion: v1\nkind: Secret\ndata:\n  password: {value}\n"),
+        format!("LAGER_API_TOKEN={value}\n"),
+        format!("{{\n  \"search\": {{\n    \"api_key\": \"{value}\"\n  }}\n}}\n"),
+        format!("<config>\n  <add key=\"DbPassword\" value=\"{value}\"/>\n</config>\n"),
+        format!("resource \"kubernetes_secret\" \"app\" {{\n  data = {{\n    token = \"{value}\"\n  }}\n}}\n"),
+        format!("GET /v1/sync HTTP/1.1\nHost: api.internal\nX-Api-Key: {value}\n"),
+        format!("Hallo Team, der API-Schlüssel ist {value} – bitte im Tresor ablegen."),
+        format!("Hi team, the API key is {value} – please store it in the vault."),
+    ]
+}
+
+#[test]
+fn base64_values_with_an_example_payload_are_silent_in_de_and_en() {
+    for word in [
+        "EXAMPLEKEY",
+        "TESTKEY",
+        "deadbeef",
+        "1234567890",
+        "0123456789",
+    ] {
+        for value in base64_payload_values(|length| fill(word, length)) {
+            for text in base64_carriers(&value) {
+                assert_silent(&text);
+            }
+        }
+    }
+}
+
+#[test]
+fn base64_values_with_a_random_payload_stay_detected() {
+    for seed in 0..20 {
+        let values =
+            base64_payload_values(|length| random(seed * 100 + length as u64, ALNUM, length));
+        // Kubernetes data and Elastic keys: the provider-prefixed values belong
+        // to their provider rules.
+        for value in [&values[0], &values[5]] {
+            assert_reported(
+                &format!("apiVersion: v1\nkind: Secret\ndata:\n  password: {value}\n"),
+                "dlp_generic_credential_assignment",
+                value,
+            );
+            assert_reported(
+                &format!("LAGER_API_TOKEN={value}\n"),
+                "dlp_env_var_secret",
+                value,
+            );
+        }
+    }
+}

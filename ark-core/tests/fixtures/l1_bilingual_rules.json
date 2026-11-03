@@ -4921,7 +4921,8 @@
         "lager:\n  environment:\n    LAGER_API_TOKEN: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
         "{\"env\": {\"LAGER_KENNWORT\": \"%LAGER_KENNWORT%\"}}",
         "<umgebung>\n  <LAGER_API_TOKEN>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</LAGER_API_TOKEN>",
-        "resource \"x\" \"lager\" {\n  environment = {\n    LAGER_KENNWORT = \"${var.lager_kennwort}\""
+        "resource \"x\" \"lager\" {\n  environment = {\n    LAGER_KENNWORT = \"${var.lager_kennwort}\"",
+        "LAGER_API_TOKEN=ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVm"
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
@@ -4937,7 +4938,8 @@
         "services:\n  worker:\n    environment:\n      SERVICE_TOKENS:\n        - ${SERVICE_TOKEN}",
         "[env]\nDEPLOY_SECRET = \"sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12\"",
         "<env>\n  <DEPLOY_SECRET>sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12</DEPLOY_SECRET>",
-        "variable \"SERVICE_TOKEN\" {\n  default = \"6512bd43d9caa6e02c990b0a\""
+        "variable \"SERVICE_TOKEN\" {\n  default = \"6512bd43d9caa6e02c990b0a\"",
+        "DEPLOY_API_KEY=RVhBTVBMRUtFWUVYQU1QTEVLRVlFWEFN"
       ]
     },
     "language_neutral": false
@@ -5032,7 +5034,8 @@
         "module \"versand\" {\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\"",
         "const client = new LagerClient({\n  privateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n  credentials: \"Tz8Wm4K93RVqe7xAb2Lp\"\n});",
         "signer = Signer(private_key=\"Tz8Wm4K93RVqe7xAb2Lp\", passphrase=\"Tz8Wm4K93RVqe7xAb2Lp\")",
-        "lager:\n  zugangsdaten: ${LAGER_ZUGANGSDATEN}\n  private_key: ./schluessel/lager.pem"
+        "lager:\n  zugangsdaten: ${LAGER_ZUGANGSDATEN}\n  private_key: ./schluessel/lager.pem",
+        "apiVersion: v1\nkind: Secret\ndata:\n  password: RVhBTVBMRUtFWUVYQU1QTEVLRVlFWEFN"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -5058,7 +5061,8 @@
         "provider \"vault\" {\n  token = \"${var.vault_token}\"",
         "public final class SigningConfig {\n    private String secretKey = \"Tz8Wm4K93RVqe7xAb2Lp\";\n}",
         "type Config struct {\n\tPrivateKey string\n}\n\nvar cfg = Config{\n\tPrivateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n}",
-        "app.signing.private-key=classpath:keys/private.pem"
+        "app.signing.private-key=classpath:keys/private.pem",
+        "apiVersion: v1\nkind: Secret\ndata:\n  password: VEVTVEtFWVRFU1RLRVlURVNUS0VZVEVT"
       ]
     },
     "language_neutral": false
