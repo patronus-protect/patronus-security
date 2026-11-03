@@ -400,10 +400,9 @@ fn bare_plates_of_other_countries_stay_silent() {
 fn scored_plate_rules_run_in_balanced_and_recall_only() {
     let bare = pattern(UK_CONTEXT_FREE);
     assert!(bare.scored_only && !bare.requires_context && !bare.captured_value);
-    assert_eq!(
-        bare.validator.map(|check| check as usize),
-        Some(validators::uk_vehicle_registration as usize)
-    );
+    assert!(bare
+        .validator
+        .is_some_and(|check| check("AB51 ABC") && !check("AB80 ABC")));
     // Without context the bare form just reaches the balanced threshold.
     assert_eq!(score::rule_score(bare), 0.50);
     let ng = pattern(NG);

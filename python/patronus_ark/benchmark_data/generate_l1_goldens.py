@@ -4962,7 +4962,8 @@ for _row in A02_CASES:
 # and age identifier stand in for a check digit; score 0.50, a nearer counter-context term drops
 # it), and the Nigerian plate (three letters, three digits, two letters, joined by a hyphen or a
 # space) with a plate term near it; a later plate of a list (`Plates: APP-456CV and KJA-999PZ`)
-# takes the term of the first. strict is unchanged. Appended so existing ids stay stable.
+# takes the term of the first (rust/tests/pii_licence_plates.rs: a golden row holds one value).
+# strict is unchanged. Appended so existing ids stay stable.
 Q_M1_CASES = [
     p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "", "AB51 ABC", "", tags=("no_context",), mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_context_free", "The blue van ", "LW02 ULF", " was seen leaving at noon.", carrier="prose", tags=("no_context",), mode="balanced"),
@@ -4985,7 +4986,7 @@ Q_M1_CASES = [
     n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AB51 IBC", "I is no random letter", mode="balanced"),
     n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_context_free", "AB51 ABC", "bare value in strict"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: ", "APP-456CV", "", mode="balanced"),
-    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: APP-456CV and ", "KJA-999PZ", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Registered plates: ", "KJA-999PZ", "", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "The car with number plate ", "ABJ-001AA", " was towed.", carrier="prose", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Nigerian licence plate ", "LSR 123AB", "", mode="recall"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_ng", '{"license_plate": "', "EKY-245BC", '"}', carrier="json", mode="balanced"),
@@ -4993,7 +4994,7 @@ Q_M1_CASES = [
     p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Nummernschild ", "KJA-999PZ", "", mode="balanced"),
     p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Das Fahrzeug mit dem Kennzeichen ", "ABJ-001AA", " stand im Halteverbot.", carrier="prose", mode="balanced"),
     p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", '{"kennzeichen": "', "EKY-245BC", '"}', carrier="json", mode="recall"),
-    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Kennzeichen: APP-456CV, ", "LSR-123AB", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_ng", "Fahrzeug-Kennzeichen ", "LSR-123AB", "", mode="balanced"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "APP-456CV", "bare value without a plate term", mode="balanced"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Order number: APP-456CV", "order number, no plate term", mode="balanced"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "Plates: app-456cv", "lowercase is no printed plate", mode="balanced"),

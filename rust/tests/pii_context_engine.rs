@@ -414,6 +414,7 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
         [
             PROXIMITY_RULE,
             "pii_phone_regional",
+            "pii_vehicle_registration_ng",
             "pii_ssn_us_proximity",
             "pii_nhs_number_uk",
             "pii_passport_number_uk",
