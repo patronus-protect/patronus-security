@@ -911,6 +911,7 @@ tasks:
 
   # M4 performance loop after all rules
   - id: H06
+    status: done
     title: "Performance loop: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
     type: perf
     deps: [H03, A02, T27, T32, T33, Q-M1, Q-M2]
