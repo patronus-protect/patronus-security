@@ -133,13 +133,24 @@ impl MatchText {
         // Build offset tables only if a character actually changes byte length.
         // Keep per-character lowercasing (not str::to_lowercase, whose Greek
         // sigma handling is contextual) identical to the mapped fallback.
+        // ASCII runs (most of German prose) are copied and lowercased in place (H06).
         let mut text = String::with_capacity(original.len());
-        for c in original.chars() {
+        let mut rest = original;
+        while !rest.is_empty() {
+            let ascii = rest.bytes().position(|byte| !byte.is_ascii());
+            let (run, tail) = rest.split_at(ascii.unwrap_or(rest.len()));
             let start = text.len();
-            text.extend(c.to_lowercase());
-            if text.len() - start != c.len_utf8() {
-                return Self::mapped(original, Some, true);
+            text.push_str(run);
+            text[start..].make_ascii_lowercase();
+            let mut chars = tail.chars();
+            if let Some(c) = chars.next() {
+                let start = text.len();
+                text.extend(c.to_lowercase());
+                if text.len() - start != c.len_utf8() {
+                    return Self::mapped(original, Some, true);
+                }
             }
+            rest = chars.as_str();
         }
         Self {
             text,
@@ -241,6 +252,9 @@ mod tests {
             "K TOKEN",
             "ẞ secret",
             "日本語 🔒",
+            "Grüße PASSWORD İ Ende",
+            "ÄÖÜ",
+            "PLAIN ASCII",
         ] {
             let fast = MatchText::lower(original);
             let reference = MatchText::mapped(original, Some, true);
