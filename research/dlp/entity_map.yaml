@@ -206,6 +206,36 @@ entities:
     ark: [dlp_replicate]
     trufflehog: [Replicate]
     backlog: F-LLM
+  - id: llm.cohere.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_cohere_key]
+    gitleaks: [cohere-api-token]
+    backlog: P01
+  - id: llm.perplexity.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_perplexity_key]
+    gitleaks: [perplexity-api-key]
+    backlog: P01
+  - id: llm.openrouter.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_openrouter_key]
+    trufflehog: [OpenRouter]
+    backlog: P01
+  - id: llm.deepseek.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_deepseek_key]
+    trufflehog: [DeepSeek]
+    backlog: P01
+  - id: llm.fireworks.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_fireworks_key]
+    trufflehog: [Fireworks]
+    backlog: P01
   - id: cloud.aws.access_key_id
     scope: shared
     group: CLOUD_KEY
@@ -705,8 +735,6 @@ entities:
     trufflehog: [Slack]
     backlog: F-PROV
   # P01/P02: LLM/AI
-  - {id: llm.cohere.api_key, scope: baseline_only, group: API_KEY, gitleaks: [cohere-api-token], backlog: P01}
-  - {id: llm.perplexity.api_key, scope: baseline_only, group: API_KEY, gitleaks: [perplexity-api-key], backlog: P01}
   - {id: llm.privateai.api_key, scope: baseline_only, group: API_KEY, gitleaks: [privateai-api-token], backlog: P02}
   # P03: Hyperscaler
   - id: cloud.aws.bedrock_api_key

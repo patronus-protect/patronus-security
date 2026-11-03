@@ -206,11 +206,7 @@ fn single_case_fills_are_not_reported() {
             "PERPLEXITY_API_KEY",
             format!("pplx-{}", "abc123".repeat(8)),
         ),
-        (
-            "dlp_cohere_key",
-            "COHERE_API_KEY",
-            "ABCD1234".repeat(5),
-        ),
+        ("dlp_cohere_key", "COHERE_API_KEY", "ABCD1234".repeat(5)),
         (
             "dlp_fireworks_key",
             "FIREWORKS_API_KEY",
@@ -226,7 +222,11 @@ fn single_case_fills_are_not_reported() {
 #[test]
 fn fireworks_keys_take_20_to_40_characters() {
     // TruffleHog fireworks: fw_ and 20 to 40 alphanumerics.
-    let body = generated("fireworks_api_key", 5)[3..].repeat(2);
+    let body = format!(
+        "{}{}",
+        &generated("fireworks_api_key", 5)[3..],
+        &generated("fireworks_api_key", 6)[3..]
+    );
     for len in [20, 24, 40] {
         let value = format!("fw_{}", &body[..len]);
         let text = format!("FIREWORKS_API_KEY={value}\n");

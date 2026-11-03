@@ -24,6 +24,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
   finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
   strings stay silent. Matches carry `structure: "xml"`.
+- Detection change: LLM provider keys (P01). New rules `dlp_perplexity_key` (`pplx-` and 48
+  base62, gitleaks perplexity-api-key), `dlp_cohere_key` (40 base62 under a Cohere or `CO_API_KEY`
+  key with a credential noun, gitleaks cohere-api-token), `dlp_openrouter_key` (`sk-or-v1-` and 64
+  lower-case hex digits), `dlp_deepseek_key` (`sk-` and 32 lower-case alphanumerics under a
+  DeepSeek key) and `dlp_fireworks_key` (`fw_` and 20 to 40 base62), the last three per TruffleHog;
+  the Perplexity, Cohere and Fireworks bodies need both letter cases. The GOLD-D5 baseline entities
+  `llm.cohere.api_key` and `llm.perplexity.api_key` become shared entities with these rules.
+  Gemini/AI Studio keys are Google API keys and stay with `dlp_google_api_key`. Mistral and
+  Together AI keys have no documented format (no gitleaks or TruffleHog rule) and get no rule.
 - Detection change: provider and CSRF values handed over in DE/EN prose (T20). The key-bound
   provider rules (`dlp_heroku_legacy_api_key`, `dlp_railway_token`, `dlp_netlify_legacy_token`,
   `dlp_travis_token`, `dlp_circleci_legacy_token`, `dlp_vercel_legacy_token`,

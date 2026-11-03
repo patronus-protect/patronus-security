@@ -102,6 +102,11 @@ fn is_llm_api_key(value: &str) -> bool {
     }
 }
 
+/// P01: a Perplexity key is `pplx-` and a random base62 body with both cases.
+fn is_perplexity_key(value: &str) -> bool {
+    value.strip_prefix("pplx-").is_some_and(has_both_cases)
+}
+
 /// Google OAuth 2.0 access token: `ya29.` and a random base64url body; the
 /// whole token takes at most 2048 bytes.
 fn is_google_access_token(value: &str) -> bool {
@@ -477,6 +482,99 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_boundary("")
         .with_body_len(37, 28)
             .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P01: Perplexity API keys, `pplx-` and 48 base62.
+    DlpPattern {
+        name: "dlp_perplexity_key",
+        pattern: r"pplx-[A-Za-z0-9]{48}",
+        entity_group: "API_KEY",
+        validator: Some(is_perplexity_key),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:perplexity-api-key",
+            &["pplx-"],
+        )
+        .with_provider("perplexity")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_body_len(48, 36)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P01: Cohere API keys: 40 base62 under a Cohere or `CO_API_KEY` key.
+    DlpPattern {
+        name: "dlp_cohere_key",
+        pattern: provider_key!(r"cohere|(?-u:\b)co_api", r"[A-Za-z0-9]{40}"),
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:cohere-api-token",
+            &["cohere", "co_api"],
+        )
+        .with_provider("cohere")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P01: OpenRouter API keys, `sk-or-v1-` and 64 lower-case hex digits.
+    DlpPattern {
+        name: "dlp_openrouter_key",
+        pattern: r"sk-or-v1-[0-9a-f]{64}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/openrouter/openrouter.go",
+            &["sk-or-v1-"],
+        )
+        .with_provider("openrouter")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_body_len(64, 48)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P01: DeepSeek API keys, `sk-` and 32 lower-case alphanumerics, which
+    // only a DeepSeek key tells apart from other `sk-` values.
+    DlpPattern {
+        name: "dlp_deepseek_key",
+        pattern: provider_key!("deepseek", r"sk-[a-z0-9]{32}"),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/deepseek/deepseek.go",
+            &["deepseek"],
+        )
+        .with_provider("deepseek")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P01: Fireworks AI API keys, `fw_` and 20 to 40 base62 with both cases.
+    DlpPattern {
+        name: "dlp_fireworks_key",
+        pattern: r"fw_[A-Za-z0-9]{20,40}",
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 45,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/fireworks/fireworks.go",
+            &["fw_"],
+        )
+        .with_provider("fireworks")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
     // F05: credential prefixes of the IAM unique-ID table (long-term AKIA,

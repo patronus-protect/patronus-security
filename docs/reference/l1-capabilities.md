@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 184 | 117 (+5 relationship rules) |
+| Regex rules | 184 | 122 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 122 | 15 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -309,7 +309,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 
 | Result label | Family | Default | Rules | Entities | Gold | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `API_KEY` | provider_secret | on | 19 | 14 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
+| `API_KEY` | provider_secret | on | 24 | 19 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
@@ -350,6 +350,11 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `llm.xai.api_key` | shared | `API_KEY` | `dlp_xai_key` | format | on | TruffleHog: `XAI` |
 | `llm.groq.api_key` | shared | `API_KEY` | `dlp_groq_key` | format | on | TruffleHog: `Groq` |
 | `llm.replicate.api_token` | shared | `API_KEY` | `dlp_replicate` | format | on | TruffleHog: `Replicate` |
+| `llm.cohere.api_key` | shared | `API_KEY` | `dlp_cohere_key` | format | on | gitleaks: `cohere-api-token` |
+| `llm.perplexity.api_key` | shared | `API_KEY` | `dlp_perplexity_key` | format | on | gitleaks: `perplexity-api-key` |
+| `llm.openrouter.api_key` | shared | `API_KEY` | `dlp_openrouter_key` | format | on | TruffleHog: `OpenRouter` |
+| `llm.deepseek.api_key` | shared | `API_KEY` | `dlp_deepseek_key` | format | on | TruffleHog: `DeepSeek` |
+| `llm.fireworks.api_key` | shared | `API_KEY` | `dlp_fireworks_key` | format | on | TruffleHog: `Fireworks` |
 | `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | `dlp_aws_access_key` | format | on | gitleaks: `aws-access-token`; TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
 | `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | `dlp_aws_secret_key` | format | on | TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | `dlp_google_api_key` | format | on | gitleaks: `gcp-api-key` |
@@ -434,8 +439,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.business_metric` | ark_only | `dlp.internal.business_metric` | `dlp_internal_business_metric` | format | off | – |
 | `content.sql` | ark_only | `dlp.content.sql` | `dlp_sql_statement`, `dlp_sql_multiline_statement` | structure | off | – |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `gitlab-session-cookie` |
-| `llm.cohere.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `cohere-api-token` |
-| `llm.perplexity.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `perplexity-api-key` |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `privateai-api-token` |
 | `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` |
 | `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `alibaba-access-key-id`, `alibaba-secret-key` |
@@ -537,7 +540,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 63 shared, 26 ARK only, 92 baseline only, 11 out of scope.
+Entities: 68 shared, 26 ARK only, 90 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -551,6 +554,11 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `llm.xai.api_key` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
 | `llm.groq.api_key` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
 | `llm.replicate.api_token` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `llm.cohere.api_key` | shared | `API_KEY` | 0 | no gold | no gold |
+| `llm.perplexity.api_key` | shared | `API_KEY` | 0 | no gold | no gold |
+| `llm.openrouter.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.deepseek.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.fireworks.api_key` | shared | `API_KEY` | – | – | – |
 | `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks) | ARK 100.0 / best baseline 100.0 (gitleaks, detect-secrets) |
 | `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 21.3 (detect-secrets) | ARK 100.0 / best baseline 62.5 (detect-secrets) |
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 97.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
@@ -635,8 +643,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.business_metric` | ark_only | `dlp.internal.business_metric` | 0 | no gold | no gold |
 | `content.sql` | ark_only | `dlp.content.sql` | 10 documents | ARK 90.9 (opt-in profile) | ARK 100.0 (opt-in profile) |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
-| `llm.cohere.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `llm.perplexity.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |

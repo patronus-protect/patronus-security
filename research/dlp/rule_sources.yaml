@@ -48,6 +48,26 @@ rules:
     provider: replicate
     source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/replicate/replicate.go
     format: "r8_ and exactly 37 base62 characters (TruffleHog Replicate)"
+  dlp_perplexity_key:
+    provider: perplexity
+    source_ref: gitleaks:perplexity-api-key
+    format: "pplx- and exactly 48 base62 characters with both cases (gitleaks perplexity-api-key; P01)"
+  dlp_cohere_key:
+    provider: cohere
+    source_ref: gitleaks:cohere-api-token
+    format: "Cohere API key: 40 base62 characters with both cases under a key with cohere or CO_API_KEY and a credential noun right before the separator (gitleaks cohere-api-token, tightened to a credential key; P01)"
+  dlp_openrouter_key:
+    provider: openrouter
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/openrouter/openrouter.go
+    format: "sk-or-v1- and exactly 64 lower-case hex digits (TruffleHog OpenRouter; P01)"
+  dlp_deepseek_key:
+    provider: deepseek
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/deepseek/deepseek.go
+    format: "sk- and exactly 32 lower-case alphanumerics under a key with deepseek and a credential noun (TruffleHog DeepSeek, keyword deepseek; P01)"
+  dlp_fireworks_key:
+    provider: fireworks
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/fireworks/fireworks.go
+    format: "fw_ and 20 to 40 base62 characters with both cases (TruffleHog Fireworks; P01)"
 
   # ── Cloud ────────────────────────────────────────────────────────────────
   dlp_aws_access_key:
