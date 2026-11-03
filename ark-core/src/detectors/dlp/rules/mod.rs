@@ -38,6 +38,15 @@ macro_rules! query_separator {
     };
 }
 
+/// G-PROSE (G06): how a chat, ticket or mail hands a value over after a
+/// credential noun: a `:` on the noun's line or the next one, and the value
+/// on that line or alone up to two lines further. The value follows.
+macro_rules! prose_handover {
+    () => {
+        r"(?-u:\b)[^\r\n]{0,160}?(?:\r?\n[^\r\n]{0,80}?)?:[ \t]*(?:\r?\n[ \t]*){0,2}"
+    };
+}
+
 mod auth_url;
 mod connection;
 mod content;

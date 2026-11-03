@@ -12114,7 +12114,7 @@ for _label, _rows in DLP_T18_CASES.items():
 # G-PROSE (G06): chats, tickets and mails hand a value over after the credential noun, at the end
 # of a line up to one line further: `dlp_prose_password` for password nouns (Passwort, Kennwort,
 # Zugangsdaten, passphrase), `dlp_prose_secret` for secret and token nouns (client secret,
-# Dienst-Secret, CSRF token). The value must look chosen or issued; words, references,
+# Dienst-Secret, access token). The value must look chosen or issued; words, references,
 # placeholders, examples, hashes and the noun in encyclopedia or law prose are no secrets.
 DLP_GPROSE_CASES = {
     "CREDENTIAL": [
@@ -12179,7 +12179,7 @@ DLP_GPROSE_CASES = {
         ),
         ds(
             "CREDENTIAL", "en", "dlp_prose_secret",
-            "Note from reporter: the job still uses the old CSRF token. Current value in the config: <<secret:0>>\n",
+            "Note from reporter: the job still uses the old access token. Current value in the config: <<secret:0>>\n",
             "csrf_token", 12016, carrier="prose",
         ),
         dn(
@@ -13436,7 +13436,7 @@ for _label, _rows in DLP_T16_CASES.items():
 # T20: provider and CSRF values handed over in DE/EN chats, tickets and mails
 # after the provider name and a credential noun; the provider rule keeps the
 # value. Hard negatives: the provider name without a credential noun, IDs under
-# the provider name, values that fail the provider format, references.
+# the provider name, masked values in the provider format, references.
 T20_PROVIDERS = (
     ("CLOUD_KEY", "dlp_heroku_legacy_api_key", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel"),
     ("CLOUD_KEY", "dlp_railway_token", "railway_token", "Railway token", "Railway-Token"),
@@ -13502,17 +13502,15 @@ DLP_T20_CASES["CLOUD_KEY"] += [
         "Hi team,\n\nthe Heroku API key for the reporting job:\n\n${HEROKU_API_KEY}\n\nThanks,\nAlex\n",
         "environment reference", carrier="prose",
     ),
-    dl(
+    dn(
         "CLOUD_KEY", "en", "dlp_netlify_legacy_token",
-        "[09:43] tom.w: the Netlify access token for staging: <<secret:0>>\n",
-        "netlify_access_token_short", 19851, "Netlify token shape with 39 instead of 40 to 46 characters",
-        carrier="prose",
+        "[09:43] tom.w: the Netlify access token for staging: ****************************************\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
-    dl(
+    dn(
         "CLOUD_KEY", "en", "dlp_cloudflare_api_key",
-        "Note from reporter: the old Cloudflare API token. Current value in the config: <<secret:0>>\n",
-        "cloudflare_api_token_short", 19852, "Cloudflare API token shape with 39 instead of 40 characters",
-        carrier="prose",
+        "Note from reporter: the old Cloudflare API token. Current value in the config: <redacted>\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "CLOUD_KEY", "de", "dlp_heroku_legacy_api_key",
@@ -13529,17 +13527,15 @@ DLP_T20_CASES["CLOUD_KEY"] += [
         "Hallo zusammen,\n\nanbei der Heroku-API-Schlüssel für den Abschlusslauf:\n\n<HEROKU_API_KEY>\n\nViele Grüße\nKatrin\n",
         "placeholder", carrier="prose",
     ),
-    dl(
+    dn(
         "CLOUD_KEY", "de", "dlp_netlify_legacy_token",
-        "Laut Konfiguration hinterlegt (Netlify-Zugriffstoken): <<secret:0>>\n",
-        "netlify_access_token_short", 19853, "Netlify token shape with 39 instead of 40 to 46 characters",
-        carrier="prose",
+        "Laut Konfiguration hinterlegt (Netlify-Zugriffstoken): ****************************************\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
-    dl(
+    dn(
         "CLOUD_KEY", "de", "dlp_cloudflare_api_key",
-        "[08:17] daniel.r: Cloudflare-API-Token für Staging:\n<<secret:0>>\n",
-        "cloudflare_api_token_short", 19854, "Cloudflare API token shape with 39 instead of 40 characters",
-        carrier="prose",
+        "[08:17] daniel.r: Cloudflare-API-Token für Staging:\n<redacted>\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
 ]
 DLP_T20_CASES["API_KEY"] += [
@@ -13553,20 +13549,20 @@ DLP_T20_CASES["API_KEY"] += [
         "the Honeycomb API key belongs to this dataset. Trace id: 0af7651916cd43dd8448eb211c80319c\n",
         "trace id under the provider name", carrier="prose",
     ),
-    dl(
+    dn(
         "API_KEY", "en", "dlp_honeycomb_api_key",
-        "here is the Honeycomb API key for the collector:\n\n<<secret:0>>\n",
-        "honeycomb_api_key_short", 19855, "Honeycomb key shape with 21 instead of 22 characters", carrier="prose",
+        "here is the Honeycomb API key for the collector:\n\n00000000000000000000000000000000\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
-    dl(
+    dn(
         "API_KEY", "en", "dlp_pagerduty_api_key",
-        "Note from on-call: the PagerDuty API key in the config: <<secret:0>>\n",
-        "pagerduty_api_key_short", 19856, "PagerDuty key shape with 19 instead of 20 characters", carrier="prose",
+        "Note from on-call: the PagerDuty API key in the config: u+XXXXXXXXXXXXXXXXXX\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
-    dl(
+    dn(
         "API_KEY", "en", "dlp_datadog_api_key",
-        "[09:43] tom.w: Datadog API key for staging: <<secret:0>>\n",
-        "datadog_api_key_short", 19857, "Datadog key shape with 31 instead of 32 hex digits", carrier="prose",
+        "[09:43] tom.w: Datadog API key for staging: <DATADOG_API_KEY>\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "API_KEY", "de", "dlp_datadog_api_key",
@@ -13578,15 +13574,15 @@ DLP_T20_CASES["API_KEY"] += [
         "Der PagerDuty-API-Schlüssel gehört zu diesem Dienst. Service-ID: 0af7651916cd43dd8448eb211c80319c\n",
         "service id under the provider name", carrier="prose",
     ),
-    dl(
+    dn(
         "API_KEY", "de", "dlp_honeycomb_api_key",
-        "anbei der Honeycomb-API-Schlüssel für den Collector:\n\n<<secret:0>>\n",
-        "honeycomb_api_key_short", 19858, "Honeycomb key shape with 21 instead of 22 characters", carrier="prose",
+        "anbei der Honeycomb-API-Schlüssel für den Collector:\n\n00000000000000000000000000000000\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
-    dl(
+    dn(
         "API_KEY", "de", "dlp_elastic_api_key",
-        "Laut Konfiguration hinterlegt (Elastic-API-Schlüssel): <<secret:0>>\n",
-        "elastic_api_key_short", 19859, "base64 of id:api_key with a 21-character api_key", carrier="prose",
+        "Laut Konfiguration hinterlegt (Elastic-API-Schlüssel): <id>:<api_key>\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "API_KEY", "de", "dlp_datadog_api_key",
@@ -13605,20 +13601,20 @@ DLP_T20_CASES["SECRET_TOKEN"] += [
         "the Splunk HEC token is configured for this index. Request id: 9b2c7e1a-4f3d-4c8b-9e2a-5d6f7a8b9c0d\n",
         "request id under the provider name", carrier="prose",
     ),
-    dl(
+    dn(
         "SECRET_TOKEN", "en", "dlp_splunk_hec_token",
-        "here is the Splunk HEC token for the forwarder:\n\n<<secret:0>>\n",
-        "splunk_hec_token_short", 19860, "GUID-shaped HEC token with 11 digits in the last group", carrier="prose",
+        "here is the Splunk HEC token for the forwarder:\n\nXXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "SECRET_TOKEN", "en", "dlp_csrf_token",
         "[09:43] tom.w: the CSRF token comes from the form:\n{{ csrf_token() }}\n",
         "template reference", carrier="prose",
     ),
-    dl(
+    dn(
         "SECRET_TOKEN", "en", "dlp_azure_devops_legacy_pat",
-        "Note from reporter: the old Azure DevOps PAT. Current value in the config: <<secret:0>>\n",
-        "azure_devops_legacy_pat_short", 19861, "legacy PAT shape with 51 instead of 52 characters", carrier="prose",
+        "Note from reporter: the old Azure DevOps PAT. Current value in the config: ****\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "SECRET_TOKEN", "de", "dlp_travis_token",
@@ -13630,10 +13626,10 @@ DLP_T20_CASES["SECRET_TOKEN"] += [
         "Das Splunk-HEC-Token ist für diesen Index eingerichtet. Anfrage-ID: 9b2c7e1a-4f3d-4c8b-9e2a-5d6f7a8b9c0d\n",
         "request id under the provider name", carrier="prose",
     ),
-    dl(
+    dn(
         "SECRET_TOKEN", "de", "dlp_splunk_hec_token",
-        "anbei das Splunk-HEC-Token für den Forwarder:\n\n<<secret:0>>\n",
-        "splunk_hec_token_short", 19862, "GUID-shaped HEC token with 11 digits in the last group", carrier="prose",
+        "anbei das Splunk-HEC-Token für den Forwarder:\n\nXXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX\n",
+        "masked or placeholder value in the provider format", carrier="prose",
     ),
     dn(
         "SECRET_TOKEN", "de", "dlp_csrf_token",

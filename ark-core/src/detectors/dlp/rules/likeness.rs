@@ -695,8 +695,9 @@ fn numbered_identifier(value: &str) -> bool {
 /// value hands that value over in prose. The assignment rules own a value
 /// right after one of their nouns, `assigned` (`Passwort: …`, `password is …`;
 /// not `passphrase:` or `Passwörter:`, which they do not read); a hash, checksum
-/// or fingerprint noun, or one of `other_nouns`, between them names another
-/// value (`Passwort-Hash`, `Zugangsdaten (Client-Secret)` for a password);
+/// or fingerprint noun, an ID noun (T20: `App-ID:`, `project id:`) or one of
+/// `other_nouns` between them names another value (`Passwort-Hash`,
+/// `Zugangsdaten (Client-Secret)` for a password);
 /// and a value under a field label of its own on a later line
 /// (`Fundstelle: …`, `Status: …`) belongs to that label.
 fn is_prose_handover(
@@ -725,6 +726,9 @@ fn is_prose_handover(
         .iter()
         .chain(other_nouns)
         .any(|noun| lower.contains(noun))
+        || lower
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|word| matches!(word, "id" | "ids" | "uuid" | "guid"))
     {
         return false;
     }
@@ -763,6 +767,12 @@ pub fn is_prose_password_key(text: &str, key_start: usize, value: Range<usize>) 
 /// nouns of `dlp_generic_credential_assignment`.
 pub fn is_prose_secret_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
     is_prose_handover(text, key_start, &value, &["secret", "token"], &[])
+}
+
+/// T20: [`is_prose_handover`] for a provider name and credential noun,
+/// whose provider rule owns the key forms as well.
+pub fn is_provider_handover(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    is_prose_handover(text, key_start, &value, &[], &[])
 }
 
 /// F-GEN2 (T08): whether the value at `range` of `text`, which

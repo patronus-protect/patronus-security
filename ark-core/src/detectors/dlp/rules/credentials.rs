@@ -42,13 +42,12 @@ macro_rules! config_document_key {
 }
 
 /// G-PROSE (G06): a value handed over after a credential noun in a chat,
-/// ticket or mail: after a `:` on the noun's line or the next one, at the
-/// end of its line or alone up to two lines further, optionally after a
-/// user name and ` / `.
+/// ticket or mail ([`prose_handover`]), at the end of its line, optionally
+/// after a user name and ` / `.
 macro_rules! prose_value {
     () => {
         concat!(
-            r"(?-u:\b)[^\r\n]{0,160}?(?:\r?\n[^\r\n]{0,80}?)?:[ \t]*(?:\r?\n[ \t]*){0,2}",
+            prose_handover!(),
             r"(?:[^\s:/]{1,64}[ \t]+/[ \t]+)?",
             prose_value_end!(),
         )
@@ -299,7 +298,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_prose_secret",
         // G-PROSE (G06): the same handover after a secret, token or API key
-        // noun (`client secret`, `Dienst-Secret`, `CSRF token`).
+        // noun (`client secret`, `Dienst-Secret`, `access token`).
         pattern: concat!(
             r"(?i)(?:secret|token|api[ _-]?key|api-?schl(?:ü|ue)ssel)",
             prose_value!(),
@@ -414,6 +413,11 @@ pub(super) const RULES: &[DlpPattern] = &[
             "|",
             key_suffix!(),
             r#"(?::|=>|=)|)\s*(?:\\?["'])?([A-Za-z0-9._~+/%=-]{8,})"#,
+            // T20: `Wie lautet der Wert für „CSRF-Token“?` and the value in
+            // the reply.
+            r"|(?:csrf|xsrf)[ _-]?token",
+            prose_handover!(),
+            r"([A-Za-z0-9._~+/%=-]{8,})[ \t]*\r?(?m:$)",
         ),
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),

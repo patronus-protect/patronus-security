@@ -74,31 +74,119 @@ fn assert_reported(text: &str, rule_id: &str, value: &str) {
         .map(|span| span.text)
         .collect();
     assert_eq!(spans, [value], "{text}");
-    assert!(rule_ids(text).iter().any(|id| id == rule_id), "{rule_id}: {text} {:?}", rule_ids(text));
+    assert!(
+        rule_ids(text).iter().any(|id| id == rule_id),
+        "{rule_id}: {text} {:?}",
+        rule_ids(text)
+    );
 }
 
 fn assert_silent(text: &str) {
-    assert!(scan(text).evidence_spans.is_empty(), "{text}: {:?}", rule_ids(text));
+    assert!(
+        scan(text).evidence_spans.is_empty(),
+        "{text}: {:?}",
+        rule_ids(text)
+    );
 }
 
 /// Provider rule, generator recipe, EN and DE label.
 const PROVIDERS: &[(&str, &str, &str, &str)] = &[
-    ("dlp_heroku_legacy_api_key", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel"),
-    ("dlp_railway_token", "railway_token", "Railway token", "Railway-Token"),
-    ("dlp_netlify_legacy_token", "netlify_access_token", "Netlify access token", "Netlify-Zugriffstoken"),
-    ("dlp_travis_token", "travisci_access_token", "Travis CI API token", "Travis-CI-API-Token"),
-    ("dlp_circleci_legacy_token", "circleci_legacy_token", "CircleCI API token", "CircleCI-API-Token"),
-    ("dlp_vercel_legacy_token", "vercel_legacy_token", "Vercel access token", "Vercel-Zugriffstoken"),
-    ("dlp_azure_devops_legacy_pat", "azure_devops_legacy_pat", "Azure DevOps PAT", "Azure-DevOps-PAT"),
-    ("dlp_cloudflare_api_key", "cloudflare_api_token", "Cloudflare API token", "Cloudflare-API-Token"),
-    ("dlp_bitbucket_client_secret", "bitbucket_client_secret", "Bitbucket client secret", "Bitbucket-Client-Secret"),
-    ("dlp_datadog_api_key", "datadog_api_key", "Datadog API key", "Datadog-API-Schlüssel"),
-    ("dlp_newrelic_legacy_license_key", "newrelic_legacy_license_key", "New Relic license key", "New-Relic-Lizenzschlüssel"),
-    ("dlp_sentry_auth_token", "sentry_auth_token", "Sentry auth token", "Sentry-Auth-Token"),
-    ("dlp_splunk_hec_token", "splunk_hec_token", "Splunk HEC token", "Splunk-HEC-Token"),
-    ("dlp_elastic_api_key", "elastic_api_key_pair", "Elastic API key", "Elastic-API-Schlüssel"),
-    ("dlp_honeycomb_api_key", "honeycomb_api_key", "Honeycomb API key", "Honeycomb-API-Schlüssel"),
-    ("dlp_pagerduty_api_key", "pagerduty_api_key", "PagerDuty API key", "PagerDuty-API-Schlüssel"),
+    (
+        "dlp_heroku_legacy_api_key",
+        "heroku_api_key",
+        "Heroku API key",
+        "Heroku-API-Schlüssel",
+    ),
+    (
+        "dlp_railway_token",
+        "railway_token",
+        "Railway token",
+        "Railway-Token",
+    ),
+    (
+        "dlp_netlify_legacy_token",
+        "netlify_access_token",
+        "Netlify access token",
+        "Netlify-Zugriffstoken",
+    ),
+    (
+        "dlp_travis_token",
+        "travisci_access_token",
+        "Travis CI API token",
+        "Travis-CI-API-Token",
+    ),
+    (
+        "dlp_circleci_legacy_token",
+        "circleci_legacy_token",
+        "CircleCI API token",
+        "CircleCI-API-Token",
+    ),
+    (
+        "dlp_vercel_legacy_token",
+        "vercel_legacy_token",
+        "Vercel access token",
+        "Vercel-Zugriffstoken",
+    ),
+    (
+        "dlp_azure_devops_legacy_pat",
+        "azure_devops_legacy_pat",
+        "Azure DevOps PAT",
+        "Azure-DevOps-PAT",
+    ),
+    (
+        "dlp_cloudflare_api_key",
+        "cloudflare_api_token",
+        "Cloudflare API token",
+        "Cloudflare-API-Token",
+    ),
+    (
+        "dlp_bitbucket_client_secret",
+        "bitbucket_client_secret",
+        "Bitbucket client secret",
+        "Bitbucket-Client-Secret",
+    ),
+    (
+        "dlp_datadog_api_key",
+        "datadog_api_key",
+        "Datadog API key",
+        "Datadog-API-Schlüssel",
+    ),
+    (
+        "dlp_newrelic_legacy_license_key",
+        "newrelic_legacy_license_key",
+        "New Relic license key",
+        "New-Relic-Lizenzschlüssel",
+    ),
+    (
+        "dlp_sentry_auth_token",
+        "sentry_auth_token",
+        "Sentry auth token",
+        "Sentry-Auth-Token",
+    ),
+    (
+        "dlp_splunk_hec_token",
+        "splunk_hec_token",
+        "Splunk HEC token",
+        "Splunk-HEC-Token",
+    ),
+    (
+        "dlp_elastic_api_key",
+        "elastic_api_key_pair",
+        "Elastic API key",
+        "Elastic-API-Schlüssel",
+    ),
+    (
+        "dlp_honeycomb_api_key",
+        "honeycomb_api_key",
+        "Honeycomb API key",
+        "Honeycomb-API-Schlüssel",
+    ),
+    (
+        "dlp_pagerduty_api_key",
+        "pagerduty_api_key",
+        "PagerDuty API key",
+        "PagerDuty-API-Schlüssel",
+    ),
     ("dlp_csrf_token", "csrf_token", "CSRF token", "CSRF-Token"),
 ];
 
@@ -152,11 +240,31 @@ fn provider_names_without_credential_noun_and_ids_under_them_stay_silent() {
 #[test]
 fn values_failing_the_provider_format_are_no_provider_finding() {
     for (rule_id, recipe, label) in [
-        ("dlp_netlify_legacy_token", "netlify_access_token_short", "Netlify access token"),
-        ("dlp_cloudflare_api_key", "cloudflare_api_token_short", "Cloudflare API token"),
-        ("dlp_honeycomb_api_key", "honeycomb_api_key_short", "Honeycomb API key"),
-        ("dlp_splunk_hec_token", "splunk_hec_token_short", "Splunk HEC token"),
-        ("dlp_datadog_api_key", "datadog_api_key_short", "Datadog API key"),
+        (
+            "dlp_netlify_legacy_token",
+            "netlify_access_token_short",
+            "Netlify access token",
+        ),
+        (
+            "dlp_cloudflare_api_key",
+            "cloudflare_api_token_short",
+            "Cloudflare API token",
+        ),
+        (
+            "dlp_honeycomb_api_key",
+            "honeycomb_api_key_short",
+            "Honeycomb API key",
+        ),
+        (
+            "dlp_splunk_hec_token",
+            "splunk_hec_token_short",
+            "Splunk HEC token",
+        ),
+        (
+            "dlp_datadog_api_key",
+            "datadog_api_key_short",
+            "Datadog API key",
+        ),
     ] {
         let value = generated(recipe, 3);
         let text = format!("here is the {label} for the collector:\n\n{value}\n");
