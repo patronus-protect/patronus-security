@@ -12630,7 +12630,7 @@ DLP_G04_CASES = {
         ),
         dn(
             "CREDENTIAL", "de", "dlp_netrc_password",
-            "# ~/.netrc ohne Passwort: curl fragt nach\nmachine git.lager.intern login lager-bot\n",
+            "# ~/.netrc für den Git-Server, curl fragt interaktiv\nmachine git.lager.intern login lager-bot\n",
             "netrc entry without a password", carrier="code",
         ),
         dn(
