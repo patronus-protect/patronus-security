@@ -12,7 +12,11 @@ use std::time::Instant;
 use super::decision_cache::DecisionCache;
 use crate::{
     assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
-    detectors::{shell::shell_risk::ShellRiskPipeline, threat::ThreatPipeline, NativeDetection},
+    detectors::{
+        shell::{policies::ShellPolicyConfig, shell_risk::ShellRiskPipeline},
+        threat::ThreatPipeline,
+        NativeDetection,
+    },
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
@@ -264,6 +268,8 @@ pub struct SecurityGatewayCore {
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
+    /// User policies and allowlist of the `shell_command` verdict.
+    shell_command_policy_config: Mutex<ShellPolicyConfig>,
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
@@ -629,6 +635,7 @@ impl SecurityGateway {
             execution: Mutex::new(ScanExecution::new(max_level)),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
+            shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
@@ -1182,6 +1189,28 @@ impl SecurityGateway {
             .lock()
             .expect("dynamic-pii config mutex poisoned") = config;
         Ok(())
+    }
+
+    /// Replace the user policies and allowlist of the `shell_command` verdict.
+    /// A loaded pipeline applies them at once (a refused configuration changes
+    /// nothing); otherwise `warmup` applies them.
+    pub fn set_shell_command_policy_config(&self, config: ShellPolicyConfig) -> Result<(), String> {
+        if let Some(pipeline) = &self.shell_command_pipeline {
+            pipeline.configure(&config)?;
+        }
+        *self
+            .shell_command_policy_config
+            .lock()
+            .expect("shell_command policy config mutex poisoned") = config;
+        Ok(())
+    }
+
+    /// Return the configured `shell_command` user policies and allowlist.
+    pub fn shell_command_policy_config(&self) -> ShellPolicyConfig {
+        self.shell_command_policy_config
+            .lock()
+            .expect("shell_command policy config mutex poisoned")
+            .clone()
     }
 
     /// Return the currently configured `dynamic-pii` settings.

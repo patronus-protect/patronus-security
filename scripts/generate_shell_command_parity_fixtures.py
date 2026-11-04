@@ -12,21 +12,20 @@ this script writes the fixtures that pin the Rust port to scikit-learn:
   corpus below with deterministic pseudo-random weights, so CI can check the
   two-block vectorizer parity without the 4 MB published model.
 * `rust/tests/fixtures/shell_command_parity.json`: the corpus with reference
-  decision scores for the synthetic model and, when `--model` points at the
-  real A1 `model.json`, for the published model too, plus two thresholds for
-  the decision-change check.
+  decision scores for the synthetic model, plus two thresholds for the
+  decision-change check.
+
+The released K26 model has its own parity suite (`rust/tests/shell_risk_parity.rs`).
 
 Requires `scikit-learn` (the fixture records the version used), `numpy` and
 `scipy`. Usage:
 
-    python scripts/generate_shell_command_parity_fixtures.py \
-        [--model /path/to/cat-shell-risk-commander/model.json]
+    python scripts/generate_shell_command_parity_fixtures.py
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -230,9 +229,7 @@ def pick_thresholds(scores: list[float]) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--model", type=Path, help="published A1 cat-shell-risk-commander model.json")
-    args = parser.parse_args()
+    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()
 
     FIXTURES.mkdir(parents=True, exist_ok=True)
     model = build_synthetic_model(FIXTURES / "shell_command_synthetic_model.json")
@@ -246,22 +243,11 @@ def main() -> None:
     texts = CORPUS + HEREDOC_REGRESSIONS
     cases = [{"text": text, "synthetic_score": score}
              for text, score in zip(texts, decision_scores(model, texts))]
-    published = None
-    if args.model is not None:
-        data = json.loads(args.model.read_text(encoding="utf-8"))
-        if data["format_version"] != 2:
-            raise SystemExit("--model must be a format_version 2 model.json")
-        published = {"sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
-                     "thresholds": data["thresholds"],
-                     "default_threshold_policy": data["default_threshold_policy"]}
-        for case, score in zip(cases, decision_scores(data, texts)):
-            case["published_score"] = score
 
     fixture = {
         "generator": "scripts/generate_shell_command_parity_fixtures.py",
         "sklearn": sklearn.__version__,
         "thresholds": thresholds,
-        "published_model": published,
         "cases": cases,
     }
     (FIXTURES / "shell_command_parity.json").write_text(

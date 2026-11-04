@@ -124,11 +124,14 @@ impl SecurityGateway {
             let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
             let pipeline =
                 ShellRiskPipeline::from_bundle_dir(&bundle_dir).map_err(std::io::Error::other)?;
+            pipeline
+                .configure(&self.shell_command_policy_config())
+                .map_err(std::io::Error::other)?;
+            let (ask, block) = pipeline.cuts();
             log::info!(
-                "shell_command model {} loaded from {}; threshold_policy={}",
+                "shell_command model {} loaded from {}; cuts ask={ask} block={block}",
                 assets::SHELL_COMMAND_ASSET.model,
                 bundle_dir.display(),
-                pipeline.threshold_policy()
             );
             metrics.checkpoint("shell_command_l1", "");
             Some(pipeline)

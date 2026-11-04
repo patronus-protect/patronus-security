@@ -4,9 +4,9 @@
 pub mod facts;
 pub mod features;
 mod markers;
+pub mod policies;
 mod pyjson;
 mod pyre;
-pub mod policies;
 pub mod shell_risk;
 pub mod shell_tokens;
 mod vocab;

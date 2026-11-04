@@ -421,6 +421,20 @@ pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), Str
 Replace the pipeline-specific `dynamic-pii` configuration.
 
 ```rust
+pub fn set_shell_command_policy_config(&self, config: ShellPolicyConfig) -> Result<(), String>;
+```
+
+Replace the user policies and allowlist of the `shell_command` verdict.
+A loaded pipeline applies them at once (a refused configuration changes
+nothing); otherwise `warmup` applies them.
+
+```rust
+pub fn shell_command_policy_config(&self) -> ShellPolicyConfig;
+```
+
+Return the configured `shell_command` user policies and allowlist.
+
+```rust
 pub fn dynamic_pii_config(&self) -> DynamicPiiConfig;
 ```
 

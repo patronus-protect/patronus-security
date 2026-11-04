@@ -649,22 +649,29 @@ score range per rule.
 ### Shell command results
 
 `shell_command` returns one L1 result with `model: "cat-shell-risk-commander"` and `class_name`
-`shell_risk` or `safe`. Its `confidence` is `sigmoid(|decision_score − threshold|)` — the
-distance from the threshold squashed into `0.5`–`1.0`, **not** a calibrated probability.
-`layers[0].details` contains:
+`shell_risk` (verdict `ask` or `block`) or `safe` (`allow`). The verdict is `max(model, policies)`
+on `allow < ask < block`: the model asks above the 1 % FPR cut and blocks above the 0.1 % FPR
+cut, and every fired Cedar policy sets at least its level. Its `confidence` is
+`sigmoid(|bundle_score − threshold|)` — the distance from the ask cut squashed into `0.5`–`1.0`,
+**not** a calibrated probability. `layers[0].details` contains:
 
 | Field | Meaning |
 | --- | --- |
-| `model` | `cat-shell-risk-commander`. |
-| `decision_score` | Raw logit of the scored variant. |
-| `threshold` / `threshold_policy` | Decision threshold and its policy (default `external_commands_1pct_fpr`, ≈1.15). |
-| `variant` | `full` or `comments_stripped` — whichever scored higher. |
-| `full_score` | Logit of the unmodified input. |
-| `comments_stripped_score` | Logit with comments blanked; present only when comments were found. |
+| `model` | Model name of the bundle (`k26`). |
+| `decision` | `allow`, `ask` or `block`. |
+| `decision_score` | Raw logit of the model. |
+| `bundle_score` | The logit raised to the floor of the fired policies. |
+| `threshold` / `threshold_policy` | The ask cut and its policy (`external_commands_1pct_fpr`). |
+| `verdict` | The full `patronus.verdict/1`: cuts, model score and top features, fired policies (id, tier, title, decision, where), allowlisted policies and the `patronus.facts/1` of the command. |
+
+User policies (forbid only, `block` or `ask`, schema-checked) and the allowlist (a
+bundle-default policy lowered from `block` to `ask`) come from
+`SecurityGateway::set_shell_command_policy_config`. Core policies cannot be lowered.
 
 Flagged results carry up to three `evidence_spans` with label `shell_risk` over the character
 n-gram regions that pushed the score up; `score` is that region's share of the positive
-contribution.
+contribution. When only the token block or a policy flags the command, the span is the trimmed
+command.
 
 ## Async queue events
 

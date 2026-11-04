@@ -77,18 +77,26 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
-/// `cat-shell-risk-commander`: a TF-IDF character n-gram logistic regression
-/// exported as JSON. It runs natively in the L1 phase, so the bundle carries no
-/// ONNX graph or tokenizer.
+/// `cat-shell-risk-commander`: a TF-IDF logistic regression exported as JSON
+/// plus the gated levels of its Cedar policies. It runs natively in the L1
+/// phase, so the bundle carries no ONNX graph or tokenizer.
 pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ShellCommand,
     model: "cat-shell-risk-commander",
     repo: "patronus-studio/cat-shell-risk-commander",
-    // A1 (format_version 2): char_wb + shell_tokens two-block model, with the
-    // issue #159 `DL->` relation markers and heredoc masking in the shell_tokens block (run G).
-    revision: "30d77a80f1ddb3c5c63d9b24c6f5083b15057813",
+    // K26 (format_version 2): char_wb + kf1 (shell tokens, legacy markers and
+    // patronus.facts/1 tokens), verdict = max(model, Cedar policies).
+    revision: "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f",
     destination_path: "shell_command/cat_shell_risk_commander",
-    files: &["manifest.json", "model.json", "LICENSE"],
+    // `config.json` names the model and policy files; it is also the file the
+    // Hub counts as a download.
+    files: &[
+        "manifest.json",
+        "config.json",
+        "model.json",
+        "policy_levels.json",
+        "LICENSE",
+    ],
 };
 
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {

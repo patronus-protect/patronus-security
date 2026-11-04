@@ -781,19 +781,37 @@ mod tests {
         ));
         let bundle = model_dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
         std::fs::create_dir_all(&bundle).unwrap();
-        let model = std::fs::read(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../rust/tests/fixtures/shell_command_synthetic_model.json"),
-        )
-        .unwrap();
+        let fixtures =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../rust/tests/fixtures");
+        let files = [
+            (
+                "model.json",
+                std::fs::read(fixtures.join("shell_risk_synthetic_model.json")).unwrap(),
+            ),
+            (
+                "policy_levels.json",
+                std::fs::read(fixtures.join("shell_risk_policy_levels.json")).unwrap(),
+            ),
+            (
+                "config.json",
+                br#"{"model_file":"model.json","policy_levels_file":"policy_levels.json"}"#
+                    .to_vec(),
+            ),
+            ("LICENSE", b"Apache-2.0".to_vec()),
+        ];
+        let mut manifest = serde_json::Map::new();
+        for (name, bytes) in &files {
+            std::fs::write(bundle.join(name), bytes).unwrap();
+            manifest.insert(
+                name.to_string(),
+                json!(format!("{:x}", Sha256::digest(bytes))),
+            );
+        }
         std::fs::write(
             bundle.join("manifest.json"),
-            json!({"files": {"model.json": {"sha256": format!("{:x}", Sha256::digest(&model))}}})
-                .to_string(),
+            json!({"files": manifest}).to_string(),
         )
         .unwrap();
-        std::fs::write(bundle.join("model.json"), model).unwrap();
-        std::fs::write(bundle.join("LICENSE"), "Apache-2.0").unwrap();
         std::fs::write(
             bundle.join(".patronus-revision"),
             patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
@@ -845,11 +863,13 @@ mod tests {
         assert_eq!(result["category"], "shell_command", "{payload}");
         assert_eq!(result["model"], "cat-shell-risk-commander");
         assert_eq!(result["level"], "L1");
-        assert!(matches!(
-            result["class_name"].as_str(),
-            Some("shell_risk" | "safe")
-        ));
         assert!(result["layers"][0]["details"]["decision_score"].is_f64());
+        // `rm -rf ~/.ssh` deletes secret material: a flagged verdict with facts.
+        assert_eq!(result["class_name"], "shell_risk", "{payload}");
+        assert_eq!(
+            result["layers"][0]["details"]["verdict"]["facts"]["segments"][0]["program"],
+            "rm"
+        );
         std::fs::remove_dir_all(model_dir).ok();
     }
 
