@@ -851,8 +851,16 @@ impl PyLayerResult {
 }
 
 impl Drop for PyLayerResult {
+    /// Large details go to [`release_off_thread`]; freeing a few entries
+    /// here costs less than waking the thread.
     fn drop(&mut self) {
-        if Arc::strong_count(&self.details) == 1 {
+        const RELEASE_OFF_THREAD_MIN_RULES: usize = 64;
+        let large = self
+            .details
+            .get("matched_rules")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|rules| rules.len() >= RELEASE_OFF_THREAD_MIN_RULES);
+        if large && Arc::strong_count(&self.details) == 1 {
             release_off_thread(std::mem::take(&mut self.details));
         }
     }
