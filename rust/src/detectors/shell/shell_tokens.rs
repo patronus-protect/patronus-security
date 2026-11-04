@@ -43,7 +43,7 @@ fn is_word_boundary(c: char) -> bool {
 
 /// Full match of the Python `\d*>&\d*` file-descriptor redirect pattern, e.g.
 /// `>&`, `2>&1`, `0>&1`.
-fn is_fd_redirect(token: &str) -> bool {
+pub(crate) fn is_fd_redirect(token: &str) -> bool {
     let bytes = token.as_bytes();
     let mut index = 0;
     while index < bytes.len() && bytes[index].is_ascii_digit() {
@@ -106,24 +106,41 @@ fn next_char_len(text: &str, index: usize) -> usize {
 /// `TOKEN.findall`). Alternatives are tried in the Python order; an unmatched
 /// character (stray quote, whitespace) is skipped.
 fn tokenize(text: &str) -> Vec<&str> {
-    tokenize_with(text, false)
+    tokenize_with(text, TokenMode::Plain)
 }
 
-/// `structural` adds the two leading alternatives of the Python `STRUCT_TOKEN`
-/// pattern used by [`relations`]: `<NAME>` placeholders stay one token and a
-/// newline is its own token (a command separator).
-fn tokenize_with(text: &str, structural: bool) -> Vec<&str> {
+/// `re.findall(r'\n|' + TOKEN.pattern, text)`: the tokens plus each newline as
+/// its own token, the word stream of the K26 marker and facts code.
+pub(crate) fn line_tokens(text: &str) -> Vec<&str> {
+    tokenize_with(text, TokenMode::Lines)
+}
+
+/// Which leading alternatives precede the Python `TOKEN` pattern.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TokenMode {
+    /// `TOKEN` alone.
+    Plain,
+    /// `\n|TOKEN`: a newline is its own token (a command separator).
+    Lines,
+    /// `STRUCT_TOKEN`, used by [`relations`]: `<NAME>` placeholders stay one
+    /// token and a newline is its own token.
+    Structural,
+}
+
+fn tokenize_with(text: &str, mode: TokenMode) -> Vec<&str> {
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
     let mut pos = 0;
     while pos < bytes.len() {
         let byte = bytes[pos];
-        if structural {
+        if mode != TokenMode::Plain {
             // `<[A-Za-z_][A-Za-z0-9_-]*>`
-            if let Some(end) = scan_placeholder(bytes, pos) {
-                tokens.push(&text[pos..end]);
-                pos = end;
-                continue;
+            if mode == TokenMode::Structural {
+                if let Some(end) = scan_placeholder(bytes, pos) {
+                    tokens.push(&text[pos..end]);
+                    pos = end;
+                    continue;
+                }
             }
             // `\n`
             if byte == b'\n' {
@@ -335,7 +352,7 @@ fn head(token: &str) -> &str {
 // block (the char_wb block still sees the raw text). Port of `mask_heredocs` in
 // `shell_tokens.py`; the regex lookaheads there are spelled out by hand here.
 
-const HEREDOC_MASK: &str = "heredoc_body";
+pub(crate) const HEREDOC_MASK: &str = "heredoc_body";
 
 /// Characters that end a word for the heredoc checks: `[\s;&|()<>'"]`.
 fn is_heredoc_word_end(c: char) -> bool {
@@ -478,7 +495,7 @@ fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str, bool)> {
 /// `$( … )` / `( … )` / backticks / quotes. A heredoc belongs to the segment that contains
 /// its `<<`, so `echo python; cat f <<EOF` attributes `<<EOF` to `cat f`, and
 /// `python -- "$(cat <<OLD)"` keeps `<<OLD` with `python`. Mirrors `heredoc_segments`.
-fn heredoc_segments(line: &str) -> Vec<(usize, usize)> {
+pub(crate) fn heredoc_segments(line: &str) -> Vec<(usize, usize)> {
     let bytes = line.as_bytes();
     let (mut depth, mut backtick): (i32, bool) = (0, false);
     let mut quote: Option<u8> = None;
@@ -536,7 +553,7 @@ fn heredoc_segments(line: &str) -> Vec<(usize, usize)> {
 
 /// Lowercase basename of the command head of `segment`, skipping assignments, flags and
 /// sudo/env prefixes; empty when it has none. Mirrors `_segment_head`.
-fn heredoc_segment_head(segment: &str) -> String {
+pub(crate) fn heredoc_segment_head(segment: &str) -> String {
     for token in segment.split_whitespace() {
         if token.starts_with('-') || is_heredoc_assignment(token) {
             continue;
@@ -606,8 +623,109 @@ fn heredoc_delimiter(line: &str) -> Option<(&str, bool)> {
     None
 }
 
+/// The K26 `HEREDOC_OP` at `k`, `<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1`:
+/// (match end, delimiter). Unlike the released analyzer it needs no boundary
+/// after the delimiter word and takes identifier delimiters only.
+fn heredoc_op_k26(line: &str, k: usize) -> Option<(usize, &str)> {
+    let bytes = line.as_bytes();
+    if !line[k..].starts_with("<<") {
+        return None;
+    }
+    let mut pos = k + 2;
+    if bytes.get(pos) == Some(&b'-') {
+        pos += 1;
+    }
+    while matches!(bytes.get(pos), Some(b' ' | b'\t')) {
+        pos += 1;
+    }
+    let quote = match bytes.get(pos) {
+        Some(&q @ (b'\'' | b'"')) => {
+            pos += 1;
+            Some(q)
+        }
+        _ => None,
+    };
+    let start = pos;
+    if !bytes
+        .get(pos)
+        .is_some_and(|b| b.is_ascii_alphabetic() || *b == b'_')
+    {
+        return None;
+    }
+    while bytes
+        .get(pos)
+        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+    {
+        pos += 1;
+    }
+    match quote {
+        Some(q) if bytes.get(pos) == Some(&q) => Some((pos + 1, &line[start..pos])),
+        Some(_) => None,
+        None => Some((pos, &line[start..pos])),
+    }
+}
+
+/// First K26 `HEREDOC_OP` match in `line` (`HEREDOC_OP.search`): (start, delimiter).
+pub(crate) fn heredoc_op_search_k26(line: &str) -> Option<(usize, &str)> {
+    line.match_indices("<<")
+        .find_map(|(k, _)| heredoc_op_k26(line, k).map(|(_, delimiter)| (k, delimiter)))
+}
+
+/// K26 `heredoc_delimiter`: the first `<<` heredoc whose owning command feeds a
+/// non-shell interpreter or is a cat/tee writing a code or data file.
+pub(crate) fn heredoc_delimiter_k26(line: &str) -> Option<&str> {
+    let segments: Vec<(usize, usize, String)> = heredoc_segments(line)
+        .into_iter()
+        .map(|(s, e)| (s, e, heredoc_segment_head(&line[s..e])))
+        .collect();
+    let mut k = 0;
+    while k < line.len() {
+        if let Some((end, delimiter)) = heredoc_op_k26(line, k) {
+            let masks = !line[..k].ends_with('<')
+                && segments.iter().any(|(s, e, head)| {
+                    *s <= k && k < *e && !head.is_empty() && heredoc_head_masks(head, &line[*s..*e])
+                });
+            if masks {
+                return Some(delimiter);
+            }
+            k = end;
+            continue;
+        }
+        k += line[k..].chars().next().map_or(1, char::len_utf8);
+    }
+    None
+}
+
+/// K26 `mask_heredocs` with a pluggable delimiter finder: every body line up to
+/// the terminator becomes one `heredoc_body` line, right after the opening line.
+pub(crate) fn mask_heredocs_with<'a>(
+    text: &'a str,
+    delimiter_of: impl Fn(&str) -> Option<&str>,
+) -> Cow<'a, str> {
+    if !text.contains("<<") {
+        return Cow::Borrowed(text);
+    }
+    let mut out: Vec<&str> = Vec::new();
+    let mut delimiter: Option<String> = None;
+    for line in text.split('\n') {
+        if let Some(open) = &delimiter {
+            if line.trim_matches([' ', '\t', '\r']) == open {
+                out.push(line);
+                delimiter = None;
+            }
+            continue;
+        }
+        out.push(line);
+        delimiter = delimiter_of(line).map(str::to_string);
+        if delimiter.is_some() {
+            out.push(HEREDOC_MASK);
+        }
+    }
+    Cow::Owned(out.join("\n"))
+}
+
 /// Replace heredoc bodies that are code (see above) by one `heredoc_body` line.
-/// Matches `shell_tokens.mask_heredocs`.
+/// Matches `shell_tokens.mask_heredocs` of the released (G) analyzer.
 pub fn mask_heredocs(text: &str) -> Cow<'_, str> {
     if !text.contains("<<") {
         return Cow::Borrowed(text);
@@ -644,7 +762,17 @@ pub fn mask_heredocs(text: &str) -> Cow<'_, str> {
 /// bigrams, the `CMD=`, `PIPE->` and `REDIR->` structural markers, then the
 /// `DL->` relation markers), after [`mask_heredocs`].
 pub fn features(text: &str) -> Vec<String> {
-    let text: &str = &mask_heredocs(text);
+    features_of(&mask_heredocs(text))
+}
+
+/// [`features`] with the K26 heredoc masking (`shellrisk/tokens.py`), the live
+/// token part of the `kf1` analyzer.
+pub fn features_k26(text: &str) -> Vec<String> {
+    features_of(&mask_heredocs_with(text, heredoc_delimiter_k26))
+}
+
+/// Unigrams, bigrams, structural and relation markers of already masked text.
+fn features_of(text: &str) -> Vec<String> {
     let norm: Vec<String> = tokenize(text).into_iter().map(normalise).collect();
 
     // Unigrams first, then bigrams and markers, in the reference order.
@@ -874,7 +1002,7 @@ fn nesting(tokens: &[&str]) -> usize {
 /// Script = pipelines; pipeline = commands; command = words (Python `_parse`).
 fn parse_text(text: &str) -> Script {
     let joined = struct_text(text);
-    let tokens = tokenize_with(&joined, true);
+    let tokens = tokenize_with(&joined, TokenMode::Structural);
     if nesting(&tokens) > MAX_NESTING {
         return Vec::new();
     }
