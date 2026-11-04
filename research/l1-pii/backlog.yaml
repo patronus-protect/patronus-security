@@ -940,6 +940,7 @@ tasks:
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
   - id: H06-3
+    status: done
     title: "Performance loop pass 3: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
     type: perf
     deps: [H06-2]
