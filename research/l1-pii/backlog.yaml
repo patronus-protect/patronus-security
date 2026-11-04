@@ -1008,7 +1008,24 @@ tasks:
       pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
-  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-6]}
+  - id: H06-7
+    title: "Performance loop pass 7: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
+    type: perf
+    deps: [H06-6]
+    source: "H06 pass 6 (scoreboard/latency.md, section H06 pass 6): explain-mode anchor details on the lazy
+      DFA (100 KiB DE 71.9 -> 9.6 ms with explain on); parallel preparation, chunked anchors and an anchor
+      DFA measured without gain; remaining hotspots: matched_rules entries as serde_json values (details
+      getter 1.3–3 ms, about 1.5 ms native drop; a typed entry with the same JSON, 56 uses in 13 files),
+      parallel rule step at about 1.4x its ideal (zero-match searches, task scheduling)"
+    accept: >-
+      Performance loop at the end of the programme (decided 2026-11-02): profile the 100 KiB DE and EN
+      workloads, remove the top hotspots without any quality change (dev and holdout scoreboard and goldens
+      unchanged, no new FP); M4 per scripts/l1_presidio/latency.py on the VPS; latency.md updated. If the
+      budget is not met and the profile still shows a hotspot worth >= 10 % of p95, the PR appends the next
+      pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
+      when the budget holds or no such hotspot remains (remaining hotspots documented).
+
+  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-7]}
 
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}
