@@ -10,6 +10,7 @@ pub mod obfuscation;
 pub mod pii;
 pub mod structure;
 pub mod validators;
+pub mod word_boundary;
 
 use regex::Regex;
 use std::{collections::HashMap, ops::Range};
