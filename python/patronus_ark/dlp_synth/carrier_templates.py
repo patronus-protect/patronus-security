@@ -1464,6 +1464,17 @@ PROFILES = {
     "dlp_groq_key": Profile("llm.groq.api_key", "API_KEY", "secret", "groq_api_key", "Groq API key", "Groq-API-Key"),
     "dlp_xai_key": Profile("llm.xai.api_key", "API_KEY", "secret", "xai_api_key", "xAI API key", "xAI-API-Key"),
     "dlp_replicate": Profile("llm.replicate.api_token", "API_KEY", "secret", "replicate_api_token", "Replicate API token", "Replicate-API-Token"),
+    "dlp_cohere_key": Profile("llm.cohere.api_key", "API_KEY", "secret", "cohere_api_key", "Cohere API key", "Cohere-API-Schlüssel"),
+    "dlp_perplexity_key": Profile(
+        "llm.perplexity.api_key", "API_KEY", "secret", "perplexity_api_key", "Perplexity API key", "Perplexity-API-Schlüssel"
+    ),
+    "dlp_deepseek_key": Profile("llm.deepseek.api_key", "API_KEY", "secret", "deepseek_api_key", "DeepSeek API key", "DeepSeek-API-Schlüssel"),
+    "dlp_openrouter_key": Profile(
+        "llm.openrouter.api_key", "API_KEY", "secret", "openrouter_api_key", "OpenRouter API key", "OpenRouter-API-Schlüssel"
+    ),
+    "dlp_fireworks_key": Profile(
+        "llm.fireworks.api_key", "API_KEY", "secret", "fireworks_api_key", "Fireworks AI API key", "Fireworks-AI-API-Schlüssel"
+    ),
     "dlp_aws_access_key": Profile("cloud.aws.access_key_id", "CLOUD_KEY", "secret", "aws_access_key_id", "AWS access key ID", "AWS-Access-Key-ID"),
     "dlp_aws_secret_key": Profile("cloud.aws.secret_access_key", "CLOUD_KEY", "secret", "aws_secret_access_key", "AWS secret access key", "AWS-Secret-Access-Key"),
     "dlp_google_api_key": Profile("cloud.gcp.api_key", "CLOUD_KEY", "secret", "google_maps_api_key", "Google Maps API key", "Google-Maps-API-Schlüssel"),
@@ -2034,13 +2045,6 @@ PROFILES = {
         },
     ),
     # GOLD-D5: payment, observability and llm entities without an ARK rule.
-    "llm.cohere.api_key": Profile(
-        "llm.cohere.api_key", "API_KEY", "secret", "cohere_api_key", "Cohere API key", "Cohere-API-Schlüssel",
-    ),
-    "llm.perplexity.api_key": Profile(
-        "llm.perplexity.api_key", "API_KEY", "secret", "perplexity_api_key", "Perplexity API key",
-        "Perplexity-API-Schlüssel",
-    ),
     "llm.privateai.api_key": Profile(
         "llm.privateai.api_key", "API_KEY", "secret", "private_ai_api_key", "Private AI API key",
         "Private-AI-API-Schlüssel",

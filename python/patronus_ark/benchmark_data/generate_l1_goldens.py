@@ -5212,6 +5212,9 @@ DLP_LOOKALIKE_GENERATORS = (
     "anthropic_api_key_short", "anthropic_admin_key_long", "openai_project_key", "openai_service_account_key_short",
     "openai_legacy_key_no_marker", "huggingface_token_digit", "groq_key_short", "replicate_api_token_long",
     "google_api_key_long", "google_oauth_access_token_short", "gcp_oauth_client_secret_long",
+    # P01: wrong length of the Cohere, Perplexity, DeepSeek, OpenRouter and Fireworks formats
+    "cohere_api_key_short", "perplexity_api_key_short", "deepseek_api_key_short", "openrouter_api_key_short",
+    "fireworks_api_key_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
@@ -13780,6 +13783,160 @@ DLP_T21_CASES["SECRET_TOKEN"] += [
     ),
 ]
 for _label, _rows in DLP_T21_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# P01: LLM provider keys. Perplexity pplx- + 48 and Cohere 40 alphanumerics under a cohere or CO_API_KEY
+# key (gitleaks), OpenRouter sk-or-v1- + 64 hex, DeepSeek sk- + 32 under a DeepSeek key, Fireworks
+# fw_ + 20 to 40 (TruffleHog); Gemini/AI Studio keys are Google API keys (AIza + 35). Hard negatives
+# are lookalikes with a wrong length, a DeepSeek-shaped key under another name, env references,
+# placeholders and format prose.
+DLP_P01_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "en", "dlp_perplexity_key",
+            "# perplexity search\nPERPLEXITY_API_KEY=<<secret:0>>\nPPLX_MODEL=sonar\n",
+            "perplexity_api_key", 20101, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_perplexity_key",
+            "Hallo Lea,\n\nder Perplexity-Schlüssel für die Recherche-Pipeline lautet <<secret:0>>\n\nViele Grüße\n",
+            "perplexity_api_key", 20102, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_cohere_key",
+            "rerank:\n  provider: cohere\n  cohere_api_key: \"<<secret:0>>\"\n",
+            "cohere_api_key", 20103, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_cohere_key",
+            "# Embeddings für die Suche\nCO_API_KEY=<<secret:0>>\n",
+            "cohere_api_key", 20104, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_openrouter_key",
+            "{\n  \"router\": {\n    \"baseUrl\": \"https://openrouter.ai/api/v1\",\n    \"apiKey\": \"<<secret:0>>\"\n  }\n}\n",
+            "openrouter_api_key", 20105, carrier="json",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_openrouter_key",
+            "2026-11-03T08:12:44Z INFO llm-proxy: Anfrage mit Schlüssel <<secret:0>> an openrouter weitergeleitet\n",
+            "openrouter_api_key", 20106, carrier="log",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_deepseek_key",
+            "from openai import OpenAI\n\nDEEPSEEK_API_KEY = \"<<secret:0>>\"\nclient = OpenAI(base_url=\"https://api.deepseek.com\")\n",
+            "deepseek_api_key", 20107, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_deepseek_key",
+            "[09:41] jonas.k: Hier der DeepSeek-API-Schlüssel für den Test-Bot:\n<<secret:0>>\n",
+            "deepseek_api_key", 20108, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_fireworks_key",
+            "$ curl https://api.fireworks.ai/inference/v1/models -H \"Authorization: Bearer <<secret:0>>\"\n",
+            "fireworks_api_key", 20109, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_fireworks_key",
+            "inferenz:\n  anbieter: fireworks\n  fireworks_api_key: <<secret:0>>\n",
+            "fireworks_api_key", 20110, carrier="yaml",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_perplexity_key",
+            "2026-11-03T08:12:44Z WARN gateway: rejected <<secret:0>> (length)\n",
+            "perplexity_api_key_short", 20113, "pplx- shape with 47 instead of 48 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_openrouter_key",
+            "2026-11-03T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "openrouter_api_key_short", 20114, "sk-or-v1- shape with 63 instead of 64 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_fireworks_key",
+            "2026-11-03T08:12:44Z WARN gateway: rejected <<secret:0>> (length)\n",
+            "fireworks_api_key_short", 20115, "fw_ shape with 19 instead of at least 20 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_perplexity_key",
+            "2026-11-03T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "perplexity_api_key_short", 20116, "pplx- shape with 47 instead of 48 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_cohere_key",
+            "2026-11-03T08:12:44Z WARN rerank: rejected <<secret:0>> (length)\n",
+            "cohere_api_key_short", 20117, "Cohere shape with 39 instead of 40 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_deepseek_key",
+            "2026-11-03T08:12:44Z WARN gateway: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "deepseek_api_key_short", 20118, "DeepSeek sk- shape with 31 instead of 32 characters", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_perplexity_key",
+            "PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_cohere_key",
+            "cohere:\n  api_key: \"{{ cohere_api_key }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_openrouter_key",
+            "Set OPENROUTER_API_KEY to your key; it starts with sk-or-v1- and has 64 hex digits.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_deepseek_key",
+            "{\"deepseek\": {\"api_key\": \"sk-your-deepseek-api-key\"}}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_fireworks_key",
+            "fw_config_rules_default = load_rules(\"firewall.yaml\")\n",
+            "identifier with the fw_ prefix", carrier="code",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_cohere_key",
+            "# Schlüssel kommt aus dem Tresor\nCO_API_KEY=${COHERE_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_perplexity_key",
+            "Perplexity-Schlüssel in der Doku gekürzt: pplx-abcd… (48 Zeichen nach pplx-)\n",
+            "truncated token in the docs", carrier="markdown",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_openrouter_key",
+            "openrouter:\n  schluessel: \"<OPENROUTER_API_KEY>\"\n",
+            "placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_deepseek_key",
+            "DeepSeek-Schlüssel: als Umgebungsvariable DEEPSEEK_API_KEY setzen, nie im Repo ablegen.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_fireworks_key",
+            "2026-11-03T08:12:44Z INFO net: Regel fw_allowOutboundHttps aktiv\n",
+            "firewall rule name with the fw_ prefix", carrier="log",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            "# Google AI Studio\nGEMINI_API_KEY=<<secret:0>>\n",
+            "google_api_key", 20111, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            "from google import genai\n\n# Gemini-Schlüssel aus AI Studio\nclient = genai.Client(api_key=\"<<secret:0>>\")\n",
+            "google_api_key", 20112, carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_P01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

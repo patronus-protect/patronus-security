@@ -3224,6 +3224,113 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_cohere_key",
+    "de": "CO_API_KEY=<<secret\u003a0>>",
+    "en": "cohere:\n  cohere_api_key: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "cohere_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CO_API_KEY=${CO_API_KEY}",
+        "Cohere-Schlüssel haben 40 Zeichen."
+      ],
+      "en": [
+        "cohere_api_key: \"{{ cohere_api_key }}\"",
+        "cohere:\n  model_id: embedenglishv3multilingualrerankmodel01"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_perplexity_key",
+    "de": "PERPLEXITY_API_KEY=<<secret\u003a0>>",
+    "en": "Authorization: Bearer <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "perplexity_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}"
+      ],
+      "en": [
+        "Keys look like pplx-<48 characters>."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_deepseek_key",
+    "de": "DEEPSEEK_API_KEY=<<secret\u003a0>>",
+    "en": "llm:\n  deepseek_api_key: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "deepseek_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"
+      ],
+      "en": [
+        "DeepSeek keys start with sk- and have 32 more characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openrouter_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openrouter_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "OPENROUTER_API_KEY=<OPENROUTER_SCHLUESSEL>"
+      ],
+      "en": [
+        "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_fireworks_key",
+    "de": "FIREWORKS_API_KEY=<<secret\u003a0>>",
+    "en": "Authorization: Bearer <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "fireworks_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Firewall-Regel fw_allowOutboundHttps aktiv"
+      ],
+      "en": [
+        "FIREWORKS_API_KEY=${FIREWORKS_API_KEY}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_aws_access_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",

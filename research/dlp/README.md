@@ -320,6 +320,15 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   belegbare Längenangabe bleiben die präfixierten Honeycomb-Ingest-Keys ohne eigene Regel (unter
   einem Honeycomb-Schlüssel greifen die generischen Regeln); Sumo Logic (Entity-Map
   `backlog: P07`) bleibt `baseline_only`.
+  Seit P01 decken fünf weitere Regeln LLM-Anbieter ab (`API_KEY`, `api_key`). Präfix-Regeln mit
+  Token-Grenze: Perplexity (`pplx-` und 48 Zeichen beider Schreibweisen, gitleaks), OpenRouter
+  (`sk-or-v1-` und 64 Hex-Ziffern) und Fireworks AI (`fw_` und 20 bis 40 Zeichen beider
+  Schreibweisen), beide nach TruffleHog. Schlüsselgebunden (`provider_key!`): Cohere (40 Zeichen
+  beider Schreibweisen unter `cohere` oder `CO_API_KEY`, gitleaks) und DeepSeek (`sk-` und 32
+  Kleinbuchstaben/Ziffern unter `deepseek`, TruffleHog). Gemini-/AI-Studio-Schlüssel sind
+  Google-API-Keys (`AIza`, `dlp_google_api_key`). Mistral und Together AI dokumentieren kein Format
+  und haben keine gitleaks- oder TruffleHog-Regel; sie bekommen keine eigene Regel (unter einem
+  Anbieterschlüssel greifen die generischen Regeln).
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am
