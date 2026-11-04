@@ -115,6 +115,9 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_ldap_bind_password",
     // credentials (CLI command lines, G03)
     "dlp_cli_password",
+    // credentials (credential files, G04)
+    "dlp_netrc_password",
+    "dlp_docker_config_auth",
     // identifiers
     "dlp_de_vat_id",
     "dlp_de_commercial_register_number",

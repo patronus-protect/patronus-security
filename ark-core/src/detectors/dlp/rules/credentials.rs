@@ -607,6 +607,54 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::Password)
         .with_value_gate(likeness::is_cli_password),
     },
+    DlpPattern {
+        name: "dlp_netrc_password",
+        // G04: the password of a `.netrc`/`_netrc` entry. The tokens are
+        // whitespace-separated, also one per line: `machine <host>` (a
+        // dotted host name, an address or `localhost`; `machine learning`
+        // is prose) or `default login <user>` at the start of a line, up to
+        // three `login`/`account`/`port` pairs, then `password <value>`
+        // (curl also reads a quoted value).
+        pattern: concat!(
+            r"(?:(?-u:\b)machine[ \t\r\n]{1,16}",
+            r"(?:[A-Za-z0-9_-]{1,63}(?:\.[A-Za-z0-9_-]{1,63}){1,8}|localhost|\[[0-9A-Fa-f:.]{2,45}\])",
+            r"(?::[0-9]{1,5})?",
+            r"|(?m:^)[ \t]{0,16}default[ \t\r\n]{1,16}login[ \t\r\n]{1,16}[^\s]{1,128})",
+            r"(?:[ \t\r\n]{1,16}(?:login|account|port)[ \t\r\n]{1,16}[^\s]{1,128}){0,3}",
+            r#"[ \t\r\n]{1,16}password[ \t\r\n]{1,16}(?:"([^"\r\n]{1,150})"|([^\s"]{1,150}))"#,
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://www.gnu.org/software/inetutils/manual/html_node/The-_002enetrc-file.html",
+            &["machine", "default"],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_cli_password),
+    },
+    DlpPattern {
+        name: "dlp_docker_config_auth",
+        // G04: the `auth` value of a registry entry in a Docker/Podman
+        // `config.json`/`auth.json` (also inside a `.dockerconfigjson`
+        // secret, there also as an escaped JSON string): base64 of
+        // `user:password`, checked like a Basic credential
+        // (`http_auth::is_basic_credentials`).
+        pattern: r#""auth\\?"[ \t]{0,16}:[ \t]{0,16}\\?"([A-Za-z0-9+/]{8,1024}={0,2})\\?""#,
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://docs.docker.com/reference/cli/docker/login/#credential-stores",
+            &["\"auth"],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(http_auth::is_basic_credentials),
+    },
 ];
 
 /// Shared value check of the credential and hash rules.

@@ -11,6 +11,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Detection change: credential files (G04). New rule `dlp_netrc_password` (`CREDENTIAL`, subtype
+  `password`, structural credential tier) reports the password of a `.netrc`/`_netrc` entry
+  (`machine <host> login <user> password <value>`, also one token per line, and the `default`
+  entry; the host is a dotted name, an address or `localhost`). New rule `dlp_docker_config_auth`
+  (`CREDENTIAL`, subtype `password`) reports the `auth` value of a Docker/Podman `config.json`/
+  `auth.json` registry entry, also inside a `.dockerconfigjson` secret, when it decodes to
+  `user:password` with a chosen password (the Basic-auth check). References, stand-ins, empty and
+  credential-helper entries stay negative. `.npmrc` `_authToken`/`_password`, `.pypirc`, Maven
+  `settings.xml`, `NuGet.Config` `ClearTextPassword` and `.s3cfg` keys are already reported by the
+  generic assignment and AWS rules; rclone's obscured `pass` is not reported.
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).
   `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
   `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or

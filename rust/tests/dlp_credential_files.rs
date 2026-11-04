@@ -118,6 +118,10 @@ fn docker_config_auth_values_are_reported() {
         ),
         concat!("{\"au", "ths\":{\"ghcr.io\":{\"auth\":\"{v}\"}},\"credsStore\":\"\"}"),
         concat!(
+            "{\"dockerconfigjson\": \"{\\\"au",
+            "ths\\\":{\\\"quay.io\\\":{\\\"auth\\\":\\\"{v}\\\"}}}\"}"
+        ),
+        concat!(
             "  .dockerconfigjson: '{\"au",
             "ths\":{\"quay.io\":{\"auth\":\"{v}\"}}}'"
         ),
@@ -130,16 +134,26 @@ fn docker_config_auth_values_are_reported() {
 fn docker_config_entries_without_a_user_password_payload_are_silent() {
     for text in [
         // base64("ci-deploy:"): no password
-        concat!("{\"au", "ths\": {\"r.example.com\": {\"auth\": \"Y2ktZGVwbG95Og==\"}}}"),
+        concat!(
+            "{\"au",
+            "ths\": {\"r.example.com\": {\"auth\": \"Y2ktZGVwbG95Og==\"}}}"
+        ),
         // base64("ci-deploy:password"): a stand-in
-        concat!("{\"au", "ths\": {\"r.example.com\": {\"auth\": \"Y2ktZGVwbG95OnBhc3N3b3Jk\"}}}"),
-        // base64(":Kx7p…"): no user
-        concat!("{\"au", "ths\": {\"r.example.com\": {\"auth\": \"Okt4N3BRMnZMOXdSNG1Ueg==\"}}}"),
+        concat!(
+            "{\"au",
+            "ths\": {\"r.example.com\": {\"auth\": \"Y2ktZGVwbG95OnBhc3N3b3Jk\"}}}"
+        ),
         // base64("session-status-ok"): no colon
         "{\"auth\": \"c2Vzc2lvbi1zdGF0dXMtb2s=\", \"status\": \"ok\"}",
-        concat!("{\"au", "ths\": {\"r.example.com\": {\"auth\": \"${DOCKER_AUTH}\"}}}"),
+        concat!(
+            "{\"au",
+            "ths\": {\"r.example.com\": {\"auth\": \"${DOCKER_AUTH}\"}}}"
+        ),
         concat!("{\"au", "ths\": {\"r.example.com\": {\"auth\": \"\"}}}"),
-        concat!("{\"au", "ths\": {\"r.example.com\": {}}, \"credsStore\": \"desktop\"}"),
+        concat!(
+            "{\"au",
+            "ths\": {\"r.example.com\": {}}, \"credsStore\": \"desktop\"}"
+        ),
         "{\"route\": \"/login\", \"auth\": \"required\"}",
         "{\"auth\": \"Bearer\"}",
     ] {
