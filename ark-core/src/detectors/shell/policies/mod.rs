@@ -29,21 +29,23 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use cedar_policy::{
-    ActionConstraint, Authorizer, Context, Effect, Entities, EntityUid, Policy, PolicyId,
-    PolicySet, PrincipalConstraint, Request, ResourceConstraint, RestrictedExpression, Schema,
-    ValidationMode, Validator,
-};
+use cedar_policy::{Authorizer, Context, Entities, EntityUid, Policy, PolicySet, Request, Schema};
 use regex::{Regex, RegexSet, RegexSetBuilder};
 use serde::Deserialize;
 
 use super::facts::Facts;
 use super::pyre::{py_regex, try_py_regex, Anchor};
 
+mod request;
+mod rules;
+
+use request::requests;
+use rules::{dc_rules, parse_cedar, policy_set, validate};
+
 /// The translated DefenseClaw rules, embedded verbatim from the K26 release.
-pub(crate) const DC_RULES_JSON: &str = include_str!("data/dc_rules.json");
-const CORE_POLICIES: &str = include_str!("data/core.cedar");
-const SCHEMA: &str = include_str!("data/shell.cedarschema");
+pub(crate) const DC_RULES_JSON: &str = include_str!("../data/dc_rules.json");
+const CORE_POLICIES: &str = include_str!("../data/core.cedar");
+const SCHEMA: &str = include_str!("../data/shell.cedarschema");
 
 static CEDAR_SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
     Schema::from_cedarschema_str(SCHEMA)
@@ -216,144 +218,6 @@ pub struct ShellPolicies {
     /// Per pattern: its rule and a set holding only that rule.
     pattern_rules: Vec<(usize, PolicySet)>,
     allowlist: BTreeMap<String, String>,
-}
-
-fn scope_of(policy: &Policy) -> Option<Scope> {
-    match policy.action_constraint() {
-        ActionConstraint::Eq(action) if action == *SEGMENT_ACTION => Some(Scope::Segment),
-        ActionConstraint::Eq(action) if action == *COMMAND_ACTION => Some(Scope::Command),
-        _ => None,
-    }
-}
-
-/// Policies of a Cedar source in the `core.cedar` format, ordered by id.
-fn parse_cedar(
-    source: &str,
-    tier: Tier,
-    levels: Option<&HashMap<String, String>>,
-) -> Result<Vec<Rule>, String> {
-    let set = PolicySet::from_str(source).map_err(|error| format!("does not parse: {error}"))?;
-    if set.templates().next().is_some() {
-        return Err("templates are not allowed".to_string());
-    }
-    let mut rules = Vec::new();
-    for policy in set.policies() {
-        let id = policy
-            .annotation("id")
-            .ok_or_else(|| format!("policy {} has no @id", policy.id()))?
-            .to_string();
-        let well_named = match tier {
-            Tier::User => USER_ID.is_match(&id),
-            _ => id.starts_with("core."),
-        };
-        if !well_named {
-            return Err(format!(
-                "policy id {id:?} is not allowed in tier {}",
-                tier.as_str()
-            ));
-        }
-        let cap = policy
-            .annotation("decision")
-            .and_then(Decision::parse_level)
-            .ok_or_else(|| format!("{id}: @decision must be block or ask"))?;
-        let scope = scope_of(policy).ok_or_else(|| {
-            format!("{id}: must apply to action == Action::\"segment\" or Action::\"command\"")
-        })?;
-        if policy.effect() != Effect::Forbid
-            || policy.principal_constraint() != PrincipalConstraint::Any
-            || policy.resource_constraint() != ResourceConstraint::Any
-        {
-            return Err(format!(
-                "{id}: must be forbid(principal, action == …, resource)"
-            ));
-        }
-        let level = match levels {
-            // Core levels come from the release's validation gate.
-            Some(levels) => match levels.get(&id).and_then(|l| Decision::parse_level(l)) {
-                Some(level) => level,
-                None => continue,
-            },
-            None => cap,
-        };
-        rules.push(Rule {
-            tier,
-            title: policy.annotation("title").unwrap_or(&id).to_string(),
-            scope,
-            level,
-            policy: policy.new_id(PolicyId::new(&id)),
-            pattern: None,
-        });
-    }
-    rules.sort_by(|a, b| a.id().cmp(b.id()));
-    if let Some(pair) = rules.windows(2).find(|pair| pair[0].id() == pair[1].id()) {
-        return Err(format!("policy id {} is not unique", pair[0].id()));
-    }
-    Ok(rules)
-}
-
-fn policy_set<'a>(rules: impl IntoIterator<Item = &'a Rule>) -> Result<PolicySet, String> {
-    PolicySet::from_policies(rules.into_iter().map(|rule| rule.policy.clone()))
-        .map_err(|error| error.to_string())
-}
-
-fn validate(rules: &[Rule]) -> Result<(), String> {
-    let result =
-        Validator::new(CEDAR_SCHEMA.clone()).validate(&policy_set(rules)?, ValidationMode::Strict);
-    if result.validation_passed() {
-        return Ok(());
-    }
-    let errors: Vec<String> = result
-        .validation_errors()
-        .take(2)
-        .map(ToString::to_string)
-        .collect();
-    Err(format!("schema validation failed: {errors:?}"))
-}
-
-/// The translated DefenseClaw rules that ship (`status == translated`, not the
-/// held-out test bucket) at their gated level, in file order.
-fn dc_rules(levels: &HashMap<String, String>) -> Result<Vec<Rule>, String> {
-    let records: Vec<DcRule> =
-        serde_json::from_str(DC_RULES_JSON).map_err(|error| format!("dc_rules.json: {error}"))?;
-    let mut rules = Vec::new();
-    for record in records {
-        if record.status != "translated" || record.bucket == "test" {
-            continue;
-        }
-        let Some(level) = levels
-            .get(&record.id)
-            .and_then(|l| Decision::parse_level(l))
-        else {
-            continue;
-        };
-        if !matches!(
-            record.tier.as_deref(),
-            None | Some("") | Some("bundle-default")
-        ) {
-            return Err(format!("{}: unexpected tier", record.id));
-        }
-        let action = record.scope.as_deref().unwrap_or("segment");
-        let condition = record
-            .condition
-            .ok_or_else(|| format!("{}: translated rule without condition", record.id))?;
-        let text = format!(
-            r#"forbid(principal, action == Action::"{action}", resource) when {{ {condition} }};"#
-        );
-        let policy = Policy::parse(Some(PolicyId::new(&record.id)), text)
-            .map_err(|error| format!("{}: {error}", record.id))?;
-        rules.push(Rule {
-            tier: Tier::BundleDefault,
-            title: record
-                .title
-                .filter(|t| !t.is_empty())
-                .unwrap_or_else(|| record.id.clone()),
-            scope: scope_of(&policy).ok_or_else(|| format!("{}: unknown scope", record.id))?,
-            level,
-            policy,
-            pattern: record.pattern.filter(|p| !p.is_empty()),
-        });
-    }
-    Ok(rules)
 }
 
 impl ShellPolicies {
@@ -555,139 +419,9 @@ impl ShellPolicies {
     }
 }
 
-/// DefenseClaw-style normalized path: forward slashes, registry roots shortened.
-fn norm_path(path: &str) -> String {
-    let path = path.replace('\\', "/");
-    let path = HKLM.replace(&path, "HKLM${2}");
-    let path = HKCU.replace(&path, "HKCU${2}");
-    SLASHES.replace_all(&path, "/").into_owned()
-}
-
-type Pairs = Vec<(String, RestrictedExpression)>;
-
-/// A Cedar set of strings (Cedar sets are unordered and de-duplicated).
-fn set<I: IntoIterator<Item = String>>(items: I) -> RestrictedExpression {
-    RestrictedExpression::new_set(items.into_iter().map(RestrictedExpression::new_string))
-}
-
-fn text(value: &str) -> RestrictedExpression {
-    RestrictedExpression::new_string(value.to_string())
-}
-
-fn strings<'a, I: IntoIterator<Item = &'a str>>(items: I) -> RestrictedExpression {
-    set(items.into_iter().map(str::to_string))
-}
-
-/// Cedar requests (place, scope, context) for one command (`requests`).
-fn requests(facts: &Facts, patterns: &[String]) -> Vec<(String, Scope, Pairs)> {
-    let pairs = |items: Vec<(&str, RestrictedExpression)>| -> Pairs {
-        items.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
-    };
-    let mut out: Vec<(String, Scope, Pairs)> = Vec::new();
-    for s in &facts.segments {
-        let mut values = BTreeSet::new();
-        let mut paths = BTreeSet::new();
-        let mut objects = BTreeSet::new();
-        for object in &s.objects {
-            let mut vs = BTreeSet::from([norm_path(object.value.as_deref().unwrap_or(""))]);
-            if let Some(abs) = object.abs.as_ref().filter(|a| !a.is_empty()) {
-                vs.insert(abs.clone());
-            }
-            if let Some(access) = object.access {
-                paths.extend(vs.iter().map(|v| format!("{access}:{v}")));
-                objects.insert(format!("{access}@{}", object.class));
-            }
-            values.extend(vs);
-        }
-        let context = pairs(vec![
-            ("program", text(&s.program)),
-            ("verb", text(s.verb.unwrap_or(""))),
-            ("role", text(s.role.unwrap_or(""))),
-            (
-                "sensitive_read",
-                RestrictedExpression::new_bool(s.sensitive),
-            ),
-            ("nested", text(s.nested.unwrap_or(""))),
-            ("sql", strings(s.sql.iter().copied())),
-            ("ops", strings(s.ops.iter().copied())),
-            ("access", strings(s.objects.iter().filter_map(|o| o.access))),
-            ("classes", strings(s.objects.iter().map(|o| o.class))),
-            ("objects", set(objects)),
-            ("paths", set(paths)),
-            ("values", set(values)),
-            ("argv", set(s.argv.iter().cloned())),
-            (
-                "settings",
-                set(s
-                    .settings
-                    .iter()
-                    .map(|x| format!("{}:{}", x.domain, x.polarity))),
-            ),
-            ("grants", strings(s.grants.iter().copied())),
-            (
-                "host_root_mount",
-                RestrictedExpression::new_bool(s.host_root_mount),
-            ),
-            ("privileged", RestrictedExpression::new_bool(s.privileged)),
-            ("fixture", RestrictedExpression::new_bool(s.fixture)),
-            ("hosts", set(s.network.iter().map(|n| n.host.clone()))),
-            ("net_scopes", strings(s.network.iter().map(|n| n.scope))),
-            ("dialect", text(&facts.dialect)),
-            ("patterns", set(patterns.iter().cloned())),
-        ]);
-        out.push((format!("segment:{}", s.id), Scope::Segment, context));
-    }
-    let flows = facts.flows.iter().flat_map(|f| {
-        [
-            format!("{}>{}", f.data, f.sink),
-            format!("{}>{}>{}", f.data, f.sink, f.via),
-        ]
-    });
-    let segments = &facts.segments;
-    let context = pairs(vec![
-        ("flows", set(flows)),
-        ("objects", strings(facts.objects.iter().map(|o| o.class))),
-        ("atoms", set(facts.atoms.iter().cloned())),
-        ("programs", set(segments.iter().map(|s| s.program.clone()))),
-        (
-            "ops",
-            strings(segments.iter().flat_map(|s| s.ops.iter().copied())),
-        ),
-        (
-            "settings",
-            set(segments.iter().flat_map(|s| {
-                s.settings
-                    .iter()
-                    .map(|x| format!("{}:{}", x.domain, x.polarity))
-            })),
-        ),
-        (
-            "hosts",
-            set(segments
-                .iter()
-                .flat_map(|s| s.network.iter().map(|n| n.host.clone()))),
-        ),
-        (
-            "net_scopes",
-            strings(
-                segments
-                    .iter()
-                    .flat_map(|s| s.network.iter().map(|n| n.scope)),
-            ),
-        ),
-        ("dialect", text(&facts.dialect)),
-        (
-            "segments",
-            RestrictedExpression::new_long(segments.len() as i64),
-        ),
-        ("patterns", set(patterns.iter().cloned())),
-    ]);
-    out.push(("command".to_string(), Scope::Command, context));
-    out
-}
-
 #[cfg(test)]
 mod tests {
+
     use super::super::facts::extract;
     use super::*;
 
@@ -848,12 +582,5 @@ mod tests {
         ] {
             assert!(policies.configure(&allow(id, to)).is_err(), "{id} -> {to}");
         }
-    }
-
-    #[test]
-    fn norm_path_shortens_registry_roots() {
-        assert_eq!(norm_path("HKEY_LOCAL_MACHINE\\SAM"), "HKLM/SAM");
-        assert_eq!(norm_path("hkcu:\\Software\\\\x"), "HKCU/Software/x");
-        assert_eq!(norm_path("/etc//shadow"), "/etc/shadow");
     }
 }
