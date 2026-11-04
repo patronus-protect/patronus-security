@@ -6,6 +6,7 @@ pub mod features;
 mod markers;
 mod pyjson;
 mod pyre;
+pub mod policies;
 pub mod shell_risk;
 pub mod shell_tokens;
 mod vocab;
