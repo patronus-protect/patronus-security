@@ -429,6 +429,13 @@ A loaded pipeline applies them at once (a refused configuration changes
 nothing); otherwise `warmup` applies them.
 
 ```rust
+pub fn pin_shell_command_manifest_for_tests(&mut self, manifest_sha256: impl Into<String>);
+```
+
+Accept a `shell_command` bundle with this manifest instead of the
+pinned release (synthetic bundles in tests).
+
+```rust
 pub fn shell_command_policy_config(&self) -> ShellPolicyConfig;
 ```
 

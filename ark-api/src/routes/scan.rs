@@ -807,11 +807,8 @@ mod tests {
                 json!(format!("{:x}", Sha256::digest(bytes))),
             );
         }
-        std::fs::write(
-            bundle.join("manifest.json"),
-            json!({"files": manifest}).to_string(),
-        )
-        .unwrap();
+        let manifest = json!({"files": manifest}).to_string();
+        std::fs::write(bundle.join("manifest.json"), &manifest).unwrap();
         std::fs::write(
             bundle.join(".patronus-revision"),
             patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
@@ -829,6 +826,7 @@ mod tests {
             Some(model_dir.clone()),
             false,
         );
+        gateway.pin_shell_command_manifest_for_tests(format!("{:x}", Sha256::digest(&manifest)));
         gateway.warmup().unwrap();
         let state = AppState::new(config, gateway);
         let app = Router::new()

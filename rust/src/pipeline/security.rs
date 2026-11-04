@@ -11,11 +11,11 @@ use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
 use crate::{
-    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
+    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET, SHELL_COMMAND_MANIFEST_SHA256},
     detectors::{
         shell::{policies::ShellPolicyConfig, shell_risk::ShellRiskPipeline},
         threat::ThreatPipeline,
-        NativeDetection,
+        NativeDetection, NativeDetector,
     },
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
@@ -270,6 +270,8 @@ pub struct SecurityGatewayCore {
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
     /// User policies and allowlist of the `shell_command` verdict.
     shell_command_policy_config: Mutex<ShellPolicyConfig>,
+    /// sha256 of the `shell_command` release manifest that warmup accepts.
+    shell_command_manifest_sha256: String,
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
@@ -636,6 +638,7 @@ impl SecurityGateway {
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
             shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
+            shell_command_manifest_sha256: SHELL_COMMAND_MANIFEST_SHA256.to_string(),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
@@ -1203,6 +1206,13 @@ impl SecurityGateway {
             .lock()
             .expect("shell_command policy config mutex poisoned") = config;
         Ok(())
+    }
+
+    /// Accept a `shell_command` bundle with this manifest instead of the
+    /// pinned release (synthetic bundles in tests).
+    #[cfg(feature = "test-util")]
+    pub fn pin_shell_command_manifest_for_tests(&mut self, manifest_sha256: impl Into<String>) {
+        self.shell_command_manifest_sha256 = manifest_sha256.into();
     }
 
     /// Return the configured `shell_command` user policies and allowlist.

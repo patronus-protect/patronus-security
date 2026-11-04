@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! `patronus.facts/1`: structured, versioned action facts for one shell
 //! command. Port of the K26 reference `facts/extract.py` and `facts/schema.py`.
 //!
@@ -25,20 +25,20 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use super::features::{
+use super::kf1::{
     classify_source, clean, flow_markers, raw_pipelines, risk_markers, segment_markers, turns,
     Pipeline, FIXTURE, FORM_FILE, PERSIST_TARGET, SECCTL, SHELLS, UPLOADERS, UPLOAD_FLAG,
 };
 use super::markers::{
     base, flag_verb, head_and_rest, is_assignment, is_separator, program, segment_ops,
-    target_class, unquote, values, verb_class, word_set, WordSet, CLASS_OF, CONNECTORS,
+    target_class, unquote, values, verb_class, word_set, Masked, WordSet, CLASS_OF, CONNECTORS,
     DOWNLOADERS, FILE_HEADS, PREFIXES,
 };
 use super::pyjson;
 use super::pyre::{is_py_space, py_regex, py_strip, Anchor};
-use super::shell_tokens::{
-    heredoc_delimiter_k26, heredoc_op_search_k26, heredoc_segment_head, heredoc_segments,
-    is_fd_redirect, line_tokens, mask_heredocs_with, relations, HEREDOC_MASK,
+use super::tokens::{
+    heredoc_delimiter, heredoc_op_search, heredoc_segment_head, heredoc_segments, is_fd_redirect,
+    line_tokens, mask_heredocs_with, relations, HEREDOC_MASK,
 };
 use super::vocab;
 
@@ -183,6 +183,18 @@ pub struct Facts {
     pub atoms: Vec<String>,
     pub writes: Vec<Write>,
     pub downloads: Vec<String>,
+    /// What the extraction computed on the (deobfuscated) command, which the
+    /// `kf1` analyzer reuses when it sees the same text.
+    pub(crate) analysis: Analysis,
+}
+
+/// Command-level markers of the text the facts were extracted from.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Analysis {
+    pub text: String,
+    pub relations: Vec<&'static str>,
+    pub flow: BTreeSet<String>,
+    pub risk: BTreeSet<&'static str>,
 }
 
 // ---------------------------------------------------------------- JSON
@@ -585,12 +597,15 @@ fn data_heredoc_file(segment: &str) -> bool {
 /// `_data_heredoc_delimiter`: a code heredoc, or a cat/tee heredoc into a plain
 /// data file.
 fn data_heredoc_delimiter(line: &str) -> Option<&str> {
-    if let Some(delimiter) = heredoc_delimiter_k26(line) {
+    if !line.contains("<<") {
+        return None;
+    }
+    if let Some(delimiter) = heredoc_delimiter(line) {
         return Some(delimiter);
     }
     for (s, e) in heredoc_segments(line) {
         let segment = &line[s..e];
-        if let Some((start, delimiter)) = heredoc_op_search_k26(segment) {
+        if let Some((start, delimiter)) = heredoc_op_search(segment) {
             if !segment[..start].ends_with('<')
                 && matches!(heredoc_segment_head(segment).as_str(), "cat" | "tee")
                 && data_heredoc_file(segment)
@@ -824,13 +839,13 @@ static NET_PROGRAMS: LazyLock<BTreeSet<&'static str>> = LazyLock::new(|| {
 /// Words after `>` / `>>` (`WRITE` / `APPEND`), from the raw pipeline tokens.
 fn redirect_targets(pipes: &[Pipeline]) -> Vec<(String, &'static str)> {
     let mut out: Vec<(String, &'static str)> = Vec::new();
-    for seg in pipes.iter().flatten() {
+    for seg in pipes.iter().flatten().map(|seg| &seg.raw) {
         for (j, word) in seg.iter().enumerate() {
-            if matches!(word.as_str(), ">" | ">>") && j + 1 < seg.len() {
-                let access = if word == ">>" { "APPEND" } else { "WRITE" };
+            if matches!(*word, ">" | ">>") && j + 1 < seg.len() {
+                let access = if *word == ">>" { "APPEND" } else { "WRITE" };
                 match out.iter_mut().find(|(path, _)| *path == seg[j + 1]) {
                     Some(entry) => entry.1 = access,
-                    None => out.push((seg[j + 1].clone(), access)),
+                    None => out.push((seg[j + 1].to_string(), access)),
                 }
             }
         }
@@ -1203,15 +1218,13 @@ fn stdin_is_code(head: &str, rest: &[&str]) -> bool {
 fn remote_interp_is_filter(pipes: &[Pipeline]) -> bool {
     let mut seen = false;
     for pipe in pipes {
-        let cleaned: Vec<Vec<&str>> = pipe.iter().map(|s| clean(s)).collect();
-        let heads: Vec<(Option<String>, &[&str])> =
-            cleaned.iter().map(|s| head_and_rest(s)).collect();
-        let first_download = heads.iter().position(|(h, _)| {
-            h.as_deref()
+        let first_download = pipe.iter().position(|s| {
+            s.head
+                .as_deref()
                 .is_some_and(|h| !h.is_empty() && DOWNLOADERS.contains(program(h).as_str()))
         });
-        for (k, (head, rest)) in heads.iter().enumerate() {
-            let Some(head) = head.as_deref() else {
+        for (k, seg) in pipe.iter().enumerate() {
+            let (Some(head), rest) = (seg.head.as_deref(), seg.rest()) else {
                 continue;
             };
             if SHELLS.contains(head) && first_download.is_some_and(|d| d < k) {
@@ -1363,19 +1376,19 @@ fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write>, Vec<String>) {
     let mut writes = Vec::new();
     let mut downloads = Vec::new();
     for pipe in pipes {
-        for (k, seg) in pipe.iter().enumerate() {
-            let cleaned = clean(seg);
-            let (Some(head), rest) = head_and_rest(&cleaned) else {
+        for (k, segment) in pipe.iter().enumerate() {
+            let (Some(head), rest) = (segment.head.as_deref(), segment.rest()) else {
                 continue;
             };
-            let piped_secret = k > 0 && classify_source(&clean(&pipe[k - 1])) == "SECRET";
+            let seg = &segment.raw;
+            let piped_secret = k > 0 && classify_source(pipe[k - 1].clean()) == "SECRET";
             for (j, word) in seg.iter().enumerate() {
-                if matches!(word.as_str(), ">" | ">>")
+                if matches!(*word, ">" | ">>")
                     && j + 1 < seg.len()
                     && (piped_secret || classify_source(&clean(&seg[..j])) == "SECRET")
                 {
                     writes.push(Write {
-                        path: seg[j + 1].clone(),
+                        path: seg[j + 1].to_string(),
                         data: "SECRET",
                     });
                 }
@@ -1390,7 +1403,7 @@ fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write>, Vec<String>) {
                     path: a.to_string(),
                     data: "SECRET",
                 }));
-            } else if matches!(head.as_str(), "cp" | "install")
+            } else if matches!(head, "cp" | "install")
                 && args.len() >= 2
                 && classify_source(&["cat", args[0]]) == "SECRET"
             {
@@ -1399,7 +1412,7 @@ fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write>, Vec<String>) {
                     data: "SECRET",
                 });
             }
-            if DOWNLOADERS.contains(program(&head).as_str()) {
+            if DOWNLOADERS.contains(program(head).as_str()) {
                 for (j, word) in rest.iter().enumerate() {
                     let lower = word.to_lowercase();
                     let short = matches!(
@@ -1422,11 +1435,10 @@ fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write>, Vec<String>) {
 fn upload_sources(pipes: &[Pipeline]) -> Vec<String> {
     let mut out = Vec::new();
     for seg in pipes.iter().flatten() {
-        let cleaned = clean(seg);
-        let (Some(head), rest) = head_and_rest(&cleaned) else {
+        let (Some(head), rest) = (seg.head.as_deref(), seg.rest()) else {
             continue;
         };
-        if !UPLOADERS.contains(head.as_str()) {
+        if !UPLOADERS.contains(head) {
             continue;
         }
         for (k, &word) in rest.iter().enumerate() {
@@ -1450,7 +1462,7 @@ fn upload_sources(pipes: &[Pipeline]) -> Vec<String> {
                 out.push(value);
             }
         }
-        if matches!(head.as_str(), "scp" | "rsync") {
+        if matches!(head, "scp" | "rsync") {
             out.extend(
                 rest.iter()
                     .filter(|w| !w.starts_with('-') && !w.contains(':'))
@@ -1727,18 +1739,16 @@ fn db_dump_flows(pipes: &[Pipeline], writes: &mut Vec<Write>) -> Vec<Flow> {
     ];
     let mut flows = Vec::new();
     for pipe in pipes {
-        let cleaned: Vec<Vec<&str>> = pipe.iter().map(|s| clean(s)).collect();
-        let heads: Vec<(Option<String>, &[&str])> =
-            cleaned.iter().map(|s| head_and_rest(s)).collect();
-        for (k, (head, rest)) in heads.iter().enumerate() {
-            let Some(head) = head.as_deref() else {
+        for (k, segment) in pipe.iter().enumerate() {
+            let (Some(head), rest) = (segment.head.as_deref(), segment.rest()) else {
                 continue;
             };
             if !DUMPERS.contains(&head) || (head == "redis-cli" && !rest.contains(&"--rdb")) {
                 continue;
             }
-            if heads[k + 1..].iter().any(|(h, _)| {
-                h.as_deref()
+            if pipe[k + 1..].iter().any(|s| {
+                s.head
+                    .as_deref()
                     .is_some_and(|h| !h.is_empty() && UPLOADERS.contains(h))
             }) {
                 flows.push(Flow {
@@ -1747,11 +1757,11 @@ fn db_dump_flows(pipes: &[Pipeline], writes: &mut Vec<Write>) -> Vec<Flow> {
                     via: "PIPE",
                 });
             }
-            let seg = &pipe[k];
+            let seg = &segment.raw;
             for (j, word) in seg.iter().enumerate() {
-                if matches!(word.as_str(), ">" | ">>") && j + 1 < seg.len() {
+                if matches!(*word, ">" | ">>") && j + 1 < seg.len() {
                     writes.push(Write {
-                        path: seg[j + 1].clone(),
+                        path: seg[j + 1].to_string(),
                         data: "DB_DUMP",
                     });
                 }
@@ -1941,7 +1951,9 @@ fn extract_at(command: &str, ctx: &ShellContext, prior_facts: &[Facts], depth: u
     let (command, obfuscation) = deobfuscate(command, &dialect);
     let command = command.as_str();
     let relations = relations(command);
-    let pipes = raw_pipelines(command);
+    let masked = Masked::new(command);
+    let line_tokens = masked.tokens();
+    let pipes = raw_pipelines(&line_tokens);
     // A bare `:` without redirect is a no-op (often the tail of a code line like `def f():`).
     let candidates: Vec<(Vec<String>, bool)> = segments_fixed(command)
         .into_iter()
@@ -1993,13 +2005,12 @@ fn extract_at(command: &str, ctx: &ShellContext, prior_facts: &[Facts], depth: u
     }
     let mut objects: Vec<Object> = Vec::new();
     let mut atoms: Vec<String> = obfuscation.iter().map(|a| a.to_string()).collect();
-    let markers: Vec<String> = flow_markers(command, &pipes)
-        .into_iter()
-        .chain(
-            risk_markers(command, &pipes)
-                .into_iter()
-                .map(str::to_string),
-        )
+    let flow = flow_markers(command, &pipes);
+    let risk = risk_markers(command, &pipes);
+    let markers: Vec<String> = flow
+        .iter()
+        .cloned()
+        .chain(risk.iter().map(|m| m.to_string()))
         .collect();
     for marker in markers {
         if let Some((_, flow)) = MARKER_FLOWS.iter().find(|(name, _)| *name == marker) {
@@ -2085,6 +2096,12 @@ fn extract_at(command: &str, ctx: &ShellContext, prior_facts: &[Facts], depth: u
         atoms: atoms.into_iter().collect(),
         writes,
         downloads,
+        analysis: Analysis {
+            text: command.to_string(),
+            relations,
+            flow,
+            risk,
+        },
     }
 }
 

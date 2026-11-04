@@ -31,4 +31,5 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+patronus-ark = { path = "../rust", features = ["test-util"] }
 tower = { version = "0.5", features = ["util"] }

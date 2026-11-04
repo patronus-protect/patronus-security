@@ -2162,7 +2162,6 @@ version = "0.1.14"
 dependencies = [
  "aho-corasick",
  "blake3",
- "cedar-policy",
  "dirs",
  "flate2",
  "half",
@@ -2194,6 +2193,7 @@ version = "0.1.14"
 dependencies = [
  "aho-corasick",
  "blake3",
+ "cedar-policy",
  "fs2",
  "half",
  "home",
@@ -2205,6 +2205,7 @@ dependencies = [
  "regex-automata",
  "regex-syntax 0.8.11",
  "ring",
+ "rustc-hash",
  "serde",
  "serde_json",
  "serde_yaml",

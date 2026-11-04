@@ -11,19 +11,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
-- **Breaking (asset manifest, result shape):** `shell_command` switches to the K26
+- **Breaking (asset manifest, result shape, API):** `shell_command` switches to the K26
   `cat-shell-risk-commander` bundle (revision `54617685bc2bc3b7f06ba0c7e7f86c2899940d1f`) and its
-  `patronus.verdict/1`: `max(model, Cedar policies)` on `allow < ask < block`. The model's token
-  block is the `kf1` analyzer (shell tokens, legacy markers, `patronus.facts/1` tokens); core
-  Patronus policies, the translated DefenseClaw rules at their gated levels and user policies run
-  on the official `cedar-policy` crate. The download adds `config.json` and `policy_levels.json`;
-  every file read is checked against `manifest.json`. `layers[0].details` gains `decision`,
-  `bundle_score` and the full `verdict` (policies, allowlisted, facts); `variant`, `full_score` and
-  `comments_stripped_score` are gone (K26 scores the command as written).
-  `ShellRiskPipeline::{new, score}` now return `Result`, `with_threshold_policy` and
-  `threshold_policy` are removed, `verdict(text, context, prior_facts)` and `configure` are new, and
-  `SecurityGateway::set_shell_command_policy_config` sets user policies and the allowlist. Parity
-  with the Python reference: every row of the public and full parity files and all chains.
+  `patronus.verdict/1`: `max(model, Cedar policies)` on `allow < ask < block`. The detector moves
+  into `patronus-ark-core` (`detectors::shell`, same `patronus_ark::detectors::shell` path). The
+  model's token block is the `kf1` analyzer (shell tokens, legacy markers, `patronus.facts/1`
+  tokens). Core policies (`core.cedar`, compiled in), the translated DefenseClaw rules at their
+  gated levels and user policies from `.cedar` files run on the official `cedar-policy` crate.
+  The download adds `config.json` and `policy_levels.json`; the release manifest's sha256 is pinned
+  in the binary and every file read is checked against it. `layers[0].details` gains `decision`,
+  `bundle_score` and the full `verdict`; `variant`, `full_score` and `comments_stripped_score` are
+  gone (K26 scores the command as written). `ShellRiskPipeline::score` returns `Result`;
+  `with_threshold_policy`, `threshold_policy` and the G-format model loader are removed;
+  `verdict(text, context, prior_facts)`, `configure`, `from_pinned_bundle_dir` and
+  `SecurityGateway::set_shell_command_policy_config` are new.
+- Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
+  `evaluate_batch`); the shell detector implements it.
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).
   `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
   `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or

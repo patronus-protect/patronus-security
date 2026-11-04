@@ -56,9 +56,10 @@ skipped unless the environment variable is set.
 `<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `config.json`,
 `model.json` ~4.6 MB, `policy_levels.json`, `LICENSE`, `.patronus-revision`). It honours
 `download_files` / `download_categories`; with downloads disabled and files missing, warmup fails
-with `missing shell_command assets ... downloads disabled`. At load, the SHA-256 of every file
-ARK reads is verified against `manifest.json`, and a release whose DefenseClaw rules or shell
-vocabulary differ from the copies ARK embeds is refused.
+with `missing shell_command assets ... downloads disabled`. At load, the SHA-256 of `manifest.json`
+must equal the one pinned in the binary (`SHELL_COMMAND_MANIFEST_SHA256`), every file ARK reads is
+verified against `manifest.json`, and a release whose DefenseClaw rules or shell vocabulary differ
+from the copies ARK embeds is refused.
 
 ## Authenticated / rate-limited access
 

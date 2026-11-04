@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Python `re` patterns on the Rust `regex` crate.
 //!
 //! The K26 shell-risk reference is written in Python, and the bundle's

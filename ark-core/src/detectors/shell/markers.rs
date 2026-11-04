@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Command segments, verb and target classes, and DefenseClaw-style operation
 //! kinds: the port of the K26 reference `markers.py` and `segments.py`.
 //!
@@ -6,20 +6,20 @@
 //! reference line by line, so the facts and `kf1` tokens built on top stay
 //! byte-identical to it.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
 
 use super::pyre::{py_regex, py_strip, Anchor};
-use super::shell_tokens::{heredoc_delimiter_k26, is_fd_redirect, line_tokens, mask_heredocs_with};
+use super::tokens::{is_fd_redirect, line_tokens, mask_heredocs};
 
 /// A static set of words.
-pub(crate) type WordSet = LazyLock<HashSet<&'static str>>;
+pub(crate) type WordSet = LazyLock<rustc_hash::FxHashSet<&'static str>>;
 
 macro_rules! word_set {
     ($($word:literal),* $(,)?) => {
-        LazyLock::new(|| std::collections::HashSet::from([$($word),*]))
+        LazyLock::new(|| [$($word),*].into_iter().collect())
     };
 }
 pub(crate) use word_set;
@@ -360,26 +360,37 @@ pub(crate) fn is_redirect_token(token: &str) -> bool {
     matches!(token, "<" | ">" | ">>") || is_fd_redirect(token)
 }
 
-/// K26 `tokens.mask_heredocs`.
-pub(crate) fn mask_heredocs(text: &str) -> std::borrow::Cow<'_, str> {
-    mask_heredocs_with(text, heredoc_delimiter_k26)
+/// The heredoc-masked text and its `\n|TOKEN` word stream, computed once per
+/// text and shared by the segment and pipeline views.
+pub(crate) struct Masked<'a> {
+    text: std::borrow::Cow<'a, str>,
 }
 
-/// `re.findall(r'\n|' + TOKEN.pattern, mask_heredocs(text))`.
-pub(crate) fn line_tokens_masked(text: &str) -> Vec<String> {
-    line_tokens(&mask_heredocs(text))
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+impl<'a> Masked<'a> {
+    pub(crate) fn new(text: &'a str) -> Self {
+        Self {
+            text: mask_heredocs(text),
+        }
+    }
+
+    /// The masked text.
+    pub(crate) fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// `re.findall(r'\n|' + TOKEN.pattern, mask_heredocs(text))`.
+    pub(crate) fn tokens(&self) -> Vec<&str> {
+        line_tokens(&self.text)
+    }
 }
 
 /// Command segments as lists of raw words (quotes stripped), split on shell
 /// separators and `#` words (`markers.segments`: the words after a `#` form
 /// the next segment, as in the reference).
-pub(crate) fn segments(text: &str) -> Vec<Vec<String>> {
+pub(crate) fn segments<'t>(tokens: &[&'t str]) -> Vec<Vec<&'t str>> {
     let mut out = Vec::new();
     let mut seg = Vec::new();
-    for token in line_tokens_masked(text).iter().map(String::as_str) {
+    for &token in tokens {
         if is_separator(token) || token.starts_with('#') {
             if !seg.is_empty() {
                 out.push(std::mem::take(&mut seg));
@@ -389,7 +400,7 @@ pub(crate) fn segments(text: &str) -> Vec<Vec<String>> {
         if is_redirect_token(token) {
             continue;
         }
-        seg.push(unquote(token).to_string());
+        seg.push(unquote(token));
     }
     if !seg.is_empty() {
         out.push(seg);
@@ -402,9 +413,20 @@ pub(crate) fn base(word: &str) -> String {
     word.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase()
 }
 
+/// Whether the lowercase last path component of `word` is in `words`, without
+/// allocating for ASCII words.
+pub(crate) fn base_in(word: &str, words: &WordSet) -> bool {
+    let last = word.rsplit(['\\', '/']).next().unwrap_or("");
+    if last.is_ascii() && !last.bytes().any(|b| b.is_ascii_uppercase()) {
+        words.contains(last)
+    } else {
+        words.contains(base(word).as_str())
+    }
+}
+
 /// `[A-Za-z_]\w*=.*` (full match): an environment assignment word.
 pub(crate) fn is_assignment(word: &str) -> bool {
-    ASSIGNMENT.is_match(word)
+    word.contains('=') && ASSIGNMENT.is_match(word)
 }
 
 /// Command head (lowercase basename) after prefixes, assignments and prefix
@@ -413,10 +435,7 @@ pub(crate) fn head_and_rest<S: AsRef<str>>(seg: &[S]) -> (Option<String>, &[S]) 
     let mut i = 0;
     while i < seg.len() {
         let word = seg[i].as_ref();
-        if PREFIXES.contains(base(word).as_str())
-            || is_assignment(word)
-            || (i > 0 && word.starts_with('-'))
-        {
+        if base_in(word, &PREFIXES) || is_assignment(word) || (i > 0 && word.starts_with('-')) {
             i += 1;
             continue;
         }
@@ -491,7 +510,11 @@ pub(crate) fn values<S: AsRef<str>>(rest: &[S]) -> Vec<String> {
     let mut out = Vec::new();
     for (k, word) in rest.iter().map(AsRef::as_ref).enumerate() {
         let lower = word.to_lowercase();
-        if let Some(captures) = KEY_VALUE.captures(word) {
+        let key_value = word
+            .contains([':', '='])
+            .then(|| KEY_VALUE.captures(word))
+            .flatten();
+        if let Some(captures) = key_value {
             let value = &captures[2];
             let value_lower = value.to_lowercase();
             if SMALL_INT.is_match(value) || BOOLISH.contains(value_lower.as_str()) {
@@ -706,8 +729,9 @@ mod tests {
 
     #[test]
     fn segments_split_on_separators_comments_and_redirects() {
+        let masked = Masked::new("sudo rm -rf '/tmp/x' > log; echo ok # c\nls");
         assert_eq!(
-            segments("sudo rm -rf '/tmp/x' > log; echo ok # c\nls"),
+            segments(&masked.tokens()),
             vec![
                 words("sudo rm -rf /tmp/x log"),
                 words("echo ok"),

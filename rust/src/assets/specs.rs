@@ -99,6 +99,12 @@ pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
+/// sha256 of the `manifest.json` of [`SHELL_COMMAND_ASSET`]'s revision. The
+/// manifest lists the sha256 of every release file, so pinning it in the
+/// binary makes any changed bundle file a refused bundle.
+pub const SHELL_COMMAND_MANIFEST_SHA256: &str =
+    "b4dd4f1ed7ef83957c69ec321b134fdb65e2c8cfcb82f38c826d4aa4ca977153";
+
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
     model: "unified-multitask-model-augmented-v3",

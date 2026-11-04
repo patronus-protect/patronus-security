@@ -43,7 +43,8 @@ cargo deny check licenses
 | `l3_scheduler.rs` | L3 worker scheduling, fairness, max-wait. |
 | `unified_l3.rs` | Unified multi-head L3 behavior. |
 | `dynamic_pii.rs` | GLiNER dynamic-PII pipeline. |
-| `shell_command.rs` | `shell_command` scoring parity with scikit-learn (fixtures from `scripts/generate_shell_command_parity_fixtures.py`). |
+| `shell_command.rs` | `shell_command` gateway wiring: bundle checks, manifest pin, user `.cedar` policies. |
+| `shell_risk_parity.rs` | K26 shell-risk verdict parity with the Python reference (`kf1`, facts, policies, scores, verdict). |
 | `assets_manifest.rs` | Asset manifest integrity. |
 | `hf_e2e.rs` | End-to-end with real Hugging Face assets (needs network / `HF_TOKEN`). |
 

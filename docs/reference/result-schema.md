@@ -664,9 +664,22 @@ cut, and every fired Cedar policy sets at least its level. Its `confidence` is
 | `threshold` / `threshold_policy` | The ask cut and its policy (`external_commands_1pct_fpr`). |
 | `verdict` | The full `patronus.verdict/1`: cuts, model score and top features, fired policies (id, tier, title, decision, where), allowlisted policies and the `patronus.facts/1` of the command. |
 
-User policies (forbid only, `block` or `ask`, schema-checked) and the allowlist (a
-bundle-default policy lowered from `block` to `ask`) come from
-`SecurityGateway::set_shell_command_policy_config`. Core policies cannot be lowered.
+Policies are Cedar files in one format. The core tier ships compiled in
+(`ark-core/src/detectors/shell/data/core.cedar`) and cannot be lowered; user policies are `.cedar`
+files given to `SecurityGateway::set_shell_command_policy_config`
+(`ShellPolicyConfig::add_cedar_dir` reads a directory). Each policy is `forbid` only, carries
+`@id("user.…")` and `@decision("block")` or `@decision("ask")` (optional `@title`), applies to
+`Action::"segment"` or `Action::"command"` and is validated against the facts schema
+(`data/shell.cedarschema`):
+
+```cedar
+@id("user.no_kubectl_delete")
+@decision("block")
+forbid (principal, action == Action::"segment", resource)
+when { context.program == "kubectl" && context.verb == "DELETE" };
+```
+
+The allowlist of the same config lowers a bundle-default policy from `block` to `ask`.
 
 Flagged results carry up to three `evidence_spans` with label `shell_risk` over the character
 n-gram regions that pushed the score up; `score` is that region's share of the positive

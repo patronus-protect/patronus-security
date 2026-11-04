@@ -15,7 +15,7 @@
 //! policy_levels.json, manifest.json); CI downloads the pinned one. Every
 //! field must match on every row.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 use patronus_ark::assets::download_shell_command_assets;
 use patronus_ark::detectors::shell::{
     facts::{extract, Facts, ShellContext},
-    features::kf1,
+    kf1,
     policies::ShellPolicies,
     shell_risk::{ShellRiskPipeline, ShellVerdict},
 };
@@ -171,30 +171,48 @@ fn check_verdict(
     m.check("decision", label, decision == row["decision"], || {
         format!("rust={decision} python={}", row["decision"])
     });
-    let json = verdict.to_json_string(false);
+    // The verdict without `model.top_features`, byte for byte.
+    let mut rust = verdict.to_json(false);
+    let mut python: Value = serde_json::from_str(row["verdict"].as_str().unwrap()).unwrap();
+    let rust_top = rust["model"]["top_features"].take();
+    let python_top = python["model"]["top_features"].take();
+    m.check("verdict", label, rust == python, || {
+        format!("rust={rust} python={python}")
+    });
     m.check(
-        "verdict",
+        "top_features",
         label,
-        json == row["verdict"].as_str().unwrap(),
-        || {
-            let rust: Value = serde_json::from_str(&json).unwrap();
-            let python: Value = serde_json::from_str(row["verdict"].as_str().unwrap()).unwrap();
-            let fields = [
-                "decision",
-                "score",
-                "cuts",
-                "model",
-                "policies",
-                "allowlisted",
-            ];
-            let differing: Vec<String> = fields
-                .iter()
-                .filter(|key| rust[**key] != python[**key])
-                .map(|key| format!("{key}: rust={} python={}", rust[*key], python[*key]))
-                .collect();
-            differing.join("; ")
-        },
+        same_top_features(&rust_top, &python_top),
+        || format!("rust={rust_top} python={python_top}"),
     );
+}
+
+/// Equal weights in the same order, and the same features per weight. The
+/// reference orders equal weights by numpy's unstable argsort, the port by
+/// feature name; a tie group cut by the top-5 limit is not comparable.
+fn same_top_features(rust: &Value, python: &Value) -> bool {
+    let groups = |top: &Value| {
+        let mut groups: Vec<(f64, BTreeSet<String>)> = Vec::new();
+        for feature in top.as_array().unwrap() {
+            let weight = feature["weight"].as_f64().unwrap();
+            let name = feature["feature"].as_str().unwrap().to_string();
+            match groups.last_mut() {
+                Some((w, names)) if *w == weight => {
+                    names.insert(name);
+                }
+                _ => groups.push((weight, BTreeSet::from([name]))),
+            }
+        }
+        groups
+    };
+    let (rust, python) = (groups(rust), groups(python));
+    let weights =
+        |g: &[(f64, BTreeSet<String>)]| g.iter().map(|(w, n)| (*w, n.len())).collect::<Vec<_>>();
+    if weights(&rust) != weights(&python) {
+        return false;
+    }
+    let complete = rust.len().saturating_sub(1);
+    rust[..complete] == python[..complete]
 }
 
 fn check_rows(name: &str, path: &Path) {

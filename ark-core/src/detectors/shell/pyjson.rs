@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Python `json.dumps` and float formatting, byte for byte.
 //!
 //! `patronus.facts/1` and `patronus.verdict/1` are defined by the canonical

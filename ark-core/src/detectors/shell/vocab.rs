@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Shell vocabulary lookup (`shell_vocab_v1.csv`): program [+ subcommand] ->
 //! verb, role, sensitive. Port of the K26 reference `facts/vocab.py`.
 //!
