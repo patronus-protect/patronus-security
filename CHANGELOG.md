@@ -137,6 +137,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 3 (H06-3). The Python binding builds the layer `details` with one string
+  object per distinct key or value text per call (keys interned as before) and frees the native
+  details of a released layer (about 20 000 small allocations for a 100 KiB text) on a background
+  thread behind a bounded queue instead of with the GIL held; evidence span labels share their
+  strings the same way. The result dicts are unchanged. 100 KiB p95 on the VPS
+  (`scripts/l1_presidio/latency.py`): ark 15.920 → 14.641 ms, ark-native 9.402 → 9.947 ms (native
+  code unchanged, machine noise); A/B of the binding against main under the same load 17.6–18.0 →
+  13.2–13.9 ms. M4 not yet met in Python; next pass H06-4.
+  **Detection change:** none.
 - L1 latency loop, pass 2 (H06-2). For texts from 32 KiB on the whole per-rule work runs on the
   rayon pool: gates, searches, validation, scoring and the `matched_rules` entries of each rule
   (`NativeRegexDetector::rule_findings`), joined in rule order, so results are unchanged (PII and
