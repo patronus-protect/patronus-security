@@ -124,7 +124,7 @@ config error in the Ark API).
 scanner.set_execution_gates({
     "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
-    "rules": {"pii_email": False, "dlp_password_assignment": False, "core.remote_to_exec": False},
+    "rules": {"pii_email": False, "dlp_password_assignment": False, "cat.core.remote_to_exec": False},
 })
 ```
 

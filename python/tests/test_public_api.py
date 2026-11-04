@@ -765,7 +765,7 @@ class PublicApiTests(unittest.TestCase):
 
             # Cat policies are rules of the shared `rules` gate map.
             scanner.set_execution_gates(
-                {"rules": {"core.secret_to_net": False, "user.no_kubectl_delete": False}}
+                {"rules": {"cat.core.secret_to_net": False, "cat.user.no_kubectl_delete": False}}
             )
             self.assertNotIn("core.secret_to_net", ids(upload))
             self.assertNotIn("user.no_kubectl_delete", ids("kubectl delete pod web-1"))

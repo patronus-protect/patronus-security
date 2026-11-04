@@ -129,16 +129,43 @@ struct Rule {
     title: String,
     scope: Scope,
     level: Decision,
-    /// The Cedar policy, with the rule id as its policy id.
+    /// The Cedar policy, with the policy id (`core.*`, bundle id, `user.*`)
+    /// as its Cedar id.
     policy: Policy,
+    /// `cat.<policy id>`: the id in the shared L1 `rules` gates.
+    rule_id: String,
     pattern: Option<String>,
 }
 
 impl Rule {
+    fn new(
+        tier: Tier,
+        title: String,
+        scope: Scope,
+        level: Decision,
+        policy: Policy,
+        pattern: Option<String>,
+    ) -> Self {
+        let rule_id = format!("{RULE_PREFIX}{}", policy.id());
+        Self {
+            tier,
+            title,
+            scope,
+            level,
+            policy,
+            rule_id,
+            pattern,
+        }
+    }
+
     fn id(&self) -> &str {
         self.policy.id().as_ref()
     }
 }
+
+/// Prefix of Cat policy ids in the shared L1 `rules` gates:
+/// `cat.core.secret_to_net`, `cat.CMD-PIPE-CURL`, `cat.user.no_kubectl_delete`.
+pub const RULE_PREFIX: &str = "cat.";
 
 /// A record of `dc_rules.json`.
 #[derive(Deserialize)]
@@ -364,7 +391,7 @@ impl ShellPolicies {
             .patterns
             .matches(command)
             .into_iter()
-            .filter(|&k| allows_rule(self.rules[self.pattern_rules[k].0].id()))
+            .filter(|&k| allows_rule(&self.rules[self.pattern_rules[k].0].rule_id))
             .collect();
         // `context.patterns` names a rule pattern `p<rule index>`, as the reference does.
         let names: Vec<String> = matched
@@ -415,7 +442,7 @@ impl ShellPolicies {
         let mut lowered = Vec::new();
         for (index, places) in fired {
             let rule = &self.rules[index];
-            if !allows_rule(rule.id()) {
+            if !allows_rule(&rule.rule_id) {
                 continue;
             }
             let mut decision = rule.level;
@@ -532,7 +559,10 @@ mod tests {
             assert!(enabled.iter().any(|id| id == disabled), "{enabled:?}");
             let facts = extract(command, None, &[]);
             let (hits, _) = policies
-                .evaluate(&facts, command, |id| !off.contains(&id))
+                .evaluate(&facts, command, |id| {
+                    !off.iter()
+                        .any(|policy| id == format!("{RULE_PREFIX}{policy}"))
+                })
                 .unwrap();
             let left: Vec<String> = hits.into_iter().map(|h| h.id).collect();
             let expected: Vec<String> = enabled.into_iter().filter(|id| id != disabled).collect();

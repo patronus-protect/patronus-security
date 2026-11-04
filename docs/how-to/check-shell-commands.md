@@ -217,11 +217,12 @@ The allowlist accepts only loaded bundle-default ids and only `"ask"`.
 
 ## Turn Cat policies on and off
 
-Every Cat policy id is an L1 rule id: `core.*`, the bundle-default ids such as `CMD-PIPE-CURL`, and
-your `user.*` ids. They sit in the same `rules` map as the PII, DLP and injection rules, with the
+Every Cat policy is an L1 rule with the id `cat.<policy id>`: `cat.core.*`, the bundle-default
+policies such as `cat.CMD-PIPE-CURL`, and your `cat.user.*` policies. Verdicts report the policy id
+without the prefix (`core.remote_to_exec`). The rules sit in the same `rules` map as the PII, DLP and injection rules, with the
 same meaning: `false` turns the policy off, a missing id keeps it as loaded (on). A disabled policy
 never fires; the model still scores the command. The
-[L1 rule catalog](../reference/l1-rule-catalog.md#shell-command-policies-117) lists every shipped
+[L1 rule catalog](../reference/l1-rule-catalog.md#shell-command-policies) lists every shipped
 policy with its tier, scope and level.
 
 === "Core Rust"
@@ -229,7 +230,7 @@ policy with its tier, scope and level.
     ```rust
     let config = ScannerConfig {
         gates: NativeGates {
-            rules: [("core.remote_to_exec", false), ("CMD-PIPE-CURL", false)]
+            rules: [("cat.core.remote_to_exec", false), ("cat.CMD-PIPE-CURL", false)]
                 .map(|(id, on)| (id.to_string(), on))
                 .into(),
             ..NativeGates::default()
@@ -243,7 +244,7 @@ policy with its tier, scope and level.
 
     ```python
     scanner = Scanner({
-        "rules": {"core.remote_to_exec": False, "CMD-PIPE-CURL": False, "user.ask_terraform": False},
+        "rules": {"cat.core.remote_to_exec": False, "cat.CMD-PIPE-CURL": False, "cat.user.ask_terraform": False},
         "shell": {"bundle_dir": "/srv/models/cat-shell-risk-commander"},
     })
     ```
@@ -251,7 +252,7 @@ policy with its tier, scope and level.
 === "Ark Python"
 
     ```python
-    gateway.set_execution_gates({"rules": {"core.remote_to_exec": False, "CMD-PIPE-CURL": False}})
+    gateway.set_execution_gates({"rules": {"cat.core.remote_to_exec": False, "cat.CMD-PIPE-CURL": False}})
     # or per request: gateway.enqueue(command, ["shell_command"], execution_gates={"rules": {...}})
     ```
 
@@ -261,8 +262,8 @@ policy with its tier, scope and level.
     pipeline:
       gates:
         rules:
-          core.remote_to_exec: false
-          CMD-PIPE-CURL: false
+          cat.core.remote_to_exec: false
+          cat.CMD-PIPE-CURL: false
     ```
 
     A request overrides them with `config.gates.rules` (same keys).

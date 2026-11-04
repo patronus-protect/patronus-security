@@ -206,8 +206,8 @@ impl Scanner {
     /// Cat's `patronus.verdict/1` for one shell command, which is never
     /// executed. `context` is the harness context (cwd, home, repo root);
     /// `prior_facts` are the `verdict.facts` of earlier commands of the same
-    /// session, kept by the caller. Cat's policy ids are rule ids: the
-    /// `rules` gates of the config turn them off. Text scans do not run Cat.
+    /// session, kept by the caller. A Cat policy is the rule
+    /// `cat.<policy id>`: the `rules` gates of the config turn it off. Text scans do not run Cat.
     pub fn shell_verdict(
         &self,
         command: &str,
@@ -469,7 +469,7 @@ mod selected_checks_tests {
         };
         assert!(ids(&scanner, webhook).contains(&"C2-WEBHOOK-SITE".to_string()));
         let gated: ScannerConfig = serde_json::from_value(serde_json::json!({
-            "rules": {"core.secret_to_net": false, "C2-WEBHOOK-SITE": false},
+            "rules": {"cat.core.secret_to_net": false, "cat.C2-WEBHOOK-SITE": false},
             "shell": {"bundle_dir": dir, "manifest_sha256": scanner.config.shell.as_ref().unwrap().manifest_sha256},
         }))
         .unwrap();

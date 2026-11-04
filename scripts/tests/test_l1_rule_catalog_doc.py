@@ -28,4 +28,4 @@ def test_shell_policies_are_catalogued_as_rules():
 
     page = GENERATE_DOCS.generate_l1_rule_catalog_doc()
     assert "## Shell command policies (117)" in page
-    assert "| `CMD-PIPE-CURL` |" in page
+    assert "| `cat.CMD-PIPE-CURL` |" in page

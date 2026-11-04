@@ -147,7 +147,7 @@ There is one mechanism everywhere: a `rules` map from stable rule id to `true`/`
   source code, business identifiers, MCP risk, …), which are opt-in.
 - A rule only runs when its detector is on: `models` switches whole detectors (e.g.
   `native:pii`) off.
-- Cat policy ids (`core.*`, bundle ids such as `CMD-PIPE-CURL`, `user.*`) are rule ids in the same
+- Cat policies are rules `cat.<policy id>` (`cat.core.*`, bundle ids such as `cat.CMD-PIPE-CURL`, `cat.user.*`) in the same
   map.
 - All ids: [L1 rule catalog](https://patronus-protect.github.io/patronus-security/reference/l1-rule-catalog/).
 

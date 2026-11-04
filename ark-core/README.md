@@ -112,7 +112,7 @@ custom ['safe', 'dlp.content.sql', 'safe', 'safe']
 ```
 
 `pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`) choose the scoring; `explain` adds
-anchor diagnostics. Cat policy ids are rule ids in the same map (see below).
+anchor diagnostics. Cat policies are rules `cat.<policy id>` in the same map (see below).
 
 ## Wolf Defender
 
@@ -175,7 +175,7 @@ block score=  4.296 model=block policies=["core.secret_to_net"]  cat ~/.ssh/id_e
 - **Policies.** Three tiers: `core.*` (built in), bundle defaults such as `CMD-PIPE-CURL`, and
   your `user.*` policies from `policy_dirs`. `allowlist` lowers a bundle-default policy from
   `block` to `ask`; core policies cannot be lowered.
-- **Rules.** Every policy id is a rule id: `rules: {"CMD-PIPE-CURL": false}` turns that policy
+- **Rules.** A policy is the rule `cat.<policy id>`: `rules: {"cat.CMD-PIPE-CURL": false}` turns that policy
   off, the same way as any L1 rule.
 - **Sessions.** Pass the `facts` of earlier verdicts as `prior_facts` to catch chains no single
   command shows:

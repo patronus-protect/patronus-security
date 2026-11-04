@@ -653,18 +653,18 @@ def generate_l1_rule_catalog_doc() -> str:
         lines.append(f"| `{rule['id']}` | `{rule['class_name']}` | {', '.join(rule['upstream_groups'])} |")
     shell = parse_shell_policies()
     lines.extend([
-        "", f"## Shell command policies ({len(shell)})", "",
+        "", f"## Shell command policies ({len(shell)}) {{ #shell-command-policies }}", "",
         "Cedar policies of Cat, the `shell_command` detector (see [Check shell commands](../how-to/check-shell-commands.md)). "
-        "A policy ID is a rule ID: `{\"rules\": {\"core.remote_to_exec\": false}}` turns that policy off like any other L1 rule; "
-        "a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` "
+        "The rule ID is `cat.` plus the policy ID that verdicts report: `{\"rules\": {\"cat.core.remote_to_exec\": false}}` "
+        "turns that policy off like any other L1 rule; a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` "
         "policies take the level that the release's validation gate set in the bundle's `policy_levels.json` "
-        "(`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`) from `policy_dirs` are rules too. "
+        "(`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`, rule ID `cat.user.*`) from `policy_dirs` are rules too. "
         "`segment` policies read one command segment, `command` policies the whole command.", "",
         "| Rule ID | Title | Tier | Scope | Level |", "| --- | --- | --- | --- | --- |",
     ])
     for rule in shell:
         title = rule["title"].replace("|", "\\|")
-        lines.append(f"| `{rule['id']}` | {title} | `{rule['tier']}` | `{rule['scope']}` | {rule['level']} |")
+        lines.append(f"| `cat.{rule['id']}` | {title} | `{rule['tier']}` | `{rule['scope']}` | {rule['level']} |")
     return "\n".join(lines) + "\n"
 
 

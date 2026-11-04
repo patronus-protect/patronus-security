@@ -28,11 +28,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `allows_rule` filter; `ShellConfig::policy_config` is replaced by
   `ShellPolicyConfig::load(policy_dirs, allowlist)`. `Facts` and its parts carry a lifetime
   (`Facts<'a>`) so parsed facts borrow their strings.
-- Cat policies are L1 rules: every policy id (`core.*`, bundle-default ids such as
-  `CMD-PIPE-CURL`, `user.*`) is gated by the same `rules` map as the other L1 rules (Core
-  `ScannerConfig`, `ScanGateMatrix.native`, per-request gates, Python, Ark API); `false` turns a
-  policy off, a missing id keeps it on. Disabled regex-gated policies are not evaluated. The L1 rule
-  catalog lists the 117 shipped policies with tier, scope and level.
+- Cat policies are L1 rules with the id `cat.<policy id>` (`cat.core.*`, bundle-default policies
+  such as `cat.CMD-PIPE-CURL`, `cat.user.*`), gated by the same `rules` map as the other L1 rules
+  (Core `ScannerConfig`, `ScanGateMatrix.native`, per-request gates, Python, Ark API): `false`
+  turns a policy off, a missing id keeps it on, and core policies can be turned off too. Verdicts
+  keep reporting the policy id without the prefix. Disabled regex-gated policies are not evaluated.
+  The L1 rule catalog lists the 117 shipped policies (`#shell-command-policies`) with tier, scope
+  and level.
 - Python Core `Scanner.shell_verdict` takes `prior_facts` (the `facts` of earlier verdicts made
   with `with_facts=True`); Rust parses them with `Facts::from_json`, which round-trips
   `Facts::to_json` and `canonical_json`.
@@ -82,6 +84,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`warmup::SHELL_REPOSITORY`, `SHELL_REVISION`, `SHELL_FILES`, `SHELL_MANIFEST_SHA256`, which
   the full runtime's `SHELL_COMMAND_ASSET` now uses). New guide: *Check shell commands*; new
   examples `ark-core/examples/core_scanner.rs` and `rust/examples/14_shell_command.rs`.
+- `detectors::shell::testing::write_synthetic_bundle` (feature `test-util`) writes the synthetic
+  K26 test bundle; the copies in the gateway and ark-api tests are removed.
+- Docs: the root README is a component map (Core → Ark → ark-api, ark-coordinator) with
+  quickstarts, real outputs and one "turn rules on and off" section for every surface; the Core and
+  Core Python READMEs are rewritten; `rust/README.md` is the new full-Ark README for the crate and
+  the `patronus-ark` PyPI package. New guide *Check shell commands*. Stale pages fixed: the A1 and
+  comment-stripping description of `shell_command`, Cat in Core vs. full Ark, the Package-v2 claim
+  in the asset docs, dead rule-catalog anchors (now stable `#dlp-regex-rules`), the contributor test
+  and release lists and the example index (`docs/USAGE.md`).
   `ScanError::Asset` reads `asset error: …` (was `Wolf asset error: …`), as Cat uses it too.
 - Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
   `evaluate_batch`); the shell detector implements it.

@@ -8,7 +8,7 @@
     {
       "categories": ["shell_command", "pii"],
       "gates": {
-        "rules": {"pii_email": false, "core.remote_to_exec": false, "CMD-PIPE-CURL": false, "user.ask_terraform": false},
+        "rules": {"pii_email": false, "cat.core.remote_to_exec": false, "cat.CMD-PIPE-CURL": false, "cat.user.ask_terraform": false},
         "models": {"cat-shell-risk-commander": true},
         "pii_mode": "recall",
         "dlp_mode": "balanced",

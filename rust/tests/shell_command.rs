@@ -173,12 +173,12 @@ fn gateway_rule_gates_turn_cat_policies_off() {
     assert!(enabled[1].contains(&"C2-WEBHOOK-SITE".to_string()));
 
     // A core and a bundle-default policy, off through the same `rules` map as
-    // every other L1 rule.
+    // every other L1 rule; the rule id is `cat.` plus the policy id.
     let off = ["core.secret_to_net", "C2-WEBHOOK-SITE"];
     gateway.set_execution_gates(
         ScanGateMatrix::default()
-            .with_rule(off[0], false)
-            .with_rule(off[1], false),
+            .with_rule(format!("cat.{}", off[0]), false)
+            .with_rule(format!("cat.{}", off[1]), false),
     );
     for (text, all) in [SECRET_UPLOAD, WEBHOOK].into_iter().zip(enabled) {
         let expected: Vec<String> = all

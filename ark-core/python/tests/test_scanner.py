@@ -106,7 +106,7 @@ def test_shell_verdict_links_prior_facts_and_gates_policies_as_rules():
     assert "core.remote_to_exec" in ids(chained)
 
     # Cat policies are rules: the same `rules` map turns them off.
-    gated = Scanner({"rules": {"core.remote_to_exec": False}, "shell": shell})
+    gated = Scanner({"rules": {"cat.core.remote_to_exec": False}, "shell": shell})
     off = gated.shell_verdict(run, **context, prior_facts=[download["facts"]])
     assert "core.remote_to_exec" not in ids(off)
 

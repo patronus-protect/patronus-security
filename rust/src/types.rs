@@ -1336,7 +1336,7 @@ mod gate_schema_tests {
     #[test]
     fn one_gate_schema_reads_every_key() {
         let gates = gates(serde_json::json!({
-            "rules": {"pii_email": false, "core.remote_to_exec": false},
+            "rules": {"pii_email": false, "cat.core.remote_to_exec": false},
             "models": {"native:pii": false},
             "pii_mode": "recall",
             "dlp_mode": "balanced",
@@ -1373,7 +1373,7 @@ mod gate_schema_tests {
             }
         }))
         .unwrap();
-        assert!(!gates.native.allows_rule("core.remote_to_exec"));
+        assert!(!gates.native.allows_rule("cat.core.remote_to_exec"));
         assert!(!gates.native.allows_model("native:pii"));
         assert_eq!(gates.native.pii_mode, crate::ScoreMode::Recall);
         assert!(gates.native.explain);

@@ -1755,8 +1755,8 @@ pub fn shell_verdict(
 Cat's `patronus.verdict/1` for one shell command, which is never
 executed. `context` is the harness context (cwd, home, repo root);
 `prior_facts` are the `verdict.facts` of earlier commands of the same
-session, kept by the caller. Cat's policy ids are rule ids: the
-`rules` gates of the config turn them off. Text scans do not run Cat.
+session, kept by the caller. A Cat policy is the rule
+`cat.<policy id>`: the `rules` gates of the config turn it off. Text scans do not run Cat.
 
 ## Shared Native Engine
 

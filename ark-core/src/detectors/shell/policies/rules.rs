@@ -72,14 +72,14 @@ pub(super) fn parse_cedar(
             },
             None => cap,
         };
-        rules.push(Rule {
+        rules.push(Rule::new(
             tier,
-            title: policy.annotation("title").unwrap_or(&id).to_string(),
+            policy.annotation("title").unwrap_or(&id).to_string(),
             scope,
             level,
-            policy: policy.new_id(PolicyId::new(&id)),
-            pattern: None,
-        });
+            policy.new_id(PolicyId::new(&id)),
+            None,
+        ));
     }
     rules.sort_by(|a, b| a.id().cmp(b.id()));
     if let Some(pair) = rules.windows(2).find(|pair| pair[0].id() == pair[1].id()) {
@@ -140,17 +140,18 @@ pub(super) fn dc_rules(levels: &HashMap<String, String>) -> Result<Vec<Rule>, St
         );
         let policy = Policy::parse(Some(PolicyId::new(&record.id)), text)
             .map_err(|error| format!("{}: {error}", record.id))?;
-        rules.push(Rule {
-            tier: Tier::BundleDefault,
-            title: record
+        let scope = scope_of(&policy).ok_or_else(|| format!("{}: unknown scope", record.id))?;
+        rules.push(Rule::new(
+            Tier::BundleDefault,
+            record
                 .title
                 .filter(|t| !t.is_empty())
                 .unwrap_or_else(|| record.id.clone()),
-            scope: scope_of(&policy).ok_or_else(|| format!("{}: unknown scope", record.id))?,
+            scope,
             level,
             policy,
-            pattern: record.pattern.filter(|p| !p.is_empty()),
-        });
+            record.pattern.filter(|p| !p.is_empty()),
+        ));
     }
     Ok(rules)
 }

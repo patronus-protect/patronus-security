@@ -604,126 +604,126 @@ Enabled by default when Threat L1 is configured. Matches report risky operations
 | `ark.threat.harmful_intent` | `harmful_behavior` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration_attempt` | E3, E5 |
 
-## Shell command policies (117)
+## Shell command policies (117) { #shell-command-policies }
 
-Cedar policies of Cat, the `shell_command` detector (see [Check shell commands](../how-to/check-shell-commands.md)). A policy ID is a rule ID: `{"rules": {"core.remote_to_exec": false}}` turns that policy off like any other L1 rule; a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` policies take the level that the release's validation gate set in the bundle's `policy_levels.json` (`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`) from `policy_dirs` are rules too. `segment` policies read one command segment, `command` policies the whole command.
+Cedar policies of Cat, the `shell_command` detector (see [Check shell commands](../how-to/check-shell-commands.md)). The rule ID is `cat.` plus the policy ID that verdicts report: `{"rules": {"cat.core.remote_to_exec": false}}` turns that policy off like any other L1 rule; a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` policies take the level that the release's validation gate set in the bundle's `policy_levels.json` (`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`, rule ID `cat.user.*`) from `policy_dirs` are rules too. `segment` policies read one command segment, `command` policies the whole command.
 
 | Rule ID | Title | Tier | Scope | Level |
 | --- | --- | --- | --- | --- |
-| `core.cred_literal_to_net` | Sends a literal credential (token, key) to a network tool | `core` | `command` | `block` |
-| `core.db_dump_to_net` | Sends a database dump to the network | `core` | `command` | `block` |
-| `core.decoded_to_interp` | Decodes data and pipes it into an interpreter | `core` | `command` | `block` |
-| `core.git_exec_config` | Sets git config that executes commands (hooks, sshCommand, fsmonitor, ...) | `core` | `command` | `ask` |
-| `core.host_root_mount` | Mounts the host root filesystem into a container | `core` | `segment` | `block` |
-| `core.metadata_fetch` | Fetches from a link-local address (cloud instance metadata) | `core` | `segment` | `block` |
-| `core.persistence_write` | Writes a persistence location (shell profile, cron, authorized_keys, ...) | `core` | `segment` | `ask` |
-| `core.privileged_container` | Starts a privileged container | `core` | `segment` | `ask` |
-| `core.remote_to_exec` | Runs code fetched from the network (pipe, substitution or saved file) | `core` | `command` | `block` |
-| `core.secctl_off` | Turns off a security control (audit, AV/EDR, firewall, SELinux, ...) | `core` | `segment` | `block` |
-| `core.secret_to_net` | Sends secret material (keys, cloud credentials, .env, ...) to the network | `core` | `command` | `block` |
-| `core.sql_exec` | Runs OS code or files through SQL (UDF SONAME, INTO OUTFILE, COPY PROGRAM, ...) | `core` | `segment` | `block` |
-| `core.sudoers_nopasswd_all` | Grants passwordless sudo for all commands | `core` | `segment` | `block` |
-| `C2-BURP` | Burp Collaborator (pentest C2) | `bundle-default` | `command` | release gate |
-| `C2-CANARY` | Canary Tokens | `bundle-default` | `command` | release gate |
-| `C2-DNS-TUNNEL` | DNS TXT query with high-entropy label (tunneling indicator) | `bundle-default` | `command` | release gate |
-| `C2-HOOKBIN` | HookBin (known exfil) | `bundle-default` | `command` | release gate |
-| `C2-METADATA-AWS` | AWS metadata endpoint (SSRF) | `bundle-default` | `segment` | release gate |
-| `C2-METADATA-AZURE` | Azure metadata endpoint (SSRF) | `bundle-default` | `command` | release gate |
-| `C2-METADATA-DECIMAL` | AWS metadata endpoint (decimal-encoded SSRF) | `bundle-default` | `command` | release gate |
-| `C2-METADATA-GCP` | GCP metadata endpoint (SSRF) | `bundle-default` | `command` | release gate |
-| `C2-METADATA-HEX` | AWS metadata endpoint (hex-encoded SSRF) | `bundle-default` | `command` | release gate |
-| `C2-METADATA-OCTAL` | AWS metadata endpoint (octal-encoded SSRF) | `bundle-default` | `command` | release gate |
-| `C2-PASTEBIN` | Pastebin raw fetch | `bundle-default` | `command` | release gate |
-| `C2-PIPEDREAM` | Pipedream (known exfil) | `bundle-default` | `command` | release gate |
-| `C2-REQUESTBIN` | RequestBin (known exfil) | `bundle-default` | `command` | release gate |
-| `C2-WEBHOOK-SITE` | webhook.site (known exfil) | `bundle-default` | `command` | release gate |
-| `CMD-CHMOD-WORLD` | chmod world-writable | `bundle-default` | `segment` | release gate |
-| `CMD-DD-IF` | dd disk write | `bundle-default` | `segment` | release gate |
-| `CMD-DEVICE-WIPE` | Destructive write to a disk device | `bundle-default` | `segment` | release gate |
-| `CMD-EVAL` | Shell eval with dynamic input | `bundle-default` | `command` | release gate |
-| `CMD-PIPE-CURL` | curl piped to shell | `bundle-default` | `segment` | release gate |
-| `CMD-PIPE-WGET` | wget piped to shell | `bundle-default` | `segment` | release gate |
-| `CMD-PYTHON-SOCKET-CONNECT` | Python code connects to a nonlocal socket | `bundle-default` | `segment` | release gate |
-| `CMD-REMOTE-PAYLOAD-EXEC-CLEANUP` | Remote payload execution with anti-forensic cleanup | `bundle-default` | `command` | release gate |
-| `CMD-REVSHELL-BASH` | Bash reverse shell | `bundle-default` | `segment` | release gate |
-| `CMD-REVSHELL-DEVTCP` | Reverse shell via /dev/tcp | `bundle-default` | `command` | release gate |
-| `CMD-REVSHELL-NC` | Netcat reverse shell with -e | `bundle-default` | `command` | release gate |
-| `CMD-REVSHELL-POWERSHELL-TCP` | PowerShell TCP command-execution loop | `bundle-default` | `command` | release gate |
-| `CMD-RM-RF` | Recursive force delete from critical root path | `bundle-default` | `segment` | release gate |
-| `CMD-SOCAT-EXEC` | socat with EXEC (reverse shell) | `bundle-default` | `command` | release gate |
-| `CMD-SYSTEMCTL` | Suspicious systemd persistence enablement | `bundle-default` | `command` | release gate |
-| `CMD-WGET-POST` | wget POST data exfil | `bundle-default` | `command` | release gate |
-| `CMD-WIN-REG-PERSIST` | Windows registry persistence modification | `bundle-default` | `segment` | release gate |
-| `PATH-AWS-CONFIG` | AWS config file | `bundle-default` | `command` | release gate |
-| `PATH-AWS-CREDS` | AWS credentials file | `bundle-default` | `segment` | release gate |
-| `PATH-DOCKER` | Docker config | `bundle-default` | `segment` | release gate |
-| `PATH-ETC-SHADOW` | /etc/shadow access | `bundle-default` | `command` | release gate |
-| `PATH-GIT-CREDS` | Git credentials file | `bundle-default` | `segment` | release gate |
-| `PATH-GNUPG` | GPG keyring access | `bundle-default` | `command` | release gate |
-| `PATH-HISTORY` | Shell history file | `bundle-default` | `segment` | release gate |
-| `PATH-NETRC` | netrc credentials file | `bundle-default` | `command` | release gate |
-| `PATH-NPMRC` | npm config (may contain tokens) | `bundle-default` | `command` | release gate |
-| `PATH-PASSWORD-CRACKER-POTFILE` | Password-cracker recovered credential store read | `bundle-default` | `segment` | release gate |
-| `PATH-PYPIRC` | PyPI config (may contain tokens) | `bundle-default` | `command` | release gate |
-| `PATH-SSH-DIR` | SSH directory access | `bundle-default` | `segment` | release gate |
-| `SEC-CONNSTR` | Connection string with credentials | `bundle-default` | `command` | release gate |
-| `SEC-DISCORD-WEBHOOK` | Discord webhook URL | `bundle-default` | `command` | release gate |
-| `SEC-GITHUB-PAT` | GitHub fine-grained PAT | `bundle-default` | `command` | release gate |
-| `SEC-GITLAB` | GitLab personal access token | `bundle-default` | `command` | release gate |
-| `SEC-GOOGLE` | Google API key | `bundle-default` | `command` | release gate |
-| `SEC-NPM-TOKEN` | npm access token | `bundle-default` | `command` | release gate |
-| `SEC-OPENAI` | OpenAI project key | `bundle-default` | `command` | release gate |
-| `SEC-OPENAI-V2` | OpenAI API key (long form) | `bundle-default` | `command` | release gate |
-| `SEC-PRIVKEY` | Private key | `bundle-default` | `command` | release gate |
-| `SEC-PYPI-TOKEN` | PyPI API token | `bundle-default` | `command` | release gate |
-| `SEC-SENDGRID` | SendGrid API key | `bundle-default` | `command` | release gate |
-| `SEC-SLACK-WEBHOOK` | Slack webhook URL | `bundle-default` | `command` | release gate |
-| `SEC-TWILIO` | Twilio API key | `bundle-default` | `command` | release gate |
-| `credential.directory_credential_acquisition` | Exact directory credential acquisition | `bundle-default` | `segment` | release gate |
-| `credential.directory_ticket_request` | Exact Kerberos ticket request | `bundle-default` | `segment` | release gate |
-| `credential.macos_login_keychain_dump` | Dump decrypted credentials from the macOS login keychain | `bundle-default` | `segment` | release gate |
-| `credential.pkcs12_private_key_extract` | Extract an unencrypted private key from a PKCS#12 bundle | `bundle-default` | `segment` | release gate |
-| `credential.windows_lsass_memory_dump` | Dump Windows LSASS credential memory | `bundle-default` | `command` | release gate |
-| `credential.windows_ntds_ifm_dump` | Export the full Active Directory database with NTDS IFM | `bundle-default` | `segment` | release gate |
-| `exec.agent_runtime_bypass_flags` | Agent runtime safety bypass flags | `bundle-default` | `segment` | release gate |
-| `exec.remote_ip_download_execute_same_artifact` | Literal public-IP download executed from the same path | `bundle-default` | `segment` | release gate |
-| `impact.cloud_s3_data_delete` | Recursively delete an exact AWS S3 prefix or bucket | `bundle-default` | `segment` | release gate |
-| `impact.cryptomining_launch` | Cryptocurrency miner launch | `bundle-default` | `segment` | release gate |
-| `impact.fork_bomb` | Unbounded fork bomb | `bundle-default` | `command` | release gate |
-| `impact.linux_magic_sysrq_destruction` | Trigger destructive Linux Magic SysRq action | `bundle-default` | `segment` | release gate |
-| `impact.posix_host_halt` | Power off or reboot the POSIX host with halt | `bundle-default` | `segment` | release gate |
-| `impact.windows_delete_all_shadow_copies` | Delete all Windows Volume Shadow Copies | `bundle-default` | `segment` | release gate |
-| `impact.windows_recovery_disable_pair` | Disable Windows boot recovery and failure handling | `bundle-default` | `segment` | release gate |
-| `impact.windows_recovery_store_destruction` | Destroy Windows recovery stores | `bundle-default` | `segment` | release gate |
-| `integrity.history_tamper` | Shell history clear or disable | `bundle-default` | `segment` | release gate |
-| `persistence.git_hook_write` | Active Git hook mutation | `bundle-default` | `segment` | release gate |
-| `persistence.global_ld_preload_install` | Global dynamic-loader preload installation | `bundle-default` | `command` | release gate |
-| `persistence.privileged_account_change` | Privileged account or group change | `bundle-default` | `segment` | release gate |
-| `persistence.windows_accessibility_feature_hijack` | Hijack a Windows accessibility feature for SYSTEM command access | `bundle-default` | `segment` | release gate |
-| `privilege.cloud_iam_administrator_attachment` | Attach AWS AdministratorAccess to an exact IAM principal | `bundle-default` | `segment` | release gate |
-| `privilege.container_runtime_socket_access` | Container runtime socket access | `bundle-default` | `segment` | release gate |
-| `privilege.custom_root_suid_implant` | Compile and install a custom root-setuid executable | `bundle-default` | `segment` | release gate |
-| `privilege.host_namespace_entry` | Host PID-1 namespace or root entry | `bundle-default` | `command` | release gate |
-| `privilege.kubernetes_cluster_admin_binding` | Grant Kubernetes cluster-admin to an exact service account | `bundle-default` | `segment` | release gate |
-| `privilege.sudoers_unrestricted_nopasswd` | Unrestricted passwordless sudo grant | `bundle-default` | `segment` | release gate |
-| `privilege.temporary_setuid_executable` | Create a setuid executable in a temporary directory | `bundle-default` | `segment` | release gate |
-| `secrets.browser_session_store_read` | Browser credential or session store read | `bundle-default` | `segment` | release gate |
-| `secrets.workload_identity_token_read` | Workload identity token read | `bundle-default` | `segment` | release gate |
-| `tamper.cloud_audit_control_destruction` | Destroy an exact cloud audit-logging control | `bundle-default` | `segment` | release gate |
-| `tamper.complete_firewall_relaxation` | Completely relax the host iptables firewall | `bundle-default` | `segment` | release gate |
-| `tamper.complete_firewall_relaxation_attempt` | Attempt to completely relax the host iptables firewall | `bundle-default` | `segment` | release gate |
-| `tamper.endpoint_security_product_disable` | Disable or uninstall an exact endpoint-security product | `bundle-default` | `segment` | release gate |
-| `tamper.linux_security_control_disable` | Disable a Linux host security control | `bundle-default` | `segment` | release gate |
-| `tamper.macos_unified_log_erase` | Erase all macOS unified logs | `bundle-default` | `segment` | release gate |
-| `tamper.posix_log_and_shell_history_destruction` | System log and shell history destroyed together | `bundle-default` | `command` | release gate |
-| `tamper.posix_logging_hardening_disable` | Disable exact POSIX logging or host-hardening controls | `bundle-default` | `segment` | release gate |
-| `tamper.posix_system_log_destruction` | Destroy canonical POSIX system logs | `bundle-default` | `segment` | release gate |
-| `tamper.windows_amsi_disable` | Disable or bypass exact Windows AMSI controls | `bundle-default` | `segment` | release gate |
-| `tamper.windows_audit_policy_wipe` | Clear Windows audit policy and all-user policy | `bundle-default` | `segment` | release gate |
-| `tamper.windows_credential_protection_weaken` | Weaken exact Windows credential-protection controls | `bundle-default` | `segment` | release gate |
-| `tamper.windows_defender_component_disable` | Disable an exact Windows Defender component | `bundle-default` | `segment` | release gate |
-| `tamper.windows_defender_multi_control_disable` | Disable multiple Windows Defender controls | `bundle-default` | `segment` | release gate |
-| `tamper.windows_recursive_everyone_full_control` | Recursively grant Everyone inheritable full control on Windows | `bundle-default` | `segment` | release gate |
-| `tamper.windows_registry_security_control_disable` | Disable Windows security controls through the registry | `bundle-default` | `segment` | release gate |
-| `tamper.windows_telemetry_disable` | Disable exact Windows ETW or event telemetry controls | `bundle-default` | `segment` | release gate |
-| `tamper.windows_usn_journal_delete` | Delete a Windows NTFS USN change journal | `bundle-default` | `segment` | release gate |
+| `cat.core.cred_literal_to_net` | Sends a literal credential (token, key) to a network tool | `core` | `command` | `block` |
+| `cat.core.db_dump_to_net` | Sends a database dump to the network | `core` | `command` | `block` |
+| `cat.core.decoded_to_interp` | Decodes data and pipes it into an interpreter | `core` | `command` | `block` |
+| `cat.core.git_exec_config` | Sets git config that executes commands (hooks, sshCommand, fsmonitor, ...) | `core` | `command` | `ask` |
+| `cat.core.host_root_mount` | Mounts the host root filesystem into a container | `core` | `segment` | `block` |
+| `cat.core.metadata_fetch` | Fetches from a link-local address (cloud instance metadata) | `core` | `segment` | `block` |
+| `cat.core.persistence_write` | Writes a persistence location (shell profile, cron, authorized_keys, ...) | `core` | `segment` | `ask` |
+| `cat.core.privileged_container` | Starts a privileged container | `core` | `segment` | `ask` |
+| `cat.core.remote_to_exec` | Runs code fetched from the network (pipe, substitution or saved file) | `core` | `command` | `block` |
+| `cat.core.secctl_off` | Turns off a security control (audit, AV/EDR, firewall, SELinux, ...) | `core` | `segment` | `block` |
+| `cat.core.secret_to_net` | Sends secret material (keys, cloud credentials, .env, ...) to the network | `core` | `command` | `block` |
+| `cat.core.sql_exec` | Runs OS code or files through SQL (UDF SONAME, INTO OUTFILE, COPY PROGRAM, ...) | `core` | `segment` | `block` |
+| `cat.core.sudoers_nopasswd_all` | Grants passwordless sudo for all commands | `core` | `segment` | `block` |
+| `cat.C2-BURP` | Burp Collaborator (pentest C2) | `bundle-default` | `command` | release gate |
+| `cat.C2-CANARY` | Canary Tokens | `bundle-default` | `command` | release gate |
+| `cat.C2-DNS-TUNNEL` | DNS TXT query with high-entropy label (tunneling indicator) | `bundle-default` | `command` | release gate |
+| `cat.C2-HOOKBIN` | HookBin (known exfil) | `bundle-default` | `command` | release gate |
+| `cat.C2-METADATA-AWS` | AWS metadata endpoint (SSRF) | `bundle-default` | `segment` | release gate |
+| `cat.C2-METADATA-AZURE` | Azure metadata endpoint (SSRF) | `bundle-default` | `command` | release gate |
+| `cat.C2-METADATA-DECIMAL` | AWS metadata endpoint (decimal-encoded SSRF) | `bundle-default` | `command` | release gate |
+| `cat.C2-METADATA-GCP` | GCP metadata endpoint (SSRF) | `bundle-default` | `command` | release gate |
+| `cat.C2-METADATA-HEX` | AWS metadata endpoint (hex-encoded SSRF) | `bundle-default` | `command` | release gate |
+| `cat.C2-METADATA-OCTAL` | AWS metadata endpoint (octal-encoded SSRF) | `bundle-default` | `command` | release gate |
+| `cat.C2-PASTEBIN` | Pastebin raw fetch | `bundle-default` | `command` | release gate |
+| `cat.C2-PIPEDREAM` | Pipedream (known exfil) | `bundle-default` | `command` | release gate |
+| `cat.C2-REQUESTBIN` | RequestBin (known exfil) | `bundle-default` | `command` | release gate |
+| `cat.C2-WEBHOOK-SITE` | webhook.site (known exfil) | `bundle-default` | `command` | release gate |
+| `cat.CMD-CHMOD-WORLD` | chmod world-writable | `bundle-default` | `segment` | release gate |
+| `cat.CMD-DD-IF` | dd disk write | `bundle-default` | `segment` | release gate |
+| `cat.CMD-DEVICE-WIPE` | Destructive write to a disk device | `bundle-default` | `segment` | release gate |
+| `cat.CMD-EVAL` | Shell eval with dynamic input | `bundle-default` | `command` | release gate |
+| `cat.CMD-PIPE-CURL` | curl piped to shell | `bundle-default` | `segment` | release gate |
+| `cat.CMD-PIPE-WGET` | wget piped to shell | `bundle-default` | `segment` | release gate |
+| `cat.CMD-PYTHON-SOCKET-CONNECT` | Python code connects to a nonlocal socket | `bundle-default` | `segment` | release gate |
+| `cat.CMD-REMOTE-PAYLOAD-EXEC-CLEANUP` | Remote payload execution with anti-forensic cleanup | `bundle-default` | `command` | release gate |
+| `cat.CMD-REVSHELL-BASH` | Bash reverse shell | `bundle-default` | `segment` | release gate |
+| `cat.CMD-REVSHELL-DEVTCP` | Reverse shell via /dev/tcp | `bundle-default` | `command` | release gate |
+| `cat.CMD-REVSHELL-NC` | Netcat reverse shell with -e | `bundle-default` | `command` | release gate |
+| `cat.CMD-REVSHELL-POWERSHELL-TCP` | PowerShell TCP command-execution loop | `bundle-default` | `command` | release gate |
+| `cat.CMD-RM-RF` | Recursive force delete from critical root path | `bundle-default` | `segment` | release gate |
+| `cat.CMD-SOCAT-EXEC` | socat with EXEC (reverse shell) | `bundle-default` | `command` | release gate |
+| `cat.CMD-SYSTEMCTL` | Suspicious systemd persistence enablement | `bundle-default` | `command` | release gate |
+| `cat.CMD-WGET-POST` | wget POST data exfil | `bundle-default` | `command` | release gate |
+| `cat.CMD-WIN-REG-PERSIST` | Windows registry persistence modification | `bundle-default` | `segment` | release gate |
+| `cat.PATH-AWS-CONFIG` | AWS config file | `bundle-default` | `command` | release gate |
+| `cat.PATH-AWS-CREDS` | AWS credentials file | `bundle-default` | `segment` | release gate |
+| `cat.PATH-DOCKER` | Docker config | `bundle-default` | `segment` | release gate |
+| `cat.PATH-ETC-SHADOW` | /etc/shadow access | `bundle-default` | `command` | release gate |
+| `cat.PATH-GIT-CREDS` | Git credentials file | `bundle-default` | `segment` | release gate |
+| `cat.PATH-GNUPG` | GPG keyring access | `bundle-default` | `command` | release gate |
+| `cat.PATH-HISTORY` | Shell history file | `bundle-default` | `segment` | release gate |
+| `cat.PATH-NETRC` | netrc credentials file | `bundle-default` | `command` | release gate |
+| `cat.PATH-NPMRC` | npm config (may contain tokens) | `bundle-default` | `command` | release gate |
+| `cat.PATH-PASSWORD-CRACKER-POTFILE` | Password-cracker recovered credential store read | `bundle-default` | `segment` | release gate |
+| `cat.PATH-PYPIRC` | PyPI config (may contain tokens) | `bundle-default` | `command` | release gate |
+| `cat.PATH-SSH-DIR` | SSH directory access | `bundle-default` | `segment` | release gate |
+| `cat.SEC-CONNSTR` | Connection string with credentials | `bundle-default` | `command` | release gate |
+| `cat.SEC-DISCORD-WEBHOOK` | Discord webhook URL | `bundle-default` | `command` | release gate |
+| `cat.SEC-GITHUB-PAT` | GitHub fine-grained PAT | `bundle-default` | `command` | release gate |
+| `cat.SEC-GITLAB` | GitLab personal access token | `bundle-default` | `command` | release gate |
+| `cat.SEC-GOOGLE` | Google API key | `bundle-default` | `command` | release gate |
+| `cat.SEC-NPM-TOKEN` | npm access token | `bundle-default` | `command` | release gate |
+| `cat.SEC-OPENAI` | OpenAI project key | `bundle-default` | `command` | release gate |
+| `cat.SEC-OPENAI-V2` | OpenAI API key (long form) | `bundle-default` | `command` | release gate |
+| `cat.SEC-PRIVKEY` | Private key | `bundle-default` | `command` | release gate |
+| `cat.SEC-PYPI-TOKEN` | PyPI API token | `bundle-default` | `command` | release gate |
+| `cat.SEC-SENDGRID` | SendGrid API key | `bundle-default` | `command` | release gate |
+| `cat.SEC-SLACK-WEBHOOK` | Slack webhook URL | `bundle-default` | `command` | release gate |
+| `cat.SEC-TWILIO` | Twilio API key | `bundle-default` | `command` | release gate |
+| `cat.credential.directory_credential_acquisition` | Exact directory credential acquisition | `bundle-default` | `segment` | release gate |
+| `cat.credential.directory_ticket_request` | Exact Kerberos ticket request | `bundle-default` | `segment` | release gate |
+| `cat.credential.macos_login_keychain_dump` | Dump decrypted credentials from the macOS login keychain | `bundle-default` | `segment` | release gate |
+| `cat.credential.pkcs12_private_key_extract` | Extract an unencrypted private key from a PKCS#12 bundle | `bundle-default` | `segment` | release gate |
+| `cat.credential.windows_lsass_memory_dump` | Dump Windows LSASS credential memory | `bundle-default` | `command` | release gate |
+| `cat.credential.windows_ntds_ifm_dump` | Export the full Active Directory database with NTDS IFM | `bundle-default` | `segment` | release gate |
+| `cat.exec.agent_runtime_bypass_flags` | Agent runtime safety bypass flags | `bundle-default` | `segment` | release gate |
+| `cat.exec.remote_ip_download_execute_same_artifact` | Literal public-IP download executed from the same path | `bundle-default` | `segment` | release gate |
+| `cat.impact.cloud_s3_data_delete` | Recursively delete an exact AWS S3 prefix or bucket | `bundle-default` | `segment` | release gate |
+| `cat.impact.cryptomining_launch` | Cryptocurrency miner launch | `bundle-default` | `segment` | release gate |
+| `cat.impact.fork_bomb` | Unbounded fork bomb | `bundle-default` | `command` | release gate |
+| `cat.impact.linux_magic_sysrq_destruction` | Trigger destructive Linux Magic SysRq action | `bundle-default` | `segment` | release gate |
+| `cat.impact.posix_host_halt` | Power off or reboot the POSIX host with halt | `bundle-default` | `segment` | release gate |
+| `cat.impact.windows_delete_all_shadow_copies` | Delete all Windows Volume Shadow Copies | `bundle-default` | `segment` | release gate |
+| `cat.impact.windows_recovery_disable_pair` | Disable Windows boot recovery and failure handling | `bundle-default` | `segment` | release gate |
+| `cat.impact.windows_recovery_store_destruction` | Destroy Windows recovery stores | `bundle-default` | `segment` | release gate |
+| `cat.integrity.history_tamper` | Shell history clear or disable | `bundle-default` | `segment` | release gate |
+| `cat.persistence.git_hook_write` | Active Git hook mutation | `bundle-default` | `segment` | release gate |
+| `cat.persistence.global_ld_preload_install` | Global dynamic-loader preload installation | `bundle-default` | `command` | release gate |
+| `cat.persistence.privileged_account_change` | Privileged account or group change | `bundle-default` | `segment` | release gate |
+| `cat.persistence.windows_accessibility_feature_hijack` | Hijack a Windows accessibility feature for SYSTEM command access | `bundle-default` | `segment` | release gate |
+| `cat.privilege.cloud_iam_administrator_attachment` | Attach AWS AdministratorAccess to an exact IAM principal | `bundle-default` | `segment` | release gate |
+| `cat.privilege.container_runtime_socket_access` | Container runtime socket access | `bundle-default` | `segment` | release gate |
+| `cat.privilege.custom_root_suid_implant` | Compile and install a custom root-setuid executable | `bundle-default` | `segment` | release gate |
+| `cat.privilege.host_namespace_entry` | Host PID-1 namespace or root entry | `bundle-default` | `command` | release gate |
+| `cat.privilege.kubernetes_cluster_admin_binding` | Grant Kubernetes cluster-admin to an exact service account | `bundle-default` | `segment` | release gate |
+| `cat.privilege.sudoers_unrestricted_nopasswd` | Unrestricted passwordless sudo grant | `bundle-default` | `segment` | release gate |
+| `cat.privilege.temporary_setuid_executable` | Create a setuid executable in a temporary directory | `bundle-default` | `segment` | release gate |
+| `cat.secrets.browser_session_store_read` | Browser credential or session store read | `bundle-default` | `segment` | release gate |
+| `cat.secrets.workload_identity_token_read` | Workload identity token read | `bundle-default` | `segment` | release gate |
+| `cat.tamper.cloud_audit_control_destruction` | Destroy an exact cloud audit-logging control | `bundle-default` | `segment` | release gate |
+| `cat.tamper.complete_firewall_relaxation` | Completely relax the host iptables firewall | `bundle-default` | `segment` | release gate |
+| `cat.tamper.complete_firewall_relaxation_attempt` | Attempt to completely relax the host iptables firewall | `bundle-default` | `segment` | release gate |
+| `cat.tamper.endpoint_security_product_disable` | Disable or uninstall an exact endpoint-security product | `bundle-default` | `segment` | release gate |
+| `cat.tamper.linux_security_control_disable` | Disable a Linux host security control | `bundle-default` | `segment` | release gate |
+| `cat.tamper.macos_unified_log_erase` | Erase all macOS unified logs | `bundle-default` | `segment` | release gate |
+| `cat.tamper.posix_log_and_shell_history_destruction` | System log and shell history destroyed together | `bundle-default` | `command` | release gate |
+| `cat.tamper.posix_logging_hardening_disable` | Disable exact POSIX logging or host-hardening controls | `bundle-default` | `segment` | release gate |
+| `cat.tamper.posix_system_log_destruction` | Destroy canonical POSIX system logs | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_amsi_disable` | Disable or bypass exact Windows AMSI controls | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_audit_policy_wipe` | Clear Windows audit policy and all-user policy | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_credential_protection_weaken` | Weaken exact Windows credential-protection controls | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_defender_component_disable` | Disable an exact Windows Defender component | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_defender_multi_control_disable` | Disable multiple Windows Defender controls | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_recursive_everyone_full_control` | Recursively grant Everyone inheritable full control on Windows | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_registry_security_control_disable` | Disable Windows security controls through the registry | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_telemetry_disable` | Disable exact Windows ETW or event telemetry controls | `bundle-default` | `segment` | release gate |
+| `cat.tamper.windows_usn_journal_delete` | Delete a Windows NTFS USN change journal | `bundle-default` | `segment` | release gate |

@@ -225,7 +225,7 @@ block shell_risk ['user.no_kubectl_delete']  kubectl delete pod web-1
 ask   shell_risk ['user.ask_terraform']      terraform plan
 ```
 
-Cat policy ids (`core.*`, bundle ids such as `CMD-PIPE-CURL`, `user.*`) are rule ids in the same `rules`
+Cat policies are rules `cat.<policy id>` (`cat.core.*`, bundle ids such as `cat.CMD-PIPE-CURL`, `cat.user.*`) in the same `rules`
 map. For harness context (cwd, home) and session chains, use Core's `shell_verdict`; see
 [Check shell commands](https://patronus-protect.github.io/patronus-security/how-to/check-shell-commands/).
 

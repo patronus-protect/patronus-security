@@ -155,7 +155,7 @@ class SecurityGateway:
         execution_gates: Optional scan execution matrix in the gate schema
             shared with the Ark API: `{"l1": True, "l2": False, "l3": False,
             "models": {"native:mcp_runtime_risk": False},
-            "rules": {"pii_email": False, "core.remote_to_exec": False}}`
+            "rules": {"pii_email": False, "cat.core.remote_to_exec": False}}`
             disables levels, model/native scanner areas, or individual L1 rules
             (Cat shell policies included) for subsequent scan calls; `pii_mode`,
             `dlp_mode`, `explain`, `conditional` and the L3 worker policy
