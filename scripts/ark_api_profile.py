@@ -97,7 +97,9 @@ CONDITIONAL_LABELS = [
 
 def execution_gates() -> dict:
     return {
-        "levels": {"l1": True, "l2": True, "l3": True},
+        "l1": True,
+        "l2": True,
+        "l3": True,
         "models": dict(MODEL_GATES),
         "conditional": CONDITIONAL_GATES,
     }

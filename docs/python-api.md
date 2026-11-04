@@ -17,12 +17,14 @@ Args:
     download_categories: Optional category allowlist for asset downloads.
         When omitted, every configured category may download if
         `download_files` is true.
-    execution_gates: Optional scan execution matrix. Use
-        `{"levels": {"l1": True, "l2": False, "l3": False},
+    execution_gates: Optional scan execution matrix in the gate schema
+        shared with the Ark API: `{"l1": True, "l2": False, "l3": False,
         "models": {"native:mcp_runtime_risk": False},
-        "rules": {"pii_email": False}}` to disable levels,
-        model/native scanner areas, or individual L1 rules for subsequent
-        scan calls.
+        "rules": {"pii_email": False, "core.remote_to_exec": False}}`
+        disables levels, model/native scanner areas, or individual L1 rules
+        (Cat shell policies included) for subsequent scan calls; `pii_mode`,
+        `dlp_mode`, `explain`, `conditional` and the L3 worker policy
+        `l3_policy` complete it. Unknown keys raise `ValueError`.
         New classifier pipelines can be gated independently through
         `models`, for example `{"models": {"tool_action": False}}`.
     onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
@@ -113,7 +115,8 @@ Scan text with every category configured on this gateway.
 Replace the gate matrix used by subsequent scan calls.
 
 Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
-accepts `levels` and `models` dictionaries; model keys match result
+uses the shared gate schema (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`,
+`dlp_mode`, `explain`, `conditional`, `l3_policy`); model keys match result
 `model` values such as `native:mcp_runtime_risk`.
 
 ### `set_onnx_batch_mode(mode: str)`
@@ -143,6 +146,16 @@ Select `dedicated` per-pipeline L3 models or the shared `multi` model.
 ### `set_dynamic_pii_config(config: dict)`
 
 Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`.
+
+### `set_shell_command_policy_config(policy_dirs: list[str] | None = None, allowlist: dict[str, str] | None = None)`
+
+Replace the user policies and allowlist of the `shell_command` verdict.
+
+`policy_dirs` are directories of user `*.cedar` policies, read in file-name
+order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
+Ark Core's `shell` config and the Ark API's `pipeline.shell_command`. A loaded
+bundle applies the configuration at once, otherwise `warmup()` does. A refused
+configuration raises `ValueError` and changes nothing.
 
 ### `scan_category(category: str, text: str) -> list[dict]`
 

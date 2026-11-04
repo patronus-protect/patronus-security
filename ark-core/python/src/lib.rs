@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::useless_conversion)] // Generated PyO3 wrappers.
 use patronus_ark_core::{
-    detectors::shell::ShellContext, native::NATIVE_CATEGORIES, ScanControl as Control, ScanError,
-    Scanner as CoreScanner, SecurityCategory,
+    detectors::shell::{Facts, ShellContext},
+    native::NATIVE_CATEGORIES,
+    ScanControl as Control, ScanError, Scanner as CoreScanner, SecurityCategory,
 };
 use pyo3::{exceptions::*, prelude::*, types::PyDict};
 use serde::de::DeserializeOwned;
@@ -118,7 +119,7 @@ impl Scanner {
         Ok(report.unbind())
     }
 
-    #[pyo3(signature = (command, *, cwd=None, home=None, repo_root=None, dialect=None, with_facts=false))]
+    #[pyo3(signature = (command, *, cwd=None, home=None, repo_root=None, dialect=None, prior_facts=None, with_facts=false))]
     #[allow(clippy::too_many_arguments)]
     fn shell_verdict(
         &self,
@@ -128,6 +129,7 @@ impl Scanner {
         home: Option<String>,
         repo_root: Option<String>,
         dialect: Option<String>,
+        prior_facts: Option<&Bound<'_, PyAny>>,
         with_facts: bool,
     ) -> PyResult<PyObject> {
         let context = ShellContext {
@@ -136,14 +138,24 @@ impl Scanner {
             repo_root,
             dialect,
         };
+        let prior: Vec<serde_json::Value> = self::config(py, prior_facts)?;
         let output = py.allow_threads(move || {
+            let prior_facts = prior
+                .iter()
+                .enumerate()
+                .map(|(index, facts)| {
+                    Facts::from_json(facts).map_err(|error| {
+                        PyValueError::new_err(format!("prior_facts[{index}]: {error}"))
+                    })
+                })
+                .collect::<PyResult<Vec<_>>>()?;
             let scanner = self.inner.try_lock().map_err(|_| {
                 ScannerBusyError::new_err(
                     "scanner is already in use; serialize calls or use separate scanners",
                 )
             })?;
             let verdict = scanner
-                .shell_verdict(&command, Some(&context), &[])
+                .shell_verdict(&command, Some(&context), &prior_facts)
                 .map_err(scan_error)?;
             Ok::<_, PyErr>(verdict.to_json_string(with_facts))
         })?;

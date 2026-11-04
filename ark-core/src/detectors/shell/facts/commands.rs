@@ -218,7 +218,7 @@ fn sed_replacement(word: &str) -> Option<&str> {
 }
 
 /// Settings changed by `sed -i 's/OLD/NEW/'` (e.g. `SELINUX=disabled`).
-pub(super) fn sed_settings(prog: &str, rest: &[String]) -> Vec<Setting> {
+pub(super) fn sed_settings(prog: &str, rest: &[String]) -> Vec<Setting<'static>> {
     if prog != "sed" || !sed_in_place(rest) {
         return Vec::new();
     }

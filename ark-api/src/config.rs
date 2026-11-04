@@ -1,13 +1,11 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
-    ConditionalPipelineGate, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
-    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, NativeGates,
-    OnnxRuntimeOptions, ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
-    WolfExecutionOptions,
+    detectors::shell::ShellPolicyConfig, DynamicPiiConfig, L3Strategy, OnnxRuntimeOptions,
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, WolfExecutionOptions,
 };
 use serde::Deserialize;
 
@@ -46,7 +44,7 @@ struct RawApiKey {
     default_categories: Option<Vec<SecurityCategory>>,
     /// Per-key gate override. Falls back to `pipeline.gates` when absent.
     #[serde(default)]
-    gates: Option<RawGates>,
+    gates: Option<ScanGateMatrix>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -65,7 +63,10 @@ struct RawPipeline {
     wolf_options: WolfExecutionOptions,
     /// Default execution gates applied to every scan unless a key overrides them.
     #[serde(default)]
-    gates: Option<RawGates>,
+    gates: Option<ScanGateMatrix>,
+    /// User policies and allowlist of the `shell_command` verdict.
+    #[serde(default)]
+    shell_command: Option<RawShellCommand>,
     /// Overrides the `dynamic-pii` (GLiNER) pipeline's config — library
     /// default uses its small core label bundle. Deserializes
     /// straight into `patronus_ark::DynamicPiiConfig`, which already derives
@@ -119,141 +120,13 @@ impl RawOnnxRuntime {
     }
 }
 
-/// Mirrors `patronus_ark::ScanGateMatrix`, including the request-local L3
-/// scheduler policy under `policy`.
-///
-/// `conditional` gates are deserialized straight into the library's own
-/// `ConditionalPipelineGate` / `GateExpression` types, so the full
-/// metadata/prior-result condition tree (`all` / `any` / `not` /
-/// `metadata` / `result`, plus per-pipeline L3 policy overrides) is
-/// expressible in YAML exactly as the Rust API defines it.
-#[derive(Debug, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct RawGates {
-    /// `rules`, `models`, `pii_mode`, `dlp_mode` and `explain`.
-    #[serde(flatten)]
-    native: NativeGates,
-    #[serde(default)]
-    l1: Option<bool>,
-    #[serde(default)]
-    l2: Option<bool>,
-    #[serde(default)]
-    l3: Option<bool>,
-    #[serde(default)]
-    conditional: Vec<ConditionalPipelineGate>,
-    #[serde(default)]
-    policy: Option<RawL3Policy>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-struct RawL3Policy {
-    enabled: Option<bool>,
-    priority: Option<Vec<String>>,
-    ttl_ms: Option<HashMap<String, u64>>,
-    estimated_cost_ms: Option<HashMap<String, u64>>,
-    fairness_quantum_ms: Option<u64>,
-    max_wait_ms: Option<u64>,
-    degraded_factor: Option<f64>,
-    early_exit: Option<L3EarlyExitMode>,
-    progress: Option<L3ProgressMode>,
-    #[serde(alias = "execution")]
-    clustering: Option<L3ClusteringStrategy>,
-    representatives_per_cluster: Option<usize>,
-    verify_representatives_per_cluster: Option<usize>,
-    min_cluster_similarity: Option<f64>,
-    max_cluster_size: Option<usize>,
-    pipelines: Option<HashMap<String, L3PipelinePolicy>>,
-}
-
-impl RawGates {
-    pub(crate) fn into_gate_matrix(self) -> Result<ScanGateMatrix, ConfigError> {
-        for gate in &self.conditional {
-            gate.validate().map_err(ConfigError::Invalid)?;
-        }
-        let RawGates {
-            native,
-            l1,
-            l2,
-            l3,
-            conditional,
-            policy: raw_policy,
-        } = self;
-        let mut policy = L3SchedulerPolicy::default();
-        if let Some(raw) = raw_policy {
-            if let Some(value) = raw.enabled {
-                policy.enabled = value;
-            }
-            if let Some(value) = raw.priority {
-                policy.priority = value;
-            }
-            if let Some(value) = raw.ttl_ms {
-                policy.ttl_ms = value;
-            }
-            if let Some(value) = raw.estimated_cost_ms {
-                policy.estimated_cost_ms = value;
-            }
-            if let Some(value) = raw.fairness_quantum_ms {
-                policy.fairness_quantum_ms = value;
-            }
-            if let Some(value) = raw.max_wait_ms {
-                policy.max_wait_ms = value;
-            }
-            if let Some(value) = raw.degraded_factor {
-                policy.degraded_factor = value;
-            }
-            if let Some(value) = raw.early_exit {
-                policy.early_exit = value;
-            }
-            if let Some(value) = raw.progress {
-                policy.progress = value;
-            }
-            if let Some(value) = raw.clustering {
-                policy.clustering = value;
-            }
-            if let Some(value) = raw.representatives_per_cluster {
-                policy.representatives_per_cluster = value;
-            }
-            if let Some(value) = raw.verify_representatives_per_cluster {
-                policy.verify_representatives_per_cluster = value;
-            }
-            if let Some(value) = raw.min_cluster_similarity {
-                policy.min_cluster_similarity = value;
-            }
-            if let Some(value) = raw.max_cluster_size {
-                policy.max_cluster_size = value;
-            }
-            if let Some(value) = raw.pipelines {
-                policy.pipelines = value;
-            }
-        }
-        validate_l3_policy(&policy)?;
-        Ok(ScanGateMatrix {
-            native,
-            l1,
-            l2,
-            l3,
-            conditional,
-            l3_policy: policy,
-        })
-    }
-}
-
-fn validate_l3_policy(policy: &L3SchedulerPolicy) -> Result<(), ConfigError> {
-    if policy.fairness_quantum_ms == 0 || policy.max_cluster_size == 0 {
-        return Err(ConfigError::Invalid(
-            "gates.policy fairness_quantum_ms and max_cluster_size must be positive".to_string(),
-        ));
-    }
-    if !(0.0..=1.0).contains(&policy.degraded_factor)
-        || !(0.0..=1.0).contains(&policy.min_cluster_similarity)
-    {
-        return Err(ConfigError::Invalid(
-            "gates.policy degraded_factor and min_cluster_similarity must be between 0 and 1"
-                .to_string(),
-        ));
-    }
-    Ok(())
+/// User policies and allowlist of the `shell_command` verdict: the
+/// `policy_dirs` / `allowlist` keys of Ark Core's `shell` config.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct RawShellCommand {
+    policy_dirs: Vec<PathBuf>,
+    allowlist: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -286,6 +159,9 @@ pub struct Config {
     pub cache_dir: Option<PathBuf>,
     /// Gates applied when the authenticated key has no override.
     pub default_gates: ScanGateMatrix,
+    /// `pipeline.shell_command` user policies and allowlist; `None` keeps the
+    /// bundle policies only.
+    pub shell_command: Option<ShellPolicyConfig>,
     /// `None` keeps the library's core Dynamic-PII bundle.
     pub dynamic_pii: Option<DynamicPiiConfig>,
     pub onnx_runtime: OnnxRuntimeOptions,
@@ -300,6 +176,13 @@ impl Config {
             .set_wolf_execution_options(self.wolf_options)
             .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
         gateway.set_l3_strategy(self.l3_strategy);
+        if let Some(shell_command) = &self.shell_command {
+            gateway
+                .set_shell_command_policy_config(shell_command.clone())
+                .map_err(|error| {
+                    ConfigError::Invalid(format!("pipeline.shell_command: {error}"))
+                })?;
+        }
         Ok(())
     }
 
@@ -408,7 +291,7 @@ impl RawConfig {
                 key_hash,
                 allowed_categories: key.categories,
                 default_categories: key.default_categories,
-                gates: key.gates.map(RawGates::into_gate_matrix).transpose()?,
+                gates: key.gates,
             });
         }
 
@@ -436,12 +319,13 @@ impl RawConfig {
                 }
             }
         }
-        let default_gates = self
+        let default_gates = self.pipeline.gates.unwrap_or_default();
+        let shell_command = self
             .pipeline
-            .gates
-            .map(RawGates::into_gate_matrix)
-            .transpose()?
-            .unwrap_or_default();
+            .shell_command
+            .map(|shell| ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist))
+            .transpose()
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.shell_command: {error}")))?;
 
         Ok(Config {
             bind,
@@ -453,6 +337,7 @@ impl RawConfig {
             download_files: self.pipeline.download_files,
             cache_dir: self.cache.dir.map(PathBuf::from),
             default_gates,
+            shell_command,
             dynamic_pii: self.pipeline.dynamic_pii,
             onnx_runtime: self.pipeline.onnx_runtime.into_options()?,
             l3_strategy,
@@ -469,7 +354,9 @@ mod tests {
         detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
     };
 
-    use super::{Config, RawConfig, RawGates, RawOnnxRuntime};
+    use patronus_ark::ScanGateMatrix;
+
+    use super::{Config, RawConfig, RawOnnxRuntime};
 
     fn startup_config() -> serde_json::Value {
         serde_json::json!({
@@ -500,15 +387,14 @@ mod tests {
 
     #[test]
     fn gates_keep_flat_native_keys_and_reject_unknown_keys() {
-        let raw: RawGates = serde_yaml::from_str(
+        let gates: ScanGateMatrix = serde_yaml::from_str(
             "rules: {pii_email: false}\nmodels: {'native:pii': false}\nl2: false\n",
         )
         .unwrap();
-        let gates = raw.into_gate_matrix().unwrap();
         assert!(!gates.native.allows_rule("pii_email"));
         assert!(!gates.native.allows_model("native:pii"));
         assert_eq!(gates.l2, Some(false));
-        assert!(serde_yaml::from_str::<RawGates>("rule: {pii_email: false}").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("rule: {pii_email: false}").is_err());
     }
 
     #[test]
@@ -538,6 +424,53 @@ mod tests {
             gateway.distributed_execution().wolf_execution_options(),
             config.wolf_options
         );
+    }
+
+    #[test]
+    fn shell_command_policies_load_at_startup_and_reach_the_gateway() {
+        let dir = std::env::temp_dir().join(format!("ark_api_shell_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("kubectl.cedar"),
+            r#"@id("user.no_kubectl_delete") @decision("block")
+forbid (principal, action == Action::"segment", resource)
+when { context.program == "kubectl" && context.verb == "DELETE" };"#,
+        )
+        .unwrap();
+        let mut value = startup_config();
+        value["pipeline"]["shell_command"] = serde_json::json!({
+            "policy_dirs": [dir],
+            "allowlist": {"C2-WEBHOOK-SITE": "ask"}
+        });
+        let config = serde_json::from_value::<RawConfig>(value.clone())
+            .unwrap()
+            .into_config()
+            .unwrap();
+        let shell = config.shell_command.clone().unwrap();
+        assert_eq!(shell.user_policies.len(), 1);
+        assert_eq!(shell.allowlist["C2-WEBHOOK-SITE"], "ask");
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::ShellCommand],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        config.apply_model_defaults(&gateway).unwrap();
+        assert_eq!(gateway.shell_command_policy_config(), shell);
+
+        value["pipeline"]["shell_command"]["policy_dirs"] =
+            serde_json::json!([dir.join("missing")]);
+        let error = serde_json::from_value::<RawConfig>(value.clone())
+            .unwrap()
+            .into_config()
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("pipeline.shell_command"),
+            "{error}"
+        );
+        value["pipeline"]["shell_command"] = serde_json::json!({"policies": []});
+        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
@@ -585,62 +518,42 @@ mod tests {
 
     #[test]
     fn explain_is_explicit_and_disabled_by_default() {
-        assert!(
-            !RawGates::default()
-                .into_gate_matrix()
-                .unwrap()
-                .native
-                .explain
-        );
-        let raw: RawGates = serde_yaml::from_str("explain: true").unwrap();
-        assert!(raw.into_gate_matrix().unwrap().native.explain);
-        assert!(serde_yaml::from_str::<RawGates>("explain: verbose").is_err());
+        assert!(!ScanGateMatrix::default().native.explain);
+        let gates: ScanGateMatrix = serde_yaml::from_str("explain: true").unwrap();
+        assert!(gates.native.explain);
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("explain: verbose").is_err());
     }
 
     #[test]
     fn pii_mode_is_strict_by_default_and_explicitly_configurable() {
         use patronus_ark::ScoreMode;
-        assert_eq!(
-            RawGates::default()
-                .into_gate_matrix()
-                .unwrap()
-                .native
-                .pii_mode,
-            ScoreMode::Strict
-        );
+        assert_eq!(ScanGateMatrix::default().native.pii_mode, ScoreMode::Strict);
         for (yaml, mode) in [
             ("pii_mode: strict", ScoreMode::Strict),
             ("pii_mode: balanced", ScoreMode::Balanced),
             ("pii_mode: recall", ScoreMode::Recall),
         ] {
-            let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(raw.into_gate_matrix().unwrap().native.pii_mode, mode);
+            let gates: ScanGateMatrix = serde_yaml::from_str(yaml).unwrap();
+            assert_eq!(gates.native.pii_mode, mode);
         }
-        assert!(serde_yaml::from_str::<RawGates>("pii_mode: fast").is_err());
-        assert!(serde_yaml::from_str::<RawGates>("pii_mode: Balanced").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("pii_mode: fast").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("pii_mode: Balanced").is_err());
     }
 
     #[test]
     fn dlp_mode_is_strict_by_default_and_explicitly_configurable() {
         use patronus_ark::ScoreMode;
-        assert_eq!(
-            RawGates::default()
-                .into_gate_matrix()
-                .unwrap()
-                .native
-                .dlp_mode,
-            ScoreMode::Strict
-        );
+        assert_eq!(ScanGateMatrix::default().native.dlp_mode, ScoreMode::Strict);
         for (yaml, mode) in [
             ("dlp_mode: strict", ScoreMode::Strict),
             ("dlp_mode: balanced", ScoreMode::Balanced),
             ("dlp_mode: recall", ScoreMode::Recall),
         ] {
-            let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(raw.into_gate_matrix().unwrap().native.dlp_mode, mode);
+            let gates: ScanGateMatrix = serde_yaml::from_str(yaml).unwrap();
+            assert_eq!(gates.native.dlp_mode, mode);
         }
-        assert!(serde_yaml::from_str::<RawGates>("dlp_mode: fast").is_err());
-        assert!(serde_yaml::from_str::<RawGates>("dlp_mode: Balanced").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("dlp_mode: fast").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("dlp_mode: Balanced").is_err());
     }
 
     #[test]
@@ -663,9 +576,8 @@ mod tests {
 
     #[test]
     fn rule_gates_parse_from_yaml_and_default_to_enabled() {
-        let raw: RawGates =
+        let gates: ScanGateMatrix =
             serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
-        let gates = raw.into_gate_matrix().unwrap();
 
         assert!(!gates.native.allows_rule("pii_email"));
         assert!(gates.native.allows_rule("dlp_openai_key"));

@@ -157,7 +157,7 @@ def new_scanner(cache_path: str | None, strategy: str) -> SecurityGateway:
         cache_storage_location=cache_path,
         l3_strategy=strategy,
         execution_gates=(
-            {"l3": {"priority": ["sensitive_document", "injection"]}}
+            {"l3_policy": {"priority": ["sensitive_document", "injection"]}}
             if strategy == "multi"
             else None
         ),

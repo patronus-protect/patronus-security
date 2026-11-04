@@ -142,7 +142,7 @@ One request can publish **several** events, always correlated by `request_id`:
   `degraded`, or `failed`; the Rust enum `SecurityRequestCompletion` is the PascalCase
   `Complete` / `Degraded` / `Failed`).
 
-If you opt into L3 progress reporting (`execution_gates.l3.progress`, off by default) two more,
+If you opt into L3 progress reporting (`execution_gates.l3_policy.progress`, off by default) two more,
 non-terminal kinds can appear while a long L3 scan resolves: **`progress`** (chunk counters, no
 verdict) and **`provisional`** (an interim, non-authoritative `result` preview). Handle them
 explicitly — in Rust the enum `match` will not compile otherwise. The blocking `scan_*` helpers

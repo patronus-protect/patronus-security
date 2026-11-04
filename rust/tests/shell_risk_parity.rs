@@ -262,7 +262,7 @@ fn check_rows(name: &str, path: &Path) {
 
         match &pipeline {
             Some(pipeline) => {
-                let verdict = pipeline.verdict(text, None, &[]).unwrap();
+                let verdict = pipeline.verdict(text, None, &[], |_| true).unwrap();
                 let json = verdict.to_json(false);
                 let score = json["model"]["score"].as_f64().unwrap();
                 m.check(
@@ -281,7 +281,7 @@ fn check_rows(name: &str, path: &Path) {
                 check_verdict(&mut m, &label, &row, &verdict, true);
             }
             None => {
-                let (hits, _) = policies.evaluate(&facts, text).unwrap();
+                let (hits, _) = policies.evaluate(&facts, text, |_| true).unwrap();
                 let policies = policy_rows(&hits);
                 m.check("policies", &label, policies == row["policies"], || {
                     format!("rust={policies} python={}", row["policies"])
@@ -338,11 +338,13 @@ fn chains_with_prior_facts_match_the_python_reference() {
             );
             match &pipeline {
                 Some(pipeline) => {
-                    let verdict = pipeline.verdict(command, Some(&context), &prior).unwrap();
+                    let verdict = pipeline
+                        .verdict(command, Some(&context), &prior, |_| true)
+                        .unwrap();
                     check_verdict(&mut m, &label, row, &verdict, true);
                 }
                 None => {
-                    let (hits, _) = policies.evaluate(&facts, command).unwrap();
+                    let (hits, _) = policies.evaluate(&facts, command, |_| true).unwrap();
                     let policies = policy_rows(&hits);
                     m.check("policies", &label, policies == row["policies"], || {
                         format!("rust={policies} python={}", row["policies"])

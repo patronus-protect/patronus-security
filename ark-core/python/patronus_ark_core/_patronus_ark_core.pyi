@@ -1,4 +1,4 @@
-from .types import NativeCategory, ScanReport, ScannerConfig, ShellVerdict, WarmupOptions, WolfExecutionOptions
+from .types import NativeCategory, ScanReport, ScannerConfig, ShellFacts, ShellVerdict, WarmupOptions, WolfExecutionOptions
 
 __version__: str
 
@@ -20,5 +20,6 @@ class Scanner:
     ) -> ScanReport: ...
     def shell_verdict(
         self, command: str, *, cwd: str | None = None, home: str | None = None,
-        repo_root: str | None = None, dialect: str | None = None, with_facts: bool = False,
+        repo_root: str | None = None, dialect: str | None = None,
+        prior_facts: list[ShellFacts] | None = None, with_facts: bool = False,
     ) -> ShellVerdict: ...

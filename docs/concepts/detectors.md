@@ -160,7 +160,7 @@ producer:
 
 ```python
 scanner.set_execution_gates({
-    "levels": {"l1": True, "l2": False, "l3": False},
+    "l1": True, "l2": False, "l3": False,
     "models": {"native:instruction_override": False},
     "rules": {"pii_employee_id": False, "dlp_sql_statement": False},
 })

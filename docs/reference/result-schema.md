@@ -692,7 +692,7 @@ command.
 `consume_next_event(timeout)` returns one event dict at a time (or `None` on timeout).
 `consume_events(timeout)` yields them. There are up to four `event_type`s: `result` and
 `finished` always, plus `progress` and `provisional` when L3 progress reporting is enabled
-(`execution_gates.l3.progress`, off by default). The blocking `scan_*` helpers only ever return
+(`execution_gates.l3_policy.progress`, off by default). The blocking `scan_*` helpers only ever return
 `result` / `finished`.
 
 ### `result`
@@ -750,7 +750,7 @@ event carries no verdict — never treat it as a result.
 
 Same shape as a `result` event's `result`, but an **interim preview** re-aggregated from the
 chunks resolved so far. It is non-authoritative and may be superseded by later `result` /
-`finished` events; only emitted when `execution_gates.l3.progress` is set to `"provisional"`.
+`finished` events; only emitted when `execution_gates.l3_policy.progress` is set to `"provisional"`.
 
 ### `finished`
 

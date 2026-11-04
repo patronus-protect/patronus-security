@@ -1150,6 +1150,12 @@ other execution gates default to enabled. Diagnostic `explain` and the
 scored PII and DLP modes are opt-in. `max_level` is still enforced by
 `ScanExecution`, so a gate can only further restrict the configured scanner.
 
+Deserializes from the one gate schema of every host (Python
+`execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
+`pii_mode`, `dlp_mode` and `explain`, the level switches `l1`, `l2` and
+`l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
+out-of-range values are refused.
+
 ```rust
 pub struct L3SchedulerPolicy {
     /// Whether model L3 work should be centrally queued by scan methods.
@@ -1195,7 +1201,7 @@ Priority and timeout policy for centrally scheduled L3 work.
 ```rust
 pub struct L3PipelinePolicy {
     /// Chunk execution strategy. `None` inherits the request-wide default.
-    #[serde(default, alias = "execution")]
+    #[serde(default)]
     pub clustering: Option<L3ClusteringStrategy>,
     /// Representatives inferred from the high-priority side of each cluster.
     #[serde(default)]
@@ -1422,6 +1428,19 @@ pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
 ```
 
 Replace the L3 worker scheduling policy.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse out-of-range values: zero counts, costs and fairness quantum,
+fractions outside `0..=1` and invalid pipeline overrides.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse zero counts, fractions outside `0..=1` and an empty positive class.
 
 ```rust
 pub fn validate(&self) -> Result<(), String>;
@@ -1736,7 +1755,8 @@ pub fn shell_verdict(
 Cat's `patronus.verdict/1` for one shell command, which is never
 executed. `context` is the harness context (cwd, home, repo root);
 `prior_facts` are the `verdict.facts` of earlier commands of the same
-session, kept by the caller. Text scans do not run Cat.
+session, kept by the caller. Cat's policy ids are rule ids: the
+`rules` gates of the config turn them off. Text scans do not run Cat.
 
 ## Shared Native Engine
 
@@ -1806,8 +1826,8 @@ pub fn default_rule_enabled(rule_id: &str) -> bool;
 ```
 
 Default of a rule without an explicit gate, shared by every host: all
-non-DLP rules and the DLP credential/secret rules are on, the other DLP
-content rules are opt-in.
+non-DLP rules (Cat's shell policies included) and the DLP credential/secret
+rules are on, the other DLP content rules are opt-in.
 
 ```rust
 pub struct NativeGates {

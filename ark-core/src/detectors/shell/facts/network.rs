@@ -292,7 +292,7 @@ fn scope_of(host: &str) -> &'static str {
 
 /// Remote endpoints named by a segment: URLs anywhere, `[user@]host:` for
 /// ssh/scp/rsync style tools, and the first host-like argument of connectors.
-pub(super) fn network_of(head: &str, rest: &[String]) -> Vec<Network> {
+pub(super) fn network_of(head: &str, rest: &[String]) -> Vec<Network<'static>> {
     let prog = program(head);
     let mut out: Vec<String> = Vec::new();
     for word in rest {

@@ -30,7 +30,7 @@ scanner = SecurityGateway(categories=["injection"], max_level="l2")
 Or gate L3 off per request while keeping the ceiling:
 
 ```python
-scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
+scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
 ```
 
 ## Choose a final-decision threshold profile

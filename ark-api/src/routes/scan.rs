@@ -16,7 +16,6 @@ use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use crate::auth::AuthenticatedKey;
-use crate::config::RawGates;
 use crate::dto::{CompletionDto, QueuedScanResultDto};
 use crate::state::AppState;
 
@@ -30,7 +29,7 @@ pub struct RequestScanConfig {
     #[serde(default)]
     max_level: Option<SecurityLevel>,
     #[serde(default)]
-    gates: Option<RawGates>,
+    gates: Option<ScanGateMatrix>,
     #[serde(default = "empty_metadata")]
     metadata: Value,
     #[serde(default)]
@@ -100,12 +99,7 @@ fn resolve_request_config(
         }
     }
 
-    let mut gates = match request.gates {
-        Some(gates) => gates
-            .into_gate_matrix()
-            .map_err(|error| error.to_string())?,
-        None => config.gates_for(key),
-    };
+    let mut gates = request.gates.unwrap_or_else(|| config.gates_for(key));
     if let Some(max_level) = request.max_level {
         if max_level < SecurityLevel::L3 {
             gates.l3 = Some(false);
@@ -479,6 +473,7 @@ mod tests {
                 download_files: false,
                 cache_dir: None,
                 default_gates: ScanGateMatrix::default(),
+                shell_command: None,
                 dynamic_pii: None,
                 onnx_runtime: patronus_ark::OnnxRuntimeOptions::default(),
                 l3_strategy: patronus_ark::L3Strategy::Multi,
@@ -486,6 +481,33 @@ mod tests {
             },
             key,
         )
+    }
+
+    /// The coordinator checks the same fixture (`ark-coordinator` request_config).
+    #[test]
+    fn request_configs_match_the_shared_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/scan_request_configs.json"
+        ))
+        .unwrap();
+        let (mut config, mut key) = config_and_key();
+        config.categories = ["injection", "dlp", "pii", "dynamic-pii", "shell_command"]
+            .iter()
+            .map(|name| name.parse().unwrap())
+            .collect();
+        key.allowed_categories = None;
+        let check = |request: &Value| {
+            serde_json::from_value::<RequestScanConfig>(request.clone())
+                .map_err(|error| error.to_string())
+                .and_then(|request| resolve_request_config(&config, &key, Some(request)))
+                .map(|_| ())
+        };
+        for request in fixture["accepted"].as_array().unwrap() {
+            assert_eq!(check(request), Ok(()), "{request}");
+        }
+        for request in fixture["refused"].as_array().unwrap() {
+            assert!(check(request).is_err(), "{request} must be refused");
+        }
     }
 
     #[test]

@@ -145,7 +145,7 @@ pub(super) fn build_segment(
     relations: &[&str],
     ctx: &ShellContext,
     redirects: &[(String, &'static str)],
-) -> Segment {
+) -> Segment<'static> {
     let prog = program(head);
     let (verb, role, sensitive, key) = match vocab::lookup(&prog, rest) {
         Some((row, key)) => {

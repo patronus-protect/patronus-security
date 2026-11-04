@@ -15,7 +15,7 @@ use crate::{
     detectors::{
         shell::{ShellPolicyConfig, ShellRiskPipeline},
         threat::ThreatPipeline,
-        NativeDetection, NativeDetector,
+        NativeDetection,
     },
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
@@ -1318,7 +1318,9 @@ impl SecurityGateway {
                         || match self.shell_command_pipeline {
                             Some(ref pipeline) => {
                                 timed_native_detection_scan_result(category, model, text, || {
-                                    pipeline.detect(text)
+                                    pipeline.detect_with_rules(text, |id| {
+                                        execution.gates().native.allows_rule(id)
+                                    })
                                 })
                             }
                             None => scanner_error_scan_result(

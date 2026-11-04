@@ -11,6 +11,35 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- **Breaking (API):** Python, the Ark API and Rust share one gate schema, the serde
+  `Deserialize` of `ScanGateMatrix` (unknown keys refused): native `rules`, `models`, `pii_mode`,
+  `dlp_mode`, `explain`; level switches `l1`, `l2`, `l3` (booleans); `conditional`; the L3 worker
+  policy `l3_policy`. Python `execution_gates` drops `levels` (use top-level `l1`/`l2`/`l3`), the
+  `model_areas` alias and the worker policy under `l3` (now `l3_policy`); the Ark API renames
+  `gates.policy` to `gates.l3_policy`. The `execution` alias of `clustering` (worker policy and
+  pipeline overrides) and Python's `min_similarity` alias are removed. Out-of-range L3 values
+  (zero counts or costs, fractions outside `0..=1`) are refused everywhere, in conditional
+  `l3_policy` overrides too; `ttl_ms`/`estimated_cost_ms` entries override the defaults per key in
+  both hosts. `L3SchedulerPolicy::validate` and `L3PipelinePolicy::validate` are public; the
+  hand-written Python gate parser and ark-api's `RawGates` are gone. ark-coordinator accepts the
+  same request schema as ark-api (`pii_mode`, `dlp_mode`, `chunk_overlap_tokens`, `l1`/`L1`/`1`
+  levels), checked by a shared fixture.
+- **Breaking (API):** `ShellRiskPipeline::verdict` and `ShellPolicies::evaluate` take an
+  `allows_rule` filter; `ShellConfig::policy_config` is replaced by
+  `ShellPolicyConfig::load(policy_dirs, allowlist)`. `Facts` and its parts carry a lifetime
+  (`Facts<'a>`) so parsed facts borrow their strings.
+- Cat policies are L1 rules: every policy id (`core.*`, bundle-default ids such as
+  `CMD-PIPE-CURL`, `user.*`) is gated by the same `rules` map as the other L1 rules (Core
+  `ScannerConfig`, `ScanGateMatrix.native`, per-request gates, Python, Ark API); `false` turns a
+  policy off, a missing id keeps it on. Disabled regex-gated policies are not evaluated. The L1 rule
+  catalog lists the 117 shipped policies with tier, scope and level.
+- Python Core `Scanner.shell_verdict` takes `prior_facts` (the `facts` of earlier verdicts made
+  with `with_facts=True`); Rust parses them with `Facts::from_json`, which round-trips
+  `Facts::to_json` and `canonical_json`.
+- Full-Ark shell policies outside Rust, with Core's `policy_dirs`/`allowlist` keys: Python
+  `SecurityGateway.set_shell_command_policy_config(policy_dirs=None, allowlist=None)` (refused
+  configuration raises `ValueError` and changes nothing) and the Ark API server config
+  `pipeline.shell_command: {policy_dirs, allowlist}`, read at startup.
 - **Breaking (API):** Core and Ark share one category type. `SecurityCategory` serializes its
   canonical name and deserializes every `FromStr` name, case-insensitively. Core's `Category` enum is
   removed: `ScannerConfig.categories` is `Vec<SecurityCategory>`, `NativeEngine` and its producers

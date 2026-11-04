@@ -89,6 +89,11 @@ class PolicyHit(TypedDict):
 Lowered = TypedDict("Lowered", {"id": str, "from": Literal["block"], "to": Literal["ask"]})
 
 
+# `patronus.facts/1` of a command: the `facts` of a verdict made with
+# `with_facts=True`, passed back as `prior_facts` of later commands.
+ShellFacts = dict[str, object]
+
+
 ShellVerdict = TypedDict("ShellVerdict", {
     "v": Literal["patronus.verdict/1"],
     "decision": Decision,
@@ -97,7 +102,7 @@ ShellVerdict = TypedDict("ShellVerdict", {
     "model": ShellModelVerdict,
     "policies": list[PolicyHit],
     "allowlisted": list[Lowered],
-    "facts": NotRequired[dict[str, object]],
+    "facts": NotRequired[ShellFacts],
 })
 
 

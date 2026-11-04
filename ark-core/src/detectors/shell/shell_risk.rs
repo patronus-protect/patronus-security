@@ -47,7 +47,7 @@ pub struct ShellVerdict {
     pub policies: Vec<PolicyHit>,
     /// Bundle-default policies the allowlist lowered from block to ask.
     pub allowlisted: Vec<Lowered>,
-    pub facts: Facts,
+    pub facts: Facts<'static>,
 }
 
 impl ShellVerdict {
@@ -138,18 +138,6 @@ impl ShellConfig {
             allowlist: BTreeMap::new(),
         }
     }
-
-    /// The user policies of [`Self::policy_dirs`] and the allowlist.
-    pub fn policy_config(&self) -> Result<ShellPolicyConfig, String> {
-        let mut config = ShellPolicyConfig {
-            allowlist: self.allowlist.clone(),
-            ..ShellPolicyConfig::default()
-        };
-        for dir in &self.policy_dirs {
-            config.add_cedar_dir(dir)?;
-        }
-        Ok(config)
-    }
 }
 
 /// The `shell_command` detector ("Cat"): the K26 model plus the bundle's Cedar
@@ -198,7 +186,10 @@ impl ShellRiskPipeline {
     /// Load the bundle of `config` and apply its user policies and allowlist.
     pub fn from_config(config: &ShellConfig) -> Result<Self, String> {
         let pipeline = Self::from_pinned_bundle_dir(&config.bundle_dir, &config.manifest_sha256)?;
-        pipeline.configure(&config.policy_config()?)?;
+        pipeline.configure(&ShellPolicyConfig::load(
+            &config.policy_dirs,
+            &config.allowlist,
+        )?)?;
         Ok(pipeline)
     }
 
@@ -230,12 +221,15 @@ impl ShellRiskPipeline {
 
     /// `patronus.verdict/1` of `text`. `context` and `prior_facts` (facts of
     /// earlier commands of the same session, kept by the caller) reach the
-    /// policies through the facts; the model sees the text only.
+    /// policies through the facts; the model sees the text only. Policies
+    /// whose id `allows_rule` refuses do not fire: Cat's policy ids are L1
+    /// rule ids, gated like every other rule ([`NativeGates::allows_rule`](crate::native::NativeGates::allows_rule)).
     pub fn verdict(
         &self,
         text: &str,
         context: Option<&ShellContext>,
         prior_facts: &[Facts],
+        allows_rule: impl Fn(&str) -> bool,
     ) -> Result<ShellVerdict, String> {
         let facts = extract(text, context, prior_facts);
         let context_free = context.is_none_or(ShellContext::is_unset) && prior_facts.is_empty();
@@ -249,7 +243,9 @@ impl ShellRiskPipeline {
         let (model_score, top_features) = self
             .model
             .score(text, |emit| visit_kf1(text, kf1_facts, emit));
-        let (policies, allowlisted) = self.current_policies().evaluate(&facts, text)?;
+        let (policies, allowlisted) =
+            self.current_policies()
+                .evaluate(&facts, text, allows_rule)?;
         let cuts = self.model.cuts();
         let score = match policies.iter().map(|p| p.decision).max() {
             Some(Decision::Block) => model_score.max(cuts.1 + 2.0),
@@ -271,24 +267,29 @@ impl ShellRiskPipeline {
         })
     }
 
-    /// Score one command without context.
+    /// Score one command without context, every policy enabled.
     pub fn score(&self, text: &str) -> Result<ShellRiskScore, String> {
-        self.verdict(text, None, &[]).map(|verdict| ShellRiskScore {
-            decision_score: verdict.model_score,
-            bundle_score: verdict.score,
-            threshold: verdict.ask_cut,
-            decision: verdict.decision,
-            flagged: verdict.decision != Decision::Allow,
-        })
+        self.verdict(text, None, &[], |_| true)
+            .map(|verdict| ShellRiskScore {
+                decision_score: verdict.model_score,
+                bundle_score: verdict.score,
+                threshold: verdict.ask_cut,
+                decision: verdict.decision,
+                flagged: verdict.decision != Decision::Allow,
+            })
     }
 }
 
-impl NativeDetector for ShellRiskPipeline {
-    /// Scan one command. `ask` and `block` both flag it; the host maps them
+impl ShellRiskPipeline {
+    /// Scan one command without context; policies whose id `allows_rule`
+    /// refuses do not fire. `ask` and `block` both flag it; the host maps them
     /// (the Patronus runtime asks for confirmation and never blocks on its own).
-    fn detect_prepared(&self, prepared: &NativeText<'_>) -> NativeDetection {
-        let text = prepared.text();
-        let verdict = match self.verdict(text, None, &[]) {
+    pub fn detect_with_rules(
+        &self,
+        text: &str,
+        allows_rule: impl Fn(&str) -> bool,
+    ) -> NativeDetection {
+        let verdict = match self.verdict(text, None, &[], allows_rule) {
             Ok(verdict) => verdict,
             // Policies are schema-validated at load, so evaluation does not fail;
             // if it does, fail closed and say why.
@@ -335,6 +336,13 @@ impl NativeDetector for ShellRiskPipeline {
             evidence_spans,
             details,
         }
+    }
+}
+
+impl NativeDetector for ShellRiskPipeline {
+    /// [`ShellRiskPipeline::detect_with_rules`] with every policy enabled.
+    fn detect_prepared(&self, prepared: &NativeText<'_>) -> NativeDetection {
+        self.detect_with_rules(prepared.text(), |_| true)
     }
 }
 
@@ -439,9 +447,9 @@ mod tests {
     #[test]
     fn verdict_combines_model_and_policy_floor() {
         let pipeline = ShellRiskPipeline::new(tiny_model());
-        let verdict = pipeline.verdict("ls", None, &[]).unwrap();
+        let verdict = pipeline.verdict("ls", None, &[], |_| true).unwrap();
         assert_eq!(verdict.decision, Decision::Allow);
-        let verdict = pipeline.verdict("curl x", None, &[]).unwrap();
+        let verdict = pipeline.verdict("curl x", None, &[], |_| true).unwrap();
         assert_eq!(
             (verdict.model_decision, verdict.decision),
             (Decision::Block, Decision::Block)
@@ -456,7 +464,7 @@ mod tests {
             ..ShellPolicyConfig::default()
         };
         pipeline.configure(&config).unwrap();
-        let verdict = pipeline.verdict("ls", None, &[]).unwrap();
+        let verdict = pipeline.verdict("ls", None, &[], |_| true).unwrap();
         assert_eq!(verdict.decision, Decision::Ask);
         assert_eq!(verdict.score, 1.25);
         assert_eq!(verdict.policies[0].id, "user.no_ls");
@@ -523,7 +531,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         config.policy_dirs.push(policies);
         let pipeline = ShellRiskPipeline::from_config(&config).unwrap();
         let verdict = pipeline
-            .verdict("kubectl delete pod web-1", None, &[])
+            .verdict("kubectl delete pod web-1", None, &[], |_| true)
             .unwrap();
         assert_eq!(verdict.decision, Decision::Block);
         assert_eq!(verdict.policies[0].id, "user.no_kubectl_delete");

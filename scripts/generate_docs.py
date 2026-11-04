@@ -423,6 +423,40 @@ DLP_RELATIONSHIP_RULES = [
 ]
 
 
+SHELL_DATA_DIR = ROOT / "ark-core/src/detectors/shell/data"
+CEDAR_POLICY_RE = re.compile(
+    r'@id\("(?P<id>[^"]+)"\)\s*@decision\("(?P<decision>[^"]+)"\)\s*'
+    r'(?:@title\("(?P<title>[^"]*)"\)\s*)?forbid\s*\(\s*principal,\s*action\s*==\s*Action::"(?P<scope>[a-z]+)"'
+)
+
+
+def parse_shell_policies() -> list[dict[str, str]]:
+    """Cat's shipped policies: `core.cedar`, then the translated DefenseClaw
+    rules the loader keeps (`status == translated`, not the held-out bucket)."""
+    core = [
+        {
+            "id": match["id"],
+            "tier": "core",
+            "title": match["title"] or match["id"],
+            "scope": match["scope"],
+            "level": f"`{match['decision']}`",
+        }
+        for match in CEDAR_POLICY_RE.finditer((SHELL_DATA_DIR / "core.cedar").read_text())
+    ]
+    bundle = [
+        {
+            "id": rule["id"],
+            "tier": "bundle-default",
+            "title": rule.get("title") or rule["id"],
+            "scope": rule.get("scope") or "segment",
+            "level": "release gate",
+        }
+        for rule in json.loads((SHELL_DATA_DIR / "dc_rules.json").read_text())
+        if rule["status"] == "translated" and rule["bucket"] != "test"
+    ]
+    return sorted(core, key=lambda rule: rule["id"]) + sorted(bundle, key=lambda rule: rule["id"])
+
+
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern")
     strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
@@ -617,6 +651,20 @@ def generate_l1_rule_catalog_doc() -> str:
     ])
     for rule in threat:
         lines.append(f"| `{rule['id']}` | `{rule['class_name']}` | {', '.join(rule['upstream_groups'])} |")
+    shell = parse_shell_policies()
+    lines.extend([
+        "", f"## Shell command policies ({len(shell)})", "",
+        "Cedar policies of Cat, the `shell_command` detector (see [Check shell commands](../how-to/check-shell-commands.md)). "
+        "A policy ID is a rule ID: `{\"rules\": {\"core.remote_to_exec\": false}}` turns that policy off like any other L1 rule; "
+        "a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` "
+        "policies take the level that the release's validation gate set in the bundle's `policy_levels.json` "
+        "(`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`) from `policy_dirs` are rules too. "
+        "`segment` policies read one command segment, `command` policies the whole command.", "",
+        "| Rule ID | Title | Tier | Scope | Level |", "| --- | --- | --- | --- | --- |",
+    ])
+    for rule in shell:
+        title = rule["title"].replace("|", "\\|")
+        lines.append(f"| `{rule['id']}` | {title} | `{rule['tier']}` | `{rule['scope']}` | {rule['level']} |")
     return "\n".join(lines) + "\n"
 
 

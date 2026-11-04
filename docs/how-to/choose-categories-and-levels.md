@@ -88,7 +88,7 @@ specific detector below the ceiling, without rebuilding the gateway:
 === "Python"
 
     ```python
-    scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
+    scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
     # ... later ...
     scanner.set_execution_gates(None)   # reset to all enabled
     ```

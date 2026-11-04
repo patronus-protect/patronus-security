@@ -104,7 +104,7 @@ pub(super) fn remote_interp_is_filter(pipes: &[Pipeline]) -> bool {
 }
 
 /// Files that receive secret material, and files produced by downloads.
-pub(super) fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write>, Vec<String>) {
+pub(super) fn writes_and_downloads(pipes: &[Pipeline]) -> (Vec<Write<'static>>, Vec<String>) {
     let mut writes = Vec::new();
     let mut downloads = Vec::new();
     for pipe in pipes {
@@ -238,7 +238,7 @@ pub(super) fn link_prior(
     segments: &[Vec<String>],
     prior_facts: &[Facts],
     ctx: &ShellContext,
-) -> Vec<Flow> {
+) -> Vec<Flow<'static>> {
     let secret: BTreeSet<String> = prior_facts
         .iter()
         .flat_map(|pf| &pf.writes)
@@ -270,7 +270,10 @@ pub(super) fn link_prior(
 
 /// Database dumps piped into a network uploader, or written to a file
 /// (recorded in `writes`).
-pub(super) fn db_dump_flows(pipes: &[Pipeline], writes: &mut Vec<Write>) -> Vec<Flow> {
+pub(super) fn db_dump_flows(
+    pipes: &[Pipeline],
+    writes: &mut Vec<Write<'static>>,
+) -> Vec<Flow<'static>> {
     const DUMPERS: [&str; 7] = [
         "pg_dump",
         "pg_dumpall",
@@ -323,9 +326,9 @@ pub(super) fn db_dump_flows(pipes: &[Pipeline], writes: &mut Vec<Write>) -> Vec<
 /// Upload of a path that this same command earlier filled with secret or dump data.
 pub(super) fn same_command_links(
     pipes: &[Pipeline],
-    writes: &[Write],
+    writes: &[Write<'static>],
     ctx: &ShellContext,
-) -> Vec<Flow> {
+) -> Vec<Flow<'static>> {
     let mut by_path: Vec<(String, &'static str)> = Vec::new();
     for write in writes {
         let path = norm_linked(&write.path, ctx);

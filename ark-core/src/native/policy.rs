@@ -65,8 +65,8 @@ const OPT_IN_RULES: [&str; 3] = [
 ];
 
 /// Default of a rule without an explicit gate, shared by every host: all
-/// non-DLP rules and the DLP credential/secret rules are on, the other DLP
-/// content rules are opt-in.
+/// non-DLP rules (Cat's shell policies included) and the DLP credential/secret
+/// rules are on, the other DLP content rules are opt-in.
 pub fn default_rule_enabled(rule_id: &str) -> bool {
     if !rule_id.starts_with("dlp_") {
         return true;
@@ -139,6 +139,10 @@ mod tests {
         assert!(gates.allows_model("native:pii"));
         assert!(!gates.allows_rule("dlp_mcp_policy"));
         assert!(NativeGates::all_enabled().allows_rule("dlp_mcp_policy"));
+        // Cat's shell policies are rules too, enabled unless gated off.
+        for id in ["core.remote_to_exec", "CMD-PIPE-CURL", "user.ask_terraform"] {
+            assert!(default_rule_enabled(id), "{id}");
+        }
         let gates: NativeGates = serde_json::from_str(
             r#"{"rules":{"pii_email":false},"models":{"native:pii":false},"pii_mode":"recall","explain":true}"#,
         )
