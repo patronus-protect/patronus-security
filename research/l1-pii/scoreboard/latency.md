@@ -4,16 +4,16 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 | Engine | Init ms | short p50 / p95 / p99 ms | 4kib p50 / p95 / p99 ms | 100kib p50 / p95 / p99 ms |
 |---|---:|---:|---:|---:|
-| ark | 451 | 0.215 / 0.334 / 0.390 | 1.469 / 1.841 / 1.994 | 12.575 / 15.920 / 16.557 |
-| ark-native | 245 | 0.202 / 0.324 / 0.408 | 1.255 / 1.606 / 1.719 | 7.765 / 9.402 / 9.595 |
+| ark | 423 | 0.314 / 0.401 / 0.469 | 1.675 / 2.114 / 2.275 | 11.864 / 14.641 / 15.579 |
+| ark-native | 311 | 0.240 / 0.342 / 0.384 | 1.570 / 1.919 / 2.119 | 8.068 / 9.947 / 10.690 |
 | presidio-default | 4565 | 10.151 / 13.928 / 16.559 | 212.486 / 338.831 / 390.239 | 10407.527 / 13634.609 / 15005.935 |
 | presidio-tuned | 8764 | 12.540 / 30.829 / 33.890 | 200.656 / 259.931 / 290.922 | 9803.598 / 11978.768 / 12399.738 |
 
 | p95 / Ark (Python) | short | 4kib | 100kib |
 |---|---:|---:|---:|
-| ark-native | 0.97× | 0.87× | 0.59× |
-| presidio-default | 42× | 184× | 856× |
-| presidio-tuned | 92× | 141× | 752× |
+| ark-native | 0.85× | 0.91× | 0.68× |
+| presidio-default | 35× | 160× | 931× |
+| presidio-tuned | 77× | 123× | 818× |
 
 | Workload | Bytes | Chars | ark spans | ark-native spans | presidio-default spans | presidio-tuned spans |
 |---|---:|---:|---:|---:|---:|---:|
@@ -24,8 +24,52 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 | 100kib-de | 102400 | 101229 | 1173 | 1173 | 3613 | 2051 |
 | 100kib-en | 102400 | 102400 | 1038 | 1038 | 2907 | 2701 |
 
-M4 (ark 100kib p95 ≤ 10 ms): 15.920 ms, FAIL.
-M4 (ark-native 100kib p95 ≤ 10 ms): 9.402 ms, pass.
+M4 (ark 100kib p95 ≤ 10 ms): 14.641 ms, FAIL.
+M4 (ark-native 100kib p95 ≤ 10 ms): 9.947 ms, pass.
+
+## Profile and remaining hotspots (H06 pass 3)
+
+Ark rows measured after H06-3 (`latency.py run --engines ark ark-native`, the second of three runs;
+100 KiB p95 over the three: ark 14.058 / 14.641 / 14.900 ms, ark-native 10.251 / 9.947 / 9.897 ms);
+the Presidio rows are the H03 run. The native code is unchanged, so the ark-native spread is the
+noise of the machine, which was busier than in pass 2. Spans per workload are unchanged. An A/B of
+the Python binding against main, both in turn under the same load: 100 KiB p95 17.6–18.0 → 13.2–13.9
+ms, short and 4 KiB unchanged.
+
+Profile of the 100 KiB workloads through the Python binding (median per call, DE and EN pooled,
+before → after pass 3):
+
+| Part | ms |
+|---|---:|
+| Native scan (`scan_category` with the GIL released) | 7.9 (unchanged) |
+| `_to_dict`: layer `details` (about 4 600 Python objects of 1 369 `matched_rules` entries), warm | 2.5 → 1.6 |
+| `_to_dict`: layer `details`, right after the scan (the entries were built on the rayon workers) | 5.1 → 3.8 |
+| `_to_dict`: `evidence_spans` (about 1 100 dicts) | 1.7 → 1.5 |
+| Freeing the result dicts | 0.8 → 0.6 |
+| Freeing the native result (serde values of the `matched_rules`) with the GIL held | 2.8 → 0.3 |
+
+Pass 3 builds one Python string per distinct key or value text per `details` call (keys interned as
+before, values not, as they may hold scanned text) and passes `Bound` values, so no dropped
+`PyObject` checks the GIL; span labels are shared the same way. A released layer with at least 64
+`matched_rules` entries hands its details to a background thread through a bounded queue (the caller
+frees them when the queue is full); smaller ones are freed in place, as waking the thread costs short
+texts as much as the free. Measured and not in: a `RegexSet` of all PII rules as a shared pre-pass
+(about 1 s per 100 KiB: the union does not fit the lazy DFA), and anchor gates that require every
+lexicon word inside a literal instead of one (2–3 of about 60 zero-match rule searches gated).
+
+M4 holds for ark-native (within the noise), not for ark (Python). Remaining hotspots, each ≥ 10 % of
+the ark p95, for H06-4:
+
+- The rule searches: 60–65 of the 93 searched PII rules find nothing in either workload and still
+  scan the whole text, about 10 of 19 ms search CPU per call (about 1.7 ms wall on 6 threads). Most
+  start with their value, not a keyword, so the lexicon gates do not apply; a shared value-shape
+  pre-pass (one scan that records which value classes and lengths occur) would skip them.
+- The `matched_rules` entries as `serde_json::Value`: about 16 allocations per match, built on the
+  rayon workers and read cache-cold when Python converts them (3.8 ms after the scan vs 1.6 ms warm),
+  and freed natively (about 1.5 ms of the ark-native call). A typed entry (a struct that serializes to
+  the same JSON) would cut the allocations, the drop and the conversion; the JSON shape stays.
+- The sequential preparation before the parallel step (lowercase view, lexical anchors, structure
+  parse; 1.4–1.7 ms).
 
 ## Profile and remaining hotspots (H06 pass 2)
 
