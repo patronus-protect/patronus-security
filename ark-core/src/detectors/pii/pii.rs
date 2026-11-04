@@ -1257,7 +1257,7 @@ mod parallel_tests {
     use crate::detectors::PARALLEL_RULES_MIN_BYTES;
 
     #[test]
-    fn parallel_rule_search_matches_the_sequential_one() {
+    fn parallel_rule_findings_match_the_sequential_ones() {
         let pipeline = PiiPipeline::new();
         let cases: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/l1_bilingual_rules.json"
@@ -1274,31 +1274,21 @@ mod parallel_tests {
         }
         let prepared = crate::threat::NativeText::new(&text);
         let allowed = vec![true; pipeline.regexes.len()];
-        let ranges = |parallel| {
+        // Both modes, so the scored entries (`score`, `context`) are compared too.
+        let findings = |min_score, parallel| {
             pipeline
-                .rule_matches(&prepared, &allowed, parallel)
+                .rule_findings(&prepared, &allowed, min_score, parallel)
                 .into_iter()
-                .map(|matches| {
-                    matches.map(|matches| {
-                        matches
-                            .iter()
-                            .map(|captures| {
-                                captures
-                                    .iter()
-                                    .map(|group| group.map(|group| group.range()))
-                                    .collect::<Vec<_>>()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                })
+                .map(|findings| serde_json::to_value(findings).unwrap())
                 .collect::<Vec<_>>()
         };
-        let sequential = ranges(false);
-        assert!(sequential
-            .iter()
-            .flatten()
-            .any(|matches| !matches.is_empty()));
-        assert_eq!(ranges(true), sequential);
+        for min_score in [None, Some(0.0)] {
+            let sequential = findings(min_score, false);
+            assert!(sequential
+                .iter()
+                .any(|findings| !findings.as_array().unwrap().is_empty()));
+            assert_eq!(findings(min_score, true), sequential);
+        }
         let detection = pipeline.detect(&text);
         assert!(!detection.evidence_spans.is_empty());
         assert_eq!(
