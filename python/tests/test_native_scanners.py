@@ -50,6 +50,28 @@ class NativeScannerTests(unittest.TestCase):
             self.assertIs(type(rule["components"]), list)
             self.assertIs(type(rule["components"][0]["span_precision"]), str)
 
+    def test_layer_details_outlive_their_released_result(self):
+        # The binding frees released details on a background thread (H06-3);
+        # a layer still held must keep the details it shares with its result.
+        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        text = " ".join(f"Kontakt {n}: user{n}@example.de." for n in range(200))
+        expected = next(
+            r for r in scanner.scan_category("pii", text) if r["model"] == "native:pii"
+        )["layers"][0]["details"]
+        for _ in range(3):
+            results = scanner.rust_gateway.scan_category("pii", text)
+            layer = next(r for r in results if r.model == "native:pii").layers[0]
+            del results
+            self.assertEqual(layer.details, expected)
+            del layer
+        rules = expected["matched_rules"]
+        self.assertEqual(len(rules), 200)
+        self.assertEqual({rule["rule_id"] for rule in rules}, {"pii_email"})
+        self.assertEqual(
+            [rule["start_byte"] for rule in rules],
+            sorted(rule["start_byte"] for rule in rules),
+        )
+
     def test_native_dlp_relationships_expose_direct_source_components(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
         scanner.set_execution_gates({"rules": {"dlp_mcp_policy": True}})
