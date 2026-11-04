@@ -44,9 +44,9 @@ pub struct NativeDetection {
 /// fork-join costs more than the scans it spreads.
 pub const PARALLEL_RULES_MIN_BYTES: usize = 32 * 1024;
 
-/// Regex matches of one rule: `None` for a rule that is off or gated without
-/// structural values; a gated rule with structural values has none.
-pub type RuleMatches<'t> = Option<Vec<regex::Captures<'t>>>;
+/// The accepted matches of one rule, in match order: per match its
+/// `matched_rules` entry and evidence span.
+pub type RuleFindings = Vec<(serde_json::Value, EvidenceSpan)>;
 
 /// Shared detection contract for native regex scanners that return exact evidence.
 pub trait NativeRegexDetector: Sync {
@@ -201,51 +201,169 @@ pub trait NativeRegexDetector: Sync {
         self.detect_prepared_scored(prepared, allows_rule, explain, None)
     }
 
-    /// The regex matches of every rule in rule order, for the rules `allowed`.
-    /// Rules are searched independently, so with `parallel` they run on the
-    /// rayon pool; the result is the same either way.
+    /// The regex matches of rule `index`: `None` for a rule gated without
+    /// structural values; a gated rule with structural values has none.
     fn rule_matches<'t>(
         &self,
         prepared: &'t crate::threat::NativeText<'_>,
-        allowed: &[bool],
-        parallel: bool,
-    ) -> Vec<RuleMatches<'t>> {
+        scan: Option<&dlp::prefilter::RuleScan>,
+        index: usize,
+    ) -> Option<Vec<regex::Captures<'t>>> {
         let text = prepared.text();
-        let scan = self.rule_scan(text);
-        let search = |index: usize| {
+        let gated = scan.is_some_and(|scan| !scan.is_active(index))
+            || self
+                .anchor_gates()
+                .get(index)
+                .is_some_and(|gate| !gate.is_unconditional() && !gate.allows(prepared.anchors()))
+            || self
+                .prefilters()
+                .and_then(|filters| filters[index].as_ref())
+                .is_some_and(|filter| !filter.is_match(text));
+        // Structural values carry their key outside the regex, so the anchor
+        // gate and prefilter of the regex do not apply to them.
+        if gated
+            && self
+                .structured_regexes()
+                .is_none_or(|regexes| regexes[index].is_none())
+        {
+            return None;
+        }
+        Some(if gated {
+            Vec::new()
+        } else {
+            self.rule_captures(index, &self.regexes()[index], text, scan)
+        })
+    }
+
+    /// The accepted matches of every rule in rule order, for the rules
+    /// `allowed`. Rules are searched and their matches validated and scored
+    /// independently, so with `parallel` they run on the rayon pool; the result
+    /// is the same either way.
+    fn rule_findings(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allowed: &[bool],
+        min_score: Option<f64>,
+        parallel: bool,
+    ) -> Vec<RuleFindings> {
+        let scan = self.rule_scan(prepared.text());
+        let findings = |index: usize| {
             if !allowed[index] {
-                return None;
+                return Vec::new();
             }
-            let gated = scan.as_ref().is_some_and(|scan| !scan.is_active(index))
-                || self.anchor_gates().get(index).is_some_and(|gate| {
-                    !gate.is_unconditional() && !gate.allows(prepared.anchors())
-                })
-                || self
-                    .prefilters()
-                    .and_then(|filters| filters[index].as_ref())
-                    .is_some_and(|filter| !filter.is_match(text));
-            // Structural values carry their key outside the regex, so the anchor
-            // gate and prefilter of the regex do not apply to them.
-            if gated
-                && self
-                    .structured_regexes()
-                    .is_none_or(|regexes| regexes[index].is_none())
-            {
-                return None;
-            }
-            Some(if gated {
-                Vec::new()
-            } else {
-                self.rule_captures(index, &self.regexes()[index], text, scan.as_ref())
-            })
+            self.rule_matches(prepared, scan.as_ref(), index)
+                .map(|matches| self.accepted_matches(prepared, index, matches, min_score))
+                .unwrap_or_default()
         };
         let rules = 0..self.regexes().len();
         if parallel {
             use rayon::prelude::*;
-            rules.into_par_iter().map(search).collect()
+            rules.into_par_iter().map(findings).collect()
         } else {
-            rules.map(search).collect()
+            rules.map(findings).collect()
         }
+    }
+
+    /// Validates and scores the regex matches of rule `index` and the values
+    /// that the document structure binds to it.
+    fn accepted_matches(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        index: usize,
+        regex_matches: Vec<regex::Captures<'_>>,
+        min_score: Option<f64>,
+    ) -> RuleFindings {
+        let text = prepared.text();
+        let regex = &self.regexes()[index];
+        let mut accepted = Vec::new();
+        let structured = self
+            .structured_regexes()
+            .and_then(|regexes| regexes[index].as_ref());
+        let regex_values: Vec<_> = regex_matches
+            .iter()
+            .filter_map(|captures| captures.get(self.value_group(index, captures).unwrap_or(0)))
+            .map(|matched| matched.range())
+            .collect();
+        // A key names its whole value, so structural values come first and keep
+        // their span against a shorter regex match of the same rule. A value the
+        // regex finds as well keeps the regex evidence (its field name).
+        let structural_matches = structured.into_iter().flat_map(|value_regex| {
+            self.structured_values(index, prepared)
+                .into_iter()
+                .filter(|structured| !regex_values.contains(&structured.value))
+                .filter_map(move |structured| {
+                    let value = structured.value.clone();
+                    let captures = value_regex.captures_at(&text[..value.end], value.start)?;
+                    (captures.get(0)?.start() == value.start)
+                        .then_some((captures, Some(structured)))
+                })
+        });
+        let candidates = structural_matches
+            .collect::<Vec<_>>()
+            .into_iter()
+            .chain(regex_matches.into_iter().map(|captures| (captures, None)));
+        for (captures, structured) in candidates {
+            let value_group = self.value_group(index, &captures);
+            let Some(matched) = captures.get(value_group.unwrap_or(0)) else {
+                continue;
+            };
+            if matched.is_empty()
+                || self.validators()[index].is_some_and(|validator| !validator(matched.as_str()))
+                || !self.allows_match(index, prepared, &captures)
+            {
+                continue;
+            }
+            let (score, context) = match min_score {
+                None => (1.0, None),
+                Some(threshold) => {
+                    let scored = self.match_score(index, prepared, &captures);
+                    if scored.score < threshold {
+                        continue;
+                    }
+                    (scored.score, scored.context)
+                }
+            };
+            let evidence = match &structured {
+                None => evidence::L1Match::from_captures(regex, &captures, value_group),
+                Some(structured) => evidence::L1Match::at(
+                    matched.range(),
+                    vec![
+                        evidence::L1Component::new("structure_key", structured.key.clone()),
+                        evidence::L1Component::new("value", matched.range()),
+                    ],
+                ),
+            };
+            let mut rule = serde_json::json!({
+                "rule_id": self.rule_ids()[index],
+                "start_byte": matched.start(), "end_byte": matched.end(),
+                "components": evidence.components,
+            });
+            if let Some(structured) = &structured {
+                rule["structure"] = structured.carrier.into();
+            }
+            if min_score.is_some() {
+                rule["score"] = serde_json::json!(score);
+            }
+            if let Some(context) = context {
+                rule["context"] = context;
+            }
+            if let Some(rule) = rule.as_object_mut() {
+                rule.extend(self.match_details(index, matched.as_str()));
+            }
+            accepted.push((
+                rule,
+                EvidenceSpan {
+                    label: self.entity_groups()[index].to_string(),
+                    text: matched.as_str().to_string(),
+                    score,
+                    start_byte: matched.start(),
+                    end_byte: matched.end(),
+                    start_char: 0,
+                    end_char: 0,
+                },
+            ));
+        }
+        accepted
     }
 
     /// `min_score: None` is the unscored contract: every finding scores `1.0`.
@@ -272,101 +390,17 @@ pub trait NativeRegexDetector: Sync {
         let mut class_name = None;
         let mut evidence_spans = Vec::new();
         let allowed: Vec<bool> = self.rule_ids().iter().map(|id| allows_rule(id)).collect();
-        let searched =
-            self.rule_matches(prepared, &allowed, text.len() >= PARALLEL_RULES_MIN_BYTES);
-        for ((index, regex), searched) in self.regexes().iter().enumerate().zip(searched) {
-            let Some(regex_matches) = searched else {
-                continue;
-            };
-            let structured = self
-                .structured_regexes()
-                .and_then(|regexes| regexes[index].as_ref());
-            let regex_values: Vec<_> = regex_matches
-                .iter()
-                .filter_map(|captures| captures.get(self.value_group(index, captures).unwrap_or(0)))
-                .map(|matched| matched.range())
-                .collect();
-            // A key names its whole value, so structural values come first and keep
-            // their span against a shorter regex match of the same rule. A value the
-            // regex finds as well keeps the regex evidence (its field name).
-            let structural_matches = structured.into_iter().flat_map(|value_regex| {
-                self.structured_values(index, prepared)
-                    .into_iter()
-                    .filter(|structured| !regex_values.contains(&structured.value))
-                    .filter_map(move |structured| {
-                        let value = structured.value.clone();
-                        let captures = value_regex.captures_at(&text[..value.end], value.start)?;
-                        (captures.get(0)?.start() == value.start)
-                            .then_some((captures, Some(structured)))
-                    })
-            });
-            let candidates = structural_matches
-                .collect::<Vec<_>>()
-                .into_iter()
-                .chain(regex_matches.into_iter().map(|captures| (captures, None)));
-            for (captures, structured) in candidates {
-                let value_group = self.value_group(index, &captures);
-                let Some(matched) = captures.get(value_group.unwrap_or(0)) else {
-                    continue;
-                };
-                if matched.is_empty()
-                    || self.validators()[index]
-                        .is_some_and(|validator| !validator(matched.as_str()))
-                    || !self.allows_match(index, prepared, &captures)
-                {
-                    continue;
-                }
-                let (score, context) = match min_score {
-                    None => (1.0, None),
-                    Some(threshold) => {
-                        let scored = self.match_score(index, prepared, &captures);
-                        if scored.score < threshold {
-                            continue;
-                        }
-                        (scored.score, scored.context)
-                    }
-                };
-                let evidence = match &structured {
-                    None => evidence::L1Match::from_captures(regex, &captures, value_group),
-                    Some(structured) => evidence::L1Match::at(
-                        matched.range(),
-                        vec![
-                            evidence::L1Component::new("structure_key", structured.key.clone()),
-                            evidence::L1Component::new("value", matched.range()),
-                        ],
-                    ),
-                };
-                let mut rule = serde_json::json!({
-                    "rule_id": self.rule_ids()[index],
-                    "start_byte": matched.start(), "end_byte": matched.end(),
-                    "components": evidence.components,
-                });
-                if let Some(structured) = &structured {
-                    rule["structure"] = structured.carrier.into();
-                }
-                if min_score.is_some() {
-                    rule["score"] = serde_json::json!(score);
-                }
-                if let Some(context) = context {
-                    rule["context"] = context;
-                }
-                if let Some(rule) = rule.as_object_mut() {
-                    rule.extend(self.match_details(index, matched.as_str()));
-                }
-                matched_rules.push(rule);
+        let findings = self.rule_findings(
+            prepared,
+            &allowed,
+            min_score,
+            text.len() >= PARALLEL_RULES_MIN_BYTES,
+        );
+        for (index, findings) in findings.into_iter().enumerate() {
+            for (rule, span) in findings {
                 class_name.get_or_insert(self.entity_groups()[index]);
-                evidence_spans.push((
-                    index,
-                    EvidenceSpan {
-                        label: self.entity_groups()[index].to_string(),
-                        text: matched.as_str().to_string(),
-                        score,
-                        start_byte: matched.start(),
-                        end_byte: matched.end(),
-                        start_char: 0,
-                        end_char: 0,
-                    },
-                ));
+                matched_rules.push(rule);
+                evidence_spans.push((index, span));
             }
         }
 

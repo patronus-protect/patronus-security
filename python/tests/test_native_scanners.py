@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from patronus_ark import SecurityGateway
@@ -27,6 +28,27 @@ class NativeScannerTests(unittest.TestCase):
                 text.encode("utf-8")[span["start_byte"]:span["end_byte"]].decode("utf-8"),
                 span["text"],
             )
+
+    def test_layer_details_and_thresholds_are_their_json_values(self):
+        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        text = "Kontakt: max.mustermann@example.de, Konto DE44 5001 0517 5407 3249 31."
+        for result in scanner.scan_category("pii", text):
+            for layer in result["layers"]:
+                with self.subTest(model=result["model"], layer=layer["layer_type"]):
+                    # What `json.loads` made of the JSON text before (H06-2).
+                    for value in (layer["details"], layer["thresholds"]):
+                        self.assertIs(type(value), dict)
+                        self.assertEqual(json.loads(json.dumps(value)), value)
+                    self.assertTrue(all(type(v) is float for v in layer["thresholds"].values()))
+        result = next(r for r in scanner.scan_category("pii", text) if r["model"] == "native:pii")
+        rules = result["layers"][0]["details"]["matched_rules"]
+        self.assertLessEqual(
+            {"pii_email", "pii_credit_card"}, {rule["rule_id"] for rule in rules}
+        )
+        for rule in rules:
+            self.assertIs(type(rule["start_byte"]), int)
+            self.assertIs(type(rule["components"]), list)
+            self.assertIs(type(rule["components"][0]["span_precision"]), str)
 
     def test_native_dlp_relationships_expose_direct_source_components(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)

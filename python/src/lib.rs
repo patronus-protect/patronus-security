@@ -11,7 +11,10 @@ use patronus_ark::{
     SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
 };
 use pyo3::prelude::*;
+use pyo3::types::{IntoPyDict, PyDict, PyList, PyString};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[pyfunction]
@@ -815,10 +818,65 @@ struct PyLayerResult {
     matched: bool,
     #[pyo3(get)]
     duration_ms: f64,
-    #[pyo3(get)]
-    thresholds_json: String,
-    #[pyo3(get)]
-    details_json: String,
+    thresholds: HashMap<String, f64>,
+    // Shared, so the `layers` getter clones a pointer and not the `matched_rules`.
+    details: Arc<HashMap<String, serde_json::Value>>,
+}
+
+#[pymethods]
+impl PyLayerResult {
+    #[getter]
+    fn thresholds(&self, py: Python<'_>) -> PyResult<PyObject> {
+        Ok(self
+            .thresholds
+            .clone()
+            .into_py_dict_bound(py)
+            .into_any()
+            .unbind())
+    }
+
+    /// The layer details as Python objects, built directly from the JSON values:
+    /// a JSON text round trip (`serde_json` out, `json.loads` in) cost more than
+    /// the scan on large texts (H06-2).
+    #[getter]
+    fn details(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let details = PyDict::new_bound(py);
+        for (key, value) in self.details.iter() {
+            details.set_item(key, json_to_py(py, value)?)?;
+        }
+        Ok(details.into_any().unbind())
+    }
+}
+
+/// A JSON value as the Python object that `json.loads` makes of its JSON text.
+fn json_to_py(py: Python<'_>, value: &serde_json::Value) -> PyResult<PyObject> {
+    use serde_json::Value;
+    Ok(match value {
+        Value::Null => py.None(),
+        Value::Bool(flag) => flag.into_py(py),
+        Value::Number(number) => match (number.as_i64(), number.as_u64()) {
+            (Some(int), _) => int.into_py(py),
+            (None, Some(int)) => int.into_py(py),
+            _ => number.as_f64().into_py(py),
+        },
+        Value::String(text) => text.into_py(py),
+        Value::Array(items) => {
+            let list = PyList::empty_bound(py);
+            for item in items {
+                list.append(json_to_py(py, item)?)?;
+            }
+            list.into_any().unbind()
+        }
+        Value::Object(map) => {
+            let dict = PyDict::new_bound(py);
+            // Interned like the keys `json.loads` memoizes: few distinct keys
+            // repeat in every `matched_rules` entry.
+            for (key, item) in map {
+                dict.set_item(PyString::intern_bound(py, key), json_to_py(py, item)?)?;
+            }
+            dict.into_any().unbind()
+        }
+    })
 }
 
 #[pyclass]
@@ -840,12 +898,46 @@ struct PyEvaluationResult {
     duration_ms: f64,
     #[pyo3(get)]
     layers: Vec<PyLayerResult>,
-    #[pyo3(get)]
-    evidence_spans: Vec<PyEvidenceSpan>,
+    // Shared, so cloning a result (an event) does not copy its spans.
+    evidence_spans: Arc<Vec<EvidenceSpan>>,
     #[pyo3(get)]
     label_scores: Vec<PyLabelScore>,
     #[pyo3(get)]
     decision_json: Option<String>,
+}
+
+#[pymethods]
+impl PyEvaluationResult {
+    /// The evidence spans as the dicts of the public result, built here: a
+    /// span object per span read field by field in Python cost about 2 ms per
+    /// 1 000 spans (H06-2).
+    #[getter]
+    fn evidence_spans<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let keys = [
+            "label",
+            "text",
+            "score",
+            "start_byte",
+            "end_byte",
+            "start_char",
+            "end_char",
+        ]
+        .map(|key| PyString::intern_bound(py, key));
+        self.evidence_spans
+            .iter()
+            .map(|span| {
+                let dict = PyDict::new_bound(py);
+                dict.set_item(&keys[0], &span.label)?;
+                dict.set_item(&keys[1], &span.text)?;
+                dict.set_item(&keys[2], span.score)?;
+                dict.set_item(&keys[3], span.start_byte)?;
+                dict.set_item(&keys[4], span.end_byte)?;
+                dict.set_item(&keys[5], span.start_char)?;
+                dict.set_item(&keys[6], span.end_char)?;
+                Ok(dict)
+            })
+            .collect()
+    }
 }
 
 #[pyclass]
@@ -857,25 +949,6 @@ struct PyLabelScore {
     confidence: f64,
     #[pyo3(get)]
     matched: bool,
-}
-
-#[pyclass]
-#[derive(Clone)]
-struct PyEvidenceSpan {
-    #[pyo3(get)]
-    label: String,
-    #[pyo3(get)]
-    text: String,
-    #[pyo3(get)]
-    score: f64,
-    #[pyo3(get)]
-    start_byte: usize,
-    #[pyo3(get)]
-    end_byte: usize,
-    #[pyo3(get)]
-    start_char: usize,
-    #[pyo3(get)]
-    end_char: usize,
 }
 
 #[pyclass]
@@ -1081,11 +1154,7 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
             model: result.model,
             duration_ms: result.duration_ms,
             layers: result.layers.into_iter().map(PyLayerResult::from).collect(),
-            evidence_spans: result
-                .evidence_spans
-                .into_iter()
-                .map(PyEvidenceSpan::from)
-                .collect(),
+            evidence_spans: Arc::new(result.evidence_spans),
             label_scores: result
                 .label_scores
                 .into_iter()
@@ -1102,20 +1171,6 @@ impl From<LabelScore> for PyLabelScore {
             label: score.label,
             confidence: score.confidence,
             matched: score.matched,
-        }
-    }
-}
-
-impl From<EvidenceSpan> for PyEvidenceSpan {
-    fn from(span: EvidenceSpan) -> Self {
-        Self {
-            label: span.label,
-            text: span.text,
-            score: span.score,
-            start_byte: span.start_byte,
-            end_byte: span.end_byte,
-            start_char: span.start_char,
-            end_char: span.end_char,
         }
     }
 }
@@ -1137,10 +1192,8 @@ impl From<LayerResult> for PyLayerResult {
             confidence: layer.confidence,
             matched: layer.matched,
             duration_ms: layer.duration_ms,
-            thresholds_json: serde_json::to_string(&layer.thresholds)
-                .unwrap_or_else(|_| "{}".to_string()),
-            details_json: serde_json::to_string(&layer.details)
-                .unwrap_or_else(|_| "{}".to_string()),
+            thresholds: layer.thresholds,
+            details: Arc::new(layer.details),
         }
     }
 }
@@ -1152,7 +1205,6 @@ fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;
     m.add_class::<PyLabelScore>()?;
-    m.add_class::<PyEvidenceSpan>()?;
     m.add_class::<PySecurityFailure>()?;
     m.add_class::<PySecurityEvent>()?;
     m.add_class::<PyRequestState>()?;

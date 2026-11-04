@@ -30,23 +30,12 @@ def _to_dict(result):
                 "confidence": layer.confidence,
                 "matched": layer.matched,
                 "duration_ms": layer.duration_ms,
-                "thresholds": _decode_json_object(layer.thresholds_json),
-                "details": _decode_json_object(layer.details_json),
+                "thresholds": layer.thresholds,
+                "details": layer.details,
             }
             for layer in result.layers
         ],
-        "evidence_spans": [
-            {
-                "label": span.label,
-                "text": span.text,
-                "score": span.score,
-                "start_byte": span.start_byte,
-                "end_byte": span.end_byte,
-                "start_char": span.start_char,
-                "end_char": span.end_char,
-            }
-            for span in result.evidence_spans
-        ],
+        "evidence_spans": result.evidence_spans,
         "label_scores": [
             {
                 "label": score.label,
