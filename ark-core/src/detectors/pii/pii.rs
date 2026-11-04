@@ -9,6 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
+use super::word_shape::{WordShape, WordShapes};
 use super::{
     at, au, be, ca, ch, common, context, crypto, de, device, driver_license, es, fin, fr,
     identifiers, ie, india, intl, it, kr, licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk,
@@ -258,6 +259,8 @@ pub struct PiiPipeline {
     /// Per rule without a lexical anchor or word boundary: a run of value
     /// characters that every match contains (H03).
     value_runs: Vec<Option<ValueRun>>,
+    /// Per rule that matches one whole ASCII word run: its length and kinds (H06-4).
+    word_shapes: Vec<Option<WordShape>>,
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
@@ -280,6 +283,7 @@ impl PiiPipeline {
         let mut prefilters = Vec::new();
         let mut anchored = Vec::new();
         let mut value_runs = Vec::new();
+        let mut word_shapes = Vec::new();
         let mut entity_groups = Vec::new();
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
@@ -304,6 +308,7 @@ impl PiiPipeline {
                 .then(|| value_run(p.pattern))
                 .flatten(),
             );
+            word_shapes.push(WordShape::of(p.pattern));
             prefilters.push(relaxed);
             entity_groups.push(p.entity_group);
             rule_ids.push(p.name);
@@ -330,6 +335,7 @@ impl PiiPipeline {
             prefilters,
             anchored,
             value_runs,
+            word_shapes,
             rule_ids,
             entity_groups,
             validators,
@@ -1075,17 +1081,24 @@ impl NativeRegexDetector for PiiPipeline {
     }
 
     /// The value runs of the rules without a lexical anchor or word boundary:
-    /// the longest run of each class is measured once per text.
+    /// the longest run of each class is measured once per text. The word
+    /// shapes of the text are recorded once as well and gate the rules that
+    /// match one whole word run.
     fn rule_scan(&self, text: &str) -> Option<RuleScan> {
         let mut longest = [None; 2];
         let mut longest_run = |class: ValueClass| {
             let slot = &mut longest[usize::from(class == ValueClass::Alphanumeric)];
             *slot.get_or_insert_with(|| class.longest_run(text))
         };
+        let shapes = WordShapes::of(text);
         Some(RuleScan::from_active(
             self.value_runs
                 .iter()
-                .map(|run| run.is_none_or(|run| longest_run(run.class) >= run.min_len))
+                .zip(&self.word_shapes)
+                .map(|(run, shape)| {
+                    run.is_none_or(|run| longest_run(run.class) >= run.min_len)
+                        && shape.is_none_or(|shape| shapes.contain(shape))
+                })
                 .collect(),
         ))
     }
@@ -1216,6 +1229,10 @@ mod prefilter_tests {
         let mut reference = PiiPipeline::new();
         reference.prefilters.iter_mut().for_each(|p| *p = None);
         reference.value_runs.iter_mut().for_each(|run| *run = None);
+        reference
+            .word_shapes
+            .iter_mut()
+            .for_each(|shape| *shape = None);
         let cases: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/l1_bilingual_rules.json"
         ))
@@ -1316,5 +1333,51 @@ mod gate_tests {
             .map(|(_, pattern)| pattern.name)
             .collect();
         assert!(ungated.is_empty(), "ungated PII rules: {ungated:?}");
+    }
+
+    /// A rule gated by its word shape has no match where the shape is missing
+    /// (H06-4): checked on the PII goldens and the bilingual fixture.
+    #[test]
+    fn word_shapes_never_gate_a_rule_that_matches() {
+        let pipeline = PiiPipeline::new();
+        let goldens = include_str!("../../../../python/patronus_ark/benchmark_data/pii_l1.jsonl");
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/l1_bilingual_rules.json"
+        ))
+        .unwrap();
+        let mut texts: Vec<String> = goldens
+            .lines()
+            .map(|line| {
+                let row: serde_json::Value = serde_json::from_str(line).unwrap();
+                row["text"].as_str().unwrap().to_owned()
+            })
+            .collect();
+        for case in fixture.as_array().unwrap() {
+            for language in ["de", "en"] {
+                texts.push(case[language].as_str().unwrap().to_owned());
+            }
+        }
+        let shaped: Vec<_> = pipeline
+            .word_shapes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, shape)| Some((index, (*shape)?)))
+            .collect();
+        assert!(shaped.len() >= 30, "{} shaped PII rules", shaped.len());
+        let mut matched = 0;
+        for text in &texts {
+            let shapes = WordShapes::of(text);
+            for &(index, shape) in &shaped {
+                if pipeline.regexes[index].is_match(text) {
+                    matched += 1;
+                    assert!(
+                        shapes.contain(shape),
+                        "{}: {text}",
+                        PII_PATTERNS[index].name
+                    );
+                }
+            }
+        }
+        assert!(matched > 100, "{matched} matches of shaped rules");
     }
 }

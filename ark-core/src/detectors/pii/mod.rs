@@ -45,4 +45,5 @@ mod uk;
 mod us;
 pub mod validators;
 mod vat;
+mod word_shape;
 mod za;
