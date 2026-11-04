@@ -11,14 +11,14 @@
 //! - Account numbers after `Konto-Nr.:`, `Als Kontonummer ist …` and `Bank account on file
 //!   is …`; `Permanent Account Number` is the Indian PAN, no bank account.
 
-use patronus_ark::detectors::pii::score::PiiMode;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-const MODES: [PiiMode; 2] = [PiiMode::Strict, PiiMode::Balanced];
+const MODES: [ScoreMode; 2] = [ScoreMode::Strict, ScoreMode::Balanced];
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -26,7 +26,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -36,7 +39,7 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn values(text: &str, label: &str, mode: PiiMode) -> Vec<String> {
+fn values(text: &str, label: &str, mode: ScoreMode) -> Vec<String> {
     scan(text, mode)
         .evidence_spans
         .into_iter()

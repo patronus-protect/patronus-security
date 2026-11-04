@@ -5,6 +5,6 @@ mod engine;
 mod policy;
 mod registry;
 
-pub use engine::{NativeEngine, NativeProducerOutcome};
-pub use policy::NativePolicy;
+pub use engine::{NativeEngine, NativeProducerOutcome, NATIVE_CATEGORIES};
+pub use policy::{default_rule_enabled, NativeGates, ScoreMode};
 pub use registry::NativeProducerSpec;

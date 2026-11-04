@@ -53,8 +53,8 @@ skipped unless the environment variable is set.
 `shell_command` is the one L1 category with a model file. `prepare_assets()` / `warmup()` fetch
 `patronus-studio/cat-shell-risk-commander` (Apache-2.0) at pinned revision
 `54617685bc2bc3b7f06ba0c7e7f86c2899940d1f` (K26) into
-`<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `config.json`,
-`model.json` ~4.6 MB, `policy_levels.json`, `LICENSE`, `.patronus-revision`). It honours
+`<model_dir>/shell_command/cat_shell_risk_commander/` (4.4 MiB: `manifest.json`, `config.json`,
+`model.json`, `policy_levels.json`, `LICENSE`, `.patronus-revision`). It honours
 `download_files` / `download_categories`; with downloads disabled and files missing, warmup fails
 with `missing shell_command assets ... downloads disabled`. At load, the SHA-256 of `manifest.json`
 must equal the one pinned in the binary (`patronus_ark_core::warmup::SHELL_MANIFEST_SHA256`), every file ARK reads is

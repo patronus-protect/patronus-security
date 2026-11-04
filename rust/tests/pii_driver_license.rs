@@ -13,18 +13,19 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::Value;
 
 const LABEL: &str = "DRIVER_LICENSE_NUMBER";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -32,7 +33,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -43,7 +47,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every driver's licence span.
-fn licence_spans(text: &str, mode: PiiMode) -> Vec<(String, f64)> {
+fn licence_spans(text: &str, mode: ScoreMode) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -53,7 +57,7 @@ fn licence_spans(text: &str, mode: PiiMode) -> Vec<(String, f64)> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -418,12 +422,12 @@ fn balanced_scores_follow_the_rule_base() {
         (RULES[2], "Numero di patente: AB1234567C"),
     ] {
         let expected = score::score(pattern(rule_id), Context::Field);
-        for mode in [PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
             let spans = licence_spans(text, mode);
             assert_eq!(spans.len(), 1, "{mode}: {text}: {spans:?}");
             assert_eq!(spans[0].1, expected, "{mode}: {text}");
         }
-        assert_eq!(licence_spans(text, PiiMode::Strict)[0].1, 1.0, "{text}");
+        assert_eq!(licence_spans(text, ScoreMode::Strict)[0].1, 1.0, "{text}");
     }
 }
 

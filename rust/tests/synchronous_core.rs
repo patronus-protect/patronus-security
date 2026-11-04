@@ -2,7 +2,7 @@ use patronus_ark::{
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
-use patronus_ark_core::{Category, NativeResult, ScanError, Scanner, ScannerConfig};
+use patronus_ark_core::{NativeResult, ScanError, Scanner, ScannerConfig};
 
 fn generators() -> GeneratorSet {
     GeneratorSet::load(
@@ -101,7 +101,7 @@ fn core_preserves_gateway_native_decisions_and_source_evidence() {
 
 #[test]
 fn native_policy_gates_and_scored_modes_preserve_complete_results() {
-    use patronus_ark::{DlpMode, PiiMode};
+    use patronus_ark::{NativeGates, ScoreMode};
     let (secret_text, _) = materialize_fragments(
         &generators(),
         "DB_PASSWORD='<<secret:0>>'",
@@ -116,13 +116,16 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
     ];
     let mut policies = vec![ScannerConfig::default()];
     for (pii_mode, dlp_mode) in [
-        (PiiMode::Balanced, DlpMode::Balanced),
-        (PiiMode::Recall, DlpMode::Recall),
+        (ScoreMode::Balanced, ScoreMode::Balanced),
+        (ScoreMode::Recall, ScoreMode::Recall),
     ] {
         policies.push(ScannerConfig {
-            pii_mode,
-            dlp_mode,
-            explain: true,
+            gates: NativeGates {
+                pii_mode,
+                dlp_mode,
+                explain: true,
+                ..Default::default()
+            },
             ..Default::default()
         });
     }
@@ -133,12 +136,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         "native:dlp",
     ] {
         let mut policy = ScannerConfig::default();
-        policy.models.insert(model.into(), false);
+        policy.gates.models.insert(model.into(), false);
         policies.push(policy);
     }
     let mut rules = ScannerConfig::default();
-    rules.rules.insert("pii_email".into(), false);
+    rules.gates.rules.insert("pii_email".into(), false);
     rules
+        .gates
         .rules
         .insert("ark.injection.override.discard_prior".into(), false);
     policies.push(rules);
@@ -155,30 +159,21 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
     );
     for policy in policies {
         let mut core = Scanner::new(policy.clone()).unwrap();
-        let mut gates = ScanGateMatrix {
-            explain: policy.explain,
-            pii_mode: policy.pii_mode,
-            dlp_mode: policy.dlp_mode,
+        gateway.set_execution_gates(ScanGateMatrix {
+            native: policy.gates.clone(),
             ..ScanGateMatrix::default()
-        };
-        for (model, enabled) in &policy.models {
-            gates.set_model(model, *enabled);
-        }
-        for (rule, enabled) in &policy.rules {
-            gates.set_rule(rule, *enabled);
-        }
-        gateway.set_execution_gates(gates);
+        });
         for text in &texts {
             let direct = core.scan(text).unwrap();
             let queued = gateway.scan_all(text);
             assert_native_parity(&direct.native, &queued);
-            if policy.models.get("native:injection_l1") == Some(&false) {
+            if policy.gates.models.get("native:injection_l1") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
                     .all(|result| result.category != "injection"));
             }
-            if policy.rules.get("pii_email") == Some(&false) {
+            if policy.gates.rules.get("pii_email") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
@@ -201,7 +196,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
     ]
     .concat();
     let mut core = Scanner::new(ScannerConfig {
-        categories: vec![Category::Pii, Category::Dlp],
+        categories: vec![SecurityCategory::Pii, SecurityCategory::Dlp],
         ..Default::default()
     })
     .unwrap();
@@ -214,14 +209,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
     let combined = core.scan(&text).unwrap();
     assert_native_parity(&combined.native, &gateway.scan_all(&text));
     let pii_alone = core
-        .scan_with_checks(
-            &text,
-            patronus_ark_core::ScanChecks {
-                pii: true,
-                dlp: false,
-                injection: false,
-            },
-        )
+        .scan_categories(&text, &[SecurityCategory::Pii])
         .unwrap();
     let pii = combined
         .native
@@ -270,7 +258,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
 #[test]
 fn synchronous_limits_are_errors_not_clean_results() {
     let mut core = Scanner::new(ScannerConfig {
-        categories: vec![Category::Pii],
+        categories: vec![SecurityCategory::Pii],
         max_input_bytes: 8,
         ..Default::default()
     })
@@ -280,7 +268,7 @@ fn synchronous_limits_are_errors_not_clean_results() {
         Err(ScanError::InputLimit { .. })
     ));
     let mut core = Scanner::new(ScannerConfig {
-        categories: vec![Category::Pii],
+        categories: vec![SecurityCategory::Pii],
         max_findings: 1,
         ..Default::default()
     })

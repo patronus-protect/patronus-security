@@ -11,6 +11,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- **Breaking (API):** Core and Ark share one category type. `SecurityCategory` serializes its
+  canonical name and deserializes every `FromStr` name, case-insensitively. Core's `Category` enum is
+  removed: `ScannerConfig.categories` is `Vec<SecurityCategory>`, `NativeEngine` and its producers
+  take `SecurityCategory` (`native::NATIVE_CATEGORIES` lists `pii`, `dlp`, `injection`), and Core
+  rejects other categories; `shell_command` points to `shell` and `Scanner::shell_verdict`. ark-api
+  parses `categories` by serde with the same names.
+- **Breaking (API):** Core per-call checks are a category selection, as in Ark's
+  `scan_categories`. `ScanChecks` and `Scanner::scan_with_checks` are removed; use
+  `Scanner::scan_categories(text, &[SecurityCategory])` and
+  `scan_with_control(text, &[SecurityCategory], &ScanControl)`; Wolf runs iff `injection` is
+  selected. Python: `Scanner.scan(text, *, categories=None, control=None)` replaces the
+  `pii=`/`dlp=`/`injection=` keywords.
+- **Breaking (API):** `PiiMode` and `DlpMode` are one `ScoreMode` (`patronus_ark::ScoreMode`,
+  `patronus_ark_core::native::ScoreMode`); the `pii_mode`/`dlp_mode` keys and values are unchanged.
+- **Breaking (API):** native rule, model, mode and `explain` gates are one Core struct,
+  `native::NativeGates`, with `default_rule_enabled` (moved from `detectors::dlp::dlp`).
+  `ScannerConfig.gates` and `ScanGateMatrix.native` hold it; the Core JSON/Python config keeps its
+  flat keys. The `NativePolicy` trait, `ScanGateMatrix::{allows_rule, allows_model}` and
+  `ScanExecution::{allows_rule, allows_model}` are removed; call them on `NativeGates`.
+- `SecurityLevel` deserializes every `FromStr` name (`L1`, `l1`, `1`, ...); output stays `L1`.
 - **Breaking (asset manifest, result shape, API):** `shell_command` switches to the K26
   `cat-shell-risk-commander` bundle (revision `54617685bc2bc3b7f06ba0c7e7f86c2899940d1f`) and its
   `patronus.verdict/1`: `max(model, Cedar policies)` on `allow < ask < block`. The detector moves
@@ -22,7 +42,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   in the binary and every file read is checked against it. `layers[0].details` gains `decision`,
   `bundle_score` and the full `verdict`; `variant`, `full_score` and `comments_stripped_score` are
   gone (K26 scores the command as written). `ShellRiskPipeline::score` returns `Result`;
-  `with_threshold_policy`, `threshold_policy` and the G-format model loader are removed;
+  the `ShellRiskPipeline::with_threshold_policy` method, its `threshold_policy` field and the
+  G-format model loader are removed (the result detail `details.threshold_policy` stays);
   `verdict(text, context, prior_facts)`, `configure`, `from_pinned_bundle_dir` and
   `SecurityGateway::set_shell_command_policy_config` are new.
 - Ark Core runs Cat: `ScannerConfig.shell` (`ShellConfig`: bundle directory, manifest pin, user

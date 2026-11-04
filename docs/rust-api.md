@@ -30,8 +30,6 @@ pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
     PersistentCacheConfig, WriteBehindConfig,
 };
-pub use detectors::dlp::score::DlpMode;
-pub use detectors::pii::score::PiiMode;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
@@ -39,6 +37,7 @@ pub use dynamic_pii::{
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
+pub use patronus_ark_core::native::{NativeGates, ScoreMode};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
     CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
@@ -1129,26 +1128,14 @@ No public documentation is available yet.
 
 ```rust
 pub struct ScanGateMatrix {
-    /// Include bounded diagnostic anchor metadata. Disabled by default.
-    pub explain: bool,
-    /// Native PII output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub pii_mode: crate::detectors::pii::score::PiiMode,
-    /// Native DLP output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub dlp_mode: crate::detectors::dlp::score::DlpMode,
+    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
+    pub native: crate::NativeGates,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
     pub l2: Option<bool>,
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
-    /// Optional per-model or per-native-scanner overrides keyed by result model
-    /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
-    pub models: HashMap<String, bool>,
-    /// Optional per-rule overrides keyed by stable public rule id. Missing
-    /// entries inherit the shared rule defaults.
-    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -1431,18 +1418,6 @@ Return whether the level is allowed by this matrix before max-level
 enforcement.
 
 ```rust
-pub fn allows_model(&self, model: &str) -> bool;
-```
-
-Return whether the model/native scanner is allowed by this matrix.
-
-```rust
-pub fn allows_rule(&self, rule_id: &str) -> bool;
-```
-
-Return whether a stable rule id is allowed by this matrix.
-
-```rust
 pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
 ```
 
@@ -1567,18 +1542,6 @@ Return whether a level is enabled for this execution after max-level
 enforcement.
 
 ```rust
-pub fn allows_model(&self, model: &str) -> bool;
-```
-
-Return whether a model/native scanner is enabled for this execution.
-
-```rust
-pub fn allows_rule(&self, rule_id: &str) -> bool;
-```
-
-Return whether a stable rule id is enabled for this execution.
-
-```rust
 pub fn gates(&self) -> &ScanGateMatrix;
 ```
 
@@ -1647,34 +1610,13 @@ Return the max-level cap backing this execution.
 ## Synchronous Core API
 
 ```rust
-pub enum Category {
-    Pii,
-    Dlp,
-    Injection,
-}
-```
-
-No public documentation is available yet.
-
-```rust
-pub struct ScanChecks {
-    pub pii: bool,
-    pub dlp: bool,
-    pub injection: bool,
-}
-```
-
-Per-call checks, intersected with the scanner's configured native categories.
-Wolf runs only when `injection` is enabled.
-
-```rust
 pub struct ScannerConfig {
-    pub categories: Vec<Category>,
-    pub rules: HashMap<String, bool>,
-    pub models: HashMap<String, bool>,
-    pub pii_mode: PiiMode,
-    pub dlp_mode: DlpMode,
-    pub explain: bool,
+    /// Native text-scan categories: `pii`, `dlp` and `injection`.
+    pub categories: Vec<SecurityCategory>,
+    /// Rule, model, mode and `explain` gates; their keys sit at the top level
+    /// of the serialized config.
+    #[serde(flatten)]
+    pub gates: NativeGates,
     /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
     pub max_input_bytes: usize,
     /// Maximum actionable evidence spans; reports are never silently truncated.
@@ -1759,26 +1701,28 @@ pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError>;
 Run all configured stages synchronously. Any incomplete stage returns an error.
 
 ```rust
-pub fn scan_with_checks(
+pub fn scan_categories(
     &mut self,
     text: &str,
-    checks: ScanChecks,
+    categories: &[SecurityCategory],
 ) -> Result<ScanReport, ScanError>;
 ```
 
-Run selected checks with the existing scanner and the same resource limits.
-Disabled checks do not invoke their native producers or Wolf inference.
+Run the selected categories with the existing scanner and the same resource
+limits. The selection is intersected with the configured categories;
+unselected categories do not invoke their native producers, and Wolf runs
+only when `injection` is selected.
 
 ```rust
 pub fn scan_with_control(
     &mut self,
     text: &str,
-    checks: ScanChecks,
+    categories: &[SecurityCategory],
     control: &crate::ScanControl,
 ) -> Result<ScanReport, ScanError>;
 ```
 
-Run selected checks under a shared cancellation/deadline budget.
+[`Self::scan_categories`] under a shared cancellation/deadline budget.
 
 ```rust
 pub fn shell_verdict(
@@ -1814,49 +1758,100 @@ pub struct NativeEngine {
 Owns each selected category's detector state once, without worker threads.
 
 ```rust
-pub fn new(categories: &[Category]) -> Self;
+pub fn new(categories: &[SecurityCategory]) -> Self;
 ```
 
-Initialize only configured categories. An empty selection creates no pipelines.
+Initialize only configured native categories; other categories have no
+native producers. An empty selection creates no pipelines.
 
 ```rust
-pub fn producers(&self, category: Category) -> &[NativeProducerSpec];
+pub fn producers(&self, category: SecurityCategory) -> &[NativeProducerSpec];
 ```
 
-Producers in the established category order, or empty for an unselected category.
+Producers in the established category order, or empty for an unselected
+or non-native category.
 
 ```rust
 pub fn run_producer(
     &self,
     producer: &NativeProducerSpec,
     prepared: &NativeText<'_>,
-    policy: &dyn NativePolicy,
+    gates: &NativeGates,
     control: &ScanControl,
 ) -> Result<NativeProducerOutcome, ScanError>;
 ```
 
-Execute an active producer. Call `producer.enabled(policy)` before this method.
+Execute an active producer. Call `producer.enabled(gates)` before this method.
 Cancellation is checked before and after detection; panics become detector errors.
 
 ## Native Policy
 
 ```rust
-pub trait NativePolicy {
-    fn allows_model(&self, id: &str) -> bool;
-    fn allows_rule(&self, id: &str) -> bool;
-    fn explain(&self) -> bool;
-    fn pii_mode(&self) -> PiiMode;
-    fn dlp_mode(&self) -> DlpMode;
+pub enum ScoreMode {
+    /// Rule acceptance only; every finding scores `1.0`.
+    #[default]
+    Strict,
+    /// Model scores; candidates below `0.50` are dropped.
+    Balanced,
+    /// Model scores; candidates below `0.30` are dropped.
+    Recall,
 }
 ```
 
-Per-call native policy. Hosts can adapt their existing gates without copying them.
+Output mode of the scored native detectors (PII and DLP). `Strict` is the
+default and the pre-score behaviour.
+
+```rust
+pub fn default_rule_enabled(rule_id: &str) -> bool;
+```
+
+Default of a rule without an explicit gate, shared by every host: all
+non-DLP rules and the DLP credential/secret rules are on, the other DLP
+content rules are opt-in.
+
+```rust
+pub struct NativeGates {
+    /// Per-rule overrides keyed by stable public rule id.
+    pub rules: HashMap<String, bool>,
+    /// Per-model or per-native-scanner overrides keyed by result model names
+    /// such as `native:mcp_runtime_risk`.
+    pub models: HashMap<String, bool>,
+    /// Native PII output mode.
+    pub pii_mode: ScoreMode,
+    /// Native DLP output mode.
+    pub dlp_mode: ScoreMode,
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
+}
+```
+
+Per-call native policy: rule, model, mode and diagnostics gates, shared by
+the Core scanner and the full gateway. Missing rule entries use
+[`default_rule_enabled`], missing model entries are enabled.
+
+```rust
+pub fn all_enabled() -> Self;
+```
+
+Gates with every native rule enabled, including the opt-in DLP content families.
+
+```rust
+pub fn allows_model(&self, id: &str) -> bool;
+```
+
+Whether a model or native producer id is enabled.
+
+```rust
+pub fn allows_rule(&self, id: &str) -> bool;
+```
+
+Whether a stable rule id is enabled.
 
 ## Native Producer Descriptors
 
 ```rust
 pub struct NativeProducerSpec {
-    category: Category,
+    category: SecurityCategory,
     id: &'static str,
     parent: Option<&'static str>,
     rule: Option<&'static str>,
@@ -1873,13 +1868,13 @@ pub fn id(&self) -> &'static str;
 No public documentation is available yet.
 
 ```rust
-pub fn category(&self) -> Category;
+pub fn category(&self) -> SecurityCategory;
 ```
 
 No public documentation is available yet.
 
 ```rust
-pub fn enabled(&self, policy: &dyn NativePolicy) -> bool;
+pub fn enabled(&self, gates: &NativeGates) -> bool;
 ```
 
 Parent/model/required-rule gates, independent of host level or conditional gates.

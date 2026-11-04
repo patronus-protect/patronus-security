@@ -14,11 +14,9 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::dlp::{
-        dlp::{ValidatorStrength, DLP_PATTERNS},
-        score::DlpMode,
-    },
+    detectors::dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -58,10 +56,10 @@ fn key_id(prefix: &str, seed: u64) -> String {
     format!("{prefix}{}", random(seed, BASE32, 16))
 }
 
-fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
+fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
-        [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall].map(|mode| {
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
             let scanner = SecurityGateway::with_max_level(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
@@ -69,7 +67,10 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
+                native: patronus_ark::NativeGates {
+                    dlp_mode: mode,
+                    ..Default::default()
+                },
                 ..ScanGateMatrix::default()
             });
             scanner
@@ -83,7 +84,7 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
 }
 
 fn scan(text: &str) -> SecurityScanResult {
-    mode_scan(text, DlpMode::Strict)
+    mode_scan(text, ScoreMode::Strict)
 }
 
 /// The unsuppressed `matched_rules` entries of `rule_id` that reported a value.
@@ -424,11 +425,11 @@ fn aws_rules_keep_format_strength_their_sources_and_subtypes() {
     assert_eq!(entry["subtype"], "secret_key");
     // In balanced, a labelled secret key stays; a bare value is no finding.
     let labelled = format!("aws_secret_access_key = {secret}\n");
-    assert!(mode_scan(&labelled, DlpMode::Balanced)
+    assert!(mode_scan(&labelled, ScoreMode::Balanced)
         .evidence_spans
         .iter()
         .any(|span| span.text == secret));
-    assert!(mode_scan(&format!("{secret}\n"), DlpMode::Recall)
+    assert!(mode_scan(&format!("{secret}\n"), ScoreMode::Recall)
         .evidence_spans
         .iter()
         .all(|span| span.label != "CLOUD_KEY"));

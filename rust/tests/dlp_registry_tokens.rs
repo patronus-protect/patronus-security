@@ -17,12 +17,10 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::{
-        dlp::{
-            dlp::{ValidatorStrength, DLP_PATTERNS},
-            score::DlpMode,
-        },
+        dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
         validators::{crc32, BASE64URL},
     },
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
@@ -153,10 +151,10 @@ fn pypi(location: &str, seed: u64, signature: usize, tail: &[u8]) -> String {
     format!("pypi-{}", base64url(&raw))
 }
 
-fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
+fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
-        [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall].map(|mode| {
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
             let scanner = SecurityGateway::with_max_level(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
@@ -164,7 +162,10 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
+                native: patronus_ark::NativeGates {
+                    dlp_mode: mode,
+                    ..Default::default()
+                },
                 ..ScanGateMatrix::default()
             });
             scanner
@@ -180,7 +181,7 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
 /// The unsuppressed strict `matched_rules` entry of `rule_id`, if it reported
 /// a value.
 fn entry(text: &str, rule_id: &str) -> Option<serde_json::Value> {
-    mode_scan(text, DlpMode::Strict).layers[0]
+    mode_scan(text, ScoreMode::Strict).layers[0]
         .details
         .get("matched_rules")
         .and_then(|rules| rules.as_array())
@@ -193,7 +194,7 @@ fn entry(text: &str, rule_id: &str) -> Option<serde_json::Value> {
 }
 
 fn reports(text: &str, value: &str) -> bool {
-    mode_scan(text, DlpMode::Strict)
+    mode_scan(text, ScoreMode::Strict)
         .evidence_spans
         .iter()
         .any(|span| span.label == "SECRET_TOKEN" && span.text == value)
@@ -377,7 +378,9 @@ fn packagist_tokens_need_their_crc32() {
                 // A generic key does not report a Packagist token whose CRC32 fails.
                 let text = format!("password = {broken}\n");
                 assert!(
-                    mode_scan(&text, DlpMode::Strict).evidence_spans.is_empty(),
+                    mode_scan(&text, ScoreMode::Strict)
+                        .evidence_spans
+                        .is_empty(),
                     "{text:?}"
                 );
             }
@@ -484,7 +487,9 @@ fn example_and_test_fills_are_silent() {
         )
         .expect("fill must materialize");
         assert!(
-            mode_scan(&text, DlpMode::Strict).evidence_spans.is_empty(),
+            mode_scan(&text, ScoreMode::Strict)
+                .evidence_spans
+                .is_empty(),
             "{gen}: {text:?}"
         );
     }

@@ -226,8 +226,7 @@ pub struct SecurityScanResult {
     pub decision: Option<DecisionEnvelope>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Maximum scanner depth to run.
 pub enum SecurityLevel {
     /// Native rule-based checks only.
@@ -246,6 +245,22 @@ impl SecurityLevel {
             SecurityLevel::L2 => "L2",
             SecurityLevel::L3 => "L3",
         }
+    }
+}
+
+/// Serializes the canonical [`SecurityLevel::as_str`] name.
+impl Serialize for SecurityLevel {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Deserializes every name [`str::parse`] accepts (`L1`, `l1`, `1`, ...).
+impl<'de> Deserialize<'de> for SecurityLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -377,26 +392,14 @@ impl std::str::FromStr for L3Strategy {
 /// scored PII and DLP modes are opt-in. `max_level` is still enforced by
 /// `ScanExecution`, so a gate can only further restrict the configured scanner.
 pub struct ScanGateMatrix {
-    /// Include bounded diagnostic anchor metadata. Disabled by default.
-    pub explain: bool,
-    /// Native PII output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub pii_mode: crate::detectors::pii::score::PiiMode,
-    /// Native DLP output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub dlp_mode: crate::detectors::dlp::score::DlpMode,
+    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
+    pub native: crate::NativeGates,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
     pub l2: Option<bool>,
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
-    /// Optional per-model or per-native-scanner overrides keyed by result model
-    /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
-    pub models: HashMap<String, bool>,
-    /// Optional per-rule overrides keyed by stable public rule id. Missing
-    /// entries inherit the shared rule defaults.
-    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -720,33 +723,19 @@ impl L3SchedulerPolicy {
 impl ScanGateMatrix {
     /// Explicitly enable all native rules, including opt-in DLP content families.
     pub fn all_enabled() -> Self {
-        let mut gates = Self::default();
-        for pattern in crate::detectors::dlp::dlp::DLP_PATTERNS {
-            gates.set_rule(pattern.name, true);
+        Self {
+            native: crate::NativeGates::all_enabled(),
+            ..Self::default()
         }
-        for id in [
-            "dlp_mcp_runtime_risk",
-            "dlp_mcp_policy",
-            "dlp_destructive_operation",
-        ] {
-            gates.set_rule(id, true);
-        }
-        gates
     }
 
     /// Create a matrix with explicit level gates.
     pub fn levels(l1: bool, l2: bool, l3: bool) -> Self {
         Self {
-            explain: false,
-            pii_mode: Default::default(),
-            dlp_mode: Default::default(),
             l1: Some(l1),
             l2: Some(l2),
             l3: Some(l3),
-            models: HashMap::new(),
-            rules: HashMap::new(),
-            conditional: Vec::new(),
-            l3_policy: L3SchedulerPolicy::default(),
+            ..Self::default()
         }
     }
 
@@ -761,7 +750,7 @@ impl ScanGateMatrix {
 
     /// Set one model/native scanner gate.
     pub fn set_model(&mut self, model: impl Into<String>, enabled: bool) {
-        self.models.insert(model.into(), enabled);
+        self.native.models.insert(model.into(), enabled);
     }
 
     /// Builder-style model/native scanner gate setter.
@@ -772,7 +761,7 @@ impl ScanGateMatrix {
 
     /// Set one stable rule-id gate.
     pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool) {
-        self.rules.insert(rule_id.into(), enabled);
+        self.native.rules.insert(rule_id.into(), enabled);
     }
 
     /// Builder-style stable rule-id gate setter.
@@ -798,19 +787,6 @@ impl ScanGateMatrix {
             SecurityLevel::L2 => self.l2.unwrap_or(true),
             SecurityLevel::L3 => self.l3.unwrap_or(true),
         }
-    }
-
-    /// Return whether the model/native scanner is allowed by this matrix.
-    pub fn allows_model(&self, model: &str) -> bool {
-        self.models.get(model).copied().unwrap_or(true)
-    }
-
-    /// Return whether a stable rule id is allowed by this matrix.
-    pub fn allows_rule(&self, rule_id: &str) -> bool {
-        self.rules
-            .get(rule_id)
-            .copied()
-            .unwrap_or_else(|| crate::detectors::dlp::dlp::default_rule_enabled(rule_id))
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -1060,16 +1036,6 @@ impl ScanExecution {
         level <= self.max_level && self.gates.allows_level(level)
     }
 
-    /// Return whether a model/native scanner is enabled for this execution.
-    pub fn allows_model(&self, model: &str) -> bool {
-        self.gates.allows_model(model)
-    }
-
-    /// Return whether a stable rule id is enabled for this execution.
-    pub fn allows_rule(&self, rule_id: &str) -> bool {
-        self.gates.allows_rule(rule_id)
-    }
-
     /// Return the matrix backing this execution.
     pub fn gates(&self) -> &ScanGateMatrix {
         &self.gates
@@ -1251,5 +1217,19 @@ mod tests {
                 .early_exit,
             L3PipelineEarlyExit::HeadStable
         );
+    }
+
+    #[test]
+    fn security_level_serde_accepts_from_str_names_and_writes_canonical_names() {
+        for (name, level) in [
+            ("L1", SecurityLevel::L1),
+            ("l2", SecurityLevel::L2),
+            ("3", SecurityLevel::L3),
+        ] {
+            let parsed: SecurityLevel = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(parsed, level);
+            assert_eq!(serde_json::to_value(level).unwrap(), level.as_str());
+        }
+        assert!(serde_json::from_value::<SecurityLevel>(serde_json::json!("L4")).is_err());
     }
 }

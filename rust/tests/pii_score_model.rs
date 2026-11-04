@@ -10,9 +10,10 @@
 use patronus_ark::detectors::pii::{
     context,
     pii::PII_PATTERNS,
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -42,9 +43,12 @@ fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
     scan(&scanner(gates), text)
 }
 
-fn with_mode(mode: PiiMode) -> Option<ScanGateMatrix> {
+fn with_mode(mode: ScoreMode) -> Option<ScanGateMatrix> {
     Some(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     })
 }
@@ -98,50 +102,21 @@ fn rule_score(rule_id: &str) -> f64 {
 
 #[test]
 fn strict_is_the_default_mode() {
-    assert_eq!(PiiMode::default(), PiiMode::Strict);
-    assert_eq!(ScanGateMatrix::default().pii_mode, PiiMode::Strict);
+    assert_eq!(ScanGateMatrix::default().native.pii_mode, ScoreMode::Strict);
     assert_eq!(
-        ScanGateMatrix::levels(true, false, false).pii_mode,
-        PiiMode::Strict
+        ScanGateMatrix::levels(true, false, false).native.pii_mode,
+        ScoreMode::Strict
     );
-    assert_eq!(ScanGateMatrix::all_enabled().pii_mode, PiiMode::Strict);
-}
-
-#[test]
-fn modes_parse_from_their_public_names_only() {
-    for (name, mode) in [
-        ("strict", PiiMode::Strict),
-        ("balanced", PiiMode::Balanced),
-        ("recall", PiiMode::Recall),
-    ] {
-        assert_eq!(name.parse::<PiiMode>().unwrap(), mode);
-        assert_eq!(mode.as_str(), name);
-        assert_eq!(serde_json::to_value(mode).unwrap(), name);
-        assert_eq!(
-            serde_json::from_value::<PiiMode>(serde_json::json!(name)).unwrap(),
-            mode
-        );
-    }
-    for invalid in ["", "Strict", "precision", "balanced "] {
-        assert!(invalid.parse::<PiiMode>().is_err(), "{invalid:?}");
-    }
-    assert!(serde_json::from_value::<PiiMode>(serde_json::json!("fast")).is_err());
-}
-
-#[test]
-fn mode_thresholds_order_strict_balanced_recall() {
-    assert_eq!(PiiMode::Strict.min_score(), None);
-    let balanced = PiiMode::Balanced.min_score().unwrap();
-    let recall = PiiMode::Recall.min_score().unwrap();
-    assert_eq!(balanced, 0.5);
-    assert_eq!(recall, 0.3);
-    assert!(recall < balanced);
+    assert_eq!(
+        ScanGateMatrix::all_enabled().native.pii_mode,
+        ScoreMode::Strict
+    );
 }
 
 #[test]
 fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
     let default_scanner = scanner(None);
-    let strict_scanner = scanner(with_mode(PiiMode::Strict));
+    let strict_scanner = scanner(with_mode(ScoreMode::Strict));
     for text in corpus() {
         let default = scan(&default_scanner, &text);
         let strict = scan(&strict_scanner, &text);
@@ -211,7 +186,7 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
     // K06: in recall, so may spelled-out or spaced values (10 points lower).
     // K07: a span of a competing label may yield to an overlapping one.
     let strict_scanner = scanner(None);
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let scored_scanner = scanner(with_mode(mode));
         for text in corpus() {
             let strict = scan(&strict_scanner, &text);
@@ -268,7 +243,7 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
                         && (PII_PATTERNS
                             .iter()
                             .any(|pattern| pattern.name == rule["rule_id"] && pattern.scored_only)
-                            || (mode == PiiMode::Recall && recall_obfuscation(rule)))
+                            || (mode == ScoreMode::Recall && recall_obfuscation(rule)))
                 });
                 assert!(
                     scored_only
@@ -372,7 +347,7 @@ fn score_is_base_plus_validator_strength_plus_field_context() {
         // Context-bound rules emit only with support (pii_context_engine.rs).
         assert!(
             pattern.requires_context
-                || score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+                || score::rule_score(pattern) >= ScoreMode::Balanced.min_score().unwrap(),
             "{} would change balanced output",
             pattern.name
         );
@@ -692,7 +667,7 @@ fn checksum_vectors_decide_emission_in_every_mode() {
         let value = |text: &str| text.split_once(": ").unwrap().1.to_string();
         assert!(validator(&value(valid)), "{valid}");
         assert!(!validator(&value(invalid)), "{invalid}");
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let found = pii_result(valid, with_mode(mode));
             assert!(
                 found.evidence_spans.iter().any(|span| span.label == label),
@@ -713,7 +688,7 @@ fn checksum_vectors_decide_emission_in_every_mode() {
 #[test]
 fn balanced_scores_rank_checksum_values_above_format_values() {
     let text = "Steuer-ID: 86095742719, IBAN: DE89370400440532013000, Kennzeichen: B-AB 1234, Tel. +1 415 555 0101";
-    let result = pii_result(text, with_mode(PiiMode::Balanced));
+    let result = pii_result(text, with_mode(ScoreMode::Balanced));
     let score_of = |label: &str| {
         result
             .evidence_spans
@@ -735,7 +710,7 @@ fn balanced_scores_rank_checksum_values_above_format_values() {
     // Without field names the checksum value still outranks the format value.
     let bare = pii_result(
         "DE89370400440532013000 und +1 415 555 0101",
-        with_mode(PiiMode::Balanced),
+        with_mode(ScoreMode::Balanced),
     );
     let bare_score = |label: &str| {
         bare.evidence_spans
@@ -753,7 +728,7 @@ fn balanced_scores_rank_checksum_values_above_format_values() {
 
 #[test]
 fn safe_text_stays_safe_in_every_mode() {
-    for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let result = pii_result("The quarterly report is attached.", with_mode(mode));
         assert_eq!(result.class_name, "safe");
         assert_eq!(result.confidence, 1.0);

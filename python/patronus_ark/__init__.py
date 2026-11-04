@@ -95,10 +95,6 @@ def _level_readiness_to_dict(readiness):
     }
 
 
-_PII_MODES = ("strict", "balanced", "recall")
-_DLP_MODES = ("strict", "balanced", "recall")
-
-
 def _execution_gates_json(execution_gates):
     if execution_gates is None:
         return None
@@ -110,14 +106,10 @@ def _execution_gates_json(execution_gates):
         if not isinstance(execution_gates["explain"], bool):
             raise ValueError("execution_gates['explain'] must be a bool")
         normalized["explain"] = execution_gates["explain"]
-    if "pii_mode" in execution_gates:
-        if execution_gates["pii_mode"] not in _PII_MODES:
-            raise ValueError("execution_gates['pii_mode'] must be one of " + ", ".join(_PII_MODES))
-        normalized["pii_mode"] = execution_gates["pii_mode"]
-    if "dlp_mode" in execution_gates:
-        if execution_gates["dlp_mode"] not in _DLP_MODES:
-            raise ValueError("execution_gates['dlp_mode'] must be one of " + ", ".join(_DLP_MODES))
-        normalized["dlp_mode"] = execution_gates["dlp_mode"]
+    # The native extension validates the score modes.
+    for key in ("pii_mode", "dlp_mode"):
+        if key in execution_gates:
+            normalized[key] = execution_gates[key]
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
     rules = execution_gates.get("rules", {})

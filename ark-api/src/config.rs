@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use patronus_ark::{
-    ConditionalPipelineGate, DlpMode, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
-    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, OnnxRuntimeOptions, PiiMode,
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, WolfExecutionOptions,
+    ConditionalPipelineGate, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
+    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, NativeGates,
+    OnnxRuntimeOptions, ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
+    WolfExecutionOptions,
 };
 use serde::Deserialize;
 
@@ -41,9 +41,9 @@ struct RawApiKey {
     name: String,
     key_hash: String,
     #[serde(default)]
-    categories: Option<Vec<String>>,
+    categories: Option<Vec<SecurityCategory>>,
     #[serde(default)]
-    default_categories: Option<Vec<String>>,
+    default_categories: Option<Vec<SecurityCategory>>,
     /// Per-key gate override. Falls back to `pipeline.gates` when absent.
     #[serde(default)]
     gates: Option<RawGates>,
@@ -51,8 +51,8 @@ struct RawApiKey {
 
 #[derive(Debug, Deserialize)]
 struct RawPipeline {
-    categories: Vec<String>,
-    max_level: String,
+    categories: Vec<SecurityCategory>,
+    max_level: SecurityLevel,
     #[serde(default)]
     model_dir: Option<String>,
     #[serde(default)]
@@ -130,22 +130,15 @@ impl RawOnnxRuntime {
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawGates {
-    #[serde(default)]
-    explain: bool,
-    #[serde(default)]
-    pii_mode: PiiMode,
-    #[serde(default)]
-    dlp_mode: DlpMode,
+    /// `rules`, `models`, `pii_mode`, `dlp_mode` and `explain`.
+    #[serde(flatten)]
+    native: NativeGates,
     #[serde(default)]
     l1: Option<bool>,
     #[serde(default)]
     l2: Option<bool>,
     #[serde(default)]
     l3: Option<bool>,
-    #[serde(default)]
-    models: HashMap<String, bool>,
-    #[serde(default)]
-    rules: HashMap<String, bool>,
     #[serde(default)]
     conditional: Vec<ConditionalPipelineGate>,
     #[serde(default)]
@@ -179,14 +172,10 @@ impl RawGates {
             gate.validate().map_err(ConfigError::Invalid)?;
         }
         let RawGates {
-            explain,
-            pii_mode,
-            dlp_mode,
+            native,
             l1,
             l2,
             l3,
-            models,
-            rules,
             conditional,
             policy: raw_policy,
         } = self;
@@ -240,14 +229,10 @@ impl RawGates {
         }
         validate_l3_policy(&policy)?;
         Ok(ScanGateMatrix {
-            explain,
-            pii_mode,
-            dlp_mode,
+            native,
             l1,
             l2,
             l3,
-            models,
-            rules,
             conditional,
             l3_policy: policy,
         })
@@ -407,14 +392,6 @@ impl RawConfig {
         }
         let mut keys = Vec::with_capacity(self.auth.keys.len());
         for key in self.auth.keys {
-            let allowed_categories = key
-                .categories
-                .map(|cats| parse_categories(&cats))
-                .transpose()?;
-            let default_categories = key
-                .default_categories
-                .map(|cats| parse_categories(&cats))
-                .transpose()?;
             let key_hash = key
                 .key_hash
                 .strip_prefix("sha256:")
@@ -429,13 +406,13 @@ impl RawConfig {
             keys.push(ApiKeyConfig {
                 name: key.name,
                 key_hash,
-                allowed_categories,
-                default_categories,
+                allowed_categories: key.categories,
+                default_categories: key.default_categories,
                 gates: key.gates.map(RawGates::into_gate_matrix).transpose()?,
             });
         }
 
-        let categories = parse_categories(&self.pipeline.categories)?;
+        let categories = self.pipeline.categories;
         if categories.is_empty() {
             return Err(ConfigError::Invalid(
                 "pipeline.categories must not be empty".to_string(),
@@ -459,9 +436,6 @@ impl RawConfig {
                 }
             }
         }
-        let max_level = SecurityLevel::from_str(&self.pipeline.max_level)
-            .map_err(|err| ConfigError::Invalid(format!("pipeline.max_level: {err}")))?;
-
         let default_gates = self
             .pipeline
             .gates
@@ -474,7 +448,7 @@ impl RawConfig {
             max_upload_bytes: self.server.max_upload_mb.saturating_mul(1024 * 1024),
             keys,
             categories,
-            max_level,
+            max_level: self.pipeline.max_level,
             model_dir: self.pipeline.model_dir.map(PathBuf::from),
             download_files: self.pipeline.download_files,
             cache_dir: self.cache.dir.map(PathBuf::from),
@@ -485,16 +459,6 @@ impl RawConfig {
             wolf_options: self.pipeline.wolf_options,
         })
     }
-}
-
-pub(crate) fn parse_categories(values: &[String]) -> Result<Vec<SecurityCategory>, ConfigError> {
-    values
-        .iter()
-        .map(|value| {
-            SecurityCategory::from_str(value)
-                .map_err(|err| ConfigError::Invalid(format!("unknown category '{value}': {err}")))
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -513,6 +477,38 @@ mod tests {
             "auth": {"keys": [{"name": "fixture", "key_hash": "0".repeat(64)}]},
             "pipeline": {"categories": ["pii"], "max_level": "L1"}
         })
+    }
+
+    #[test]
+    fn pipeline_categories_and_level_accept_their_from_str_names() {
+        let mut value = startup_config();
+        value["pipeline"] =
+            serde_json::json!({"categories": ["PII", "dynamic_pii"], "max_level": "l2"});
+        let config = serde_json::from_value::<RawConfig>(value)
+            .unwrap()
+            .into_config()
+            .unwrap();
+        assert_eq!(
+            config.categories,
+            [SecurityCategory::Pii, SecurityCategory::DynamicPii]
+        );
+        assert_eq!(config.max_level, SecurityLevel::L2);
+        let mut value = startup_config();
+        value["pipeline"]["categories"] = serde_json::json!(["nope"]);
+        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+    }
+
+    #[test]
+    fn gates_keep_flat_native_keys_and_reject_unknown_keys() {
+        let raw: RawGates = serde_yaml::from_str(
+            "rules: {pii_email: false}\nmodels: {'native:pii': false}\nl2: false\n",
+        )
+        .unwrap();
+        let gates = raw.into_gate_matrix().unwrap();
+        assert!(!gates.native.allows_rule("pii_email"));
+        assert!(!gates.native.allows_model("native:pii"));
+        assert_eq!(gates.l2, Some(false));
+        assert!(serde_yaml::from_str::<RawGates>("rule: {pii_email: false}").is_err());
     }
 
     #[test]
@@ -589,26 +585,36 @@ mod tests {
 
     #[test]
     fn explain_is_explicit_and_disabled_by_default() {
-        assert!(!RawGates::default().into_gate_matrix().unwrap().explain);
+        assert!(
+            !RawGates::default()
+                .into_gate_matrix()
+                .unwrap()
+                .native
+                .explain
+        );
         let raw: RawGates = serde_yaml::from_str("explain: true").unwrap();
-        assert!(raw.into_gate_matrix().unwrap().explain);
+        assert!(raw.into_gate_matrix().unwrap().native.explain);
         assert!(serde_yaml::from_str::<RawGates>("explain: verbose").is_err());
     }
 
     #[test]
     fn pii_mode_is_strict_by_default_and_explicitly_configurable() {
-        use patronus_ark::PiiMode;
+        use patronus_ark::ScoreMode;
         assert_eq!(
-            RawGates::default().into_gate_matrix().unwrap().pii_mode,
-            PiiMode::Strict
+            RawGates::default()
+                .into_gate_matrix()
+                .unwrap()
+                .native
+                .pii_mode,
+            ScoreMode::Strict
         );
         for (yaml, mode) in [
-            ("pii_mode: strict", PiiMode::Strict),
-            ("pii_mode: balanced", PiiMode::Balanced),
-            ("pii_mode: recall", PiiMode::Recall),
+            ("pii_mode: strict", ScoreMode::Strict),
+            ("pii_mode: balanced", ScoreMode::Balanced),
+            ("pii_mode: recall", ScoreMode::Recall),
         ] {
             let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(raw.into_gate_matrix().unwrap().pii_mode, mode);
+            assert_eq!(raw.into_gate_matrix().unwrap().native.pii_mode, mode);
         }
         assert!(serde_yaml::from_str::<RawGates>("pii_mode: fast").is_err());
         assert!(serde_yaml::from_str::<RawGates>("pii_mode: Balanced").is_err());
@@ -616,18 +622,22 @@ mod tests {
 
     #[test]
     fn dlp_mode_is_strict_by_default_and_explicitly_configurable() {
-        use patronus_ark::DlpMode;
+        use patronus_ark::ScoreMode;
         assert_eq!(
-            RawGates::default().into_gate_matrix().unwrap().dlp_mode,
-            DlpMode::Strict
+            RawGates::default()
+                .into_gate_matrix()
+                .unwrap()
+                .native
+                .dlp_mode,
+            ScoreMode::Strict
         );
         for (yaml, mode) in [
-            ("dlp_mode: strict", DlpMode::Strict),
-            ("dlp_mode: balanced", DlpMode::Balanced),
-            ("dlp_mode: recall", DlpMode::Recall),
+            ("dlp_mode: strict", ScoreMode::Strict),
+            ("dlp_mode: balanced", ScoreMode::Balanced),
+            ("dlp_mode: recall", ScoreMode::Recall),
         ] {
             let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(raw.into_gate_matrix().unwrap().dlp_mode, mode);
+            assert_eq!(raw.into_gate_matrix().unwrap().native.dlp_mode, mode);
         }
         assert!(serde_yaml::from_str::<RawGates>("dlp_mode: fast").is_err());
         assert!(serde_yaml::from_str::<RawGates>("dlp_mode: Balanced").is_err());
@@ -657,9 +667,11 @@ mod tests {
             serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
         let gates = raw.into_gate_matrix().unwrap();
 
-        assert!(!gates.allows_rule("pii_email"));
-        assert!(gates.allows_rule("dlp_openai_key"));
-        assert!(gates.allows_rule("ark.injection.override.discard_prior"));
+        assert!(!gates.native.allows_rule("pii_email"));
+        assert!(gates.native.allows_rule("dlp_openai_key"));
+        assert!(gates
+            .native
+            .allows_rule("ark.injection.override.discard_prior"));
     }
 
     #[test]
@@ -682,7 +694,7 @@ mod tests {
 
         for pattern in DLP_PATTERNS {
             assert_eq!(
-                config.default_gates.allows_rule(pattern.name),
+                config.default_gates.native.allows_rule(pattern.name),
                 credential_groups.contains(&pattern.entity_group),
                 "unexpected default DLP gate for {} ({})",
                 pattern.name,
@@ -690,12 +702,22 @@ mod tests {
             );
         }
 
-        assert!(config.default_gates.allows_rule("dlp_sensitive_material"));
-        assert!(config.default_gates.allows_rule("dlp_secret_transfer"));
-        assert!(!config.default_gates.allows_rule("dlp_mcp_runtime_risk"));
-        assert!(!config.default_gates.allows_rule("dlp_mcp_policy"));
+        assert!(config
+            .default_gates
+            .native
+            .allows_rule("dlp_sensitive_material"));
+        assert!(config
+            .default_gates
+            .native
+            .allows_rule("dlp_secret_transfer"));
         assert!(!config
             .default_gates
+            .native
+            .allows_rule("dlp_mcp_runtime_risk"));
+        assert!(!config.default_gates.native.allows_rule("dlp_mcp_policy"));
+        assert!(!config
+            .default_gates
+            .native
             .allows_rule("dlp_destructive_operation"));
 
         let gateway = SecurityGateway::with_max_level(

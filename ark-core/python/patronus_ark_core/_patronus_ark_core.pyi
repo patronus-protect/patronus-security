@@ -1,4 +1,4 @@
-from .types import ScanReport, ScannerConfig, ShellVerdict, WarmupOptions, WolfExecutionOptions
+from .types import NativeCategory, ScanReport, ScannerConfig, ShellVerdict, WarmupOptions, WolfExecutionOptions
 
 __version__: str
 
@@ -15,8 +15,8 @@ class Scanner:
         warmup: dict[str, object] | WarmupOptions | None = None, wolf_options: dict[str, int] | WolfExecutionOptions | None = None,
     ) -> None: ...
     def scan(
-        self, text: str, *, pii: bool = True, dlp: bool = True,
-        injection: bool = True, control: ScanControl | None = None,
+        self, text: str, *, categories: list[NativeCategory] | None = None,
+        control: ScanControl | None = None,
     ) -> ScanReport: ...
     def shell_verdict(
         self, command: str, *, cwd: str | None = None, home: str | None = None,

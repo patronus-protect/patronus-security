@@ -16,12 +16,10 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::{
-        dlp::{
-            dlp::{ValidatorStrength, DLP_PATTERNS},
-            score::DlpMode,
-        },
+        dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
         validators::{crc32_base62, BASE62},
     },
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
@@ -116,10 +114,10 @@ fn flip(value: &str, index: usize) -> String {
     chars.into_iter().collect()
 }
 
-fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
+fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
-        [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall].map(|mode| {
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
             let scanner = SecurityGateway::with_max_level(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
@@ -127,7 +125,10 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
+                native: patronus_ark::NativeGates {
+                    dlp_mode: mode,
+                    ..Default::default()
+                },
                 ..ScanGateMatrix::default()
             });
             scanner
@@ -141,11 +142,11 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
 }
 
 fn scan(text: &str) -> SecurityScanResult {
-    mode_scan(text, DlpMode::Strict)
+    mode_scan(text, ScoreMode::Strict)
 }
 
 /// The unsuppressed `matched_rules` entry of `rule_id`, if it reported a value.
-fn entry(text: &str, rule_id: &str, mode: DlpMode) -> Option<serde_json::Value> {
+fn entry(text: &str, rule_id: &str, mode: ScoreMode) -> Option<serde_json::Value> {
     mode_scan(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -203,7 +204,7 @@ fn generated_npm_tokens_are_reported_in_de_and_en_carriers() {
             let text = carrier.replace("{}", &value);
             assert!(reports(&text, "SECRET_TOKEN", &value), "{seed}: {text:?}");
             assert!(
-                entry(&text, "dlp_npm_token", DlpMode::Strict).is_some(),
+                entry(&text, "dlp_npm_token", ScoreMode::Strict).is_some(),
                 "{text:?}"
             );
         }
@@ -249,7 +250,7 @@ fn npm_bodies_of_another_length_are_no_npm_token() {
             for carrier in NPM_CARRIERS {
                 let text = carrier.replace("{}", &value);
                 assert!(
-                    entry(&text, "dlp_npm_token", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_npm_token", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -309,14 +310,14 @@ fn npm_tokens_score_at_checksum_strength() {
     let strict = entry(
         &format!("NPM_TOKEN={value}\n"),
         "dlp_npm_token",
-        DlpMode::Strict,
+        ScoreMode::Strict,
     )
     .expect("token must match");
     assert_eq!(strict["validator_strength"], "checksum");
     assert_eq!(strict["severity"], "live");
     assert_eq!(strict["provider"], "npm");
     // Base 50 + checksum 35 without context.
-    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let bare = entry(&value, "dlp_npm_token", mode).expect("bare token");
         assert_eq!(bare["score"].as_f64(), Some(0.85), "{mode:?}");
     }
@@ -330,7 +331,7 @@ fn every_documented_gitlab_prefix_is_reported_in_de_and_en_carriers() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", &value);
                 assert!(reports(&text, "SECRET_TOKEN", &value), "{gen}: {text:?}");
-                let rule = entry(&text, "dlp_gitlab_token", DlpMode::Strict)
+                let rule = entry(&text, "dlp_gitlab_token", ScoreMode::Strict)
                     .unwrap_or_else(|| panic!("{gen}: {text:?}"));
                 assert_eq!(rule["provider"], "gitlab");
                 assert_eq!(rule["subtype"], "access_token");
@@ -348,7 +349,7 @@ fn legacy_and_routable_personal_access_tokens_are_reported_whole() {
                 let text = carrier.replace("{}", &value);
                 assert!(reports(&text, "SECRET_TOKEN", &value), "{gen}: {text:?}");
                 assert!(
-                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_some(),
+                    entry(&text, "dlp_gitlab_pat", ScoreMode::Strict).is_some(),
                     "{text:?}"
                 );
             }
@@ -378,7 +379,7 @@ fn gitlab_bodies_of_another_length_are_no_gitlab_token() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", value);
                 assert!(
-                    entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_gitlab_token", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -391,7 +392,7 @@ fn gitlab_bodies_of_another_length_are_no_gitlab_token() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", &value);
                 assert!(
-                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_gitlab_pat", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -403,7 +404,7 @@ fn gitlab_bodies_of_another_length_are_no_gitlab_token() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", &value);
                 assert!(
-                    entry(&text, "dlp_gitlab_oauth_secret", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_gitlab_oauth_secret", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -424,14 +425,14 @@ fn a_broken_routable_suffix_is_no_routable_token() {
         ] {
             let text = format!("Hi Jo, here is the GitLab token for the mirror job: {broken}\n");
             assert!(
-                entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_none(),
+                entry(&text, "dlp_gitlab_pat", ScoreMode::Strict).is_none(),
                 "{text:?}"
             );
         }
         let runner = generated("gitlab_runner_token_routable", seed);
         let text = format!("token = \"{}X\"\n", runner);
         assert!(
-            entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_none(),
+            entry(&text, "dlp_gitlab_token", ScoreMode::Strict).is_none(),
             "{text:?}"
         );
     }
@@ -448,7 +449,7 @@ fn current_routable_runner_and_workspace_tokens_are_reported_whole() {
                 for carrier in GITLAB_CARRIERS {
                     let text = carrier.replace("{}", &value);
                     assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
-                    let rule = entry(&text, "dlp_gitlab_token", DlpMode::Strict)
+                    let rule = entry(&text, "dlp_gitlab_token", ScoreMode::Strict)
                         .unwrap_or_else(|| panic!("{text:?}"));
                     assert_eq!(rule["provider"], "gitlab");
                     assert_eq!(rule["subtype"], "access_token");
@@ -459,7 +460,7 @@ fn current_routable_runner_and_workspace_tokens_are_reported_whole() {
                 let text = carrier.replace("{}", &value);
                 assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
                 assert!(
-                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_some(),
+                    entry(&text, "dlp_gitlab_pat", ScoreMode::Strict).is_some(),
                     "{text:?}"
                 );
             }
@@ -470,7 +471,7 @@ fn current_routable_runner_and_workspace_tokens_are_reported_whole() {
             let text = carrier.replace("{}", &value);
             assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
             assert!(
-                entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_some(),
+                entry(&text, "dlp_gitlab_token", ScoreMode::Strict).is_some(),
                 "{text:?}"
             );
         }
@@ -508,7 +509,7 @@ fn near_misses_of_the_current_routable_shape_are_no_gitlab_token() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", value);
                 assert!(
-                    entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_gitlab_token", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -518,7 +519,7 @@ fn near_misses_of_the_current_routable_shape_are_no_gitlab_token() {
             for carrier in GITLAB_CARRIERS {
                 let text = carrier.replace("{}", &broken);
                 assert!(
-                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_gitlab_pat", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }
@@ -534,7 +535,7 @@ fn gitlab_oauth_application_secrets_are_api_keys() {
         for carrier in GITLAB_CARRIERS {
             let text = carrier.replace("{}", &value);
             assert!(reports(&text, "API_KEY", &value), "{text:?}");
-            let rule = entry(&text, "dlp_gitlab_oauth_secret", DlpMode::Strict)
+            let rule = entry(&text, "dlp_gitlab_oauth_secret", ScoreMode::Strict)
                 .unwrap_or_else(|| panic!("{text:?}"));
             assert_eq!(rule["provider"], "gitlab");
             assert_eq!(rule["subtype"], "secret_key");

@@ -9,7 +9,7 @@ from patronus_ark_core import CancelledError, ScanControl, Scanner
 def test_original_unicode_spans_and_selective_checks():
     text = "😀 Kontakt: " + "alice" + "@example.org"
     scanner = Scanner({"categories": ["pii", "dlp"]})
-    report = scanner.scan(text, dlp=False, injection=False)
+    report = scanner.scan(text, categories=["pii"])
     assert report["input_bytes"] == len(text.encode())
     assert report["wolf"] is None
     assert {r["category"] for r in report["native"]} == {"pii"}
@@ -35,11 +35,22 @@ def test_limits_deadline_and_cancellation_never_return_partial_results():
 
 @pytest.mark.parametrize("config", [
     {"categories": []}, {"categories": ["unknown"]}, {"max_findings": 0},
-    {"unsupported": True}, {"pii_mode": "unknown"},
+    {"unsupported": True}, {"pii_mode": "unknown"}, {"categories": ["threat"]},
 ])
 def test_core_rejects_invalid_configuration(config):
     with pytest.raises(ValueError):
         Scanner(config)
+
+
+def test_shell_command_points_to_shell_verdict():
+    with pytest.raises(ValueError, match="shell_verdict"):
+        Scanner({"categories": ["shell_command"]})
+    scanner = Scanner({"categories": ["PII"]})
+    with pytest.raises(ValueError, match="shell_verdict"):
+        scanner.scan("ls", categories=["shell_command"])
+    with pytest.raises(ValueError):
+        scanner.scan("ls", categories="pii")
+    assert scanner.scan("hello", categories=[])["native"] == []
 
 
 def test_wolf_configuration_fails_at_construction_for_missing_assets(tmp_path):
@@ -90,8 +101,8 @@ def test_real_wolf_is_reused_and_obeys_per_call_selection():
         "threshold": 0.8, "precision": os.environ.get("PATRONUS_CORE_WOLF_PRECISION", "fp16"),
         "backend": "cpu",
     }})
-    first = scanner.scan("Please summarize this document", pii=False, dlp=False)
-    second = scanner.scan("Please summarize this document", pii=False, dlp=False)
+    first = scanner.scan("Please summarize this document", categories=["injection"])
+    second = scanner.scan("Please summarize this document", categories=["injection"])
     assert first["wolf"]["attack_probability"] == second["wolf"]["attack_probability"]
     assert first["wolf"]["windows"] > 0
-    assert scanner.scan("hello", injection=False)["wolf"] is None
+    assert scanner.scan("hello", categories=["pii", "dlp"])["wolf"] is None

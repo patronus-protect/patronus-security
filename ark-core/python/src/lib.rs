@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::useless_conversion)] // Generated PyO3 wrappers.
 use patronus_ark_core::{
-    detectors::shell::ShellContext, ScanChecks, ScanControl as Control, ScanError,
-    Scanner as CoreScanner,
+    detectors::shell::ShellContext, native::NATIVE_CATEGORIES, ScanControl as Control, ScanError,
+    Scanner as CoreScanner, SecurityCategory,
 };
 use pyo3::{exceptions::*, prelude::*, types::PyDict};
 use serde::de::DeserializeOwned;
@@ -20,9 +20,10 @@ fn scan_error(error: ScanError) -> PyErr {
     }
 }
 
+/// Deserialize a JSON-compatible Python value with the Core serde rules.
 fn config<T: DeserializeOwned + Default>(
     py: Python<'_>,
-    value: Option<&Bound<'_, PyDict>>,
+    value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<T> {
     match value {
         None => Ok(T::default()),
@@ -73,9 +74,9 @@ impl Scanner {
         warmup: Option<&Bound<'_, PyDict>>,
         wolf_options: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let policy = self::config(py, config)?;
-        let warmup = self::config(py, warmup)?;
-        let execution = self::config(py, wolf_options)?;
+        let policy = self::config(py, config.map(|v| v.as_any()))?;
+        let warmup = self::config(py, warmup.map(|v| v.as_any()))?;
+        let execution = self::config(py, wolf_options.map(|v| v.as_any()))?;
         let scanner = py
             .allow_threads(move || CoreScanner::warmup_with_wolf_options(policy, warmup, execution))
             .map_err(scan_error)?;
@@ -84,16 +85,17 @@ impl Scanner {
         })
     }
 
-    #[pyo3(signature = (text, *, pii=true, dlp=true, injection=true, control=None))]
+    #[pyo3(signature = (text, *, categories=None, control=None))]
     fn scan(
         &self,
         py: Python<'_>,
         text: String,
-        pii: bool,
-        dlp: bool,
-        injection: bool,
+        categories: Option<&Bound<'_, PyAny>>,
         control: Option<&ScanControl>,
     ) -> PyResult<PyObject> {
+        let categories: Option<Vec<SecurityCategory>> = categories
+            .map(|categories| self::config(py, Some(categories)))
+            .transpose()?;
         let control = control.map(|c| c.inner.clone()).unwrap_or_default();
         let output = py.allow_threads(move || {
             control.check().map_err(scan_error)?;
@@ -105,11 +107,7 @@ impl Scanner {
             let report = scanner
                 .scan_with_control(
                     &text,
-                    ScanChecks {
-                        pii,
-                        dlp,
-                        injection,
-                    },
+                    categories.as_deref().unwrap_or(&NATIVE_CATEGORIES),
                     &control,
                 )
                 .map_err(scan_error)?;

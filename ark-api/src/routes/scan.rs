@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use crate::auth::AuthenticatedKey;
-use crate::config::{parse_categories, RawGates};
+use crate::config::RawGates;
 use crate::dto::{CompletionDto, QueuedScanResultDto};
 use crate::state::AppState;
 
@@ -26,7 +26,7 @@ const MAX_SCAN_INPUTS: usize = 64;
 #[serde(deny_unknown_fields)]
 pub struct RequestScanConfig {
     #[serde(default)]
-    categories: Option<Vec<String>>,
+    categories: Option<Vec<SecurityCategory>>,
     #[serde(default)]
     max_level: Option<SecurityLevel>,
     #[serde(default)]
@@ -78,7 +78,7 @@ fn resolve_request_config(
         Some(values) if values.is_empty() => {
             return Err("config.categories must not be empty".to_string())
         }
-        Some(values) => parse_categories(&values).map_err(|error| error.to_string())?,
+        Some(values) => values,
         None => defaults,
     };
     for category in &categories {
@@ -688,8 +688,9 @@ mod tests {
         let defaults = resolve_request_config(&config, &key, None).unwrap();
         assert!(!defaults
             .gates
+            .native
             .allows_rule("ark.injection.override.discard_prior"));
-        assert!(defaults.gates.allows_rule("pii_email"));
+        assert!(defaults.gates.native.allows_rule("pii_email"));
 
         let request: RequestScanConfig = serde_json::from_value(json!({
             "categories": ["injection"],
@@ -705,9 +706,11 @@ mod tests {
 
         assert!(overridden
             .gates
+            .native
             .allows_rule("ark.injection.override.discard_prior"));
         assert!(!overridden
             .gates
+            .native
             .allows_rule("ark.injection.exfil.external_sink"));
     }
 

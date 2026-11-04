@@ -14,9 +14,10 @@ use std::collections::BTreeMap;
 
 use patronus_ark::detectors::pii::{
     context::{self, SUPPORT_LEXICON},
-    score::{Context, PiiMode},
+    score::Context,
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -25,7 +26,7 @@ use serde_json::Value;
 
 const LANGUAGES: [&str; 4] = ["fr", "es", "it", "nl"];
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -33,7 +34,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -45,7 +49,7 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
 
 /// `(label, text)` of every evidence span in `strict`.
 fn strict_spans(text: &str) -> Vec<(String, String)> {
-    scan(text, PiiMode::Strict)
+    scan(text, ScoreMode::Strict)
         .evidence_spans
         .iter()
         .map(|span| (span.label.clone(), span.text.clone()))
@@ -54,7 +58,7 @@ fn strict_spans(text: &str) -> Vec<(String, String)> {
 
 /// Rule ids that matched in `strict` with the value text they matched.
 fn strict_rules(text: &str) -> Vec<(String, String)> {
-    let result = scan(text, PiiMode::Strict);
+    let result = scan(text, ScoreMode::Strict);
     result.layers[0]
         .details
         .get("matched_rules")
@@ -625,7 +629,7 @@ fn iban_checksum_decides_under_fr_es_it_nl_account_names() {
     ] {
         let value = text.rsplit(' ').next().unwrap();
         assert!(validators::mod97(value), "{value}");
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         let spans: Vec<_> = result
             .evidence_spans
             .iter()

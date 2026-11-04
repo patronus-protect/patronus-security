@@ -11,14 +11,15 @@ inference, and decides on **shell commands** with Cat (`allow`, `ask`, `block`).
 | | Ark Core | Full Ark |
 | --- | --- | --- |
 | Package | `patronus-ark-core` (crate and PyPI, imports as `patronus_ark_core`) | `patronus-ark` (crate and PyPI, imports as `patronus_ark`) |
-| Categories | `pii`, `dlp`, `injection` | all [eleven categories](../concepts/categories.md) |
+| Categories | `pii`, `dlp`, `injection`, + Cat via `shell_verdict` (not a scan category) | all [eleven categories](../concepts/categories.md), Cat as the `shell_command` category |
+| Cat | `Scanner::shell_verdict` with harness context (cwd, home, repo root) and `prior_facts` of earlier commands | `shell_command` category scan; no harness context or session |
 | Detection | native L1 rules; Wolf as an optional prompt-injection model; Cat as an optional shell-command verdict | L1, NTDB L2 heads and L3 transformers ([layered scanning](../concepts/layered-scanning.md)) |
 | Execution | synchronous on the calling thread; no queue, no worker threads | asynchronous queue with background L3 workers |
 | Assets | none for native rules; one Wolf and one Cat bundle when enabled | L2/L3 model bundles ([manage assets](../how-to/manage-assets.md)) |
 | License | MIT OR Apache-2.0 | GPL-3.0-only or commercial |
 
-Choose Core when you embed scanning in your own process and the three categories cover your
-policy: an agent hook, a proxy, a CLI, a desktop app. Choose full Ark when you need the
+Choose Core when you embed scanning in your own process and the three categories plus Cat cover
+your policy: an agent hook, a proxy, a CLI, a desktop app. Choose full Ark when you need the
 model-backed categories, the L2→L3 promotion, or the queue.
 
 Both share one implementation of the native detectors, the [L1 rule catalog](../reference/l1-rule-catalog.md)
@@ -172,9 +173,10 @@ Cat decides on a command an agent wants to run. Configure it next to Wolf with `
     print(verdict["decision"])  # "allow" | "ask" | "block"
     ```
 
-=== "Rust"
+=== "Rust (`download` feature)"
 
     ```rust
+    use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig, WarmupOptions};
     use patronus_ark_core::detectors::shell::ShellConfig;
 
     let mut config = ScannerConfig::default();

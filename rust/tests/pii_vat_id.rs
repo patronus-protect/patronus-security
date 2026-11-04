@@ -13,14 +13,15 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -28,7 +29,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -39,7 +43,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(label, text, score)` of every span.
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -54,7 +58,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
         .unwrap_or_else(|| panic!("unknown rule {rule_id}"))
 }
 
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
 type Validator = fn(&str) -> bool;
 
@@ -516,11 +520,11 @@ fn every_country_has_its_own_scored_only_checksum_rule() {
         assert!(!pattern.captured_value, "{rule}");
         assert!(pattern.validator.is_some(), "{rule}");
         assert!(
-            score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+            score::rule_score(pattern) >= ScoreMode::Balanced.min_score().unwrap(),
             "{rule}"
         );
         assert!(
-            score::score(pattern, Context::Counter) < PiiMode::Recall.min_score().unwrap(),
+            score::score(pattern, Context::Counter) < ScoreMode::Recall.min_score().unwrap(),
             "{rule}"
         );
     }
@@ -596,7 +600,7 @@ fn strict_reports_no_vat_id() {
         for value in *values {
             let text = format!("USt-IdNr. {value}");
             assert!(
-                !spans(&text, PiiMode::Strict)
+                !spans(&text, ScoreMode::Strict)
                     .iter()
                     .any(|(span_label, ..)| span_label.starts_with("VAT_ID")),
                 "{label}: {text}"

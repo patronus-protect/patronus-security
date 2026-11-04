@@ -9,13 +9,14 @@
 //! the number (`4567xl`) still yield no match. Other numbers keep their span, and the
 //! validator checks the number without the extension.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::Value;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -23,7 +24,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -61,7 +65,7 @@ fn phone_spans(result: &SecurityScanResult) -> Vec<String> {
         .collect()
 }
 
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
 /// `(text, value)`: `pii_phone_us` reports `value` with its extension, the only PHONE span.
 const EXTENDED: [(&str, &str); 12] = [
@@ -152,7 +156,7 @@ fn the_extension_belongs_to_the_span() {
     for (text, value) in EXTENDED {
         for mode in MODES {
             let result = scan(text, mode);
-            if mode == PiiMode::Strict {
+            if mode == ScoreMode::Strict {
                 assert!(
                     rules(text, &result).contains(&("pii_phone_us".to_owned(), value.to_owned())),
                     "{text}: {:?}",

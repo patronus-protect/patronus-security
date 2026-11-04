@@ -13,9 +13,10 @@ use patronus_ark::detectors::lexical_anchors::LexicalAnchorScanner;
 use patronus_ark::detectors::pii::{
     context::{self, Side, AFTER_WINDOW, BEFORE_WINDOW, COUNTER_LEXICON, SUPPORT_LEXICON},
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS},
+    score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -23,7 +24,7 @@ use serde::Deserialize;
 
 const PROXIMITY_RULE: &str = "pii_phone_de_national_proximity";
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -31,7 +32,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -41,7 +45,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -49,7 +53,7 @@ fn spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
         .collect()
 }
 
-fn rules(text: &str, mode: PiiMode) -> Vec<String> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<String> {
     pii_result(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -159,13 +163,13 @@ fn support_terms_count_on_both_sides_of_the_value() {
             "{text}: {:?}",
             context_of(text, value, "PHONE")
         );
-        let found = spans(text, PiiMode::Strict);
+        let found = spans(text, ScoreMode::Strict);
         assert_eq!(
             found,
             vec![("PHONE".to_string(), value.to_string(), 1.0)],
             "{text}"
         );
-        assert!(rules(text, PiiMode::Strict).contains(&PROXIMITY_RULE.to_string()));
+        assert!(rules(text, ScoreMode::Strict).contains(&PROXIMITY_RULE.to_string()));
     }
 }
 
@@ -211,12 +215,12 @@ fn proximity_points_fall_with_the_distance_to_the_term() {
             "{text}"
         );
         assert_eq!(
-            spans(text, PiiMode::Balanced),
+            spans(text, ScoreMode::Balanced),
             vec![("PHONE".to_string(), value.to_string(), expected)],
             "{text}"
         );
     }
-    assert!(spans(outside, PiiMode::Recall).is_empty());
+    assert!(spans(outside, ScoreMode::Recall).is_empty());
 }
 
 #[test]
@@ -237,7 +241,7 @@ fn a_nearer_counter_term_outranks_support() {
         ("Tracking number 0151 23456789 (parcel)", "0151 23456789"),
     ] {
         assert_eq!(context_of(text, value, "PHONE"), Context::Counter, "{text}");
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             assert!(spans(text, mode).is_empty(), "{mode:?}: {text}");
         }
     }
@@ -269,7 +273,7 @@ fn terms_of_other_fields_lines_or_words_are_no_context() {
             "{text}"
         );
         assert!(
-            !rules(text, PiiMode::Recall).contains(&PROXIMITY_RULE.to_string()),
+            !rules(text, ScoreMode::Recall).contains(&PROXIMITY_RULE.to_string()),
             "{text}"
         );
     }
@@ -305,11 +309,11 @@ fn counter_context_lowers_existing_rules_only_in_scored_modes() {
             Some(0.60),
         ),
     ] {
-        let strict = spans(text, PiiMode::Strict);
+        let strict = spans(text, ScoreMode::Strict);
         assert_eq!(strict.len(), 1, "{text}: {strict:?}");
         assert_eq!(strict[0].0, label, "{text}");
         assert_eq!(strict[0].2, 1.0, "{text}");
-        for (mode, expected) in [(PiiMode::Balanced, balanced), (PiiMode::Recall, recall)] {
+        for (mode, expected) in [(ScoreMode::Balanced, balanced), (ScoreMode::Recall, recall)] {
             let scored = spans(text, mode);
             assert_eq!(
                 scored.first().map(|span| span.2),
@@ -331,14 +335,14 @@ fn support_terms_raise_unbound_rules_in_scored_modes() {
         ("Client IP 198.51.100.23 was blocked.", "IP_ADDRESS", 0.90),
         ("IBAN DE89370400440532013000", "IBAN", 1.0),
     ] {
-        let found = spans(text, PiiMode::Balanced);
+        let found = spans(text, ScoreMode::Balanced);
         assert_eq!(found.len(), 1, "{text}: {found:?}");
         assert_eq!(
             (found[0].0.as_str(), found[0].2),
             (label, expected),
             "{text}"
         );
-        assert_eq!(spans(text, PiiMode::Strict)[0].2, 1.0, "{text}");
+        assert_eq!(spans(text, ScoreMode::Strict)[0].2, 1.0, "{text}");
     }
 }
 
@@ -347,7 +351,7 @@ fn field_bound_rules_keep_the_field_bonus_next_to_counter_terms() {
     // The value is bound to its own field name; a counter term elsewhere is irrelevant.
     let text = "Bestellnummer 4711, Steuer-ID: 86095742719";
     assert_eq!(
-        spans(text, PiiMode::Balanced),
+        spans(text, ScoreMode::Balanced),
         vec![("STEUERID".to_string(), "86095742719".to_string(), 1.0)]
     );
 }
@@ -385,7 +389,7 @@ fn checksum_and_format_vectors_decide_with_any_context() {
             .join(" ");
         assert!(validator(value_of_valid), "{valid}");
         assert!(!validator(&invalid_value), "{invalid}");
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             assert!(
                 spans(valid, mode).iter().any(|span| span.0 == label),
                 "{mode:?}: {valid}"
@@ -486,7 +490,7 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
     for pattern in bound {
         assert!(!pattern.captured_value, "{}", pattern.name);
         assert!(
-            score::score(pattern, weakest) >= PiiMode::Balanced.min_score().unwrap(),
+            score::score(pattern, weakest) >= ScoreMode::Balanced.min_score().unwrap(),
             "{}",
             pattern.name
         );
@@ -748,7 +752,7 @@ fn balanced_scores_follow_the_context_and_strict_ignores_it() {
         ),
     ] {
         let expected = model_score(pattern(rule_id), bonus, penalty);
-        for mode in [PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
             let result = pii_result(text, mode);
             let rules = matched_rules(&result);
             if expected < mode.min_score().unwrap() {
@@ -766,7 +770,7 @@ fn balanced_scores_follow_the_context_and_strict_ignores_it() {
             assert_eq!(matched["context"]["bonus"], bonus, "{mode:?}: {text}");
             assert_eq!(matched["context"]["penalty"], penalty, "{mode:?}: {text}");
         }
-        let strict = pii_result(text, PiiMode::Strict);
+        let strict = pii_result(text, ScoreMode::Strict);
         assert_eq!(span_score(&strict, label), Some(1.0), "strict: {text}");
         for matched in matched_rules(&strict) {
             assert!(matched.get("score").is_none(), "strict: {text}");
@@ -777,7 +781,10 @@ fn balanced_scores_follow_the_context_and_strict_ignores_it() {
 
 #[test]
 fn matched_rules_explain_the_deciding_context() {
-    let result = pii_result("Rückfragen unter Telefon +49 30 1234567", PiiMode::Balanced);
+    let result = pii_result(
+        "Rückfragen unter Telefon +49 30 1234567",
+        ScoreMode::Balanced,
+    );
     let rules = matched_rules(&result);
     let context = &rule(&rules, "pii_phone_de").unwrap()["context"];
     assert_eq!(context["bonus"], 25);
@@ -787,7 +794,7 @@ fn matched_rules_explain_the_deciding_context() {
     assert_eq!(context["distance"], 1);
 
     // A counter term names itself.
-    let result = pii_result("Bestellnummer 4111 1111 1111 1111", PiiMode::Recall);
+    let result = pii_result("Bestellnummer 4111 1111 1111 1111", ScoreMode::Recall);
     let rules = matched_rules(&result);
     let context = &rule(&rules, "pii_credit_card").unwrap()["context"];
     assert_eq!(context["bonus"], 0);
@@ -799,7 +806,7 @@ fn matched_rules_explain_the_deciding_context() {
     // Field-bound rules name their own field.
     let result = pii_result(
         "Bestellnummer 4711, Steuer-ID: 86095742719",
-        PiiMode::Balanced,
+        ScoreMode::Balanced,
     );
     let rules = matched_rules(&result);
     let context = &rule(&rules, "pii_steuer_id_de").unwrap()["context"];
@@ -807,7 +814,7 @@ fn matched_rules_explain_the_deciding_context() {
     assert_eq!(context["penalty"], 0);
     assert_eq!(context["anchor"], "field");
 
-    let result = pii_result("Call 212-736-4410", PiiMode::Balanced);
+    let result = pii_result("Call 212-736-4410", ScoreMode::Balanced);
     let rules = matched_rules(&result);
     let context = &rule(&rules, "pii_phone_us").unwrap()["context"];
     assert_eq!(context["bonus"], 0);
@@ -824,8 +831,8 @@ fn field_bound_values_never_take_a_penalty() {
         ),
         ("Order number 4711, SSN: 123-45-6789", "SSN"),
     ] {
-        let strict = pii_result(text, PiiMode::Strict);
-        let balanced = pii_result(text, PiiMode::Balanced);
+        let strict = pii_result(text, ScoreMode::Strict);
+        let balanced = pii_result(text, ScoreMode::Balanced);
         assert!(span_score(&strict, label).is_some(), "{text}");
         let field_score = PII_PATTERNS
             .iter()
@@ -862,7 +869,7 @@ fn checksum_vectors_decide_emission_next_to_any_context() {
             "Bestellnummer ",
             "Invoice no. ",
         ] {
-            for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+            for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
                 let rejected = pii_result(&format!("{prefix}{invalid}"), mode);
                 assert_eq!(
                     span_score(&rejected, label),
@@ -870,12 +877,12 @@ fn checksum_vectors_decide_emission_next_to_any_context() {
                     "{mode:?}: {prefix}{invalid}"
                 );
             }
-            let strict = pii_result(&format!("{prefix}{valid}"), PiiMode::Strict);
+            let strict = pii_result(&format!("{prefix}{valid}"), ScoreMode::Strict);
             assert_eq!(span_score(&strict, label), Some(1.0), "{prefix}{valid}");
         }
     }
     // Steuer-ID: valid after its field stays in every mode, invalid never appears.
-    for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let valid = pii_result("Rechnungsnummer 88213, Steuer-ID: 86095742719", mode);
         assert!(span_score(&valid, "STEUERID").is_some(), "{mode:?}");
         let invalid = pii_result("Rechnungsnummer 88213, Steuer-ID: 86095742718", mode);
@@ -923,7 +930,7 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
     );
     for (case, probes) in probed {
         for text in [&probes.context.de, &probes.context.en] {
-            let result = pii_result(text, PiiMode::Balanced);
+            let result = pii_result(text, ScoreMode::Balanced);
             let rules = matched_rules(&result);
             let matched =
                 rule(&rules, &case.rule_id).unwrap_or_else(|| panic!("{}: {text}", case.rule_id));
@@ -935,13 +942,13 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
         }
         if let Some(counter) = &probes.counter {
             for text in [&counter.de, &counter.en] {
-                let strict = matched_rules(&pii_result(text, PiiMode::Strict));
+                let strict = matched_rules(&pii_result(text, ScoreMode::Strict));
                 assert!(
                     rule(&strict, &case.rule_id).is_some(),
                     "strict {}: {text}",
                     case.rule_id
                 );
-                let balanced = pii_result(text, PiiMode::Balanced);
+                let balanced = pii_result(text, ScoreMode::Balanced);
                 assert!(
                     rule(&matched_rules(&balanced), &case.rule_id).is_none(),
                     "balanced {}: {text}",

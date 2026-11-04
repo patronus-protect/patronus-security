@@ -9,13 +9,14 @@
 //! the area code set off by `)` or a separator. The validator is unchanged: it accepts
 //! every one of these values, the position and the grouping reject them.
 
-use patronus_ark::detectors::pii::{pii::PII_PATTERNS, score::PiiMode, validators};
+use patronus_ark::detectors::pii::{pii::PII_PATTERNS, validators};
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use regex::Regex;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -23,7 +24,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -138,7 +142,7 @@ fn validator_vectors_are_unchanged() {
 #[test]
 fn element_runs_report_no_phone_in_any_mode() {
     for text in ELEMENT_RUNS {
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let result = scan(text, mode);
             assert!(phone_spans(&result).is_empty(), "{mode:?}: {text:?}");
         }
@@ -148,7 +152,7 @@ fn element_runs_report_no_phone_in_any_mode() {
 #[test]
 fn six_four_groups_report_no_phone_in_any_mode() {
     for text in SIX_FOUR {
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let result = scan(text, mode);
             assert!(phone_spans(&result).is_empty(), "{mode:?}: {text:?}");
         }
@@ -158,7 +162,7 @@ fn six_four_groups_report_no_phone_in_any_mode() {
 #[test]
 fn phone_numbers_after_field_names_and_placeholders_stay() {
     for (text, value) in KEPT {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert_eq!(phone_spans(&result), vec![value.to_owned()], "{text:?}");
     }
 }
@@ -166,7 +170,7 @@ fn phone_numbers_after_field_names_and_placeholders_stay() {
 #[test]
 fn a_tel_uri_after_a_number_keeps_both() {
     let text = "Call our desk at [+31 6 12345678](tel:+31612345678).";
-    let result = scan(text, PiiMode::Strict);
+    let result = scan(text, ScoreMode::Strict);
     assert_eq!(
         phone_spans(&result),
         vec!["+31 6 12345678".to_owned(), "+31612345678".to_owned()]

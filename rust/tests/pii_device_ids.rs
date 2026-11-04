@@ -12,9 +12,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -24,9 +25,9 @@ const IMEI: &str = "pii_imei";
 const MEID: &str = "pii_meid";
 const ICCID: &str = "pii_iccid";
 const IMSI: &str = "pii_imsi";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -34,7 +35,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -45,7 +49,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// Text of every span with `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<String> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<String> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -55,7 +59,7 @@ fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<String> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -231,7 +235,7 @@ fn imsi_validator_checks_the_mobile_country_code_and_the_form() {
 #[test]
 fn the_device_rules_have_their_label_validator_and_strength() {
     let validator = |pattern: &PiiPattern| pattern.validator.map(|validator| validator as usize);
-    let balanced = PiiMode::Balanced.min_score().unwrap();
+    let balanced = ScoreMode::Balanced.min_score().unwrap();
     for (rule_id, label, check, strength) in [
         (
             IMEI,

@@ -14,9 +14,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{PiiMode, ValidatorStrength},
+    score::ValidatorStrength,
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -24,10 +25,10 @@ use patronus_ark::{
 const REGISTER: &str = "pii_commercial_register_de";
 const REGISTER_BARE: &str = "pii_commercial_register_de_context_free";
 const LABEL: &str = "COMMERCIAL_REGISTER_DE";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -35,7 +36,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -46,7 +50,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every span with `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -62,7 +66,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
         .unwrap_or_else(|| panic!("unknown rule {rule_id}"))
 }
 
-fn values(text: &str, mode: PiiMode, label: &str) -> Vec<String> {
+fn values(text: &str, mode: ScoreMode, label: &str) -> Vec<String> {
     spans(text, mode, label)
         .into_iter()
         .map(|(value, _)| value)
@@ -213,7 +217,7 @@ fn bare_slashed_tax_number_keeps_any_leading_digit_in_the_scored_modes() {
         for mode in SCORED {
             assert_eq!(values(value, mode, "TAX_NUMBER_DE"), [value], "{mode:?}");
         }
-        assert!(spans(value, PiiMode::Strict, "TAX_NUMBER_DE").is_empty());
+        assert!(spans(value, ScoreMode::Strict, "TAX_NUMBER_DE").is_empty());
     }
 }
 
@@ -323,7 +327,7 @@ fn bare_commercial_register_is_reported_in_the_scored_modes_only() {
                 "{mode:?}: {text}"
             );
         }
-        assert!(spans(text, PiiMode::Strict, LABEL).is_empty(), "{text}");
+        assert!(spans(text, ScoreMode::Strict, LABEL).is_empty(), "{text}");
     }
     for mode in SCORED {
         assert_eq!(

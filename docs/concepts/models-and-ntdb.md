@@ -78,7 +78,7 @@ executed by the L3 background worker. Only required assets are downloaded by def
 | **Husky** (Sight / Paw / Nose) | `tool_class` / `tool_action` / `tool_tags` | Agentic tool-type, operation, and data-flow properties. |
 | **Lion Warden** | multiple (unified) | Single multi-head model serving several categories from one inference. |
 | **GLiNER small v2.5 (edge)** | `dynamic-pii` | Open-vocabulary entity extraction with exact spans. |
-| **Cat Shell Risk Commander** | `shell_command` | L1 logistic regression over TF-IDF char n-grams and shell tokens (A1, `model.json`, Apache-2.0) scoring shell command/script risk. |
+| **Cat Shell Risk Commander** | `shell_command` | L1 logistic regression over TF-IDF char n-grams and shell tokens (K26, `model.json`, Apache-2.0); its score and Cedar policies decide `allow` / `ask` / `block` for a shell command or script. |
 
 All models are published under the [`patronus-studio`](https://huggingface.co/patronus-studio)
 Hugging Face organization and each carries its own model card with training data, benchmarks,
@@ -101,7 +101,10 @@ them on your own hardware.
 The category → level → repository mapping is defined in
 [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
 Assets are cached under the platform cache directory (or a custom `model_dir`) and downloaded on
-first use. The L2 NTDB packages, L3 transformers, the unified L3 model, and the dynamic-pii
-bundle are pinned to immutable commit revisions in `specs.rs`. See
+first use. Every bundle is pinned to an immutable commit revision: the Cat (`shell_command`) and
+Wolf Defender revisions live in
+[`ark-core/src/warmup.rs`](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/src/warmup.rs)
+(`SHELL_*`, `WOLF_*`), which `specs.rs` references; the other L2 NTDB packages, L3 transformers,
+the unified L3 model, and the dynamic-pii bundle are pinned in `specs.rs`. See
 [Manage model assets](../how-to/manage-assets.md) and the generated
 [Assets reference](../assets.md) for cache locations, sizes, and offline behavior.

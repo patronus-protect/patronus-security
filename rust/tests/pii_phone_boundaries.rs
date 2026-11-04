@@ -9,13 +9,14 @@
 //! rules found before: no prefix alone, and no other `00` number, is a new match.
 //! The validator is unchanged.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::Value;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -23,7 +24,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -61,7 +65,7 @@ fn phone_spans(result: &SecurityScanResult) -> Vec<String> {
         .collect()
 }
 
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
 /// `(text, rule, value)`: the number ends before the line break.
 const LINE_BREAK: [(&str, &str, &str); 8] = [
@@ -151,7 +155,7 @@ fn validator_vectors_are_unchanged() {
 #[test]
 fn a_number_ends_before_a_line_break() {
     for (text, rule, value) in LINE_BREAK {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         let found = rules(text, &result);
         assert!(
             found.contains(&(rule.to_owned(), value.to_owned())),
@@ -167,7 +171,7 @@ fn a_number_ends_before_a_line_break() {
 
 #[test]
 fn a_number_ends_before_a_line_break_in_scored_modes() {
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         for (text, value) in [
             ("Call +1-123-456-7890\n\n2. Next step", "+1-123-456-7890"),
             (
@@ -203,7 +207,7 @@ fn digits_split_by_a_line_break_stay_silent() {
 #[test]
 fn trunk_and_international_prefix_are_part_of_the_span() {
     for (text, value) in PREFIXED {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert!(
             rules(text, &result).contains(&("pii_phone_us".to_owned(), value.to_owned())),
             "{text}: {:?}",
@@ -215,7 +219,7 @@ fn trunk_and_international_prefix_are_part_of_the_span() {
 
 #[test]
 fn trunk_prefix_is_part_of_the_span_in_scored_modes() {
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         for (text, value) in [
             ("Phone: 1-800-123-4567", "1-800-123-4567"),
             ("Telefon: 1 (800) 555-0199", "1 (800) 555-0199"),
@@ -256,7 +260,7 @@ fn plus_and_0049_forms_keep_their_prefix() {
             "0049 30 1234567",
         ),
     ] {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert!(
             rules(text, &result).contains(&(rule.to_owned(), value.to_owned())),
             "{text}: {:?}",
@@ -277,7 +281,7 @@ fn a_prefix_needs_its_own_boundary() {
         ("Code A1-800-123-4567", "800-123-4567"),
         ("Hotline:\n1\n800-123-4567", "800-123-4567"),
     ] {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert_eq!(phone_spans(&result), vec![value.to_owned()], "{text:?}");
     }
 }

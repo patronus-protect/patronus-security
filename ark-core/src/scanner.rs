@@ -1,10 +1,6 @@
 use crate::{
-    detectors::{
-        dlp::{dlp::default_rule_enabled, score::DlpMode},
-        pii::score::PiiMode,
-        shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
-    },
-    native::{NativeEngine, NativePolicy, NativeProducerOutcome},
+    detectors::shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
+    native::{NativeEngine, NativeGates, NativeProducerOutcome, NATIVE_CATEGORIES},
     threat::NativeText,
     LayerResult, NativeResult, SecurityCategory,
 };
@@ -14,52 +10,17 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Category {
-    Pii,
-    Dlp,
-    Injection,
-}
-impl Category {
-    fn legacy(self) -> SecurityCategory {
-        match self {
-            Self::Pii => SecurityCategory::Pii,
-            Self::Dlp => SecurityCategory::Dlp,
-            Self::Injection => SecurityCategory::Injection,
-        }
-    }
-}
-
-/// Per-call checks, intersected with the scanner's configured native categories.
-/// Wolf runs only when `injection` is enabled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScanChecks {
-    pub pii: bool,
-    pub dlp: bool,
-    pub injection: bool,
-}
-impl Default for ScanChecks {
-    fn default() -> Self {
-        Self {
-            pii: true,
-            dlp: true,
-            injection: true,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 /// Queue-free scanner policy. Defaults to all three native categories, no Wolf
 /// and no Cat.
 pub struct ScannerConfig {
-    pub categories: Vec<Category>,
-    pub rules: HashMap<String, bool>,
-    pub models: HashMap<String, bool>,
-    pub pii_mode: PiiMode,
-    pub dlp_mode: DlpMode,
-    pub explain: bool,
+    /// Native text-scan categories: `pii`, `dlp` and `injection`.
+    pub categories: Vec<SecurityCategory>,
+    /// Rule, model, mode and `explain` gates; their keys sit at the top level
+    /// of the serialized config.
+    #[serde(flatten)]
+    pub gates: NativeGates,
     /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
     pub max_input_bytes: usize,
     /// Maximum actionable evidence spans; reports are never silently truncated.
@@ -72,12 +33,8 @@ pub struct ScannerConfig {
 impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
-            categories: vec![Category::Pii, Category::Dlp, Category::Injection],
-            rules: HashMap::new(),
-            models: HashMap::new(),
-            pii_mode: PiiMode::default(),
-            dlp_mode: DlpMode::default(),
-            explain: false,
+            categories: NATIVE_CATEGORIES.to_vec(),
+            gates: NativeGates::default(),
             max_input_bytes: 1024 * 1024,
             max_findings: 10_000,
             #[cfg(feature = "wolf")]
@@ -92,6 +49,13 @@ impl ScannerConfig {
             return Err(ScanError::Config(
                 "categories and positive resource limits are required".into(),
             ));
+        }
+        if let Some(&category) = self
+            .categories
+            .iter()
+            .find(|c| !NATIVE_CATEGORIES.contains(c))
+        {
+            return Err(unsupported_category(category));
         }
         if self
             .categories
@@ -108,25 +72,17 @@ impl ScannerConfig {
         Ok(())
     }
 }
-impl NativePolicy for ScannerConfig {
-    fn allows_rule(&self, id: &str) -> bool {
-        self.rules
-            .get(id)
-            .copied()
-            .unwrap_or_else(|| default_rule_enabled(id))
-    }
-    fn allows_model(&self, id: &str) -> bool {
-        self.models.get(id).copied().unwrap_or(true)
-    }
-    fn explain(&self) -> bool {
-        self.explain
-    }
-    fn pii_mode(&self) -> PiiMode {
-        self.pii_mode
-    }
-    fn dlp_mode(&self) -> DlpMode {
-        self.dlp_mode
-    }
+/// The error for a category the Core text scan does not run.
+fn unsupported_category(category: SecurityCategory) -> ScanError {
+    ScanError::Config(match category {
+        SecurityCategory::ShellCommand => "category shell_command is not a text-scan category; \
+            configure `shell` and call `shell_verdict`"
+            .into(),
+        other => format!(
+            "category {} is not supported by the Core scanner; expected pii, dlp or injection",
+            other.as_str()
+        ),
+    })
 }
 #[derive(Debug, thiserror::Error)]
 pub enum ScanError {
@@ -196,35 +152,42 @@ impl Scanner {
     }
     /// Run all configured stages synchronously. Any incomplete stage returns an error.
     pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError> {
-        self.scan_with_checks(text, ScanChecks::default())
+        self.scan_categories(text, &NATIVE_CATEGORIES)
     }
-    /// Run selected checks with the existing scanner and the same resource limits.
-    /// Disabled checks do not invoke their native producers or Wolf inference.
-    pub fn scan_with_checks(
+    /// Run the selected categories with the existing scanner and the same resource
+    /// limits. The selection is intersected with the configured categories;
+    /// unselected categories do not invoke their native producers, and Wolf runs
+    /// only when `injection` is selected.
+    pub fn scan_categories(
         &mut self,
         text: &str,
-        checks: ScanChecks,
+        categories: &[SecurityCategory],
     ) -> Result<ScanReport, ScanError> {
-        self.scan_with_control(text, checks, &crate::ScanControl::default())
+        self.scan_with_control(text, categories, &crate::ScanControl::default())
     }
-    /// Run selected checks under a shared cancellation/deadline budget.
+    /// [`Self::scan_categories`] under a shared cancellation/deadline budget.
     pub fn scan_with_control(
         &mut self,
         text: &str,
-        checks: ScanChecks,
+        categories: &[SecurityCategory],
         control: &crate::ScanControl,
     ) -> Result<ScanReport, ScanError> {
+        if let Some(&category) = categories.iter().find(|c| !NATIVE_CATEGORIES.contains(c)) {
+            return Err(unsupported_category(category));
+        }
         control.check()?;
         if text.len() > self.config.max_input_bytes {
             return Err(ScanError::InputLimit {
                 limit: self.config.max_input_bytes,
             });
         }
-        let native = catch_unwind(AssertUnwindSafe(|| self.scan_native(text, checks, control)))
-            .map_err(|_| ScanError::Detector("native scanner panicked".into()))??;
+        let native = catch_unwind(AssertUnwindSafe(|| {
+            self.scan_native(text, categories, control)
+        }))
+        .map_err(|_| ScanError::Detector("native scanner panicked".into()))??;
         control.check()?;
         #[cfg(feature = "wolf")]
-        let wolf = if checks.injection {
+        let wolf = if categories.contains(&SecurityCategory::Injection) {
             self.wolf
                 .as_mut()
                 .map(|runner| runner.scan_with_control(text, control))
@@ -266,39 +229,34 @@ impl Scanner {
     fn scan_native(
         &self,
         text: &str,
-        checks: ScanChecks,
+        categories: &[SecurityCategory],
         control: &crate::ScanControl,
     ) -> Result<Vec<NativeResult>, ScanError> {
         let prepared = NativeText::new(text);
         let mut results = Vec::new();
         for &category in &self.config.categories {
             control.check()?;
-            let selected = match category {
-                Category::Pii => checks.pii,
-                Category::Dlp => checks.dlp,
-                Category::Injection => checks.injection,
-            };
-            if !selected {
+            if !categories.contains(&category) {
                 continue;
             }
             let mut outputs = Vec::new();
             for producer in self.native.producers(category) {
                 control.check()?;
-                if !producer.enabled(&self.config) {
+                if !producer.enabled(&self.config.gates) {
                     continue;
                 }
                 let outcome = self
                     .native
-                    .run_producer(producer, &prepared, &self.config, control)
+                    .run_producer(producer, &prepared, &self.config.gates, control)
                     .map_err(|error| match error {
                         ScanError::Detector(_) => {
                             ScanError::Detector("native scanner panicked".into())
                         }
                         other => other,
                     })?;
-                outputs.push(measure(category.legacy(), producer.id(), text, outcome));
+                outputs.push(measure(category, producer.id(), text, outcome));
             }
-            if category == Category::Injection {
+            if category == SecurityCategory::Injection {
                 if !outputs.is_empty() {
                     results.push(crate::injection_l1::aggregate(text, outputs));
                 }
@@ -394,27 +352,13 @@ mod scope_tests {
                 .as_ref()
                 .is_some_and(|d| d.recommendation.accepted)));
         let scoped = scanner
-            .scan_with_checks(
-                attack,
-                ScanChecks {
-                    pii: true,
-                    dlp: true,
-                    injection: false,
-                },
-            )
+            .scan_categories(attack, &[SecurityCategory::Pii, SecurityCategory::Dlp])
             .unwrap();
         assert!(scoped.native.iter().all(|r| r.category != "injection"));
         assert_eq!(scoped.input_bytes, attack.len());
         let text = "Grüße: alice@example.org\n-----BEGIN PRIVATE KEY-----\nQ2ZxN2ZKYzZtM1ZscDlLMnpXNFJ0OGFI\n-----END PRIVATE KEY-----";
         let scoped = scanner
-            .scan_with_checks(
-                text,
-                ScanChecks {
-                    pii: true,
-                    dlp: true,
-                    injection: false,
-                },
-            )
+            .scan_categories(text, &[SecurityCategory::Pii, SecurityCategory::Dlp])
             .unwrap();
         let full = scanner.scan(text).unwrap();
         for expected in full.native.iter().filter(|r| r.category != "injection") {
@@ -444,23 +388,19 @@ mod scope_tests {
         })
         .unwrap();
         assert!(matches!(
-            scanner.scan_with_checks("too long", ScanChecks::default()),
+            scanner.scan_categories("too long", &NATIVE_CATEGORIES),
             Err(ScanError::InputLimit { limit: 4 })
         ));
         let mut scanner = Scanner::new(ScannerConfig {
-            categories: vec![Category::Pii],
+            categories: vec![SecurityCategory::Pii],
             max_findings: 1,
             ..ScannerConfig::default()
         })
         .unwrap();
         assert!(matches!(
-            scanner.scan_with_checks(
+            scanner.scan_categories(
                 "alice@example.org and bob@example.net",
-                ScanChecks {
-                    pii: true,
-                    dlp: false,
-                    injection: false
-                }
+                &[SecurityCategory::Pii]
             ),
             Err(ScanError::FindingLimit { limit: 1 })
         ));
@@ -475,54 +415,24 @@ mod selected_checks_tests {
         let mut scanner = Scanner::new(ScannerConfig::default()).unwrap();
         let text="alice@example.org\n-----BEGIN PRIVATE KEY-----\nQ2ZxN2ZKYzZtM1ZscDlLMnpXNFJ0OGFI\n-----END PRIVATE KEY-----";
         let pii = scanner
-            .scan_with_checks(
-                text,
-                ScanChecks {
-                    pii: true,
-                    dlp: false,
-                    injection: false,
-                },
-            )
+            .scan_categories(text, &[SecurityCategory::Pii])
             .unwrap();
         assert!(pii.native.iter().all(|r| r.category == "pii"));
         assert!(pii.native.iter().any(|r| !r.evidence_spans.is_empty()));
         let dlp = scanner
-            .scan_with_checks(
-                text,
-                ScanChecks {
-                    pii: false,
-                    dlp: true,
-                    injection: false,
-                },
-            )
+            .scan_categories(text, &[SecurityCategory::Dlp])
             .unwrap();
         assert!(dlp.native.iter().all(|r| r.category == "dlp"));
         assert!(dlp.native.iter().any(|r| !r.evidence_spans.is_empty()));
-        let none = scanner
-            .scan_with_checks(
-                text,
-                ScanChecks {
-                    pii: false,
-                    dlp: false,
-                    injection: false,
-                },
-            )
-            .unwrap();
+        let none = scanner.scan_categories(text, &[]).unwrap();
         assert!(none.native.is_empty());
         let mut scanner = Scanner::new(ScannerConfig {
-            categories: vec![Category::Pii],
+            categories: vec![SecurityCategory::Pii],
             ..ScannerConfig::default()
         })
         .unwrap();
         let unavailable = scanner
-            .scan_with_checks(
-                text,
-                ScanChecks {
-                    pii: false,
-                    dlp: true,
-                    injection: true,
-                },
-            )
+            .scan_categories(text, &[SecurityCategory::Dlp, SecurityCategory::Injection])
             .unwrap();
         assert!(unavailable.native.is_empty());
     }
@@ -570,5 +480,56 @@ mod selected_checks_tests {
             Err(ScanError::Shell(_))
         ));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::*;
+    use crate::native::ScoreMode;
+
+    #[test]
+    fn config_keeps_flat_gate_keys_and_rejects_unknown_keys() {
+        let config: ScannerConfig = serde_json::from_str(
+            r#"{"categories":["PII","dlp"],"rules":{"pii_email":false},"pii_mode":"recall","explain":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.categories,
+            [SecurityCategory::Pii, SecurityCategory::Dlp]
+        );
+        assert_eq!(config.gates.rules.get("pii_email"), Some(&false));
+        assert_eq!(config.gates.pii_mode, ScoreMode::Recall);
+        assert!(config.gates.explain);
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["categories"], serde_json::json!(["pii", "dlp"]));
+        assert_eq!(json["pii_mode"], "recall");
+        assert!(json.get("gates").is_none());
+        assert!(serde_json::from_str::<ScannerConfig>(r#"{"pii_mod":"recall"}"#).is_err());
+        assert!(serde_json::from_str::<ScannerConfig>(r#"{"categories":["nope"]}"#).is_err());
+    }
+
+    #[test]
+    fn only_native_text_categories_are_accepted() {
+        let shell = Scanner::new(ScannerConfig {
+            categories: vec![SecurityCategory::ShellCommand],
+            ..ScannerConfig::default()
+        });
+        let Err(ScanError::Config(message)) = shell else {
+            panic!("shell_command must be rejected");
+        };
+        assert!(message.contains("`shell`") && message.contains("shell_verdict"));
+        let Err(ScanError::Config(message)) = Scanner::new(ScannerConfig {
+            categories: vec![SecurityCategory::Threat],
+            ..ScannerConfig::default()
+        }) else {
+            panic!("threat must be rejected");
+        };
+        assert!(message.contains("expected pii, dlp or injection"));
+        let mut scanner = Scanner::new(ScannerConfig::default()).unwrap();
+        assert!(matches!(
+            scanner.scan_categories("ls", &[SecurityCategory::ShellCommand]),
+            Err(ScanError::Config(_))
+        ));
     }
 }

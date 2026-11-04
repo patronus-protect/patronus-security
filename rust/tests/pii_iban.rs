@@ -8,12 +8,13 @@
 //! creditor identifier (`DE98ZZZ09999999999`) is no IBAN: its length is not the
 //! registry length of its country, even where its digits pass MOD-97.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
 /// One valid IBAN per registry country with the registry length of that
 /// country; the BBAN starts with the letter block `BANK`.
@@ -128,10 +129,13 @@ thread_local! {
     );
 }
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     SCANNER.with(|scanner| {
         scanner.set_execution_gates(ScanGateMatrix {
-            pii_mode: mode,
+            native: patronus_ark::NativeGates {
+                pii_mode: mode,
+                ..Default::default()
+            },
             ..Default::default()
         });
         scanner
@@ -143,7 +147,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// Texts of every IBAN span.
-fn ibans(text: &str, mode: PiiMode) -> Vec<String> {
+fn ibans(text: &str, mode: ScoreMode) -> Vec<String> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -269,7 +273,7 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
                 format!("Please wire the amount to {value} by Friday."),
             ] {
                 assert_eq!(
-                    ibans(&prose, PiiMode::Strict),
+                    ibans(&prose, ScoreMode::Strict),
                     std::slice::from_ref(&value),
                     "{country}"
                 );

@@ -30,8 +30,11 @@ class LabelScore(TypedDict):
     matched: bool
 
 
+NativeCategory = Literal["pii", "dlp", "injection"]
+
+
 class NativeResult(TypedDict):
-    category: Literal["pii", "dlp", "injection"]
+    category: NativeCategory
     class_name: str
     confidence: float
     level: str
@@ -120,7 +123,7 @@ class ShellConfig(TypedDict):
 
 
 class ScannerConfig(TypedDict, total=False):
-    categories: list[Literal["pii", "dlp", "injection"]]
+    categories: list[NativeCategory]
     rules: dict[str, bool]
     models: dict[str, bool]
     pii_mode: Literal["strict", "balanced", "recall"]

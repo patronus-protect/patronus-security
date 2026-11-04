@@ -19,7 +19,10 @@ impl SecurityGateway {
             return Vec::new();
         }
         if execution.l3_strategy() == crate::L3Strategy::Multi
-            && !execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+            && !execution
+                .gates()
+                .native
+                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
         {
             return Vec::new();
         }

@@ -601,7 +601,7 @@ identifier and content rules carry no `subtype`.
 
 Subtypes marked planned have no rule yet; new rules for them report the listed group, so
 group filters and gates written for the existing groups keep covering them. The
-[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists the subtype of every rule.
+[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules) lists the subtype of every rule.
 
 ### DLP score and modes
 
@@ -643,7 +643,7 @@ then drops those below the threshold: its spans are always a subset of the `stri
 value dropped for its context does not free its range for a weaker rule. Each surviving
 `matched_rules` entry carries `score` and `context` (`bonus`, `penalty` and, if a term decided,
 `anchor` — the lexicon entry or `field` —, `side` and `distance`) next to the rule metadata.
-The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists base, context source and
+The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules) lists base, context source and
 score range per rule.
 
 ### Shell command results

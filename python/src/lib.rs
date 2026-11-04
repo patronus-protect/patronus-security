@@ -450,30 +450,16 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
         pyo3::exceptions::PyValueError::new_err("execution_gates must be a JSON object")
     })?;
 
-    let mut gates = ScanGateMatrix::default();
-    if let Some(explain) = object.get("explain") {
-        gates.explain = explain.as_bool().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.explain must be a boolean")
-        })?;
-    }
-    if let Some(mode) = object.get("pii_mode") {
-        gates.pii_mode = mode
-            .as_str()
-            .ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err("execution_gates.pii_mode must be a string")
-            })?
-            .parse()
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-    }
-    if let Some(mode) = object.get("dlp_mode") {
-        gates.dlp_mode = mode
-            .as_str()
-            .ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err("execution_gates.dlp_mode must be a string")
-            })?
-            .parse()
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-    }
+    let native = ["rules", "models", "pii_mode", "dlp_mode", "explain"]
+        .into_iter()
+        .filter_map(|key| Some((key.to_owned(), object.get(key)?.clone())))
+        .collect();
+    let mut gates = ScanGateMatrix {
+        native: serde_json::from_value(serde_json::Value::Object(native)).map_err(|error| {
+            pyo3::exceptions::PyValueError::new_err(format!("execution_gates: {error}"))
+        })?,
+        ..ScanGateMatrix::default()
+    };
     if let Some(levels) = object.get("levels") {
         let levels = levels.as_object().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")
@@ -488,32 +474,6 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
                 .parse::<SecurityLevel>()
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
             gates.set_level(level, enabled);
-        }
-    }
-    if let Some(models) = object.get("models") {
-        let models = models.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.models must be an object")
-        })?;
-        for (model, enabled) in models {
-            let enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "execution_gates.models.{model} must be a boolean"
-                ))
-            })?;
-            gates.set_model(model, enabled);
-        }
-    }
-    if let Some(rules) = object.get("rules") {
-        let rules = rules.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.rules must be an object")
-        })?;
-        for (rule, enabled) in rules {
-            let enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "execution_gates.rules.{rule} must be a boolean"
-                ))
-            })?;
-            gates.set_rule(rule, enabled);
         }
     }
     if let Some(conditional) = object.get("conditional") {

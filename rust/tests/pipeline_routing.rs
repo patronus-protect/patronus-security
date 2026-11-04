@@ -1083,7 +1083,10 @@ mod l3_worker_streaming {
         );
 
         let gates = patronus_ark::ScanGateMatrix {
-            explain: true,
+            native: patronus_ark::NativeGates {
+                explain: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         scanner.set_execution_gates(gates);

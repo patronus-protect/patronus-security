@@ -13,15 +13,15 @@ use std::{path::Path, sync::OnceLock};
 use patronus_ark::detectors::dlp::{
     context::{self, ContextSource},
     dlp::{ValidatorStrength, DLP_PATTERNS},
-    score::{self, DlpMode},
+    score,
 };
 use patronus_ark::detectors::pii::score::{
-    Context, PiiMode, ValidatorStrength as PiiStrength, COUNTER_CONTEXT_POINTS,
-    FIELD_CONTEXT_POINTS,
+    Context, ValidatorStrength as PiiStrength, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS,
 };
 use patronus_ark::golden_recipes::{
     materialize, materialize_fragments, GeneratorSet, SecretRecipe,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -60,24 +60,27 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
         .expect("native DLP result must be present")
 }
 
-fn with_mode(mode: DlpMode) -> ScanGateMatrix {
+fn with_mode(mode: ScoreMode) -> ScanGateMatrix {
     ScanGateMatrix {
-        dlp_mode: mode,
+        native: patronus_ark::NativeGates {
+            dlp_mode: mode,
+            ..patronus_ark::NativeGates::all_enabled()
+        },
         ..ScanGateMatrix::all_enabled()
     }
 }
 
 /// One gateway per mode for the whole test binary: building one compiles every regex.
-fn mode_scanner(mode: DlpMode) -> &'static SecurityGateway {
+fn mode_scanner(mode: ScoreMode) -> &'static SecurityGateway {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
-        [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall]
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall]
             .map(|mode| scanner(Some(with_mode(mode))))
     });
     &scanners[mode as usize]
 }
 
-fn dlp_result(text: &str, mode: DlpMode) -> SecurityScanResult {
+fn dlp_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     scan(mode_scanner(mode), text)
 }
 
@@ -224,48 +227,27 @@ fn pattern(rule_id: &str) -> &'static patronus_ark::detectors::dlp::dlp::DlpPatt
 
 #[test]
 fn strict_is_the_default_mode() {
-    assert_eq!(DlpMode::default(), DlpMode::Strict);
-    assert_eq!(ScanGateMatrix::default().dlp_mode, DlpMode::Strict);
+    assert_eq!(ScanGateMatrix::default().native.dlp_mode, ScoreMode::Strict);
     assert_eq!(
-        ScanGateMatrix::levels(true, false, false).dlp_mode,
-        DlpMode::Strict
+        ScanGateMatrix::levels(true, false, false).native.dlp_mode,
+        ScoreMode::Strict
     );
-    assert_eq!(ScanGateMatrix::all_enabled().dlp_mode, DlpMode::Strict);
-}
-
-#[test]
-fn modes_parse_explicitly_and_share_the_pii_thresholds() {
-    for (name, mode) in [
-        ("strict", DlpMode::Strict),
-        ("balanced", DlpMode::Balanced),
-        ("recall", DlpMode::Recall),
-    ] {
-        assert_eq!(name.parse::<DlpMode>().unwrap(), mode);
-        assert_eq!(mode.as_str(), name);
-        assert_eq!(
-            serde_json::from_value::<DlpMode>(serde_json::json!(name)).unwrap(),
-            mode
-        );
-        assert_eq!(serde_json::to_value(mode).unwrap(), serde_json::json!(name));
-    }
-    for invalid in ["", "Strict", "precision", "balanced "] {
-        assert!(invalid.parse::<DlpMode>().is_err(), "{invalid:?}");
-    }
-    assert!(serde_json::from_value::<DlpMode>(serde_json::json!("fast")).is_err());
-    assert_eq!(DlpMode::Strict.min_score(), None);
-    assert_eq!(DlpMode::Balanced.min_score(), PiiMode::Balanced.min_score());
-    assert_eq!(DlpMode::Recall.min_score(), PiiMode::Recall.min_score());
-    assert_eq!(DlpMode::Balanced.min_score(), Some(0.5));
-    assert_eq!(DlpMode::Recall.min_score(), Some(0.3));
+    assert_eq!(
+        ScanGateMatrix::all_enabled().native.dlp_mode,
+        ScoreMode::Strict
+    );
 }
 
 #[test]
 fn strict_output_is_the_unscored_rule_acceptance() {
     let default = scanner(Some(ScanGateMatrix::all_enabled()));
-    let strict = mode_scanner(DlpMode::Strict);
+    let strict = mode_scanner(ScoreMode::Strict);
     let unset = scanner(None);
     let explicit = scanner(Some(ScanGateMatrix {
-        dlp_mode: DlpMode::Strict,
+        native: patronus_ark::NativeGates {
+            dlp_mode: ScoreMode::Strict,
+            ..Default::default()
+        },
         ..ScanGateMatrix::default()
     }));
     let texts = corpus();
@@ -298,13 +280,13 @@ fn strict_output_is_the_unscored_rule_acceptance() {
 #[test]
 fn scored_modes_keep_strict_spans_and_report_the_model_score() {
     for text in corpus() {
-        let strict = dlp_result(&text, DlpMode::Strict);
+        let strict = dlp_result(&text, ScoreMode::Strict);
         let strict_spans: Vec<_> = strict
             .evidence_spans
             .iter()
             .map(|span| (span.label.clone(), span.start_byte, span.end_byte))
             .collect();
-        for mode in [DlpMode::Balanced, DlpMode::Recall] {
+        for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
             let threshold = mode.min_score().unwrap();
             let scored = dlp_result(&text, mode);
             let rules = matched_rules(&scored);
@@ -369,8 +351,8 @@ fn score_is_base_plus_validator_strength_plus_context() {
     assert_eq!(ValidatorStrength::Structure.points(), 25);
     assert!(ValidatorStrength::Structure.points() > ValidatorStrength::Format.points());
     assert!(ValidatorStrength::Structure.points() < ValidatorStrength::Checksum.points());
-    let balanced = DlpMode::Balanced.min_score().unwrap();
-    let recall = DlpMode::Recall.min_score().unwrap();
+    let balanced = ScoreMode::Balanced.min_score().unwrap();
+    let recall = ScoreMode::Recall.min_score().unwrap();
     for pattern in DLP_PATTERNS {
         assert!(
             (1..=100).contains(&pattern.base_score),
@@ -478,7 +460,7 @@ fn proximity_decides_secrets_without_a_field_name() {
     let generators = generators();
     let eth = |template: &str| value(&generators, template, "eth_private_key_hex", 11);
     let eth_rule = pattern("dlp_eth_private_key");
-    let score_of = |text: &str, mode: DlpMode| {
+    let score_of = |text: &str, mode: ScoreMode| {
         rule(
             &matched_rules(&dlp_result(text, mode)),
             "dlp_eth_private_key",
@@ -494,7 +476,7 @@ fn proximity_decides_secrets_without_a_field_name() {
 
     // Bare: no key context, so F01 drops it in every mode.
     let bare = eth("<<secret:0>>");
-    for mode in [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall] {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         assert!(score_of(&bare, mode).is_none(), "{mode:?}");
     }
     // A bare WIF key: its Base58Check checksum (F02) carries it into balanced
@@ -505,7 +487,7 @@ fn proximity_decides_secrets_without_a_field_name() {
         "btc_wif_mainnet_compressed",
         11,
     );
-    let wif_score = |mode: DlpMode| {
+    let wif_score = |mode: ScoreMode| {
         rule(&matched_rules(&dlp_result(&wif, mode)), "dlp_btc_wif").map(|rule| {
             (
                 rule["score"].as_f64().unwrap_or(1.0),
@@ -513,8 +495,8 @@ fn proximity_decides_secrets_without_a_field_name() {
             )
         })
     };
-    assert!(wif_score(DlpMode::Strict).is_some());
-    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+    assert!(wif_score(ScoreMode::Strict).is_some());
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let (score, context) = wif_score(mode).unwrap();
         assert_eq!(score, score::score(pattern("dlp_btc_wif"), Context::None));
         assert_eq!(context, serde_json::json!({"bonus": 0, "penalty": 0}));
@@ -542,7 +524,7 @@ fn proximity_decides_secrets_without_a_field_name() {
         ),
     ] {
         let text = eth(template);
-        let (balanced, context) = score_of(&text, DlpMode::Balanced).expect(template);
+        let (balanced, context) = score_of(&text, ScoreMode::Balanced).expect(template);
         let gap = Context::Support { gap: distance };
         assert_eq!(balanced, score::score(eth_rule, gap), "{template}");
         assert_eq!(context["anchor"], anchor, "{template}");
@@ -560,10 +542,10 @@ fn proximity_decides_secrets_without_a_field_name() {
         "private key? no, block hash: <<secret:0>>",
     ] {
         let text = eth(template);
-        assert!(score_of(&text, DlpMode::Strict).is_none(), "{template}");
-        assert!(score_of(&text, DlpMode::Balanced).is_none(), "{template}");
-        assert!(score_of(&text, DlpMode::Recall).is_none(), "{template}");
-        let result = dlp_result(&text, DlpMode::Recall);
+        assert!(score_of(&text, ScoreMode::Strict).is_none(), "{template}");
+        assert!(score_of(&text, ScoreMode::Balanced).is_none(), "{template}");
+        assert!(score_of(&text, ScoreMode::Recall).is_none(), "{template}");
+        let result = dlp_result(&text, ScoreMode::Recall);
         assert!(result.evidence_spans.is_empty(), "{template}");
     }
     // A hex hash dropped for its context does not free its range for a
@@ -575,7 +557,7 @@ fn proximity_decides_secrets_without_a_field_name() {
             "eth_private_key_hex",
             seed,
         );
-        for mode in [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let scored = dlp_result(&text, mode);
             assert!(scored.evidence_spans.is_empty(), "{mode:?}: {text}");
             assert_eq!(scored.class_name, "safe", "{mode:?}: {text}");
@@ -589,27 +571,27 @@ fn proximity_decides_secrets_without_a_field_name() {
 
     // A support term nearer than the counter term wins.
     let text = eth("checksum ok, private key <<secret:0>>");
-    let (_, context) = score_of(&text, DlpMode::Balanced).unwrap();
+    let (_, context) = score_of(&text, ScoreMode::Balanced).unwrap();
     assert_eq!(context["anchor"], "dlp.private_key");
 
     // A provider token keeps balanced without context, and only a counter term drops it.
     let token = |template: &str| value(&generators, template, "openai_project_api_key", 5);
-    let openai = |text: &str, mode: DlpMode| {
+    let openai = |text: &str, mode: ScoreMode| {
         rule(&matched_rules(&dlp_result(text, mode)), "dlp_openai_key")
             .map(|rule| rule["score"].as_f64().unwrap_or(1.0))
     };
     let plain = token("model: gpt\nkey <<secret:0>>");
-    assert_eq!(openai(&plain, DlpMode::Balanced), Some(0.7));
+    assert_eq!(openai(&plain, ScoreMode::Balanced), Some(0.7));
     let counter = token("request id <<secret:0>>");
-    assert_eq!(openai(&counter, DlpMode::Balanced), None);
-    assert_eq!(openai(&counter, DlpMode::Recall), Some(0.4));
-    assert!(openai(&counter, DlpMode::Strict).is_some());
+    assert_eq!(openai(&counter, ScoreMode::Balanced), None);
+    assert_eq!(openai(&counter, ScoreMode::Recall), Some(0.4));
+    assert!(openai(&counter, ScoreMode::Strict).is_some());
 }
 
 #[test]
 fn field_rules_score_their_field_name() {
     let text = "db:\n  password: Sommer2026!x\n";
-    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let result = dlp_result(text, mode);
         let rules = matched_rules(&result);
         let entry = rule(&rules, "dlp_password_assignment").expect("password");
@@ -627,7 +609,7 @@ fn field_rules_score_their_field_name() {
     }
     // A counter term next to a field-bound value does not count: the key names it.
     let text = "checksum password = Sommer2026!x";
-    let rules = matched_rules(&dlp_result(text, DlpMode::Balanced));
+    let rules = matched_rules(&dlp_result(text, ScoreMode::Balanced));
     assert!(rule(&rules, "dlp_password_assignment").is_some());
 }
 
@@ -645,7 +627,7 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
     for (case, probes) in probed {
         for template in [&probes.context.de, &probes.context.en] {
             let text = materialized(&generators, case, template);
-            let result = dlp_result(&text, DlpMode::Balanced);
+            let result = dlp_result(&text, ScoreMode::Balanced);
             let rules = matched_rules(&result);
             let matched =
                 rule(&rules, &case.rule_id).unwrap_or_else(|| panic!("{}: {text}", case.rule_id));
@@ -660,14 +642,14 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
                 let text = materialized(&generators, case, template);
                 // F01: a rule with a context gate drops it already in strict.
                 let gated = pattern(&case.rule_id).meta.context_gate.is_some();
-                let strict = matched_rules(&dlp_result(&text, DlpMode::Strict));
+                let strict = matched_rules(&dlp_result(&text, ScoreMode::Strict));
                 assert_eq!(
                     rule(&strict, &case.rule_id).is_some(),
                     !gated,
                     "strict {}: {text}",
                     case.rule_id
                 );
-                let balanced = matched_rules(&dlp_result(&text, DlpMode::Balanced));
+                let balanced = matched_rules(&dlp_result(&text, ScoreMode::Balanced));
                 assert!(
                     rule(&balanced, &case.rule_id).is_none(),
                     "balanced {}: {text}",

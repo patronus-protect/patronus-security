@@ -81,7 +81,7 @@ it for every call.
 - `shell` is optional, like `wolf`. Without it, `shell_verdict` returns a configuration error; text
   scans never run Cat.
 - **Assets:** `download: "missing"` fetches the pinned release
-  (`patronus-studio/cat-shell-risk-commander`, revision `54617685`) into `bundle_dir` once. Every
+  (`patronus-studio/cat-shell-risk-commander`, revision `54617685`, 4.4 MiB) into `bundle_dir` once. Every
   load checks the SHA-256 of `manifest.json` against the pin compiled into the binary
   (`warmup::SHELL_MANIFEST_SHA256`) and every file against the manifest. A changed file is refused.
   Offline: run `warmup::prepare_assets` in a separate step and ship the directory.
@@ -204,7 +204,8 @@ The allowlist accepts only loaded bundle-default ids and only `"ask"`.
 ## Full Ark: the `shell_command` category
 
 In the full runtime, Cat is the category `shell_command`. The gateway downloads and pins the same
-bundle; set user policies on the gateway:
+bundle; set user policies on the gateway (Rust). Python: bundle policies only for now, without user
+`.cedar` files.
 
 ```rust
 use patronus_ark::{detectors::shell::ShellPolicyConfig, SecurityCategory, SecurityGateway, SecurityLevel};

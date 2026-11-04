@@ -11,12 +11,13 @@
 //! is ASCII or punycode and delegated by IANA or reserved as a placeholder (T01);
 //! the userinfo of a URL is no address.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -24,7 +25,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -35,7 +39,7 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, start_char, end_char)` of every EMAIL span.
-fn email_spans(text: &str, mode: PiiMode) -> Vec<(String, usize, usize)> {
+fn email_spans(text: &str, mode: ScoreMode) -> Vec<(String, usize, usize)> {
     scan(text, mode)
         .evidence_spans
         .into_iter()
@@ -44,7 +48,7 @@ fn email_spans(text: &str, mode: PiiMode) -> Vec<(String, usize, usize)> {
         .collect()
 }
 
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
 /// `(text, value)`: `value` is the only EMAIL span in every mode.
 const FOUND: [(&str, &str); 16] = [
@@ -103,12 +107,12 @@ fn unicode_apostrophe_and_idn_addresses_are_one_span() {
 fn spans_are_counted_in_code_points() {
     let text = "联系邮箱伟伟许@aol.com，联系电话";
     assert_eq!(
-        email_spans(text, PiiMode::Strict),
+        email_spans(text, ScoreMode::Strict),
         [("伟伟许@aol.com".to_owned(), 4, 15)]
     );
     let text = "Grüße an jürgen.müller@beispiel.de";
     assert_eq!(
-        email_spans(text, PiiMode::Balanced),
+        email_spans(text, ScoreMode::Balanced),
         [("jürgen.müller@beispiel.de".to_owned(), 9, 34)]
     );
 }
@@ -138,7 +142,7 @@ const SILENT: [&str; 14] = [
 #[test]
 fn userinfo_quoted_at_signs_and_unknown_domains_stay_silent() {
     for text in SILENT {
-        for mode in [PiiMode::Strict, PiiMode::Balanced] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced] {
             assert_eq!(email_spans(text, mode), [], "{mode}: {text:?}");
         }
     }
@@ -148,12 +152,12 @@ fn userinfo_quoted_at_signs_and_unknown_domains_stay_silent() {
 fn an_address_after_a_url_keeps_its_span() {
     let text = "See https://example.com/docs and write to ops@example.com.";
     assert_eq!(
-        email_spans(text, PiiMode::Strict),
+        email_spans(text, ScoreMode::Strict),
         [("ops@example.com".to_owned(), 42, 57)]
     );
     // A bare `//` (a comment) opens no URL.
     let text = "// owner: ops@example.com";
-    assert_eq!(email_spans(text, PiiMode::Strict).len(), 1);
+    assert_eq!(email_spans(text, ScoreMode::Strict).len(), 1);
 }
 
 #[test]

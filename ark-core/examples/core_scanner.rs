@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use patronus_ark_core::{
     detectors::shell::{ShellConfig, ShellContext},
     wolf::WolfConfig,
-    Category, DownloadPolicy, ScanChecks, Scanner, ScannerConfig, WarmupOptions,
+    DownloadPolicy, Scanner, ScannerConfig, SecurityCategory, WarmupOptions,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,7 +35,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Core policies cannot be lowered.
     // shell.allowlist.insert("dc.<rule id>".into(), "ask".into());
     let config = ScannerConfig {
-        categories: vec![Category::Pii, Category::Dlp, Category::Injection],
+        categories: vec![
+            SecurityCategory::Pii,
+            SecurityCategory::Dlp,
+            SecurityCategory::Injection,
+        ],
         wolf: Some(WolfConfig::new(model_dir.join("wolf-defender"), 0.8)),
         shell: Some(shell),
         ..ScannerConfig::default()
@@ -65,13 +69,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     // Tool output: skip the injection check (and with it Wolf) for this input only.
-    let report = scanner.scan_with_checks(
+    let report = scanner.scan_categories(
         "build ok, 12 tests passed",
-        ScanChecks {
-            pii: true,
-            dlp: true,
-            injection: false,
-        },
+        &[SecurityCategory::Pii, SecurityCategory::Dlp],
     )?;
     println!("tool output: {} native results\n", report.native.len());
 

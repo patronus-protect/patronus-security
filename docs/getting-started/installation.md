@@ -5,16 +5,17 @@ imported as `patronus_ark`). Both are built from the same Rust core, so you inst
 fits your stack — no repository checkout required.
 
 !!! tip "Lightweight alternative"
-    For PII, DLP and prompt injection only — native L1 rules plus optional Wolf Defender, no
-    queue and no L2/L3 assets — install [Ark Core](core.md) (`patronus-ark-core`) instead.
+    For PII, DLP, prompt injection and shell commands only — native L1 rules plus optional Wolf
+    Defender and Cat shell-command verdicts, no queue and no L2/L3 assets — install
+    [Ark Core](core.md) (`patronus-ark-core`) instead.
 
 ## Requirements
 
 | | Minimum | Notes |
 | --- | --- | --- |
 | Python | 3.11+ | wheels target the stable ABI (`abi3-py311`), so one wheel covers 3.11+ |
-| Rust | stable toolchain | for the `patronus-ark` crate |
-| Disk | ~100–250 MB per model bundle | native L1 needs none; L2/L3 assets download on demand |
+| Rust | 1.98.0 | for the `patronus-ark` crate; the repository pins it in `rust-toolchain.toml` |
+| Disk | ~100–250 MB per model bundle | native L1 needs none except `shell_command` (4.4 MiB); L2/L3 assets download on demand |
 
 Model assets are downloaded from Hugging Face on first use. Set `HF_TOKEN` if you need
 authenticated or rate-limited access (see [Manage model assets](../how-to/manage-assets.md)).

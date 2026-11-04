@@ -23,16 +23,16 @@ use std::path::Path;
 
 use patronus_ark::detectors::pii::{
     overlap::{COMPETING_LABELS, DOCUMENT_LABELS},
-    score::PiiMode,
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::Value;
 
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
 const REASONS: [&str; 7] = [
     "iban",
@@ -44,7 +44,7 @@ const REASONS: [&str; 7] = [
     "iban_form",
 ];
 
-fn scanner(mode: PiiMode) -> SecurityGateway {
+fn scanner(mode: ScoreMode) -> SecurityGateway {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -52,7 +52,10 @@ fn scanner(mode: PiiMode) -> SecurityGateway {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -66,7 +69,7 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     scan(&scanner(mode), text)
 }
 
@@ -79,7 +82,7 @@ fn matched_rules(result: &SecurityScanResult) -> Vec<Value> {
 }
 
 /// `(label, text)` of every evidence span.
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -95,7 +98,7 @@ fn owned(spans: &[(&str, &str)]) -> Vec<(String, String)> {
 }
 
 /// The `overlap` object of the `matched_rules` entry of `rule_id` on `value`.
-fn overlap_of(text: &str, mode: PiiMode, rule_id: &str, value: &str) -> Value {
+fn overlap_of(text: &str, mode: ScoreMode, rule_id: &str, value: &str) -> Value {
     let rules = matched_rules(&pii_result(text, mode));
     let rule = rules
         .iter()
@@ -119,7 +122,7 @@ fn overlap_of(text: &str, mode: PiiMode, rule_id: &str, value: &str) -> Value {
 /// resolution (decision T07 keeps strict bit-identical).
 fn assert_strict_overlap(text: &str, label: &str, value: &str) {
     assert!(
-        spans(text, PiiMode::Strict).contains(&(label.into(), value.into())),
+        spans(text, ScoreMode::Strict).contains(&(label.into(), value.into())),
         "strict lost {label} ({} chars in a {}-char text)",
         value.chars().count(),
         text.chars().count()
@@ -233,7 +236,7 @@ fn a_french_vat_id_keeps_the_steuer_id_digits_inside_it() {
             assert!(validators::fr_vat_id(&value), "{value}");
             let text = format!("Invoice sent to {value} yesterday.");
             assert!(
-                pii_result(&text, PiiMode::Strict)
+                pii_result(&text, ScoreMode::Strict)
                     .evidence_spans
                     .iter()
                     .all(|span| span.label != "VAT_ID_FR" && span.label != "STEUERID"),
@@ -268,7 +271,7 @@ fn a_croatian_vat_id_keeps_the_steuer_id_digits_inside_it() {
         assert!(validators::hr_vat_id(&value), "{value}");
         let text = format!("Invoice sent to {value} yesterday.");
         assert!(
-            pii_result(&text, PiiMode::Strict)
+            pii_result(&text, ScoreMode::Strict)
                 .evidence_spans
                 .iter()
                 .all(|span| span.label != "VAT_ID_HR" && span.label != "STEUERID"),
@@ -298,7 +301,7 @@ fn a_lithuanian_vat_id_keeps_the_card_digits_inside_it() {
     assert!(validators::lt_vat_id(&value), "{value}");
     let text = format!("Invoice sent to {value} yesterday.");
     assert_eq!(
-        spans(&text, PiiMode::Strict),
+        spans(&text, ScoreMode::Strict),
         owned(&[("CREDITCARD", digits)]),
         "strict: {text}"
     );
@@ -334,7 +337,7 @@ fn document_labels_compete_with_every_label() {
     }
     // Strict keeps every label and runs no context-free rule.
     assert_eq!(
-        spans("Kundennummer K12345676", PiiMode::Strict),
+        spans("Kundennummer K12345676", ScoreMode::Strict),
         [("CUSTOMER_ID".into(), "K12345676".into())]
     );
 }
@@ -382,7 +385,7 @@ fn a_phone_number_keeps_its_digits_that_pass_luhn() {
     // B-PAN: the digits after `+` are no card in any mode, so nothing competes.
     for (phone, _) in PHONES_WITH_LUHN_DIGITS {
         let text = format!("Rückruf unter {phone}");
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             assert_eq!(spans(&text, mode), owned(&[("PHONE", phone)]), "{mode:?}");
             assert!(
                 matched_rules(&pii_result(&text, mode))
@@ -408,7 +411,7 @@ fn supporting_context_outranks_a_bare_checksum_on_the_same_value() {
         ("Rückruf bitte unter 0157-09-316-8811.", "0157-09-316-8811"),
     ] {
         assert!(!validators::payment_card(value), "{value}");
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let found = spans(text, mode);
             assert!(
                 found.iter().all(|(label, _)| label != "CREDITCARD"),
@@ -567,7 +570,7 @@ fn strict_keeps_both_labels() {
         "Rückruf unter +49 89 2019 4400",
         "IBAN: DE74 6009 0800 1237 8945 61",
     ] {
-        let result = pii_result(text, PiiMode::Strict);
+        let result = pii_result(text, ScoreMode::Strict);
         assert!(
             matched_rules(&result)
                 .iter()
@@ -594,7 +597,7 @@ fn golden_texts() -> Vec<String> {
 
 /// In the scored modes no two findings of different competing labels overlap,
 /// and every `overlap` entry names a reason and a surviving winner.
-fn assert_resolved(scanner: &SecurityGateway, text: &str, mode: PiiMode) {
+fn assert_resolved(scanner: &SecurityGateway, text: &str, mode: ScoreMode) {
     let result = scan(scanner, text);
     let spans = &result.evidence_spans;
     for (index, a) in spans.iter().enumerate() {
@@ -677,7 +680,7 @@ fn bilingual_overlap_probes_keep_their_rule() {
         };
         assert_ne!(overlap.de, overlap.en, "translate {}", probe.rule_id);
         for text in [&overlap.de, &overlap.en] {
-            let strict = pii_result(text, PiiMode::Strict);
+            let strict = pii_result(text, ScoreMode::Strict);
             let labels: BTreeSet<_> = strict
                 .evidence_spans
                 .iter()

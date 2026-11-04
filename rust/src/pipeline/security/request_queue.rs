@@ -786,7 +786,10 @@ impl SecurityGateway {
             .iter()
             .any(|input| input.category == SecurityCategory::DynamicPii)
             || !execution.allows_level(SecurityLevel::L3)
-            || !execution.allows_model(DYNAMIC_PII_ASSET.model)
+            || !execution
+                .gates()
+                .native
+                .allows_model(DYNAMIC_PII_ASSET.model)
             || !execution.l3_policy().enabled
             || !crate::pipeline::conditional_gate::pipeline_allowed(
                 execution,
