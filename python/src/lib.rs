@@ -11,10 +11,11 @@ use patronus_ark::{
     SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
 };
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyList, PyString};
+use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::mpsc::{self, SyncSender};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 #[pyfunction]
@@ -840,43 +841,111 @@ impl PyLayerResult {
     /// the scan on large texts (H06-2).
     #[getter]
     fn details(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let mut strings = PyStrings::new(py);
         let details = PyDict::new_bound(py);
         for (key, value) in self.details.iter() {
-            details.set_item(key, json_to_py(py, value)?)?;
+            details.set_item(strings.key(key), strings.json_to_py(value)?)?;
         }
         Ok(details.into_any().unbind())
     }
 }
 
-/// A JSON value as the Python object that `json.loads` makes of its JSON text.
-fn json_to_py(py: Python<'_>, value: &serde_json::Value) -> PyResult<PyObject> {
-    use serde_json::Value;
-    Ok(match value {
-        Value::Null => py.None(),
-        Value::Bool(flag) => flag.into_py(py),
-        Value::Number(number) => match (number.as_i64(), number.as_u64()) {
-            (Some(int), _) => int.into_py(py),
-            (None, Some(int)) => int.into_py(py),
-            _ => number.as_f64().into_py(py),
-        },
-        Value::String(text) => text.into_py(py),
-        Value::Array(items) => {
-            let list = PyList::empty_bound(py);
-            for item in items {
-                list.append(json_to_py(py, item)?)?;
-            }
-            list.into_any().unbind()
+impl Drop for PyLayerResult {
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.details) == 1 {
+            release_off_thread(std::mem::take(&mut self.details));
         }
-        Value::Object(map) => {
-            let dict = PyDict::new_bound(py);
-            // Interned like the keys `json.loads` memoizes: few distinct keys
-            // repeat in every `matched_rules` entry.
-            for (key, item) in map {
-                dict.set_item(PyString::intern_bound(py, key), json_to_py(py, item)?)?;
-            }
-            dict.into_any().unbind()
+    }
+}
+
+/// Frees `value` on a background thread. The `matched_rules` of a 100 KiB
+/// scan are about 20 000 small allocations, and freeing them with the GIL
+/// held, when Python releases a result, cost about 2 ms per call (H06-3).
+/// The queue is bounded: when the thread falls behind, the caller frees.
+fn release_off_thread<T: Send + 'static>(value: T) {
+    const QUEUED: usize = 64;
+    static RELEASER: OnceLock<Option<SyncSender<Box<dyn Send>>>> = OnceLock::new();
+    let releaser = RELEASER.get_or_init(|| {
+        let (sender, receiver) = mpsc::sync_channel::<Box<dyn Send>>(QUEUED);
+        std::thread::Builder::new()
+            .name("patronus-release".into())
+            .spawn(move || receiver.into_iter().for_each(drop))
+            .ok()
+            .map(|_| sender)
+    });
+    match releaser {
+        // A full queue hands the value back in the error, freed here.
+        Some(sender) => drop(sender.try_send(Box::new(value))),
+        None => drop(value),
+    }
+}
+
+/// Builds the Python objects of JSON values and shares one string object per
+/// distinct text: the keys and most string values (`rule_id`,
+/// `span_precision`, …) repeat in every `matched_rules` entry, and creating
+/// and freeing a string per occurrence cost about a third of the details of
+/// a 100 KiB scan (H06-3). A shared value string is equal and immutable, so
+/// the dicts are the ones `json.loads` makes.
+struct PyStrings<'py, 'a> {
+    py: Python<'py>,
+    strings: HashMap<&'a str, Bound<'py, PyString>>,
+}
+
+impl<'py, 'a> PyStrings<'py, 'a> {
+    fn new(py: Python<'py>) -> Self {
+        Self {
+            py,
+            strings: HashMap::new(),
         }
-    })
+    }
+
+    /// A dict key, interned like the keys `json.loads` memoizes.
+    fn key(&mut self, text: &'a str) -> Bound<'py, PyString> {
+        let py = self.py;
+        self.strings
+            .entry(text)
+            .or_insert_with(|| PyString::intern_bound(py, text))
+            .clone()
+    }
+
+    /// A string value; not interned, as it may hold scanned text.
+    fn value(&mut self, text: &'a str) -> Bound<'py, PyString> {
+        let py = self.py;
+        self.strings
+            .entry(text)
+            .or_insert_with(|| PyString::new_bound(py, text))
+            .clone()
+    }
+
+    /// A JSON value as the Python object that `json.loads` makes of its JSON text.
+    fn json_to_py(&mut self, value: &'a serde_json::Value) -> PyResult<Bound<'py, PyAny>> {
+        use serde_json::Value;
+        let py = self.py;
+        Ok(match value {
+            Value::Null => py.None().into_bound(py),
+            Value::Bool(flag) => PyBool::new_bound(py, *flag).to_owned().into_any(),
+            Value::Number(number) => match (number.as_i64(), number.as_u64()) {
+                (Some(int), _) => int.into_py(py).into_bound(py),
+                (None, Some(int)) => int.into_py(py).into_bound(py),
+                _ => number.as_f64().into_py(py).into_bound(py),
+            },
+            Value::String(text) => self.value(text).into_any(),
+            Value::Array(items) => {
+                let list = PyList::empty_bound(py);
+                for item in items {
+                    list.append(self.json_to_py(item)?)?;
+                }
+                list.into_any()
+            }
+            Value::Object(map) => {
+                let dict = PyDict::new_bound(py);
+                for (key, item) in map {
+                    dict.set_item(self.key(key), self.json_to_py(item)?)?;
+                }
+                dict.into_any()
+            }
+        })
+    }
 }
 
 #[pyclass]
@@ -923,17 +992,19 @@ impl PyEvaluationResult {
             "end_char",
         ]
         .map(|key| PyString::intern_bound(py, key));
+        let mut labels = PyStrings::new(py);
         self.evidence_spans
             .iter()
             .map(|span| {
                 let dict = PyDict::new_bound(py);
-                dict.set_item(&keys[0], &span.label)?;
-                dict.set_item(&keys[1], &span.text)?;
-                dict.set_item(&keys[2], span.score)?;
-                dict.set_item(&keys[3], span.start_byte)?;
-                dict.set_item(&keys[4], span.end_byte)?;
-                dict.set_item(&keys[5], span.start_char)?;
-                dict.set_item(&keys[6], span.end_char)?;
+                // Bound values: a dropped `PyObject` checks the GIL first.
+                dict.set_item(&keys[0], labels.value(&span.label))?;
+                dict.set_item(&keys[1], PyString::new_bound(py, &span.text))?;
+                dict.set_item(&keys[2], span.score.into_py(py).into_bound(py))?;
+                dict.set_item(&keys[3], span.start_byte.into_py(py).into_bound(py))?;
+                dict.set_item(&keys[4], span.end_byte.into_py(py).into_bound(py))?;
+                dict.set_item(&keys[5], span.start_char.into_py(py).into_bound(py))?;
+                dict.set_item(&keys[6], span.end_char.into_py(py).into_bound(py))?;
                 Ok(dict)
             })
             .collect()
