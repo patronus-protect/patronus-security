@@ -12,12 +12,15 @@
 //! `kf1` tokens, facts and fired policies need no model and are always
 //! checked. Scores, decisions and the verdict need the released bundle:
 //! `PATRONUS_SHELL_RISK_BUNDLE=<dir>` (model.json, config.json,
-//! policy_levels.json, manifest.json). Every field must match on every row.
+//! policy_levels.json, manifest.json); CI downloads the pinned one. Every
+//! field must match on every row.
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
+use patronus_ark::assets::download_shell_command_assets;
 use patronus_ark::detectors::shell::{
     facts::{extract, Facts, ShellContext},
     features::kf1,
@@ -52,9 +55,34 @@ fn bundle_policies() -> ShellPolicies {
     ShellPolicies::from_levels(&levels).unwrap()
 }
 
+/// The released bundle: `PATRONUS_SHELL_RISK_BUNDLE`, or in CI (`CI` set) the
+/// pinned `SHELL_COMMAND_ASSET` fetched once through ARK's asset download into
+/// `PATRONUS_SHELL_RISK_CACHE` (default `target/shell_risk_bundle`). CI fails
+/// instead of skipping the model fields when the bundle cannot be had.
+fn bundle_dir() -> Option<PathBuf> {
+    static BUNDLE: OnceLock<Option<PathBuf>> = OnceLock::new();
+    BUNDLE
+        .get_or_init(|| {
+            if let Some(dir) = std::env::var_os("PATRONUS_SHELL_RISK_BUNDLE") {
+                return Some(PathBuf::from(dir));
+            }
+            std::env::var_os("CI")?;
+            let cache = std::env::var_os("PATRONUS_SHELL_RISK_CACHE")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/shell_risk_bundle")
+                });
+            let dir = download_shell_command_assets(&cache).unwrap_or_else(|error| {
+                panic!("CI needs the pinned shell-risk bundle for parity: {error}")
+            });
+            Some(dir)
+        })
+        .clone()
+}
+
 fn pipeline() -> Option<ShellRiskPipeline> {
-    let dir = std::env::var_os("PATRONUS_SHELL_RISK_BUNDLE")?;
-    Some(ShellRiskPipeline::from_bundle_dir(Path::new(&dir)).unwrap())
+    let dir = bundle_dir()?;
+    Some(ShellRiskPipeline::from_bundle_dir(&dir).unwrap())
 }
 
 fn token_counts<'a>(tokens: impl IntoIterator<Item = &'a str>) -> BTreeMap<&'a str, usize> {
