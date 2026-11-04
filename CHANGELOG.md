@@ -117,6 +117,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 1 (H06). Rules of texts from 32 KiB on (`PARALLEL_RULES_MIN_BYTES`) are
+  gated and searched in parallel on the rayon pool (`NativeRegexDetector::rule_matches`); each rule
+  scans the whole text on its own lazy DFA, about 0.18 ms per 100 KiB, which made up about 14.5 of
+  the 24 ms of a 100 KiB PII scan. Validation, scoring and overlap resolution stay sequential in rule
+  order, so results are unchanged (PII and DLP). `MatchText::lower` copies and lowercases the ASCII
+  runs of non-ASCII text in place instead of lowercasing every character on its own (100 KiB DE
+  lowercase view and anchors 2.3 → 1.0 ms). 100 KiB p95 on the VPS (`scripts/l1_presidio/latency.py`):
+  ark 35.898 → 24.651 ms, ark-native 28.441 → 15.324 ms; M4 not yet met, the remaining hotspots
+  are in `scoreboard/latency.md` and pass H06-2. **Detection change:** none.
 - L1 PII latency pass 1 (H03). A Unicode word boundary (`\b`) sends the regex lazy DFA to the
   NFA at the first non-ASCII byte, so on German prose (`ä`, `ß`) most PII rules ran on the slow
   engine: 100 KiB DE took about four times as long as EN. Each PII rule with a Unicode word boundary

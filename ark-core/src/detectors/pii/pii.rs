@@ -1252,6 +1252,63 @@ mod prefilter_tests {
 }
 
 #[cfg(test)]
+mod parallel_tests {
+    use super::*;
+    use crate::detectors::PARALLEL_RULES_MIN_BYTES;
+
+    #[test]
+    fn parallel_rule_search_matches_the_sequential_one() {
+        let pipeline = PiiPipeline::new();
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/l1_bilingual_rules.json"
+        ))
+        .unwrap();
+        let mut text = String::new();
+        while text.len() < PARALLEL_RULES_MIN_BYTES {
+            for case in cases.as_array().unwrap() {
+                for language in ["de", "en"] {
+                    text.push_str(case[language].as_str().unwrap());
+                    text.push_str("\n\n");
+                }
+            }
+        }
+        let prepared = crate::threat::NativeText::new(&text);
+        let allowed = vec![true; pipeline.regexes.len()];
+        let ranges = |parallel| {
+            pipeline
+                .rule_matches(&prepared, &allowed, parallel)
+                .into_iter()
+                .map(|matches| {
+                    matches.map(|matches| {
+                        matches
+                            .iter()
+                            .map(|captures| {
+                                captures
+                                    .iter()
+                                    .map(|group| group.map(|group| group.range()))
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+        let sequential = ranges(false);
+        assert!(sequential
+            .iter()
+            .flatten()
+            .any(|matches| !matches.is_empty()));
+        assert_eq!(ranges(true), sequential);
+        let detection = pipeline.detect(&text);
+        assert!(!detection.evidence_spans.is_empty());
+        assert_eq!(
+            serde_json::to_value(&detection.evidence_spans).unwrap(),
+            serde_json::to_value(&pipeline.detect(&text).evidence_spans).unwrap()
+        );
+    }
+}
+
+#[cfg(test)]
 mod gate_tests {
     use super::*;
 
