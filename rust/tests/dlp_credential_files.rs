@@ -12,7 +12,10 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{
+    detectors::dlp::{dlp::DLP_PATTERNS, prefilter::RulePrefilter},
+    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
@@ -158,5 +161,27 @@ fn docker_config_entries_without_a_user_password_payload_are_silent() {
         "{\"auth\": \"Bearer\"}",
     ] {
         assert_silent(text);
+    }
+}
+
+#[test]
+fn rules_are_searched_near_their_keywords() {
+    // `machine`, `default` and `"auth` are common in code and docs: the
+    // rules must not scan the whole text, so every match starts a bounded
+    // lead before a keyword.
+    let prefilter = RulePrefilter::new(DLP_PATTERNS);
+    for (name, word) in [
+        ("dlp_netrc_password", "machine"),
+        ("dlp_netrc_password", "default"),
+        ("dlp_docker_config_auth", "\"auth"),
+    ] {
+        let index = DLP_PATTERNS
+            .iter()
+            .position(|rule| rule.name == name)
+            .expect("rule is registered");
+        let text = format!("{}\nsee {word} for details\n", "x".repeat(4096));
+        let scan = prefilter.scan(&text);
+        assert!(scan.is_active(index), "{name}");
+        assert!(scan.is_local(index), "{name}");
     }
 }
