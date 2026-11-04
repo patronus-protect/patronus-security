@@ -938,7 +938,22 @@ tasks:
       pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
-  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-2]}
+  - id: H06-3
+    title: "Performance loop pass 3: 100 KiB p95 <= 10 ms (native and Python) with all rules, no quality drop"
+    type: perf
+    deps: [H06-2]
+    source: "H06 pass 2 (scoreboard/latency.md, section H06 pass 2): ark 15.920 ms, ark-native 9.402 ms
+      (8.8–10.0 over three runs); remaining hotspots: matched_rules details as Python objects and their
+      release (~5–6 ms), rule search CPU time (13 ms over 6 threads), native result drop (~1.5 ms)"
+    accept: >-
+      Performance loop at the end of the programme (decided 2026-11-02): profile the 100 KiB DE and EN
+      workloads, remove the top hotspots without any quality change (dev and holdout scoreboard and goldens
+      unchanged, no new FP); M4 per scripts/l1_presidio/latency.py on the VPS; latency.md updated. If the
+      budget is not met and the profile still shows a hotspot worth >= 10 % of p95, the PR appends the next
+      pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
+      when the budget holds or no such hotspot remains (remaining hotspots documented).
+
+  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-3]}
 
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}

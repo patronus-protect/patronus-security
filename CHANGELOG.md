@@ -117,6 +117,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 2 (H06-2). For texts from 32 KiB on the whole per-rule work runs on the
+  rayon pool: gates, searches, validation, scoring and the `matched_rules` entries of each rule
+  (`NativeRegexDetector::rule_findings`), joined in rule order, so results are unchanged (PII and
+  DLP). The Python binding builds the layer `details`/`thresholds` as Python objects instead of a
+  JSON text round trip (`PyLayerResult.details_json`/`thresholds_json` are replaced by
+  `details`/`thresholds`), and `PyEvaluationResult.evidence_spans` returns the span dicts of the
+  public result (`PyEvidenceSpan` is gone); the dicts of `SecurityGateway.scan_category` and friends
+  are unchanged. 100 KiB p95 on the VPS (`scripts/l1_presidio/latency.py`): ark 24.651 → 15.920 ms,
+  ark-native 15.324 → 9.402 ms (M4 met native, not yet in Python; next pass H06-3).
+  **Detection change:** none.
 - L1 latency loop, pass 1 (H06). Rules of texts from 32 KiB on (`PARALLEL_RULES_MIN_BYTES`) are
   gated and searched in parallel on the rayon pool (`NativeRegexDetector::rule_matches`); each rule
   scans the whole text on its own lazy DFA, about 0.18 ms per 100 KiB, which made up about 14.5 of
