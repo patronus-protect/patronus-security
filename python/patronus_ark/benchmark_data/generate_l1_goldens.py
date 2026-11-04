@@ -13939,6 +13939,116 @@ DLP_P01_CASES = {
 for _label, _rows in DLP_P01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T22: base64 values under generic keys (Kubernetes Secret data, Grafana legacy keys and glc_
+# tokens, PyPI macaroons, 1Password ops_ tokens, Elastic id:api_key) whose decoded payload holds
+# the example/test fill. The encoded text shows no marker, so the generic rules check the
+# decoded bytes (whole marker words, repeated chunks); random payloads stay findings.
+DLP_T22_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "apiVersion: v1\nkind: Secret\nmetadata:\n  name: kunden-db\ndata:\n  password: <<secret:0>>\n",
+            "kubernetes_secret_data", 22101, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Suche (Produktion)\nES_API_KEY=<<secret:0>>\n",
+            "elastic_api_key", 22102, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"suche\": {\n    \"api_key\": \"<<secret:0>>\"\n  }\n}\n",
+            "elastic_api_key", 22103, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<config>\n  <add key=\"DbPassword\" value=\"<<secret:0>>\"/>\n</config>\n",
+            "kubernetes_secret_data", 22104, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "resource \"kubernetes_secret\" \"app\" {\n  data = {\n    token = \"<<secret:0>>\"\n  }\n}\n",
+            "kubernetes_secret_data", 22105, carrier="hcl",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "apiVersion: v1\nkind: Secret\nmetadata:\n  name: billing-db\ndata:\n  password: <<secret:0>>\n",
+            "kubernetes_secret_data", 22106, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "SEARCH_API_KEY=<<secret:0>>\n",
+            "elastic_api_key", 22107, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"search\": {\n    \"api_key\": \"<<secret:0>>\"\n  }\n}\n",
+            "elastic_api_key", 22108, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<config>\n  <add key=\"DbPassword\" value=\"<<secret:0>>\"/>\n</config>\n",
+            "kubernetes_secret_data", 22109, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "resource \"kubernetes_secret\" \"app\" {\n  data = {\n    token = \"<<secret:0>>\"\n  }\n}\n",
+            "kubernetes_secret_data", 22110, carrier="hcl",
+        ),
+    ],
+}
+_T22_NEGATIVES = [
+    ("de", "dlp_password_assignment",
+     "apiVersion: v1\nkind: Secret\nmetadata:\n  name: kunden-db\ndata:\n  password: <<secret:0>>\n",
+     "kubernetes_secret_data", "EXAMPLEKEY", "yaml"),
+    ("de", "dlp_generic_credential_assignment",
+     "resource \"kubernetes_secret\" \"app\" {\n  data = {\n    token = \"<<secret:0>>\"\n  }\n}\n",
+     "kubernetes_secret_data", "deadbeef", "hcl"),
+    ("de", "dlp_env_var_secret", "# Monitoring\nGRAFANA_TOKEN=<<secret:0>>\n",
+     "grafana_api_key", "EXAMPLEKEY", "env"),
+    ("de", "dlp_generic_credential_assignment",
+     "{\n  \"monitoring\": {\n    \"token\": \"<<secret:0>>\"\n  }\n}\n",
+     "grafana_cloud_token", "TESTKEY", "json"),
+    ("de", "dlp_password_assignment",
+     "<config>\n  <add key=\"PublishPassword\" value=\"<<secret:0>>\"/>\n</config>\n",
+     "pypi_upload_token", "EXAMPLEKEY", "xml"),
+    ("de", "dlp_generic_credential_assignment",
+     "POST /v1/sync HTTP/1.1\nHost: vault.intern\nX-Api-Key: <<secret:0>>\n",
+     "onepassword_service_account_token", "TESTKEY", "http"),
+    ("de", "dlp_prose_secret",
+     "Hallo Team, für die Suche gilt ab heute: der API-Schlüssel ist <<secret:0>> – bitte im Tresor ablegen.",
+     "elastic_api_key", "1234567890", "prose"),
+    ("en", "dlp_password_assignment",
+     "apiVersion: v1\nkind: Secret\nmetadata:\n  name: billing-db\ndata:\n  password: <<secret:0>>\n",
+     "kubernetes_secret_data", "TESTKEY", "yaml"),
+    ("en", "dlp_generic_credential_assignment",
+     "resource \"kubernetes_secret\" \"app\" {\n  data = {\n    token = \"<<secret:0>>\"\n  }\n}\n",
+     "kubernetes_secret_data", "0123456789", "hcl"),
+    ("en", "dlp_env_var_secret", "# Monitoring\nGRAFANA_TOKEN=<<secret:0>>\n",
+     "grafana_api_key", "1234567890", "env"),
+    ("en", "dlp_generic_credential_assignment",
+     "{\n  \"monitoring\": {\n    \"token\": \"<<secret:0>>\"\n  }\n}\n",
+     "grafana_cloud_token", "EXAMPLEKEY", "json"),
+    ("en", "dlp_password_assignment",
+     "<config>\n  <add key=\"PublishPassword\" value=\"<<secret:0>>\"/>\n</config>\n",
+     "pypi_upload_token", "TESTKEY", "xml"),
+    ("en", "dlp_generic_credential_assignment",
+     "POST /v1/sync HTTP/1.1\nHost: vault.internal\nX-Api-Key: <<secret:0>>\n",
+     "onepassword_service_account_token", "EXAMPLEKEY", "http"),
+    ("en", "dlp_prose_secret",
+     "Hi team, from today the search API key is <<secret:0>> – please store it in the vault.",
+     "elastic_api_key", "deadbeef", "prose"),
+]
+DLP_T22_CASES["CREDENTIAL"] += [
+    dx(
+        "CREDENTIAL", language, rule, template, generator, fill,
+        f"test value (base64 of a {fill} fill)", carrier=carrier,
+    )
+    for language, rule, template, generator, fill, carrier in _T22_NEGATIVES
+]
+for _label, _rows in DLP_T22_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
