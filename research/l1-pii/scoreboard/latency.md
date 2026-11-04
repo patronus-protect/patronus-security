@@ -4,16 +4,16 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 | Engine | Init ms | short p50 / p95 / p99 ms | 4kib p50 / p95 / p99 ms | 100kib p50 / p95 / p99 ms |
 |---|---:|---:|---:|---:|
-| ark | 423 | 0.314 / 0.401 / 0.469 | 1.675 / 2.114 / 2.275 | 11.864 / 14.641 / 15.579 |
-| ark-native | 311 | 0.240 / 0.342 / 0.384 | 1.570 / 1.919 / 2.119 | 8.068 / 9.947 / 10.690 |
+| ark | 446 | 0.275 / 0.398 / 0.494 | 1.465 / 1.855 / 2.120 | 11.761 / 15.170 / 15.398 |
+| ark-native | 308 | 0.219 / 0.315 / 0.358 | 1.317 / 1.714 / 1.887 | 8.288 / 9.803 / 10.240 |
 | presidio-default | 4565 | 10.151 / 13.928 / 16.559 | 212.486 / 338.831 / 390.239 | 10407.527 / 13634.609 / 15005.935 |
 | presidio-tuned | 8764 | 12.540 / 30.829 / 33.890 | 200.656 / 259.931 / 290.922 | 9803.598 / 11978.768 / 12399.738 |
 
 | p95 / Ark (Python) | short | 4kib | 100kib |
 |---|---:|---:|---:|
-| ark-native | 0.85× | 0.91× | 0.68× |
-| presidio-default | 35× | 160× | 931× |
-| presidio-tuned | 77× | 123× | 818× |
+| ark-native | 0.79× | 0.92× | 0.65× |
+| presidio-default | 35× | 183× | 899× |
+| presidio-tuned | 77× | 140× | 790× |
 
 | Workload | Bytes | Chars | ark spans | ark-native spans | presidio-default spans | presidio-tuned spans |
 |---|---:|---:|---:|---:|---:|---:|
@@ -24,8 +24,47 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 | 100kib-de | 102400 | 101229 | 1173 | 1173 | 3613 | 2051 |
 | 100kib-en | 102400 | 102400 | 1038 | 1038 | 2907 | 2701 |
 
-M4 (ark 100kib p95 ≤ 10 ms): 14.641 ms, FAIL.
-M4 (ark-native 100kib p95 ≤ 10 ms): 9.947 ms, pass.
+M4 (ark 100kib p95 ≤ 10 ms): 15.170 ms, FAIL.
+M4 (ark-native 100kib p95 ≤ 10 ms): 9.803 ms, pass.
+
+## Profile and remaining hotspots (H06 pass 4)
+
+Ark rows measured after H06-4 (`latency.py run --engines ark ark-native`); the Presidio rows are the
+H03 run. The machine was busier than in pass 3 (load average about 5–6 during the run, against 1.2),
+so the wall times move within the noise: 100 KiB p95 ark 14.641 → 15.170 ms (p50 11.864 → 11.761 ms),
+ark-native 9.947 → 9.803 ms. Spans per workload are unchanged.
+
+Pass 4 adds a word shape gate to the PII rules (`detectors/pii/word_shape.rs`). A rule whose every
+match is one maximal ASCII word run (`\b[A-Z]{5}[0-9]{4}[A-Z]\b`, `\b[A-Z0-9]{18}[0-9]{2}\b`) carries
+the run length range, the character kinds the run may hold (digit, upper, lower, underscore) and the
+kinds it must hold; `rule_scan` records the lengths of the word runs of the text per kind set in one
+pass and leaves a rule whose shape occurs nowhere unsearched. 41 of the PII rules have a shape. The
+gate is a necessary condition of the regex, so results are the same; a test checks it on the PII
+goldens and the bilingual fixture, and the prefilter equivalence test runs against the pipeline
+without it.
+
+Rule searches of the 100 KiB workloads (sum of the single-rule searches, fastest of 15, one thread):
+
+| Workload | Before, ms | After, ms | Of which zero-match rules, before → after |
+|---|---:|---:|---:|
+| 100kib-de | 17.2 | 14.3 | 11.0 → 8.6 |
+| 100kib-en | 16.7 | 13.9 | 10.3 → 7.6 |
+
+That is about 0.5 ms of the parallel step on 6 threads, below the noise of the busy machine.
+
+M4 holds for ark-native, not for ark (Python). Remaining hotspots, each ≥ 10 % of the ark p95, for
+H06-5:
+
+- The `matched_rules` entries as `serde_json::Value` (unchanged since pass 3): about 3.8 ms of the
+  Python conversion right after the scan and about 1.5 ms native drop. A typed entry that serializes
+  to the same JSON is the remaining lever; it touches every reader of `details["matched_rules"]`
+  (overlap resolution, the deobfuscated merge, DLP and MCP detectors).
+- The zero-match rule searches still cost 7.6–8.6 ms search CPU: most of them are rules with
+  separators inside the value (`[0-9]{6}[-+]?[0-9]{4}`, plates, grouped numbers) or field names before
+  it, which a single word run does not describe. Each costs the floor of one lazy DFA pass over the
+  text (about 0.18 ms per 100 KiB).
+- The sequential preparation before the parallel step (lowercase view, lexical anchors, structure
+  parse; 1.4–1.7 ms).
 
 ## Profile and remaining hotspots (H06 pass 3)
 
