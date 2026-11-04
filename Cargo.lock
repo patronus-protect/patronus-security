@@ -1668,6 +1668,7 @@ version = "0.1.14"
 dependencies = [
  "patronus-ark",
  "pyo3",
+ "rustc-hash",
  "serde_json",
 ]
 

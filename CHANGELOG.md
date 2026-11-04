@@ -137,6 +137,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 5 (H06-5). The Python binding hashes its per-call cache of the result
+  strings (the keys and string values of the `matched_rules` entries, span labels) with Fx instead of
+  SipHash: the 100 KiB `details` getter 1.55 → 1.25 ms (fastest call); A/B of the Python call against
+  main, 100 KiB p50 11.12 → 10.55 ms, p95 13.63 → 13.25 ms. 100 KiB p95 on the VPS
+  (`scripts/l1_presidio/latency.py`): ark 15.170 → 15.003 ms, ark-native 9.803 → 9.774 ms (native
+  code unchanged). M4 not yet met in Python; next pass H06-6. **Detection change:** none.
 - L1 latency loop, pass 4 (H06-4). PII rules whose every match is one whole ASCII word run
   (`\b[A-Z]{5}[0-9]{4}[A-Z]\b`) carry a word shape (length range, allowed and required character
   kinds); one pass over the text records which word run shapes occur, and a rule whose shape occurs
