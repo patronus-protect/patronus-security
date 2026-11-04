@@ -5372,6 +5372,52 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_netrc_password",
+    "de": "# ~/.netrc für den Lager-Export\nmachine ftp.lager.intern login export password <<secret\u003a0>>",
+    "en": "machine github.com\n  login release-bot\n  password <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "password",
+        "seed": 7
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "machine ftp.lager.intern login export password ${LAGER_FTP_PASSWORT}",
+        "machine git.lager.intern login lager-bot"
+      ],
+      "en": [
+        "machine example.com login myuser password mypassword",
+        "The state machine moves to login and waits for the password prompt."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_docker_config_auth",
+    "de": "{\"auths\": {\"registry.lager.intern\": {\"auth\": \"<<secret\u003a0>>\"}}}",
+    "en": "{\n  \"auths\": {\n    \"registry.example.com\": {\n      \"auth\": \"<<secret\u003a0>>\"\n    }\n  }\n}",
+    "secrets": [
+      {
+        "gen": "http_basic_auth",
+        "seed": 7
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "{\"auths\":{\"registry.lager.intern\":{\"auth\":\"\"}},\"credsStore\":\"desktop\"}",
+        "{\"auth\": \"c2Vzc2lvbi1zdGF0dXMtb2s=\", \"status\": \"ok\"}"
+      ],
+      "en": [
+        "{\"auths\": {\"registry.example.com\": {\"auth\": \"dXNlcm5hbWU6cGFzc3dvcmQ=\"}}}",
+        "{\"route\": \"/login\", \"auth\": \"required\"}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_de_vat_id",
     "de": "USt-IdNr: DE123456789",
     "en": "VAT-ID: DE123456789",
