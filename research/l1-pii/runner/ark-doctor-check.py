@@ -2,8 +2,9 @@
 """Detect a stuck ARK runner programme. Prints a diagnosis and exits 1 when stuck, 0 otherwise.
 
 Stuck means one of:
-  - no progress (LANDED / AUTO_MERGED / new PR) for STALL_HOURS while runs keep happening and
-    the programme is not idle (NOTHING_TO_DO / PAUSED);
+  - no progress (LANDED / AUTO_MERGED / new PR, or a finished review or verify run, which print the
+    PR= line too) for STALL_HOURS while runs keep happening and the programme is not idle
+    (NOTHING_TO_DO / PAUSED);
   - the same error line in REPEAT_LIMIT or more of the last runs;
   - an own open PR (of this host's lane) that has not changed for PR_STALE_HOURS, unless the run in
     progress works on it.
@@ -35,7 +36,7 @@ UNIT = "ark-l1.service" if PROGRAM == "pii" else "ark-dlp.service"
 PROGRESS = re.compile(r"LANDED=#\d+|AUTO_MERGED=#\d+|^PR=https", re.M)
 IDLE = re.compile(r"RESULT=(NOTHING_TO_DO|PAUSED|NO_BACKLOG)")
 ERRORS = re.compile(r"^(PUBLISH_ERROR=.*|WATCHDOG=.*|STALE_RUN=.*|RESTACK_PUSH_ERROR=.*|BLOCKED=.*|"
-                    r"REBASE_CONFLICT.*|LAND_WAIT=.*merge failed.*|CI=red.*|CI=timeout.*|"
+                    r"REBASE_CONFLICT.*|LAND_WAIT=.*merge failed.*|CI=red.*|CI=timeout.*|VERIFY_ERROR=.*|"
                     r"Traceback.*|.*Error:.*)$", re.M)
 
 now = dt.datetime.now(dt.timezone.utc)

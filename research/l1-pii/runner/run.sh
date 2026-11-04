@@ -87,6 +87,11 @@ fi
 [ "$rc" -eq 10 ] && exit 0
 [ "$rc" -eq 0 ] || exit 1
 eval "$("${L1[@]}" env)"
+if [ "$TASK_TYPE" = verify ]; then
+  # Quiet latency A/B while this run holds the lock; the result reaches the agent through TASK_YAML.
+  "${L1[@]}" latency
+  eval "$("${L1[@]}" env)"
+fi
 
 feedback=""
 for round in $(seq 1 "$MAX_ROUNDS"); do
@@ -135,6 +140,11 @@ $feedback"
     "$HOME/.local/bin/claude" -p "$prompt" --model "$MODEL" --dangerously-skip-permissions --max-turns 250
   agent_rc=$?
   echo "== agent exit $agent_rc"
+  if [ "$TASK_TYPE" = verify ]; then
+    # One round, never gated or published: the runner acts on the agent's verdict file.
+    "${L1[@]}" verdict
+    exit $?
+  fi
 
   if [ "$agent_rc" -ne 0 ] && [ "$("${L1[@]}" ahead)" = "0" ]; then
     echo "== agent failed without commits; aborting run, task stays selectable"

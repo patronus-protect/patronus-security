@@ -1062,6 +1062,16 @@ run.sh
   prüfen wie sonst, `ci` pusht mit Lease auf den alten Head, `publish` antwortet in jedem Thread mit dem
   Commit (plus der Notiz des Agenten aus `.git/ark-review.json`) und löst ihn auf. Drei rote Runden
   blockieren `REVIEW:<branch>`; der PR bleibt dann bis `unblock` unmergebar, neue Aufgaben laufen weiter.
+- **Verify-Läufe** (seit 2026-11-04): Ein PR, der `ark-core/` ändert (Diff gegen die Merge-Basis mit
+  `main`), wird von Auto-Merge und `publish` erst gemergt, wenn für genau seinen Head ein Verify
+  bestanden ist. Sonst wird er zur Aufgabe des Laufs (`VERIFY:<branch>`, Prompt
+  `runner/AGENT_PROMPT.verify.md`, nur eigene Lane): `ark-l1 latency` misst unter dem Run-Lock ein ruhiges
+  Latenz-A/B (Head gegen `main`, mit dem Latenz-Code des Gates aus `main`, mehr Versuche), danach prüft
+  ein frischer Agent in einer Runde ohne Commit Akzeptanzkriterien, Code-Regeln aus `CLAUDE.md`,
+  Overfitting/Öffentlichkeit und die Zahlen im PR und schreibt `.git/ark-verify.json`. `ark-l1 verdict`
+  trägt ein bestandenes Verify in `state/verify.json` ein (der nächste Auto-Merge mergt); Findings und
+  eine Latenz-Regression werden Review-Kommentare im PR, die der Review-Lauf behebt; der neue Head
+  braucht ein neues Verify. Zwei gescheiterte Verifies blockieren `VERIFY:<branch>` für einen Menschen.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
   Gate-Target, das Gate-Venv und der Scoreboard-Cache sind für den Agenten nicht beschreibbar bzw.

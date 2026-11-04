@@ -5,11 +5,13 @@ the runner programme stuck. Your job: find the root cause, fix it so the program
 and verify the fix. Do not stop at a diagnosis.
 
 ## Layout
-- Runner: `~/ark-l1/bin/ark-l1` (Python CLI: `--program pii|dlp next|ci|publish|abort|unblock|status|block`),
+- Runner: `~/ark-l1/bin/ark-l1` (Python CLI: `--program pii|dlp next|ci|publish|latency|verdict|abort|unblock|status|block`),
   `~/ark-l1/bin/run.sh`, agent prompts `~/ark-l1/bin/AGENT_PROMPT*.md`.
 - Units: `ark-l1.service`/`.timer` (PII), `ark-dlp.service`/`.timer` (DLP); `sudo systemctl` works.
 - PII state/logs: `~/ark-l1/state`, `~/ark-l1/logs`. DLP: `~/ark-dlp/state`, `~/ark-dlp/logs`.
-  `current.json` is the run in progress, `blocked.json` the blocked tasks.
+  `current.json` is the run in progress, `blocked.json` the blocked tasks, `verify.json` the verify
+  verdicts (passed heads, failed verifies per branch). Run types: backlog task, `RESTACK:<branch>`,
+  `REVIEW:<branch>`, `VERIFY:<branch>` (one agent round, no gate; `latency` then `verdict`).
 - Repo clone: `~/ark-l1/repo` (patronus-protect/patronus-security); `gh` is logged in.
 - Host settings: `~/ark-l1/host.env` (`ARK_L1_LANE`, `ARK_L1_WHEN_IDLE`; the units load it). A programme
   shared by two hosts has one lane per host: work only on this host's lane (`ark-l1 --program <p> own
@@ -23,7 +25,8 @@ and verify the fix. Do not stop at a diagnosis.
 - Flaky GitHub CI jobs: `gh run rerun <id> --failed`; if a job is broken in the workflow itself, the
   runner token cannot push `.github/workflows` — record it in the report for a person.
 - PRs that stay open: check threads, CI, mergeable state (`gh pr view`, `git merge-tree`). Merge only a PR
-  whose required checks (`rust`, `python`) are green and whose review threads are all resolved:
+  whose required checks (`rust`, `python`) are green and whose review threads are all resolved; a PR that
+  changes `ark-core/` only with its head under `pass` in `verify.json`:
   `gh api -X PUT repos/patronus-protect/patronus-security/pulls/<n>/merge -f merge_method=squash -f sha=<head>`.
 - A bug in `ark-l1`/`run.sh`: patch the installed file in `~/ark-l1/bin` (back it up first as
   `<file>.bak-<timestamp>`), `python3 -m py_compile` it, and verify the changed function on real data
