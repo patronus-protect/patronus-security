@@ -51,6 +51,7 @@ onnx-tensorrt = ["ort/tensorrt", "patronus-ark-core/onnx-tensorrt"]
 [dev-dependencies]
 patronus-ark = { path = ".", features = ["test-util"] }
 serde_yaml = "0.9"
+flate2 = "1"
 
 # Runs the evaluator's unit tests (span offsets) with `cargo test`.
 [[example]]
