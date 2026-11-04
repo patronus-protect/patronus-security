@@ -40,6 +40,25 @@ pub struct NativeDetection {
     pub details: HashMap<String, serde_json::Value>,
 }
 
+/// Shared contract of the native (L1) detectors: a prepared text in, one
+/// detection out. Implementors write `detect_prepared`; the rest follows.
+pub trait NativeDetector: Sync {
+    fn detect_prepared(&self, prepared: &crate::threat::NativeText<'_>) -> NativeDetection;
+
+    fn detect(&self, text: &str) -> NativeDetection {
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    fn evaluate(&self, text: &str) -> EvaluationResult {
+        self.detect(text).result
+    }
+
+    fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
+        use rayon::prelude::*;
+        texts.par_iter().map(|text| self.evaluate(text)).collect()
+    }
+}
+
 /// Texts from this size on search their rules in parallel (H06): below it the
 /// fork-join costs more than the scans it spreads.
 pub const PARALLEL_RULES_MIN_BYTES: usize = 32 * 1024;

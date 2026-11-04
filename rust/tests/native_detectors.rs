@@ -23,6 +23,7 @@ use patronus_ark::detectors::{
         mcp_runtime_risk::McpRuntimeRiskPipeline,
     },
     pii::pii::PiiPipeline,
+    NativeDetector,
 };
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 

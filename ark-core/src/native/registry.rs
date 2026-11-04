@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use super::NativePolicy;
+use crate::detectors::NativeDetector;
 use crate::{
     detectors::{dlp, injection::*, mcp, pii, NativeDetection},
     threat::NativeText,
