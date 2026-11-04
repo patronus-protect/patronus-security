@@ -4,16 +4,16 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 | Engine | Init ms | short p50 / p95 / p99 ms | 4kib p50 / p95 / p99 ms | 100kib p50 / p95 / p99 ms |
 |---|---:|---:|---:|---:|
-| ark | 446 | 0.275 / 0.398 / 0.494 | 1.465 / 1.855 / 2.120 | 11.761 / 15.170 / 15.398 |
-| ark-native | 308 | 0.219 / 0.315 / 0.358 | 1.317 / 1.714 / 1.887 | 8.288 / 9.803 / 10.240 |
+| ark | 515 | 0.292 / 0.404 / 0.491 | 1.904 / 2.548 / 2.861 | 12.319 / 15.003 / 15.855 |
+| ark-native | 324 | 0.288 / 0.367 / 0.438 | 1.880 / 2.641 / 3.175 | 8.334 / 9.774 / 11.099 |
 | presidio-default | 4565 | 10.151 / 13.928 / 16.559 | 212.486 / 338.831 / 390.239 | 10407.527 / 13634.609 / 15005.935 |
 | presidio-tuned | 8764 | 12.540 / 30.829 / 33.890 | 200.656 / 259.931 / 290.922 | 9803.598 / 11978.768 / 12399.738 |
 
 | p95 / Ark (Python) | short | 4kib | 100kib |
 |---|---:|---:|---:|
-| ark-native | 0.79× | 0.92× | 0.65× |
-| presidio-default | 35× | 183× | 899× |
-| presidio-tuned | 77× | 140× | 790× |
+| ark-native | 0.91× | 1.04× | 0.65× |
+| presidio-default | 34× | 133× | 909× |
+| presidio-tuned | 76× | 102× | 798× |
 
 | Workload | Bytes | Chars | ark spans | ark-native spans | presidio-default spans | presidio-tuned spans |
 |---|---:|---:|---:|---:|---:|---:|
@@ -24,8 +24,49 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 | 100kib-de | 102400 | 101229 | 1173 | 1173 | 3613 | 2051 |
 | 100kib-en | 102400 | 102400 | 1038 | 1038 | 2907 | 2701 |
 
-M4 (ark 100kib p95 ≤ 10 ms): 15.170 ms, FAIL.
-M4 (ark-native 100kib p95 ≤ 10 ms): 9.803 ms, pass.
+M4 (ark 100kib p95 ≤ 10 ms): 15.003 ms, FAIL.
+M4 (ark-native 100kib p95 ≤ 10 ms): 9.774 ms, pass.
+## Profile and remaining hotspots (H06 pass 5)
+
+Ark rows measured after H06-5 (`latency.py run`; ark under a load average of about 1.3–1.4, ark-native
+in a second run at about 1.8, as the first ark-native run at about 2.8–3.0 gave 10.606 ms with unchanged
+native code); the Presidio rows are the H03 run. 100 KiB p95: ark 15.170 → 15.003 ms, ark-native
+9.803 → 9.774 ms; the 4 KiB rows of both engines moved up by the same amount with the load (the native
+code is unchanged). Spans per workload are unchanged.
+
+Profile of the 100 KiB workloads through the Python binding before pass 5 (median per call; the
+machine is noisy, so ranges over DE and EN and repeated runs):
+
+| Part | ms |
+|---|---:|
+| Native scan (`scan_category` with the GIL released) | 7.0–8.0 |
+| Layer `details` getter (1 369 `matched_rules` entries, about 11 000 Python objects) | 2.9–3.3 (fastest 1.5) |
+| `evidence_spans` getter (about 1 100 dicts) | 0.7–0.9 (fastest 0.45) |
+| Freeing the result dicts | 0.5–0.6 |
+| Freeing the native result (details on the release thread) | 0.2–0.3 |
+
+The `details` getter looks every dict key and string value up in a per-call string cache (about
+22 000 lookups per 100 KiB call). Pass 5 hashes that cache with Fx instead of SipHash (`rustc-hash`,
+already in the lock): the getter's fastest call 1.55 → 1.25 ms. An A/B of the whole Python call
+against main, interleaved three times on the same machine (100 samples per workload and round,
+mean over the rounds): 100 KiB p50 11.12 → 10.55 ms, p95 13.63 → 13.25 ms. The JSON values are
+unchanged (`test_layer_details_and_thresholds_are_their_json_values`). For comparison, building the
+same dicts from Python objects already in hand costs about 0.5 ms; the rest of the getter is reading
+the scattered `serde_json` maps. Measured and not in: sharing one Python int per distinct offset
+(slower, 1.25 → 1.4 ms), a presized list per JSON array and a presized dict per span (each below
+0.05 ms).
+
+M4 holds for ark-native (within the noise), not for ark (Python). Remaining hotspots, each ≥ 10 % of
+the ark p95, for H06-6:
+
+- The `matched_rules` entries as `serde_json::Value`: the details getter (1.3–3 ms) and about 1.5 ms
+  native drop. A typed entry that serializes to the same JSON is the remaining lever; it touches every
+  reader of `details["matched_rules"]` (overlap resolution, the deobfuscated merge, DLP and MCP
+  detectors) and the binding reads it field by field.
+- The zero-match rule searches of rules with separators or field names (7.6–8.6 of 14 ms search CPU,
+  pass 4).
+- The sequential preparation before the parallel step (lowercase view, lexical anchors, structure
+  parse; 1.4–1.7 ms).
 
 ## Profile and remaining hotspots (H06 pass 4)
 
