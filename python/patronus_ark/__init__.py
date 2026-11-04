@@ -30,8 +30,8 @@ def _to_dict(result):
                 "confidence": layer.confidence,
                 "matched": layer.matched,
                 "duration_ms": layer.duration_ms,
-                "thresholds": _decode_json_object(layer.thresholds_json),
-                "details": _decode_json_object(layer.details_json),
+                "thresholds": layer.thresholds,
+                "details": layer.details,
             }
             for layer in result.layers
         ],
