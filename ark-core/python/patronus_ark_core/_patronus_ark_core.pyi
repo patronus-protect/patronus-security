@@ -1,4 +1,4 @@
-from .types import ScanReport, ScannerConfig, WarmupOptions, WolfExecutionOptions
+from .types import ScanReport, ScannerConfig, ShellVerdict, WarmupOptions, WolfExecutionOptions
 
 __version__: str
 
@@ -18,3 +18,7 @@ class Scanner:
         self, text: str, *, pii: bool = True, dlp: bool = True,
         injection: bool = True, control: ScanControl | None = None,
     ) -> ScanReport: ...
+    def shell_verdict(
+        self, command: str, *, cwd: str | None = None, home: str | None = None,
+        repo_root: str | None = None, dialect: str | None = None, with_facts: bool = False,
+    ) -> ShellVerdict: ...

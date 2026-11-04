@@ -99,8 +99,8 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/spm.model` | `dynamic_pii/gliner_small_v2_5/spm.model` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer.json` | `dynamic_pii/gliner_small_v2_5/tokenizer.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer_config.json` | `dynamic_pii/gliner_small_v2_5/tokenizer_config.json` | unknown |
-| `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/manifest.json` | `shell_command/cat_shell_risk_commander/manifest.json` | 4.4 KiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/config.json` | `shell_command/cat_shell_risk_commander/config.json` | 0.3 KiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/model.json` | `shell_command/cat_shell_risk_commander/model.json` | 4.4 MiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/policy_levels.json` | `shell_command/cat_shell_risk_commander/policy_levels.json` | 4.3 KiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/LICENSE` | `shell_command/cat_shell_risk_commander/LICENSE` | 11.1 KiB |
+| `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/manifest.json` | `shell_command/cat_shell_risk_commander/manifest.json` | 4.4 KiB |

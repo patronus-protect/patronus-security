@@ -83,27 +83,14 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
 pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ShellCommand,
     model: "cat-shell-risk-commander",
-    repo: "patronus-studio/cat-shell-risk-commander",
     // K26 (format_version 2): char_wb + kf1 (shell tokens, legacy markers and
-    // patronus.facts/1 tokens), verdict = max(model, Cedar policies).
-    revision: "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f",
+    // patronus.facts/1 tokens), verdict = max(model, Cedar policies). The
+    // core pins its manifest (`SHELL_MANIFEST_SHA256`).
+    repo: patronus_ark_core::warmup::SHELL_REPOSITORY,
+    revision: patronus_ark_core::warmup::SHELL_REVISION,
     destination_path: "shell_command/cat_shell_risk_commander",
-    // `config.json` names the model and policy files; it is also the file the
-    // Hub counts as a download.
-    files: &[
-        "manifest.json",
-        "config.json",
-        "model.json",
-        "policy_levels.json",
-        "LICENSE",
-    ],
+    files: patronus_ark_core::warmup::SHELL_FILES,
 };
-
-/// sha256 of the `manifest.json` of [`SHELL_COMMAND_ASSET`]'s revision. The
-/// manifest lists the sha256 of every release file, so pinning it in the
-/// binary makes any changed bundle file a refused bundle.
-pub const SHELL_COMMAND_MANIFEST_SHA256: &str =
-    "b4dd4f1ed7ef83957c69ec321b134fdb65e2c8cfcb82f38c826d4aa4ca977153";
 
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,

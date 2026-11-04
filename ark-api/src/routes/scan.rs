@@ -780,35 +780,8 @@ mod tests {
             Instant::now().elapsed().as_nanos()
         ));
         let bundle = model_dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
-        std::fs::create_dir_all(&bundle).unwrap();
-        let fixtures =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../rust/tests/fixtures");
-        let files = [
-            (
-                "model.json",
-                std::fs::read(fixtures.join("shell_risk_synthetic_model.json")).unwrap(),
-            ),
-            (
-                "policy_levels.json",
-                std::fs::read(fixtures.join("shell_risk_policy_levels.json")).unwrap(),
-            ),
-            (
-                "config.json",
-                br#"{"model_file":"model.json","policy_levels_file":"policy_levels.json"}"#
-                    .to_vec(),
-            ),
-            ("LICENSE", b"Apache-2.0".to_vec()),
-        ];
-        let mut manifest = serde_json::Map::new();
-        for (name, bytes) in &files {
-            std::fs::write(bundle.join(name), bytes).unwrap();
-            manifest.insert(
-                name.to_string(),
-                json!(format!("{:x}", Sha256::digest(bytes))),
-            );
-        }
-        let manifest = json!({"files": manifest}).to_string();
-        std::fs::write(bundle.join("manifest.json"), &manifest).unwrap();
+        let manifest =
+            patronus_ark::detectors::shell::testing::write_synthetic_bundle(&bundle, None).unwrap();
         std::fs::write(
             bundle.join(".patronus-revision"),
             patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
@@ -826,7 +799,7 @@ mod tests {
             Some(model_dir.clone()),
             false,
         );
-        gateway.pin_shell_command_manifest_for_tests(format!("{:x}", Sha256::digest(&manifest)));
+        gateway.pin_shell_command_manifest_for_tests(manifest);
         gateway.warmup().unwrap();
         let state = AppState::new(config, gateway);
         let app = Router::new()

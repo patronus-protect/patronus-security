@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::useless_conversion)] // Generated PyO3 wrappers.
-use patronus_ark_core::{ScanChecks, ScanControl as Control, ScanError, Scanner as CoreScanner};
+use patronus_ark_core::{
+    detectors::shell::ShellContext, ScanChecks, ScanControl as Control, ScanError,
+    Scanner as CoreScanner,
+};
 use pyo3::{exceptions::*, prelude::*, types::PyDict};
 use serde::de::DeserializeOwned;
 use std::{sync::Mutex, time::Duration};
@@ -115,6 +118,41 @@ impl Scanner {
         let report = py.import_bound("json")?.call_method1("loads", (output,))?;
         report.call_method1("setdefault", ("wolf", py.None()))?;
         Ok(report.unbind())
+    }
+
+    #[pyo3(signature = (command, *, cwd=None, home=None, repo_root=None, dialect=None, with_facts=false))]
+    #[allow(clippy::too_many_arguments)]
+    fn shell_verdict(
+        &self,
+        py: Python<'_>,
+        command: String,
+        cwd: Option<String>,
+        home: Option<String>,
+        repo_root: Option<String>,
+        dialect: Option<String>,
+        with_facts: bool,
+    ) -> PyResult<PyObject> {
+        let context = ShellContext {
+            cwd,
+            home,
+            repo_root,
+            dialect,
+        };
+        let output = py.allow_threads(move || {
+            let scanner = self.inner.try_lock().map_err(|_| {
+                ScannerBusyError::new_err(
+                    "scanner is already in use; serialize calls or use separate scanners",
+                )
+            })?;
+            let verdict = scanner
+                .shell_verdict(&command, Some(&context), &[])
+                .map_err(scan_error)?;
+            Ok::<_, PyErr>(verdict.to_json_string(with_facts))
+        })?;
+        Ok(py
+            .import_bound("json")?
+            .call_method1("loads", (output,))?
+            .unbind())
     }
 }
 

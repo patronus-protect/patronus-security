@@ -26,6 +26,7 @@ use patronus_ark::detectors::shell::{
     kf1,
     policies::ShellPolicies,
     shell_risk::{ShellRiskPipeline, ShellVerdict},
+    testing,
 };
 use serde_json::Value;
 
@@ -50,8 +51,7 @@ fn rows(path: &Path) -> Vec<Value> {
 
 fn bundle_policies() -> ShellPolicies {
     let levels: HashMap<String, String> =
-        serde_json::from_slice(&std::fs::read(fixture("shell_risk_policy_levels.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(testing::POLICY_LEVELS_JSON).unwrap();
     ShellPolicies::from_levels(&levels).unwrap()
 }
 

@@ -101,7 +101,13 @@ def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> li
     category = _field(block, "category").replace("SecurityCategory::", "")
     repo = _field(block, "repo").strip('"')
     destination = _field(block, "destination_path").strip('"')
-    files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
+    if "files: &[" in block:
+        files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
+    else:
+        # A `&[&str]` constant of `ark-core/src/warmup.rs`.
+        name = _field(block, "files").removeprefix("patronus_ark_core::warmup::")
+        constants = (ROOT / "ark-core/src/warmup.rs").read_text()
+        files_block = constants.split(f"pub const {name}: &[&str] = &[", 1)[1].split("];", 1)[0]
     return [
         Asset(
             category=category,
@@ -152,7 +158,7 @@ def _field(block: str, name: str) -> str:
     # Runtime and documentation use the same official model metadata.
     if "patronus_ark_core::warmup::" in value:
         constants = (ROOT / "ark-core/src/warmup.rs").read_text()
-        for constant, literal in re.findall(r'pub const (WOLF_\w+): &str\s*=\s*"([^"\n]+)";', constants):
+        for constant, literal in re.findall(r'pub const (\w+): &str\s*=\s*"([^"\n]+)";', constants):
             value = value.replace(f"patronus_ark_core::warmup::{constant}", json.dumps(literal))
     return value
 

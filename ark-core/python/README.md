@@ -43,6 +43,18 @@ scanner = Scanner(
 report = scanner.scan("Text to inspect", pii=False, dlp=False)
 ```
 
+For Cat, the shell-command verdict, add `shell` and call `shell_verdict` per command:
+
+```python
+scanner = Scanner(
+    {"shell": {"bundle_dir": "/srv/models/cat-shell-risk-commander",
+               "policy_dirs": ["/etc/patronus/shell-policies"]}},
+    warmup={"download": "missing"},
+)
+verdict = scanner.shell_verdict("kubectl delete pod web-1", cwd="/home/dev/app")
+verdict["decision"]  # "allow" | "ask" | "block"
+```
+
 Thresholds are deployment-specific. The default Wolf window profile preserves
 Core's 256 total tokens / overlap 0 / batch 1 behavior. Downloads require explicit
 `warmup={"download": "missing"}` during construction; scans never download.

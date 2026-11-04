@@ -1681,10 +1681,13 @@ pub struct ScannerConfig {
     pub max_findings: usize,
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfConfig>,
+    /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
+    pub shell: Option<ShellConfig>,
 }
 ```
 
-Queue-free scanner policy. Defaults to all three native categories and no Wolf.
+Queue-free scanner policy. Defaults to all three native categories, no Wolf
+and no Cat.
 
 ```rust
 pub enum ScanError {
@@ -1700,10 +1703,12 @@ pub enum ScanError {
     Cancelled,
     #[error("scan deadline exceeded")]
     DeadlineExceeded,
-    #[error("Wolf asset error: {0}")]
+    #[error("asset error: {0}")]
     Asset(String),
     #[error("Wolf inference failed: {0}")]
     Inference(String),
+    #[error("shell verdict failed: {0}")]
+    Shell(String),
 }
 ```
 
@@ -1726,6 +1731,7 @@ pub struct Scanner {
     native: NativeEngine,
     #[cfg(feature = "wolf")]
     wolf: Option<crate::wolf::WolfRunner>,
+    shell: Option<ShellRiskPipeline>,
 }
 ```
 
@@ -1773,6 +1779,20 @@ pub fn scan_with_control(
 ```
 
 Run selected checks under a shared cancellation/deadline budget.
+
+```rust
+pub fn shell_verdict(
+    &self,
+    command: &str,
+    context: Option<&ShellContext>,
+    prior_facts: &[Facts],
+) -> Result<ShellVerdict, ScanError>;
+```
+
+Cat's `patronus.verdict/1` for one shell command, which is never
+executed. `context` is the harness context (cwd, home, repo root);
+`prior_facts` are the `verdict.facts` of earlier commands of the same
+session, kept by the caller. Text scans do not run Cat.
 
 ## Shared Native Engine
 
@@ -2032,6 +2052,16 @@ pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result
 ```
 
 Prepare model files without creating a tokenizer, ONNX session or scanner.
+
+```rust
+pub fn prepare_shell_assets(
+    config: &crate::detectors::shell::ShellConfig,
+    options: &WarmupOptions,
+) -> Result<(), ScanError>;
+```
+
+Fetch the pinned Cat release into `config.bundle_dir` unless it already
+holds a bundle. Files are verified when the scanner loads them.
 
 ```rust
 pub fn prepare_wolf_assets(

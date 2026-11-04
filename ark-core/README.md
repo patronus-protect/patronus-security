@@ -13,7 +13,9 @@
 # Patronus Ark Core
 
 **Synchronous, local scanning for PII, DLP and prompt injection — native rules plus optional
-[Wolf Defender](https://huggingface.co/patronus-studio/wolf-defender-prompt-injection-small) inference.**
+[Wolf Defender](https://huggingface.co/patronus-studio/wolf-defender-prompt-injection-small) inference —
+and optional shell-command verdicts with
+[Cat](https://huggingface.co/patronus-studio/cat-shell-risk-commander).**
 
 Ark Core is the standalone core of [Patronus Ark](https://github.com/patronus-protect/patronus-security).
 It runs the native L1 detectors and, when enabled, a local prompt-injection model on the calling
@@ -162,6 +164,31 @@ let mut scanner = Scanner::new_with_wolf_options(config, execution)?;
 `Scanner::warmup_with_wolf_options` does the same with asset preparation. Window and overlap change
 the document scores, and INT8/INT4 batches can shift logits through dynamic quantization, so
 recalibrate the threshold when you change either. Memory is bounded by window and batch size.
+
+## Cat: shell commands
+
+Cat decides on a shell command before an agent runs it: `allow`, `ask` or `block`, from the K26
+model and Cedar policies over the command's facts. Configure it with `shell` and call
+`shell_verdict`; text scans do not run it.
+
+```rust
+use patronus_ark_core::detectors::shell::{ShellConfig, ShellContext};
+
+let mut shell = ShellConfig::new("/srv/models/cat-shell-risk-commander");
+shell.policy_dirs.push("/etc/patronus/shell-policies".into()); // user *.cedar files
+config.shell = Some(shell);
+let scanner = Scanner::warmup(config, options)?; // `download: Missing` fetches the pinned release
+
+let context = ShellContext { cwd: Some("/home/dev/app".into()), ..ShellContext::default() };
+let verdict = scanner.shell_verdict("kubectl delete pod web-1", Some(&context), &[])?;
+println!("{} {:?}", verdict.decision.as_str(), verdict.policies);
+```
+
+The bundle's `manifest.json` must match the SHA-256 pinned in the binary, and every file the
+manifest lists. Pass the `facts` of earlier commands as `prior_facts` to see chains across a
+session. The guide [Check shell commands](https://github.com/patronus-protect/patronus-security/blob/main/docs/how-to/check-shell-commands.md)
+covers the verdict, user policies and the allowlist; `examples/core_scanner.rs` configures PII,
+DLP, Wolf and Cat in one scanner.
 
 ## Timeouts, cancellation and concurrency
 

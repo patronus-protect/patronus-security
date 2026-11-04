@@ -1,9 +1,10 @@
-# Ark Core: L1 and Wolf only
+# Ark Core: L1, Wolf and Cat
 
 Ark Core (`patronus-ark-core`) is the standalone, synchronous part of Patronus Ark. It scans for
 **PII, DLP and prompt injection** with the native L1 rules and, optionally, local
 [Wolf Defender](https://huggingface.co/patronus-studio/wolf-defender-prompt-injection-small)
-inference. It is licensed **MIT OR Apache-2.0** and does not load the full Ark runtime.
+inference, and decides on **shell commands** with Cat (`allow`, `ask`, `block`). It is licensed
+**MIT OR Apache-2.0** and does not load the full Ark runtime.
 
 ## Core or full Ark?
 
@@ -11,9 +12,9 @@ inference. It is licensed **MIT OR Apache-2.0** and does not load the full Ark r
 | --- | --- | --- |
 | Package | `patronus-ark-core` (crate and PyPI, imports as `patronus_ark_core`) | `patronus-ark` (crate and PyPI, imports as `patronus_ark`) |
 | Categories | `pii`, `dlp`, `injection` | all [eleven categories](../concepts/categories.md) |
-| Detection | native L1 rules; Wolf as an optional prompt-injection model | L1, NTDB L2 heads and L3 transformers ([layered scanning](../concepts/layered-scanning.md)) |
+| Detection | native L1 rules; Wolf as an optional prompt-injection model; Cat as an optional shell-command verdict | L1, NTDB L2 heads and L3 transformers ([layered scanning](../concepts/layered-scanning.md)) |
 | Execution | synchronous on the calling thread; no queue, no worker threads | asynchronous queue with background L3 workers |
-| Assets | none for native rules; one Wolf bundle when enabled | L2/L3 model bundles ([manage assets](../how-to/manage-assets.md)) |
+| Assets | none for native rules; one Wolf and one Cat bundle when enabled | L2/L3 model bundles ([manage assets](../how-to/manage-assets.md)) |
 | License | MIT OR Apache-2.0 | GPL-3.0-only or commercial |
 
 Choose Core when you embed scanning in your own process and the three categories cover your
@@ -153,6 +154,41 @@ choose a threshold for your deployment; the examples use `0.8`.
   overlap, batch 1. Changing them changes the document scores, so recalibrate the threshold.
 - **Precision and backend:** `precision` is `auto`, `fp16` or `int8_int4`; `backend` selects CPU or
   a GPU execution provider.
+
+## Add Cat for shell commands
+
+Cat decides on a command an agent wants to run. Configure it next to Wolf with `shell` and call
+`shell_verdict` per command; text scans do not run it.
+
+=== "Python"
+
+    ```python
+    scanner = Scanner(
+        {"shell": {"bundle_dir": "/srv/models/cat-shell-risk-commander",
+                   "policy_dirs": ["/etc/patronus/shell-policies"]}},
+        warmup={"download": "missing"},
+    )
+    verdict = scanner.shell_verdict("kubectl delete pod web-1", cwd="/home/dev/app")
+    print(verdict["decision"])  # "allow" | "ask" | "block"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use patronus_ark_core::detectors::shell::ShellConfig;
+
+    let mut config = ScannerConfig::default();
+    config.shell = Some(ShellConfig::new("/srv/models/cat-shell-risk-commander"));
+    let scanner = Scanner::warmup(config, WarmupOptions {
+        download: DownloadPolicy::Missing,
+        ..WarmupOptions::default()
+    })?;
+    let verdict = scanner.shell_verdict("kubectl delete pod web-1", None, &[])?;
+    println!("{}", verdict.decision.as_str());
+    ```
+
+[Check shell commands](../how-to/check-shell-commands.md) shows PII, DLP, Wolf and Cat in one
+scanner, the verdict, sessions and how to write Cedar policies.
 
 ## Timeouts, cancellation and concurrency
 

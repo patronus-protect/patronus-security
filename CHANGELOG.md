@@ -25,6 +25,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `with_threshold_policy`, `threshold_policy` and the G-format model loader are removed;
   `verdict(text, context, prior_facts)`, `configure`, `from_pinned_bundle_dir` and
   `SecurityGateway::set_shell_command_policy_config` are new.
+- Ark Core runs Cat: `ScannerConfig.shell` (`ShellConfig`: bundle directory, manifest pin, user
+  `.cedar` policy directories, allowlist) and `Scanner::shell_verdict(command, context,
+  prior_facts)`, in Python `Scanner.shell_verdict(command, cwd=..., home=..., ...)`.
+  `Scanner::warmup` with `download: missing` fetches the pinned release
+  (`warmup::SHELL_REPOSITORY`, `SHELL_REVISION`, `SHELL_FILES`, `SHELL_MANIFEST_SHA256`, which
+  the full runtime's `SHELL_COMMAND_ASSET` now uses). New guide: *Check shell commands*; new
+  examples `ark-core/examples/core_scanner.rs` and `rust/examples/14_shell_command.rs`.
+  `ScanError::Asset` reads `asset error: …` (was `Wolf asset error: …`), as Cat uses it too.
 - Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
   `evaluate_batch`); the shell detector implements it.
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).

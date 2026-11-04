@@ -47,6 +47,35 @@ def test_wolf_configuration_fails_at_construction_for_missing_assets(tmp_path):
         Scanner({"wolf": {"bundle_dir": str(tmp_path), "threshold": 0.8}})
 
 
+def test_shell_needs_a_configured_verified_bundle(tmp_path):
+    with pytest.raises(ValueError, match="shell is not configured"):
+        Scanner().shell_verdict("ls")
+    with pytest.raises(RuntimeError, match="holds no Cat bundle"):
+        Scanner({"shell": {"bundle_dir": str(tmp_path)}})
+    (tmp_path / "manifest.json").write_text('{"files": {}}')
+    with pytest.raises(RuntimeError, match="is not the pinned release manifest"):
+        Scanner({"shell": {"bundle_dir": str(tmp_path)}})
+
+
+@pytest.mark.skipif(not os.environ.get("PATRONUS_SHELL_RISK_BUNDLE"), reason="requires the K26 bundle")
+def test_shell_verdict_with_user_policies(tmp_path):
+    (tmp_path / "kubectl.cedar").write_text(
+        '@id("user.no_kubectl_delete")\n@decision("block")\n'
+        'forbid (principal, action == Action::"segment", resource)\n'
+        'when { context.program == "kubectl" && context.verb == "DELETE" };\n'
+    )
+    scanner = Scanner({"shell": {
+        "bundle_dir": os.environ["PATRONUS_SHELL_RISK_BUNDLE"],
+        "policy_dirs": [str(tmp_path)],
+    }})
+    verdict = scanner.shell_verdict("kubectl delete pod web-1", cwd="/repo", with_facts=True)
+    assert verdict["v"] == "patronus.verdict/1"
+    assert verdict["decision"] == "block"
+    assert verdict["policies"][0]["id"] == "user.no_kubectl_delete"
+    assert verdict["facts"]["segments"][0]["program"] == "kubectl"
+    assert scanner.shell_verdict("git status")["decision"] == "allow"
+
+
 def test_independent_scanners_can_run_in_threads():
     scanners = [Scanner({"categories": ["dlp"]}) for _ in range(4)]
     with ThreadPoolExecutor(max_workers=4) as pool:

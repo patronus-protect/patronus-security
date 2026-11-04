@@ -11,9 +11,9 @@ use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
 use crate::{
-    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET, SHELL_COMMAND_MANIFEST_SHA256},
+    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
     detectors::{
-        shell::{policies::ShellPolicyConfig, shell_risk::ShellRiskPipeline},
+        shell::{ShellPolicyConfig, ShellRiskPipeline},
         threat::ThreatPipeline,
         NativeDetection, NativeDetector,
     },
@@ -638,7 +638,8 @@ impl SecurityGateway {
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
             shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
-            shell_command_manifest_sha256: SHELL_COMMAND_MANIFEST_SHA256.to_string(),
+            shell_command_manifest_sha256: patronus_ark_core::warmup::SHELL_MANIFEST_SHA256
+                .to_string(),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),

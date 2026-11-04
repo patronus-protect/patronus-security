@@ -54,3 +54,7 @@ required-features = ["wolf"]
 [[example]]
 name = "prepare_wolf_bundle"
 required-features = ["wolf"]
+
+[[example]]
+name = "core_scanner"
+required-features = ["download"]

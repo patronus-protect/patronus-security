@@ -86,7 +86,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
-      - "Ark Core: L1 and Wolf only": getting-started/core.md
+      - "Ark Core: L1, Wolf and Cat": getting-started/core.md
   - Tutorials:
       - Examples walkthrough: USAGE.md
   - How-to guides:
@@ -101,6 +101,7 @@ nav:
       - Configure caching: how-to/configure-caching.md
       - Normalize text before scanning: how-to/normalize-text-before-scanning.md
       - Add external L1 signals: how-to/external-l1-signals.md
+      - Check shell commands (Cat): how-to/check-shell-commands.md
   - Concepts:
       - Architecture: concepts/architecture.md
       - Layered scanning (L1/L2/L3): concepts/layered-scanning.md

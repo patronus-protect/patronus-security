@@ -8,10 +8,11 @@
 //! Python reference is the specification; `rust/tests/shell_risk_parity.rs`
 //! checks this port against it.
 
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::bundle;
@@ -104,6 +105,53 @@ pub struct ShellRiskScore {
     pub flagged: bool,
 }
 
+/// Where Cat's bundle is and which policies apply on top of it: the shell
+/// part of a [`ScannerConfig`](crate::ScannerConfig).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShellConfig {
+    /// The downloaded `cat-shell-risk-commander` release directory.
+    pub bundle_dir: PathBuf,
+    /// sha256 of the bundle's `manifest.json`. Default: the pinned K26
+    /// release, [`SHELL_MANIFEST_SHA256`](crate::warmup::SHELL_MANIFEST_SHA256).
+    #[serde(default = "pinned_manifest")]
+    pub manifest_sha256: String,
+    /// Directories of user `.cedar` policies, read in file-name order.
+    #[serde(default)]
+    pub policy_dirs: Vec<PathBuf>,
+    /// Bundle-default policy id -> `"ask"`: lowers that policy from block.
+    #[serde(default)]
+    pub allowlist: BTreeMap<String, String>,
+}
+
+fn pinned_manifest() -> String {
+    crate::warmup::SHELL_MANIFEST_SHA256.to_string()
+}
+
+impl ShellConfig {
+    /// The pinned release in `bundle_dir`, without user policies.
+    pub fn new(bundle_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            bundle_dir: bundle_dir.into(),
+            manifest_sha256: pinned_manifest(),
+            policy_dirs: Vec::new(),
+            allowlist: BTreeMap::new(),
+        }
+    }
+
+    /// The user policies of [`Self::policy_dirs`] and the allowlist.
+    pub fn policy_config(&self) -> Result<ShellPolicyConfig, String> {
+        let mut config = ShellPolicyConfig {
+            allowlist: self.allowlist.clone(),
+            ..ShellPolicyConfig::default()
+        };
+        for dir in &self.policy_dirs {
+            config.add_cedar_dir(dir)?;
+        }
+        Ok(config)
+    }
+}
+
 /// The `shell_command` detector ("Cat"): the K26 model plus the bundle's Cedar
 /// policies, with user policies and allowlist from the runtime configuration.
 pub struct ShellRiskPipeline {
@@ -145,6 +193,13 @@ impl ShellRiskPipeline {
     /// `manifest.json` must be `manifest_sha256`.
     pub fn from_pinned_bundle_dir(dir: &Path, manifest_sha256: &str) -> Result<Self, String> {
         Self::load(dir, Some(manifest_sha256))
+    }
+
+    /// Load the bundle of `config` and apply its user policies and allowlist.
+    pub fn from_config(config: &ShellConfig) -> Result<Self, String> {
+        let pipeline = Self::from_pinned_bundle_dir(&config.bundle_dir, &config.manifest_sha256)?;
+        pipeline.configure(&config.policy_config()?)?;
+        Ok(pipeline)
     }
 
     fn load(dir: &Path, manifest_sha256: Option<&str>) -> Result<Self, String> {
@@ -440,5 +495,38 @@ mod tests {
             .collect();
         assert_eq!(spans, [("RM", 0, 2), ("-RF", 3, 6)]);
         assert_eq!(pipeline.detect("ls").result.class_name, SAFE_CLASS);
+    }
+
+    #[test]
+    fn from_config_loads_the_pinned_bundle_with_user_policies() {
+        let dir =
+            std::env::temp_dir().join(format!("patronus_shell_config_{}", std::process::id()));
+        let (bundle, policies) = (dir.join("bundle"), dir.join("policies"));
+        let pin = super::super::testing::write_synthetic_bundle(&bundle, None).unwrap();
+        std::fs::create_dir_all(&policies).unwrap();
+        std::fs::write(
+            policies.join("kubectl.cedar"),
+            r#"@id("user.no_kubectl_delete")
+@decision("block")
+forbid (principal, action == Action::"segment", resource)
+when { context.program == "kubectl" && context.verb == "DELETE" };"#,
+        )
+        .unwrap();
+
+        // The default pin is the K26 release, which the synthetic bundle is not.
+        let mut config: ShellConfig =
+            serde_json::from_value(json!({ "bundle_dir": bundle })).unwrap();
+        assert_eq!(config, ShellConfig::new(&bundle));
+        assert!(ShellRiskPipeline::from_config(&config).is_err());
+
+        config.manifest_sha256 = pin;
+        config.policy_dirs.push(policies);
+        let pipeline = ShellRiskPipeline::from_config(&config).unwrap();
+        let verdict = pipeline
+            .verdict("kubectl delete pod web-1", None, &[])
+            .unwrap();
+        assert_eq!(verdict.decision, Decision::Block);
+        assert_eq!(verdict.policies[0].id, "user.no_kubectl_delete");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
