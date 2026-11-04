@@ -898,12 +898,46 @@ struct PyEvaluationResult {
     duration_ms: f64,
     #[pyo3(get)]
     layers: Vec<PyLayerResult>,
-    #[pyo3(get)]
-    evidence_spans: Vec<PyEvidenceSpan>,
+    // Shared, so cloning a result (an event) does not copy its spans.
+    evidence_spans: Arc<Vec<EvidenceSpan>>,
     #[pyo3(get)]
     label_scores: Vec<PyLabelScore>,
     #[pyo3(get)]
     decision_json: Option<String>,
+}
+
+#[pymethods]
+impl PyEvaluationResult {
+    /// The evidence spans as the dicts of the public result, built here: a
+    /// span object per span read field by field in Python cost about 2 ms per
+    /// 1 000 spans (H06-2).
+    #[getter]
+    fn evidence_spans<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let keys = [
+            "label",
+            "text",
+            "score",
+            "start_byte",
+            "end_byte",
+            "start_char",
+            "end_char",
+        ]
+        .map(|key| PyString::intern_bound(py, key));
+        self.evidence_spans
+            .iter()
+            .map(|span| {
+                let dict = PyDict::new_bound(py);
+                dict.set_item(&keys[0], &span.label)?;
+                dict.set_item(&keys[1], &span.text)?;
+                dict.set_item(&keys[2], span.score)?;
+                dict.set_item(&keys[3], span.start_byte)?;
+                dict.set_item(&keys[4], span.end_byte)?;
+                dict.set_item(&keys[5], span.start_char)?;
+                dict.set_item(&keys[6], span.end_char)?;
+                Ok(dict)
+            })
+            .collect()
+    }
 }
 
 #[pyclass]
@@ -915,25 +949,6 @@ struct PyLabelScore {
     confidence: f64,
     #[pyo3(get)]
     matched: bool,
-}
-
-#[pyclass]
-#[derive(Clone)]
-struct PyEvidenceSpan {
-    #[pyo3(get)]
-    label: String,
-    #[pyo3(get)]
-    text: String,
-    #[pyo3(get)]
-    score: f64,
-    #[pyo3(get)]
-    start_byte: usize,
-    #[pyo3(get)]
-    end_byte: usize,
-    #[pyo3(get)]
-    start_char: usize,
-    #[pyo3(get)]
-    end_char: usize,
 }
 
 #[pyclass]
@@ -1139,11 +1154,7 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
             model: result.model,
             duration_ms: result.duration_ms,
             layers: result.layers.into_iter().map(PyLayerResult::from).collect(),
-            evidence_spans: result
-                .evidence_spans
-                .into_iter()
-                .map(PyEvidenceSpan::from)
-                .collect(),
+            evidence_spans: Arc::new(result.evidence_spans),
             label_scores: result
                 .label_scores
                 .into_iter()
@@ -1160,20 +1171,6 @@ impl From<LabelScore> for PyLabelScore {
             label: score.label,
             confidence: score.confidence,
             matched: score.matched,
-        }
-    }
-}
-
-impl From<EvidenceSpan> for PyEvidenceSpan {
-    fn from(span: EvidenceSpan) -> Self {
-        Self {
-            label: span.label,
-            text: span.text,
-            score: span.score,
-            start_byte: span.start_byte,
-            end_byte: span.end_byte,
-            start_char: span.start_char,
-            end_char: span.end_char,
         }
     }
 }
@@ -1208,7 +1205,6 @@ fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;
     m.add_class::<PyLabelScore>()?;
-    m.add_class::<PyEvidenceSpan>()?;
     m.add_class::<PySecurityFailure>()?;
     m.add_class::<PySecurityEvent>()?;
     m.add_class::<PyRequestState>()?;
