@@ -1388,6 +1388,20 @@ mod tests {
     }
 
     #[test]
+    fn decoding_is_bounded_by_the_maximum_length() {
+        // The L1 cost per match stays bounded: a value of DECODED_MAX_LEN
+        // base64 characters is decoded, one block more is not.
+        let payload = "EXAMPLEKEY".repeat(1300);
+        let at_bound = base64(&payload.as_bytes()[..12 * 1024], false);
+        assert_eq!(at_bound.len(), super::DECODED_MAX_LEN);
+        assert!(is_decoded_example(&at_bound));
+        assert!(!is_decoded_example(&base64(
+            &payload.as_bytes()[..12 * 1024 + 3],
+            false
+        )));
+    }
+
+    #[test]
     fn host_names_in_decoded_payloads_are_no_markers() {
         let mut macaroon = b"\x02\x01\x0dtest.pypi.org\x02\x24".to_vec();
         macaroon.extend(b"\x00\x00\x06\x20");
