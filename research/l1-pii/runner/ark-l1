@@ -22,6 +22,10 @@ Subcommands:
   ci              push the would-be PR head to the branch and wait for GitHub CI on it
                   (0 = green, 1 = red with the failed logs in gate-report.md, 3 = no verdict)
   publish         open a ready PR on the stack, only for a head with green GitHub CI (idempotent)
+  latency         verify runs (VERIFY:<branch>): quiet latency A/B of the PR head against main, under
+                  the run lock, before the agent round
+  verdict         verify runs: read the agent's verdict; pass lets auto-merge merge that exact head,
+                  fail posts the findings as review threads (two failed verifies block the PR)
   block ID REASON skip a task until `unblock`; drops the current worktree
   abort           drop the current worktree without blocking the task
   unblock ID      make a blocked task selectable again
@@ -29,6 +33,10 @@ Subcommands:
   idle            exit 0 when the programme's last `next` found nothing to do (NOTHING_TO_DO,
                   NO_BACKLOG); run.sh starts a second programme only then (ARK_L1_WHEN_IDLE)
   own BRANCH...   print the given task branches that belong to this host's lane
+
+Verify: auto-merge (and `land`) merges a PR that changes ark-core/ only after a verify run passed
+on its exact head: a fresh agent checks it against the backlog task's accept criteria and the
+CLAUDE.md code rules and writes a verdict; it never commits.
 
 Exit codes of `next`: 0 = task ready, 10 = nothing to do (reason on stdout),
 11 = the previous run passed the gate but was not published yet (run `publish`).
@@ -123,8 +131,9 @@ AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
 MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
 RESUME_LIMIT = 3         # resumes of an unpublished gated run before the watchdog drops it
 DROP_LIMIT = 2           # watchdog drops of the same task on the same base before it is blocked
-LAND_CI_WAIT = 90 * 60   # seconds `land` waits for the PR's own CI runs (pull_request event); the rust
-                         # job's integration tests alone took 55-75 min on 2026-11-01
+LAND_CI_WAIT = 150 * 60  # seconds `land` waits for the PR's own CI runs (pull_request event); the rust
+                         # job's integration tests alone took 55-75 min on 2026-11-01, the whole
+                         # rust job 102-103 min on 2026-11-03 (#246)
 MERGEABLE_RETRIES = 4    # re-reads of a PR whose `mergeable` GitHub has not computed yet (UNKNOWN)
 RETARGET_TIMEOUT = 300   # seconds to wait for GitHub to move the PRs above onto main
 MERGE_PENDING = -1       # auto_merge result: GitHub is still merging, the run must stop
@@ -421,17 +430,23 @@ def start_restack(conflict: dict) -> int:
             "branch": branch, "pr": conflict["pr"], "onto": conflict["onto"],
             "onto_name": conflict["onto_name"], "old_base": conflict["old_base"],
             "old_head": conflict["old_head"]}
-    worktree = WORKTREES / ("restack-" + branch.replace("/", "-"))
+    return start_on_branch(task, conflict["old_head"], conflict["onto_name"], conflict["onto"])
+
+
+def start_on_branch(task: dict, head: str, base: str, base_sha: str) -> int:
+    """Make `task` the current run in a fresh agent clone of `task["branch"]` at `head`
+    (restack, review and verify runs; `base_sha` is where the agent's own commits start)."""
+    branch = task["branch"]
+    worktree = WORKTREES / (f"{task['type']}-" + branch.replace("/", "-"))
     shutil.rmtree(worktree, ignore_errors=True)
     git("clone", "--quiet", "--shared", "--no-checkout", str(REPO), str(worktree))
-    git("checkout", "--quiet", "-B", branch, conflict["old_head"], cwd=worktree)
+    git("checkout", "--quiet", "-B", branch, head, cwd=worktree)
     current = {
-        "task_id": task["id"], "task": task, "branch": branch, "base": conflict["onto_name"],
-        "base_sha": conflict["onto"], "worktree": str(worktree),
-        "started": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "task_id": task["id"], "task": task, "branch": branch, "base": base, "base_sha": base_sha,
+        "worktree": str(worktree), "started": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
     save(CURRENT, current)
-    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={conflict['onto_name']}\nWORKTREE={worktree}")
+    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={base}\nWORKTREE={worktree}")
     return 0
 
 
@@ -451,14 +466,25 @@ BAD_CONCLUSIONS = ("failure", "cancelled", "timed_out", "startup_failure")
 NO_RESTART = "no-restart"  # rerun_infra_failures: runner failure, but CI could not be restarted
 
 
-def run_is_infra_failure(run_id: int) -> bool:
-    """Every failed or cancelled job of the run shows a runner or toolchain failure in its log or its
-    annotations (a job that never got a runner has no log). Judged per job: a real failure cancels its
-    matrix siblings ("The operation was canceled"), which must not turn the whole run into infra."""
+CI_RESTART_LIMIT = 2  # CI restarts per head; macos capacity + a Windows flake needed two (H06, 2026-11-03)
+
+
+def run_jobs(run_id: int) -> list[dict]:
     view = json.loads(run(["gh", "run", "view", str(run_id), "--repo", GH_REPO, "--json", "jobs"],
                           check=False) or "{}")
-    bad = [j for j in view.get("jobs", []) if j.get("conclusion") in BAD_CONCLUSIONS]
+    return view.get("jobs", [])
+
+
+def run_is_infra_failure(run_id: int, passed_elsewhere: frozenset[str] = frozenset()) -> bool:
+    """Every failed or cancelled job of the run shows a runner or toolchain failure in its log or its
+    annotations (a job that never got a runner has no log). Judged per job: a real failure cancels its
+    matrix siblings ("The operation was canceled"), which must not turn the whole run into infra.
+    A job that passed in another CI run on the same head (passed_elsewhere) is a flake on the same
+    code, not a verdict: H06's Windows job failed once on a file rename race it passed before."""
+    bad = [j for j in run_jobs(run_id) if j.get("conclusion") in BAD_CONCLUSIONS]
     for job in bad:
+        if job.get("name") in passed_elsewhere:
+            continue
         text = run(["gh", "run", "view", str(run_id), "--repo", GH_REPO, "--job", str(job["databaseId"]),
                     "--log-failed"], check=False) + run(
             ["gh", "api", f"repos/{GH_REPO}/check-runs/{job['databaseId']}/annotations", "--jq", ".[].message"],
@@ -468,11 +494,18 @@ def run_is_infra_failure(run_id: int) -> bool:
     return bool(bad)
 
 
+def restart_count(entry: str | dict | None) -> int:
+    """CI restarts recorded for a head in ci-reruns.json (a plain timestamp: one, from older runners)."""
+    if entry is None:
+        return 0
+    return entry.get("count", 1) if isinstance(entry, dict) else 1
+
+
 def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None = None) -> str | None:
-    """Restart CI on head once when every failed job of its failed runs is a runner, toolchain or
-    download failure (run_is_infra_failure). Returns the commit whose CI to wait for; NO_RESTART for
+    """Restart CI on head (up to CI_RESTART_LIMIT times) when every failed job of its failed runs is
+    a runner, toolchain or download failure or passed in another run on head (run_is_infra_failure). Returns the commit whose CI to wait for; NO_RESTART for
     such a failure that could not be restarted (no verdict on the code); None for a real failure or
-    a head that was restarted before.
+    a head that was restarted CI_RESTART_LIMIT times.
 
     The runner token may not rerun workflow runs (no actions:write), so a restart is a push. For a
     PR branch an empty commit on top of head: pull_request runs filter paths on the whole PR diff.
@@ -481,12 +514,18 @@ def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None
     workflow since its base. Moving the branch back to its main base and then to head again starts
     a push run on head (plus one on the base commit, which is already on main)."""
     reruns = load(STATE / "ci-reruns.json", {})
-    if head in reruns:
+    restarts = restart_count(reruns.get(head))
+    if restarts >= CI_RESTART_LIMIT:
         return None
     runs = json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", head, "--json",
                            "databaseId,conclusion"], check=False) or "[]")
     failed = [r["databaseId"] for r in runs if r.get("conclusion") in BAD_CONCLUSIONS]
-    if not failed or not all(run_is_infra_failure(r) for r in failed):
+    if not failed:
+        return None
+    passed = {r["databaseId"]: {j.get("name") for j in run_jobs(r["databaseId"]) if j.get("conclusion") == "success"}
+              for r in runs}
+    if not all(run_is_infra_failure(r, frozenset().union(*(v for k, v in passed.items() if k != r)))
+               for r in failed):
         return None
     new = head
     if branch is None:
@@ -514,7 +553,7 @@ def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None
             return NO_RESTART
         print(f"CI_RETRIGGER={branch} {head[:12]} → {new[:12]} (runner/toolchain failure)")
     # The retrigger commit counts as the restart too: a CDN that stays down must not stack them.
-    reruns[head] = reruns[new] = dt.datetime.now(dt.timezone.utc).isoformat()
+    reruns[head] = reruns[new] = {"at": dt.datetime.now(dt.timezone.utc).isoformat(), "count": restarts + 1}
     save(STATE / "ci-reruns.json", reruns)
     return new
 
@@ -548,20 +587,213 @@ def start_review(review: dict) -> int:
             "branch": branch, "pr": pr["url"], "number": pr["number"], "old_head": head,
             "threads": review["threads"],
             "ci_failure": ci_failure_log(head) if review["ci_red"] else ""}
-    worktree = WORKTREES / ("review-" + branch.replace("/", "-"))
-    shutil.rmtree(worktree, ignore_errors=True)
-    git("clone", "--quiet", "--shared", "--no-checkout", str(REPO), str(worktree))
-    git("checkout", "--quiet", "-B", branch, head, cwd=worktree)
-    current = {
-        # base_sha is the PR head: the agent's fix commits sit on top of it and the gate compares
-        # the fixed head against the PR as it was.
-        "task_id": task["id"], "task": task, "branch": branch, "base": pr["baseRefName"],
-        "base_sha": head, "worktree": str(worktree),
-        "started": dt.datetime.now(dt.timezone.utc).isoformat(),
-    }
-    save(CURRENT, current)
-    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={pr['baseRefName']}\nWORKTREE={worktree}")
-    return 0
+    # base_sha is the PR head: the agent's fix commits sit on top of it and the gate compares
+    # the fixed head against the PR as it was.
+    return start_on_branch(task, head, pr["baseRefName"], head)
+
+
+def public_text(text: str) -> str:
+    """Agent text for a public GitHub comment, with every value of secrets.env masked."""
+    try:
+        values = [line.split("=", 1)[1].strip().strip("'\"") for line in SECRETS.read_text().splitlines()
+                  if "=" in line and not line.lstrip().startswith("#")]
+    except OSError:
+        values = []
+    for value in values:
+        if len(value) >= 8:
+            text = text.replace(value, "[redacted]")
+    return text
+
+
+# ── verify ───────────────────────────────────────────────────────────────
+
+VERIFY_PATH = "ark-core/"     # a PR that changes the detector crate merges only after a passing verify
+VERIFIED = STATE / "verify.json"  # {"pass": {head sha: time}, "fails": {branch: count}}
+VERIFY_FAIL_LIMIT = 2         # failed verifies of one PR before VERIFY:<branch> is blocked for a person
+VERIFY_LATENCY_ATTEMPTS = 4   # latency A/B attempts (the gate takes 2); a slowdown must show in every one
+VERIFY_MAX_FINDINGS = 20
+VERDICT_PATH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,255}")
+
+
+def diff_base(head: str) -> str:
+    return git("merge-base", "origin/main", head)
+
+
+def touches_core(head: str) -> bool:
+    """True when the PR head changes ark-core/ against its merge base with main."""
+    return bool(git("diff", "--name-only", diff_base(head), head, "--", VERIFY_PATH))
+
+
+def needs_verify(head: str) -> bool:
+    """True for a head that changes ark-core/ and has no passing verify verdict of its own."""
+    return head not in load(VERIFIED, {}).get("pass", {}) and touches_core(head)
+
+
+def start_verify(pr: dict) -> int:
+    """Hand a mergeable, green PR that changes ark-core/ to a fresh agent for an independent check of
+    its exact head. The agent writes a verdict file, never a commit; `verdict` acts on it."""
+    branch, head = pr["headRefName"], pr["headRefOid"]
+    backlog = backlog_at(head) or {}
+    entry = next((t for t in backlog.get("tasks", []) + backlog.get("recurring", [])
+                  if str(t.get("id", "")).lower() == task_of_branch(branch)), None)
+    body = run(["gh", "pr", "view", str(pr["number"]), "--repo", GH_REPO, "--json", "body", "--jq", ".body"])
+    task = {"id": f"VERIFY:{branch}", "type": "verify",
+            "title": f"Verify {pr['url']} independently before it merges",
+            "branch": branch, "pr": pr["url"], "number": pr["number"], "head": head,
+            "diff_base": diff_base(head), "backlog_task": entry,
+            # The body carries the gate report with the scoreboard summary (aggregates, no holdout data).
+            "pr_body": body[:20000]}
+    # base_sha is the head: a verify run adds no commits.
+    return start_on_branch(task, head, pr["baseRefName"], head)
+
+
+# Runs in the sandbox with the base checkout's scoreboard.py: the gate's latency check on the gate's
+# cached builds of base and head, with more attempts. Prints one JSON line (numbers only).
+DLP_LATENCY_AB = """\
+import importlib.util, json, sys
+from pathlib import Path
+tree, base, head, dev, cache, attempts = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("ark_verify_scoreboard", Path(tree, "scripts/l1_dlp/scoreboard.py"))
+sb = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = sb
+spec.loader.exec_module(sb)
+builds = [sb.ensure_build(Path(tree), sb.resolve_commit(Path(tree), rev), Path(cache)) for rev in (base, head)]
+result = sb.LATENCY.gate_check(*builds, Path(dev), Path(cache) / "latency", attempts=int(attempts))
+print(json.dumps({"lines": sb.LATENCY.gate_lines(result), "ok": [c["ok"] for c in result["checks"]]}))
+"""
+
+
+def latency_ab(task: dict) -> dict:
+    """Quiet latency A/B of the PR head against its merge base with main. run.sh calls it while it
+    holds the run lock, so no other ARK job runs on the host. The latency code is the base
+    checkout's (merged, reviewed), never the head's: DLP the gate's `LATENCY.gate_check`, PII
+    `latency.py run` + `compare` (ark and ark-native, 100 KiB p95) per attempt. Like the gate, a
+    check fails only when it fails in every attempt. Returns {"lines", "regression"} or {"error"}."""
+    out = GATE_TREES / "verify-latency"   # not under CACHE: head code runs here with network
+    trees = {"base": GATE_TREES / "verify-base", "head": GATE_TREES / "verify-head"}
+    sides = {"base": task["diff_base"], "head": task["head"]}
+    if PROGRAM == "dlp":
+        del sides["head"]  # scoreboard builds both commits from one checkout
+    for d in (out, GATE_TARGET, GATE_HOME / "cargo", GATE_HOME / "cache", CACHE):
+        d.mkdir(parents=True, exist_ok=True)
+    try:
+        git("worktree", "prune")
+        for side, rev in sides.items():
+            shutil.rmtree(trees[side], ignore_errors=True)
+            git("worktree", "add", "--quiet", "--detach", str(trees[side]), rev)
+        if PROGRAM == "dlp":
+            proc = sandbox([str(ROOT / P["eval_venv"] / "bin" / "python"), "-c", DLP_LATENCY_AB,
+                            str(trees["base"]), task["diff_base"], task["head"], str(DEV_DATA),
+                            str(CACHE / "scoreboard"), str(VERIFY_LATENCY_ATTEMPTS)],
+                           trees["base"], [CACHE], gate_env(), network=False,
+                           readable=(DEV_DATA, trees["base"]), max_sec=7200)
+            if proc.returncode != 0:
+                raise RuntimeError(f"latency A/B exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+            result = json.loads(proc.stdout.strip().splitlines()[-1])
+            return {"lines": [str(x)[:300] for x in result["lines"]], "regression": not all(result["ok"])}
+        return _pii_latency_ab(trees, out)
+    except (RuntimeError, OSError, ValueError, KeyError, IndexError, TypeError) as err:
+        return {"error": str(err).strip()[-1500:]}
+    finally:
+        for tree in trees.values():
+            shutil.rmtree(tree, ignore_errors=True)
+        shutil.rmtree(out, ignore_errors=True)
+        git("worktree", "prune", check=False)
+
+
+def _pii_latency_ab(trees: dict[str, Path], out: Path) -> dict:
+    gpy = str(GATE_VENV / "bin" / "python")
+    script = "scripts/l1_presidio/latency.py"
+    shutil.copy2(trees["base"] / script, trees["head"] / script)  # `run` measures its own checkout
+    engines = ("ark", "ark-native")
+    passed = dict.fromkeys(engines, False)
+    lines = []
+    for attempt in range(1, VERIFY_LATENCY_ATTEMPTS + 1):
+        for side in ("base", "head"):
+            proc = sandbox([gpy, script, "run", "--engines", *engines, "--ark-python", gpy,
+                            "--output", str(out / f"{side}.json")], trees[side],
+                           [trees[side], GATE_TARGET, GATE_HOME, out], gate_env(), max_sec=7200)
+            if proc.returncode != 0:
+                raise RuntimeError(f"latency.py run ({side}) exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+        for engine in engines:
+            proc = sandbox([gpy, script, "compare", "--base", str(out / "base.json"), "--head",
+                            str(out / "head.json"), "--engine", engine], trees["base"], [], {},
+                           network=False, readable=(out, trees["base"]), max_sec=300)
+            if proc.returncode not in (0, 1):
+                raise RuntimeError(f"latency.py compare exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+            passed[engine] = passed[engine] or proc.returncode == 0
+            lines += [f"attempt {attempt}: {line[:200]}" for line in proc.stdout.strip().splitlines()]
+        if all(passed.values()):
+            break
+    return {"lines": lines, "regression": not all(passed.values())}
+
+
+def verify_verdict(cur: dict) -> dict | None:
+    """The agent's verdict from `.git/ark-verify.json` in its clone, or None when there is none.
+
+    Untrusted agent output: only the pass/fail word and findings with a plain relative path, a line
+    number and a short reason (secrets.env values masked) are used."""
+    path = Path(cur["worktree"]) / ".git" / "ark-verify.json"
+    try:
+        data = json.loads(path.read_text()) if path.is_file() and path.stat().st_size < 64_000 else None
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("verdict") not in ("pass", "fail"):
+        return None
+    findings = []
+    for item in data.get("findings") or []:
+        if not isinstance(item, dict) or not isinstance(item.get("reason"), str) or not item["reason"].strip():
+            continue
+        where, line = item.get("path"), item.get("line")
+        findings.append({
+            "path": where if isinstance(where, str) and VERDICT_PATH.fullmatch(where) and ".." not in where else "",
+            "line": line if isinstance(line, int) and not isinstance(line, bool) and line > 0 else None,
+            "reason": public_text(item["reason"].strip()[:1500]),
+        })
+    return {"verdict": data["verdict"], "findings": findings[:VERIFY_MAX_FINDINGS]}
+
+
+def diff_lines(base: str, head: str) -> dict[str, set[int]]:
+    """Per file, the head-side lines of the PR diff GitHub accepts review comments on (hunks, 3 lines context)."""
+    lines: dict[str, set[int]] = {}
+    path = None
+    for row in git_raw("diff", "--no-ext-diff", "--no-color", "--unified=3", base, head).splitlines():
+        if row.startswith("+++ "):
+            path = row[6:] if row.startswith("+++ b/") else None
+        elif row.startswith("@@") and path and (m := re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", row)):
+            start = int(m.group(1))
+            lines.setdefault(path, set()).update(range(start, start + int(m.group(2) or 1)))
+    return lines
+
+
+def post_findings(task: dict, findings: list[dict]) -> int:
+    """Each finding becomes a review comment on the PR head, i.e. an unresolved thread the review flow
+    fixes: on its line when the diff shows it, else on its file, else on the first changed ark-core/
+    file; a PR comment only when GitHub rejects that. Returns the number of findings not posted."""
+    head = task["head"]
+    lines = diff_lines(task["diff_base"], head)
+    anchor = next((p for p in sorted(lines) if p.startswith(VERIFY_PATH)), min(lines, default=""))
+    failed = 0
+    for finding in findings:
+        where, line = finding["path"], finding["line"]
+        body = f"**Verify ({P['name']}, {head[:12]}):** {finding['reason']}"
+        if where in lines and line in lines[where]:
+            place = ["-f", f"path={where}", "-F", f"line={line}", "-f", "side=RIGHT"]
+        else:
+            if where:
+                body += f"\n\nLocation: `{where}{f':{line}' if line else ''}`"
+            place = ["-f", f"path={where if where in lines else anchor}", "-f", "subject_type=file"]
+        try:
+            run(["gh", "api", "-X", "POST", f"repos/{GH_REPO}/pulls/{task['number']}/comments",
+                 "-f", f"body={body}", "-f", f"commit_id={head}", *place])
+        except RuntimeError:
+            try:
+                run(["gh", "api", "-X", "POST", f"repos/{GH_REPO}/issues/{task['number']}/comments",
+                     "-f", f"body={body}"])
+            except RuntimeError as err:
+                failed += 1
+                print(f"WARN=verify finding not posted: {str(err).strip().splitlines()[0] if str(err).strip() else err}")
+    return failed
 
 
 # ── backlog ──────────────────────────────────────────────────────────────
@@ -637,11 +869,39 @@ def mark_done_text(text: str, task_id: str) -> str:
 # ── auto-merge ───────────────────────────────────────────────────────────
 
 
+def check_runs(head: str) -> list[dict]:
+    """The check runs on head that still count: those of the newest workflow run per workflow and
+    event, and of those the newest attempt per job name. A CI restart adds a run on the same head,
+    and before this the superseded run's cancelled macos job kept every later verdict red or
+    pending (H06 waited out its 150 min after its restart had finished, 2026-11-03)."""
+    checks = json.loads(run(["gh", "api", f"repos/{GH_REPO}/commits/{head}/check-runs?per_page=100"]))[
+        "check_runs"]
+    try:
+        runs = json.loads(run(["gh", "api", f"repos/{GH_REPO}/actions/runs?head_sha={head}&per_page=100"]))[
+            "workflow_runs"]
+    except (RuntimeError, ValueError, KeyError):
+        runs = []
+    newest: dict[tuple, dict] = {}
+    for r in runs:
+        key = (r.get("workflow_id"), r.get("event"))
+        if key not in newest or r["id"] > newest[key]["id"]:
+            newest[key] = r
+    stale = {r.get("check_suite_id") for r in runs} - {r.get("check_suite_id") for r in newest.values()}
+    latest: dict[tuple, dict] = {}
+    for c in checks:
+        suite = (c.get("check_suite") or {}).get("id")
+        if suite in stale:
+            continue
+        key = (suite, c["name"])
+        if key not in latest or c["id"] > latest[key]["id"]:
+            latest[key] = c
+    return list(latest.values())
+
+
 def ci_state(head: str) -> str:
     """'green', 'red' or 'pending' for the GitHub check runs on head (same rule as `ci`)."""
     try:
-        checks = json.loads(run(["gh", "api", f"repos/{GH_REPO}/commits/{head}/check-runs?per_page=100"]))[
-            "check_runs"]
+        checks = check_runs(head)
     except (RuntimeError, ValueError, KeyError):
         return "pending"
     names = {c["name"] for c in checks}
@@ -740,6 +1000,9 @@ def land(number: int, head: str, wait_for_codex: bool = True) -> None:
     if threads:
         print(f"LAND_WAIT={label} {threads} unresolved review thread(s); the next run reviews them")
         return
+    if needs_verify(head):
+        print(f"LAND_WAIT={label} changes {VERIFY_PATH}; the next run's auto-merge verifies it first")
+        return
     # Opening the PR starts a second CI run on the same head; main requires it, so wait for it.
     deadline = dt.datetime.now() + dt.timedelta(seconds=LAND_CI_WAIT)
     while (state := ci_state(head)) == "pending" and dt.datetime.now() < deadline:
@@ -787,11 +1050,13 @@ def pr_mergeable(pr: dict) -> str:
     return state
 
 
-def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING or None
+def auto_merge(open_prs: list[dict]) -> int | dict | None:  # PR number, MERGE_PENDING, PR to verify or None
     """Squash-merge the oldest open PR that targets main, is mergeable and has green CI.
 
     At most one per run; a PR with conflicts or pending CI does not hold back the ones after it
-    (restack fixes its conflicts). Returns the merged PR number, else None."""
+    (restack fixes its conflicts). A PR that changes ark-core/ merges only with a passing verify
+    verdict for its exact head; without one it is returned for a VERIFY run instead. Returns the
+    merged PR number, else None."""
     if not AUTO_MERGE or not open_prs:
         return None
     bottom = None
@@ -814,6 +1079,12 @@ def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING 
         if threads:
             print(f"AUTO_MERGE_WAIT={label} {threads} unresolved review thread(s)")
             return None
+        if needs_verify(bottom["headRefOid"]):
+            if f"VERIFY:{bottom['headRefName']}" in load(BLOCKED, {}):
+                print(f"AUTO_MERGE_WAIT={label} verify blocked; it stays unmerged until unblocked")
+                return None
+            print(f"AUTO_MERGE_VERIFY={label} changes {VERIFY_PATH}; verify run first")
+            return bottom
         result = merge_async(bottom["number"], bottom["headRefOid"])
     except (RuntimeError, ValueError) as err:
         print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
@@ -831,6 +1102,20 @@ def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING 
     return bottom["number"]
 
 
+def resume_auto_merge(cur: dict) -> None:
+    """Merge a green, mergeable PR of this lane while a resumed run only waits for CI and publishes.
+
+    Without it a task whose CI needs several runs held back every other green PR for hours
+    (#246 on 2026-11-03). No restack here: that one stays with the next `next`. The resumed run's
+    own branch is left alone (a review or restack run publishes it itself). A PR that needs a verify
+    run waits for the next `next`."""
+    try:
+        open_prs = [p for p in own(prs("open")) if p["headRefName"] != cur.get("branch")]
+        auto_merge(open_prs)
+    except (RuntimeError, ValueError) as err:
+        print(f"WARN=auto-merge during resume failed: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
+
+
 # ── subcommands ──────────────────────────────────────────────────────────
 
 
@@ -846,6 +1131,7 @@ def cmd_next() -> int:
             cur["resume_attempts"] = attempts
             save(CURRENT, cur)
             print(f"RESULT=RESUME_PUBLISH {cur.get('task_id')} (attempt {attempts}/{RESUME_LIMIT})")
+            resume_auto_merge(cur)
             return 11
         reason = "gated run not published" if cur.get("gated_commit") else "run died before its gate"
         print(f"WATCHDOG={cur.get('task_id')}: {reason} after {attempts - 1} resume(s); run dropped")
@@ -869,6 +1155,8 @@ def cmd_next() -> int:
     merged = auto_merge(open_prs)
     if merged == MERGE_PENDING:
         return nothing("MERGE_PENDING (asynchronous merge still running; the next run continues)")
+    if isinstance(merged, dict):
+        return start_verify(merged)
     if merged is not None:
         git("fetch", "--quiet", "--prune", "origin")
         git("checkout", "--quiet", "--detach", "origin/main")
@@ -922,9 +1210,10 @@ def cmd_env() -> int:
         print(f"{key.upper()}={shlex.quote(cur[key])}")
     print(f"PROGRAM={PROGRAM}")
     print(f"PROGRAM_ROOT={shlex.quote(str(ROOT))}")
-    prompt = {"restack": "AGENT_PROMPT.restack.md", "review": "AGENT_PROMPT.review.md"}.get(
-        cur["task"].get("type"), P["prompt"])
+    prompt = {"restack": "AGENT_PROMPT.restack.md", "review": "AGENT_PROMPT.review.md",
+              "verify": "AGENT_PROMPT.verify.md"}.get(cur["task"].get("type"), P["prompt"])
     print(f"PROMPT_FILE={prompt}")
+    print(f"TASK_TYPE={shlex.quote(cur['task'].get('type', 'task'))}")
     print(f"TASK_YAML={shlex.quote(yaml.safe_dump(cur['task'], allow_unicode=True, sort_keys=False))}")
     return 0
 
@@ -1259,7 +1548,8 @@ def done_commit(commit: str, task: dict) -> str:
 
 
 CI_REQUIRED = {"rust", "python"}     # jobs of .github/workflows/ci.yml that must be among the checks
-CI_TIMEOUT = 75 * 60                 # native-throughput alone may take 30 minutes
+CI_TIMEOUT = 150 * 60                # the rust job took 102-103 min on 2026-11-03 (#246); 75 min
+                                     # timed out every task and left its run to a resume
 CI_POLL = 60
 OK_CONCLUSIONS = {"success", "skipped", "neutral"}
 # The ARK API image job: main's ruleset does not require it and it flakes on toolchain installs.
@@ -1435,8 +1725,7 @@ def cmd_ci() -> int:
     while dt.datetime.now() < deadline:
         subprocess.run(["sleep", str(CI_POLL)])
         try:
-            checks = json.loads(run(["gh", "api", f"repos/{GH_REPO}/commits/{head}/check-runs?per_page=100"]))[
-                "check_runs"]
+            checks = check_runs(head)
         except (RuntimeError, ValueError, KeyError) as err:
             print(f"WARN=check-runs not readable: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
             continue
@@ -1578,7 +1867,8 @@ def review_notes(cur: dict) -> dict:
     if not isinstance(notes, dict):
         return {}
     known = {t["id"] for t in cur["task"].get("threads", [])}
-    return {k: v.strip()[:1500] for k, v in notes.items() if k in known and isinstance(v, str) and v.strip()}
+    return {k: public_text(v.strip()[:1500]) for k, v in notes.items()
+            if k in known and isinstance(v, str) and v.strip()}
 
 
 def publish_review(cur: dict) -> int:
@@ -1644,6 +1934,62 @@ def drop_worktree(cur: dict) -> None:
     CURRENT.unlink(missing_ok=True)
 
 
+def cmd_latency() -> int:
+    """Verify runs: the quiet latency A/B before the agent round; the result goes into the task."""
+    cur = load(CURRENT, None)
+    if cur is None or cur["task"].get("type") != "verify":
+        print("no verify run")
+        return 1
+    cur["task"]["latency"] = latency_ab(cur["task"])
+    save(CURRENT, cur)
+    result = cur["task"]["latency"]
+    print("\n".join(result.get("lines", [])) or f"LATENCY_ERROR={result.get('error', '')[-300:]}")
+    print(f"LATENCY={'regression' if result.get('regression') else 'error' if 'error' in result else 'ok'}")
+    return 0
+
+
+def cmd_verdict() -> int:
+    """Verify runs: act on the agent's verdict. Pass records the head, and the next auto-merge merges
+    it; fail posts the findings as review threads for the review flow, whose new head needs a fresh
+    verify. The VERIFY_FAIL_LIMIT-th failed verify of a PR blocks VERIFY:<branch> for a person."""
+    cur = load(CURRENT, None)
+    if cur is None or cur["task"].get("type") != "verify":
+        print("no verify run")
+        return 1
+    task, branch = cur["task"], cur["branch"]
+    verdict = verify_verdict(cur)
+    if verdict is None:
+        print(f"VERIFY_ERROR={branch}: no valid verdict in .git/ark-verify.json; run dropped")
+        drop_worktree(cur)
+        return 1
+    findings = verdict["findings"] if verdict["verdict"] == "fail" else []
+    if verdict["verdict"] == "fail" and not findings:
+        findings.append({"path": "", "line": None, "reason": "Verify failed without a specific finding."})
+    latency = task.get("latency") or {}
+    if latency.get("regression"):
+        findings.append({"path": "", "line": None, "reason": public_text(
+            "Latency A/B against main (quiet host, base vs head): slower beyond noise in every attempt.\n```\n"
+            + "\n".join(latency["lines"][-12:]) + "\n```")})
+    state = load(VERIFIED, {})
+    if not findings:
+        state.setdefault("pass", {})[task["head"]] = dt.datetime.now(dt.timezone.utc).isoformat()
+        save(VERIFIED, state)
+        drop_worktree(cur)
+        print(f"VERIFIED={branch} pass {task['head'][:12]}\nPR={task['pr']}")
+        return 0
+    fails = state.setdefault("fails", {})
+    fails[branch] = fails.get(branch, 0) + 1
+    save(VERIFIED, state)
+    unposted = post_findings(task, findings)
+    print(f"VERIFIED={branch} fail {task['head'][:12]}: {len(findings)} finding(s), {unposted} not posted "
+          f"(failed verify {fails[branch]}/{VERIFY_FAIL_LIMIT})\nPR={task['pr']}")
+    if fails[branch] >= VERIFY_FAIL_LIMIT:
+        cmd_block(task["id"], f"verify failed {fails[branch]} times; see the findings on {task['pr']}; needs a person")
+    else:
+        drop_worktree(cur)
+    return 0
+
+
 def cmd_block(task_id: str, reason: str) -> int:
     blocked = load(BLOCKED, {})
     cur = load(CURRENT, None)
@@ -1674,6 +2020,10 @@ def cmd_unblock(task_id: str) -> int:
     save(BLOCKED, blocked)
     drops = load(STATE / "watchdog.json", {})
     save(STATE / "watchdog.json", {k: v for k, v in drops.items() if not k.startswith(f"{task_id}@")})
+    if task_id.startswith("VERIFY:") and VERIFIED.exists():
+        verified = load(VERIFIED, {})
+        verified.get("fails", {}).pop(task_id.removeprefix("VERIFY:"), None)
+        save(VERIFIED, verified)
     print(f"UNBLOCKED={task_id}")
     return 0
 
@@ -1710,6 +2060,7 @@ def main(argv: list[str]) -> int:
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
         "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci, "idle": cmd_idle,
+        "latency": cmd_latency, "verdict": cmd_verdict,
     }
     if cmd in table:
         return table[cmd]()
