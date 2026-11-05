@@ -43,8 +43,11 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   verschiedene Spans entscheidet weiter die Reihenfolge.
   Seit Q-DLP-PW gilt ein Wert nur als Member-Zugriff (Code), wo Code ihn enden lassen kann:
   `wPF.DZs~Brb…` oder `o.Bbst….jdJ44` (Ende an `~` oder an einem `.` vor Ziffer/Symbol) sind
-  gewählte Passwörter. Offen: Schlüssel-Wert-Tupel in SQL-Dumps (`(2,'db_password','…')`) der
-  nach dem Einfrieren hinzugekommenen Carrier `sql.*` (T19) erkennt keine Regel.
+  gewählte Passwörter. Seit T23 binden SQL-Dumps (`dlp::sql_rows`): In `INSERT … VALUES`
+  am Zeilenanfang und `COPY … FROM stdin` bindet eine Spalte mit Credential-Schlüssel ihr Feld in
+  jeder Zeile, und ein Schlüsselfeld einer Settings-Zeile (`(2,'db_password','…')`) das nächste
+  Feld; `dlp_csrf_token` und `dlp_password_hash` nur über Schlüsselfelder, Container-Spalten
+  (`zugangsdaten`) nur über das Label der Zeile.
   Seit T01 haben die Präfix-Regeln (Provider-Token, ETH/WIF, JWT) eine Token-Grenze
   (`RuleMeta::boundary`): Vor und nach dem Wert steht kein `[A-Za-z0-9_]` und kein Zeichen des
   Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`

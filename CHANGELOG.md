@@ -172,6 +172,21 @@ the M1 work on presidio_favored) are opt-in.
   credential-helper entries stay negative. `.npmrc` `_authToken`/`_password`, `.pypirc`, Maven
   `settings.xml`, `NuGet.Config` `ClearTextPassword` and `.s3cfg` keys are already reported by the
   generic assignment and AWS rules; rclone's obscured `pass` is not reported.
+- Detection change: credentials in SQL dump rows (T23). `INSERT … VALUES` statements that start
+  their line (also `INSERT IGNORE`, `INSERT OR REPLACE`, `REPLACE INTO`, several tuples over one
+  or more lines) and `COPY … FROM stdin` blocks are read as rows: a column whose name passes the
+  credential key gate (`password`, `kennwort`, `api_token`, `client_secret` …) binds its field in
+  every row, and a quoted key field of a settings row (`(2,'service_secret','…')`, `'… –
+  Client-Secret'`) binds the next field, for `dlp_generic_credential_assignment`,
+  `dlp_env_var_secret` and `dlp_password_assignment` with their key gate, value gate and
+  value-shape filter (structure `sql`). `dlp_csrf_token` and `dlp_password_hash` bind through
+  settings key fields only; a `password_hash` column of user digests and a container column
+  (`zugangsdaten`, `credentials`) without a credential label bind nothing. SQL built in code
+  strings, DDL, `NULL`, numbers and expressions (`current_setting('…')`) bind nothing. A
+  placeholder after an auth scheme or a variable name (`Bearer HIER_…_EINTRAGEN`,
+  `NAME=BITTE_AENDERN`) is a placeholder for every rule, and a sequential or repeated fill in a
+  SQL row counts as a test value. Dev `sql.*` carrier misses of implemented credential entities
+  11 -> 1 (the last one is a value that the member-access check rejects in every carrier).
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).
   `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
   `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or
