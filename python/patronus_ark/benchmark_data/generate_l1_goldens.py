@@ -14049,6 +14049,144 @@ DLP_T22_CASES["CREDENTIAL"] += [
 for _label, _rows in DLP_T22_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T23: credentials in SQL dumps. A key field of a settings row binds the next quoted field of
+# its tuple, and a column whose name passes the key gate binds its field in every row: one-line
+# and multi-row INSERTs (mysqldump, MariaDB, pg_dump, SQLite) and COPY ... FROM stdin blocks.
+# Hard negatives: DDL, a password_hash column of digests, settings rows whose keys name no
+# credential, SQL that code builds in a string, references and UUIDs in dump rows.
+DLP_T23_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "-- Data for Name: schnittstellen; Type: TABLE DATA; Schema: public; Owner: erp\n"
+            "INSERT INTO public.schnittstellen (id, bezeichnung, zugangsdaten, geaendert_am) VALUES "
+            "(1, 'Lieferantenportal – Client-Secret', '<<secret:0>>', '2026-09-14 07:55:10');\n",
+            "generic_api_secret", 23101, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "LOCK TABLES `mandanten_konfiguration` WRITE;\n"
+            "INSERT INTO `mandanten_konfiguration` (`mandant`, `schluessel`, `wert`) VALUES "
+            "('0001','waehrung','EUR'),('0001','db_passwort','<<secret:0>>'),('0002','waehrung','CHF');\n"
+            "UNLOCK TABLES;\n",
+            "password", 23102, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "INSERT INTO benutzer (id, anmeldename, kennwort) VALUES\n"
+            "  (1, 'lager', '<<secret:0>>'),\n  (2, 'versand', NULL);\n",
+            "password", 23103, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "COPY public.dienste (id, name, api_token) FROM stdin;\n1\tLagerverwaltung\t<<secret:0>>\n\\.\n",
+            "generic_api_secret", 23104, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "LOCK TABLES `integration_settings` WRITE;\n"
+            "INSERT INTO `integration_settings` VALUES (1,'export.endpoint','https://api.example.com/v2',"
+            "'2026-09-14 08:12:44'),(2,'service_secret','<<secret:0>>','2026-09-14 08:12:44');\n",
+            "generic_api_secret", 23105, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "INSERT INTO public.accounts (id, login, password, created_at) VALUES "
+            "(1, 'svc-export', '<<secret:0>>', '2026-09-14 07:55:10');\n",
+            "password", 23106, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "INSERT INTO `api_clients` (`id`, `name`, `api_token`) VALUES\n"
+            "(1,'billing','<<secret:0>>'),\n(2,'reports',NULL);\n",
+            "generic_api_secret", 23107, carrier="sql",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "COPY public.integrations (id, name, client_secret) FROM stdin;\n1\tcrm\t<<secret:0>>\n\\.\n",
+            "generic_api_secret", 23108, carrier="sql",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "INSERT INTO `sitzungen` VALUES (1,'csrf_token','<<secret:0>>','2026-09-14 08:12:44');\n",
+            "csrf_token", 23111, carrier="sql",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "INSERT INTO app_settings VALUES('csrf_token','<<secret:0>>','2026-08-30T10:02:11Z');\n",
+            "csrf_token", 23112, carrier="sql",
+        ),
+    ],
+    "PASSWORD_HASH": [
+        ds(
+            "PASSWORD_HASH", "de", "dlp_password_hash",
+            "INSERT INTO einstellungen VALUES ('admin_passwort_hash', '<<secret:0>>');\n",
+            "argon2id_hash", 23121, carrier="sql",
+        ),
+        ds(
+            "PASSWORD_HASH", "en", "dlp_password_hash",
+            "INSERT INTO `settings` VALUES (7,'admin_password_hash','<<secret:0>>');\n",
+            "bcrypt_hash", 23122, carrier="sql",
+        ),
+    ],
+}
+_T23_NEGATIVES = [
+    ("de", "dlp_password_assignment",
+     "CREATE TABLE benutzer (\n  id integer NOT NULL,\n  kennwort varchar(255) NOT NULL,\n"
+     "  api_token varchar(64) DEFAULT NULL\n);\n",
+     "schema DDL without rows"),
+    ("de", "dlp_password_assignment",
+     "INSERT INTO benutzer (id, email, passwort_hash) VALUES "
+     "(1, 'anna@example.com', '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8');\n",
+     "digest in a password hash column"),
+    ("de", "dlp_generic_credential_assignment",
+     "INSERT INTO `einstellungen` VALUES (1,'export.stapelgroesse','500'),(2,'token_gueltigkeit','3600'),"
+     "(3,'secret_rotation_tage','90');\n",
+     "settings keys that name no credential"),
+    ("de", "dlp_password_assignment",
+     "def upgrade():\n    op.execute(\n        \"INSERT INTO einstellungen (name, wert) VALUES ('smtp_passwort', '%s')\"\n"
+     "        % os.environ['SMTP_PASSWORT']\n    )\n",
+     "migration code that builds SQL"),
+    ("de", "dlp_generic_credential_assignment",
+     "INSERT INTO public.schnittstellen (id, bezeichnung, zugangsdaten) VALUES "
+     "(2, 'Lagerverwaltung – Client-Secret', current_setting('erp.client_secret'));\n",
+     "server setting reference"),
+    ("de", "dlp_generic_credential_assignment",
+     "INSERT INTO sitzungen (id, benutzer_id, refresh_token) VALUES "
+     "(1, 42, '3f2b8c1e-7d4a-4f6b-9e2c-1a5d8b7c9e0f');\n",
+     "UUID under a token column"),
+    ("en", "dlp_password_assignment",
+     "CREATE TABLE users (\n  id int NOT NULL,\n  password varchar(255) NOT NULL,\n"
+     "  api_token varchar(64) DEFAULT NULL\n);\n",
+     "schema DDL without rows"),
+    ("en", "dlp_password_assignment",
+     "INSERT INTO `users` (`id`, `email`, `password_hash`) VALUES "
+     "(1,'ana@example.com','5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8');\n",
+     "digest in a password hash column"),
+    ("en", "dlp_generic_credential_assignment",
+     "INSERT INTO `settings` VALUES (1,'export.batch_size','500'),(2,'token_ttl','3600'),"
+     "(3,'secret_rotation_days','90');\n",
+     "settings keys that name no credential"),
+    ("en", "dlp_password_assignment",
+     "cursor.execute(\"INSERT INTO users (login, password) VALUES ('svc', '%s')\" % password)\n",
+     "code that builds SQL"),
+    ("en", "dlp_generic_credential_assignment",
+     "INSERT INTO app_settings VALUES('api_secret','${API_SECRET}','2026-08-30T10:02:11Z');\n",
+     "environment reference"),
+    ("en", "dlp_generic_credential_assignment",
+     "INSERT INTO sessions (id, user_id, refresh_token) VALUES "
+     "(1, 42, '3f2b8c1e-7d4a-4f6b-9e2c-1a5d8b7c9e0f');\n",
+     "UUID under a token column"),
+]
+DLP_T23_CASES["CREDENTIAL"] += [
+    dn("CREDENTIAL", language, rule, text, reason, carrier="sql")
+    for language, rule, text, reason in _T23_NEGATIVES
+]
+for _label, _rows in DLP_T23_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
