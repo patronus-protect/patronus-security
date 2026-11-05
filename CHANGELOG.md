@@ -137,6 +137,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 6 (H06-6). With `explain` on, the context anchor patterns of PII and DLP
+  (`(?i)\b…\b`) are searched without their word boundaries on the lazy DFA and each candidate
+  start is probed anchored, as the PII rules since H03 (shared `detectors::word_boundary` module): a
+  Unicode word boundary sent the search to the slow NFA after the first umlaut. Anchor details
+  unchanged; explain on, 100 KiB DE p50 71.9 → 9.6 ms, 4 KiB DE 8.35 → 1.31 ms. Profile of the
+  default path and the measured attempts in `research/l1-pii/scoreboard/latency.md`. M4 not yet met
+  in Python; next pass H06-7. **Detection change:** none.
 - L1 latency loop, pass 5 (H06-5). The Python binding hashes its per-call cache of the result
   strings (the keys and string values of the `matched_rules` entries, span labels) with Fx instead of
   SipHash: the 100 KiB `details` getter 1.55 → 1.25 ms (fastest call); A/B of the Python call against

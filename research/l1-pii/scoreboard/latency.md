@@ -26,6 +26,59 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 M4 (ark 100kib p95 ≤ 10 ms): 15.003 ms, FAIL.
 M4 (ark-native 100kib p95 ≤ 10 ms): 9.774 ms, pass.
+## Profile and remaining hotspots (H06 pass 6)
+
+Stage profile of one native PII scan of the 100 KiB workloads (`detect_prepared_with_mode`, strict,
+explain off, median over 50 calls, 6 rayon threads, quiet machine):
+
+| Part | DE ms | EN ms |
+|---|---:|---:|
+| Rule scan before the parallel step (value runs, word shapes) | 0.39 | 0.39 |
+| Parallel rule step, wall (search CPU 14.9, accept CPU 4.0–5.3) | 4.5 | 4.9 |
+| Collecting the findings and overlap resolution | 0.51 | 0.57 |
+| Deobfuscated view (`Deobfuscated::new`) | 0.29 | 0.31 |
+| `mark_secondary` | 0.11 | 0.10 |
+| Whole call including the drop of the result | 7.6 | 7.8 |
+
+No single rule bounds the parallel step: the most expensive rule costs about 1.5 ms CPU (search and
+accept). Two zero-match rules (`pii_applicant_id`, `pii_health_insurance_number_de`) looked like
+1.0–1.4 ms searches; their regexes take 0.04 ms, the rest is the first search of each thread waiting
+for the lazy lexical anchors of the text (0.75–0.9 ms per 100 KiB, one Aho-Corasick pass over 6 399
+words). Measured and not in, each an interleaved A/B of the native worker (5 rounds) that did not
+beat the noise or was slower:
+
+- the rule scan, the anchors and the structure parse joined on the rayon pool before the parallel
+  step (EN p50 about +0.8 ms, DE unchanged);
+- the anchors split into overlapping chunks over the pool (standalone 0.8 → 0.3–0.5 ms, search CPU
+  15 → 13.4 ms, but the wall time of the call unchanged: the wake-up of the pool costs what the
+  overlap saves on 6 shared CPUs);
+- a DFA instead of the contiguous NFA for the anchor automaton (EN 0.74 → 0.58 ms, DE unchanged,
+  much more memory).
+
+Found on the way, outside the M4 path (explain is off by default): with `explain` on, PII and DLP add
+the matches of their context anchor patterns, all `(?i)\b…\b`. A Unicode word boundary sends the
+lazy DFA to the slow NFA at the first non-ASCII byte, so a German text paid about 65 ms per 100 KiB
+for the anchor details alone. Pass 6 searches these patterns like the PII rules since H03: without
+their word boundaries on the DFA, each candidate start probed anchored with the pattern itself (the
+shared `detectors::word_boundary` module, used by the PII rules and the anchor details of PII and
+DLP). The anchor JSON is byte-identical on the six workloads; tests check that every PII rule and
+PII/DLP anchor pattern finds what its regex finds on the bilingual fixture after German prose.
+Explain on, p50 per call: 100 KiB DE 71.9 → 9.6 ms, 4 KiB DE 8.35 → 1.31 ms; EN and explain off
+unchanged.
+
+The default path (explain off) runs the same search code as before (the PII rule search only moved into
+the shared module), so the M4 rows at the top are the pass 5 run; the interleaved A/B rounds of this
+pass on the native worker kept 100 KiB p95 at 9.7–11.6 ms under a load of 1.3–2.5. M4 holds for
+ark-native (within the noise), not for ark (Python). Remaining hotspots, each ≥ 10 % of the ark p95,
+for H06-7:
+
+- The `matched_rules` entries as `serde_json::Value` (unchanged): the Python `details` getter
+  (1.3–3 ms) and about 1.5 ms native drop. A typed entry that serializes to the same JSON touches
+  56 uses in 13 files (overlap resolution, the deobfuscated merge, DLP, MCP and injection
+  detectors, the binding); the remaining lever, too large for one pass next to the measurements.
+- The parallel rule step at about 1.4× its ideal (wall 4.5–4.9 ms against CPU/6 ≈ 3.2 ms): the
+  zero-match searches (most of the 13–15 ms search CPU) and the scheduling of 300+ small tasks.
+
 ## Profile and remaining hotspots (H06 pass 5)
 
 Ark rows measured after H06-5 (`latency.py run`; ark under a load average of about 1.3–1.4, ark-native

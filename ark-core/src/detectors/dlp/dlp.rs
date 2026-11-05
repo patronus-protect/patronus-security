@@ -492,7 +492,7 @@ pub struct DlpPipeline {
     metas: Vec<RuleMeta>,
     tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
-    anchor_regexes: Vec<Regex>,
+    anchor_regexes: Vec<crate::detectors::word_boundary::BoundarySearch>,
     /// K05: per generic key-bound rule, the value regex of config-line values;
     /// T21: per key-bound provider rule, its value regex for XML values.
     structured_regexes: Vec<Option<Regex>>,
@@ -700,7 +700,7 @@ impl DlpPipeline {
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
             .iter()
-            .map(|anchor| Regex::new(anchor.pattern).unwrap())
+            .map(|anchor| crate::detectors::word_boundary::BoundarySearch::new(anchor.pattern))
             .collect();
 
         DlpPipeline {
@@ -1220,5 +1220,17 @@ impl NativeRegexDetector for DlpPipeline {
 
     fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {
         anchors::details(text, &self.anchor_regexes, DLP_ANCHOR_PATTERNS)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anchor_searches_find_what_their_regexes_find() {
+        DLP_ANCHOR_PATTERNS.iter().for_each(|anchor| {
+            crate::detectors::word_boundary::assert_finds_as_regex(anchor.pattern)
+        });
     }
 }
