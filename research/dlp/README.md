@@ -280,6 +280,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `ConvertTo-SecureString "…" -AsPlainText` und `net use \\server\share … /user:`. Prompts,
   `--password-stdin`, `sshpass -e`/`-f` und Referenzen bleiben negativ. Offen: die generische
   Zuweisung liest `$kennwort = ConvertTo-SecureString …` als Wert `ConvertTo-SecureString`.
+  Seit G04 meldet `dlp_netrc_password` (`CREDENTIAL`, Untertyp `password`) das Passwort eines
+  `.netrc`-Eintrags (`machine <host> login <user> password …`, auch zeilenweise, und `default`;
+  der Host ist ein Name mit Punkt, eine Adresse oder `localhost`) und `dlp_docker_config_auth`
+  den `auth`-Wert eines Registry-Eintrags in Docker-/Podman-`config.json`/`auth.json`, wenn er zu
+  `user:password` decodiert (Prüfung wie bei Basic-Auth). `.npmrc`, `.pypirc`, Maven
+  `settings.xml`, `NuGet.Config` und `.s3cfg` decken die generischen und AWS-Regeln schon ab.
+  Offen: rclone `pass` ist verschleiert (`rclone obscure`) und wird nicht gemeldet.
   Seit P05 decken elf Provider-Regeln DevOps- und Paket-Registries ab (`SECRET_TOKEN`, Untertyp
   `access_token`): Docker Hub (`dckr_pat_`/`dckr_oat_`, 27 Zeichen), PyPI (`pypi-` und ein
   base64url-Macaroon V2, das vollständig geparst wird: Version, Header mit Location `pypi.org` oder

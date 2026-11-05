@@ -12540,6 +12540,150 @@ DLP_G03_CASES = {
 for _label, _rows in DLP_G03_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# G04: credential files. `dlp_netrc_password` reports the password of a `.netrc`/`_netrc` entry
+# (`machine <host> login <user> password <password>`, also across lines and for `default`);
+# `dlp_docker_config_auth` reports the `auth` value of a Docker/Podman `config.json`/`auth.json`
+# registry entry, base64 of `user:password`. `.npmrc` `_authToken`/`_password`, `.pypirc`, Maven
+# `settings.xml`, `NuGet.Config` and `.s3cfg` keep the generic assignment and AWS rules. Hard
+# negatives: references, placeholders, empty and credential-helper entries, base64 without a
+# `user:password` payload and netrc entries without a password.
+DLP_G04_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "# ~/.netrc für den Lager-Export\nmachine ftp.lager.intern login export password <<secret:0>>\n",
+            "password", 19101, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "machine git.lager.intern\n  login lager-bot\n  password <<secret:0>>\nmachine nexus.lager.intern\n"
+            "  login lager-bot\n",
+            "password", 19102, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "Hallo Jana,\n\nlege bitte diese Zeile in deine ~/.netrc:\n\n"
+            "machine api.lager.intern login jana password <<secret:0>>\n\nDanach läuft der Abruf ohne Rückfrage.\n",
+            "curl_user_password", 19103, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "{\n  \"auths\": {\n    \"registry.lager.intern\": {\n      \"auth\": \"<<secret:0>>\"\n    }\n  }\n}\n",
+            "http_basic_auth", 19104, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "# Registry-Zugang für den Build-Agenten (~/.docker/config.json)\n"
+            "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"<<secret:0>>\"}},\"credsStore\":\"\"}\n",
+            "http_basic_auth", 19105, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "2026-10-12T08:14:03Z INFO lade Registry-Konfiguration "
+            "{\"auths\": {\"ghcr.io\": {\"auth\": \"<<secret:0>>\"}}}\n",
+            "http_basic_auth", 19106, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "machine api.example.org login deploy password <<secret:0>>\n",
+            "password", 19111, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "# _netrc used by the nightly sync\nmachine github.com\n    login release-bot\n"
+            "    password <<secret:0>>\n",
+            "curl_user_password", 19112, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "- name: Write netrc\n  run: |\n    cat > ~/.netrc <<EOF\n"
+            "    machine artifacts.example.com login ci password <<secret:0>>\n    EOF\n",
+            "password", 19113, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "{\n  \"auths\": {\n    \"registry.example.com:5000\": {\n      \"auth\": \"<<secret:0>>\",\n"
+            "      \"email\": \"ci@example.com\"\n    }\n  }\n}\n",
+            "http_basic_auth", 19114, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "apiVersion: v1\nkind: Secret\ntype: kubernetes.io/dockerconfigjson\nstringData:\n"
+            "  .dockerconfigjson: '{\"auths\":{\"quay.io\":{\"auth\":\"<<secret:0>>\"}}}'\n",
+            "http_basic_auth", 19115, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "Hi team,\n\nthe runner's ${XDG_RUNTIME_DIR}/containers/auth.json is\n\n"
+            "{\"auths\": {\"registry.example.com\": {\"auth\": \"<<secret:0>>\"}}}\n\nPlease rotate it.\n",
+            "http_basic_auth", 19116, carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "machine ftp.lager.intern login export password ${LAGER_FTP_PASSWORT}\n",
+            "shell variable instead of the netrc password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "Aufbau laut Handbuch: machine <host> login <benutzer> password <passwort>\n",
+            "documented syntax with placeholders", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_netrc_password",
+            "# ~/.netrc für den Git-Server, curl fragt interaktiv\nmachine git.lager.intern login lager-bot\n",
+            "netrc entry without a password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "{\n  \"auths\": {\n    \"registry.lager.intern\": {}\n  },\n  \"credsStore\": \"desktop\"\n}\n",
+            "credential helper, no stored auth", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "{\"auths\":{\"registry.lager.intern\":{\"auth\":\"\"}},\"credHelpers\":{\"ghcr.io\":\"pass\"}}\n",
+            "empty auth entry", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_docker_config_auth",
+            "{\"auth\": \"c2Vzc2lvbi1zdGF0dXMtb2s=\", \"status\": \"ok\"}\n",
+            "base64 without a user:password payload", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "machine github.com login release-bot password $GITHUB_TOKEN\n",
+            "environment reference as netrc password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "# example ~/.netrc\nmachine example.com login myuser password mypassword\n",
+            "documented stand-in credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_netrc_password",
+            "The state machine moves to login and waits for the password prompt.\n",
+            "netrc keywords in prose", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "{\n  \"auths\": {\n    \"https://index.docker.io/v1/\": {\n      \"auth\": \"${DOCKER_AUTH}\"\n"
+            "    }\n  }\n}\n",
+            "template reference instead of the auth value", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "{\"auths\": {\"registry.example.com\": {\"auth\": \"dXNlcm5hbWU6cGFzc3dvcmQ=\"}}}\n",
+            "documented example (username:password)", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_docker_config_auth",
+            "{\"route\": \"/login\", \"auth\": \"required\", \"methods\": [\"POST\"]}\n",
+            "auth flag in an API route config", carrier="json",
+        ),
+    ],
+}
+for _label, _rows in DLP_G04_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 # G02: structure-aware config keys. In a config document (YAML, JSON, TOML, HCL, XML,
 # INI/properties, .env; the whole text has config structure) the generic rule also binds the
 # credentials, private key, secret key, signing key and passphrase keys and their DE variants

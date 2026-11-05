@@ -377,6 +377,12 @@ rules:
   dlp_cli_password:
     source_ref: https://curl.se/docs/manpage.html#-u
     format: "password on a CLI command line (G03, gitleaks:curl-auth-user): curl -u/--user user:<password>; MySQL/MariaDB clients -p<password> (attached, a space prompts) and --password=<password> (https://dev.mysql.com/doc/refman/8.4/en/connection-options.html#option_general_password); a shell PGPASSWORD=<password> (https://www.postgresql.org/docs/current/libpq-envars.html); sshpass -p (https://linux.die.net/man/1/sshpass); docker/podman login -p/--password (https://docs.docker.com/reference/cli/docker/login/); htpasswd in batch mode -b, the last argument (https://httpd.apache.org/docs/2.4/programs/htpasswd.html); PowerShell ConvertTo-SecureString <literal> -AsPlainText (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/convertto-securestring); net use \\\\server\\share <password> /user: (https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/gg651155(v=ws.11)); prompts, stdin/file options, shell references and stand-ins are no findings"
+  dlp_netrc_password:
+    source_ref: https://www.gnu.org/software/inetutils/manual/html_node/The-_002enetrc-file.html
+    format: "password of a .netrc/_netrc entry (G04): whitespace-separated tokens machine <host> or default, login, account, port (curl, https://everything.curl.dev/usingcurl/netrc.html) and password <value>, also one token per line; curl reads a quoted value; the host is a dotted name, an address or localhost; references and stand-ins are no findings"
+  dlp_docker_config_auth:
+    source_ref: https://docs.docker.com/reference/cli/docker/login/#credential-stores
+    format: "auth value of a registry entry under auths in a Docker config.json, Podman/containers auth.json (https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md) or a kubernetes.io/dockerconfigjson secret (G04): base64 of user:password (RFC 7617 user-pass), also in an escaped JSON string; entries of a credential helper (credsStore, credHelpers) hold no secret"
   dlp_url_userinfo_token:
     source_ref: https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/
     format: "token as the username of a URL with the constant password x-oauth-basic (https://<token>:x-oauth-basic@github.com/…); the token needs two character classes, 3 bits of entropy per character and no sequential or repeated runs (F-GEN1)"
