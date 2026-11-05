@@ -55,51 +55,45 @@ pub fn key_field_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
     row_values(text, key, false)
 }
 
+/// The literals of the statement heads; dumps write `INTO` in one case.
+static HEAD_LITERAL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"INTO|into|COPY ").unwrap());
+
 fn row_values(text: &str, key: &Regex, by_column: bool) -> Vec<ConfigValue> {
     let mut values = Vec::new();
-    // Dumps write `INTO` in one case.
-    for line_start in line_starts(text, &["INTO", "into"]) {
-        let Some(head) = INSERT_HEAD.captures(&text[line_start..]) else {
-            continue;
-        };
-        let columns = head.get(1).filter(|_| by_column).map(|columns| {
-            column_names(
-                text,
-                line_start + columns.start()..line_start + columns.end(),
-            )
-        });
-        let rows = insert_rows(text, line_start + head.get(0).unwrap().end());
-        bind(text, key, columns.as_deref(), &rows, true, &mut values);
-    }
-    for line_start in line_starts(text, &["COPY "]) {
-        let Some(head) = COPY_HEAD.captures(&text[line_start..]) else {
-            continue;
-        };
-        let columns = by_column.then(|| {
-            let list = head.get(1).unwrap();
-            column_names(text, line_start + list.start()..line_start + list.end())
-        });
-        let rows = copy_rows(text, line_start + head.get(0).unwrap().end());
-        bind(text, key, columns.as_deref(), &rows, false, &mut values);
+    for line_start in line_starts(text) {
+        let line = &text[line_start..];
+        if let Some(head) = INSERT_HEAD.captures(line) {
+            let columns = head.get(1).filter(|_| by_column).map(|columns| {
+                column_names(
+                    text,
+                    line_start + columns.start()..line_start + columns.end(),
+                )
+            });
+            let rows = insert_rows(text, line_start + head.get(0).unwrap().end());
+            bind(text, key, columns.as_deref(), &rows, true, &mut values);
+        } else if let Some(head) = COPY_HEAD.captures(line) {
+            let columns = by_column.then(|| {
+                let list = head.get(1).unwrap();
+                column_names(text, line_start + list.start()..line_start + list.end())
+            });
+            let rows = copy_rows(text, line_start + head.get(0).unwrap().end());
+            bind(text, key, columns.as_deref(), &rows, false, &mut values);
+        }
     }
     values
 }
 
-/// The starts of the lines that hold one of `literals`, in order: the
-/// statement regexes run only there, anchored, not over the whole text.
-fn line_starts(text: &str, literals: &[&str]) -> Vec<usize> {
-    let mut found: Vec<usize> = literals
-        .iter()
-        .flat_map(|literal| text.match_indices(literal).map(|(at, _)| at))
-        .collect();
-    found.sort_unstable();
+/// The starts of the lines that hold a statement head literal
+/// ([`HEAD_LITERAL`]), in order: the statement regexes run only there,
+/// anchored, not over the whole text.
+fn line_starts(text: &str) -> Vec<usize> {
     let mut starts = Vec::new();
     let (mut line_start, mut scanned) = (0, 0);
-    for at in found {
-        if let Some(newline) = text[scanned..at].rfind('\n') {
+    for found in HEAD_LITERAL.find_iter(text) {
+        if let Some(newline) = text[scanned..found.start()].rfind('\n') {
             line_start = scanned + newline + 1;
         }
-        scanned = at;
+        scanned = found.start();
         if starts.last() != Some(&line_start) {
             starts.push(line_start);
         }
@@ -337,9 +331,8 @@ mod tests {
 
     #[test]
     fn line_starts_of_literals() {
-        let text = "a INTO b\nc\nd into e INTO\nf";
-        assert_eq!(line_starts(text, &["INTO", "into"]), vec![0, 11]);
-        assert_eq!(line_starts(text, &["COPY "]), Vec::<usize>::new());
+        let text = "a INTO b\nc\nd into e INTO\nCOPY x\nf";
+        assert_eq!(line_starts(text), vec![0, 11, 25]);
     }
 
     #[test]
