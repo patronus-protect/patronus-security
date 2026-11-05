@@ -356,6 +356,112 @@ class SecondaryGateway:
         ]
 
 
+class FakeDynamicGateway:
+    """dynamic-pii results as ``SecurityGateway.scan_category("dynamic-pii", text)`` returns them."""
+
+    def __init__(self, spans_by_text):
+        self.spans_by_text = spans_by_text
+        self.calls = []
+
+    def scan_category(self, category, text):
+        self.calls.append((category, text))
+        return [{"category": "dynamic-pii", "class_name": "pii", "evidence_spans": list(self.spans_by_text.get(text, []))}]
+
+
+NER_TEXT = "Anna Weber works at Contoso in Köln, mail " + "anna" + "@" + "example.org"
+DYNAMIC_LABELS = {"person": "entity.person_name", "organization": "entity.organization", "location": "entity.location"}
+
+
+def ner_rows():
+    return [{"id": "ner", "language": "de", "text": NER_TEXT}, {"id": "empty", "language": "en", "text": "Nothing."}]
+
+
+def ner_gateways():
+    l1 = FakeGateway({NER_TEXT: [span("EMAIL", NER_TEXT, 42, 58)]})
+    dynamic = FakeDynamicGateway({NER_TEXT: [
+        span("person", NER_TEXT, 0, 10, 0.97),
+        span("location", NER_TEXT, 31, 35, 0.81),
+        span("organization", NER_TEXT, 20, 27, 0.66),
+        span("organization", NER_TEXT, 20, 27, 0.7),  # same span twice: kept once, best score
+        span("job_title", NER_TEXT, 11, 16, 0.55),  # not in DYNAMIC_LABELS: namespaced, never scored
+    ]})
+    return l1, dynamic
+
+
+def test_predict_rows_adds_dynamic_pii_spans_with_their_benchmark_ids():
+    l1, dynamic = ner_gateways()
+    timings = {"de": [], "en": []}
+    rows = list(MODULE.predict_rows(ner_rows(), l1, None, dynamic, DYNAMIC_LABELS, timings))
+    assert dynamic.calls == [("dynamic-pii", NER_TEXT), ("dynamic-pii", "Nothing.")]
+    assert [call[0] for call in l1.calls] == ["pii", "pii"]
+    assert rows[0]["evidence_spans"] == [
+        {"label": "entity.person_name", "dynamic_pii_label": "person", "start_char": 0, "end_char": 10, "score": 0.97},
+        {"label": "dynamic-pii.job_title", "dynamic_pii_label": "job_title", "start_char": 11, "end_char": 16,
+         "score": 0.55},
+        {"label": "entity.organization", "dynamic_pii_label": "organization", "start_char": 20, "end_char": 27,
+         "score": 0.7},
+        {"label": "entity.location", "dynamic_pii_label": "location", "start_char": 31, "end_char": 35, "score": 0.81},
+        {"label": "pii.email", "ark_label": "EMAIL", "start_char": 42, "end_char": 58, "score": 1.0},
+    ]
+    assert rows[1]["evidence_spans"] == []
+    assert {language: len(samples) for language, samples in timings.items()} == {"de": 1, "en": 1}
+
+
+def test_dynamic_config_needs_mapped_labels_and_known_threshold_labels():
+    config = MODULE.dynamic_config(["person", "location"], 0.5, {"person": 0.8}, DYNAMIC_LABELS)
+    assert config == {"labels": ["person", "location"], "threshold": 0.5, "label_thresholds": {"person": 0.8},
+                      "execution_gate": {"type": "always"}, "conditional_labels": []}
+    with pytest.raises(ValueError, match="job_title"):
+        MODULE.dynamic_config(["person", "job_title"], 0.5, {}, DYNAMIC_LABELS)
+    with pytest.raises(ValueError, match="none given"):
+        MODULE.dynamic_config([], 0.5, {}, DYNAMIC_LABELS)
+    with pytest.raises(ValueError, match="organization"):
+        MODULE.dynamic_config(["person"], 0.5, {"organization": 0.7}, DYNAMIC_LABELS)
+    # The checked-in entity map names the default labels.
+    assert set(MODULE.DEFAULT_DYNAMIC_LABELS) <= set(MODULE.dynamic_label_map())
+
+
+def test_run_records_the_dynamic_pii_engine_and_writes_row_latency(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, ner_rows())
+    config = MODULE.dynamic_config(["person", "organization", "location"], 0.5, {"person": 0.8}, DYNAMIC_LABELS)
+    outputs = []
+    for attempt, latency in (("a", None), ("b", tmp_path / "b.latency.json")):
+        l1, dynamic = ner_gateways()
+        meta = MODULE.run(input_path=source, output_path=tmp_path / f"{attempt}.jsonl",
+                          meta_path=tmp_path / f"{attempt}.meta.json", gateway=l1, build={"native_sha256": "0" * 64},
+                          dynamic_pii=config, dynamic=dynamic, dynamic_labels=DYNAMIC_LABELS, latency_path=latency)
+        outputs.append(((tmp_path / f"{attempt}.jsonl").read_bytes(), (tmp_path / f"{attempt}.meta.json").read_bytes()))
+    assert outputs[0] == outputs[1]  # row latency never touches predictions or sidecar
+    assert meta["engine"] == {
+        "categories": ["pii", "dynamic-pii"],
+        "max_level": "l3",
+        "dynamic_pii": {"labels": ["person", "organization", "location"], "threshold": 0.5,
+                        "label_thresholds": {"person": 0.8}, "label_map": DYNAMIC_LABELS,
+                        "machine": MODULE.platform.machine()},
+    }
+    assert meta["spans"] == 5
+    payload = json.loads((tmp_path / "b.latency.json").read_text(encoding="utf-8"))
+    assert payload["engine"] == meta["engine"]
+    assert {language: len(samples) for language, samples in payload["samples_ns"].items()} == {"de": 1, "en": 1}
+    assert not (tmp_path / "a.latency.json").exists()
+
+
+def test_cli_rejects_bad_dynamic_pii_options(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, ner_rows())
+    base = ["--input", str(source), "--output", str(tmp_path / "out.jsonl")]
+    for extra in (["--dynamic-pii", "--dynamic-pii-labels", "person,job_title"],
+                  ["--dynamic-pii", "--dynamic-pii-label-threshold", "person"],
+                  ["--dynamic-pii", "--dynamic-pii-label-threshold", "person=high"],
+                  ["--dynamic-pii", "--dynamic-pii-label-threshold", "person=0.8", "--dynamic-pii-label-threshold",
+                   "person=0.7"],
+                  ["--dynamic-pii-label-threshold", "person=0.8"]):
+        with pytest.raises(SystemExit):
+            MODULE.main(base + extra)
+    assert not (tmp_path / "out.jsonl").exists()
+
+
 def test_predict_rows_scores_primary_findings_only(tmp_path):
     rows = [{"id": "a", "language": "de", "text": SECONDARY_TEXT}]
     predicted = list(MODULE.predict_rows(rows, SecondaryGateway()))

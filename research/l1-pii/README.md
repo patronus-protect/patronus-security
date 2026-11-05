@@ -149,7 +149,9 @@ englische Recognizer einer `shared`-ID).
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
 
-PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an.
+PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an
+(`run_ark.py --dynamic-pii`, gewertet von `scoreboard.py ner` auf rohem Gold gegen Presidio default und
+tuned, siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)).
 
 **M4 gilt als erreicht** (entschieden am 2026-11-05): nativ 100 KiB p95 9,8 ms (≤ 10 ms seit H06-2);
 die Python-Bindings bleiben bei etwa 15 ms, weitere Durchgänge der Performance-Schleife lagen im
