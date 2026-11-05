@@ -11,7 +11,7 @@
 //! unlike the bare Partita IVA, needs a NIP term (balanced/recall only).
 
 use patronus_ark::detectors::pii::{
-    pii::{PiiPattern, PII_PATTERNS},
+    pii::{is_bare_rule, PiiPattern, PII_PATTERNS},
     score::{self, Context, ValidatorStrength},
     validators,
 };
@@ -217,11 +217,12 @@ fn the_polish_rules_have_their_label_validator_and_mode() {
             score::score(rule, Context::Support { gap: 48 }) >= balanced,
             "{rule_id}"
         );
-        // No context-free rule: bare digits always need a term.
+        // No context-free rule: bare digits need a term unless the opt-in bare
+        // rule (D-BARE) is enabled.
         assert_eq!(
             PII_PATTERNS
                 .iter()
-                .filter(|pattern| pattern.entity_group == label)
+                .filter(|pattern| pattern.entity_group == label && !is_bare_rule(pattern.name))
                 .count(),
             1,
             "{label}"

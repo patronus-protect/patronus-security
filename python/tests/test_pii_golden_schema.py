@@ -120,7 +120,9 @@ class PiiGoldenSchemaV2Tests(unittest.TestCase):
             if row["case_type"] == "positive" and not row["known_gap"]
         )
         negatives = Counter(row["rule_id"] for row in rows if row["case_type"] == "hard_negative")
-        for rule_id in sorted(all_rule_ids()):
+        # The goldens run on the default gates; the opt-in bare rules (D-BARE) stay off there
+        # and are covered by rust/tests/pii_bare_rules.rs.
+        for rule_id in sorted(rule for rule in all_rule_ids() if not rule.endswith("_bare")):
             for language in LANGUAGES:
                 self.assertGreater(positives[(rule_id, language)], 0, (rule_id, language))
             self.assertGreater(negatives[rule_id], 0, rule_id)
