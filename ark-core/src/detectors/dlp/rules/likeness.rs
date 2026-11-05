@@ -918,8 +918,9 @@ pub fn is_key_prefix(text: &str, key_start: usize, value: Range<usize>) -> bool 
 /// stand-in (`"github-copilot"`, `"prefixItems"`, `"alpha"`), no version
 /// range (`"^1.0.0"`), no code (`"IPython.core.magics.osm:OSMagics"`), and
 /// a passphrase with a capital, digit or symbol beyond lower-case words
-/// (`'little green men'` in a test array).
-fn suits_field_key(value: &str) -> bool {
+/// (`'little green men'` in a test array). T23: also a quoted field of a SQL
+/// row (`dlp::sql_rows`).
+pub fn suits_field_key(value: &str) -> bool {
     let bare = trim_trailing_punctuation(value.trim());
     if bare.contains(char::is_whitespace) {
         return bare

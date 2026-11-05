@@ -171,10 +171,15 @@ fn skip_space(bytes: &[u8], mut at: usize) -> usize {
 }
 
 /// The tuples of an `INSERT` from `at` (after `VALUES`): per field the range
-/// inside a non-empty quoted string, or `None` for any other field. Reading
-/// stops at the end of the tuple list or at anything malformed.
-fn insert_rows(text: &str, mut at: usize) -> Vec<Vec<Option<Range<usize>>>> {
-    let bytes = text.as_bytes();
+/// inside a non-empty quoted string, or `None` for any other field. A
+/// statement that does not end in `;` after its tuples, as every statement of
+/// a dump does, or holds anything malformed has no rows: SQL that code holds
+/// in a multi-line string (`` db.Exec(`\nINSERT … VALUES (…)`) ``) binds nothing.
+fn insert_rows(text: &str, at: usize) -> Vec<Vec<Option<Range<usize>>>> {
+    insert_tuples(text.as_bytes(), at).unwrap_or_default()
+}
+
+fn insert_tuples(bytes: &[u8], mut at: usize) -> Option<Vec<Vec<Option<Range<usize>>>>> {
     let mut rows = Vec::new();
     while bytes.get(at) == Some(&b'(') {
         let mut row = Vec::new();
@@ -182,28 +187,23 @@ fn insert_rows(text: &str, mut at: usize) -> Vec<Vec<Option<Range<usize>>>> {
         loop {
             at = skip_space(bytes, at);
             let field = if bytes.get(at) == Some(&b'\'') {
-                let Some(end) = string_end(bytes, at) else {
-                    return rows;
-                };
+                let end = string_end(bytes, at)?;
                 let content = at + 1..end;
                 at = end + 1;
                 (!content.is_empty()).then_some(content)
             } else {
-                let Some(end) = expression_end(bytes, at) else {
-                    return rows;
-                };
-                at = end;
+                at = expression_end(bytes, at)?;
                 None
             };
             row.push(field);
             at = skip_space(bytes, at);
-            match bytes.get(at) {
-                Some(b',') => at += 1,
-                Some(b')') => {
+            match bytes.get(at)? {
+                b',' => at += 1,
+                b')' => {
                     at += 1;
                     break;
                 }
-                _ => return rows,
+                _ => return None,
             }
         }
         rows.push(row);
@@ -213,7 +213,7 @@ fn insert_rows(text: &str, mut at: usize) -> Vec<Vec<Option<Range<usize>>>> {
         }
         at = skip_space(bytes, at + 1);
     }
-    rows
+    (bytes.get(at) == Some(&b';')).then_some(rows)
 }
 
 /// The closing quote of the SQL string that opens at `open`: `''` and a
@@ -351,6 +351,8 @@ mod tests {
             "INSERT INTO cfg (name, password) VALUES (%s, %s);\n",
             "INSERT INTO cfg VALUES ('api_secret', ?);\n",
             "INSERT INTO cfg (password) SELECT pw FROM old;\n",
+            "db.Exec(`\nINSERT INTO cfg (name, password) VALUES ('a', 'pw-one')`)\n",
+            "INSERT INTO cfg (name, password) VALUES ('a', 'pw-one'), ('b', 'pw-two' || x);\n",
         ] {
             assert_eq!(pairs(text), vec![], "{text}");
         }

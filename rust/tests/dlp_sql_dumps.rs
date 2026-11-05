@@ -157,6 +157,16 @@ fn dumps_without_credentials_stay_silent() {
         "INSERT INTO `users` (`id`, `email`, `password_hash`) VALUES (1,'ana@example.com','5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8');\n",
         // A hex digest in a password column is the stored hash.
         "INSERT INTO `admins` (`admin_id`, `username`, `password`) VALUES\n(1, 'admin', '0b9c2625dc21ef05f6ad4ddf47c5f203837aa32c');\n",
+        // A crypt or framework hash in a password column is the stored hash.
+        "INSERT INTO sys_user (user_id, user_name, password) VALUES (1, 'admin', '$2a$10$Qm7Lp2vN9xTz8Wm4K93RVqe7xAb2LpKx7pQ2vL9rT4mN8bW3sDe1u');\n",
+        "INSERT INTO users (id, password) VALUES (1, '{bcrypt}$2y$12$Tz8Wm4K93RVqe7xAb2LpKe7xAb2LpKx7pQ2vL9rT4mN8bW3sDQm7Lp');\n",
+        "INSERT INTO users (id, password) VALUES (1, '$argon2id$v=19$m=65536,t=3,p=4$VHo4V200SzkzUlZx$ZTd4QWIyTHBLeDdwUTJ2TDlyVDRtTjhi');\n",
+        "INSERT INTO auth_user (id, password, username) VALUES (1, 'pbkdf2_sha256$600000$Tz8Wm4K93RVqe7xA$Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz8Wm4K93RVq=', 'admin');\n",
+        "INSERT INTO accounts (id, password) VALUES (1, '$6$Tz8Wm4K93RVqe7xA$Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz8Wm4K93RVqe7xAb2LpKx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xT');\n",
+        // Word passwords in the seed rows of a test database.
+        "INSERT INTO users (id, username, password) VALUES\n  (1, 'alice', 'testpass'),\n  (2, 'bob', 'supersecret');\n",
+        // SQL in a code string that does not end like a statement of a dump.
+        "func seed(db *sql.DB) {\n\tdb.Exec(`\nINSERT INTO users (login, password) VALUES ('svc', 'Xzvk;fov8032?')`)\n}\n",
         // Settings keys that name no credential.
         "INSERT INTO `settings` VALUES (1,'export.batch_size','500'),(2,'token_ttl','3600'),(3,'secret_rotation_days','90');\n",
         // SQL that code builds in a string.
