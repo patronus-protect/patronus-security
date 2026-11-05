@@ -171,6 +171,42 @@ def _baseline_rules(entity: dict) -> str:
     return "; ".join(parts) or "–"
 
 
+def semantic_lines(semantic: dict[str, Any], date: str) -> list[str]:
+    """`pii.semantic` of a snapshot: NER ids of ARK L1 + L3 dynamic-pii vs the Presidio profiles."""
+    engines = semantic["engines"]
+    lines = [
+        "### Semantic entities (L1 + L3 dynamic-pii)",
+        "",
+        f"Exact F1 in percent on {semantic['view']} gold, measured {date}: ARK L1 plus the L3 `dynamic-pii` "
+        "pipeline (GLiNER) against the Presidio profiles, per source family and language. Only rows with gold "
+        "for the id are listed.",
+        "",
+        "| Benchmark id | Family | Lang | Gold | " + " | ".join(f"F1 {_engine_title(e)}" for e in engines) + " |",
+        "| --- | --- | --- | --- | " + "--- | " * len(engines),
+    ]
+    for entity_id, families in semantic["entities"].items():
+        for family in PII_FAMILIES:
+            for language, values in families.get(family, {}).items():
+                lines.append(f"| `{entity_id}` | {family} | {language} | {values['gold']} | "
+                             + " | ".join(f"{values['f1'][engine]:.1f}" for engine in engines) + " |")
+    if semantic.get("latency"):
+        lines.extend(["", "| Engine | Lang | Texts | p50 per text | p95 per text | Machine |",
+                      "| --- | --- | --- | --- | --- | --- |"])
+        for engine, item in semantic["latency"].items():
+            for language, values in item["per_text"].items():
+                lines.append(f"| {_engine_title(engine)} | {language} | {values['texts']} | "
+                             f"{values['p50_ms']:.1f} ms | {values['p95_ms']:.1f} ms | {item['machine']} |")
+    if semantic.get("note"):
+        lines.extend(["", semantic["note"]])
+    return lines
+
+
+def _engine_title(name: str) -> str:
+    """Display name of a report engine key (`presidio-tuned` -> `Presidio tuned`, `ark-…` -> `ARK …`)."""
+    head, _, rest = name.partition("-")
+    return " ".join([{"ark": "ARK", "presidio": "Presidio"}.get(head, head), rest.replace("-", " ")]).strip()
+
+
 def _met(flag: bool) -> str:
     return "met" if flag else "not met"
 
@@ -314,6 +350,8 @@ def generate(
         f"Measured ids: {len(measured)}, {with_gold} with gold in at least one family, "
         f"{len(measured) - with_gold} without gold.",
     ])
+    if pii.get("semantic"):
+        lines.extend(["", *semantic_lines(pii["semantic"], date)])
 
     # ── DLP ──
     taxonomy = dlp_map["taxonomy"]

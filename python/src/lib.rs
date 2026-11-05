@@ -65,6 +65,14 @@ impl SecurityGateway {
             Ok(level) => level,
             Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
         };
+        // `dynamic-pii` runs only on L3; below it every scan would silently return nothing.
+        if rust_categories.contains(&SecurityCategory::DynamicPii)
+            && rust_max_level != SecurityLevel::L3
+        {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "dynamic-pii runs only on L3; set max_level=\"l3\" (got {max_level:?})"
+            )));
+        }
         let rust_model_dir = model_dir.map(PathBuf::from);
         let rust_download_categories = match download_categories {
             Some(categories) => Some(parse_categories(categories)?),

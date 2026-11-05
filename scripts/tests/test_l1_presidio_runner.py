@@ -265,6 +265,24 @@ def test_run_writes_byte_identical_predictions_and_metadata(tmp_path):
     assert metadata["output_sha256"] == MODULE.sha256_bytes(outputs[0][0])
 
 
+def test_run_writes_row_latency_apart_from_the_byte_identical_outputs(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, gold_rows())
+    kwargs = dict(input_path=source, profile_name="default", versions={"presidio-analyzer": "2.2.364"})
+    MODULE.run(output_path=tmp_path / "a.jsonl", meta_path=tmp_path / "a.meta.json",
+               analyzer=FakeAnalyzer(fake_results()), **kwargs)
+    MODULE.run(output_path=tmp_path / "b.jsonl", meta_path=tmp_path / "b.meta.json",
+               analyzer=FakeAnalyzer(fake_results()), latency_path=tmp_path / "b.latency.json", **kwargs)
+    assert (tmp_path / "a.jsonl").read_bytes() == (tmp_path / "b.jsonl").read_bytes()
+    assert (tmp_path / "a.meta.json").read_bytes() == (tmp_path / "b.meta.json").read_bytes()
+    payload = json.loads((tmp_path / "b.latency.json").read_text(encoding="utf-8"))
+    assert payload["schema"] == "ark-l1-row-latency-v1" and payload["engine"] == {"profile": "default"}
+    # One sample per row, keyed by the row language (not the analysis language).
+    assert {language: len(samples) for language, samples in payload["samples_ns"].items()} == {"de": 1, "en": 1, "fr": 1}
+    assert all(isinstance(sample, int) and sample >= 0 for samples in payload["samples_ns"].values() for sample in samples)
+    assert payload["machine"]["machine"]
+
+
 def presidio_available():
     return importlib.util.find_spec("presidio_analyzer") is not None
 

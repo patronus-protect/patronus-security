@@ -10,7 +10,9 @@
 #   ark_only       nur ARK; zählt für M2/M3, Presidio hat dort Recall 0.
 #   presidio_only  nur Presidio; Kandidaten für A/C-Aufgaben, ARK hat dort Recall 0.
 #   semantic       NER-Entitäten (PERSON, LOCATION, ORG, NRP, Datum, Adresse); kein L1-Scope,
-#                  dort treten L1 + dynamic-pii (L3) an. ARK-L1 meldet sie nie.
+#                  dort treten L1 + dynamic-pii (L3) an. ARK-L1 meldet sie nie. `dynamic_pii` nennt die
+#                  GLiNER-Labels der L3-Pipeline, die auf die ID zählen (run_ark.py --dynamic-pii,
+#                  gewertet von scoreboard.py ner); jedes Label höchstens einmal.
 #
 # Regeln (prüft scripts/l1_presidio/entity_map.py check, Test scripts/tests/test_l1_entity_map.py):
 #   - jedes ARK-Label der Registry genau einmal, keine Labels, die die Registry nicht kennt;
@@ -664,6 +666,7 @@ entities:
   - id: entity.person_name
     scope: semantic
     ark: []
+    dynamic_pii: [person]
     presidio: [PERSON]
     corpora:
       ai4privacy-openpii-nano-1k: [GIVENNAME, SURNAME]
@@ -674,6 +677,7 @@ entities:
   - id: entity.organization
     scope: semantic
     ark: []
+    dynamic_pii: [organization]
     presidio: [ORGANIZATION]
     corpora:
       gretel-synthetic-pii-finance: [company]
@@ -683,6 +687,7 @@ entities:
   - id: entity.location
     scope: semantic
     ark: []
+    dynamic_pii: [location, city, country]
     presidio: [LOCATION]
     corpora:
       ai4privacy-openpii-nano-1k: [CITY]

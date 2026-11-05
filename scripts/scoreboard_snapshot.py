@@ -11,7 +11,11 @@ fills the measured per-entity and per-group results from the aggregated reports 
   ``gitleaks.json``, ``trufflehog.json``, ``detect-secrets.json`` for the default runs and
   ``ark.extended.json`` for ARK's opt-in profile);
 - ``--dlp-entity-map``: ``research/dlp/entity_map.yaml`` as of the measured commit
-  (``git show <commit>:research/dlp/entity_map.yaml``), so ids added later stay "not measured".
+  (``git show <commit>:research/dlp/entity_map.yaml``), so ids added later stay "not measured";
+- ``--ner-report``: the JSON of ``scripts/l1_presidio/scoreboard.py ner --json`` (ARK L1 + L3
+  dynamic-pii and the Presidio profiles on the semantic ids, raw gold), written to ``pii.semantic``:
+  ``entities.<id>.<family>.<en|de>`` with gold and exact F1 per engine, ``latency.<engine>`` with p50/p95
+  per text and the machine. Hand-written keys there (e.g. ``note`` on platform and method) are kept.
 
 Only counts and rates are read; reports never carry text. Ids of the measurement without gold get
 ``"gold": 0``; ids that were not part of the measurement are left out.
@@ -34,6 +38,7 @@ import yaml
 SCHEMA = "ark-l1-scoreboard-snapshot-v1"
 SCHEMA_VERSION = "1.1"
 PII_FAMILIES = ("neutral", "presidio_favored", "ark_authored")
+PII_LANGUAGES = ("en", "de")
 DLP_TOOLS = ("ark", "gitleaks", "trufflehog", "detect-secrets")
 OPT_IN_FAMILIES = ("business_identifier", "content_class", "document_class")
 
@@ -72,6 +77,37 @@ def pii_entities(report: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict
         for family in PII_FAMILIES
     }
     return entities, overall
+
+
+def pii_semantic(report: dict[str, Any]) -> dict[str, Any]:
+    """``pii.semantic`` from ``scoreboard.py ner --json``: gold and exact F1 per engine for every NER id,
+    family and language (EN, DE) on raw gold, and p50/p95 per text with the measuring machine."""
+    engines = report["engines"]
+    entities: dict[str, Any] = {}
+    for entity_id in report["ids"]:
+        entry: dict[str, Any] = {}
+        for family in PII_FAMILIES:
+            for language in PII_LANGUAGES:
+                key = f"family_language_entity/{family}/{language}/{entity_id}"
+                counts = {name: engine["buckets"].get(key) for name, engine in engines.items()}
+                gold = max((c["gold"] for c in counts.values() if c), default=0)
+                if gold:
+                    entry.setdefault(family, {})[language] = {
+                        "gold": gold, "f1": {name: _exact_f1(c) if c else 0.0 for name, c in counts.items()}}
+        entities[entity_id] = entry
+    latency = {}
+    for name, item in report["latency"].items():
+        if item is None:
+            continue
+        latency[name] = {
+            "machine": ", ".join(sorted({m["machine"] for m in item["machines"]})),
+            "per_text": {
+                language: {"p50_ms": round(summary["p50_ms"], 1), "p95_ms": round(summary["p95_ms"], 1),
+                           "texts": summary["samples"]}
+                for language, summary in item["per_text"].items()
+            },
+        }
+    return {"view": report["view"], "engines": list(engines), "entities": entities, "latency": latency}
 
 
 def _metrics(m: dict[str, Any]) -> dict[str, float]:
@@ -154,11 +190,14 @@ def dlp_results(reports: dict[str, dict[str, Any]], extended: dict[str, Any] | N
 
 def from_reports(snapshot: dict[str, Any], pii_report: dict[str, Any] | None,
                  dlp_reports: dict[str, dict[str, Any]] | None, dlp_extended: dict[str, Any] | None,
-                 dlp_entity_map: dict[str, Any] | None) -> dict[str, Any]:
+                 dlp_entity_map: dict[str, Any] | None, ner_report: dict[str, Any] | None = None) -> dict[str, Any]:
     if snapshot.get("schema") != SCHEMA:
         raise ValueError(f"snapshot schema must be {SCHEMA}")
     out = json.loads(json.dumps(snapshot))
     out["schema_version"] = SCHEMA_VERSION
+    if ner_report is not None:
+        # Platform and method notes stay hand-written next to the measured part.
+        out["pii"]["semantic"] = {**out["pii"].get("semantic", {}), **pii_semantic(ner_report)}
     if pii_report is not None:
         entities, overall = pii_entities(pii_report)
         pii = out["pii"]
@@ -198,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     convert = commands.add_parser("from-reports", help="fill per-entity results of a snapshot from report files")
     convert.add_argument("--snapshot", type=Path, required=True, help="snapshot with milestones (read)")
     convert.add_argument("--pii-report", type=Path, help="scoreboard.py report --json output")
+    convert.add_argument("--ner-report", type=Path, help="scoreboard.py ner --json output (pii.semantic)")
     convert.add_argument("--dlp-reports", type=Path, help="baseline_report.py --output-dir")
     convert.add_argument("--dlp-entity-map", type=Path, help="research/dlp/entity_map.yaml of the measured commit")
     convert.add_argument("--output", type=Path, help="write here (default: overwrite --snapshot)")
@@ -205,13 +245,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
         pii_report = json.loads(args.pii_report.read_text(encoding="utf-8")) if args.pii_report else None
+        ner_report = json.loads(args.ner_report.read_text(encoding="utf-8")) if args.ner_report else None
         dlp_reports = dlp_extended = dlp_entity_map = None
         if args.dlp_reports:
             dlp_reports, dlp_extended = load_dlp_reports(args.dlp_reports)
             if not args.dlp_entity_map:
                 raise ValueError("--dlp-reports needs --dlp-entity-map")
             dlp_entity_map = yaml.safe_load(args.dlp_entity_map.read_text(encoding="utf-8"))
-        result = from_reports(snapshot, pii_report, dlp_reports, dlp_extended, dlp_entity_map)
+        result = from_reports(snapshot, pii_report, dlp_reports, dlp_extended, dlp_entity_map, ner_report)
     except (OSError, ValueError, KeyError) as exc:
         print(f"scoreboard_snapshot: error: {exc}", file=sys.stderr)
         return 2

@@ -14,7 +14,9 @@ or infrastructure error. A regression is any F1 loss above the tolerance (defaul
 exact or overlap) of an entity, of all L1 entities together, of a source family or of DE/EN,
 in any split and either mode, or any new prediction on a hard-negative span. The summary
 goes to stdout; for the holdout it only names aggregates and regressions, never row ids or
-text.
+text. Its last lines before the verdict give M1 and M2 of the head per split (balanced,
+attainable gold) against Presidio tuned, run with the gate's interpreter (the Presidio venv) and
+cached per runner, profile and input SHA-256; they never change the exit code.
 
 Scoring follows ``research/l1-pii/entity_map.yaml``: semantic entities are not L1
 scope; a corpus listed in the map is scored only on the ids it annotates, a corpus
@@ -68,6 +70,14 @@ checksum validator; reported only, T16):
 
     scoreboard.py report --gold DIR --ark strict=DIR --ark balanced=DIR \
         --engine presidio-default=DIR --engine presidio-tuned=DIR
+
+``ner`` scores the semantic ids the L3 ``dynamic-pii`` pipeline can report (``dynamic_pii`` in the
+entity map: PERSON, LOCATION, ORGANIZATION) for Ark L1 + L3 (``run_ark.py --dynamic-pii``) against the
+Presidio profiles, raw gold, exact P/R/F1 per family, language and id, and p50/p95 per text from the
+row-latency files next to the predictions (``--latency``):
+
+    scoreboard.py ner --gold DIR --engine ark-dynamic-pii=DIR \
+        --engine presidio-default=DIR --engine presidio-tuned=DIR [--json PATH]
 """
 
 from __future__ import annotations
@@ -91,6 +101,7 @@ from typing import Any, Callable, Iterable, NamedTuple
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import entity_map as entity_map_module  # noqa: E402
+import latency  # noqa: E402
 import synth_goldset  # noqa: E402
 
 
@@ -109,6 +120,8 @@ M2_PARITY_FAMILIES = ("presidio_favored",)
 # T27: milestones and the F1 >= 80 floor are judged on attainable gold; the raw view is reported next to it.
 VIEWS = ("raw", "attainable")
 MILESTONE_VIEW = "attainable"
+# The gate prints the milestones of the head against this Presidio profile (H05).
+PRESIDIO_PROFILE = "tuned"
 # Document classes spanning countries: their gold is checked against the validator of the issuing
 # country only (rules.country in entity_map.yaml), and only where the row names the country.
 DOCUMENT_IDS = ("entity.passport_number", "pii.identity_card_number")
@@ -193,21 +206,29 @@ def l1_ids(emap: Any) -> set[str]:
     return {entity_id for entity_id, entity in emap.entities.items() if entity.scope != "semantic"}
 
 
-def scored_ids(emap: Any, corpus: str) -> set[str]:
-    """L1 ids a corpus annotates; corpora without map entry annotate every L1 id."""
-    l1 = l1_ids(emap)
+def ner_ids(emap: Any) -> set[str]:
+    """Semantic ids the L3 dynamic-pii pipeline (GLiNER) can report (``dynamic_pii`` in the map)."""
+    return set(emap.dynamic_pii_labels().values())
+
+
+def scored_ids(emap: Any, corpus: str, ids: set[str] | None = None) -> set[str]:
+    """Ids (default: the L1 ids) a corpus annotates; corpora without map entry annotate every one."""
+    ids = l1_ids(emap) if ids is None else ids
     if corpus not in emap.corpora():
-        return l1
-    return {entity_id for entity_id in l1 if corpus in emap.entities[entity_id].corpora}
+        return set(ids)
+    return {entity_id for entity_id in ids if corpus in emap.entities[entity_id].corpora}
 
 
 def resolve_label(span: dict[str, Any], emap: Any) -> str | None:
-    """Benchmark id of a predicted span (Ark ``ark_label``, Presidio ``presidio_entity`` or ``label``).
+    """Benchmark id of a predicted span (Ark ``ark_label`` or ``dynamic_pii_label``, Presidio
+    ``presidio_entity`` or ``label``).
 
     Native labels win over an embedded ``label``: a base commit's run_ark.py precomputed ``label``
     with its own output map, and the current entity map must decide how its ``ark_label`` counts."""
     if isinstance(span.get("ark_label"), str):
         return emap.ark_label(span["ark_label"])
+    if isinstance(span.get("dynamic_pii_label"), str):
+        return emap.dynamic_pii_label(span["dynamic_pii_label"])
     if isinstance(span.get("presidio_entity"), str):
         return emap.presidio_entity(span["presidio_entity"])
     label = span.get("label")
@@ -261,13 +282,13 @@ def _predictions_by_id(
     return predictions
 
 
-def _row_scope(row: dict[str, Any], emap: Any, where: str) -> tuple[str, str, set[str]]:
-    """Corpus, source family and the ids a gold row is scored on."""
+def _row_scope(row: dict[str, Any], emap: Any, where: str, ids: set[str] | None = None) -> tuple[str, str, set[str]]:
+    """Corpus, source family and the ids (default: L1) a gold row is scored on."""
     corpus = str(row.get("corpus", ""))
     family = emap.family(corpus)
     if family is None:
         raise ScoreboardError(f"{where}: corpus {corpus!r} has no source family in entity_map.yaml")
-    allowed = scored_ids(emap, corpus)
+    allowed = scored_ids(emap, corpus, ids)
     if "scored_entities" in row:
         # Rows that assert on some ids only (Presidio recognizer test cases).
         scored = row["scored_entities"]
@@ -281,14 +302,15 @@ Span = tuple[str | None, int, int]
 
 
 def _row_spans(
-    row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str, checks: "GoldChecks | None" = None
+    row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str, checks: "GoldChecks | None" = None,
+    ids: set[str] | None = None,
 ) -> tuple[str, str, set[Span], set[Span], set[Span]]:
     """Corpus, family, scored gold, all predictions and scored predictions of one gold row.
 
     Gold of an ``IGNORED_GOLD`` id failing its check is dropped together with every scored prediction
     of that id overlapping it, so it neither counts as missed nor as a false positive. With ``checks``
     (attainable view, T27) unattainable gold is dropped the same way."""
-    corpus, family, allowed = _row_scope(row, emap, where)
+    corpus, family, allowed = _row_scope(row, emap, where, ids)
     gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
     gold = {item for item in gold if item[0] in allowed}
     predicted_all = {_span(s, resolve_label(s, emap), where) for s in spans}
@@ -314,14 +336,15 @@ def _gold_value(row: dict[str, Any], item: Span, where: str) -> str:
 
 def score_rows(
     gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = "",
-    checks: "GoldChecks | None" = None,
+    checks: "GoldChecks | None" = None, ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Count exact and overlap matches per bucket plus predictions on hard-negative spans.
 
-    ``checks`` scores the attainable view (T27): unattainable gold is left out for every engine alike."""
+    ``checks`` scores the attainable view (T27): unattainable gold is left out for every engine alike.
+    ``ids`` replaces the scored L1 ids (``ner`` scores the semantic ids of ``ner_ids``)."""
     gold_rows = list(gold_rows)
     predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
-    l1 = l1_ids(emap)
+    l1 = l1_ids(emap) if ids is None else ids
     scopes = {entity_id: emap.entities[entity_id].scope for entity_id in l1}
     buckets: dict[str, dict[str, int]] = defaultdict(empty_counts)
     hard_negative_fp: set[tuple[str, str, str, int, int]] = set()
@@ -330,7 +353,7 @@ def score_rows(
         rows += 1
         row_id = row["id"]
         where = f"{dataset}:{row_id}"
-        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where, checks)
+        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where, checks, l1)
         for hn in row.get("hard_negatives", []) or []:
             _, start, end = _span(hn, None, where)
             # A hard negative with entity_type only forbids that id (a recognizer's negative case).
@@ -2072,6 +2095,69 @@ def lazy(factory: Callable[[], ArkBuild]) -> Callable[[], Predictor]:
     return get
 
 
+def presidio_key(profile: str = PRESIDIO_PROFILE) -> str:
+    """Cache key of Presidio predictions: the runner, the profile and the pinned packages."""
+    digest = hashlib.sha256(PREDICTION_VERSION.encode())
+    for path in (HERE / "run_presidio.py", HERE / "profiles" / f"{profile}.yaml", HERE / "requirements.txt"):
+        digest.update(path.read_bytes())
+    return f"presidio-{profile}-{digest.hexdigest()[:16]}"
+
+
+def presidio_predictor(python: str = sys.executable) -> Predictor:
+    """run_presidio.py with the interpreter of the gate (the Presidio venv); the predictor's mode is the profile."""
+
+    def predict(dataset: Dataset, output: Path, profile: str) -> None:
+        proc = subprocess.run(
+            [python, str(HERE / "run_presidio.py"), "--profile", profile, "--input", str(dataset.path),
+             "--output", str(output)],
+            cwd="/", text=True, capture_output=True,
+        )
+        if proc.returncode != 0:
+            # Same rule as run_predictions: stderr may name holdout rows, so it stays in the cache.
+            stderr = output.with_name(output.name + ".stderr")
+            stderr.write_text(proc.stderr, encoding="utf-8")
+            raise ScoreboardError(f"run_presidio.py failed (exit {proc.returncode}); stderr in {stderr}")
+
+    return predict
+
+
+def gate_milestones(
+    head: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, presidio: Predictor
+) -> list[str]:
+    """M1 and M2 of the head per split on attainable gold, balanced vs Presidio tuned (H05).
+
+    One aggregate line per split, so the final milestone numbers on the holdout reach the gate report
+    (the runner keeps the tail of a passing scoreboard) without a row id or value. A failure to
+    measure names only the error type and never fails the gate."""
+    checks = gold_checks(emap)
+    lines = []
+    for split in dict.fromkeys(d.split for d in datasets):
+        try:
+            ark_parts, presidio_parts = [], []
+            for dataset in (d for d in datasets if d.split == split):
+                rows = read_jsonl(dataset.path)
+                ark = cache.get(head.key, dataset, MILESTONE_MODE, head.predict)
+                tuned = cache.get(presidio_key(), dataset, PRESIDIO_PROFILE, lambda: presidio)
+                ark_parts.append(score_rows(rows, ark, emap, dataset.name, checks))
+                presidio_parts.append(score_rows(rows, tuned, emap, dataset.name, checks))
+            ark_result, presidio_result = merge(ark_parts), merge(presidio_parts)
+            m1 = m1_report(ark_result, presidio_result, emap)
+            m2 = m2_report(ark_result, presidio_result, emap)
+        except (ScoreboardError, OSError, ValueError, KeyError) as error:
+            lines.append(f"milestones {split}: not measured ({type(error).__name__})")
+            continue
+        m1_parts = [f"{family} {sum(e['holds'] for e in result['entities'].values())}/{len(result['entities'])}"
+                    for family, result in m1["families"].items() if result["decides"]]
+        m2_parts = [f"{family} {pct(result['ark_macro_f1']).strip()} {'>=' if result['holds'] else '<'} "
+                    f"{pct(result['target']).strip()}" for family, result in m2["families"].items() if result["decides"]]
+        lines.append(
+            f"milestones {split} ({MILESTONE_MODE}, {MILESTONE_VIEW} gold, vs Presidio {PRESIDIO_PROFILE}): "
+            f"M1 {'MET' if m1['met'] else 'NOT MET'} ({', '.join(m1_parts)} shared ids) | "
+            f"M2 {'MET' if m2['met'] else 'NOT MET'} (macro-F1 {', '.join(m2_parts)})"
+        )
+    return lines
+
+
 def score_side(
     side: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, mode: str = "strict"
 ) -> dict[str, Any]:
@@ -2205,6 +2291,7 @@ def gate(
     head_factory: Callable[[], ArkBuild] | None = None,
     base_factory: Callable[[str, str], ArkBuild] | None = None,
     modes: tuple[str, ...] = MODES,
+    presidio: Predictor | None = None,
 ) -> tuple[list[str], bool, dict[str, Any]]:
     head_dir = head_dir.resolve()
     root = cache_dir.resolve() / "scoreboard"
@@ -2236,6 +2323,9 @@ def gate(
         for mode in modes
     }
     lines, regressed = summary(head, base, results, tolerance_pp)
+    if presidio is not None and MILESTONE_MODE in modes:
+        # Before the RESULT line, inside the tail the runner puts into the gate report.
+        lines[-1:-1] = gate_milestones(head, datasets, cache, emap, presidio)
     report = {"schema": SCHEMA, "head": head_sha, "base": base_sha, "head_source_key": head_key,
               "base_source_key": base_key, "tolerance_pp": tolerance_pp, "regressed": regressed,
               "milestone_mode": MILESTONE_MODE, "modes": results}
@@ -2801,6 +2891,108 @@ def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
     return lines
 
 
+# ── NER: L1 + L3 dynamic-pii against Presidio on the semantic ids ───────
+
+
+def row_latency_path(predictions: Path) -> Path:
+    """Row-latency file of a prediction file (``run_ark.py``/``run_presidio.py --latency``)."""
+    return predictions.with_name(predictions.stem + ".latency.json")
+
+
+def ner_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str, Any]:
+    """Every engine's merged result on the semantic ids of ``ner_ids`` (raw gold), plus its row latency.
+
+    ``engines`` maps a name (e.g. ``ark-dynamic-pii``, ``presidio-default``, ``presidio-tuned``) to a
+    prediction directory with the gold file names. Latency is p50/p95 per text over the
+    ``<file stem>.latency.json`` files next to the predictions, ``None`` unless every gold file has one."""
+    ids = ner_ids(emap)
+    if not ids:
+        raise ScoreboardError("entity_map.yaml maps no dynamic_pii label to a semantic id")
+    if not engines:
+        raise ScoreboardError("ner needs at least one engine")
+    datasets = discover("gold", gold_root)
+    gold = {dataset.name: read_jsonl(dataset.path) for dataset in datasets}
+    results: dict[str, Any] = {}
+    latencies: dict[str, Any] = {}
+    for engine, root in engines.items():
+        parts, payloads = [], []
+        for name, rows in gold.items():
+            predictions = root / name
+            if not predictions.is_file():
+                raise ScoreboardError(f"{engine}: no predictions {predictions} for {name}")
+            parts.append(score_rows(rows, read_jsonl(predictions), emap, name, ids=ids))
+            timing = row_latency_path(predictions)
+            if timing.is_file():
+                payloads.append(json.loads(timing.read_text(encoding="utf-8")))
+        results[engine] = merge(parts)
+        try:
+            latencies[engine] = latency.row_latency_summary(payloads) if len(payloads) == len(gold) else None
+        except latency.LatencyError as error:
+            raise ScoreboardError(f"{engine}: {error}") from None
+    family_rows: dict[str, int] = defaultdict(int)
+    for rows in gold.values():
+        for row in rows:
+            family_rows[str(emap.family(str(row.get("corpus", ""))))] += 1
+    return {
+        "schema": SCHEMA,
+        "view": "raw",
+        "ids": sorted(ids),
+        "dynamic_pii_labels": emap.dynamic_pii_labels(),
+        "datasets": {dataset.name: dataset.sha256 for dataset in datasets},
+        "family_rows": dict(sorted(family_rows.items())),
+        "engines": results,
+        "latency": latencies,
+    }
+
+
+def ner_lines(report: dict[str, Any]) -> list[str]:
+    """Markdown tables of a NER report: exact P/R/F1 per family, language and id; row latency."""
+    engines = report["engines"]
+    names = list(engines)
+    lines = [
+        f"## Semantic entities (NER), {report['view']} gold (exact P / R / F1 per engine, best F1 in bold)",
+        "",
+        "| Family | Lang | Entity | Gold | " + " | ".join(names) + " |",
+        "|---|---|---|---:|" + "---|" * len(names),
+    ]
+    families = [f for f in entity_map_module.FAMILIES if f in report["family_rows"]]
+    for family in families:
+        for language in LANGUAGES:
+            for entity_id in [*report["ids"], "all"]:
+                key = (f"family_language/{family}/{language}" if entity_id == "all"
+                       else f"family_language_entity/{family}/{language}/{entity_id}")
+                counts = {engine: engines[engine]["buckets"].get(key, empty_counts()) for engine in names}
+                gold = max(c["gold"] for c in counts.values())
+                if not gold:
+                    continue
+                exact = {engine: metrics(c)["exact"] for engine, c in counts.items()}
+                best = max(m["f1"] for m in exact.values())
+                cells = []
+                for engine in names:
+                    f1 = _cell(exact[engine]["f1"])
+                    cells.append(f"{_cell(exact[engine]['precision'])} / {_cell(exact[engine]['recall'])} / "
+                                 + (f"**{f1}**" if best > 0 and exact[engine]["f1"] == best else f1))
+                label = "all NER ids" if entity_id == "all" else entity_id
+                lines.append(f"| {_family_cell(family)} | {language} | {label} | {gold} | " + " | ".join(cells) + " |")
+    lines += ["", "¹ ark_authored is reported and decides no milestone.", ""]
+    lines += [
+        "## Latency per text (wall time of one engine call per gold row, in ms)",
+        "",
+        "| Engine | Lang | Texts | p50 | p95 | Machine |",
+        "|---|---|---:|---:|---:|---|",
+    ]
+    for engine in names:
+        item = report["latency"].get(engine)
+        if item is None:
+            lines.append(f"| {engine} | – | – | – | – | no row latency (run with --latency) |")
+            continue
+        machines = ", ".join(sorted({f"{m['system']} {m['machine']}" for m in item["machines"]}))
+        for language, summary in item["per_text"].items():
+            lines.append(f"| {engine} | {language} | {summary['samples']} | {summary['p50_ms']:.1f} | "
+                         f"{summary['p95_ms']:.1f} | {machines} |")
+    return lines
+
+
 def named_dirs(items: Iterable[str], option: str, allowed: tuple[str, ...] | None = None) -> dict[str, Path]:
     """Parse repeated NAME=DIR options; names are unique and, with allowed, one of those."""
     result: dict[str, Path] = {}
@@ -2858,8 +3050,20 @@ def main(argv: list[str] | None = None) -> int:
     report_parser.add_argument("--engine", action="append", required=True, metavar="NAME=DIR",
                                help="Presidio predictions of one profile with the gold file names")
     report_parser.add_argument("--json", type=Path, help="also write the report as JSON")
+    ner_parser = commands.add_parser("ner", help="semantic ids (PERSON, LOCATION, ...): L1 + L3 dynamic-pii vs Presidio")
+    ner_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
+    ner_parser.add_argument("--engine", action="append", required=True, metavar="NAME=DIR",
+                            help="predictions of one engine with the gold file names (run_ark.py --dynamic-pii, "
+                                 "run_presidio.py --profile ...), optional <stem>.latency.json next to them")
+    ner_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     args = parser.parse_args(argv)
     try:
+        if args.command == "ner":
+            report = ner_report(args.gold, named_dirs(args.engine, "--engine"), entity_map_module.load())
+            print("\n".join(ner_lines(report)))
+            if args.json:
+                args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            return 0
         if args.command == "report":
             ark = named_dirs(args.ark, "--ark", ARK_MODES)
             presidio = named_dirs(args.engine, "--engine")
@@ -2901,6 +3105,7 @@ def main(argv: list[str] | None = None) -> int:
         lines, regressed, report = gate(
             args.head, args.base_sha, splits, args.cache,
             ark_python=args.ark_python, cargo=args.cargo, tolerance_pp=args.tolerance_pp,
+            presidio=presidio_predictor(),
         )
     except ScoreboardError as error:
         print(f"scoreboard error: {error}", file=sys.stderr)

@@ -66,6 +66,41 @@
       "lookalike": ["fireworks_api_key_short"],
       "probes": ["FIREWORKS_API_KEY=<<secret:0>>", "fireworks.client.api_key = \"<<secret:0>>\""]
     },
+    "dlp_langsmith_key": {
+      "generators": ["langsmith_personal_token", "langsmith_service_key"],
+      "lookalike": ["langsmith_api_key_short"],
+      "probes": ["LANGSMITH_API_KEY=<<secret:0>>", "x-api-key: <<secret:0>>"]
+    },
+    "dlp_pinecone_key": {
+      "generators": ["pinecone_api_key", "pinecone_api_key_long_id"],
+      "lookalike": ["pinecone_api_key_short"],
+      "probes": ["PINECONE_API_KEY=<<secret:0>>", "pc = Pinecone(api_key=\"<<secret:0>>\")"]
+    },
+    "dlp_elevenlabs_key": {
+      "generators": ["elevenlabs_api_key"],
+      "lookalike": ["elevenlabs_api_key_short"],
+      "probes": ["ELEVENLABS_API_KEY=<<secret:0>>", "xi-api-key: <<secret:0>>"]
+    },
+    "dlp_azure_openai_key": {
+      "generators": ["azure_openai_api_key"],
+      "lookalike": ["azure_openai_api_key_short"],
+      "probes": ["AZURE_OPENAI_API_KEY=<<secret:0>>", "client = AzureOpenAI(api_key=\"<<secret:0>>\")"]
+    },
+    "dlp_wandb_key": {
+      "generators": ["wandb_api_key"],
+      "lookalike": ["wandb_api_key_short"],
+      "probes": ["WANDB_API_KEY=<<secret:0>>", "wandb login <<secret:0>>"]
+    },
+    "dlp_assemblyai_key": {
+      "generators": ["assemblyai_api_key"],
+      "lookalike": ["assemblyai_api_key_short"],
+      "probes": ["ASSEMBLYAI_API_KEY=<<secret:0>>", "aai.settings.api_key = \"<<secret:0>>\""]
+    },
+    "dlp_deepgram_key": {
+      "generators": ["deepgram_api_key"],
+      "lookalike": ["deepgram_api_key_short"],
+      "probes": ["DEEPGRAM_API_KEY=<<secret:0>>", "dg = DeepgramClient(\"<<secret:0>>\")"]
+    },
     "dlp_aws_access_key": {
       "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id", "aws_access_key_id_non_base32"],
       "lookalike": ["aws_access_key_id_long", "aws_iam_user_unique_id"],

@@ -230,6 +230,48 @@ entities:
     ark: [dlp_deepseek_key]
     trufflehog: [DeepSeek]
     backlog: P01
+  - id: llm.langsmith.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_langsmith_key]
+    trufflehog: [LangSmith]
+    backlog: P02
+  - id: llm.pinecone.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_pinecone_key]
+    trufflehog: [Pinecone]
+    backlog: P02
+  - id: llm.elevenlabs.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_elevenlabs_key]
+    trufflehog: [ElevenLabs]
+    backlog: P02
+  - id: llm.azure_openai.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_azure_openai_key]
+    trufflehog: [AzureOpenAI]
+    backlog: P02
+  - id: llm.wandb.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_wandb_key]
+    trufflehog: [WeightsAndBiases]
+    backlog: P02
+  - id: llm.assemblyai.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_assemblyai_key]
+    trufflehog: [AssemblyAI]
+    backlog: P02
+  - id: llm.deepgram.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_deepgram_key]
+    trufflehog: [Deepgram]
+    backlog: P02
   - id: cloud.aws.access_key_id
     scope: shared
     group: CLOUD_KEY

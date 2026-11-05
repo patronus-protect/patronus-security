@@ -46,6 +46,7 @@ from typing import Any, Callable, Iterable, NamedTuple
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SCHEMA = "ark-l1-latency-v1"
+ROW_LATENCY_SCHEMA = "ark-l1-row-latency-v1"
 WORKLOAD_VERSION = "1"
 LANGUAGES = ("de", "en")
 # Size class -> exact UTF-8 bytes (None: the first paragraph alone).
@@ -177,6 +178,44 @@ def summarize(samples_ns: list[int]) -> dict[str, Any]:
         "p99_ms": round(percentile(ms, 0.99), 4),
         "mean_ms": round(sum(ms) / len(ms), 4),
         "max_ms": round(max(ms), 4),
+    }
+
+
+def write_row_latency(path: Path, engine: Any, timings: dict[str, list[int]]) -> dict[str, Any]:
+    """Per-row wall times of a prediction run (``run_ark.py``/``run_presidio.py --latency``).
+
+    One sample per gold row and language, in nanoseconds; kept apart from the byte-identical
+    predictions and sidecar. ``scoreboard.py ner`` merges the files of all gold files."""
+    payload = {
+        "schema": ROW_LATENCY_SCHEMA,
+        "engine": engine,
+        "machine": machine_info(),
+        "samples_ns": {language: list(samples) for language, samples in sorted(timings.items())},
+    }
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+def row_latency_summary(payloads: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """p50/p95 per text over several row-latency files, overall (``all``) and per language."""
+    by_language: dict[str, list[int]] = {}
+    machines = []
+    for payload in payloads:
+        if payload.get("schema") != ROW_LATENCY_SCHEMA:
+            raise LatencyError(f"row latency needs schema {ROW_LATENCY_SCHEMA}")
+        if payload["machine"] not in machines:
+            machines.append(payload["machine"])
+        for language, samples in payload["samples_ns"].items():
+            by_language.setdefault(language, []).extend(samples)
+    every = [sample for samples in by_language.values() for sample in samples]
+    if not every:
+        raise LatencyError("row latency without samples")
+    return {
+        "machines": machines,
+        "per_text": {
+            "all": summarize(every),
+            **{language: summarize(samples) for language, samples in sorted(by_language.items()) if samples},
+        },
     }
 
 

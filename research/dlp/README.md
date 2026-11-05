@@ -347,6 +347,16 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Google-API-Keys (`AIza`, `dlp_google_api_key`). Mistral und Together AI dokumentieren kein Format
   und haben keine gitleaks- oder TruffleHog-Regel; sie bekommen keine eigene Regel (unter einem
   Anbieterschlüssel greifen die generischen Regeln).
+  Seit P02 kommen drei Präfix-Regeln mit Token-Grenze nach TruffleHog hinzu (`API_KEY`,
+  `api_key`): LangSmith (`lsv2_pt_` oder `lsv2_sk_`, 32 Hex-Ziffern, `_`, 10 Hex-Ziffern), Pinecone
+  (`pcsk_`, 5 oder 6 Zeichen Schlüssel-ID, `_`, 63 Zeichen beider Schreibweisen) und ElevenLabs
+  (`sk_` und 48 Hex-Ziffern). Azure OpenAI, Weights & Biases, AssemblyAI und Deepgram haben kein
+  eigenes Präfix; wie TruffleHogs Schlüsselwort-Detektoren binden Kontextregeln ihre Kleinbuchstaben-
+  Hex-Werte an den Anbieternamen (`provider_key!` und Client-Aufrufe): Azure OpenAI (32 Ziffern unter
+  `azure_openai` oder in `AzureOpenAI(api_key=…)`), Weights & Biases (40 unter `wandb`, nach
+  `wandb login` oder in `wandb.login(key=…)`), AssemblyAI (32 unter `assemblyai` oder
+  `aai.settings.api_key`) und Deepgram (40 unter `deepgram` oder in `DeepgramClient(…)`). Stability
+  AI erkennt weder das gepinnte gitleaks noch TruffleHog; keine Regel.
   Seit P03 decken sechs Regeln Hyperscaler ab (`CLOUD_KEY`): Azure-Storage-Kontoschlüssel nach
   `AccountKey=` (Base64 von genau 64 Bytes, detect-secrets), Entra-ID-Client-Secrets (`…\dQ~` und 31
   bis 34 Zeichen beider Schreibweisen, gitleaks), Alibaba-AccessKey-ID (`LTAI` und 20 Zeichen,

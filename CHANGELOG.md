@@ -17,6 +17,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   current `ark-core/` paths. `scripts/release_legal_files.py` checks every packaged license and
   `NOTICE` copy and that Core and root attributions agree; CI runs it on every pull request, so
   a stale copy no longer surfaces first in the release workflow.
+- Python: `dynamic-pii` no longer returns silently empty results. A gateway with `dynamic-pii`
+  and a `max_level` below `l3` raises `ValueError` (the L3-only GLiNER pipeline never ran there),
+  and `scan_all`/`scan_category`/`scan_categories` over `dynamic-pii` raise `RuntimeError` until
+  `warmup()` has loaded its model. **Breaking** for code that relied on the empty list.
+- New GLiNER model test (`rust/tests/dynamic_pii.rs`, ignored like the other model tests; run
+  with `PATRONUS_TEST_GLINER_DIR` and `--ignored`): PERSON, ORGANIZATION and LOCATION must be
+  found in two English and two German sentences.
 
 ## [0.1.15] - 2026-11-05
 
@@ -190,6 +197,20 @@ the M1 work on presidio_favored) are opt-in.
   entities with these rules. GCP service account key files, AWS session tokens, Amazon MWS,
   Azure SAS signatures beyond `dlp_signed_url_signature`, Tencent Cloud and Oracle OCI get no new
   rule in this change.
+- Detection change: LLM/AI provider keys (P02). New prefix rules with a token boundary, each per
+  TruffleHog: `dlp_langsmith_key` (`lsv2_pt_` or `lsv2_sk_`, 32 lower-case hex digits, `_` and 10
+  lower-case hex digits), `dlp_pinecone_key` (`pcsk_`, a 5 or 6 character key ID, `_` and 63 base62
+  with both cases) and `dlp_elevenlabs_key` (`sk_` and 48 lower-case hex digits). Stability AI has
+  no format the pinned gitleaks or TruffleHog detects and gets no rule.
+- Detection change: LLM/AI provider context keys (P02 review), all modes. Azure OpenAI, Weights &
+  Biases, AssemblyAI and Deepgram keys have no own marker; like TruffleHog's keyword detectors, new
+  context rules bind their lower-case hex values to the provider name: `dlp_azure_openai_key` (32
+  digits under an Azure OpenAI key or in `AzureOpenAI(api_key=…)`), `dlp_wandb_key` (40 under a
+  wandb key, after `wandb login` or in `wandb.login(key=…)`), `dlp_assemblyai_key` (32 under an
+  AssemblyAI key or `aai.settings.api_key`) and `dlp_deepgram_key` (40 under a Deepgram key or in
+  `DeepgramClient(…)`). IDs under the provider name (`WANDB_RUN_ID`, `DEEPGRAM_PROJECT_ID`) stay
+  silent. The values were reported by generic rules under a credential key only, without provider
+  attribution, and not at all in client calls or `wandb login`.
 - Detection change: LLM provider keys (P01). New rules `dlp_perplexity_key` (`pplx-` and 48
   base62, gitleaks perplexity-api-key), `dlp_cohere_key` (40 base62 under a Cohere or `CO_API_KEY`
   key with a credential noun, gitleaks cohere-api-token), `dlp_openrouter_key` (`sk-or-v1-` and 64

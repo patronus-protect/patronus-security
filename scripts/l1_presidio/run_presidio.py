@@ -27,6 +27,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from collections import defaultdict
 from importlib import metadata
 from pathlib import Path
@@ -174,9 +175,11 @@ def _evidence_span(result: Any, text: str, row_id: str) -> dict[str, Any]:
 
 
 def predict_rows(
-    rows: Iterable[dict[str, Any]], analyzer: Any, profile: dict[str, Any]
+    rows: Iterable[dict[str, Any]], analyzer: Any, profile: dict[str, Any],
+    timings: dict[str, list[int]] | None = None,
 ) -> Iterable[dict[str, Any]]:
-    """Yield one prediction row per Gold row, in input order."""
+    """Yield one prediction row per Gold row, in input order; ``timings`` collects the wall time
+    of each ``analyze`` call in nanoseconds per row language."""
     seen = set()
     for row in rows:
         row_id = row.get("id")
@@ -188,9 +191,12 @@ def predict_rows(
             raise ValueError(f"row {row_id!r} requires text")
         language = str(row.get("language", "und"))
         target = analysis_language(language, profile)
+        started = time.perf_counter_ns()
         results = analyzer.analyze(
             text=text, language=target, score_threshold=profile["score_threshold"]
         )
+        if timings is not None:
+            timings[language].append(time.perf_counter_ns() - started)
         spans = [_evidence_span(result, text, row_id) for result in results]
         spans.sort(key=lambda s: (s["start_char"], s["end_char"], s["presidio_entity"], -s["score"]))
         yield {
@@ -219,8 +225,11 @@ def run(
     profile_name: str,
     analyzer: Any = None,
     versions: dict[str, str] | None = None,
+    latency_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Write predictions plus a timestamp-free metadata sidecar; return the metadata."""
+    """Write predictions plus a timestamp-free metadata sidecar; return the metadata.
+
+    ``latency_path`` writes the per-row wall times (``latency.write_row_latency``)."""
     profile_file = PROFILE_DIR / f"{profile_name}.yaml"
     profile = load_profile(profile_name)
     if versions is None:
@@ -230,11 +239,18 @@ def run(
         analyzer = build_analyzer(profile)
     source = input_path.read_bytes()
     rows = _read_jsonl(input_path)
-    predictions = list(predict_rows(rows, analyzer, profile))
+    timings: dict[str, list[int]] | None = defaultdict(list) if latency_path is not None else None
+    predictions = list(predict_rows(rows, analyzer, profile, timings))
     encoded = "".join(
         json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in predictions
     ).encode("utf-8")
     output_path.write_bytes(encoded)
+    if timings is not None:
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        import latency
+
+        latency.write_row_latency(latency_path, {"profile": profile_name}, timings)
     languages: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in predictions:
         languages[row["language"]][row["analysis_language"]] += 1
@@ -262,6 +278,7 @@ def main() -> int:
     parser.add_argument("--input", type=Path, required=True, help="normalized Gold JSONL")
     parser.add_argument("--output", type=Path, required=True, help="prediction JSONL")
     parser.add_argument("--meta", type=Path, help="metadata JSON (default: OUTPUT with .meta.json)")
+    parser.add_argument("--latency", type=Path, help="per-row wall times in nanoseconds per language (JSON)")
     args = parser.parse_args()
     problems = check_pins(parse_requirements(REQUIREMENTS_PATH))
     if problems:
@@ -270,7 +287,7 @@ def main() -> int:
             print(f"  {problem}", file=sys.stderr)
         return 2
     meta_path = args.meta or args.output.with_name(args.output.stem + ".meta.json")
-    meta = run(args.input, args.output, meta_path, args.profile)
+    meta = run(args.input, args.output, meta_path, args.profile, latency_path=args.latency)
     print(
         f"presidio {args.profile}: {meta['rows']} rows -> {args.output} "
         f"(sha256 {meta['output_sha256'][:12]})",

@@ -1031,7 +1031,46 @@ tasks:
       pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
-  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-6]}
+  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-6], status: done}
+
+  # Raw parity with Presidio default AND tuned (decided 2026-11-05 after an external re-test on
+  # Presidio's 1,500 English texts and the raw M2 gap on German rows: 63.2 vs tuned 87.0). The goal
+  # stays "beat Presidio, also tuned"; the attainable view (T27) is no longer enough for a public claim.
+  - id: D-BARE
+    title: "Configurable bare-format detection: opt-in rules for every bare value in known_gaps (tax ID, ELSTER tax number, LANR, BSNR, DE driver's licence, SSN, SIN, Aadhaar, NPI, PESEL, ACN, KR BRN, …)"
+    type: new-entity
+    deps: [H05]
+    source: "Owner decision 2026-11-05: bare unlabelled numbers must be switchable, not decided away"
+    accept: >-
+      Each bare form is its own rule id (e.g. pii_tax_id_de_bare) in the existing `rules` gate, default
+      off in every mode (no new API; documented in docs/reference/configuration.md and the generated rule
+      catalog, plus a named example profile). The bare rules keep the id's validator (checksum where one
+      exists) and use a low base score so balanced/recall rank them below labelled hits. Strict output with
+      the default gates stays bit-identical (goldens unchanged). Per rule: hard-negative and benign
+      code/docs FP measured with the rule on, reported in the PR. Behind the existing prefilters; default
+      L1 latency unchanged. Tests per rule (positive bare, labelled, hard negatives)
+  - id: M-RAW
+    title: "Milestones in the raw view against Presidio default and tuned, Ark balanced with and without the bare profile"
+    type: eval-infra
+    deps: [D-BARE]
+    source: "Owner decision 2026-11-05; supersedes T27 for public claims (attainable view stays as a diagnostic column)"
+    accept: >-
+      scoreboard.py report, m1 and m2 score the raw view (no known_gaps exclusion) as the deciding view
+      and show the attainable view next to it; engines: Ark strict, Ark balanced, Ark balanced + bare
+      profile, Presidio default (threshold 0) and Presidio tuned. M1/M2 hold only if Ark beats BOTH
+      Presidio variants in the raw view. README milestone section, snapshot schema and
+      docs/reference/l1-capabilities.md generator updated; tests
+  - id: Q-RAW
+    title: "Close the raw-view gaps to Presidio default and tuned on neutral and presidio_favored (EN structured ids and DE/EU rows)"
+    type: recall-fix
+    deps: [M-RAW]
+    source: "External re-test 2026-11-05 (Presidio's 1,500 EN texts, 370 structured values): Ark balanced 297 found / 0 FP, Presidio default 297 / 21, tuned 282 / 20; raw M2 presidio_favored 63.2 vs tuned 87.0 (2026-11-02)"
+    accept: >-
+      In the raw view, Ark (balanced, bare profile allowed) has higher exact F1 than Presidio default and
+      tuned on neutral and presidio_favored, M1 and M2 hold; the PR lists every remaining raw gap per id.
+      Validators are never loosened for the default rules; strict default output unchanged unless a gold
+      fix; no new hard-negative FP in the default profile
+  - {id: H05-2, title: "Final report M1–M4 on holdout in the raw view (Presidio default and tuned, Ark with and without the bare profile)", type: report, deps: [Q-RAW]}
 
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}

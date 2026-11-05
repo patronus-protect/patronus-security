@@ -64,6 +64,39 @@ cd python && ../.venv/bin/python -m patronus_ark.external_pii_eval evaluate \
 `<output>.meta.json` enthält SHA-256 von Eingabe, Ausgabe und nativem Modul (`build.native_sha256`)
 sowie die Paketversion, ohne Zeitstempel. Zwei Läufe auf demselben Build sind byte-identisch.
 
+### L1 + L3 `dynamic-pii` (GLiNER)
+
+`--dynamic-pii` ergänzt L1 um die L3-Pipeline `dynamic-pii` (GLiNER, Asset
+`patronus-studio/gliner_small-v2.5-edge`, wird bei Bedarf geladen): ein zweites Gateway
+`SecurityGateway(categories=["dynamic-pii"], max_level="l3", download_files=True)` scannt jede Zeile
+nach L1. Labels und Schwellen: `--dynamic-pii-labels` (Standard `person,organization,location`),
+`--dynamic-pii-threshold` (Standard 0,5) und `--dynamic-pii-label-threshold LABEL=X` (wiederholbar).
+GLiNER-Spans tragen `dynamic_pii_label` und die Benchmark-ID aus `dynamic_pii` in `entity_map.yaml`;
+ein Label ohne ID wird abgelehnt. Die Metadaten nennen Konfiguration, Label-Mapping und Maschine
+unter `engine.dynamic_pii`.
+
+`--latency PATH` (auch in `run_presidio.py`) schreibt die Wandzeit jeder Zeile (ARK: L1 plus L3) in
+Nanosekunden je Sprache in eine eigene Datei (`ark-l1-row-latency-v1`); Vorhersagen und Metadaten
+bleiben byte-identisch. `scoreboard.py ner` liest sie als `<Vorhersage-Stem>.latency.json`.
+
+```bash
+.venv/bin/python scripts/l1_presidio/run_ark.py --input gold.jsonl --output ner/gold.jsonl \
+  --dynamic-pii --dynamic-pii-label-threshold person=0.8 --latency ner/gold.latency.json
+```
+
+**Nur auf arm64 oder x86_64 mit VNNI messen.** Das aktuelle GLiNER-Asset rechnet `MatMulInteger`
+mit U8S8; ohne VNNI (AVX2, z. B. Haswell-VPS) sättigt der Kernel und die Scores weichen ab. Bis das
+korrigierte Asset (uint8-Gewichte) im Build steckt, laufen GLiNER-Messungen nicht auf dem VPS.
+
+`scoreboard.py ner` wertet die semantischen IDs mit `dynamic_pii`-Labels (PERSON, LOCATION,
+ORGANIZATION) für ARK L1 + L3 gegen beide Presidio-Profile: rohes Gold, exaktes P/R/F1 je
+Quellfamilie, Sprache (EN, DE) und ID sowie p50/p95 je Text aus den Latenzdateien.
+
+```bash
+python3 scripts/l1_presidio/scoreboard.py ner --gold GOLD --engine ark-dynamic-pii=NER \
+  --engine presidio-default=DEFAULT --engine presidio-tuned=TUNED --json ner.json
+```
+
 ## Entity-Mapping
 
 `research/l1-pii/entity_map.yaml` ordnet jede Benchmark-ID die ARK-Labels (`entity_group` in
@@ -297,6 +330,14 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   bedient beide Modi. `run_ark.py` muss den Modus in den Metadaten bestätigen (`engine.pii_mode`, bei
   `strict` fehlend), sonst Exit 2: ein Runner, der `--pii-mode` ignoriert, würde `strict` als
   `balanced` ausgeben. Meilensteine liest `m1`/`report` aus `balanced`.
+- **Meilensteine im Gate (H05):** Vor der Zeile `RESULT` steht je Split eine Zeile
+  `milestones <split> (balanced, attainable gold, vs Presidio tuned): M1 … | M2 …` mit M1 (gehaltene
+  gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel) des Heads. Presidio
+  tuned läuft mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
+  Runner, Profil und Eingabe-SHA-256 gecacht. So erreichen die Holdout-Meilensteine den Gate-Bericht
+  (der Runner übernimmt das Ende einer grünen Scoreboard-Ausgabe), nur als Aggregat. Scheitert die
+  Messung (lokal ohne Presidio im Interpreter), steht `not measured (<Fehlertyp>)` da; der Exit-Code
+  ändert sich nie.
 - **Regression (Exit 1):** F1-Verlust > 0,5 pp (`--tolerance-pp`), exakt oder überlappend, für eine
   Entität, alle L1-IDs zusammen, eine Quellfamilie, `de` oder `en`, in Dev oder Holdout, in `strict` oder
   `balanced`; oder ein neuer Treffer auf einem Hard Negative in einem der Modi (gleiche Zeile, ID und
@@ -454,6 +495,11 @@ python3 scripts/generate_docs.py
   fehlen.
 - `--dlp-entity-map`: die Entity-Map des gemessenen Commits, damit später ergänzte IDs als „nicht
   gemessen“ (`–`) statt „kein Gold“ erscheinen.
+- `--ner-report` (optional): JSON von `scoreboard.py ner --json`. Schreibt `pii.semantic`: je NER-ID,
+  Quellfamilie und Sprache (`en`, `de`) mit Gold `gold` und exakt F1 je Engine (rohes Gold), dazu
+  `latency.<engine>` mit p50/p95 je Text und der messenden Maschine. Von Hand gepflegte Schlüssel dort
+  (etwa `note` zu Plattform und Methode) bleiben erhalten; die Capabilities-Seite zeigt den Abschnitt
+  „Semantic entities“ nur, wenn der Snapshot `pii.semantic` trägt.
 
 Die Berichte enthalten nur Zählungen und Raten; Korpustext, Holdout und Vorhersagen gehören nicht ins
 Repo. Ohne `--output` wird `--snapshot` überschrieben; ein zweiter Lauf auf der eigenen Ausgabe ist

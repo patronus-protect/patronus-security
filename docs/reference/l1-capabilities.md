@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 184 | 130 (+5 relationship rules) |
+| Regex rules | 184 | 137 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 122 | 18 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -309,7 +309,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 
 | Result label | Family | Default | Rules | Entities | Gold | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `API_KEY` | provider_secret | on | 24 | 19 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
+| `API_KEY` | provider_secret | on | 31 | 26 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 24 | 18 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
@@ -354,6 +354,13 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `llm.perplexity.api_key` | shared | `API_KEY` | `dlp_perplexity_key` | format | on | gitleaks: `perplexity-api-key` |
 | `llm.openrouter.api_key` | shared | `API_KEY` | `dlp_openrouter_key` | format | on | TruffleHog: `OpenRouter` |
 | `llm.deepseek.api_key` | shared | `API_KEY` | `dlp_deepseek_key` | format | on | TruffleHog: `DeepSeek` |
+| `llm.langsmith.api_key` | shared | `API_KEY` | `dlp_langsmith_key` | format | on | TruffleHog: `LangSmith` |
+| `llm.pinecone.api_key` | shared | `API_KEY` | `dlp_pinecone_key` | format | on | TruffleHog: `Pinecone` |
+| `llm.elevenlabs.api_key` | shared | `API_KEY` | `dlp_elevenlabs_key` | format | on | TruffleHog: `ElevenLabs` |
+| `llm.azure_openai.api_key` | shared | `API_KEY` | `dlp_azure_openai_key` | format | on | TruffleHog: `AzureOpenAI` |
+| `llm.wandb.api_key` | shared | `API_KEY` | `dlp_wandb_key` | format | on | TruffleHog: `WeightsAndBiases` |
+| `llm.assemblyai.api_key` | shared | `API_KEY` | `dlp_assemblyai_key` | format | on | TruffleHog: `AssemblyAI` |
+| `llm.deepgram.api_key` | shared | `API_KEY` | `dlp_deepgram_key` | format | on | TruffleHog: `Deepgram` |
 | `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | `dlp_aws_access_key` | format | on | gitleaks: `aws-access-token`; TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
 | `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | `dlp_aws_secret_key` | format | on | TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | `dlp_google_api_key` | format | on | gitleaks: `gcp-api-key` |
@@ -542,7 +549,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 72 shared, 29 ARK only, 85 baseline only, 11 out of scope.
+Entities: 79 shared, 29 ARK only, 85 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -560,6 +567,13 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `llm.perplexity.api_key` | shared | `API_KEY` | 0 | no gold | no gold |
 | `llm.openrouter.api_key` | shared | `API_KEY` | – | – | – |
 | `llm.deepseek.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.langsmith.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.pinecone.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.elevenlabs.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.azure_openai.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.wandb.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.assemblyai.api_key` | shared | `API_KEY` | – | – | – |
+| `llm.deepgram.api_key` | shared | `API_KEY` | – | – | – |
 | `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks) | ARK 100.0 / best baseline 100.0 (gitleaks, detect-secrets) |
 | `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 21.3 (detect-secrets) | ARK 100.0 / best baseline 62.5 (detect-secrets) |
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 97.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
