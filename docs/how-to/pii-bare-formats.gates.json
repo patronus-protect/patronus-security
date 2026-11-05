@@ -1,0 +1,20 @@
+{
+  "pii_mode": "balanced",
+  "rules": {
+    "pii_steuer_id_de_bare": true,
+    "pii_steuernummer_de_bare": true,
+    "pii_physician_number_lanr_de_bare": true,
+    "pii_facility_number_bsnr_de_bare": true,
+    "pii_driver_license_number_de_bare": true,
+    "pii_ssn_us_bare": true,
+    "pii_sin_ca_bare": true,
+    "pii_aadhaar_in_bare": true,
+    "pii_npi_us_bare": true,
+    "pii_pesel_pl_bare": true,
+    "pii_acn_au_bare": true,
+    "pii_brn_kr_bare": true,
+    "pii_pan_in_bare": true,
+    "pii_voter_id_in_bare": true,
+    "pii_vehicle_registration_ng_bare": true
+  }
+}

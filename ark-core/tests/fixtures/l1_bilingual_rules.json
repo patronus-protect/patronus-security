@@ -3095,6 +3095,231 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_steuer_id_de_bare",
+    "de": "Bitte 86095742719 im Formular eintragen.",
+    "en": "Please copy 86095742719 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 86095742719 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 86095742719 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuernummer_de_bare",
+    "de": "Bitte 1121081508150 im Formular eintragen.",
+    "en": "Please copy 1121081508150 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 1121081508150 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 1121081508150 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_physician_number_lanr_de_bare",
+    "de": "Bitte 987654401 im Formular eintragen.",
+    "en": "Please copy 987654401 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 987654401 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 987654401 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_facility_number_bsnr_de_bare",
+    "de": "Bitte 711234567 im Formular eintragen.",
+    "en": "Please copy 711234567 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 711234567 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 711234567 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_de_bare",
+    "de": "Bitte B072RRE2A57 im Formular eintragen.",
+    "en": "Please copy B072RRE2A57 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang B072RRE2A57 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference B072RRE2A57 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us_bare",
+    "de": "Bitte 422687360 im Formular eintragen.",
+    "en": "Please copy 422687360 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 422687360 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 422687360 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_sin_ca_bare",
+    "de": "Bitte 435418165 im Formular eintragen.",
+    "en": "Please copy 435418165 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 435418165 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 435418165 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_aadhaar_in_bare",
+    "de": "Bitte 599979610811 im Formular eintragen.",
+    "en": "Please copy 599979610811 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 599979610811 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 599979610811 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_npi_us_bare",
+    "de": "Bitte 1565277724 im Formular eintragen.",
+    "en": "Please copy 1565277724 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 1565277724 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 1565277724 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_pesel_pl_bare",
+    "de": "Bitte 02070803628 im Formular eintragen.",
+    "en": "Please copy 02070803628 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 02070803628 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 02070803628 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_acn_au_bare",
+    "de": "Bitte 006 249 976 im Formular eintragen.",
+    "en": "Please copy 006 249 976 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 006 249 976 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 006 249 976 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_brn_kr_bare",
+    "de": "Bitte 1048656659 im Formular eintragen.",
+    "en": "Please copy 1048656659 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 1048656659 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference 1048656659 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_pan_in_bare",
+    "de": "Bitte AFZPK7190K im Formular eintragen.",
+    "en": "Please copy AFZPK7190K into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang AFZPK7190K wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference AFZPK7190K was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_voter_id_in_bare",
+    "de": "Bitte KLT4471920 im Formular eintragen.",
+    "en": "Please copy KLT4471920 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang KLT4471920 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference KLT4471920 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_ng_bare",
+    "de": "Bitte APP-456CV im Formular eintragen.",
+    "en": "Please copy APP-456CV into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang APP-456CV wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference APP-456CV was archived."
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",
