@@ -1,3 +1,4 @@
+import gc
 import json
 import sys
 import unittest
@@ -88,14 +89,22 @@ class NativeScannerTests(unittest.TestCase):
             self.assertTrue(all(type(component) is dict for component in rule["components"]))
         spans = result.evidence_spans
         self.assertTrue(spans)
-        key = sys.intern("rule_id")
-        span_key = sys.intern("start_byte")
-        before = (sys.getrefcount(key), sys.getrefcount(span_key))
-        for _ in range(5):
+        # Shared key strings are also held by objects of other tests and
+        # threads still alive in the same process (the full CI run), so the
+        # counts may move by a few; a reference kept or lost per entry moves
+        # them by at least one per entry and call.
+        calls = 50
+        keys = (sys.intern("rule_id"), sys.intern("start_byte"))
+        del spans
+        gc.collect()
+        before = [sys.getrefcount(key) for key in keys]
+        for _ in range(calls):
             details = layer.details
             spans = result.evidence_spans
             del details, spans
-        self.assertEqual((sys.getrefcount(key), sys.getrefcount(span_key)), before)
+        gc.collect()
+        for key, count in zip(keys, before):
+            self.assertLess(abs(sys.getrefcount(key) - count), calls, key)
         # One shared value string per text: held by each rule that names it.
         rules = layer.details["matched_rules"]
         rule_id = rules[0]["rule_id"]
