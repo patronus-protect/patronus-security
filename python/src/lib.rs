@@ -9,8 +9,9 @@ use patronus_ark::{
     SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
     SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
 };
+use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
+use pyo3::types::{IntoPyDict, PyBool, PyDict, PyString};
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -505,7 +506,8 @@ impl PyLayerResult {
         let mut strings = PyStrings::new(py);
         let details = PyDict::new_bound(py);
         for (key, value) in self.details.iter() {
-            details.set_item(strings.key(key), strings.json_to_py(value)?)?;
+            let value = strings.json_to_py(value)?;
+            set_item(&details, strings.key(key), &value)?;
         }
         Ok(details.into_any().unbind())
     }
@@ -549,6 +551,22 @@ fn release_off_thread<T: Send + 'static>(value: T) {
     }
 }
 
+/// `dict[key] = value` without the reference count round trips of
+/// `PyDict::set_item` (it takes owned arguments and converts each again):
+/// about a quarter of the details of a 100 KiB scan (H06-7).
+fn set_item(
+    dict: &Bound<'_, PyDict>,
+    key: &Bound<'_, PyString>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    // SAFETY: valid objects; `PyDict_SetItem` takes its own references.
+    if unsafe { ffi::PyDict_SetItem(dict.as_ptr(), key.as_ptr(), value.as_ptr()) } == 0 {
+        Ok(())
+    } else {
+        Err(PyErr::fetch(dict.py()))
+    }
+}
+
 /// Builds the Python objects of JSON values and shares one string object per
 /// distinct text: the keys and most string values (`rule_id`,
 /// `span_precision`, …) repeat in every `matched_rules` entry, and creating
@@ -571,12 +589,11 @@ impl<'py, 'a> PyStrings<'py, 'a> {
     }
 
     /// A dict key, interned like the keys `json.loads` memoizes.
-    fn key(&mut self, text: &'a str) -> Bound<'py, PyString> {
+    fn key(&mut self, text: &'a str) -> &Bound<'py, PyString> {
         let py = self.py;
         self.strings
             .entry(text)
             .or_insert_with(|| PyString::intern_bound(py, text))
-            .clone()
     }
 
     /// A string value; not interned, as it may hold scanned text.
@@ -602,16 +619,26 @@ impl<'py, 'a> PyStrings<'py, 'a> {
             },
             Value::String(text) => self.value(text).into_any(),
             Value::Array(items) => {
-                let list = PyList::empty_bound(py);
-                for item in items {
-                    list.append(self.json_to_py(item)?)?;
+                let length = ffi::Py_ssize_t::try_from(items.len()).map_err(|error| {
+                    pyo3::exceptions::PyOverflowError::new_err(error.to_string())
+                })?;
+                // SAFETY: a new list of `length` empty slots, owned here.
+                let list = unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyList_New(length))? };
+                for (index, item) in (0..length).zip(items) {
+                    let item = self.json_to_py(item)?;
+                    // SAFETY: `index` is in bounds of the new list, and
+                    // `PyList_SetItem` takes over the reference of `item`.
+                    if unsafe { ffi::PyList_SetItem(list.as_ptr(), index, item.into_ptr()) } != 0 {
+                        return Err(PyErr::fetch(py));
+                    }
                 }
-                list.into_any()
+                list
             }
             Value::Object(map) => {
                 let dict = PyDict::new_bound(py);
                 for (key, item) in map {
-                    dict.set_item(self.key(key), self.json_to_py(item)?)?;
+                    let item = self.json_to_py(item)?;
+                    set_item(&dict, self.key(key), &item)?;
                 }
                 dict.into_any()
             }
@@ -669,13 +696,13 @@ impl PyEvaluationResult {
             .map(|span| {
                 let dict = PyDict::new_bound(py);
                 // Bound values: a dropped `PyObject` checks the GIL first.
-                dict.set_item(&keys[0], labels.value(&span.label))?;
-                dict.set_item(&keys[1], PyString::new_bound(py, &span.text))?;
-                dict.set_item(&keys[2], span.score.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[3], span.start_byte.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[4], span.end_byte.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[5], span.start_char.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[6], span.end_char.into_py(py).into_bound(py))?;
+                set_item(&dict, &keys[0], &labels.value(&span.label))?;
+                set_item(&dict, &keys[1], &PyString::new_bound(py, &span.text))?;
+                set_item(&dict, &keys[2], &span.score.into_py(py).into_bound(py))?;
+                set_item(&dict, &keys[3], &span.start_byte.into_py(py).into_bound(py))?;
+                set_item(&dict, &keys[4], &span.end_byte.into_py(py).into_bound(py))?;
+                set_item(&dict, &keys[5], &span.start_char.into_py(py).into_bound(py))?;
+                set_item(&dict, &keys[6], &span.end_char.into_py(py).into_bound(py))?;
                 Ok(dict)
             })
             .collect()
