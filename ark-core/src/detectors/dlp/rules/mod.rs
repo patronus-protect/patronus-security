@@ -183,6 +183,17 @@ pub fn provider_xml_key(rule_id: &str) -> Option<ProviderKey> {
         .and_then(|rule| providers::xml_key(rule.pattern))
 }
 
+/// T23: the key and value regexes of a rule whose key also binds the next
+/// field of a SQL row (`dlp::sql_rows`) and that has no config-line binding
+/// ([`config_key`]); `None` for every other rule.
+pub fn sql_key(rule_id: &str) -> Option<ProviderKey> {
+    match rule_id {
+        "dlp_csrf_token" => Some(credentials::CSRF_SQL_KEY),
+        "dlp_password_hash" => Some(hashes::SQL_KEY),
+        _ => None,
+    }
+}
+
 /// Credential rules that take any value under a secret-like key or variable
 /// name: the generic tier of the overlap resolution (K08).
 const GENERIC_CREDENTIALS: &[&str] = &[
@@ -232,7 +243,12 @@ pub fn is_example_match(
     range: Range<usize>,
 ) -> bool {
     let value = checked_value(rule_id, text, range.clone());
-    let example_context = || credentials::has_example_context(text, range.start, range.end);
+    // T23: a dump row has no comment beside it that could call its value a
+    // test value, so a fill in a SQL row (`12345678-1234-…`) counts as one.
+    let example_context = || {
+        credentials::has_example_context(text, range.start, range.end)
+            || super::sql_rows::is_row_value(text, range.start)
+    };
     match check {
         ExampleCheck::Off => false,
         // F-GEN2, T18: the machine-issued run of a generic value (a long

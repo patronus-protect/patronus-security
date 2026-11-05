@@ -74,6 +74,9 @@ pub enum ConfigFormat {
     /// `<password>value</password>` and `<entry key="password" value="…"/>`
     /// (K05C).
     Xml,
+    /// A field of an `INSERT` or `COPY` row bound by its column or by the
+    /// key field before it (T23, [`super::sql_rows`]).
+    Sql,
 }
 
 impl ConfigFormat {
@@ -87,6 +90,7 @@ impl ConfigFormat {
             Self::Toml => "toml",
             Self::Hcl => "hcl",
             Self::Xml => "xml",
+            Self::Sql => "sql",
         }
     }
 }
@@ -156,6 +160,7 @@ pub fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
             );
         }
     }
+    values.extend(super::sql_rows::sql_values(text, key));
     values.sort_by_key(|value| (value.value.start, value.key.start));
     values.dedup_by(|a, b| a.value == b.value && a.key == b.key);
     values
@@ -1090,6 +1095,10 @@ pub enum DocumentFamily {
     /// A document of config lines: YAML, TOML, HCL, INI/properties, .env and
     /// HTTP header fields.
     Lines,
+    /// The rows of SQL dump statements (T23): no config document, so a
+    /// container noun (`zugangsdaten`, `credentials`) binds no field there;
+    /// the label in the row names what the field holds.
+    Sql,
 }
 
 impl DocumentFamily {
@@ -1097,6 +1106,7 @@ impl DocumentFamily {
         match format {
             ConfigFormat::Json => Self::Json,
             ConfigFormat::Xml => Self::Xml,
+            ConfigFormat::Sql => Self::Sql,
             _ => Self::Lines,
         }
     }
@@ -1133,6 +1143,7 @@ pub fn is_config_document(text: &str, family: DocumentFamily) -> bool {
             trimmed.starts_with('<') && trimmed.ends_with('>') && !HTML_MARKUP.is_match(text)
         }
         DocumentFamily::Lines => !trimmed.is_empty() && config_lines(text),
+        DocumentFamily::Sql => false,
     }
 }
 
