@@ -25,17 +25,18 @@ use regex::Regex;
 use super::config_keys::{ConfigFormat, ConfigValue};
 
 /// The head of an `INSERT` statement at the start of a line up to the first
-/// tuple: table name, optional column list (group 1) and `VALUES`.
+/// tuple: table name, optional column list (group 1) and `VALUES`. Matched
+/// at the start of a line that holds `INTO` ([`line_starts`]).
 static INSERT_HEAD: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?im)^[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^\s(]+[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
+        r"(?i)\A[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^\s(]+[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
     )
     .unwrap()
 });
 
 /// A pg_dump `COPY table (columns) FROM stdin;` line; the rows follow.
 static COPY_HEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)^COPY[ \t]+[^\s(]+[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$")
+    Regex::new(r"(?m)\ACOPY[ \t]+[^\s(]+[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$")
         .unwrap()
 });
 
@@ -56,35 +57,61 @@ pub fn key_field_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
 
 fn row_values(text: &str, key: &Regex, by_column: bool) -> Vec<ConfigValue> {
     let mut values = Vec::new();
-    // Literal gates before the line-anchored statement regexes; dumps write
-    // `INTO` in one case.
-    if text.contains("INTO") || text.contains("into") {
-        for head in INSERT_HEAD.captures_iter(text) {
-            let columns = head
-                .get(1)
-                .filter(|_| by_column)
-                .map(|columns| column_names(text, columns.range()));
-            let rows = insert_rows(text, head.get(0).unwrap().end());
-            bind(text, key, columns.as_deref(), &rows, true, &mut values);
-        }
+    // Dumps write `INTO` in one case.
+    for line_start in line_starts(text, &["INTO", "into"]) {
+        let Some(head) = INSERT_HEAD.captures(&text[line_start..]) else {
+            continue;
+        };
+        let columns = head.get(1).filter(|_| by_column).map(|columns| {
+            column_names(
+                text,
+                line_start + columns.start()..line_start + columns.end(),
+            )
+        });
+        let rows = insert_rows(text, line_start + head.get(0).unwrap().end());
+        bind(text, key, columns.as_deref(), &rows, true, &mut values);
     }
-    if text.contains("COPY ") {
-        for head in COPY_HEAD.captures_iter(text) {
-            let columns = by_column.then(|| column_names(text, head.get(1).unwrap().range()));
-            let rows = copy_rows(text, head.get(0).unwrap().end());
-            bind(text, key, columns.as_deref(), &rows, false, &mut values);
-        }
+    for line_start in line_starts(text, &["COPY "]) {
+        let Some(head) = COPY_HEAD.captures(&text[line_start..]) else {
+            continue;
+        };
+        let columns = by_column.then(|| {
+            let list = head.get(1).unwrap();
+            column_names(text, line_start + list.start()..line_start + list.end())
+        });
+        let rows = copy_rows(text, line_start + head.get(0).unwrap().end());
+        bind(text, key, columns.as_deref(), &rows, false, &mut values);
     }
     values
+}
+
+/// The starts of the lines that hold one of `literals`, in order: the
+/// statement regexes run only there, anchored, not over the whole text.
+fn line_starts(text: &str, literals: &[&str]) -> Vec<usize> {
+    let mut found: Vec<usize> = literals
+        .iter()
+        .flat_map(|literal| text.match_indices(literal).map(|(at, _)| at))
+        .collect();
+    found.sort_unstable();
+    let mut starts = Vec::new();
+    let (mut line_start, mut scanned) = (0, 0);
+    for at in found {
+        if let Some(newline) = text[scanned..at].rfind('\n') {
+            line_start = scanned + newline + 1;
+        }
+        scanned = at;
+        if starts.last() != Some(&line_start) {
+            starts.push(line_start);
+        }
+    }
+    starts
 }
 
 /// Whether the value at `at` stands on a line that opens an `INSERT`
 /// statement, as a field of its rows.
 pub fn is_row_value(text: &str, at: usize) -> bool {
     let line_start = text[..at].rfind('\n').map_or(0, |end| end + 1);
-    INSERT_HEAD
-        .find(&text[line_start..at])
-        .is_some_and(|head| head.start() == 0)
+    INSERT_HEAD.is_match(&text[line_start..at])
 }
 
 /// The values of `rows` bound by a key column or a key field. `quoted`:
@@ -306,6 +333,13 @@ mod tests {
             .collect();
         assert_eq!(bound, vec!["digest-two"]);
         assert_eq!(sql_values(text, &key).len(), 2);
+    }
+
+    #[test]
+    fn line_starts_of_literals() {
+        let text = "a INTO b\nc\nd into e INTO\nf";
+        assert_eq!(line_starts(text, &["INTO", "into"]), vec![0, 11]);
+        assert_eq!(line_starts(text, &["COPY "]), Vec::<usize>::new());
     }
 
     #[test]
