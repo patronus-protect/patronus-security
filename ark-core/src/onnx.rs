@@ -1,4 +1,6 @@
 //! Shared ONNX Runtime initialization and provider/session selection.
+mod u8u8;
+
 use crate::{ExecutionBackend, OnnxRuntimeOptions};
 #[cfg(any(
     feature = "onnx-coreml",
@@ -86,6 +88,29 @@ pub fn warmup_runtime() -> bool {
     #[cfg(ort_rc_10)]
     let initialized = initialized.unwrap_or(false);
     initialized
+}
+
+/// Commit `builder` to the ONNX model at `path`.
+///
+/// On x86-64 CPUs without VNNI, ONNX Runtime's U8S8 `MatMulInteger` kernels saturate and our
+/// dynamically quantized models return wrong logits; there the int8 weights are rewritten to
+/// the equivalent uint8 form before the session is created (see [`u8u8`]). Elsewhere, and for
+/// models without U8S8 weights, the file is loaded as is.
+pub fn commit_session(
+    mut builder: SessionBuilder,
+    path: &Path,
+) -> Result<Session, Box<dyn std::error::Error>> {
+    if u8u8::u8s8_saturates() {
+        match u8u8::rewrite_u8s8_weights(&std::fs::read(path)?) {
+            Ok(Some(model)) => return Ok(builder.commit_from_memory(&model)?),
+            Ok(None) => {}
+            Err(error) => log::warn!(
+                "ONNX model {} left as is; U8U8 weight rewrite failed: {error}",
+                path.display()
+            ),
+        }
+    }
+    Ok(builder.commit_from_file(path)?)
 }
 
 pub fn configured_session_builder(

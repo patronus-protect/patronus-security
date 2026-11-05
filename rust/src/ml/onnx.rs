@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{EvaluationResult, ExecutionBackend, OnnxRuntimeOptions};
 pub use patronus_ark_core::onnx::{
-    active_execution_providers, available_execution_providers, configured_session_builder,
-    warmup_runtime,
+    active_execution_providers, available_execution_providers, commit_session,
+    configured_session_builder, warmup_runtime,
 };
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

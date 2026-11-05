@@ -156,13 +156,13 @@ impl GlinerEngine {
             crate::OnnxRuntimeOptions::default(),
         )
         .map_err(|error| ArkEngineError::Onnx(error.to_string()))?;
-        let session = session_builder
+        let session_builder = session_builder
             .with_memory_pattern(false)
             .map_err(onnx_error)?
             .with_prepacking(false)
-            .map_err(onnx_error)?
-            .commit_from_file(&model_path)
             .map_err(onnx_error)?;
+        let session =
+            crate::ml::onnx::commit_session(session_builder, &model_path).map_err(onnx_error)?;
         Ok(Self {
             session,
             tokenizer,

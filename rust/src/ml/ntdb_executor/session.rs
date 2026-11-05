@@ -13,10 +13,10 @@ pub(super) fn load_single_thread_session(path: impl AsRef<Path>) -> NtdbResult<S
     let builder = builder
         .with_inter_threads(1)
         .map_err(|err| ntdb_error(format!("failed to set ORT inter threads: {err}")))?;
-    let mut builder = builder
+    let builder = builder
         .with_intra_op_spinning(false)
         .map_err(|err| ntdb_error(format!("failed to disable ORT spinning: {err}")))?;
-    builder.commit_from_file(path).map_err(|err| {
+    crate::ml::onnx::commit_session(builder, path).map_err(|err| {
         ntdb_error(format!(
             "failed to load ORT model {}: {err}",
             path.display()
