@@ -322,7 +322,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (127) { #dlp-regex-rules }
+## DLP regex rules (131) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -386,6 +386,10 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_langsmith_key` | `API_KEY` | `api_key` | `langsmith` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/langsmith/langsmith.go) | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_pinecone_key` | `API_KEY` | `api_key` | `pinecone` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/pinecone/pinecone.go) | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_elevenlabs_key` | `API_KEY` | `api_key` | `elevenlabs` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/elevenlabs/v2/elevenlabs.go) | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_azure_openai_key` | `API_KEY` | `api_key` | `azure_openai` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/azure_openai/azure_openai.go) | no | on | 40 | field | 0.80 |
+| `dlp_wandb_key` | `API_KEY` | `api_key` | `wandb` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/weightsandbiases/weightsandbiases.go) | no | on | 40 | field | 0.80 |
+| `dlp_assemblyai_key` | `API_KEY` | `api_key` | `assemblyai` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/assemblyai/assemblyai.go) | no | on | 40 | field | 0.80 |
+| `dlp_deepgram_key` | `API_KEY` | `api_key` | `deepgram` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/deepgram/deepgram.go) | no | on | 40 | field | 0.80 |
 | `dlp_aws_access_key` | `CLOUD_KEY` | `api_key` | `aws` | `format` | `gitleaks:aws-access-token` | no | on | 55 | proximity | 0.70–0.95 |
 | `dlp_aws_secret_key` | `CLOUD_KEY` | `secret_key` | `aws` | `format` | [docs.aws.amazon.com](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) | yes | on | 35 | field | 0.75 |
 | `dlp_google_api_key` | `CLOUD_KEY` | `api_key` | `google` | `format` | `gitleaks:gcp-api-key` | no | on | 55 | proximity | 0.70–0.95 |

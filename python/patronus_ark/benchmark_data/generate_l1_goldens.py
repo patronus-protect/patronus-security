@@ -14299,8 +14299,8 @@ DLP_P02_CONTEXT_CASES = {
         ),
         dl(
             "API_KEY", "en", "dlp_azure_openai_key",
-            "AZURE_OPENAI_API_KEY=<<secret:0>>\n",
-            "azure_openai_api_key_short", 20230, "Azure OpenAI shape with 31 instead of 32 hex digits", carrier="env",
+            "2026-11-05T09:14:03Z WARN llm: rejected <<secret:0>> (length)\n",
+            "azure_openai_api_key_short", 20230, "Azure OpenAI shape with 31 instead of 32 hex digits", carrier="log",
         ),
         dl(
             "API_KEY", "de", "dlp_wandb_key",
