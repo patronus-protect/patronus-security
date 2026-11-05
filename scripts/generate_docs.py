@@ -256,7 +256,20 @@ def _native_pattern_const(directory: Path, struct_name: str, module: str, const:
     )
     if not match:
         raise ValueError(f"Missing {struct_name} {module}::{const} in {path}")
-    return match.group(1)
+    block = match.group(1)
+    base = re.search(r"^\s*\.\.(?:(\w+)::)?(\w+)\s*$", block, flags=re.M)
+    if not base:
+        return block
+    # Struct update (`..BASE`): the fields set here, then the others of the base.
+    own = block[: base.start()]
+    field = re.compile(r"^    (\w+):", flags=re.M)
+    names = set(field.findall(own))
+    inherited = _native_pattern_const(directory, struct_name, base.group(1) or module, base.group(2))
+    kept = [
+        item for item in re.split(r"^(?=    \w+:)", inherited, flags=re.M)
+        if not (match := field.match(item)) or match.group(1) not in names
+    ]
+    return own + "".join(kept)
 
 
 def pii_score_points(path: Path = ROOT / "ark-core/src/detectors/pii/score.rs") -> tuple[dict[str, int], int, list[int], int]:
@@ -354,6 +367,8 @@ def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: 
 
 
 def pii_rule_context(rule: dict) -> str:
+    if rule["id"].endswith("_bare"):
+        return "none, opt-in (off by default)"
     if rule["field_context"]:
         return "field or key"
     if rule["scored_only"]:
@@ -508,7 +523,7 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         f"## PII rules ({len(pii)})",
         "",
-        "All PII rules are eligible by default when PII L1 is enabled.",
+        "All PII rules except the bare forms (`*_bare`) are eligible by default when PII L1 is enabled.",
         "",
         "In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` "
         "a finding scores the rule base plus the validator strength "
@@ -521,6 +536,11 @@ def generate_l1_rule_catalog_doc() -> str:
         "Rules marked `proximity (required)` report only with a support term, in every mode. "
         "Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name "
         "and never run in `strict`; the value must stand alone, not inside a longer number. "
+        "Rules marked `opt-in` (D-BARE) report the bare value of an id that the default rules report only "
+        "with a term of its label or after its field name; they are off in every mode until the `rules` gate "
+        "enables them (see [bare formats](configuration.md#bare-formats)), then report in every mode with the "
+        "validator of the id, standing alone, outside a key that names another value and without a nearer "
+        "counter-context term, and score below the labelled rules. "
         "Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV "
         "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
         "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "

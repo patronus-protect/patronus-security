@@ -247,7 +247,29 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     crypto::LTC,
     crypto::ETH,
     crypto::ETH_UNCHECKED,
+    // Opt-in bare forms (D-BARE) last: every default rule keeps its span against them.
+    de::STEUER_ID_BARE,
+    de::STEUERNUMMER_BARE,
+    de::PHYSICIAN_NUMBER_LANR_BARE,
+    de::FACILITY_NUMBER_BSNR_BARE,
+    driver_license::DE_BARE,
+    us::SSN_BARE,
+    ca::SIN_BARE,
+    india::AADHAAR_BARE,
+    us::NPI_BARE,
+    pl::PESEL_BARE,
+    au::ACN_BARE,
+    kr::BUSINESS_REGISTRATION_NUMBER_BARE,
+    india::PAN_BARE,
+    india::VOTER_ID_BARE,
+    licence_plate::NG_BARE,
 ];
+
+/// Whether `rule_id` is an opt-in bare form (D-BARE): off unless the `rules`
+/// gate enables it, see [`crate::native::default_rule_enabled`].
+pub fn is_bare_rule(rule_id: &str) -> bool {
+    rule_id.starts_with("pii_") && rule_id.ends_with("_bare")
+}
 
 pub struct PiiPipeline {
     regexes: Vec<Regex>,
@@ -758,6 +780,19 @@ impl NativeRegexDetector for PiiPipeline {
     ) -> bool {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
+        // An opt-in bare form (D-BARE) stands alone, outside a field that names
+        // another value and without a nearer counter-context term.
+        if is_bare_rule(self.rule_ids[index]) {
+            let value = captures.get(0).unwrap().range();
+            return context::stands_alone(text, value.clone())
+                && !context::foreign_field(
+                    prepared.structure(),
+                    text,
+                    value,
+                    pattern.entity_group,
+                )
+                && self.context(index, prepared, captures).context != score::Context::Counter;
+        }
         // The bare NIP checks this after its structural key (below).
         if pattern.scored_only
             && self.rule_ids[index] != "pii_vat_id_pl_proximity"
@@ -995,6 +1030,11 @@ impl NativeRegexDetector for PiiPipeline {
             }
             _ => true,
         }
+    }
+
+    /// Unfiltered detection runs the default rules: the opt-in bare forms stay off.
+    fn detect(&self, text: &str) -> NativeDetection {
+        self.detect_with_rule_filter(text, crate::native::default_rule_enabled)
     }
 
     /// The trait's unscored detection is `strict`: scored-only rules stay off.

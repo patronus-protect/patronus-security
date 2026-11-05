@@ -95,3 +95,13 @@ pub(super) const MEDICARE_CONTEXT_FREE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: true,
 };
+
+/// A bare ACN with its check digit (B-APAC). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const ACN_BARE: PiiPattern = PiiPattern {
+    name: "pii_acn_au_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..ACN
+};

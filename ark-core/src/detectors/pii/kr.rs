@@ -115,3 +115,13 @@ pub(super) const BUSINESS_REGISTRATION_NUMBER_CONTEXT_FREE: PiiPattern = PiiPatt
     requires_context: false,
     scored_only: true,
 };
+
+/// A bare BRN, plain or `NNN-NN-NNNNN`, with its check digit (B-KR). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const BUSINESS_REGISTRATION_NUMBER_BARE: PiiPattern = PiiPattern {
+    name: "pii_brn_kr_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..BUSINESS_REGISTRATION_NUMBER
+};

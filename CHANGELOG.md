@@ -9,6 +9,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Detection change: opt-in bare-format PII rules (D-BARE). Every value that the default rules
+  report only with a term of its label or after its field name (`known_gaps` with `bare: true`)
+  has its own rule `<rule>_bare`: `pii_steuer_id_de_bare`, `pii_steuernummer_de_bare` (13-digit
+  ELSTER form), `pii_physician_number_lanr_de_bare`, `pii_facility_number_bsnr_de_bare`,
+  `pii_driver_license_number_de_bare`, `pii_ssn_us_bare`, `pii_sin_ca_bare`,
+  `pii_aadhaar_in_bare`, `pii_npi_us_bare`, `pii_pesel_pl_bare`, `pii_acn_au_bare`,
+  `pii_brn_kr_bare`, `pii_pan_in_bare`, `pii_voter_id_in_bare` and
+  `pii_vehicle_registration_ng_bare`. They are off in every mode until the existing `rules` gate
+  enables them (no new API; example profile `docs/how-to/pii-bare-formats.gates.json`). An enabled
+  bare rule keeps the validator of its id, reports in every mode a value that stands alone,
+  outside a key that names another value and without a nearer counter-context term, and scores
+  base `15`: `0.50` with a check digit (`balanced`), `0.30` format-only (`recall` only), below every
+  labelled hit, which keeps its span. Default output (all modes, default gates) is unchanged; the
+  goldens are unchanged. `NativeGates::all_enabled()` includes the bare rules;
+  `PiiPipeline::evaluate()` keeps the defaults.
+
 ### Fixed
 
 - The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in

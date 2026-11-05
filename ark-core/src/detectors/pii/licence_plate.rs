@@ -98,3 +98,13 @@ pub(super) const NG: PiiPattern = PiiPattern {
     requires_context: true,
     scored_only: true,
 };
+
+/// A bare Nigerian plate, format only (T30). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const NG_BARE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_ng_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..NG
+};

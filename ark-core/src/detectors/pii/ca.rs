@@ -35,3 +35,13 @@ pub(super) const SIN_CONTEXT_FREE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: true,
 };
+
+/// A bare SIN with its Luhn check digit (B-LUHN). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const SIN_BARE: PiiPattern = PiiPattern {
+    name: "pii_sin_ca_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..SIN
+};

@@ -233,6 +233,20 @@ fn de_card_number_vectors_are_unchanged() {
     }
 }
 
+/// The bare card licence (D-BARE) also needs letters and digits.
+#[test]
+fn de_bare_card_number_needs_letters_and_digits() {
+    for valid in ["B072RRE2A57", "J0101234K56", "KO12345678X"] {
+        assert!(validators::de_driver_license_number_bare(valid), "{valid}");
+    }
+    for invalid in ["INFORMATION", "12345678901", "B072RRE2A5", "b072rre2a57"] {
+        assert!(
+            !validators::de_driver_license_number_bare(invalid),
+            "{invalid}"
+        );
+    }
+}
+
 #[test]
 fn prose_phrasing_counts_as_field_name() {
     for (rule_id, text, value) in [

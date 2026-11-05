@@ -35,3 +35,13 @@ pub(super) const REGON: PiiPattern = PiiPattern {
     requires_context: true,
     scored_only: false,
 };
+
+/// A bare PESEL with its check digit (A13). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const PESEL_BARE: PiiPattern = PiiPattern {
+    name: "pii_pesel_pl_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..PESEL
+};

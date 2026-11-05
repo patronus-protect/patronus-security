@@ -190,6 +190,49 @@ The same rule-level opt-in applies to `dlp_mcp_policy`, `dlp_mcp_runtime_risk`, 
 `dlp_destructive_operation`; no additional model override is needed unless you disabled that model.
 Rust callers can explicitly opt into every rule with `ScanGateMatrix::all_enabled()`.
 
+### Bare formats
+
+Some identifiers carry no or only a weak check digit, so the default PII rules report them only
+with a term of their label near the value or after their field name: a bare `422687360` is no SSN,
+a bare `86095742719` no Steuer-ID. Each such bare form has its own opt-in rule `<rule>_bare`, off
+in every mode until the `rules` gate enables it:
+
+| Rule ID | Value | Validator |
+| --- | --- | --- |
+| `pii_steuer_id_de_bare` | Steuer-ID, 11 digits or 2-3-3-3 | check digit |
+| `pii_steuernummer_de_bare` | Steuernummer, 13-digit ELSTER form | Land and office prefix |
+| `pii_physician_number_lanr_de_bare` | LANR, 9 digits | check digit |
+| `pii_facility_number_bsnr_de_bare` | BSNR, 9 digits | format |
+| `pii_driver_license_number_de_bare` | German card licence, 11 letters and digits | format |
+| `pii_ssn_us_bare` | US SSN, 9 digits or grouped | SSA ranges |
+| `pii_sin_ca_bare` | Canadian SIN | Luhn |
+| `pii_aadhaar_in_bare` | Aadhaar number, plain or grouped | Verhoeff |
+| `pii_npi_us_bare` | US NPI | Luhn |
+| `pii_pesel_pl_bare` | PESEL | check digit |
+| `pii_acn_au_bare` | Australian ACN | check digit |
+| `pii_brn_kr_bare` | Korean BRN | check digit |
+| `pii_pan_in_bare` | Indian PAN | format |
+| `pii_voter_id_in_bare` | Indian voter ID (EPIC) | format |
+| `pii_vehicle_registration_ng_bare` | Nigerian plate | format |
+
+An enabled bare rule reports in every mode with the validator of its id. The value must stand
+alone (not inside a longer number), not under a key that names another value, and no
+counter-context term (order, reference, invoice …) may be nearer than a support term. Its base
+score is low (`15`): a checksum value scores `0.50` and reaches `balanced`, a format-only value
+scores `0.30` and reaches only `recall`; a labelled hit of the same value always ranks above and
+wins the overlap. The example profile
+[`pii-bare-formats.gates.json`](../how-to/pii-bare-formats.gates.json) enables all of them in
+`balanced`:
+
+```python
+import json
+scanner.set_execution_gates(json.load(open("docs/how-to/pii-bare-formats.gates.json")))
+```
+
+Bare numbers are often order, invoice or record numbers: enable only the forms your data holds.
+Rust callers that use `NativeGates::all_enabled()` get the bare rules too; the low-level
+`PiiPipeline::evaluate()` keeps the defaults.
+
 ### L3 worker policy
 
 The optional `l3_policy` tunes the shared L3 worker. Initial costs are

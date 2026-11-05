@@ -224,3 +224,15 @@ def test_shared_wolf_metadata_is_resolved_in_asset_docs():
     package = next(p for p in GENERATE_DOCS.parse_ntdb_packages() if p.category == "Injection")
     assert package.revision == "142fadc5474163d4c483cb761d5a6b02e3aa1741"
     assert "patronus_ark_core::warmup::" not in GENERATE_DOCS.generate_assets_doc(assets, GENERATE_DOCS.load_snapshot())
+
+
+def test_pii_default_names_the_opt_in_bare_form():
+    rule = {"id": "pii_sin_ca", "scored_only": False}
+    scored = {"id": "pii_sin_ca_context_free", "scored_only": True}
+    bare = {"id": "pii_sin_ca_bare", "scored_only": False}
+    assert l1_capabilities_doc._pii_default([rule]) == "on"
+    assert l1_capabilities_doc._pii_default([rule, bare]) == "on, bare form opt-in"
+    assert (
+        l1_capabilities_doc._pii_default([rule, scored, bare])
+        == "on (1 of 2 rules `balanced`/`recall` only), bare form opt-in"
+    )

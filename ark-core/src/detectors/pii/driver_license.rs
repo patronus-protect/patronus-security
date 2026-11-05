@@ -121,3 +121,16 @@ pub(super) const UK_CONTEXT_FREE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: true,
 };
+
+/// A bare German card licence, eleven upper-case letters and digits with both (F15).
+/// Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const DE_BARE: PiiPattern = PiiPattern {
+    name: "pii_driver_license_number_de_bare",
+    pattern: r"(?-u:\b)[A-Z0-9]{11}(?-u:\b)",
+    validator: Some(validators::de_driver_license_number_bare),
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..DE
+};
