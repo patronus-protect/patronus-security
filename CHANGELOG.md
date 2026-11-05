@@ -11,6 +11,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Model-backed scanners returned wrong results on x86-64 CPUs without VNNI (Intel before
+  Cascade Lake or Alder Lake, AMD before Zen 4): ONNX Runtime's U8S8 `MatMulInteger` kernels
+  saturate there, so GLiNER `dynamic-pii` found no entities and the L3 classifier logits drifted
+  (by up to 9.7 for injection L3 on a Haswell host). On these CPUs every ONNX session now
+  loads its int8 weights rewritten to the equivalent uint8 form; arm64 and VNNI CPUs load the
+  models unchanged. Effect on a Haswell host: GLiNER exact-span F1 on Presidio's
+  `synth_dataset_v2` PERSON 77.5 / LOCATION 61.9 / ORG 54.4 (arm64: 77.7 / 62.2 / 54.1), about
+  +10 % L3 inference time and +0.3 s model load.
 - Core ships its own `NOTICE` (crate and Python package) with the Prompt Armor, pipelock,
   PromptInject, Garak, DefenseClaw and Cedar attributions of the Core sources; 0.1.15 carried
   them only in the root and Ark `NOTICE`. The root `NOTICE` points sections 3 and 4 at their
