@@ -325,6 +325,21 @@ pub(super) fn xml_key(pattern: &'static str) -> Option<ProviderKey> {
         .then_some(ProviderKey { key, value })
 }
 
+/// P02: the value as the first or `key`/`api_key` argument of a provider's
+/// client call (`DeepgramClient("…")`, `AzureOpenAI(api_key="…")`,
+/// `wandb.login(key="…")`) in group 1, quoted.
+macro_rules! provider_call {
+    ($provider:literal, $value:expr) => {
+        concat!(
+            "(?i:",
+            $provider,
+            r")[A-Za-z_.]{0,20}\([ \t]*(?:(?:api_?)?key[ \t]*[=:][ \t]*)?\\?[\x22'`](",
+            $value,
+            r")\\?[\x22'`]",
+        )
+    };
+}
+
 /// P07: the value after an HTTP `Authorization` header and its scheme
 /// (`Authorization: Splunk <token>`, `"authorization": "ApiKey <key>"`) in
 /// group 1, which no further value character continues.
@@ -630,6 +645,95 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("elevenlabs")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: Azure OpenAI API keys, 32 lower-case hex digits under an Azure
+    // OpenAI key or as the key of an `AzureOpenAI(…)` client.
+    DlpPattern {
+        name: "dlp_azure_openai_key",
+        pattern: concat!(
+            provider_key!(r"azure[_.\- ]?openai", r"[0-9a-f]{32}"),
+            "|",
+            provider_call!(r"azure[_.]?openai", r"[0-9a-f]{32}"),
+        ),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/azure_openai/azure_openai.go",
+            &["azure"],
+        )
+        .with_provider("azure_openai")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: Weights & Biases API keys, 40 lower-case hex digits under a wandb
+    // key, after `wandb login` or in `wandb.login(key=…)`.
+    DlpPattern {
+        name: "dlp_wandb_key",
+        pattern: concat!(
+            provider_key!(r"wandb|weights[_.\- ]?(?:and|&)[_.\- ]?biases", r"[0-9a-f]{40}"),
+            "|",
+            provider_call!("wandb", r"[0-9a-f]{40}"),
+            r"|(?i:wandb)[ \t]+login(?:[ \t]+--[a-z\-]+)*[ \t]+([0-9a-f]{40})(?:[^A-Za-z0-9_\-+/=]|$)",
+        ),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/weightsandbiases/weightsandbiases.go",
+            &["wandb", "biases"],
+        )
+        .with_provider("wandb")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: AssemblyAI API keys, 32 lower-case hex digits under an AssemblyAI
+    // key or the SDK's `aai.settings.api_key`.
+    DlpPattern {
+        name: "dlp_assemblyai_key",
+        pattern: provider_key!(r"assembly[_.\- ]?ai|(?-u:\b)aai\.settings", r"[0-9a-f]{32}"),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/assemblyai/assemblyai.go",
+            &["assembly", "aai.settings"],
+        )
+        .with_provider("assemblyai")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: Deepgram API keys, 40 lower-case hex digits under a Deepgram key or
+    // as the key of a `DeepgramClient(…)`.
+    DlpPattern {
+        name: "dlp_deepgram_key",
+        pattern: concat!(
+            provider_key!("deepgram", r"[0-9a-f]{40}"),
+            "|",
+            provider_call!("deepgram", r"[0-9a-f]{40}"),
+        ),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/deepgram/deepgram.go",
+            &["deepgram"],
+        )
+        .with_provider("deepgram")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
         .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────

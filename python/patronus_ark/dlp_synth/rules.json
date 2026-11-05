@@ -81,6 +81,26 @@
       "lookalike": ["elevenlabs_api_key_short"],
       "probes": ["ELEVENLABS_API_KEY=<<secret:0>>", "xi-api-key: <<secret:0>>"]
     },
+    "dlp_azure_openai_key": {
+      "generators": ["azure_openai_api_key"],
+      "lookalike": ["azure_openai_api_key_short"],
+      "probes": ["AZURE_OPENAI_API_KEY=<<secret:0>>", "client = AzureOpenAI(api_key=\"<<secret:0>>\")"]
+    },
+    "dlp_wandb_key": {
+      "generators": ["wandb_api_key"],
+      "lookalike": ["wandb_api_key_short"],
+      "probes": ["WANDB_API_KEY=<<secret:0>>", "wandb login <<secret:0>>"]
+    },
+    "dlp_assemblyai_key": {
+      "generators": ["assemblyai_api_key"],
+      "lookalike": ["assemblyai_api_key_short"],
+      "probes": ["ASSEMBLYAI_API_KEY=<<secret:0>>", "aai.settings.api_key = \"<<secret:0>>\""]
+    },
+    "dlp_deepgram_key": {
+      "generators": ["deepgram_api_key"],
+      "lookalike": ["deepgram_api_key_short"],
+      "probes": ["DEEPGRAM_API_KEY=<<secret:0>>", "dg = DeepgramClient(\"<<secret:0>>\")"]
+    },
     "dlp_aws_access_key": {
       "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id", "aws_access_key_id_non_base32"],
       "lookalike": ["aws_access_key_id_long", "aws_iam_user_unique_id"],
