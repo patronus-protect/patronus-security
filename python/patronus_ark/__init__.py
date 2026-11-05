@@ -324,6 +324,7 @@ class SecurityGateway:
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""
+        self._require_loaded_dynamic_pii(self._categories)
         results = self.rust_gateway.scan_all(text)
         return [_to_dict(r) for r in results]
 
@@ -404,13 +405,26 @@ class SecurityGateway:
         config["l3_strategy"] = l3_strategy
         return type(self)(**config)
 
+    def _require_loaded_dynamic_pii(self, categories: list[str]):
+        """Raise instead of silently returning no `dynamic-pii` result when its model is not loaded."""
+        if "dynamic-pii" not in categories:
+            return
+        l3 = self.runtime_readiness()["l3"]
+        if l3["state"] == "not_ready":
+            reasons = "; ".join(failure["message"] for failure in l3["failures"])
+            raise RuntimeError(
+                f"dynamic-pii needs its L3 model loaded; call warmup() before scanning ({reasons})"
+            )
+
     def scan_category(self, category: str, text: str) -> list[dict]:
         """Scan text with a single category."""
+        self._require_loaded_dynamic_pii([category])
         results = self.rust_gateway.scan_category(category, text)
         return [_to_dict(r) for r in results]
 
     def scan_categories(self, categories: list[str], text: str) -> list[dict]:
         """Scan text with a caller-provided category subset."""
+        self._require_loaded_dynamic_pii(categories)
         results = self.rust_gateway.scan_categories(categories, text)
         return [_to_dict(r) for r in results]
 
