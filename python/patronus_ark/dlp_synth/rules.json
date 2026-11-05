@@ -491,6 +491,15 @@
       "lookalike": ["cli_password_env_ref"],
       "probes": ["curl -u ci-deploy:<<secret:0>> -T build.tgz https://nexus.example.com/repository/raw/", "mysqldump -u backup -p<<secret:0>> --single-transaction shop > shop.sql", "PGPASSWORD=<<secret:0>> psql -h db.internal -U orders orders", "sshpass -p <<secret:0>> ssh deploy@10.0.4.12 uptime", "docker login -u ci-bot -p <<secret:0>> registry.example.com", "htpasswd -bc /etc/nginx/.htpasswd admin <<secret:0>>", "$pw = ConvertTo-SecureString \"<<secret:0>>\" -AsPlainText -Force", "net use Z: \\\\fs01.internal\\finance <<secret:0>> /user:ACME\\jana"]
     },
+    "dlp_netrc_password": {
+      "generators": ["password", "curl_user_password"],
+      "lookalike": ["cli_password_env_ref"],
+      "probes": ["machine api.example.com login deploy password <<secret:0>>", "machine github.com\n  login release-bot\n  password <<secret:0>>", "default login anonymous password <<secret:0>>"]
+    },
+    "dlp_docker_config_auth": {
+      "generators": ["http_basic_auth"],
+      "probes": ["{\"auths\": {\"registry.example.com\": {\"auth\": \"<<secret:0>>\"}}}", "{\"auths\":{\"ghcr.io\":{\"auth\":\"<<secret:0>>\"}},\"credsStore\":\"\"}"]
+    },
     "dlp_de_vat_id": {
       "generators": ["de_vat_id"],
       "probes": ["USt-IdNr.: <<secret:0>>", "VAT ID: <<secret:0>>"]

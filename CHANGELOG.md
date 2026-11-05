@@ -96,6 +96,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `ScanError::Asset` reads `asset error: …` (was `Wolf asset error: …`), as Cat uses it too.
 - Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
   `evaluate_batch`); the shell detector implements it.
+- Detection change: credential files (G04). New rule `dlp_netrc_password` (`CREDENTIAL`, subtype
+  `password`, structural credential tier) reports the password of a `.netrc`/`_netrc` entry
+  (`machine <host> login <user> password <value>`, also one token per line, and the `default`
+  entry; the host is a dotted name, an address or `localhost`). New rule `dlp_docker_config_auth`
+  (`CREDENTIAL`, subtype `password`) reports the `auth` value of a Docker/Podman `config.json`/
+  `auth.json` registry entry, also inside a `.dockerconfigjson` secret, when it decodes to
+  `user:password` with a chosen password (the Basic-auth check). References, stand-ins, empty and
+  credential-helper entries stay negative. `.npmrc` `_authToken`/`_password`, `.pypirc`, Maven
+  `settings.xml`, `NuGet.Config` `ClearTextPassword` and `.s3cfg` keys are already reported by the
+  generic assignment and AWS rules; rclone's obscured `pass` is not reported.
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).
   `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
   `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or
@@ -222,6 +232,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 6 (H06-6). With `explain` on, the context anchor patterns of PII and DLP
+  (`(?i)\b…\b`) are searched without their word boundaries on the lazy DFA and each candidate
+  start is probed anchored, as the PII rules since H03 (shared `detectors::word_boundary` module): a
+  Unicode word boundary sent the search to the slow NFA after the first umlaut. Anchor details
+  unchanged; explain on, 100 KiB DE p50 71.9 → 9.6 ms, 4 KiB DE 8.35 → 1.31 ms. Profile of the
+  default path and the measured attempts in `research/l1-pii/scoreboard/latency.md`. M4 not yet met
+  in Python; next pass H06-7. **Detection change:** none.
+- L1 latency loop, pass 5 (H06-5). The Python binding hashes its per-call cache of the result
+  strings (the keys and string values of the `matched_rules` entries, span labels) with Fx instead of
+  SipHash: the 100 KiB `details` getter 1.55 → 1.25 ms (fastest call); A/B of the Python call against
+  main, 100 KiB p50 11.12 → 10.55 ms, p95 13.63 → 13.25 ms. 100 KiB p95 on the VPS
+  (`scripts/l1_presidio/latency.py`): ark 15.170 → 15.003 ms, ark-native 9.803 → 9.774 ms (native
+  code unchanged). M4 not yet met in Python; next pass H06-6. **Detection change:** none.
 - L1 latency loop, pass 4 (H06-4). PII rules whose every match is one whole ASCII word run
   (`\b[A-Z]{5}[0-9]{4}[A-Z]\b`) carry a word shape (length range, allowed and required character
   kinds); one pass over the text records which word run shapes occur, and a rule whose shape occurs

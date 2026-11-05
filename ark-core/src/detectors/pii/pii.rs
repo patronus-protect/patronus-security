@@ -19,12 +19,11 @@ use crate::detectors::anchor_gate::AnchorGate;
 use crate::detectors::anchors;
 use crate::detectors::dlp::prefilter::{required_value_run, RuleScan, ValueClass, ValueRun};
 use crate::detectors::obfuscation::{Deobfuscated, Level};
+use crate::detectors::word_boundary::{self, without_unicode_word_boundaries, BoundarySearch};
 use crate::native::ScoreMode;
 use crate::EvidenceSpan;
 use regex::Regex;
-use regex_automata::{meta, Anchored, Input};
-use regex_syntax::ast;
-use regex_syntax::hir::{Hir, HirKind, Look};
+use regex_automata::meta;
 use std::ops::Range;
 
 /// A single PII heuristic pattern.
@@ -268,7 +267,7 @@ pub struct PiiPipeline {
     capture_groups: Vec<Option<usize>>,
     structured_regexes: Vec<Option<Regex>>,
     structured_keys: Vec<Option<Regex>>,
-    anchor_regexes: Vec<Regex>,
+    anchor_regexes: Vec<BoundarySearch>,
 }
 
 impl Default for PiiPipeline {
@@ -328,7 +327,7 @@ impl PiiPipeline {
 
         let anchor_regexes = PII_ANCHOR_PATTERNS
             .iter()
-            .map(|anchor| Regex::new(anchor.pattern).unwrap())
+            .map(|anchor| BoundarySearch::new(anchor.pattern))
             .collect();
         PiiPipeline {
             regexes,
@@ -652,11 +651,8 @@ impl PiiPipeline {
 
 impl PiiPipeline {
     /// The leftmost match of rule `index` from `at`, as `regex.captures_at`.
-    /// A Unicode word boundary sends the lazy DFA to the slow NFA at the first
-    /// non-ASCII byte (`ä` in German prose), for the rest of the text. The rule
-    /// without its word boundaries stays on the DFA and matches wherever the
-    /// rule does: each of its match starts is probed anchored with the rule's
-    /// own regex, and only a start that holds captures (H03).
+    /// A rule with a Unicode word boundary is searched on the lazy DFA as in
+    /// [`word_boundary::leftmost_start`] (H03).
     fn captures_at<'t>(
         &self,
         index: usize,
@@ -668,15 +664,10 @@ impl PiiPipeline {
         else {
             return regex.captures_at(text, at);
         };
-        let mut start = at;
-        loop {
-            let candidate = relaxed.find_at(text, start)?.start();
-            if anchored.is_match(Input::new(text).range(candidate..).anchored(Anchored::Yes)) {
-                // The match starts here, so it is the leftmost one from here.
-                return regex.captures_at(text, candidate);
-            }
-            start = candidate + text[candidate..].chars().next()?.len_utf8();
-        }
+        regex.captures_at(
+            text,
+            word_boundary::leftmost_start(relaxed, anchored, text, at)?,
+        )
     }
 }
 
@@ -691,64 +682,6 @@ fn value_run(pattern: &str) -> Option<ValueRun> {
             min_len: required_value_run(pattern, class),
         })
         .find(|run| run.min_len >= 2)
-}
-
-/// `pattern` without its word boundaries if it has a Unicode one, else `None`:
-/// a necessary condition of the rule that the lazy DFA searches on any text.
-/// The assertions are cut out of the pattern source at their syntax spans.
-fn without_unicode_word_boundaries(pattern: &str) -> Option<Regex> {
-    struct Boundaries(Vec<ast::Span>);
-    impl ast::Visitor for Boundaries {
-        type Output = Vec<ast::Span>;
-        type Err = ();
-        fn finish(self) -> Result<Self::Output, ()> {
-            Ok(self.0)
-        }
-        fn visit_pre(&mut self, node: &ast::Ast) -> Result<(), ()> {
-            if let ast::Ast::Assertion(assertion) = node {
-                if !matches!(
-                    assertion.kind,
-                    ast::AssertionKind::StartLine
-                        | ast::AssertionKind::EndLine
-                        | ast::AssertionKind::StartText
-                        | ast::AssertionKind::EndText
-                        | ast::AssertionKind::NotWordBoundary
-                ) {
-                    self.0.push(assertion.span);
-                }
-            }
-            Ok(())
-        }
-    }
-    fn unicode_boundary(hir: &Hir) -> bool {
-        match hir.kind() {
-            HirKind::Look(look) => matches!(
-                look,
-                Look::WordUnicode
-                    | Look::WordStartUnicode
-                    | Look::WordEndUnicode
-                    | Look::WordStartHalfUnicode
-                    | Look::WordEndHalfUnicode
-            ),
-            HirKind::Repetition(repetition) => unicode_boundary(&repetition.sub),
-            HirKind::Capture(capture) => unicode_boundary(&capture.sub),
-            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs.iter().any(unicode_boundary),
-            _ => false,
-        }
-    }
-    if !unicode_boundary(&regex_syntax::parse(pattern).ok()?) {
-        return None;
-    }
-    let syntax = ast::parse::Parser::new().parse(pattern).ok()?;
-    let boundaries = ast::visit(&syntax, Boundaries(Vec::new())).ok()?;
-    let mut relaxed = String::with_capacity(pattern.len());
-    let mut at = 0;
-    for span in boundaries {
-        relaxed.push_str(&pattern[at..span.start.offset]);
-        at = span.end.offset;
-    }
-    relaxed.push_str(&pattern[at..]);
-    Some(Regex::new(&relaxed).expect("a pattern without assertions stays valid"))
 }
 
 /// Whether the national number of `rule_id` at `start` is the body of a VAT ID
@@ -1224,6 +1157,15 @@ impl NativeRegexDetector for PiiPipeline {
 #[cfg(test)]
 mod prefilter_tests {
     use super::*;
+    #[test]
+    fn anchor_and_rule_searches_find_what_their_regexes_find() {
+        PII_ANCHOR_PATTERNS
+            .iter()
+            .map(|anchor| anchor.pattern)
+            .chain(PII_PATTERNS.iter().map(|pattern| pattern.pattern))
+            .for_each(word_boundary::assert_finds_as_regex);
+    }
+
     #[test]
     fn pii_prefilters_preserve_bilingual_results_and_captures() {
         let optimized = PiiPipeline::new();

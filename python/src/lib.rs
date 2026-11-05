@@ -11,6 +11,7 @@ use patronus_ark::{
 };
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender};
@@ -553,17 +554,19 @@ fn release_off_thread<T: Send + 'static>(value: T) {
 /// `span_precision`, …) repeat in every `matched_rules` entry, and creating
 /// and freeing a string per occurrence cost about a third of the details of
 /// a 100 KiB scan (H06-3). A shared value string is equal and immutable, so
-/// the dicts are the ones `json.loads` makes.
+/// the dicts are the ones `json.loads` makes. The texts are short (rule
+/// ids, component names, labels), so the cache hashes with Fx: SipHash cost
+/// about a fifth of the details of a 100 KiB scan (H06-5).
 struct PyStrings<'py, 'a> {
     py: Python<'py>,
-    strings: HashMap<&'a str, Bound<'py, PyString>>,
+    strings: FxHashMap<&'a str, Bound<'py, PyString>>,
 }
 
 impl<'py, 'a> PyStrings<'py, 'a> {
     fn new(py: Python<'py>) -> Self {
         Self {
             py,
-            strings: HashMap::new(),
+            strings: FxHashMap::default(),
         }
     }
 

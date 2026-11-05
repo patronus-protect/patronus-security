@@ -1734,6 +1734,14 @@ PROFILES = {
             "cli_password_env_ref": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
         },
     ),
+    "dlp_netrc_password": Profile(
+        "credential.file.netrc", "CREDENTIAL", "secret", "netrc_entry", "netrc entry", "netrc-Eintrag",
+        "machine artifacts.example.com login ci-deploy password <<value>>",
+    ),
+    "dlp_docker_config_auth": Profile(
+        "credential.file.docker_config", "CREDENTIAL", "secret", "docker_config", "registry auth", "Registry-Zugang",
+        '{"auths": {"registry.example.com": {"auth": "<<value>>"}}}',
+    ),
     "dlp_de_vat_id": Profile("identifier.de.vat_id", "dlp.de.vat_id", "identifier", "vat_id", "VAT ID", "USt-IdNr."),
     "dlp_de_commercial_register_number": Profile(
         "identifier.de.commercial_register", "dlp.de.commercial_register_number", "identifier", "commercial_register",

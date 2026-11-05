@@ -622,6 +622,18 @@ entities:
     backlog: M19
 
   # ── ark_only ────────────────────────────────────────────────────────────
+  - id: credential.file.netrc
+    scope: ark_only
+    group: CREDENTIAL
+    subtype: password
+    ark: [dlp_netrc_password]
+    backlog: G04
+  - id: credential.file.docker_config
+    scope: ark_only
+    group: CREDENTIAL
+    subtype: password
+    ark: [dlp_docker_config_auth]
+    backlog: G04
   - id: payment.stripe.webhook_secret
     scope: ark_only
     group: PAYMENT_KEY

@@ -183,6 +183,8 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_connection_string_password", "connection_string"),
     ("dlp_ldap_bind_password", "password"),
     ("dlp_cli_password", "password"),
+    ("dlp_netrc_password", "password"),
+    ("dlp_docker_config_auth", "password"),
 ];
 
 fn scan_with(gates: Option<ScanGateMatrix>, text: &str) -> SecurityScanResult {

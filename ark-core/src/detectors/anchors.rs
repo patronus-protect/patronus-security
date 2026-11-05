@@ -1,11 +1,11 @@
 //! Bounded previews of native L1 context; these are not security findings.
 use std::collections::HashMap;
 
-use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
 
 use super::evidence::char_offsets;
+use super::word_boundary::BoundarySearch;
 
 pub struct AnchorPattern {
     pub category: &'static str,
@@ -35,7 +35,7 @@ struct Anchor<'a> {
 
 pub fn details(
     text: &str,
-    regexes: &[Regex],
+    regexes: &[BoundarySearch],
     patterns: &[AnchorPattern],
 ) -> HashMap<String, Value> {
     let mut anchors = Vec::new();
@@ -111,7 +111,7 @@ mod tests {
             anchor_kind: "lexical",
             pattern: "token",
         }];
-        let regexes = [Regex::new("token").unwrap()];
+        let regexes = [BoundarySearch::new("token")];
         let details = details(&"token ".repeat(64_000), &regexes, &patterns);
         assert_eq!(details["l1_anchors_truncated"], true);
         assert_eq!(details["l1_anchors"].as_array().unwrap().len(), MAX_ANCHORS);
@@ -126,7 +126,7 @@ mod tests {
             anchor_kind: "structural",
             pattern: r"(?s)BEGIN.*END",
         }];
-        let regexes = [Regex::new(patterns[0].pattern).unwrap()];
+        let regexes = [BoundarySearch::new(patterns[0].pattern)];
         let text = format!("Grüße BEGIN{}END", "\u{0001}🛡".repeat(10_000));
         let details = details(&text, &regexes, &patterns);
         let anchor = &details["l1_anchors"][0];
