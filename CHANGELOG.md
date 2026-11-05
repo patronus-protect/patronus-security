@@ -26,6 +26,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   labelled hit, which keeps its span. Default output (all modes, default gates) is unchanged; the
   goldens are unchanged. `NativeGates::all_enabled()` includes the bare rules;
   `PiiPipeline::evaluate()` keeps the defaults.
+  Measured per rule with only that rule on (new spans against the defaults, strict/balanced):
+  on the 2311 PII hard negatives of goldens and fixture (many are deliberately bare valid values)
+  from 6/0 (`pii_steuernummer_de_bare`, `pii_pan_in_bare`) to 64/0
+  (`pii_driver_license_number_de_bare`), at most 24 in `balanced` (`pii_sin_ca_bare`); on 2.92 MB
+  of repository code and docs at most 4.1/MB in strict (`pii_facility_number_bsnr_de_bare`) and
+  1.0/MB in `balanced`.
 
 ### Fixed
 
