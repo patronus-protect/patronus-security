@@ -303,16 +303,18 @@ Span = tuple[str | None, int, int]
 
 def _row_spans(
     row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str, checks: "GoldChecks | None" = None,
-    ids: set[str] | None = None,
+    ids: set[str] | None = None, inside: frozenset[str] = frozenset(),
 ) -> tuple[str, str, set[Span], set[Span], set[Span]]:
     """Corpus, family, scored gold, all predictions and scored predictions of one gold row.
 
     Gold of an ``IGNORED_GOLD`` id failing its check is dropped together with every scored prediction
     of that id overlapping it, so it neither counts as missed nor as a false positive. With ``checks``
-    (attainable view, T27) unattainable gold is dropped the same way."""
+    (attainable view, T27) unattainable gold is dropped the same way. A scored prediction that lies
+    within gold of an ``inside`` id (e.g. a city inside an annotated street address) and overlaps no
+    scored gold is dropped as well."""
     corpus, family, allowed = _row_scope(row, emap, where, ids)
-    gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
-    gold = {item for item in gold if item[0] in allowed}
+    annotated = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
+    gold = {item for item in annotated if item[0] in allowed}
     predicted_all = {_span(s, resolve_label(s, emap), where) for s in spans}
     predicted = {item for item in predicted_all if item[0] in allowed}
     ignored = {
@@ -323,6 +325,13 @@ def _row_spans(
     if ignored:
         gold -= ignored
         predicted = {item for item in predicted if not any(_overlaps(item, g) for g in ignored)}
+    containers = [item for item in annotated if item[0] in inside]
+    if containers:
+        predicted = {
+            item for item in predicted
+            if any(_overlaps(item, g) for g in gold)
+            or not any(c[1] <= item[1] and item[2] <= c[2] for c in containers)
+        }
     return corpus, family, gold, predicted_all, predicted
 
 
@@ -336,12 +345,13 @@ def _gold_value(row: dict[str, Any], item: Span, where: str) -> str:
 
 def score_rows(
     gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = "",
-    checks: "GoldChecks | None" = None, ids: set[str] | None = None,
+    checks: "GoldChecks | None" = None, ids: set[str] | None = None, inside: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Count exact and overlap matches per bucket plus predictions on hard-negative spans.
 
     ``checks`` scores the attainable view (T27): unattainable gold is left out for every engine alike.
-    ``ids`` replaces the scored L1 ids (``ner`` scores the semantic ids of ``ner_ids``)."""
+    ``ids`` replaces the scored L1 ids (``ner`` scores the semantic ids of ``ner_ids``). ``inside`` drops
+    predictions within gold of those ids that match no scored gold, for every engine alike."""
     gold_rows = list(gold_rows)
     predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
     l1 = l1_ids(emap) if ids is None else ids
@@ -353,7 +363,9 @@ def score_rows(
         rows += 1
         row_id = row["id"]
         where = f"{dataset}:{row_id}"
-        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where, checks, l1)
+        corpus, family, gold, predicted_all, predicted = _row_spans(
+            row, predictions[row_id], emap, where, checks, l1, inside
+        )
         for hn in row.get("hard_negatives", []) or []:
             _, start, end = _span(hn, None, where)
             # A hard negative with entity_type only forbids that id (a recognizer's negative case).
@@ -2899,8 +2911,13 @@ def row_latency_path(predictions: Path) -> Path:
     return predictions.with_name(predictions.stem + ".latency.json")
 
 
-def ner_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str, Any]:
+def ner_report(
+    gold_root: Path, engines: dict[str, Path], emap: Any, inside: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     """Every engine's merged result on the semantic ids of ``ner_ids`` (raw gold), plus its row latency.
+
+    ``inside`` (e.g. ``entity.street_address``) drops predictions within gold of those ids that match no
+    scored gold for every engine alike: the raw gold annotates the address, not the city or name in it.
 
     ``engines`` maps a name (e.g. ``ark-dynamic-pii``, ``presidio-default``, ``presidio-tuned``) to a
     prediction directory with the gold file names. Latency is p50/p95 per text over the
@@ -2920,7 +2937,7 @@ def ner_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str
             predictions = root / name
             if not predictions.is_file():
                 raise ScoreboardError(f"{engine}: no predictions {predictions} for {name}")
-            parts.append(score_rows(rows, read_jsonl(predictions), emap, name, ids=ids))
+            parts.append(score_rows(rows, read_jsonl(predictions), emap, name, ids=ids, inside=inside))
             timing = row_latency_path(predictions)
             if timing.is_file():
                 payloads.append(json.loads(timing.read_text(encoding="utf-8")))
@@ -2935,7 +2952,7 @@ def ner_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str
             family_rows[str(emap.family(str(row.get("corpus", ""))))] += 1
     return {
         "schema": SCHEMA,
-        "view": "raw",
+        "view": "raw" if not inside else f"raw (predictions inside {', '.join(sorted(inside))} ignored)",
         "ids": sorted(ids),
         "dynamic_pii_labels": emap.dynamic_pii_labels(),
         "datasets": {dataset.name: dataset.sha256 for dataset in datasets},
@@ -3055,11 +3072,18 @@ def main(argv: list[str] | None = None) -> int:
     ner_parser.add_argument("--engine", action="append", required=True, metavar="NAME=DIR",
                             help="predictions of one engine with the gold file names (run_ark.py --dynamic-pii, "
                                  "run_presidio.py --profile ...), optional <stem>.latency.json next to them")
+    ner_parser.add_argument("--ignore-inside", action="append", default=[], metavar="ID",
+                            help="drop predictions within gold of this id that match no scored gold, for every "
+                                 "engine alike (e.g. entity.street_address)")
     ner_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     args = parser.parse_args(argv)
     try:
         if args.command == "ner":
-            report = ner_report(args.gold, named_dirs(args.engine, "--engine"), entity_map_module.load())
+            emap = entity_map_module.load()
+            unknown = sorted(set(args.ignore_inside) - set(emap.entities))
+            if unknown:
+                raise ScoreboardError(f"--ignore-inside: unknown ids {unknown}")
+            report = ner_report(args.gold, named_dirs(args.engine, "--engine"), emap, frozenset(args.ignore_inside))
             print("\n".join(ner_lines(report)))
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")

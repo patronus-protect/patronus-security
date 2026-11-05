@@ -84,13 +84,16 @@ bleiben byte-identisch. `scoreboard.py ner` liest sie als `<Vorhersage-Stem>.lat
   --dynamic-pii --dynamic-pii-label-threshold person=0.8 --latency ner/gold.latency.json
 ```
 
-**Nur auf arm64 oder x86_64 mit VNNI messen.** Das aktuelle GLiNER-Asset rechnet `MatMulInteger`
-mit U8S8; ohne VNNI (AVX2, z. B. Haswell-VPS) sättigt der Kernel und die Scores weichen ab. Bis das
-korrigierte Asset (uint8-Gewichte) im Build steckt, laufen GLiNER-Messungen nicht auf dem VPS.
+Die GLiNER- und L3-Assets rechnen `MatMulInteger` mit U8S8, was auf x86_64 ohne VNNI (AVX2, z. B.
+Haswell-VPS) sättigt. Seit #280 schreibt ARK die Gewichte dort beim Laden auf U8U8 um; Messungen auf
+dem VPS brauchen einen Build ab diesem Stand (auf dem VPS: F1 wie auf arm64, ±0,3 pp).
 
 `scoreboard.py ner` wertet die semantischen IDs mit `dynamic_pii`-Labels (PERSON, LOCATION,
 ORGANIZATION) für ARK L1 + L3 gegen beide Presidio-Profile: rohes Gold, exaktes P/R/F1 je
 Quellfamilie, Sprache (EN, DE) und ID sowie p50/p95 je Text aus den Latenzdateien.
+`--ignore-inside entity.street_address` liefert die zweite Sicht: Vorhersagen innerhalb einer
+annotierten Straßenadresse, die kein gewertetes Gold treffen, fallen für jede Engine gleich weg (das
+Gold annotiert die Adresse, nicht die Stadt oder den Namen darin).
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py ner --gold GOLD --engine ark-dynamic-pii=NER \

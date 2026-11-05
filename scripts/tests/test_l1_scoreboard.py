@@ -1670,6 +1670,21 @@ def test_score_rows_with_ner_ids_scores_semantic_ids_only():
     assert l1["all"]["gold"] == 1 and "entity/pii.email" in l1
 
 
+def test_score_rows_ignores_predictions_inside_annotated_addresses_when_asked():
+    rows = [gold("a", [("entity.street_address", 0, 30), ("entity.location", 40, 46)])]
+    preds = [{"id": "a", "language": "en", "evidence_spans": [
+        {"label": "entity.location", "presidio_entity": "LOCATION", "start_char": 20, "end_char": 30, "score": 0.9},
+        {"label": "entity.location", "presidio_entity": "LOCATION", "start_char": 40, "end_char": 46, "score": 0.9},
+        {"label": "entity.location", "presidio_entity": "LOCATION", "start_char": 25, "end_char": 35, "score": 0.9},
+    ]}]
+    ids = MODULE.ner_ids(EMAP)
+    raw = MODULE.score_rows(rows, preds, EMAP, ids=ids)["buckets"]["all"]
+    assert raw["predicted"] == 3 and raw["exact"] == 1
+    # The city within the address is dropped; the one crossing its end stays a false positive.
+    nested = MODULE.score_rows(rows, preds, EMAP, ids=ids, inside=frozenset({"entity.street_address"}))
+    assert nested["buckets"]["all"] == {"gold": 1, "predicted": 2, "exact": 1, "gold_found": 1, "predicted_correct": 1}
+
+
 def ner_tree(tmp_path):
     """EN rows of the Presidio evaluator set and DE rows of the synthetic set, Ark L1 + L3 and Presidio."""
     rows = [
@@ -1743,3 +1758,7 @@ def test_main_ner_subcommand(tmp_path, capsys):
     assert out.startswith("## Semantic entities (NER), raw gold") and "## Latency per text" in out
     assert json.loads((tmp_path / "ner.json").read_text())["latency"]["ark-dynamic-pii"]["per_text"]["de"]["samples"] == 1
     assert MODULE.main(["ner", "--gold", str(tmp_path / "gold"), "--engine", "broken"]) == 2
+    assert MODULE.main([*args[:5], "--ignore-inside", "entity.street_address"]) == 0
+    assert capsys.readouterr().out.startswith(
+        "## Semantic entities (NER), raw (predictions inside entity.street_address ignored) gold")
+    assert MODULE.main([*args[:5], "--ignore-inside", "entity.nope"]) == 2
