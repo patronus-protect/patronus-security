@@ -1010,8 +1010,8 @@ tasks:
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
   - id: H06-7
-    status: deferred
-    deferred: >-
+    status: done
+    decision: >-
       Decided 2026-11-05: M4 counts as met. Native 100 KiB p95 9.8 ms (<= 10 ms) since H06-2; the Python
       binding stays at about 15 ms (H06-4 15.2, H06-5 15.0 ms) and further passes moved within the noise.
       The performance loop ends here; the remaining hotspots above stay documented.
