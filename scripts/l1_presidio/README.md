@@ -297,6 +297,14 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   bedient beide Modi. `run_ark.py` muss den Modus in den Metadaten bestätigen (`engine.pii_mode`, bei
   `strict` fehlend), sonst Exit 2: ein Runner, der `--pii-mode` ignoriert, würde `strict` als
   `balanced` ausgeben. Meilensteine liest `m1`/`report` aus `balanced`.
+- **Meilensteine im Gate (H05):** Vor der Zeile `RESULT` steht je Split eine Zeile
+  `milestones <split> (balanced, attainable gold, vs Presidio tuned): M1 … | M2 …` mit M1 (gehaltene
+  gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel) des Heads. Presidio
+  tuned läuft mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
+  Runner, Profil und Eingabe-SHA-256 gecacht. So erreichen die Holdout-Meilensteine den Gate-Bericht
+  (der Runner übernimmt das Ende einer grünen Scoreboard-Ausgabe), nur als Aggregat. Scheitert die
+  Messung (lokal ohne Presidio im Interpreter), steht `not measured (<Fehlertyp>)` da; der Exit-Code
+  ändert sich nie.
 - **Regression (Exit 1):** F1-Verlust > 0,5 pp (`--tolerance-pp`), exakt oder überlappend, für eine
   Entität, alle L1-IDs zusammen, eine Quellfamilie, `de` oder `en`, in Dev oder Holdout, in `strict` oder
   `balanced`; oder ein neuer Treffer auf einem Hard Negative in einem der Modi (gleiche Zeile, ID und
