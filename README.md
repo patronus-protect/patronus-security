@@ -238,22 +238,53 @@ In full Ark the same runs as the `shell_command` category. Guide:
 
 ## How L1 compares
 
-Native L1 alone — no model, the same rules in Core and Ark — measured against the established
-open-source tools on 2026-11-02 (commit `3eda3e8`, dev split, exact span match).
+Native L1 alone — no model, the same rules in Core and Ark — against the established open-source
+tools: dev split, exact span match, raw gold.
 
-**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364 with tuned recognizers,
-Ark in the `balanced` mode:
+**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364, with its default recognizers
+and with our tuned profile (German recognizers and context words added). Exact F1, measured on
+2026-11-05 (commit `cf8e702`). Ark's `balanced` mode (`pii_mode: balanced`) scores matches with
+context; the default `strict` mode reports rule matches only and finds fewer identifiers that need
+context:
 
-| Corpus family | Ark L1 F1 | Presidio F1 |
-| --- | ---: | ---: |
-| Neutral public corpora (Gretel finance, ai4privacy) | **70.0** | 40.6 |
-| Presidio's own evaluator and recognizer test data | **78.1** | 71.3 |
-| Ark's DE/EU synthetic set ¹ | **88.2** | 39.6 |
+| Corpus family | Ark `balanced` | Ark `strict` (default) | Presidio default | Presidio tuned |
+| --- | ---: | ---: | ---: | ---: |
+| Neutral public corpora (Gretel finance, ai4privacy) | **70.0** | 69.6 | 18.0 | 40.5 |
+| Presidio's own evaluator and recognizer test data | **78.7** | 65.4 | 63.6 | 77.6 |
+| — of which English rows | 82.6 | 75.1 | 73.3 | **84.6** |
+| — of which German rows | 71.2 | 14.6 | 18.6 | **93.0** |
+| Ark's DE/EU synthetic set ¹ | **88.2** | 75.2 | 16.2 | 42.8 |
 
-Ark validates checksums for 83 identifier units, Presidio for 35; neither tool raises a false
-positive on the hard negatives of the deciding families.
+What this covers:
 
-**Secrets (DLP) vs. secret scanners**, Ark in its default profile:
+- Identifiers with a fixed format: cards, IBANs, phone numbers, e-mail and IP addresses, national
+  IDs. Ark is about as accurate as Presidio tuned on Presidio's own data and well ahead on the
+  neutral corpora, with no false positive on the hard negatives (Presidio default: 7 on its own
+  data). Ark
+  validates checksums for 83 identifier units, Presidio for 35.
+- Ark does not report bare numbers without a field name (German tax ID, LANR, BSNR, driver's
+  licence) that Presidio matches by format alone, so Presidio tuned leads on the German rows of
+  its own test data.
+- Names, places and organisations are not part of L1; Ark finds them with the optional L3 model:
+
+**Names, places, organisations** — Ark L1 plus the L3 `dynamic-pii` pipeline (GLiNER,
+`max_level="l3"`) against Presidio's spaCy NER (`en_core_web_lg`; tuned adds `de_core_news_lg`).
+Exact F1 over PERSON, LOCATION and ORGANIZATION, same measurement:
+
+| Corpus family | Language | Ark L1 + GLiNER | Presidio default | Presidio tuned |
+| --- | --- | ---: | ---: | ---: |
+| Neutral public corpora | English | **54.7** | 30.2 | 30.2 |
+| Neutral public corpora | German | **44.0** | 7.4 | 27.5 |
+| Presidio's evaluator data | English | **65.4** | 58.8 | 58.8 |
+| Ark's DE/EU synthetic set ¹ | English | **70.0** | 54.0 | 54.0 |
+| Ark's DE/EU synthetic set ¹ | German | **69.9** | 31.0 | 42.9 |
+
+Presidio 2.2.364 reports no organisations by default. The L3 model costs several times more time
+per text than Presidio's spaCy model; L1 alone is unaffected. Per-entity tables, the address view
+and the method: [`research/l1-pii/scoreboard/2026-11-05.md`](research/l1-pii/scoreboard/2026-11-05.md).
+
+**Secrets (DLP) vs. secret scanners**, Ark in its default profile, measured on 2026-11-02
+(commit `3eda3e8`):
 
 | Tool | Precision | Recall | F1 | Hard-negative FPs | FPs per MB of benign code |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -265,8 +296,8 @@ positive on the hard negatives of the deciding families.
 The DLP scan runs at 8.16 MiB/s against 4.16 MiB/s for gitleaks, with a 100 KiB p95 of 11.7 ms
 (measured: 29.10.2026).
 
-¹ Written by us for German and EU identifiers; reported for completeness, not used to decide
-milestones. ² Run with `--no-verification`, so it scores formats only, like the other tools.
+¹ Written by us for German and EU identifiers (and names in English and German); reported for
+completeness, not used to decide milestones. ² Run with `--no-verification`, so it scores formats only, like the other tools.
 These are our own measurements; per-entity results, corpora and method are in
 [L1 capabilities](https://patronus-protect.github.io/patronus-security/reference/l1-capabilities/).
 

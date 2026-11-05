@@ -231,6 +231,12 @@ def generate(
     for rule in pii_rules:
         pii_by_label.setdefault(rule["entity_group"], []).append(rule)
     dlp_by_id = {rule["id"]: rule for rule in dlp_rules}
+    favored_f1 = [
+        entity["presidio_favored"]["f1"]
+        for entity in pii["entities"].values()
+        if entity.get("presidio_favored", {}).get("gold")
+    ]
+    strict_below = sum(f1["ark-strict"] < f1[f"ark-{pii['decision_mode']}"] for f1 in favored_f1)
 
     lines = [
         "# L1 capabilities",
@@ -258,7 +264,7 @@ def generate(
         f"{sum(rule['strength'] == 'checksum' for rule in pii_rules)} | "
         f"{sum(rule['validator_strength'] in ('checksum', 'structure') for rule in dlp_rules)} |",
         f"| Default state | all rules on | credential/secret groups on, broader families opt-in |",
-        f"| Compared with | Presidio {pii_map['presidio_version']} (tuned) | "
+        f"| Compared with | Presidio {pii_map['presidio_version']} (default and tuned; milestones against tuned) | "
         + ", ".join(
             f"{name} {dlp_map['baselines'][key]['version']}"
             for key, name in (("gitleaks", "gitleaks"), ("trufflehog", "TruffleHog"), ("detect_secrets", "detect-secrets"))
@@ -268,6 +274,19 @@ def generate(
         f"presidio_favored {pii['overall_f1']['presidio_favored']:.1f} | "
         f"{dlp['decision_profile']} profile: {dlp['overall']['f1']:.1f} (P {dlp['overall']['precision']:.1f}, "
         f"R {dlp['overall']['recall']:.1f}) |",
+        "",
+        "!!! warning \"Scope of the Presidio comparison\"\n"
+        "    The PII numbers cover L1 identifiers with a fixed format (cards, IBANs, phone numbers, e-mail "
+        f"and IP addresses, national IDs) in the `{pii['decision_mode']}` mode. The default mode is `strict` "
+        "(rules only, every finding scores 1.0): on `presidio_favored` "
+        f"{strict_below} of {len(favored_f1)} entities with gold score a lower F1 in `strict` than in "
+        f"`{pii['decision_mode']}`, mostly phone numbers, US SSNs and national IDs that need context. "
+        "Ark does not report bare numbers without a field name (German tax ID, LANR, BSNR, driver's "
+        "licence) that Presidio matches by format alone, so Presidio tuned leads on the German rows of "
+        "`presidio_favored` (M2). PERSON, LOCATION, ORGANIZATION and NRP are `semantic` entities that L1 "
+        "never reports; the optional L3 `dynamic-pii` pipeline (GLiNER) covers PERSON, LOCATION and "
+        "ORGANIZATION, measured against Presidio's spaCy NER in "
+        "[`research/l1-pii/scoreboard/`](https://github.com/patronus-protect/patronus-security/tree/main/research/l1-pii/scoreboard).",
         "",
         "### Milestone status",
         "",
