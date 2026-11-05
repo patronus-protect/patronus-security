@@ -9,6 +9,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Fixed
+
+- Core ships its own `NOTICE` (crate and Python package) with the Prompt Armor, pipelock,
+  PromptInject, Garak, DefenseClaw and Cedar attributions of the Core sources; 0.1.15 carried
+  them only in the root and Ark `NOTICE`. The root `NOTICE` points sections 3 and 4 at their
+  current `ark-core/` paths. `scripts/release_legal_files.py` checks every packaged license and
+  `NOTICE` copy and that Core and root attributions agree; CI runs it on every pull request, so
+  a stale copy no longer surfaces first in the release workflow.
+
 ## [0.1.15] - 2026-11-05
 
 ### Detection changes in the default modes

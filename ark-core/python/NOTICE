@@ -1,0 +1,79 @@
+Patronus Ark Core (`patronus-ark-core`)
+Copyright (c) 2026 Casdo Labs GmbH
+
+This product is licensed under the MIT License or the Apache License 2.0, at
+your option. See LICENSE-MIT and LICENSE-APACHE.
+
+===============================================================================
+Third-party components and derived work
+===============================================================================
+
+This product includes software derived from and/or incorporating the following
+third-party works. Their original licenses and attributions are preserved as
+required.
+
+-------------------------------------------------------------------------------
+1. Prompt-injection rule catalog
+   (ark-core/src/detectors/injection/rules/prompt_armor_95e532e.json)
+-------------------------------------------------------------------------------
+Selected prompt-injection rules are adapted from Prompt Armor at revision
+95e532e275280488b3abacb519f8b14ae17a9dcb. Ark retains the upstream rule IDs,
+records local mapping IDs, and modifies selected expressions to reduce false
+positives. Prompt Armor's runtime and scoring thresholds are not included.
+
+    Prompt Armor — Apache License 2.0
+    https://github.com/prompt-armor/prompt-armor
+
+Licensed under the Apache License, Version 2.0. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+2. Source-derived prompt-injection relationships
+   (ark-core/src/detectors/injection/rules/source_derived_p0_0_1_6.json,
+    ark-core/src/threat/obfuscation.rs)
+-------------------------------------------------------------------------------
+High-precision relationship rules are adapted from the pinned Apache-2.0 core
+of pipelock and the MIT-licensed PromptInject attack construction axes. The
+bounded ROT13 and URL-safe Base64 variations follow NVIDIA Garak's pinned
+Apache-2.0 encoding probes. Ark records the exact source revision, upstream
+rule or probe ID, and every local adaptation in rule evidence.
+
+    pipelock — Apache License 2.0
+    Copyright (c) 2026 Joshua Waldrep
+    Revision b4104d5af05b2d861ee6cff43e8d099dbc141c82
+    https://github.com/luckyPipewrench/pipelock
+
+    PromptInject — MIT License
+    Copyright (c) 2020 Agency Enterprise, LLC
+    Revision 2928a719d5de62d3766226f1b44c51d9570bc530
+    https://github.com/agencyenterprise/PromptInject
+
+    NVIDIA Garak — Apache License 2.0
+    Copyright (c) 2023 Leon Derczynski
+    Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES
+    Revision 8ed1543b985a5722adb659584182faf6f7907d4e
+    https://github.com/NVIDIA/garak
+
+Apache-2.0 components are licensed under the Apache License, Version 2.0. You
+may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0. PromptInject is
+used under the MIT License; its copyright and permission notice are retained
+here.
+
+-------------------------------------------------------------------------------
+3. Shell-command policies and facts  (ark-core/src/detectors/shell/)
+-------------------------------------------------------------------------------
+The bundle-default shell policies (`data/dc_rules.json`) are translations of
+DefenseClaw guardrail rules to Cedar conditions over `patronus.facts/1`, and the
+enum sets of `patronus.facts/1` (operations, path access, network scope, parse
+status, dialect) follow DefenseClaw's `defenseclaw.guardrail.semantic.v1`
+schema. Policies are evaluated with the Cedar policy engine.
+
+    DefenseClaw — Apache License 2.0
+    Copyright 2026 Cisco Systems, Inc.
+
+    Cedar (`cedar-policy`) — Apache License 2.0
+    Copyright Cedar Contributors
+    https://github.com/cedar-policy/cedar
+
+Licensed under the Apache License, Version 2.0. You may obtain a copy at
+http://www.apache.org/licenses/LICENSE-2.0

@@ -45,7 +45,7 @@ License at http://www.apache.org/licenses/LICENSE-2.0
 
 -------------------------------------------------------------------------------
 3. Prompt-injection rule catalog
-   (rust/src/detectors/injection/rules/prompt_armor_95e532e.json)
+   (ark-core/src/detectors/injection/rules/prompt_armor_95e532e.json)
 -------------------------------------------------------------------------------
 Selected prompt-injection rules are adapted from Prompt Armor at revision
 95e532e275280488b3abacb519f8b14ae17a9dcb. Ark retains the upstream rule IDs,
@@ -60,8 +60,8 @@ License at http://www.apache.org/licenses/LICENSE-2.0
 
 -------------------------------------------------------------------------------
 4. Source-derived prompt-injection relationships
-   (rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json,
-    rust/src/threat/obfuscation.rs)
+   (ark-core/src/detectors/injection/rules/source_derived_p0_0_1_6.json,
+    ark-core/src/threat/obfuscation.rs)
 -------------------------------------------------------------------------------
 High-precision relationship rules are adapted from the pinned Apache-2.0 core
 of pipelock and the MIT-licensed PromptInject attack construction axes. The

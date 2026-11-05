@@ -58,13 +58,7 @@ jobs:
       - run: python -m pip install "PyYAML>=6,<7"
       - run: python scripts/generate_docs.py --check
       - name: Verify packaged legal files are current
-        run: |
-          cmp LICENSE rust/LICENSE
-          cmp LICENSE-COMMERCIAL.md rust/LICENSE-COMMERCIAL.md
-          cmp NOTICE rust/NOTICE
-          cmp LICENSE python/LICENSE
-          cmp LICENSE-COMMERCIAL.md python/LICENSE-COMMERCIAL.md
-          cmp NOTICE python/NOTICE
+        run: python scripts/release_legal_files.py
 
   wheels:
     name: Build wheel (${{ matrix.artifact }})

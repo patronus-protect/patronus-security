@@ -9,7 +9,7 @@ description = "Local PII, DLP and prompt-injection scanning with optional Wolf D
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT OR Apache-2.0"
-license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+license-files = ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
 dependencies = []
 
 [project.urls]
