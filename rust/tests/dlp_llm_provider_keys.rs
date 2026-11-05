@@ -6,8 +6,11 @@
 //! `dlp_deepseek_key` (`sk-` and 32 lower-case alphanumerics under a DeepSeek
 //! key) and `dlp_fireworks_key` (`fw_` and 20 to 40 base62), the last three
 //! per TruffleHog. Gemini/AI Studio keys are Google API keys
-//! (`dlp_google_api_key`). Values come from the golden generator or are built
-//! here at test time.
+//! (`dlp_google_api_key`). P02 adds, per TruffleHog, `dlp_langsmith_key`
+//! (`lsv2_pt_`/`lsv2_sk_`, 32 and 10 lower-case hex digits), `dlp_pinecone_key`
+//! (`pcsk_`, 5 base62, `_` and 63 base62) and `dlp_elevenlabs_key` (`sk_` and
+//! 48 lower-case hex digits). Values come from the golden generator or are
+//! built here at test time.
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -49,6 +52,30 @@ const RULES: &[(&str, &str, &str, &str)] = &[
         "FIREWORKS_API_KEY",
         "fireworks_api_key",
         "fireworks_api_key_short",
+    ),
+    (
+        "dlp_langsmith_key",
+        "LANGSMITH_API_KEY",
+        "langsmith_personal_token",
+        "langsmith_api_key_short",
+    ),
+    (
+        "dlp_langsmith_key",
+        "LANGCHAIN_API_KEY",
+        "langsmith_service_key",
+        "langsmith_api_key_short",
+    ),
+    (
+        "dlp_pinecone_key",
+        "PINECONE_API_KEY",
+        "pinecone_api_key",
+        "pinecone_api_key_short",
+    ),
+    (
+        "dlp_elevenlabs_key",
+        "ELEVENLABS_API_KEY",
+        "elevenlabs_api_key",
+        "elevenlabs_api_key_short",
     ),
     (
         "dlp_google_api_key",
@@ -172,6 +199,10 @@ fn prefixed_keys_need_no_key_name() {
         "perplexity_api_key",
         "openrouter_api_key",
         "fireworks_api_key",
+        "langsmith_personal_token",
+        "langsmith_service_key",
+        "pinecone_api_key",
+        "elevenlabs_api_key",
     ] {
         let value = generated(gen, 2);
         let text = NEUTRAL_CARRIER.replace("{}", &value);
@@ -212,6 +243,11 @@ fn single_case_fills_are_not_reported() {
             "FIREWORKS_API_KEY",
             format!("fw_{}", "allowoutboundhttps".repeat(2)),
         ),
+        (
+            "dlp_pinecone_key",
+            "PINECONE_API_KEY",
+            format!("pcsk_docs1_{}", "abc123def".repeat(7)),
+        ),
     ];
     for (rule_id, key, value) in &fills {
         let text = format!("{key}={value}\n");
@@ -235,4 +271,35 @@ fn fireworks_keys_take_20_to_40_characters() {
     let value = format!("fw_{}", &body[..41]);
     let text = format!("FIREWORKS_API_KEY={value}\n");
     assert!(!rule_hit(&text, "dlp_fireworks_key"), "{text}");
+}
+
+#[test]
+fn langsmith_keys_need_a_known_kind_and_both_hex_parts() {
+    // TruffleHog langsmith: lsv2_ and pt (personal) or sk (service).
+    let value = generated("langsmith_personal_token", 4);
+    for (kind, ok) in [("pt", true), ("sk", true), ("xx", false), ("PT", false)] {
+        let candidate = format!("lsv2_{kind}_{}", &value[8..]);
+        let text = format!("LANGSMITH_API_KEY={candidate}\n");
+        assert_eq!(rule_hit(&text, "dlp_langsmith_key"), ok, "{text}");
+    }
+    let upper = value.to_ascii_uppercase().replacen("LSV2_PT_", "lsv2_pt_", 1);
+    let text = format!("LANGSMITH_API_KEY={upper}\n");
+    assert!(!rule_hit(&text, "dlp_langsmith_key"), "{text}");
+    let text = format!("LANGSMITH_API_KEY={value}0\n");
+    assert!(!rule_hit(&text, "dlp_langsmith_key"), "{text}");
+}
+
+#[test]
+fn pinecone_and_elevenlabs_keys_stand_as_whole_tokens() {
+    let value = generated("pinecone_api_key", 5);
+    let text = format!("PINECONE_API_KEY={value}X\n");
+    assert!(!rule_hit(&text, "dlp_pinecone_key"), "{text}");
+    let text = format!("PINECONE_API_KEY=x{value}\n");
+    assert!(!rule_hit(&text, "dlp_pinecone_key"), "{text}");
+    let value = generated("elevenlabs_api_key", 5);
+    let text = format!("ELEVENLABS_API_KEY={value}a\n");
+    assert!(!rule_hit(&text, "dlp_elevenlabs_key"), "{text}");
+    // Stripe-style sk_live_ / sk_test_ keys are not ElevenLabs keys.
+    let text = format!("STRIPE_KEY=sk_live_{}\n", &value[3..]);
+    assert!(!rule_hit(&text, "dlp_elevenlabs_key"), "{text}");
 }

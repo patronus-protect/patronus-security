@@ -1475,6 +1475,15 @@ PROFILES = {
     "dlp_fireworks_key": Profile(
         "llm.fireworks.api_key", "API_KEY", "secret", "fireworks_api_key", "Fireworks AI API key", "Fireworks-AI-API-Schlüssel"
     ),
+    "dlp_langsmith_key": Profile(
+        "llm.langsmith.api_key", "API_KEY", "secret", "langsmith_api_key", "LangSmith API key", "LangSmith-API-Schlüssel"
+    ),
+    "dlp_pinecone_key": Profile(
+        "llm.pinecone.api_key", "API_KEY", "secret", "pinecone_api_key", "Pinecone API key", "Pinecone-API-Schlüssel"
+    ),
+    "dlp_elevenlabs_key": Profile(
+        "llm.elevenlabs.api_key", "API_KEY", "secret", "elevenlabs_api_key", "ElevenLabs API key", "ElevenLabs-API-Schlüssel"
+    ),
     "dlp_aws_access_key": Profile("cloud.aws.access_key_id", "CLOUD_KEY", "secret", "aws_access_key_id", "AWS access key ID", "AWS-Access-Key-ID"),
     "dlp_aws_secret_key": Profile("cloud.aws.secret_access_key", "CLOUD_KEY", "secret", "aws_secret_access_key", "AWS secret access key", "AWS-Secret-Access-Key"),
     "dlp_google_api_key": Profile("cloud.gcp.api_key", "CLOUD_KEY", "secret", "google_maps_api_key", "Google Maps API key", "Google-Maps-API-Schlüssel"),

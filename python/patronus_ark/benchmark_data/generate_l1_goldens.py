@@ -5215,6 +5215,8 @@ DLP_LOOKALIKE_GENERATORS = (
     # P01: wrong length of the Cohere, Perplexity, DeepSeek, OpenRouter and Fireworks formats
     "cohere_api_key_short", "perplexity_api_key_short", "deepseek_api_key_short", "openrouter_api_key_short",
     "fireworks_api_key_short",
+    # P02: wrong length of the LangSmith, Pinecone and ElevenLabs formats
+    "langsmith_api_key_short", "pinecone_api_key_short", "elevenlabs_api_key_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
@@ -14081,6 +14083,146 @@ DLP_P01_CASES = {
     ],
 }
 for _label, _rows in DLP_P01_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# P02: LLM/AI provider keys per TruffleHog: LangSmith lsv2_pt_/lsv2_sk_ + 32 hex + _ + 10 hex,
+# Pinecone pcsk_ + 5 alphanumerics + _ + 63 alphanumerics, ElevenLabs sk_ + 48 hex. Hard negatives
+# are lookalikes with a wrong length, env/template references, placeholders and format prose.
+DLP_P02_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "en", "dlp_langsmith_key",
+            "# tracing\nLANGSMITH_TRACING=true\nLANGSMITH_API_KEY=<<secret:0>>\nLANGSMITH_PROJECT=support-bot\n",
+            "langsmith_personal_token", 20201, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_langsmith_key",
+            "Hallo Jana,\n\nfür das Tracing im Staging nimm bitte den LangSmith-Dienstschlüssel <<secret:0>>\n\nGruß\n",
+            "langsmith_service_key", 20202, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_langsmith_key",
+            "import os\n\nos.environ[\"LANGCHAIN_TRACING_V2\"] = \"true\"\nclient = Client(api_key=\"<<secret:0>>\")\n",
+            "langsmith_service_key", 20203, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "vektorspeicher:\n  anbieter: pinecone\n  index: produktsuche\n  api_key: \"<<secret:0>>\"\n",
+            "pinecone_api_key", 20204, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_pinecone_key",
+            "{\n  \"vectorStore\": {\n    \"provider\": \"pinecone\",\n    \"apiKey\": \"<<secret:0>>\"\n  }\n}\n",
+            "pinecone_api_key", 20205, carrier="json",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "$ curl -X GET https://api.pinecone.io/indexes -H \"Api-Key: <<secret:0>>\"\n",
+            "pinecone_api_key", 20206, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_elevenlabs_key",
+            "$ curl https://api.elevenlabs.io/v1/voices -H \"xi-api-key: <<secret:0>>\"\n",
+            "elevenlabs_api_key", 20207, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_elevenlabs_key",
+            "# Sprachausgabe\nELEVENLABS_API_KEY=<<secret:0>>\n",
+            "elevenlabs_api_key", 20208, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_elevenlabs_key",
+            "2026-11-04T07:30:12Z DEBUG tts: request voice=rachel key=<<secret:0>>\n",
+            "elevenlabs_api_key", 20209, carrier="log",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_langsmith_key",
+            "2026-11-04T07:30:12Z DEBUG tracer: Projekt support-bot, Schlüssel <<secret:0>> geladen\n",
+            "langsmith_personal_token", 20210, carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_langsmith_key",
+            "2026-11-04T07:30:12Z WARN tracer: rejected <<secret:0>> (length)\n",
+            "langsmith_api_key_short", 20211, "lsv2_pt_ shape with 31 instead of 32 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_langsmith_key",
+            "2026-11-04T07:30:12Z WARN tracer: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "langsmith_api_key_short", 20212, "lsv2_pt_ shape with 31 instead of 32 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_pinecone_key",
+            "2026-11-04T07:30:12Z WARN vectors: rejected <<secret:0>> (length)\n",
+            "pinecone_api_key_short", 20213, "pcsk_ shape with 62 instead of 63 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "2026-11-04T07:30:12Z WARN vektoren: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "pinecone_api_key_short", 20214, "pcsk_ shape with 62 instead of 63 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_elevenlabs_key",
+            "2026-11-04T07:30:12Z WARN tts: rejected <<secret:0>> (length)\n",
+            "elevenlabs_api_key_short", 20215, "sk_ shape with 47 instead of 48 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_elevenlabs_key",
+            "2026-11-04T07:30:12Z WARN tts: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "elevenlabs_api_key_short", 20216, "sk_ shape with 47 instead of 48 hex digits", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_langsmith_key",
+            "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_pinecone_key",
+            "pinecone:\n  api_key: \"{{ pinecone_api_key }}\"\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_elevenlabs_key",
+            "Set ELEVENLABS_API_KEY to your key; it starts with sk_ and has 48 hex digits.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_langsmith_key",
+            "{\"langsmith\": {\"api_key\": \"lsv2_pt_your-langsmith-api-key\"}}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_pinecone_key",
+            "index = pc.Index(\"products\")\nresult = index.query(vector=embedding, top_k=5, namespace=\"pcsk_docs\")\n",
+            "identifier with the pcsk_ prefix", carrier="code",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_langsmith_key",
+            "LangSmith-Schlüssel in der Doku gekürzt: lsv2_pt_1a2b… (32 + 10 Hex-Ziffern)\n",
+            "truncated token in the docs", carrier="markdown",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "# Schlüssel kommt aus dem Tresor\nPINECONE_API_KEY=${PINECONE_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_elevenlabs_key",
+            "elevenlabs:\n  schluessel: \"<ELEVENLABS_API_KEY>\"\n",
+            "placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_elevenlabs_key",
+            "ElevenLabs-Schlüssel: als Umgebungsvariable ELEVENLABS_API_KEY setzen, nie im Repo ablegen.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "2026-11-04T07:30:12Z INFO vektoren: Index produktsuche, Prüfsumme sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\n",
+            "digest next to the provider name", carrier="log",
+        ),
+    ],
+}
+for _label, _rows in DLP_P02_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 # T22: base64 values under generic keys (Kubernetes Secret data, Grafana legacy keys and glc_

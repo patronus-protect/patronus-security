@@ -3331,6 +3331,73 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_langsmith_key",
+    "de": "LANGSMITH_API_KEY=<<secret\u003a0>>",
+    "en": "x-api-key: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "langsmith_personal_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}",
+        "LangSmith-Schlüssel beginnen mit lsv2_pt_ oder lsv2_sk_."
+      ],
+      "en": [
+        "langsmith:\n  api_key: \"{{ langsmith_api_key }}\"",
+        "LANGCHAIN_API_KEY=lsv2_pt_your-langsmith-api-key"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_pinecone_key",
+    "de": "vektorspeicher:\n  pinecone_api_key: \"<<secret\u003a0>>\"",
+    "en": "PINECONE_API_KEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "pinecone_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "PINECONE_API_KEY=${PINECONE_API_KEY}"
+      ],
+      "en": [
+        "index.query(vector=embedding, top_k=5, namespace=\"pcsk_docs\")",
+        "Keys look like pcsk_<id>_<secret>."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_elevenlabs_key",
+    "de": "ELEVENLABS_API_KEY=<<secret\u003a0>>",
+    "en": "xi-api-key: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "elevenlabs_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}"
+      ],
+      "en": [
+        "elevenlabs:\n  api_key: \"<ELEVENLABS_API_KEY>\"",
+        "Keys look like sk_<48 hex digits>."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_aws_access_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
