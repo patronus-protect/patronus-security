@@ -283,8 +283,8 @@ the M1 work on presidio_favored) are opt-in.
   a list of its length, instead of `PyDict::set_item` (a reference count round trip per key and
   value) and `PyList::append`. Same objects; `details` getter on a held 100 KiB result 1.29–1.35 →
   1.05–1.14 ms; ark 100 KiB p95 13.1 → 12.1 ms (interleaved A/B, median of 6 runs). Profile in
-  `research/l1-pii/scoreboard/latency.md`. M4 not yet met in Python; next pass H06-8. **Detection
-  change:** none.
+  `research/l1-pii/scoreboard/latency.md`. M4 counts as met (decided 2026-11-05), the loop ends;
+  H06-8 is deferred. **Detection change:** none.
 - L1 latency loop, pass 6 (H06-6). With `explain` on, the context anchor patterns of PII and DLP
   (`(?i)\b…\b`) are searched without their word boundaries on the lazy DFA and each candidate
   start is probed anchored, as the PII rules since H03 (shared `detectors::word_boundary` module): a

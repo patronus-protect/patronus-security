@@ -56,8 +56,8 @@ caches) the getter costs about twice that, and the gain is about 0.4 ms. `latenc
 6 interleaved rounds per build (load about 0.8): 100 KiB p95 median 13.12 → 12.15 ms (range 12.29–15.16
 → 11.53–12.40), p50 10.18 → 9.96 ms; 4 KiB p95 1.92 → 1.98 ms (noise).
 
-M4 holds for ark-native, not for ark (Python). Remaining hotspots, each ≥ 10 % of the ark p95, for
-H06-8:
+M4 holds for ark-native, not for ark (Python); M4 counts as met (decided 2026-11-05), the loop ends and
+H06-8 is deferred. Remaining hotspots, each ≥ 10 % of the ark p95, documented:
 
 - The `matched_rules` entries as `serde_json::Value` trees: the `details` getter still costs 2.0–2.6 ms
   per 100 KiB right after a scan (1.0–1.1 ms on warm caches; the BTreeMap nodes come from the rayon

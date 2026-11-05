@@ -153,7 +153,7 @@ PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNE
 
 **M4 gilt als erreicht** (entschieden am 2026-11-05): nativ 100 KiB p95 9,8 ms (≤ 10 ms seit H06-2);
 die Python-Bindings bleiben bei etwa 15 ms, weitere Durchgänge der Performance-Schleife lagen im
-Rauschen. Die Schleife endet mit H06-6; H05 berichtet nativ und Python getrennt.
+Rauschen. Die Schleife endet mit H06-7; H05 berichtet nativ und Python getrennt.
 
 ## Messmodus und Gold-Lücken (T15, T16)
 
