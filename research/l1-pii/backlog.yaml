@@ -1037,6 +1037,7 @@ tasks:
   # Presidio's 1,500 English texts and the raw M2 gap on German rows: 63.2 vs tuned 87.0). The goal
   # stays "beat Presidio, also tuned"; the attainable view (T27) is no longer enough for a public claim.
   - id: D-BARE
+    status: done
     title: "Configurable bare-format detection: opt-in rules for every bare value in known_gaps (tax ID, ELSTER tax number, LANR, BSNR, DE driver's licence, SSN, SIN, Aadhaar, NPI, PESEL, ACN, KR BRN, …)"
     type: new-entity
     deps: [H05]
