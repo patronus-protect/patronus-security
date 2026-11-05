@@ -22,7 +22,14 @@ Patronus Ark is the open-source engine behind [Patronus Protect](https://patronu
 checks prompts, tool calls, tool outputs, documents and shell commands on your machine; nothing
 is sent to a cloud service.
 
-📖 **[Documentation](https://patronus-protect.github.io/patronus-security/)**
+📖 **[Documentation](https://patronus-protect.github.io/patronus-security/)** ·
+[Which one do I need?](#which-one-do-i-need) ·
+[Installation](https://patronus-protect.github.io/patronus-security/getting-started/installation/) ·
+[Core guide](https://patronus-protect.github.io/patronus-security/getting-started/core/) ·
+[Ark quickstart](https://patronus-protect.github.io/patronus-security/getting-started/quickstart/) ·
+[Shell commands](https://patronus-protect.github.io/patronus-security/how-to/check-shell-commands/) ·
+[Python API](https://patronus-protect.github.io/patronus-security/python-api/) ·
+[Rust API](https://patronus-protect.github.io/patronus-security/rust-api/)
 
 ## Components
 
@@ -139,6 +146,36 @@ curl -X POST http://localhost:8080/v1/scan \
 
 Setup and responses: [Deploy the HTTP API](https://patronus-protect.github.io/patronus-security/how-to/deploy-http-api/).
 
+## How scanning works
+
+Categories use the layers that fit their detector contract:
+
+| Layer | What it is | Cost | Availability |
+| --- | --- | --- | --- |
+| **L1** | Native rule-based detectors, plus the Cat shell-command verdict (Core and Ark) | input-dependent | rules need no assets; Cat needs its bundle; gate-controlled |
+| **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + lightweight ONNX heads) | milliseconds | Ark, when assets are cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | Ark, when assets are cached |
+
+Core runs L1 and, when configured, Wolf Defender as a separate prompt-injection model result.
+
+L2 packages carry a trained promote-router that decides when a case actually needs L3, so most
+traffic never touches a transformer. When a scan is promoted, the queue publishes the L2 fallback
+first and the final L3 result later. Compatible L2 chunks pass their existing mmBERT token IDs to
+L3 instead of being tokenized again; L3 errors and timeouts degrade back to L2.
+
+Native-only `pii`, `dlp` and `shell_command` do not escalate. PII L1 validates deterministic
+identifiers and anchor-bound values such as contact, payment, government, account, and employee
+identifiers. DLP L1 covers credentials and secrets plus opt-in business identifiers, internal
+metrics, source code, SQL, dumps, and logs. PII and DLP findings return evidence spans and can
+expose non-finding `l1_anchors` as structured context when the `explain` gate is on.
+`dynamic-pii` is the complementary GLiNER L3 pipeline for semantic entities such as people,
+organizations, and locations.
+
+Read more: [Architecture](https://patronus-protect.github.io/patronus-security/concepts/architecture/) ·
+[Layered scanning](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/) ·
+[Categories](https://patronus-protect.github.io/patronus-security/concepts/categories/) ·
+[Models & NTDB](https://patronus-protect.github.io/patronus-security/concepts/models-and-ntdb/)
+
 ## Turn rules on and off
 
 There is one mechanism everywhere: a `rules` map from stable rule id to `true`/`false`.
@@ -201,15 +238,36 @@ In full Ark the same runs as the `shell_command` category. Guide:
 
 ## How L1 compares
 
-Native L1 alone (no model), measured on 2026-11-02 (commit `3eda3e8`, dev split, exact span
-match; our own measurements):
+Native L1 alone — no model, the same rules in Core and Ark — measured against the established
+open-source tools on 2026-11-02 (commit `3eda3e8`, dev split, exact span match).
 
-- **PII vs. [Presidio](https://github.com/microsoft/presidio) 2.2.364** (Ark `balanced` mode), F1:
-  neutral public corpora **70.0** vs. 40.6; Presidio's own test data **78.1** vs. 71.3.
-- **Secrets vs. secret scanners**, F1: Ark **89.4** (precision 99.3), gitleaks 51.1, TruffleHog
-  46.2, detect-secrets 40.9 — at 8.16 MiB/s against 4.16 MiB/s for gitleaks.
+**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364 with tuned recognizers,
+Ark in the `balanced` mode:
 
-Per-entity results, corpora and method:
+| Corpus family | Ark L1 F1 | Presidio F1 |
+| --- | ---: | ---: |
+| Neutral public corpora (Gretel finance, ai4privacy) | **70.0** | 40.6 |
+| Presidio's own evaluator and recognizer test data | **78.1** | 71.3 |
+| Ark's DE/EU synthetic set ¹ | **88.2** | 39.6 |
+
+Ark validates checksums for 83 identifier units, Presidio for 35; neither tool raises a false
+positive on the hard negatives of the deciding families.
+
+**Secrets (DLP) vs. secret scanners**, Ark in its default profile:
+
+| Tool | Precision | Recall | F1 | Hard-negative FPs | FPs per MB of benign code |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Ark L1** | **99.3** | **81.3** | **89.4** | **10** | **0.05** |
+| gitleaks 8.30.1 | 49.1 | 53.4 | 51.1 | 974 | 0.21 |
+| TruffleHog 3.97.9 ² | 63.2 | 36.4 | 46.2 | 326 | 1.43 |
+| detect-secrets 1.5.0 | 33.9 | 51.6 | 40.9 | 1,731 | 36.28 |
+
+The DLP scan runs at 8.16 MiB/s against 4.16 MiB/s for gitleaks, with a 100 KiB p95 of 11.7 ms
+(measured: 29.10.2026).
+
+¹ Written by us for German and EU identifiers; reported for completeness, not used to decide
+milestones. ² Run with `--no-verification`, so it scores formats only, like the other tools.
+These are our own measurements; per-entity results, corpora and method are in
 [L1 capabilities](https://patronus-protect.github.io/patronus-security/reference/l1-capabilities/).
 
 ## Documentation
