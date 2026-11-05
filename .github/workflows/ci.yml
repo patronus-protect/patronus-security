@@ -78,6 +78,7 @@ jobs:
           .ci-venv/bin/python -m pip install pytest PyYAML
           .ci-venv/bin/python -m pytest scripts/tests/test_ci_*.py scripts/tests/test_release_*.py -q
           .ci-venv/bin/python scripts/release_version.py
+          .ci-venv/bin/python scripts/release_legal_files.py
 
   rust:
     needs: changes
