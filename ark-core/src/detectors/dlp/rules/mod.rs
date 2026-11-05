@@ -141,10 +141,11 @@ pub fn placeholder_check(rule_id: &str) -> bool {
     is_credential_rule(rule_id, true)
 }
 
-pub use likeness::is_item_value;
+pub use likeness::{is_item_value, suits_field_key};
 pub use placeholders::is_placeholder_match;
 pub use value_shape::{
-    is_hex_digest, is_key_reference, key_names_digest, non_secret_shape, non_secret_shape_under,
+    is_key_reference, is_password_digest, key_names_digest, non_secret_shape,
+    non_secret_shape_under,
 };
 
 /// K05: how config lines (`dlp::config_keys`) bind a value to a generic

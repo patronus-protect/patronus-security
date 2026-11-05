@@ -1016,17 +1016,26 @@ impl NativeRegexDetector for DlpPipeline {
             let key = &text[config.key.clone()];
             // K05C: the shape check under the bound key, which need not stand
             // before the value on its line.
-            // T23: a hex digest under a password key of a SQL row is the
-            // stored hash of a password (a `password` column of a user table).
+            // T23: a hex digest or a crypt hash under a password key of a SQL
+            // row is the stored hash of a password (a `password` column of a
+            // user table).
             let shaped = || {
                 !(self.tiers[index] == Some(OverlapTier::Generic)
                     && (rules::non_secret_shape_under(text, config.value.clone(), key).is_some()
                         || (config.format == super::config_keys::ConfigFormat::Sql
                             && self.rule_ids[index] == "dlp_password_assignment"
-                            && rules::is_hex_digest(&text[config.value.clone()]))))
+                            && rules::is_password_digest(&text[config.value.clone()]))))
+            };
+            // T23: a field of a SQL row is a quoted field, as in JSON; a
+            // value-gated rule wants a value that suits one (no word or
+            // identifier: `'testpass'` in the seed rows of a test database).
+            let field = || {
+                config.format != super::config_keys::ConfigFormat::Sql
+                    || self.metas[index].value_gate.is_none()
+                    || rules::suits_field_key(&text[config.value.clone()])
             };
             if !config.item {
-                return binds == Some(false) && shaped();
+                return binds == Some(false) && shaped() && field();
             }
             let passes = binds.is_some()
                 && rules::is_item_value(&text[config.value.clone()])
