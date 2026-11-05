@@ -474,9 +474,32 @@ class PublicApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SecurityGateway(
                 categories=["dynamic-pii"],
+                max_level="l3",
                 dynamic_pii_config=["person"],
                 download_files=False,
             )
+
+    def test_dynamic_pii_below_l3_is_rejected_instead_of_returning_nothing(self):
+        for max_level in ("l1", "l2"):
+            with self.subTest(max_level=max_level):
+                with self.assertRaisesRegex(ValueError, 'max_level="l3"'):
+                    SecurityGateway(categories=["pii", "dynamic-pii"], max_level=max_level)
+        with self.assertRaisesRegex(ValueError, 'max_level="l3"'):
+            SecurityGateway(categories=["dynamic-pii"])
+
+    def test_dynamic_pii_scan_without_loaded_model_raises(self):
+        scanner = SecurityGateway(
+            categories=["pii", "dynamic-pii"], max_level="l3", download_files=False
+        )
+        text = "Alexandr Petrov arbeitet bei Siemens in Frankfurt."
+        for scan in (
+            lambda: scanner.scan_all(text),
+            lambda: scanner.scan_category("dynamic-pii", text),
+            lambda: scanner.scan_categories(["pii", "dynamic-pii"], text),
+        ):
+            with self.assertRaisesRegex(RuntimeError, r"warmup\(\)"):
+                scan()
+        self.assertEqual(scanner.scan_category("pii", text)[0]["category"], "pii")
 
     def test_constructor_rejects_invalid_public_arguments(self):
         invalid_kwargs = [

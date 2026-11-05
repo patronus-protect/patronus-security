@@ -113,10 +113,19 @@ jobs:
         with:
           path: .shell-risk-bundle
           key: shell-risk-bundle-${{ hashFiles('rust/src/assets/specs.rs') }}
+      # The dynamic-pii model tests run the pinned GLiNER Edge bundle; they
+      # fetch it once on a miss.
+      - name: Cache the pinned GLiNER bundle
+        if: needs.changes.outputs.wrapper == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .gliner-bundle
+          key: gliner-bundle-${{ hashFiles('rust/src/assets/specs.rs') }}
       - name: Ark unit and selected integration tests
         if: needs.changes.outputs.wrapper == 'true'
         env:
           PATRONUS_SHELL_RISK_CACHE: ${{ github.workspace }}/.shell-risk-bundle
+          PATRONUS_GLINER_CACHE: ${{ github.workspace }}/.gliner-bundle
         run: python scripts/ci_rust_tests.py wrapper
       - name: L1 golden evaluation (pii_l1 + dlp_l1)
         if: needs.changes.outputs.pii == 'true' && needs.changes.outputs.dlp == 'true'

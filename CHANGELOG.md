@@ -17,6 +17,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   current `ark-core/` paths. `scripts/release_legal_files.py` checks every packaged license and
   `NOTICE` copy and that Core and root attributions agree; CI runs it on every pull request, so
   a stale copy no longer surfaces first in the release workflow.
+- Python: `dynamic-pii` no longer returns silently empty results. A gateway with `dynamic-pii`
+  and a `max_level` below `l3` raises `ValueError` (the L3-only GLiNER pipeline never ran there),
+  and `scan_all`/`scan_category`/`scan_categories` over `dynamic-pii` raise `RuntimeError` until
+  `warmup()` has loaded its model. **Breaking** for code that relied on the empty list.
+- The GLiNER model tests (`rust/tests/dynamic_pii.rs`) were `#[ignore]` and never ran; CI now
+  fetches the pinned GLiNER Edge bundle once and runs them, including a new EN + DE check that
+  PERSON, ORGANIZATION and LOCATION are found.
 
 ## [0.1.15] - 2026-11-05
 
