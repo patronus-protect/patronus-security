@@ -66,8 +66,11 @@ PII/DLP anchor pattern finds what its regex finds on the bilingual fixture after
 Explain on, p50 per call: 100 KiB DE 71.9 → 9.6 ms, 4 KiB DE 8.35 → 1.31 ms; EN and explain off
 unchanged.
 
-M4 holds for ark-native (within the noise), not for ark (Python). Remaining hotspots, each ≥ 10 % of
-the ark p95, for H06-7:
+The default path (explain off) runs the same search code as before (the PII rule search only moved into
+the shared module), so the M4 rows at the top are the pass 5 run; the interleaved A/B rounds of this
+pass on the native worker kept 100 KiB p95 at 9.7–11.6 ms under a load of 1.3–2.5. M4 holds for
+ark-native (within the noise), not for ark (Python). Remaining hotspots, each ≥ 10 % of the ark p95,
+for H06-7:
 
 - The `matched_rules` entries as `serde_json::Value` (unchanged): the Python `details` getter
   (1.3–3 ms) and about 1.5 ms native drop. A typed entry that serializes to the same JSON touches
