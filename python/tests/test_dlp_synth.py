@@ -875,6 +875,7 @@ CHECKS = {
     "langsmith_personal_token": lambda v: re.fullmatch(r"lsv2_pt_[0-9a-f]{32}_[0-9a-f]{10}", v) is not None,
     "langsmith_service_key": lambda v: re.fullmatch(r"lsv2_sk_[0-9a-f]{32}_[0-9a-f]{10}", v) is not None,
     "pinecone_api_key": lambda v: re.fullmatch(r"pcsk_[A-Za-z0-9]{5}_[A-Za-z0-9]{63}", v) is not None,
+    "pinecone_api_key_long_id": lambda v: re.fullmatch(r"pcsk_[A-Za-z0-9]{6}_[A-Za-z0-9]{63}", v) is not None,
     "elevenlabs_api_key": prefixed("sk_", HEX, 48),
     "azure_openai_api_key": prefixed("", HEX, 32),
     "wandb_api_key": prefixed("", HEX, 40),

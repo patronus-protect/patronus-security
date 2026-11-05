@@ -5215,8 +5215,9 @@ DLP_LOOKALIKE_GENERATORS = (
     # P01: wrong length of the Cohere, Perplexity, DeepSeek, OpenRouter and Fireworks formats
     "cohere_api_key_short", "perplexity_api_key_short", "deepseek_api_key_short", "openrouter_api_key_short",
     "fireworks_api_key_short",
-    # P02: wrong length of the LangSmith, Pinecone and ElevenLabs formats
+    # P02: wrong length of the LangSmith, Pinecone, ElevenLabs, Azure OpenAI, W&B, AssemblyAI and Deepgram formats
     "langsmith_api_key_short", "pinecone_api_key_short", "elevenlabs_api_key_short",
+    "azure_openai_api_key_short", "wandb_api_key_short", "assemblyai_api_key_short", "deepgram_api_key_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
@@ -14223,6 +14224,132 @@ DLP_P02_CASES = {
     ],
 }
 for _label, _rows in DLP_P02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# P02: context keys per TruffleHog's keyword detectors: Azure OpenAI and AssemblyAI 32 hex, Weights &
+# Biases and Deepgram 40 hex under the provider's key, client call, aai.settings or `wandb login`;
+# a Pinecone key with a 6 character key ID. Hard negatives are wrong lengths, references, IDs and
+# hex next to the provider name without a credential.
+DLP_P02_CONTEXT_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "en", "dlp_azure_openai_key",
+            "AZURE_OPENAI_ENDPOINT=https://contoso-ai.openai.azure.com/\nAZURE_OPENAI_API_KEY=<<secret:0>>\n",
+            "azure_openai_api_key", 20217, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_azure_openai_key",
+            "client = AzureOpenAI(api_key=\"<<secret:0>>\", api_version=\"2024-06-01\", azure_endpoint=endpoint)\n",
+            "azure_openai_api_key", 20218, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_azure_openai_key",
+            "llm:\n  anbieter: azure\n  azure_openai_key: \"<<secret:0>>\"\n",
+            "azure_openai_api_key", 20219, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_wandb_key",
+            "$ wandb login <<secret:0>>\nwandb: Appending key for api.wandb.ai to your netrc file\n",
+            "wandb_api_key", 20220, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_wandb_key",
+            "# Experiment-Tracking\nWANDB_PROJECT=bildklassifikation\nWANDB_API_KEY=<<secret:0>>\n",
+            "wandb_api_key", 20221, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_wandb_key",
+            "import wandb\n\nwandb.login(key=\"<<secret:0>>\")\nrun = wandb.init(project=\"vision\")\n",
+            "wandb_api_key", 20222, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_assemblyai_key",
+            "import assemblyai as aai\n\n# Transkription der Kundengespräche\naai.settings.api_key = \"<<secret:0>>\"\n",
+            "assemblyai_api_key", 20223, carrier="code",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_assemblyai_key",
+            "{\n  \"transcription\": {\n    \"assemblyai_api_key\": \"<<secret:0>>\"\n  }\n}\n",
+            "assemblyai_api_key", 20224, carrier="json",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_assemblyai_key",
+            "Hallo Tom,\n\nhier der AssemblyAI-Schlüssel für die Transkription: <<secret:0>>\n\nGruß\n",
+            "assemblyai_api_key", 20225, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_deepgram_key",
+            "from deepgram import DeepgramClient\n\ndeepgram = DeepgramClient(\"<<secret:0>>\")\n",
+            "deepgram_api_key", 20226, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_deepgram_key",
+            "# Spracherkennung\nDEEPGRAM_API_KEY=<<secret:0>>\n",
+            "deepgram_api_key", 20227, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_deepgram_key",
+            "2026-11-05T09:14:03Z DEBUG stt: deepgram_api_key=<<secret:0>> loaded\n",
+            "deepgram_api_key", 20228, carrier="log",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_pinecone_key",
+            "# Vektorsuche\nPINECONE_API_KEY=<<secret:0>>\n",
+            "pinecone_api_key_long_id", 20229, carrier="env",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_azure_openai_key",
+            "AZURE_OPENAI_API_KEY=<<secret:0>>\n",
+            "azure_openai_api_key_short", 20230, "Azure OpenAI shape with 31 instead of 32 hex digits", carrier="env",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_wandb_key",
+            "$ wandb login <<secret:0>>\n",
+            "wandb_api_key_short", 20231, "W&B shape with 39 instead of 40 hex digits", carrier="cli",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_assemblyai_key",
+            "2026-11-05T09:14:03Z WARN stt: rejected <<secret:0>> (length)\n",
+            "assemblyai_api_key_short", 20232, "AssemblyAI shape with 31 instead of 32 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_deepgram_key",
+            "2026-11-05T09:14:03Z WARN stt: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "deepgram_api_key_short", 20233, "Deepgram shape with 39 instead of 40 hex digits", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_azure_openai_key",
+            "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_wandb_key",
+            "wandb: Syncing run tough-sky-12\nwandb: code saved at commit 9fceb02d0ae598e95dc970b74767f19372d61af8\n",
+            "commit SHA next to the provider name", carrier="log",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_deepgram_key",
+            "deepgram = DeepgramClient(api_key=os.getenv(\"DEEPGRAM_API_KEY\"))\n",
+            "environment lookup", carrier="code",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_assemblyai_key",
+            "aai.settings.api_key = os.environ[\"ASSEMBLYAI_API_KEY\"]\n",
+            "environment lookup", carrier="code",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_deepgram_key",
+            "DEEPGRAM_PROJECT_ID=3f9a1c2e4b5d6a7f8e9d0c1b2a3f4e5d6c7b8a90\n",
+            "project ID under the provider name", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_azure_openai_key",
+            "Azure-OpenAI-Schlüssel: im Portal unter Schlüssel und Endpunkt kopieren (32 Hex-Ziffern).\n",
+            "format description without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_P02_CONTEXT_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 # T22: base64 values under generic keys (Kubernetes Secret data, Grafana legacy keys and glc_

@@ -72,7 +72,7 @@
       "probes": ["LANGSMITH_API_KEY=<<secret:0>>", "x-api-key: <<secret:0>>"]
     },
     "dlp_pinecone_key": {
-      "generators": ["pinecone_api_key"],
+      "generators": ["pinecone_api_key", "pinecone_api_key_long_id"],
       "lookalike": ["pinecone_api_key_short"],
       "probes": ["PINECONE_API_KEY=<<secret:0>>", "pc = Pinecone(api_key=\"<<secret:0>>\")"]
     },

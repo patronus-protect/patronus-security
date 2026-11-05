@@ -675,7 +675,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_wandb_key",
         pattern: concat!(
-            provider_key!(r"wandb|weights[_.\- ]?(?:and|&)[_.\- ]?biases", r"[0-9a-f]{40}"),
+            provider_key!("wandb", r"[0-9a-f]{40}"),
             "|",
             provider_call!("wandb", r"[0-9a-f]{40}"),
             r"|(?i:wandb)[ \t]+login(?:[ \t]+--[a-z\-]+)*[ \t]+([0-9a-f]{40})(?:[^A-Za-z0-9_\-+/=]|$)",
@@ -687,7 +687,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/weightsandbiases/weightsandbiases.go",
-            &["wandb", "biases"],
+            &["wandb"],
         )
         .with_provider("wandb")
         .with_min_entropy(3.0)

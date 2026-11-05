@@ -350,9 +350,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Seit P02 kommen drei Präfix-Regeln mit Token-Grenze nach TruffleHog hinzu (`API_KEY`,
   `api_key`): LangSmith (`lsv2_pt_` oder `lsv2_sk_`, 32 Hex-Ziffern, `_`, 10 Hex-Ziffern), Pinecone
   (`pcsk_`, 5 oder 6 Zeichen Schlüssel-ID, `_`, 63 Zeichen beider Schreibweisen) und ElevenLabs
-  (`sk_` und 48 Hex-Ziffern). Azure OpenAI, Weights & Biases, AssemblyAI und Deepgram haben nur
-  nackte Hex- bzw. Kleinbuchstaben-Werte ohne eigenes Präfix; unter ihren Schlüsselnamen greifen die
-  generischen Regeln. Stability AI erkennt weder das gepinnte gitleaks noch TruffleHog; keine Regel.
+  (`sk_` und 48 Hex-Ziffern). Azure OpenAI, Weights & Biases, AssemblyAI und Deepgram haben kein
+  eigenes Präfix; wie TruffleHogs Schlüsselwort-Detektoren binden Kontextregeln ihre Kleinbuchstaben-
+  Hex-Werte an den Anbieternamen (`provider_key!` und Client-Aufrufe): Azure OpenAI (32 Ziffern unter
+  `azure_openai` oder in `AzureOpenAI(api_key=…)`), Weights & Biases (40 unter `wandb`, nach
+  `wandb login` oder in `wandb.login(key=…)`), AssemblyAI (32 unter `assemblyai` oder
+  `aai.settings.api_key`) und Deepgram (40 unter `deepgram` oder in `DeepgramClient(…)`). Stability
+  AI erkennt weder das gepinnte gitleaks noch TruffleHog; keine Regel.
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

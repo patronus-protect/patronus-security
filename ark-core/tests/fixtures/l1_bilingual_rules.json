@@ -3398,6 +3398,96 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_azure_openai_key",
+    "de": "llm:\n  azure_openai_key: \"<<secret\u003a0>>\"",
+    "en": "AZURE_OPENAI_API_KEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "azure_openai_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}",
+        "Azure-OpenAI-Schlüssel haben 32 Hex-Ziffern."
+      ],
+      "en": [
+        "client = AzureOpenAI(api_key=os.environ[\"AZURE_OPENAI_API_KEY\"])",
+        "AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_wandb_key",
+    "de": "# Experiment-Tracking\nWANDB_API_KEY=<<secret\u003a0>>",
+    "en": "$ wandb login <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "wandb_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "WANDB_API_KEY=${WANDB_API_KEY}",
+        "wandb: Code im Commit 9fceb02d0ae598e95dc970b74767f19372d61af8 gesichert"
+      ],
+      "en": [
+        "wandb login --relogin",
+        "WANDB_RUN_ID=9fceb02d0ae598e95dc970b74767f19372d61af8"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_assemblyai_key",
+    "de": "aai.settings.api_key = \"<<secret\u003a0>>\"",
+    "en": "ASSEMBLYAI_API_KEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "assemblyai_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "aai.settings.api_key = os.environ[\"ASSEMBLYAI_API_KEY\"]"
+      ],
+      "en": [
+        "assemblyai:\n  api_key: \"{{ assemblyai_api_key }}\"",
+        "ASSEMBLYAI_TRANSCRIPT_ID=5551722f4f1b2a5c9e8d7c6b5a4f3e2d"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_deepgram_key",
+    "de": "DEEPGRAM_API_KEY=<<secret\u003a0>>",
+    "en": "deepgram = DeepgramClient(\"<<secret\u003a0>>\")",
+    "secrets": [
+      {
+        "gen": "deepgram_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}",
+        "DEEPGRAM_PROJECT_ID=3f9a1c2e4b5d6a7f8e9d0c1b2a3f4e5d6c7b8a90"
+      ],
+      "en": [
+        "deepgram = DeepgramClient(api_key=os.getenv(\"DEEPGRAM_API_KEY\"))"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_aws_access_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
