@@ -55,6 +55,7 @@ def minimal_map():
                 "id": "entity.person_name",
                 "scope": "semantic",
                 "ark": [],
+                "dynamic_pii": ["person"],
                 "presidio": ["PERSON"],
                 "corpora": {"tab": ["PERSON"]},
             },
@@ -401,6 +402,21 @@ def test_minimal_map_is_valid():
     assert entity_map.ark_label("EMAIL") == "pii.email"
     assert entity_map.presidio_entity("URL") == "pii.url"
     assert entity_map.corpus_label("tab", "person") == "entity.person_name"
+    assert entity_map.dynamic_pii_label("person") == "entity.person_name"
+    assert entity_map.dynamic_pii_label("PERSON") is None
+    assert entity_map.dynamic_pii_labels() == {"person": "entity.person_name"}
+
+
+def test_checked_in_map_maps_the_gliner_labels_of_the_ner_benchmark():
+    entity_map = MODULE.load()
+    sys.path.insert(0, str(ROOT / "python"))
+    from patronus_ark.gliner_category_map import GLINER_LABELS
+
+    labels = entity_map.dynamic_pii_labels()
+    assert {labels[label] for label in ("person", "organization", "location")} == {
+        "entity.person_name", "entity.organization", "entity.location"}
+    assert set(labels) <= set(GLINER_LABELS)  # canonical runtime label names, no typos
+    assert all(entity_map.scope(entity_id) == "semantic" for entity_id in labels.values())
 
 
 @pytest.mark.parametrize(
@@ -420,6 +436,10 @@ def test_minimal_map_is_valid():
         (lambda m: m["entities"][3]["corpora"].update({"gretel-synthetic-pii-finance": ["email"]}), "email"),
         (lambda m: m["entities"][0].update(ark="EMAIL"), "list"),
         (lambda m: m["entities"][0].update(extra=1), "extra"),
+        (lambda m: m["entities"][0].update(dynamic_pii=["email"]), "only semantic entities"),
+        (lambda m: m["entities"][3].update(dynamic_pii="person"), "list"),
+        (lambda m: m["entities"].append({"id": "entity.nrp", "scope": "semantic", "ark": [], "presidio": [],
+                                         "dynamic_pii": ["person"], "corpora": {}}), "dynamic-pii label 'person'"),
         (lambda m: m["source_families"].update(favored=["x"]), "source family"),
         (lambda m: m["source_families"]["neutral"].append("pii_l1"), "pii_l1"),
         (lambda m: m.update(source_families=["tab"]), "source_families"),

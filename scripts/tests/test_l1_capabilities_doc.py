@@ -179,6 +179,44 @@ def test_converter_without_opt_in_run_leaves_opt_in_families_unmeasured(tmp_path
     assert dlp["entities"]["llm.openai.api_key"]["gold"] == 40
 
 
+def test_converter_fills_semantic_entities_from_the_ner_report(tmp_path):
+    source = json.loads((FIXTURES / "snapshot.json").read_text(encoding="utf-8"))
+    source["pii"]["semantic"] = {"note": "Measured on arm64.", "entities": {"stale": {}}}
+    (tmp_path / "in.json").write_text(json.dumps(source), encoding="utf-8")
+    output = tmp_path / "snapshot.json"
+    assert scoreboard_snapshot.main([
+        "from-reports", "--snapshot", str(tmp_path / "in.json"), "--ner-report", str(FIXTURES / "ner_report.json"),
+        "--output", str(output),
+    ]) == 0
+    semantic = json.loads(output.read_text(encoding="utf-8"))["pii"]["semantic"]
+    assert semantic["note"] == "Measured on arm64."  # hand-written keys stay
+    assert semantic["view"] == "raw" and semantic["engines"] == ["ark-dynamic-pii", "presidio-tuned"]
+    assert semantic["entities"] == {
+        "entity.location": {"ark_authored": {"de": {"gold": 2, "f1": {"ark-dynamic-pii": 50.0, "presidio-tuned": 0.0}}}},
+        "entity.organization": {"presidio_favored": {"en": {"gold": 2, "f1": {"ark-dynamic-pii": 0.0, "presidio-tuned": 0.0}}}},
+        "entity.person_name": {"presidio_favored": {"en": {"gold": 10, "f1": {"ark-dynamic-pii": 80.0, "presidio-tuned": 62.5}}}},
+    }
+    assert semantic["latency"] == {"ark-dynamic-pii": {"machine": "arm64", "per_text": {
+        "all": {"p50_ms": 35.0, "p95_ms": 61.3, "texts": 12},
+        "de": {"p50_ms": 40.0, "p95_ms": 44.0, "texts": 2},
+        "en": {"p50_ms": 35.0, "p95_ms": 61.3, "texts": 10},
+    }}}
+
+    lines = l1_capabilities_doc.semantic_lines(semantic, "2026-11-05")
+    assert lines[0] == "### Semantic entities (L1 + L3 dynamic-pii)"
+    assert "| Benchmark id | Family | Lang | Gold | F1 ARK dynamic pii | F1 Presidio tuned |" in lines
+    assert "| `entity.person_name` | presidio_favored | en | 10 | 80.0 | 62.5 |" in lines
+    assert "| `entity.location` | ark_authored | de | 2 | 50.0 | 0.0 |" in lines
+    assert "| ARK dynamic pii | en | 10 | 35.0 ms | 61.3 ms | arm64 |" in lines
+    assert lines[-1] == "Measured on arm64."
+
+
+def test_page_shows_semantic_entities_only_when_the_snapshot_has_them():
+    _, snapshot = l1_capabilities_doc.latest_snapshot()
+    page = PAGE.read_text(encoding="utf-8")
+    assert ("### Semantic entities (L1 + L3 dynamic-pii)" in page) == bool(snapshot["pii"].get("semantic"))
+
+
 def test_shared_wolf_metadata_is_resolved_in_asset_docs():
     assets = GENERATE_DOCS.parse_assets()
     wolf = [asset for asset in assets if asset.category == "Injection"]

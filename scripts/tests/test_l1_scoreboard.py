@@ -1641,3 +1641,105 @@ def test_report_shows_both_views_and_the_known_gaps(tmp_path):
     assert f"| {RECOGNIZER_TESTS} | pii.identity_card_number | de: de_identity_card_number | 2 | 1 | 0 | 1 |" in lines
     assert "| Corpus | Entity | Gold | Known gap | Decisions recorded for the id |" in lines
     assert f"| {RECOGNIZER_TESTS} | pii.ip_address | 2 | 1 | D-IP, T28 |" in lines
+
+
+# ── NER: L1 + L3 dynamic-pii vs Presidio on the semantic ids ─────────────
+
+
+def test_resolve_label_reads_the_dynamic_pii_label():
+    assert MODULE.resolve_label({"label": "x", "dynamic_pii_label": "person"}, EMAP) == "entity.person_name"
+    assert MODULE.resolve_label({"label": "x", "dynamic_pii_label": "city"}, EMAP) == "entity.location"
+    assert MODULE.resolve_label({"label": "entity.person_name", "dynamic_pii_label": "job_title"}, EMAP) is None
+    assert MODULE.ner_ids(EMAP) >= {"entity.person_name", "entity.location", "entity.organization"}
+    assert all(EMAP.scope(entity_id) == "semantic" for entity_id in MODULE.ner_ids(EMAP))
+
+
+def test_score_rows_with_ner_ids_scores_semantic_ids_only():
+    rows = [gold("a", [("entity.person_name", 0, 10), ("pii.email", 20, 30), ("entity.date", 40, 50)])]
+    preds = [{"id": "a", "language": "de", "evidence_spans": [
+        {"label": "entity.person_name", "dynamic_pii_label": "person", "start_char": 0, "end_char": 10, "score": 0.9},
+        {"label": "pii.email", "ark_label": "EMAIL", "start_char": 20, "end_char": 30, "score": 1.0},
+        {"label": "entity.location", "presidio_entity": "LOCATION", "start_char": 60, "end_char": 70, "score": 0.85},
+    ]}]
+    buckets = MODULE.score_rows(rows, preds, EMAP, ids=MODULE.ner_ids(EMAP))["buckets"]
+    assert buckets["all"] == {"gold": 1, "predicted": 2, "exact": 1, "gold_found": 1, "predicted_correct": 1}
+    assert buckets["scope/semantic"] == buckets["all"]
+    assert "entity/pii.email" not in buckets and "entity/entity.date" not in buckets
+    # The default stays L1: the same rows score the e-mail only.
+    l1 = MODULE.score_rows(rows, preds, EMAP)["buckets"]
+    assert l1["all"]["gold"] == 1 and "entity/pii.email" in l1
+
+
+def ner_tree(tmp_path):
+    """EN rows of the Presidio evaluator set and DE rows of the synthetic set, Ark L1 + L3 and Presidio."""
+    rows = [
+        gold("en-1", [("entity.person_name", 0, 10), ("entity.organization", 20, 30), ("pii.email", 40, 50)],
+             corpus=EVALUATOR, language="en"),
+        gold("en-2", [("entity.location", 0, 8), ("entity.nrp", 20, 26)], corpus=EVALUATOR, language="en"),
+        gold("de-1", [("entity.person_name", 0, 10), ("entity.location", 20, 28)], corpus=SYNTH, language="de"),
+    ]
+
+    def dynamic(row_id, spans):
+        return {"id": row_id, "language": "x", "evidence_spans": [
+            {"label": "?", "dynamic_pii_label": label, "start_char": start, "end_char": end, "score": 0.9}
+            for label, start, end in spans]}
+
+    ark = [dynamic("en-1", [("person", 0, 10), ("organization", 20, 30)]), dynamic("en-2", [("location", 0, 8)]),
+           dynamic("de-1", [("person", 0, 10), ("city", 20, 27)])]
+    presidio = [pred("en-1", [("entity.person_name", 0, 10)]), pred("en-2", [("entity.location", 0, 8)]),
+                pred("de-1", [])]
+    dirs = write_tree(tmp_path, rows, {"ark": ark, "tuned": presidio})
+    engine = {"categories": ["pii", "dynamic-pii"]}
+    MODULE.latency.write_row_latency(dirs["ark"] / "presidio_favored" / "e.latency.json", engine,
+                                     {"en": [30_000_000, 40_000_000]})
+    MODULE.latency.write_row_latency(dirs["ark"] / "synthetic" / "s.latency.json", engine, {"de": [50_000_000]})
+    MODULE.latency.write_row_latency(dirs["ark"] / "g.latency.json", engine, {})
+    return dirs
+
+
+def test_ner_report_scores_semantic_ids_per_family_and_language_with_latency(tmp_path):
+    dirs = ner_tree(tmp_path)
+    report = MODULE.ner_report(tmp_path / "gold", {"ark-dynamic-pii": dirs["ark"], "presidio-tuned": dirs["tuned"]}, EMAP)
+    assert report["view"] == "raw" and report["ids"] == sorted(MODULE.ner_ids(EMAP))
+    ark = report["engines"]["ark-dynamic-pii"]["buckets"]
+    assert ark["family_language_entity/presidio_favored/en/entity.person_name"]["exact"] == 1
+    assert ark["family_language_entity/presidio_favored/en/entity.organization"]["exact"] == 1
+    assert ark["family_language_entity/ark_authored/de/entity.location"] == {
+        "gold": 1, "predicted": 1, "exact": 0, "gold_found": 1, "predicted_correct": 1}
+    assert "entity/pii.email" not in ark
+    assert report["engines"]["presidio-tuned"]["buckets"]["family_language/ark_authored/de"]["exact"] == 0
+    latency = report["latency"]["ark-dynamic-pii"]
+    assert latency["per_text"]["all"]["samples"] == 3
+    assert latency["per_text"]["en"]["p50_ms"] == 30.0 and latency["per_text"]["de"]["p95_ms"] == 50.0
+    assert report["latency"]["presidio-tuned"] is None  # no latency file next to its predictions
+    lines = MODULE.ner_lines(report)
+    assert ("| presidio_favored | en | entity.person_name | 1 | 100.0 / 100.0 / **100.0** | "
+            "100.0 / 100.0 / **100.0** |") in lines
+    assert "| ark_authored ¹ | de | entity.location | 1 | 0.0 / 0.0 / 0.0 | 0.0 / 0.0 / 0.0 |" in lines
+    # entity.nrp has no dynamic_pii label: its gold is not part of the NER ids.
+    assert "| presidio_favored | en | all NER ids | 3 | 100.0 / 100.0 / **100.0** | 100.0 / 66.7 / 80.0 |" in lines
+    assert not any("entity.nrp" in line for line in lines)
+    machine = latency["machines"][0]
+    assert f"| ark-dynamic-pii | en | 2 | 30.0 | 40.0 | {machine['system']} {machine['machine']} |" in lines
+    assert "| presidio-tuned | – | – | – | – | no row latency (run with --latency) |" in lines
+
+
+def test_ner_report_rejects_missing_predictions_and_foreign_latency_files(tmp_path):
+    dirs = ner_tree(tmp_path)
+    (dirs["ark"] / "presidio_favored" / "e.latency.json").write_text(json.dumps({"schema": "other"}))
+    with pytest.raises(MODULE.ScoreboardError, match="ark: row latency needs schema"):
+        MODULE.ner_report(tmp_path / "gold", {"ark": dirs["ark"]}, EMAP)
+    (dirs["tuned"] / "g.jsonl").unlink()
+    with pytest.raises(MODULE.ScoreboardError, match="no predictions"):
+        MODULE.ner_report(tmp_path / "gold", {"tuned": dirs["tuned"]}, EMAP)
+
+
+def test_main_ner_subcommand(tmp_path, capsys):
+    dirs = ner_tree(tmp_path)
+    args = ["ner", "--gold", str(tmp_path / "gold"), "--engine", f"ark-dynamic-pii={dirs['ark']}",
+            "--engine", f"presidio-tuned={dirs['tuned']}", "--json", str(tmp_path / "ner.json")]
+    assert MODULE.main(args) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("## Semantic entities (NER), raw gold") and "## Latency per text" in out
+    assert json.loads((tmp_path / "ner.json").read_text())["latency"]["ark-dynamic-pii"]["per_text"]["de"]["samples"] == 1
+    assert MODULE.main(["ner", "--gold", str(tmp_path / "gold"), "--engine", "broken"]) == 2

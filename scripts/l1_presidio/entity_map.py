@@ -4,8 +4,9 @@
 
 Every map entry is one benchmark id of ``patronus_ark.external_pii_eval`` with a scope
 (``shared``, ``ark_only``, ``presidio_only``, ``semantic``), the Ark labels
-(``entity_group`` in ``ark-core/src/detectors/pii/pii.rs``), the Presidio entities of the
-pinned ``presidio_analyzer`` and the upstream labels per corpus of the external PII
+(``entity_group`` in ``ark-core/src/detectors/pii/pii.rs``), for semantic ids optionally the
+labels of Ark's L3 ``dynamic-pii`` pipeline (GLiNER, ``dynamic_pii``), the Presidio entities of
+the pinned ``presidio_analyzer`` and the upstream labels per corpus of the external PII
 manifest. ``check`` verifies the map against those sources:
 
     python3 scripts/l1_presidio/entity_map.py check             # registry, manifest, runtime maps
@@ -47,6 +48,7 @@ PII_SOURCE_PATH = ROOT / "ark-core" / "src" / "detectors" / "pii" / "pii.rs"
 SCHEMA = "ark-l1-entity-map-v1"
 SCOPES = ("shared", "ark_only", "presidio_only", "semantic")
 ENTITY_KEYS = {"id", "scope", "ark", "presidio", "corpora"}
+OPTIONAL_ENTITY_KEYS = {"dynamic_pii"}
 KNOWN_GAP_KEYS = {"id", "decision", "reason", "span", "bare", "rows", "corpora"}
 ID_PATTERN = re.compile(r"^(?:pii|entity)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
 FAMILIES = ("ark_authored", "neutral", "presidio_favored")
@@ -68,6 +70,7 @@ class Entity(NamedTuple):
     ark: tuple[str, ...]
     presidio: tuple[str, ...]
     corpora: dict[str, tuple[str, ...]]
+    dynamic_pii: tuple[str, ...] = ()  # labels of the L3 dynamic-pii pipeline (GLiNER), semantic ids only
 
 
 class KnownGap(NamedTuple):
@@ -129,7 +132,7 @@ def _names(value: Any, where: str) -> tuple[str, ...]:
 def _entity(raw: Any) -> Entity:
     if not isinstance(raw, dict):
         raise ValueError(f"entity must be a mapping: {raw!r}")
-    unknown = sorted(set(raw) - ENTITY_KEYS)
+    unknown = sorted(set(raw) - ENTITY_KEYS - OPTIONAL_ENTITY_KEYS)
     missing = sorted(ENTITY_KEYS - set(raw))
     if unknown or missing:
         raise ValueError(f"entity {raw.get('id')!r}: unknown keys {unknown}, missing keys {missing}")
@@ -159,7 +162,10 @@ def _entity(raw: Any) -> Entity:
         )
     if scope == "semantic" and not entity_id.startswith("entity."):
         raise ValueError(f"{entity_id}: semantic entities use an entity.* id")
-    return Entity(entity_id, scope, ark, presidio, corpora)
+    dynamic_pii = _names(raw["dynamic_pii"], f"{entity_id}.dynamic_pii") if "dynamic_pii" in raw else ()
+    if dynamic_pii and scope != "semantic":
+        raise ValueError(f"{entity_id}: only semantic entities map dynamic_pii labels")
+    return Entity(entity_id, scope, ark, presidio, corpora, dynamic_pii)
 
 
 class EntityMap:
@@ -172,13 +178,17 @@ class EntityMap:
         self.entities: dict[str, Entity] = {}
         self._ark: dict[str, str] = {}
         self._presidio: dict[str, str] = {}
+        self._dynamic_pii: dict[str, str] = {}
         self._corpora: dict[str, dict[str, str]] = {}
         for entity in entities:
             if entity.id in self.entities:
                 raise ValueError(f"duplicate id {entity.id}")
             self.entities[entity.id] = entity
-            for vocabulary, names in (("ARK label", entity.ark), ("Presidio entity", entity.presidio)):
-                target = self._ark if vocabulary == "ARK label" else self._presidio
+            for vocabulary, names, target in (
+                ("ARK label", entity.ark, self._ark),
+                ("Presidio entity", entity.presidio, self._presidio),
+                ("dynamic-pii label", entity.dynamic_pii, self._dynamic_pii),
+            ):
                 for name in names:
                     if name in target:
                         raise ValueError(f"duplicate {vocabulary} {name!r} in {target[name]} and {entity.id}")
@@ -216,6 +226,13 @@ class EntityMap:
 
     def presidio_entity(self, entity_type: str) -> str | None:
         return self._presidio.get(entity_type)
+
+    def dynamic_pii_label(self, label: str) -> str | None:
+        return self._dynamic_pii.get(label)
+
+    def dynamic_pii_labels(self) -> dict[str, str]:
+        """dynamic-pii (GLiNER) label -> benchmark id."""
+        return dict(self._dynamic_pii)
 
     def corpus_label(self, corpus: str, label: str) -> str | None:
         return self._corpora.get(corpus, {}).get(label.strip().lower())
@@ -396,8 +413,9 @@ def table(entity_map: EntityMap) -> str:
             if entity.scope != scope:
                 continue
             corpora = "; ".join(f"{corpus}: {', '.join(labels)}" for corpus, labels in sorted(entity.corpora.items()))
+            ark = ", ".join(entity.ark) or (f"dynamic-pii: {', '.join(entity.dynamic_pii)}" if entity.dynamic_pii else "–")
             lines.append(
-                f"| `{entity.id}` | {scope} | {', '.join(entity.ark) or '–'} | "
+                f"| `{entity.id}` | {scope} | {ark} | "
                 f"{', '.join(entity.presidio) or '–'} | {corpora or '–'} |"
             )
     counts = ", ".join(f"{scope} {len(entity_map.ids(scope))}" for scope in SCOPES)

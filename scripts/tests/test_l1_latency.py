@@ -136,6 +136,22 @@ class TestStatistics:
         assert MODULE.sample_counts(1.0) == MODULE.SAMPLES
         assert MODULE.sample_counts(0.0001) == {size: 1 for size in MODULE.SIZES}
 
+    def test_row_latency_files_merge_per_language(self, tmp_path):
+        first = MODULE.write_row_latency(tmp_path / "a.json", {"profile": "tuned"},
+                                         {"en": [1_000_000 * n for n in range(1, 11)], "de": [50_000_000]})
+        assert json.loads((tmp_path / "a.json").read_text(encoding="utf-8")) == first
+        assert first["schema"] == MODULE.ROW_LATENCY_SCHEMA and first["machine"] == MODULE.machine_info()
+        second = MODULE.write_row_latency(tmp_path / "b.json", {"profile": "tuned"}, {"en": [11_000_000]})
+        summary = MODULE.row_latency_summary([first, second])
+        assert summary["machines"] == [MODULE.machine_info()]
+        assert list(summary["per_text"]) == ["all", "de", "en"]
+        assert summary["per_text"]["en"]["samples"] == 11 and summary["per_text"]["en"]["p50_ms"] == 6.0
+        assert summary["per_text"]["de"]["p95_ms"] == 50.0 and summary["per_text"]["all"]["max_ms"] == 50.0
+        with pytest.raises(MODULE.LatencyError, match="without samples"):
+            MODULE.row_latency_summary([MODULE.write_row_latency(tmp_path / "c.json", {}, {})])
+        with pytest.raises(MODULE.LatencyError, match="schema"):
+            MODULE.row_latency_summary([{**first, "schema": "ark-l1-latency-v1"}])
+
 
 class TestMeasure:
     def test_times_every_workload_after_warmup_and_pools_sizes(self):
