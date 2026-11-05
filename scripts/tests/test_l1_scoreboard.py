@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -1129,9 +1130,9 @@ class Builds:
         script.write_text(run_git(self.repo, "show", f"{sha}:scripts/l1_presidio/run_ark.py") + "\n")
         return MODULE.ArkBuild(sys.executable, script, {}, None)
 
-    def gate(self, base_rev, data, cache):
+    def gate(self, base_rev, data, cache, presidio=None):
         return MODULE.gate(self.repo, base_rev, data, cache, emap=EMAP,
-                           head_factory=self.head, base_factory=self.base)
+                           head_factory=self.head, base_factory=self.base, presidio=presidio)
 
 
 def test_gate_same_sources_reuses_head_predictions(repo, data, tmp_path):
@@ -1273,6 +1274,70 @@ def test_gate_dirty_head_is_not_cached(repo, data, tmp_path):
     assert builds.base_builds == [base] and builds.head_builds == 1
     # Only the committed base lands in the prediction cache.
     assert [p.name for p in (tmp_path / "cache" / "scoreboard" / "predictions").iterdir()] == [report["base_source_key"]]
+
+
+class FakePresidio:
+    """Presidio predictor that reports the gold spans except on the dropped rows and counts its runs."""
+
+    def __init__(self, drop=()):
+        self.drop, self.runs = set(drop), []
+
+    def __call__(self, dataset, output, profile):
+        self.runs.append((dataset.split, profile))
+        rows = MODULE.read_jsonl(dataset.path)
+        write_jsonl(output, [{"id": row["id"], "evidence_spans": [] if row["id"] in self.drop else [
+            {"label": e["entity_type"], "start_char": e["start"], "end_char": e["end"]} for e in row["entities"]]}
+            for row in rows])
+
+
+def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_path):
+    base = run_git(repo, "rev-parse", "HEAD")
+    # The PAN gold of the shared fixture fails Luhn (no attainable gold): score e-mail addresses instead.
+    frozen_split(data["holdout"], {"c.jsonl": [gold(f"h{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en")
+                                               for i in range(10)]})
+    presidio = FakePresidio(drop=["h0", "h1"])
+    lines, regressed, _ = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", presidio)
+    assert not regressed and lines[-1] == "RESULT: PASS"
+    assert presidio.runs == [("dev", "tuned"), ("holdout", "tuned")]
+    prefix = "milestones {} (balanced, attainable gold, vs Presidio tuned): "
+    # Holdout: the neutral e-mail beats Presidio (100 vs 88.9); no presidio_favored gold, so M1 is not met.
+    assert lines[-2] == prefix.format("holdout") + (
+        "M1 NOT MET (neutral 1/1, presidio_favored 0/0 shared ids) | "
+        "M2 NOT MET (macro-F1 neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
+    assert lines[-3].startswith(prefix.format("dev") + "M1 NOT MET (neutral 0/0, presidio_favored 0/0 shared ids)")
+    # Aggregates only: no holdout row id reaches stdout.
+    assert not any("h0" in line or "h1" in line for line in lines)
+    # Presidio predictions are cached per runner, profile and input; a second gate does not run Presidio.
+    assert len(list((tmp_path / "cache" / "scoreboard" / "predictions" / MODULE.presidio_key() / "tuned").glob("*.jsonl"))) == 2
+    again = FakePresidio(drop=["h0", "h1"])
+    assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-2] == lines[-2]
+    assert again.runs == []
+
+
+def test_gate_milestone_failure_names_only_the_error_and_passes(repo, data, tmp_path):
+    base = run_git(repo, "rev-parse", "HEAD")
+
+    def broken(dataset, output, profile):
+        raise MODULE.ScoreboardError(f"run_presidio.py failed on {dataset.path}")
+
+    lines, regressed, _ = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", broken)
+    assert not regressed and lines[-1] == "RESULT: PASS"
+    assert lines[-3:-1] == ["milestones dev: not measured (ScoreboardError)",
+                            "milestones holdout: not measured (ScoreboardError)"]
+
+
+def test_presidio_predictor_keeps_stderr_in_the_cache(tmp_path):
+    dataset = MODULE.Dataset("holdout", "c.jsonl", tmp_path / "c.jsonl", "0" * 64)
+    output = tmp_path / "out" / "predictions.jsonl"
+    output.parent.mkdir()
+    with pytest.raises(MODULE.ScoreboardError, match=r"run_presidio.py failed \(exit 1\)"):
+        MODULE.presidio_predictor(shutil.which("false"))(dataset, output, "tuned")
+    assert output.with_name("predictions.jsonl.stderr").is_file()
+
+
+def test_presidio_key_tracks_the_profile():
+    assert MODULE.presidio_key("tuned").startswith("presidio-tuned-")
+    assert MODULE.presidio_key("tuned") != MODULE.presidio_key("default").replace("default", "tuned")
 
 
 def test_main_reports_infrastructure_errors_with_exit_2(repo, data, tmp_path, capsys):
