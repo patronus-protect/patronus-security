@@ -155,6 +155,11 @@ PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNE
 die Python-Bindings bleiben bei etwa 15 ms, weitere Durchgänge der Performance-Schleife lagen im
 Rauschen. Die Schleife endet mit H06-6; H05 berichtet nativ und Python getrennt.
 
+**Abschlussbericht (H05):** [`scoreboard/final.md`](scoreboard/final.md). Auf Dev (2026-11-05) sind M1
+(neutral 9/9, presidio_favored 22/22), M2 (66,1 ≥ 36,2 und 100,0 ≥ 100,0), M3 (83 ≥ 70) und M4 nativ
+(9,774 ms) erreicht. Die Holdout-Werte von M1 und M2 druckt `scoreboard.py gate` als Aggregatzeile
+`milestones holdout …` in den Gate-Bericht.
+
 ## Messmodus und Gold-Lücken (T15, T16)
 
 Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14; umgesetzt in B-EVAL).
