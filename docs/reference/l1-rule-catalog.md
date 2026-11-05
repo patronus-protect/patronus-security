@@ -322,7 +322,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (131) { #dlp-regex-rules }
+## DLP regex rules (137) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -395,6 +395,12 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_google_api_key` | `CLOUD_KEY` | `api_key` | `google` | `format` | `gitleaks:gcp-api-key` | no | on | 55 | proximity | 0.70–0.95 |
 | `dlp_google_oauth_token` | `CLOUD_KEY` | `access_token` | `google` | `format` | [developers.google.com](https://developers.google.com/identity/protocols/oauth2#size) | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_gcp_client_secret` | `CLOUD_KEY` | `secret_key` | `google` | `format` | [github.com](https://github.com/mongodb/kingfisher/blob/main/data/rules/google.yml) | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_azure_storage_account_key` | `CLOUD_KEY` | `secret_key` | `azure` | `structure` | [github.com](https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/azure_storage_key.py) | yes | on | 50 | field | 1.00 |
+| `dlp_azure_entra_client_secret` | `CLOUD_KEY` | `secret_key` | `azure` | `format` | `gitleaks:azure-ad-client-secret` | yes | on | 50 | proximity | 0.65–0.90 |
+| `dlp_alibaba_access_key_id` | `CLOUD_KEY` | `api_key` | `alibaba` | `format` | `gitleaks:alibaba-access-key-id` | yes | on | 50 | proximity | 0.65–0.90 |
+| `dlp_alibaba_secret_key` | `CLOUD_KEY` | `secret_key` | `alibaba` | `format` | `gitleaks:alibaba-secret-key` | yes | on | 40 | field | 0.80 |
+| `dlp_aws_bedrock_api_key` | `CLOUD_KEY` | `api_key` | `aws` | `structure` | `gitleaks:aws-amazon-bedrock-api-key-long-lived` | yes | on | 50 | proximity | 0.75–1.00 |
+| `dlp_ibm_cloud_api_key` | `CLOUD_KEY` | `api_key` | `ibm` | `format` | [github.com](https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py) | yes | on | 40 | field | 0.80 |
 | `dlp_github_token` | `SECRET_TOKEN` | `access_token` | `github` | `checksum` | `gitleaks:github-pat` | yes | on | 55 | proximity | 0.90–1.00 |
 | `dlp_github_pat` | `SECRET_TOKEN` | `access_token` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on | 60 | proximity | 0.75–1.00 |
 | `dlp_gitlab_pat` | `SECRET_TOKEN` | `access_token` | `gitlab` | `format` | `gitleaks:gitlab-pat` | no | on | 55 | proximity | 0.70–0.95 |

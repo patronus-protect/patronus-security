@@ -357,6 +357,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `wandb login` oder in `wandb.login(key=…)`), AssemblyAI (32 unter `assemblyai` oder
   `aai.settings.api_key`) und Deepgram (40 unter `deepgram` oder in `DeepgramClient(…)`). Stability
   AI erkennt weder das gepinnte gitleaks noch TruffleHog; keine Regel.
+  Seit P03 decken sechs Regeln Hyperscaler ab (`CLOUD_KEY`): Azure-Storage-Kontoschlüssel nach
+  `AccountKey=` (Base64 von genau 64 Bytes, detect-secrets), Entra-ID-Client-Secrets (`…\dQ~` und 31
+  bis 34 Zeichen beider Schreibweisen, gitleaks), Alibaba-AccessKey-ID (`LTAI` und 20 Zeichen,
+  gitleaks) und -Secret (30 Zeichen unter `alibaba`/`aliyun`, `provider_key!`), langfristige
+  Bedrock-API-Schlüssel (`ABSK` und Base64 von `BedrockAPIKey-…`, gitleaks) und IBM-Cloud-API-Keys
+  (44 Zeichen unter `ibm`, detect-secrets). Offen bleiben GCP-Service-Account-JSON (die Entity
+  bleibt `baseline_only`), AWS-Session-Token/MWS, Tencent Cloud und Oracle OCI.
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

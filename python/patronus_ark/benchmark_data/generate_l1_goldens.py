@@ -5218,6 +5218,9 @@ DLP_LOOKALIKE_GENERATORS = (
     # P02: wrong length of the LangSmith, Pinecone, ElevenLabs, Azure OpenAI, W&B, AssemblyAI and Deepgram formats
     "langsmith_api_key_short", "pinecone_api_key_short", "elevenlabs_api_key_short",
     "azure_openai_api_key_short", "wandb_api_key_short", "assemblyai_api_key_short", "deepgram_api_key_short",
+    # P03: wrong length of the Azure, Alibaba, Bedrock and IBM Cloud formats
+    "azure_storage_account_key_short", "azure_entra_client_secret_short", "alibaba_access_key_id_short",
+    "bedrock_api_key_short", "ibm_cloud_iam_api_key_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
@@ -14460,6 +14463,157 @@ DLP_T22_CASES["CREDENTIAL"] += [
     for language, rule, template, generator, fill, carrier in _T22_NEGATIVES
 ]
 for _label, _rows in DLP_T22_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# P03: hyperscaler credentials. Azure Storage account keys (base64 of 64 bytes after AccountKey=,
+# detect-secrets AzureStorageKeyDetector), Entra ID client secrets (3 characters, a digit, Q~ and 31 to
+# 34 characters, gitleaks azure-ad-client-secret), Alibaba AccessKey ID (LTAI + 20) and secret (30
+# under an Alibaba key), long-term Amazon Bedrock API keys (ABSK + base64 of BedrockAPIKey-…) and
+# IBM Cloud API keys (44 under an IBM key). Hard negatives are lookalikes with a wrong length, env
+# and template references, placeholders, the Azurite development setting and format prose.
+DLP_P03_CASES = {
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "en", "dlp_azure_storage_account_key",
+            "# blob storage for uploads\nAZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;"
+            "AccountName=stacmeuploads;AccountKey=<<secret:0>>;EndpointSuffix=core.windows.net\n",
+            "azure_storage_account_key", 20301, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_azure_storage_account_key",
+            "{\n  \"ConnectionStrings\": {\n    \"Speicher\": \"DefaultEndpointsProtocol=https;AccountName=stacmedaten;"
+            "AccountKey=<<secret:0>>;EndpointSuffix=core.windows.net\"\n  }\n}\n",
+            "azure_storage_account_key", 20302, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_azure_entra_client_secret",
+            "auth:\n  tenant_id: contoso.onmicrosoft.com\n  azure_client_secret: \"<<secret:0>>\"\n",
+            "azure_entra_client_secret", 20303, carrier="yaml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_azure_entra_client_secret",
+            "Hallo Team,\n\ndas neue Client-Secret der App-Registrierung lautet <<secret:0>>\n\nGruß, Mia\n",
+            "azure_entra_client_secret", 20304, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_alibaba_access_key_id",
+            "$ aliyun configure set --mode AK --access-key-id <<secret:0>> --region cn-hangzhou\n",
+            "alibaba_access_key_id", 20305, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_alibaba_access_key_id",
+            "2026-11-05T07:01:12Z INFO oss-sync: Anmeldung mit AccessKey-ID <<secret:0>> erfolgreich\n",
+            "alibaba_access_key_id", 20306, carrier="log",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_alibaba_secret_key",
+            "import oss2\n\nALIBABA_CLOUD_ACCESS_KEY_SECRET = \"<<secret:0>>\"\n",
+            "alibaba_secret_key", 20307, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_alibaba_secret_key",
+            "# Zugang für OSS\nALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret:0>>\n",
+            "alibaba_secret_key", 20308, carrier="env",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_bedrock_api_key",
+            "$ export AWS_BEARER_TOKEN_BEDROCK=<<secret:0>>\n",
+            "bedrock_api_key", 20309, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_bedrock_api_key",
+            "[10:02] lena.w: Hier der Bedrock-API-Schlüssel für die Demo:\n<<secret:0>>\n",
+            "bedrock_api_key", 20310, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_ibm_cloud_api_key",
+            "{\n  \"ibmcloud\": {\n    \"region\": \"eu-de\",\n    \"ibm_cloud_api_key\": \"<<secret:0>>\"\n  }\n}\n",
+            "ibm_cloud_iam_api_key", 20311, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_ibm_cloud_api_key",
+            "ibm:\n  region: eu-de\n  ibmcloud_api_key: <<secret:0>>\n",
+            "ibm_cloud_iam_api_key", 20312, carrier="yaml",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_azure_storage_account_key",
+            "2026-11-05T07:01:12Z WARN storage: rejected <<secret:0>> (length)\n",
+            "azure_storage_account_key_short", 20313, "base64 of 63 instead of 64 bytes", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_azure_entra_client_secret",
+            "2026-11-05T07:01:12Z WARN auth: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "azure_entra_client_secret_short", 20314, "Q~ shape with 30 instead of 31 to 34 characters",
+            carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_alibaba_access_key_id",
+            "2026-11-05T07:01:12Z WARN oss-sync: rejected <<secret:0>> (length)\n",
+            "alibaba_access_key_id_short", 20315, "LTAI shape with 19 instead of 20 characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_bedrock_api_key",
+            "2026-11-05T07:01:12Z WARN bedrock: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "bedrock_api_key_short", 20316, "ABSK shape with 107 instead of at least 109 characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_ibm_cloud_api_key",
+            "2026-11-05T07:01:12Z WARN iam: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "ibm_cloud_iam_api_key_short", 20317, "IBM Cloud key with 43 instead of 44 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_azure_storage_account_key",
+            "AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_azure_storage_account_key",
+            "{\"ConnectionStrings\": {\"Storage\": \"UseDevelopmentStorage=true\"}}\n",
+            "Azurite development storage setting", carrier="json",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_azure_entra_client_secret",
+            "Entra client secrets have a three-character prefix, a digit and Q~; copy the value right after creating it.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_alibaba_secret_key",
+            "alibaba:\n  access_key_id: \"<your-access-key-id>\"\n  access_key_secret: \"<your-access-key-secret>\"\n",
+            "placeholder", carrier="yaml",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_ibm_cloud_api_key",
+            "ibmcloud_api_key = \"{{ ibmcloud_api_key }}\"\ninstance_id = \"3f2b8c1e-9d4a-4e6b-8f1a-2c7d5e9b0a14\"\n",
+            "template reference and instance UUID", carrier="code",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_azure_storage_account_key",
+            "# Verbindungszeichenfolge kommt aus dem Key Vault\nSPEICHER_VERBINDUNG=@Microsoft.KeyVault(SecretUri=https://kv-acme.vault.azure.net/secrets/storage/)\n",
+            "Key Vault reference", carrier="env",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_azure_entra_client_secret",
+            "{\"azure\": {\"clientSecret\": \"<CLIENT-SECRET-AUS-DEM-PORTAL>\"}}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_alibaba_access_key_id",
+            "Die AccessKey-ID beginnt mit LTAI und hat 24 Zeichen; das Secret steht nur in der KMS-Ablage.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_aws_bedrock_api_key",
+            "$ export AWS_BEARER_TOKEN_BEDROCK=$(aws secretsmanager get-secret-value --secret-id bedrock-key --query SecretString --output text)\n",
+            "command substitution", carrier="cli",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_ibm_cloud_api_key",
+            "# Schlüssel kommt aus dem Tresor\nIBMCLOUD_API_KEY=${IBM_CLOUD_API_KEY}\n",
+            "environment reference", carrier="env",
+        ),
+    ],
+}
+for _label, _rows in DLP_P03_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
