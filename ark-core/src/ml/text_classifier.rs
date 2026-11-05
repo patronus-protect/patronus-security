@@ -2,7 +2,7 @@
 //! Synchronous mmBERT ONNX classification shared with Ark's lazy adapter.
 //! Document-level Wolf scanning uses `crate::wolf::WolfRunner` instead.
 use super::tokenizer::{RuntimeTokenizer, MODEL_TOKENS};
-use crate::onnx::configured_session_builder;
+use crate::onnx::{commit_session, configured_session_builder};
 use crate::{EvaluationResult, ExecutionBackend, OnnxRuntimeOptions};
 use half::f16;
 use ort::{session::Session, value::Tensor};
@@ -80,9 +80,9 @@ impl OnnxTextClassifier {
         let tokenizer_dir = dir.join(tokenizer_path);
         let tokenizer =
             RuntimeTokenizer::load(tokenizer_dir.parent().ok_or("invalid tokenizer path")?)?;
-        let (mut session_builder, execution_provider) =
+        let (session_builder, execution_provider) =
             configured_session_builder(backend, Some(dir), options)?;
-        let session = session_builder.commit_from_file(&model_path)?;
+        let session = commit_session(session_builder, &model_path)?;
         let input_names = session_input_names(&session);
 
         Ok(Some(OnnxTextClassifier {

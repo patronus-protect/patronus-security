@@ -9,7 +9,7 @@ use ort::{session::Session, value::Tensor};
 
 use crate::{ExecutionBackend, LabelScore, OnnxRuntimeOptions};
 
-use super::onnx::{configured_session_builder, l3_ttl};
+use super::onnx::{commit_session, configured_session_builder, l3_ttl};
 
 pub const UNIFIED_MODEL: &str = "unified-multitask-model-augmented-v3";
 pub const UNIFIED_ONNX_PATH: &str = "onnx/int8_int4_embeddings/model.onnx";
@@ -421,8 +421,8 @@ impl UnifiedOnnxClassifier {
         options: OnnxRuntimeOptions,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let tokenizer = RuntimeTokenizer::load(dir)?;
-        let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
-        let session = builder.commit_from_file(dir.join(selected_unified_onnx_path()))?;
+        let (builder, _) = configured_session_builder(backend, Some(dir), options)?;
+        let session = commit_session(builder, &dir.join(selected_unified_onnx_path()))?;
         let inputs = session_input_names(&session);
         if inputs != ["input_ids", "attention_mask"] {
             return Err(format!("unexpected unified L3 inputs: {inputs:?}").into());

@@ -171,7 +171,7 @@ impl WolfRunner {
         )
         .map_err(inference)?;
         builder = builder.with_independent_thread_pool().map_err(inference)?;
-        let session = builder.commit_from_file(&model).map_err(inference)?;
+        let session = crate::onnx::commit_session(builder, &model).map_err(inference)?;
         let fixed_width =
             inference::validate_session(&session, &config.bundle_dir, options, &manifest)?;
         let mut runner = Self {
