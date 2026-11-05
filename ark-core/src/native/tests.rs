@@ -221,3 +221,23 @@ fn producer_panic_preserves_payload_for_host_failure_policy() {
         Err(ScanError::Detector(message)) if message == "scanner panicked"
     ));
 }
+
+#[test]
+fn engines_share_the_pii_and_dlp_pipelines_compiled_once() {
+    assert!(std::ptr::eq(pii_pipeline(), pii_pipeline()));
+    assert!(std::ptr::eq(dlp_pipeline(), dlp_pipeline()));
+    let source = format!("Kontakt: {}@{}", "alice", "example.org");
+    let text = NativeText::new(&source);
+    let policy = ScannerConfig::default();
+    let spans = |engine: &NativeEngine| {
+        let producers = engine.producers(Category::Pii);
+        engine
+            .run_producer(&producers[0], &text, &policy, &ScanControl::default())
+            .unwrap()
+            .detection
+            .evidence_spans
+    };
+    let first = spans(&NativeEngine::new(&[Category::Pii]));
+    assert!(!first.is_empty());
+    assert_eq!(first, spans(&NativeEngine::new(&[Category::Pii])));
+}
