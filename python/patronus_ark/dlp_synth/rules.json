@@ -108,7 +108,7 @@
     },
     "dlp_alibaba_secret_key": {
       "generators": ["alibaba_secret_key"],
-      "probes": ["ALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret:0>>", "aliyun:\n  access_key_secret: \"<<secret:0>>\""]
+      "probes": ["ALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret:0>>", "oss:\n  aliyun_access_key_secret: \"<<secret:0>>\""]
     },
     "dlp_aws_bedrock_api_key": {
       "generators": ["bedrock_api_key"],

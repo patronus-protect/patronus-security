@@ -5643,7 +5643,7 @@
     "category": "dlp",
     "rule_id": "dlp_alibaba_secret_key",
     "de": "ALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret\u003a0>>",
-    "en": "aliyun:\n  access_key_secret: \"<<secret\u003a0>>\"",
+    "en": "oss:\n  aliyun_access_key_secret: \"<<secret\u003a0>>\"",
     "secrets": [
       {
         "gen": "alibaba_secret_key",

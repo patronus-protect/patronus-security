@@ -779,7 +779,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: Some(is_bedrock_api_key),
         span_group: None,
-        base_score: 55,
+        base_score: 50,
         meta: RuleMeta::new(
             ValidatorStrength::Structure,
             "gitleaks:aws-amazon-bedrock-api-key-long-lived",

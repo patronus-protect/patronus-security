@@ -392,7 +392,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_azure_entra_client_secret` | `CLOUD_KEY` | `secret_key` | `azure` | `format` | `gitleaks:azure-ad-client-secret` | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_alibaba_access_key_id` | `CLOUD_KEY` | `api_key` | `alibaba` | `format` | `gitleaks:alibaba-access-key-id` | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_alibaba_secret_key` | `CLOUD_KEY` | `secret_key` | `alibaba` | `format` | `gitleaks:alibaba-secret-key` | yes | on | 40 | field | 0.80 |
-| `dlp_aws_bedrock_api_key` | `CLOUD_KEY` | `api_key` | `aws` | `structure` | `gitleaks:aws-amazon-bedrock-api-key-long-lived` | yes | on | 55 | proximity | 0.80–1.00 |
+| `dlp_aws_bedrock_api_key` | `CLOUD_KEY` | `api_key` | `aws` | `structure` | `gitleaks:aws-amazon-bedrock-api-key-long-lived` | yes | on | 50 | proximity | 0.75–1.00 |
 | `dlp_ibm_cloud_api_key` | `CLOUD_KEY` | `api_key` | `ibm` | `format` | [github.com](https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py) | yes | on | 40 | field | 0.80 |
 | `dlp_github_token` | `SECRET_TOKEN` | `access_token` | `github` | `checksum` | `gitleaks:github-pat` | yes | on | 55 | proximity | 0.90–1.00 |
 | `dlp_github_pat` | `SECRET_TOKEN` | `access_token` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on | 60 | proximity | 0.75–1.00 |
