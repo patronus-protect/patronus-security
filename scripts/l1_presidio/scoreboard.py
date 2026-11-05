@@ -14,7 +14,9 @@ or infrastructure error. A regression is any F1 loss above the tolerance (defaul
 exact or overlap) of an entity, of all L1 entities together, of a source family or of DE/EN,
 in any split and either mode, or any new prediction on a hard-negative span. The summary
 goes to stdout; for the holdout it only names aggregates and regressions, never row ids or
-text.
+text. Its last lines before the verdict give M1 and M2 of the head per split (balanced,
+attainable gold) against Presidio tuned, run with the gate's interpreter (the Presidio venv) and
+cached per runner, profile and input SHA-256; they never change the exit code.
 
 Scoring follows ``research/l1-pii/entity_map.yaml``: semantic entities are not L1
 scope; a corpus listed in the map is scored only on the ids it annotates, a corpus
@@ -109,6 +111,8 @@ M2_PARITY_FAMILIES = ("presidio_favored",)
 # T27: milestones and the F1 >= 80 floor are judged on attainable gold; the raw view is reported next to it.
 VIEWS = ("raw", "attainable")
 MILESTONE_VIEW = "attainable"
+# The gate prints the milestones of the head against this Presidio profile (H05).
+PRESIDIO_PROFILE = "tuned"
 # Document classes spanning countries: their gold is checked against the validator of the issuing
 # country only (rules.country in entity_map.yaml), and only where the row names the country.
 DOCUMENT_IDS = ("entity.passport_number", "pii.identity_card_number")
@@ -2072,6 +2076,69 @@ def lazy(factory: Callable[[], ArkBuild]) -> Callable[[], Predictor]:
     return get
 
 
+def presidio_key(profile: str = PRESIDIO_PROFILE) -> str:
+    """Cache key of Presidio predictions: the runner, the profile and the pinned packages."""
+    digest = hashlib.sha256(PREDICTION_VERSION.encode())
+    for path in (HERE / "run_presidio.py", HERE / "profiles" / f"{profile}.yaml", HERE / "requirements.txt"):
+        digest.update(path.read_bytes())
+    return f"presidio-{profile}-{digest.hexdigest()[:16]}"
+
+
+def presidio_predictor(python: str = sys.executable) -> Predictor:
+    """run_presidio.py with the interpreter of the gate (the Presidio venv); the predictor's mode is the profile."""
+
+    def predict(dataset: Dataset, output: Path, profile: str) -> None:
+        proc = subprocess.run(
+            [python, str(HERE / "run_presidio.py"), "--profile", profile, "--input", str(dataset.path),
+             "--output", str(output)],
+            cwd="/", text=True, capture_output=True,
+        )
+        if proc.returncode != 0:
+            # Same rule as run_predictions: stderr may name holdout rows, so it stays in the cache.
+            stderr = output.with_name(output.name + ".stderr")
+            stderr.write_text(proc.stderr, encoding="utf-8")
+            raise ScoreboardError(f"run_presidio.py failed (exit {proc.returncode}); stderr in {stderr}")
+
+    return predict
+
+
+def gate_milestones(
+    head: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, presidio: Predictor
+) -> list[str]:
+    """M1 and M2 of the head per split on attainable gold, balanced vs Presidio tuned (H05).
+
+    One aggregate line per split, so the final milestone numbers on the holdout reach the gate report
+    (the runner keeps the tail of a passing scoreboard) without a row id or value. A failure to
+    measure names only the error type and never fails the gate."""
+    checks = gold_checks(emap)
+    lines = []
+    for split in dict.fromkeys(d.split for d in datasets):
+        try:
+            ark_parts, presidio_parts = [], []
+            for dataset in (d for d in datasets if d.split == split):
+                rows = read_jsonl(dataset.path)
+                ark = cache.get(head.key, dataset, MILESTONE_MODE, head.predict)
+                tuned = cache.get(presidio_key(), dataset, PRESIDIO_PROFILE, lambda: presidio)
+                ark_parts.append(score_rows(rows, ark, emap, dataset.name, checks))
+                presidio_parts.append(score_rows(rows, tuned, emap, dataset.name, checks))
+            ark_result, presidio_result = merge(ark_parts), merge(presidio_parts)
+            m1 = m1_report(ark_result, presidio_result, emap)
+            m2 = m2_report(ark_result, presidio_result, emap)
+        except (ScoreboardError, OSError, ValueError, KeyError) as error:
+            lines.append(f"milestones {split}: not measured ({type(error).__name__})")
+            continue
+        m1_parts = [f"{family} {sum(e['holds'] for e in result['entities'].values())}/{len(result['entities'])}"
+                    for family, result in m1["families"].items() if result["decides"]]
+        m2_parts = [f"{family} {pct(result['ark_macro_f1']).strip()} {'>=' if result['holds'] else '<'} "
+                    f"{pct(result['target']).strip()}" for family, result in m2["families"].items() if result["decides"]]
+        lines.append(
+            f"milestones {split} ({MILESTONE_MODE}, {MILESTONE_VIEW} gold, vs Presidio {PRESIDIO_PROFILE}): "
+            f"M1 {'MET' if m1['met'] else 'NOT MET'} ({', '.join(m1_parts)} shared ids) | "
+            f"M2 {'MET' if m2['met'] else 'NOT MET'} (macro-F1 {', '.join(m2_parts)})"
+        )
+    return lines
+
+
 def score_side(
     side: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, mode: str = "strict"
 ) -> dict[str, Any]:
@@ -2205,6 +2272,7 @@ def gate(
     head_factory: Callable[[], ArkBuild] | None = None,
     base_factory: Callable[[str, str], ArkBuild] | None = None,
     modes: tuple[str, ...] = MODES,
+    presidio: Predictor | None = None,
 ) -> tuple[list[str], bool, dict[str, Any]]:
     head_dir = head_dir.resolve()
     root = cache_dir.resolve() / "scoreboard"
@@ -2236,6 +2304,9 @@ def gate(
         for mode in modes
     }
     lines, regressed = summary(head, base, results, tolerance_pp)
+    if presidio is not None and MILESTONE_MODE in modes:
+        # Before the RESULT line, inside the tail the runner puts into the gate report.
+        lines[-1:-1] = gate_milestones(head, datasets, cache, emap, presidio)
     report = {"schema": SCHEMA, "head": head_sha, "base": base_sha, "head_source_key": head_key,
               "base_source_key": base_key, "tolerance_pp": tolerance_pp, "regressed": regressed,
               "milestone_mode": MILESTONE_MODE, "modes": results}
@@ -2901,6 +2972,7 @@ def main(argv: list[str] | None = None) -> int:
         lines, regressed, report = gate(
             args.head, args.base_sha, splits, args.cache,
             ark_python=args.ark_python, cargo=args.cargo, tolerance_pp=args.tolerance_pp,
+            presidio=presidio_predictor(),
         )
     except ScoreboardError as error:
         print(f"scoreboard error: {error}", file=sys.stderr)
