@@ -1475,6 +1475,27 @@ PROFILES = {
     "dlp_fireworks_key": Profile(
         "llm.fireworks.api_key", "API_KEY", "secret", "fireworks_api_key", "Fireworks AI API key", "Fireworks-AI-API-Schlüssel"
     ),
+    "dlp_langsmith_key": Profile(
+        "llm.langsmith.api_key", "API_KEY", "secret", "langsmith_api_key", "LangSmith API key", "LangSmith-API-Schlüssel"
+    ),
+    "dlp_pinecone_key": Profile(
+        "llm.pinecone.api_key", "API_KEY", "secret", "pinecone_api_key", "Pinecone API key", "Pinecone-API-Schlüssel"
+    ),
+    "dlp_elevenlabs_key": Profile(
+        "llm.elevenlabs.api_key", "API_KEY", "secret", "elevenlabs_api_key", "ElevenLabs API key", "ElevenLabs-API-Schlüssel"
+    ),
+    "dlp_azure_openai_key": Profile(
+        "llm.azure_openai.api_key", "API_KEY", "secret", "azure_openai_api_key", "Azure OpenAI API key", "Azure-OpenAI-API-Schlüssel"
+    ),
+    "dlp_wandb_key": Profile(
+        "llm.wandb.api_key", "API_KEY", "secret", "wandb_api_key", "Weights & Biases API key", "Weights-&-Biases-API-Schlüssel"
+    ),
+    "dlp_assemblyai_key": Profile(
+        "llm.assemblyai.api_key", "API_KEY", "secret", "assemblyai_api_key", "AssemblyAI API key", "AssemblyAI-API-Schlüssel"
+    ),
+    "dlp_deepgram_key": Profile(
+        "llm.deepgram.api_key", "API_KEY", "secret", "deepgram_api_key", "Deepgram API key", "Deepgram-API-Schlüssel"
+    ),
     "dlp_aws_access_key": Profile("cloud.aws.access_key_id", "CLOUD_KEY", "secret", "aws_access_key_id", "AWS access key ID", "AWS-Access-Key-ID"),
     "dlp_aws_secret_key": Profile("cloud.aws.secret_access_key", "CLOUD_KEY", "secret", "aws_secret_access_key", "AWS secret access key", "AWS-Secret-Access-Key"),
     "dlp_google_api_key": Profile("cloud.gcp.api_key", "CLOUD_KEY", "secret", "google_maps_api_key", "Google Maps API key", "Google-Maps-API-Schlüssel"),

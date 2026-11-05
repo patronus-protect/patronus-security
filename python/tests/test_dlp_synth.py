@@ -9,6 +9,7 @@ import base64
 import binascii
 import json
 import math
+import re
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -870,6 +871,16 @@ CHECKS = {
     "openrouter_api_key": prefixed("sk-or-v1-", HEX, 64),
     "deepseek_api_key": prefixed("sk-", HEX, 32),
     "fireworks_api_key": lambda v: any(prefixed("fw_", ALNUM, n)(v) for n in range(20, 41)),
+    # P02 LLM/AI provider keys
+    "langsmith_personal_token": lambda v: re.fullmatch(r"lsv2_pt_[0-9a-f]{32}_[0-9a-f]{10}", v) is not None,
+    "langsmith_service_key": lambda v: re.fullmatch(r"lsv2_sk_[0-9a-f]{32}_[0-9a-f]{10}", v) is not None,
+    "pinecone_api_key": lambda v: re.fullmatch(r"pcsk_[A-Za-z0-9]{5}_[A-Za-z0-9]{63}", v) is not None,
+    "pinecone_api_key_long_id": lambda v: re.fullmatch(r"pcsk_[A-Za-z0-9]{6}_[A-Za-z0-9]{63}", v) is not None,
+    "elevenlabs_api_key": prefixed("sk_", HEX, 48),
+    "azure_openai_api_key": prefixed("", HEX, 32),
+    "wandb_api_key": prefixed("", HEX, 40),
+    "assemblyai_api_key": prefixed("", HEX, 32),
+    "deepgram_api_key": prefixed("", HEX, 40),
     "sumologic_access_token": prefixed("", BASE36, 64),
     "square_access_token": prefixed("EAAA", B64URL, 60),
     "square_legacy_access_token": prefixed("sq0atp-", B64URL, 22),
@@ -1117,6 +1128,14 @@ LOOKALIKE_FAILURES = {
     "openrouter_api_key_short": CHECKS["openrouter_api_key"],
     "deepseek_api_key_short": CHECKS["deepseek_api_key"],
     "fireworks_api_key_short": CHECKS["fireworks_api_key"],
+    # P02
+    "langsmith_api_key_short": any_check("langsmith_personal_token", "langsmith_service_key"),
+    "pinecone_api_key_short": CHECKS["pinecone_api_key"],
+    "elevenlabs_api_key_short": CHECKS["elevenlabs_api_key"],
+    "azure_openai_api_key_short": CHECKS["azure_openai_api_key"],
+    "wandb_api_key_short": CHECKS["wandb_api_key"],
+    "assemblyai_api_key_short": CHECKS["assemblyai_api_key"],
+    "deepgram_api_key_short": CHECKS["deepgram_api_key"],
     "sumologic_access_token_short": CHECKS["sumologic_access_token"],
     "square_access_token_short": any_check("square_access_token", "square_legacy_access_token"),
     "shopify_access_token_short": any_check(
