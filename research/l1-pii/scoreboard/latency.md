@@ -4,16 +4,16 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 | Engine | Init ms | short p50 / p95 / p99 ms | 4kib p50 / p95 / p99 ms | 100kib p50 / p95 / p99 ms |
 |---|---:|---:|---:|---:|
-| ark | 515 | 0.292 / 0.404 / 0.491 | 1.904 / 2.548 / 2.861 | 12.319 / 15.003 / 15.855 |
+| ark | 577 | 0.270 / 0.376 / 0.422 | 1.564 / 2.216 / 3.088 | 10.358 / 12.647 / 13.133 |
 | ark-native | 324 | 0.288 / 0.367 / 0.438 | 1.880 / 2.641 / 3.175 | 8.334 / 9.774 / 11.099 |
 | presidio-default | 4565 | 10.151 / 13.928 / 16.559 | 212.486 / 338.831 / 390.239 | 10407.527 / 13634.609 / 15005.935 |
 | presidio-tuned | 8764 | 12.540 / 30.829 / 33.890 | 200.656 / 259.931 / 290.922 | 9803.598 / 11978.768 / 12399.738 |
 
 | p95 / Ark (Python) | short | 4kib | 100kib |
 |---|---:|---:|---:|
-| ark-native | 0.91× | 1.04× | 0.65× |
-| presidio-default | 34× | 133× | 909× |
-| presidio-tuned | 76× | 102× | 798× |
+| ark-native | 0.98× | 1.19× | 0.77× |
+| presidio-default | 37× | 153× | 1078× |
+| presidio-tuned | 82× | 117× | 947× |
 
 | Workload | Bytes | Chars | ark spans | ark-native spans | presidio-default spans | presidio-tuned spans |
 |---|---:|---:|---:|---:|---:|---:|
@@ -24,8 +24,47 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 | 100kib-de | 102400 | 101229 | 1173 | 1173 | 3613 | 2051 |
 | 100kib-en | 102400 | 102400 | 1038 | 1038 | 2907 | 2701 |
 
-M4 (ark 100kib p95 ≤ 10 ms): 15.003 ms, FAIL.
+M4 (ark 100kib p95 ≤ 10 ms): 12.647 ms, FAIL.
 M4 (ark-native 100kib p95 ≤ 10 ms): 9.774 ms, pass.
+
+## Profile and remaining hotspots (H06 pass 7)
+
+Ark row measured after H06-7 (`latency.py run --engines ark --installed-ark`, the `maturin develop
+--release` build of this branch, load average about 0.8); ark-native and Presidio rows unchanged (the
+native code is unchanged). Spans per workload are unchanged.
+
+Python call of the 100 KiB workloads by part (`rust_gateway.scan_category` and the getters that
+`_to_dict` reads, median over 40 calls, before this pass):
+
+| Part | DE ms | EN ms |
+|---|---:|---:|
+| Scan and result conversion (GIL released) | 6.6–7.1 | 6.3–7.1 |
+| `details` getter (1 369 / about 1 200 `matched_rules` entries) | 2.5–2.8 | 2.4–3.3 |
+| `evidence_spans` getter | 0.8–0.9 | 0.7–1.0 |
+| Freeing the Python objects | 0.6–0.7 | 0.6–0.7 |
+
+`marshal.loads` makes the same `matched_rules` objects in about 1.2 ms, so about half of the getter
+was binding overhead. `PyDict::set_item` takes owned arguments and converts each again (a reference
+count round trip per key and value), and `PyList::append` grows the list. Pass 7 inserts through
+`PyDict_SetItem` with borrowed objects (the `details` and `evidence_spans` getters) and fills each JSON
+array into a list of its length. Same objects; a test checks the reference counts of the shared keys
+and values.
+
+Getter on a held result, median of 200 calls, 3 interleaved rounds: `details` DE 1.35 → 1.14 ms,
+EN 1.29 → 1.05 ms; `evidence_spans` DE 0.45 → 0.40 ms, EN 0.39 → 0.35 ms. Right after a scan (cold
+caches) the getter costs about twice that, and the gain is about 0.4 ms. `latency.py run --engines ark`,
+6 interleaved rounds per build (load about 0.8): 100 KiB p95 median 13.12 → 12.15 ms (range 12.29–15.16
+→ 11.53–12.40), p50 10.18 → 9.96 ms; 4 KiB p95 1.92 → 1.98 ms (noise).
+
+M4 holds for ark-native, not for ark (Python). Remaining hotspots, each ≥ 10 % of the ark p95, for
+H06-8:
+
+- The `matched_rules` entries as `serde_json::Value` trees: the `details` getter still costs 2.0–2.6 ms
+  per 100 KiB right after a scan (1.0–1.1 ms on warm caches; the BTreeMap nodes come from the rayon
+  workers), plus about 1.5 ms native drop. A typed entry that serializes to the same JSON (56 uses in
+  13 files) remains the lever, for the native build and drop and for a getter over flat structs.
+- The parallel rule step at about 1.4× its ideal (unchanged from pass 6).
+
 ## Profile and remaining hotspots (H06 pass 6)
 
 Stage profile of one native PII scan of the 100 KiB workloads (`detect_prepared_with_mode`, strict,

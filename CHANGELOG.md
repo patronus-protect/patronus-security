@@ -278,6 +278,13 @@ the M1 work on presidio_favored) are opt-in.
   `de_passport_number` and lists the known gaps per corpus and entity. The gate and the raw view are
   unchanged; validators are not loosened. Dev, presidio_favored, balanced vs Presidio tuned: M1 22/25
   raw, 24/24 attainable; M2 macro-F1 63.2 vs 87.0 raw, 96.3 vs 100.0 attainable. No detection change.
+- L1 latency loop, pass 7 (H06-7). The Python binding builds the layer `details` and the
+  `evidence_spans` dicts through `PyDict_SetItem` with borrowed objects and fills each JSON array into
+  a list of its length, instead of `PyDict::set_item` (a reference count round trip per key and
+  value) and `PyList::append`. Same objects; `details` getter on a held 100 KiB result 1.29–1.35 →
+  1.05–1.14 ms; ark 100 KiB p95 13.1 → 12.1 ms (interleaved A/B, median of 6 runs). Profile in
+  `research/l1-pii/scoreboard/latency.md`. M4 not yet met in Python; next pass H06-8. **Detection
+  change:** none.
 - L1 latency loop, pass 6 (H06-6). With `explain` on, the context anchor patterns of PII and DLP
   (`(?i)\b…\b`) are searched without their word boundaries on the lazy DFA and each candidate
   start is probed anchored, as the PII rules since H03 (shared `detectors::word_boundary` module): a
