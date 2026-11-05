@@ -82,7 +82,7 @@ def validation_case_texts() -> list[tuple[str, str]]:
 def throughput_gates() -> dict:
     """General-text API gates for the initial injection/DLP/threat surface."""
     gates = execution_gates()
-    gates["l3"] = {
+    gates["l3_policy"] = {
         "clustering": "representative",
         "representatives_per_cluster": 1,
     }

@@ -35,13 +35,10 @@ impl InjectionStructuralPipeline {
             components: structural_components(),
         }
     }
+}
 
-    #[cfg(test)]
-    pub fn detect(&self, text: &str) -> NativeDetection {
-        self.detect_prepared(&crate::threat::NativeText::new(text))
-    }
-
-    pub fn detect_prepared(&self, prepared: &crate::threat::NativeText<'_>) -> NativeDetection {
+impl crate::detectors::NativeDetector for InjectionStructuralPipeline {
+    fn detect_prepared(&self, prepared: &crate::threat::NativeText<'_>) -> NativeDetection {
         let text = prepared.text();
         let enabled = self.components.iter().all(|component| {
             component.anchor_gate.is_unconditional()
@@ -178,6 +175,7 @@ fn structural_references() -> Vec<InjectionReference> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::detectors::NativeDetector;
 
     #[test]
     fn decomposes_override_disclosure_into_four_features() {

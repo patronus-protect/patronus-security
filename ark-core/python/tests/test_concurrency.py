@@ -23,14 +23,14 @@ scanner = Scanner({
 mode = sys.argv[2]
 control = ScanControl(timeout_ms=5000 if mode == "cancel" else 1000)
 with ThreadPoolExecutor(max_workers=1) as pool:
-    future = pool.submit(scanner.scan, " a", pii=False, dlp=False, control=control)
+    future = pool.submit(scanner.scan, " a", categories=["injection"], control=control)
     # Allow the worker to acquire the scanner before probing its actual state.
     time.sleep(0.01)
     observed_busy = False
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline and not future.done():
         try:
-            scanner.scan("", pii=False, dlp=False)
+            scanner.scan("", categories=["injection"])
         except ScannerBusyError:
             observed_busy = True
             break
@@ -48,7 +48,7 @@ with ThreadPoolExecutor(max_workers=1) as pool:
         pass
     else:
         raise AssertionError("active work must not return a partial successful report")
-assert scanner.scan("", pii=False, dlp=False)["wolf"]["document_logit"] == 0.0
+assert scanner.scan("", categories=["injection"])["wolf"]["document_logit"] == 0.0
 '''
 
 

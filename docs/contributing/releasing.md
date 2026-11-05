@@ -50,9 +50,9 @@ it) keeps moving while the release is prepared.
 2. On the release branch, update [`CHANGELOG.md`](../changelog.md) — move items from
    *Unreleased* into a new versioned section with the date. Summarize every detection change of
    the default modes at the top of the section.
-3. Bump all **six Cargo package versions** — `ark-core/`, `rust/`, `python/`, `ark-api/`,
-   `ark-coordinator/` and `ark-distributed-protocol/` `Cargo.toml` — plus
-   `python/pyproject.toml`, the corresponding local dependency requirements and `Cargo.lock`.
+3. Bump all **seven Cargo package versions** — `ark-core/`, `ark-core/python/`, `rust/`,
+   `python/`, `ark-api/`, `ark-coordinator/` and `ark-distributed-protocol/` `Cargo.toml` — plus
+   `python/pyproject.toml` and `ark-core/python/pyproject.toml`, the corresponding local dependency requirements and `Cargo.lock`.
    Update the image checks of `ark-api/deploy/bootstrap.sh`,
    `ark-coordinator/deploy/bootstrap.sh` and `scripts/tests/test_cube_runtime_config.py`. The
    image workflows read it with `scripts/release_version.py`, which fails if any source disagrees

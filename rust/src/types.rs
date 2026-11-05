@@ -226,8 +226,7 @@ pub struct SecurityScanResult {
     pub decision: Option<DecisionEnvelope>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Maximum scanner depth to run.
 pub enum SecurityLevel {
     /// Native rule-based checks only.
@@ -246,6 +245,22 @@ impl SecurityLevel {
             SecurityLevel::L2 => "L2",
             SecurityLevel::L3 => "L3",
         }
+    }
+}
+
+/// Serializes the canonical [`SecurityLevel::as_str`] name.
+impl Serialize for SecurityLevel {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Deserializes every name [`str::parse`] accepts (`L1`, `l1`, `1`, ...).
+impl<'de> Deserialize<'de> for SecurityLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -369,34 +384,29 @@ impl std::str::FromStr for L3Strategy {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(try_from = "GateConfig")]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
 /// Unspecified rules use the shared credentials/secrets-only DLP default;
 /// other execution gates default to enabled. Diagnostic `explain` and the
 /// scored PII and DLP modes are opt-in. `max_level` is still enforced by
 /// `ScanExecution`, so a gate can only further restrict the configured scanner.
+///
+/// Deserializes from the one gate schema of every host (Python
+/// `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
+/// `pii_mode`, `dlp_mode` and `explain`, the level switches `l1`, `l2` and
+/// `l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
+/// out-of-range values are refused.
 pub struct ScanGateMatrix {
-    /// Include bounded diagnostic anchor metadata. Disabled by default.
-    pub explain: bool,
-    /// Native PII output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub pii_mode: crate::detectors::pii::score::PiiMode,
-    /// Native DLP output mode. `Strict` (default) keeps rule acceptance with
-    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
-    pub dlp_mode: crate::detectors::dlp::score::DlpMode,
+    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
+    pub native: crate::NativeGates,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
     pub l2: Option<bool>,
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
-    /// Optional per-model or per-native-scanner overrides keyed by result model
-    /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
-    pub models: HashMap<String, bool>,
-    /// Optional per-rule overrides keyed by stable public rule id. Missing
-    /// entries inherit the shared rule defaults.
-    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -448,7 +458,7 @@ pub struct L3SchedulerPolicy {
 /// Optional per-pipeline overrides for L3 chunk execution.
 pub struct L3PipelinePolicy {
     /// Chunk execution strategy. `None` inherits the request-wide default.
-    #[serde(default, alias = "execution")]
+    #[serde(default)]
     pub clustering: Option<L3ClusteringStrategy>,
     /// Representatives inferred from the high-priority side of each cluster.
     #[serde(default)]
@@ -720,33 +730,19 @@ impl L3SchedulerPolicy {
 impl ScanGateMatrix {
     /// Explicitly enable all native rules, including opt-in DLP content families.
     pub fn all_enabled() -> Self {
-        let mut gates = Self::default();
-        for pattern in crate::detectors::dlp::dlp::DLP_PATTERNS {
-            gates.set_rule(pattern.name, true);
+        Self {
+            native: crate::NativeGates::all_enabled(),
+            ..Self::default()
         }
-        for id in [
-            "dlp_mcp_runtime_risk",
-            "dlp_mcp_policy",
-            "dlp_destructive_operation",
-        ] {
-            gates.set_rule(id, true);
-        }
-        gates
     }
 
     /// Create a matrix with explicit level gates.
     pub fn levels(l1: bool, l2: bool, l3: bool) -> Self {
         Self {
-            explain: false,
-            pii_mode: Default::default(),
-            dlp_mode: Default::default(),
             l1: Some(l1),
             l2: Some(l2),
             l3: Some(l3),
-            models: HashMap::new(),
-            rules: HashMap::new(),
-            conditional: Vec::new(),
-            l3_policy: L3SchedulerPolicy::default(),
+            ..Self::default()
         }
     }
 
@@ -761,7 +757,7 @@ impl ScanGateMatrix {
 
     /// Set one model/native scanner gate.
     pub fn set_model(&mut self, model: impl Into<String>, enabled: bool) {
-        self.models.insert(model.into(), enabled);
+        self.native.models.insert(model.into(), enabled);
     }
 
     /// Builder-style model/native scanner gate setter.
@@ -772,7 +768,7 @@ impl ScanGateMatrix {
 
     /// Set one stable rule-id gate.
     pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool) {
-        self.rules.insert(rule_id.into(), enabled);
+        self.native.rules.insert(rule_id.into(), enabled);
     }
 
     /// Builder-style stable rule-id gate setter.
@@ -800,22 +796,181 @@ impl ScanGateMatrix {
         }
     }
 
-    /// Return whether the model/native scanner is allowed by this matrix.
-    pub fn allows_model(&self, model: &str) -> bool {
-        self.models.get(model).copied().unwrap_or(true)
-    }
-
-    /// Return whether a stable rule id is allowed by this matrix.
-    pub fn allows_rule(&self, rule_id: &str) -> bool {
-        self.rules
-            .get(rule_id)
-            .copied()
-            .unwrap_or_else(|| crate::detectors::dlp::dlp::default_rule_enabled(rule_id))
-    }
-
     /// Replace the L3 worker scheduling policy.
     pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy) {
         self.l3_policy = policy;
+    }
+}
+
+/// The serialized [`ScanGateMatrix`]; missing keys keep the defaults.
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct GateConfig {
+    #[serde(flatten)]
+    native: crate::NativeGates,
+    l1: Option<bool>,
+    l2: Option<bool>,
+    l3: Option<bool>,
+    conditional: Vec<ConditionalPipelineGate>,
+    l3_policy: L3PolicyConfig,
+}
+
+/// The serialized [`L3SchedulerPolicy`]: each key overrides its default;
+/// `ttl_ms` and `estimated_cost_ms` entries override the default per key.
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct L3PolicyConfig {
+    enabled: Option<bool>,
+    priority: Option<Vec<String>>,
+    ttl_ms: HashMap<String, u64>,
+    estimated_cost_ms: HashMap<String, u64>,
+    fairness_quantum_ms: Option<u64>,
+    max_wait_ms: Option<u64>,
+    degraded_factor: Option<f64>,
+    early_exit: Option<L3EarlyExitMode>,
+    progress: Option<L3ProgressMode>,
+    clustering: Option<L3ClusteringStrategy>,
+    representatives_per_cluster: Option<usize>,
+    verify_representatives_per_cluster: Option<usize>,
+    min_cluster_similarity: Option<f64>,
+    max_cluster_size: Option<usize>,
+    pipelines: HashMap<String, L3PipelinePolicy>,
+}
+
+impl TryFrom<GateConfig> for ScanGateMatrix {
+    type Error = String;
+
+    fn try_from(config: GateConfig) -> Result<Self, String> {
+        let raw = config.l3_policy;
+        let mut policy = L3SchedulerPolicy::default();
+        macro_rules! set {
+            ($($field:ident),*) => {$(
+                if let Some(value) = raw.$field {
+                    policy.$field = value;
+                }
+            )*};
+        }
+        set!(
+            enabled,
+            priority,
+            fairness_quantum_ms,
+            max_wait_ms,
+            degraded_factor,
+            early_exit,
+            progress,
+            clustering,
+            representatives_per_cluster,
+            verify_representatives_per_cluster,
+            min_cluster_similarity,
+            max_cluster_size
+        );
+        policy.ttl_ms.extend(raw.ttl_ms);
+        policy.estimated_cost_ms.extend(raw.estimated_cost_ms);
+        policy.pipelines = raw.pipelines;
+        policy.validate()?;
+        let mut gates = Self {
+            native: config.native,
+            l1: config.l1,
+            l2: config.l2,
+            l3: config.l3,
+            l3_policy: policy,
+            ..Self::default()
+        };
+        gates.set_conditional(config.conditional)?;
+        Ok(gates)
+    }
+}
+
+fn check_fraction(value: f64, field: &str) -> Result<(), String> {
+    if (0.0..=1.0).contains(&value) {
+        Ok(())
+    } else {
+        Err(format!("{field} must be between 0.0 and 1.0"))
+    }
+}
+
+fn check_count(value: usize, field: &str) -> Result<(), String> {
+    if value == 0 {
+        Err(format!("{field} must be >= 1"))
+    } else {
+        Ok(())
+    }
+}
+
+impl L3SchedulerPolicy {
+    /// Refuse out-of-range values: zero counts, costs and fairness quantum,
+    /// fractions outside `0..=1` and invalid pipeline overrides.
+    pub fn validate(&self) -> Result<(), String> {
+        check_count(
+            usize::try_from(self.fairness_quantum_ms).unwrap_or(usize::MAX),
+            "l3_policy.fairness_quantum_ms",
+        )?;
+        check_count(
+            self.representatives_per_cluster,
+            "l3_policy.representatives_per_cluster",
+        )?;
+        check_count(
+            self.verify_representatives_per_cluster,
+            "l3_policy.verify_representatives_per_cluster",
+        )?;
+        check_count(self.max_cluster_size, "l3_policy.max_cluster_size")?;
+        check_fraction(self.degraded_factor, "l3_policy.degraded_factor")?;
+        check_fraction(
+            self.min_cluster_similarity,
+            "l3_policy.min_cluster_similarity",
+        )?;
+        if let Some(name) = self.estimated_cost_ms.iter().find(|(_, &cost)| cost == 0) {
+            return Err(format!(
+                "l3_policy.estimated_cost_ms.{} must be >= 1",
+                name.0
+            ));
+        }
+        for (name, pipeline) in &self.pipelines {
+            if name.trim().is_empty() {
+                return Err("l3_policy.pipelines keys must not be empty".to_string());
+            }
+            pipeline
+                .validate()
+                .map_err(|error| format!("l3_policy.pipelines.{name}.{error}"))?;
+        }
+        Ok(())
+    }
+}
+
+impl L3PipelinePolicy {
+    /// Refuse zero counts, fractions outside `0..=1` and an empty positive class.
+    pub fn validate(&self) -> Result<(), String> {
+        for (field, value) in [
+            (
+                "representatives_per_cluster",
+                self.representatives_per_cluster,
+            ),
+            (
+                "verify_representatives_per_cluster",
+                self.verify_representatives_per_cluster,
+            ),
+            ("max_cluster_size", self.max_cluster_size),
+        ] {
+            value.map_or(Ok(()), |value| check_count(value, field))?;
+        }
+        if let Some(value) = self.min_cluster_similarity {
+            check_fraction(value, "min_cluster_similarity")?;
+        }
+        match &self.aggregation {
+            Some(L3AggregationStrategy::AnyPositiveOrHighest {
+                positive_class,
+                threshold,
+            }) => {
+                if positive_class.trim().is_empty() {
+                    return Err("aggregation.positive_class must not be empty".to_string());
+                }
+                check_fraction(*threshold, "aggregation.threshold")
+            }
+            Some(L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold }) => {
+                check_fraction(*threshold, "aggregation.threshold")
+            }
+            Some(L3AggregationStrategy::MajorityVoteOrHighest) | None => Ok(()),
+        }
     }
 }
 
@@ -836,6 +991,11 @@ impl ConditionalPipelineGate {
             return Err(
                 "conditional l3_policy overrides require level l3 and a pipeline".to_string(),
             );
+        }
+        if let Some(policy) = &self.l3_policy {
+            policy
+                .validate()
+                .map_err(|error| format!("conditional l3_policy.{error}"))?;
         }
         self.when.validate()
     }
@@ -1060,16 +1220,6 @@ impl ScanExecution {
         level <= self.max_level && self.gates.allows_level(level)
     }
 
-    /// Return whether a model/native scanner is enabled for this execution.
-    pub fn allows_model(&self, model: &str) -> bool {
-        self.gates.allows_model(model)
-    }
-
-    /// Return whether a stable rule id is enabled for this execution.
-    pub fn allows_rule(&self, rule_id: &str) -> bool {
-        self.gates.allows_rule(rule_id)
-    }
-
     /// Return the matrix backing this execution.
     pub fn gates(&self) -> &ScanGateMatrix {
         &self.gates
@@ -1176,6 +1326,122 @@ impl From<SecurityScanResult> for patronus_ark_core::NativeResult {
 pub use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
 
 #[cfg(test)]
+mod gate_schema_tests {
+    use super::*;
+
+    fn gates(value: serde_json::Value) -> Result<ScanGateMatrix, String> {
+        serde_json::from_value(value).map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn one_gate_schema_reads_every_key() {
+        let gates = gates(serde_json::json!({
+            "rules": {"pii_email": false, "cat.core.remote_to_exec": false},
+            "models": {"native:pii": false},
+            "pii_mode": "recall",
+            "dlp_mode": "balanced",
+            "explain": true,
+            "l1": true,
+            "l2": false,
+            "l3": false,
+            "conditional": [{
+                "level": "l3",
+                "pipeline": "injection",
+                "when": {"metadata": {"path": "tenant", "equals": "a"}},
+                "l3_policy": {"clustering": "representative"}
+            }],
+            "l3_policy": {
+                "enabled": false,
+                "priority": ["tool_class"],
+                "ttl_ms": {"tool_class": 1234},
+                "estimated_cost_ms": {"tool_class": 30},
+                "fairness_quantum_ms": 10,
+                "max_wait_ms": 100,
+                "degraded_factor": 0.5,
+                "early_exit": "disabled",
+                "progress": "provisional",
+                "clustering": "verify_representative",
+                "representatives_per_cluster": 2,
+                "verify_representatives_per_cluster": 2,
+                "min_cluster_similarity": 0.8,
+                "max_cluster_size": 4,
+                "pipelines": {"injection": {
+                    "clustering": "representative",
+                    "aggregation": {"type": "any_positive_or_highest", "positive_class": "attack", "threshold": 0.93},
+                    "early_exit": "request_wide_positive"
+                }}
+            }
+        }))
+        .unwrap();
+        assert!(!gates.native.allows_rule("cat.core.remote_to_exec"));
+        assert!(!gates.native.allows_model("native:pii"));
+        assert_eq!(gates.native.pii_mode, crate::ScoreMode::Recall);
+        assert!(gates.native.explain);
+        assert_eq!(
+            (gates.l1, gates.l2, gates.l3),
+            (Some(true), Some(false), Some(false))
+        );
+        assert_eq!(gates.conditional.len(), 1);
+        let policy = &gates.l3_policy;
+        assert!(!policy.enabled);
+        assert_eq!(policy.ttl_ms["tool_class"], 1234);
+        // Map entries override the defaults per key.
+        assert_eq!(policy.ttl_ms["injection"], 15_000);
+        assert_eq!(
+            policy.clustering,
+            L3ClusteringStrategy::VerifyRepresentative
+        );
+        assert_eq!(policy.max_cluster_size, 4);
+        assert_eq!(
+            policy.pipelines["injection"].clustering,
+            Some(L3ClusteringStrategy::Representative)
+        );
+        let default = self::gates(serde_json::json!({})).unwrap();
+        assert_eq!(
+            default.l3_policy.priority,
+            L3SchedulerPolicy::default().priority
+        );
+        assert!(default.native.allows_rule("pii_email"));
+    }
+
+    #[test]
+    fn gate_schema_refuses_old_keys_and_bad_values() {
+        for invalid in [
+            serde_json::json!({"levels": {"l1": true}}),
+            serde_json::json!({"model_areas": {"native:pii": false}}),
+            serde_json::json!({"policy": {"enabled": true}}),
+            serde_json::json!({"l3": {"enabled": true}}),
+            serde_json::json!({"l3_policy": {"execution": "rank_only"}}),
+            serde_json::json!({"l3_policy": {"min_similarity": 0.9}}),
+            serde_json::json!({"l3_policy": {"pipelines": {"injection": {"execution": "representative"}}}}),
+            serde_json::json!({"rules": {"pii_email": "no"}}),
+            serde_json::json!({"l1": "yes"}),
+            serde_json::json!({"pii_mode": "fast"}),
+            serde_json::json!({"l3_policy": {"priority": "injection"}}),
+            serde_json::json!({"l3_policy": {"ttl_ms": {"injection": "soon"}}}),
+            serde_json::json!({"l3_policy": {"estimated_cost_ms": {"dynamic-pii": 0}}}),
+            serde_json::json!({"l3_policy": {"fairness_quantum_ms": 0}}),
+            serde_json::json!({"l3_policy": {"max_wait_ms": -1}}),
+            serde_json::json!({"l3_policy": {"degraded_factor": 2.0}}),
+            serde_json::json!({"l3_policy": {"min_cluster_similarity": 1.5}}),
+            serde_json::json!({"l3_policy": {"early_exit": "sometimes"}}),
+            serde_json::json!({"l3_policy": {"progress": "verbose"}}),
+            serde_json::json!({"l3_policy": {"clustering": "aggressive"}}),
+            serde_json::json!({"l3_policy": {"representatives_per_cluster": 0}}),
+            serde_json::json!({"l3_policy": {"max_cluster_size": 0}}),
+            serde_json::json!({"l3_policy": {"pipelines": {"": {}}}}),
+            serde_json::json!({"l3_policy": {"pipelines": {"injection": {"max_cluster_size": 0}}}}),
+            serde_json::json!({"l3_policy": {"pipelines": {"injection": {"min_cluster_similarity": 1.5}}}}),
+            serde_json::json!({"l3_policy": {"pipelines": {"injection": {"aggregation": {"type": "any_positive_or_highest", "positive_class": " ", "threshold": 0.5}}}}}),
+            serde_json::json!({"conditional": [{"level": "l1", "when": {"metadata": {"path": "a", "exists": true}}}]}),
+            serde_json::json!({"conditional": [{"level": "l3", "pipeline": "injection", "when": {"metadata": {"path": "a", "exists": true}}, "l3_policy": {"max_cluster_size": 0}}]}),
+        ] {
+            assert!(gates(invalid.clone()).is_err(), "{invalid} must be refused");
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1251,5 +1517,19 @@ mod tests {
                 .early_exit,
             L3PipelineEarlyExit::HeadStable
         );
+    }
+
+    #[test]
+    fn security_level_serde_accepts_from_str_names_and_writes_canonical_names() {
+        for (name, level) in [
+            ("L1", SecurityLevel::L1),
+            ("l2", SecurityLevel::L2),
+            ("3", SecurityLevel::L3),
+        ] {
+            let parsed: SecurityLevel = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(parsed, level);
+            assert_eq!(serde_json::to_value(level).unwrap(), level.as_str());
+        }
+        assert!(serde_json::from_value::<SecurityLevel>(serde_json::json!("L4")).is_err());
     }
 }

@@ -14,14 +14,15 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use patronus_ark::detectors::pii::{overlap::SECONDARY_IN_IBAN, score::PiiMode, validators};
+use patronus_ark::detectors::pii::{overlap::SECONDARY_IN_IBAN, validators};
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::Value;
 
-fn scanner(mode: PiiMode) -> SecurityGateway {
+fn scanner(mode: ScoreMode) -> SecurityGateway {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -29,7 +30,10 @@ fn scanner(mode: PiiMode) -> SecurityGateway {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -44,7 +48,7 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
 }
 
 fn strict(text: &str) -> SecurityScanResult {
-    scan(&scanner(PiiMode::Strict), text)
+    scan(&scanner(ScoreMode::Strict), text)
 }
 
 /// `(label, text)` of every evidence span.
@@ -292,7 +296,7 @@ fn strict_class_and_confidence_stay_as_before() {
 
 #[test]
 fn scored_modes_resolve_instead_of_marking() {
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let scanner = scanner(mode);
         for text in [
             "IBAN: DE94 5001 0517 5401 2345 65",
@@ -352,7 +356,7 @@ fn golden_texts() -> Vec<String> {
 
 #[test]
 fn every_secondary_entry_on_a_golden_is_a_card_or_account_inside_a_reported_iban() {
-    let scanner = scanner(PiiMode::Strict);
+    let scanner = scanner(ScoreMode::Strict);
     let mut marked = 0;
     for text in golden_texts() {
         let result = scan(&scanner, &text);
@@ -435,7 +439,7 @@ fn bilingual_secondary_probes_mark_their_rule() {
         "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
     ))
     .unwrap();
-    let scanner = scanner(PiiMode::Strict);
+    let scanner = scanner(ScoreMode::Strict);
     let mut probed = BTreeSet::new();
     for probe in probes.iter().filter(|probe| probe.category == "pii") {
         let Some(secondary) = &probe.secondary else {

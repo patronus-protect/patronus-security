@@ -45,16 +45,21 @@ credential/secret DLP rules by default; other DLP families are opt-in through ru
 
 ### Model-backed L1 (`shell_command`)
 
-`shell_command` scores a shell command or full script (POSIX/Bash, PowerShell, Windows CMD) for
-risk. The **caller** declares that the input is a command by choosing this category (for example
-from a PreToolUse hook for a Bash tool); it is not meant for prose. It runs natively in the L1
-phase — so also in distributed mode and with `max_level="l1"` — but is the one L1 detector that
-needs a downloaded model file: `cat-shell-risk-commander` (A1), a logistic regression over TF-IDF
-character n-grams and shell tokens (`model.json`, ~4 MB, no ONNX/tokenizer). ARK also scores a comments-stripped
-variant and keeps the max, to resist comment padding. It is text-only: it neither executes nor
-parses commands. Like every category it is available through the library, the HTTP API and the
-Cube Coordinator. See [Assets](../assets.md) and the
-[result schema](../reference/result-schema.md).
+`shell_command` ("Cat") decides on a shell command or full script (POSIX/Bash, PowerShell,
+Windows CMD): `allow`, `ask` or `block`. The **caller** declares that the input is a command by
+choosing this category (for example from a PreToolUse hook for a Bash tool); it is not meant for
+prose. It runs natively in the L1 phase — so also in distributed mode and with `max_level="l1"` —
+but is the one L1 detector that needs a downloaded bundle: `cat-shell-risk-commander` (K26), a
+logistic regression over TF-IDF character n-grams and shell tokens (4.4 MiB bundle, no
+ONNX/tokenizer). The verdict is the stricter of the model and Cedar policies over the command's
+facts (core policies, the bundle's DefenseClaw rules, and your own `.cedar` files). The command is
+never executed. In full Ark (library, HTTP API, Cube Coordinator) Cat is the `shell_command`
+category: no harness context or session; user policies and allowlist come from `policy_dirs` and
+`allowlist` (`set_shell_command_policy_config` in Rust and Python, `pipeline.shell_command` in the
+Ark API). Every Cat policy id is an L1 rule id in the shared `rules` gates. In Ark Core it is not a scan category but
+`Scanner::shell_verdict`, which also takes the harness context (cwd, home, repo root) and the facts
+of earlier commands (`prior_facts`). See [Check shell commands](../how-to/check-shell-commands.md),
+[Assets](../assets.md) and the [result schema](../reference/result-schema.md).
 
 ### Native + model-backed (L1 → L2 → L3)
 

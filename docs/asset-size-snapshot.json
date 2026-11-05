@@ -4,11 +4,13 @@
     "patronus-studio/cat-shell-risk-commander": {
       "files": {
         "LICENSE": 11358,
-        "manifest.json": 2603,
-        "model.json": 4425243
+        "config.json": 342,
+        "manifest.json": 4521,
+        "model.json": 4563864,
+        "policy_levels.json": 4423
       },
-      "last_modified": "2026-10-26T08:37:23.000Z",
-      "sha": "30d77a80f1ddb3c5c63d9b24c6f5083b15057813"
+      "last_modified": "2026-11-04T14:17:09.000Z",
+      "sha": "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f"
     },
     "patronus-studio/orca-sonar-document-classifier": {
       "files": {

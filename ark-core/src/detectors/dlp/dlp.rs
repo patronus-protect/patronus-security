@@ -12,8 +12,8 @@ use super::overlap::OverlapRules;
 pub use super::overlap::OverlapTier;
 use super::prefilter::{RulePrefilter, ValueClass, ValueRun};
 use super::rules::{self, ExampleCheck};
-use super::score::DlpMode;
 use super::{context, score};
+use crate::native::ScoreMode;
 
 /// A single DLP heuristic pattern (credentials / secrets).
 #[derive(Clone, Copy)]
@@ -377,23 +377,6 @@ pub fn overlap_tier(rule_id: &str) -> Option<OverlapTier> {
     rules::overlap_tier(rule_id)
 }
 
-/// Shared DLP rule defaults for Rust, Python, and HTTP gateway execution.
-pub fn default_rule_enabled(rule_id: &str) -> bool {
-    if !rule_id.starts_with("dlp_") {
-        return true;
-    }
-    if matches!(
-        rule_id,
-        "dlp_mcp_runtime_risk" | "dlp_mcp_policy" | "dlp_destructive_operation"
-    ) {
-        return false;
-    }
-    DLP_PATTERNS
-        .iter()
-        .find(|pattern| pattern.name == rule_id)
-        .is_none_or(|pattern| SECRET_GROUPS.contains(&pattern.entity_group))
-}
-
 /// Context facts for downstream DLP analysis. Anchors describe nearby content
 /// but never become findings by themselves.
 static DLP_ANCHOR_PATTERNS: &[AnchorPattern] = &[
@@ -731,7 +714,7 @@ impl DlpPipeline {
         texts.par_iter().map(|text| self.evaluate(text)).collect()
     }
 
-    /// Detect with an explicit output mode. `DlpMode::Strict` is identical to
+    /// Detect with an explicit output mode. `ScoreMode::Strict` is identical to
     /// the trait's `detect_prepared_with_options`.
     ///
     /// A scored mode scores every strict finding first, so that overlap
@@ -744,7 +727,7 @@ impl DlpPipeline {
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: F,
         explain: bool,
-        mode: DlpMode,
+        mode: ScoreMode,
     ) -> NativeDetection
     where
         F: Fn(&str) -> bool,

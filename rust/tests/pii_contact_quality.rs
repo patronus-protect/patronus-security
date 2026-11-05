@@ -17,13 +17,14 @@
 //!
 //! Validators are not loosened: an impossible date stays negative in every order.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::Value;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -31,7 +32,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -42,7 +46,7 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(rule id, matched value, carrier)` of every matched rule.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String, Option<String>)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String, Option<String>)> {
     scan(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -63,7 +67,7 @@ fn rules(text: &str, mode: PiiMode) -> Vec<(String, String, Option<String>)> {
 
 /// `rule_id` reports exactly `value` in `strict` and `balanced`.
 fn assert_reports(rule_id: &str, text: &str, value: &str) {
-    for mode in [PiiMode::Strict, PiiMode::Balanced] {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced] {
         let found = rules(text, mode);
         assert!(
             found
@@ -76,7 +80,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str) {
 
 /// No span of `label` in `strict`, `balanced` or `recall`.
 fn assert_silent(label: &str, text: &str) {
-    for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let spans: Vec<_> = scan(text, mode)
             .evidence_spans
             .into_iter()
@@ -212,7 +216,7 @@ fn a_form_printed_as_a_table_binds_its_key_cells() {
         ("pii_employee_id", "PN 201033"),
         ("pii_customer_id", "KD-88231"),
     ] {
-        for mode in [PiiMode::Strict, PiiMode::Balanced] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced] {
             assert!(
                 rules(text, mode).iter().any(|(rule, matched, carrier)| {
                     rule == rule_id && matched == value && carrier.as_deref() == Some("table")

@@ -9,13 +9,14 @@
 //! the other phone rules, which keep their spans; `strict` is unchanged. Reserved
 //! placeholder numbers (T01: NANP 555-01xx, `+1 000-000-0000`) stay positive.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::Value;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -23,7 +24,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -33,7 +37,7 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn phone_spans(text: &str, mode: PiiMode) -> Vec<String> {
+fn phone_spans(text: &str, mode: ScoreMode) -> Vec<String> {
     scan(text, mode)
         .evidence_spans
         .iter()
@@ -42,7 +46,7 @@ fn phone_spans(text: &str, mode: PiiMode) -> Vec<String> {
         .collect()
 }
 
-fn regional_rules(text: &str, mode: PiiMode) -> Vec<String> {
+fn regional_rules(text: &str, mode: ScoreMode) -> Vec<String> {
     scan(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -82,9 +86,9 @@ const POSITIVES: &[(&str, &str)] = &[
 fn regional_numbers_with_a_phone_term_are_reported_in_balanced() {
     for (text, value) in POSITIVES {
         assert!(
-            phone_spans(text, PiiMode::Balanced).contains(&(*value).to_owned()),
+            phone_spans(text, ScoreMode::Balanced).contains(&(*value).to_owned()),
             "{text:?}: {:?}",
-            phone_spans(text, PiiMode::Balanced)
+            phone_spans(text, ScoreMode::Balanced)
         );
     }
 }
@@ -93,7 +97,7 @@ fn regional_numbers_with_a_phone_term_are_reported_in_balanced() {
 fn strict_never_runs_the_regional_rule() {
     for (text, _) in POSITIVES {
         assert!(
-            regional_rules(text, PiiMode::Strict).is_empty(),
+            regional_rules(text, ScoreMode::Strict).is_empty(),
             "{text:?} in strict"
         );
     }
@@ -116,7 +120,7 @@ const NEGATIVES: &[&str] = &[
 
 #[test]
 fn regional_rule_stays_silent_on_hard_negatives() {
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         for text in NEGATIVES {
             assert!(
                 regional_rules(text, mode).is_empty(),
@@ -135,7 +139,7 @@ fn earlier_phone_rules_keep_their_spans() {
         ("Desk: +41 (0)96 471 07 95", "+41 (0)96 471 07 95"),
     ] {
         assert_eq!(
-            phone_spans(text, PiiMode::Balanced),
+            phone_spans(text, ScoreMode::Balanced),
             vec![value.to_owned()],
             "{text:?}"
         );
@@ -150,7 +154,7 @@ fn placeholder_numbers_stay_positive() {
         ("Phone: +1 000-000-0000", "+1 000-000-0000"),
         ("Phone: +1 555 0100 123", "+1 555 0100 123"),
     ] {
-        for mode in [PiiMode::Strict, PiiMode::Balanced] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced] {
             assert!(
                 phone_spans(text, mode).contains(&value.to_owned()),
                 "{text:?} in {mode:?}: {:?}",

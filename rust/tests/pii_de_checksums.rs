@@ -17,9 +17,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -32,10 +33,10 @@ const KVNR_CONTEXT_FREE: &str = "pii_health_insurance_number_de_context_free";
 const LANR: &str = "pii_physician_number_lanr_de";
 const LANR_PROXIMITY: &str = "pii_physician_number_lanr_de_proximity";
 const BSNR: &str = "pii_facility_number_bsnr_de";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -43,7 +44,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -54,7 +58,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every span with `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -64,7 +68,7 @@ fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -91,7 +95,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 }
 
 /// `rule_id` reports `value`, the only span of its label, in each of `modes`.
-fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
+fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[ScoreMode]) {
     let label = pattern(rule_id).entity_group;
     for &mode in modes {
         assert!(
@@ -108,7 +112,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
     }
 }
 
-fn assert_silent(text: &str, label: &str, modes: &[PiiMode]) {
+fn assert_silent(text: &str, label: &str, modes: &[ScoreMode]) {
     for &mode in modes {
         assert!(
             spans(text, mode, label).is_empty(),
@@ -280,8 +284,8 @@ fn the_de1_rules_have_their_label_validator_and_mode() {
         );
         assert_eq!(score::rule_score(rule), expected, "{rule_id}");
     }
-    let balanced = PiiMode::Balanced.min_score().unwrap();
-    let recall = PiiMode::Recall.min_score().unwrap();
+    let balanced = ScoreMode::Balanced.min_score().unwrap();
+    let recall = ScoreMode::Recall.min_score().unwrap();
     for rule_id in [RVNR_CONTEXT_FREE, KVNR_CONTEXT_FREE] {
         let rule = pattern(rule_id);
         assert!(
@@ -399,17 +403,17 @@ fn bare_kvnr_and_rvnr_are_reported_in_the_scored_modes_only() {
         ),
     ] {
         assert_reports(rule_id, text, value, &SCORED);
-        assert_silent(text, pattern(rule_id).entity_group, &[PiiMode::Strict]);
+        assert_silent(text, pattern(rule_id).entity_group, &[ScoreMode::Strict]);
     }
     // Bare, the value scores the check digit alone; a support term adds to it.
     assert_eq!(
-        spans("B123456782", PiiMode::Balanced, "HEALTH_INSURANCE_NUMBER"),
+        spans("B123456782", ScoreMode::Balanced, "HEALTH_INSURANCE_NUMBER"),
         [("B123456782".to_owned(), 0.55)]
     );
     assert_eq!(
         spans(
             "Die Versichertennummer lautet B123456782",
-            PiiMode::Balanced,
+            ScoreMode::Balanced,
             "HEALTH_INSURANCE_NUMBER"
         ),
         [("B123456782".to_owned(), 0.80)]
@@ -462,7 +466,7 @@ fn a_lanr_near_its_term_is_reported_in_the_scored_modes() {
         ("{\"arztnummer\": \"765432203\"}", "765432203"),
     ] {
         assert_reports(LANR_PROXIMITY, text, value, &SCORED);
-        assert_silent(text, "PHYSICIAN_NUMBER_LANR", &[PiiMode::Strict]);
+        assert_silent(text, "PHYSICIAN_NUMBER_LANR", &[ScoreMode::Strict]);
     }
 }
 

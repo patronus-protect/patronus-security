@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use patronus_ark::DlpMode;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::dlp::dlp::{overlap_tier, OverlapTier, DLP_PATTERNS},
     golden_recipes::{materialize, GeneratorSet, SecretRecipe},
@@ -670,7 +670,7 @@ fn scored_modes_resolve_overlaps_like_strict() {
         "stripe_secret_test_long",
         15,
     );
-    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let gateway = SecurityGateway::with_max_level(
             vec![SecurityCategory::Dlp],
             SecurityLevel::L1,
@@ -678,7 +678,10 @@ fn scored_modes_resolve_overlaps_like_strict() {
             false,
         );
         gateway.set_execution_gates(ScanGateMatrix {
-            dlp_mode: mode,
+            native: patronus_ark::NativeGates {
+                dlp_mode: mode,
+                ..Default::default()
+            },
             ..ScanGateMatrix::default()
         });
         let result = gateway

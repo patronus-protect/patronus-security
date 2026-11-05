@@ -4,7 +4,7 @@ version = "0.1.14"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
-readme = "../README.md"
+readme = "README.md"
 license = "GPL-3.0-only"
 repository = "https://github.com/patronus-protect/patronus-security"
 homepage = "https://github.com/patronus-protect/patronus-security"
@@ -48,6 +48,7 @@ onnx-tensorrt = ["ort/tensorrt", "patronus-ark-core/onnx-tensorrt"]
 [dev-dependencies]
 patronus-ark = { path = ".", features = ["test-util"] }
 serde_yaml = "0.9"
+flate2 = "1"
 
 # Runs the evaluator's unit tests (span offsets) with `cargo test`.
 [[example]]

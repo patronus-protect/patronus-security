@@ -1,8 +1,8 @@
 # Native detectors (L1)
 
-Native detectors are the rule-based Rust checks that make up **L1**. They need no model
-assets and are available fully offline. Their runtime scales with the input and enabled rule
-inventory: short inputs are cheap, while sufficiently large inputs can take milliseconds rather
+Native detectors are the rule-based Rust checks that make up **L1**. Except for
+[`shell_command`](#shell-command), they need no model assets and are available fully offline.
+Their runtime scales with the input and enabled rule inventory: short inputs are cheap, while sufficiently large inputs can take milliseconds rather
 than microseconds. This page catalogues the detectors by family. The source lives under
 [`ark-core/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/detectors)
 and [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/threat).
@@ -119,17 +119,18 @@ open-vocabulary entity extraction (names, organizations, locations, …) use the
 
 ## Shell command
 
-The `shell_command` category is the one L1 detector that needs a downloaded model file:
-`cat-shell-risk-commander` (A1), a logistic regression over two TF-IDF blocks, character n-grams
-(char_wb 3–5) and shell tokens with pipe, redirect and command markers (`PIPE->jq` vs. `PIPE->sh`),
-loaded from `model.json` (SHA-256 checked against `manifest.json`). It scores a caller-declared shell
-command or script (POSIX/Bash, PowerShell, CMD) and returns `shell_risk` or `safe`. Because the
-model loses recall behind long comment padding, ARK also scores a variant with `#` comments,
-PowerShell `<# #>` blocks, and CMD `REM`/`::` lines blanked (quote-aware, offsets preserved) and
-keeps the higher score. Flagged results carry up to three `shell_risk` evidence spans over the
-n-gram regions that pushed the score up, or the whole trimmed command when only the shell tokens
-did. Disable it with the model gate
-`{"cat-shell-risk-commander": false}`. See [Categories](categories.md#model-backed-l1-shell_command).
+The `shell_command` category ("Cat") is the one L1 detector that needs a downloaded bundle:
+`cat-shell-risk-commander` (K26), a logistic regression over TF-IDF character n-grams and shell
+tokens, loaded from `model.json` and checked against the pinned `manifest.json`. It decides on a
+caller-declared shell command or script (POSIX/Bash, PowerShell, CMD): `allow`, `ask` or `block`.
+The verdict is the stricter of the model (ask above the 1 % false-positive cut, block above the
+0.1 % cut) and Cedar policies over the command's facts — the compiled-in `core` tier, the bundle's
+DefenseClaw rules (`bundle-default`) and your own `.cedar` files (`user`). A fired policy can raise
+the decision but never lower it. The command is never executed. The category result has
+`class_name` `shell_risk` (ask or block) or `safe` (allow) and up to three `shell_risk` evidence
+spans. Disable it with the model gate `{"cat-shell-risk-commander": false}`. See
+[Check shell commands](../how-to/check-shell-commands.md) and
+[Categories](categories.md#model-backed-l1-shell_command).
 
 ## Language and evidence guarantees
 
@@ -159,7 +160,7 @@ producer:
 
 ```python
 scanner.set_execution_gates({
-    "levels": {"l1": True, "l2": False, "l3": False},
+    "l1": True, "l2": False, "l3": False,
     "models": {"native:instruction_override": False},
     "rules": {"pii_employee_id": False, "dlp_sql_statement": False},
 })

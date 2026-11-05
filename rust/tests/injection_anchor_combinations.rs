@@ -54,7 +54,7 @@ fn semantic_anchor_combinations_de_en() {
                 assert_eq!(&text[span.start_byte..span.end_byte], span.text);
             }
             let mut gates = ScanGateMatrix::all_enabled();
-            gates.rules.insert(id.clone(), false);
+            gates.native.rules.insert(id.clone(), false);
             gateway.set_execution_gates(gates);
             let result = gateway
                 .scan_category(SecurityCategory::Injection, text)
@@ -93,7 +93,7 @@ fn semantic_anchor_combinations_de_en() {
                 !has_rule(&enabled.layers[0].details["l1_candidates"], &id),
                 "{text}"
             );
-            gates.rules.insert(id, false);
+            gates.native.rules.insert(id, false);
         }
         gateway.set_execution_gates(gates);
         let baseline = gateway

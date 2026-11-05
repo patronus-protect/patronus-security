@@ -760,7 +760,7 @@ Python:
 
 ```python
 scanner.set_execution_gates({
-    "levels": {"l1": True, "l2": False, "l3": False},
+    "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
     "rules": {"pii_email": False, "dlp_password_assignment": False},
 })

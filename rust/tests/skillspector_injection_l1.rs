@@ -63,7 +63,7 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
                 assert_eq!(&text[s.start_byte..s.end_byte], s.text);
             }
             let mut gates = ScanGateMatrix::all_enabled();
-            gates.rules.insert(case.rule_id.clone(), false);
+            gates.native.rules.insert(case.rule_id.clone(), false);
             gateway.set_execution_gates(gates);
             let disabled = gateway.scan_category(SecurityCategory::Injection, text);
             assert!(!has_rule(

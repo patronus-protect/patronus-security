@@ -1,6 +1,6 @@
 #![cfg(feature = "wolf")]
 use patronus_ark_core::wolf::WolfConfig;
-use patronus_ark_core::{ScanChecks, ScanError, Scanner, ScannerConfig};
+use patronus_ark_core::{ScanError, Scanner, ScannerConfig, SecurityCategory};
 use std::{
     fs,
     path::PathBuf,
@@ -379,28 +379,14 @@ fn sensitive_data_scope_never_runs_enabled_wolf_inference() {
     let bundle = Bundle::new();
     let mut scanner = Scanner::new(bundle.config(0.0)).unwrap();
     let scoped = scanner
-        .scan_with_checks(
-            " a",
-            ScanChecks {
-                pii: true,
-                dlp: true,
-                injection: false,
-            },
-        )
+        .scan_categories(" a", &[SecurityCategory::Pii, SecurityCategory::Dlp])
         .unwrap();
     assert!(scoped.wolf.is_none());
     assert!(scoped.native.iter().all(|r| r.category != "injection"));
     let full = scanner.scan(" a").unwrap();
     assert!(full.wolf.unwrap().matched);
     assert!(scanner
-        .scan_with_checks(
-            " a",
-            ScanChecks {
-                pii: true,
-                dlp: true,
-                injection: false
-            }
-        )
+        .scan_categories(" a", &[SecurityCategory::Pii, SecurityCategory::Dlp])
         .unwrap()
         .wolf
         .is_none());

@@ -8,14 +8,15 @@
 //! mode. Unbalanced forms keep their previous span, the validator is unchanged:
 //! too few digits, repeated digits and masked numbers stay silent with parentheses.
 
-use patronus_ark::detectors::pii::{score::PiiMode, validators};
+use patronus_ark::detectors::pii::validators;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::Value;
 
-fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -23,7 +24,10 @@ fn scan(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -120,7 +124,7 @@ fn rejected_vectors_fail_the_unchanged_validator() {
 #[test]
 fn parenthesized_area_code_is_part_of_the_span_in_strict() {
     for (text, value) in PARENTHESIZED {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert!(
             rules(text, &result).contains(&("pii_phone_us".to_owned(), value.to_owned())),
             "{text}: {:?}",
@@ -132,7 +136,7 @@ fn parenthesized_area_code_is_part_of_the_span_in_strict() {
 
 #[test]
 fn parenthesized_area_code_is_part_of_the_span_in_scored_modes() {
-    for mode in [PiiMode::Balanced, PiiMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         for (text, value) in [
             ("Phone: (212) 736-4410", "(212) 736-4410"),
             ("Telefon: (415) 555-2671", "(415) 555-2671"),
@@ -151,7 +155,7 @@ fn parenthesized_area_code_is_part_of_the_span_in_scored_modes() {
 #[test]
 fn parenthesized_lookalikes_stay_silent() {
     for text in REJECTED {
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let result = scan(text, mode);
             assert!(
                 result.evidence_spans.is_empty(),
@@ -171,7 +175,7 @@ fn no_us_phone_span_is_cut_inside_parentheses() {
         ("Phone: +1 (415) 555-2671", "+1 (415) 555-2671"),
         ("Telefon: +1 (212) 736-4410", "+1 (212) 736-4410"),
     ] {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         let found = rules(text, &result);
         assert!(
             found.contains(&("pii_phone_us".to_owned(), value.to_owned()))
@@ -194,7 +198,7 @@ fn unbalanced_forms_keep_their_span() {
         ("Phone: (212 736 4410", "212 736 4410"),
         ("Phone: 415) 555-2671", "415) 555-2671"),
     ] {
-        let result = scan(text, PiiMode::Strict);
+        let result = scan(text, ScoreMode::Strict);
         assert_eq!(phone_spans(&result), vec![value.to_owned()], "{text}");
     }
 }
@@ -232,7 +236,7 @@ fn bilingual_span_probes_report_the_exact_value() {
         };
         assert_ne!(span.de.text, span.en.text, "translate {}", probe.rule_id);
         for ExactSpan { text, value } in [&span.de, &span.en] {
-            let result = scan(text, PiiMode::Strict);
+            let result = scan(text, ScoreMode::Strict);
             assert!(
                 rules(text, &result).contains(&(probe.rule_id.clone(), value.clone())),
                 "{}: {text:?}: {:?}",

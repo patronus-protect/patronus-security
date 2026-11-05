@@ -95,72 +95,13 @@ def _level_readiness_to_dict(readiness):
     }
 
 
-_PII_MODES = ("strict", "balanced", "recall")
-_DLP_MODES = ("strict", "balanced", "recall")
-
-
 def _execution_gates_json(execution_gates):
+    """Gates in the one gate schema; the native extension validates them."""
     if execution_gates is None:
         return None
     if not isinstance(execution_gates, dict):
         raise ValueError("execution_gates must be a dict")
-
-    normalized = {"levels": {}, "models": {}, "rules": {}}
-    if "explain" in execution_gates:
-        if not isinstance(execution_gates["explain"], bool):
-            raise ValueError("execution_gates['explain'] must be a bool")
-        normalized["explain"] = execution_gates["explain"]
-    if "pii_mode" in execution_gates:
-        if execution_gates["pii_mode"] not in _PII_MODES:
-            raise ValueError("execution_gates['pii_mode'] must be one of " + ", ".join(_PII_MODES))
-        normalized["pii_mode"] = execution_gates["pii_mode"]
-    if "dlp_mode" in execution_gates:
-        if execution_gates["dlp_mode"] not in _DLP_MODES:
-            raise ValueError("execution_gates['dlp_mode'] must be one of " + ", ".join(_DLP_MODES))
-        normalized["dlp_mode"] = execution_gates["dlp_mode"]
-    levels = execution_gates.get("levels", {})
-    models = execution_gates.get("models", execution_gates.get("model_areas", {}))
-    rules = execution_gates.get("rules", {})
-    l3_policy = execution_gates.get("l3")
-    conditional = execution_gates.get("conditional")
-
-    if not isinstance(levels, dict):
-        raise ValueError("execution_gates['levels'] must be a dict")
-    if not isinstance(models, dict):
-        raise ValueError("execution_gates['models'] must be a dict")
-    if not isinstance(rules, dict):
-        raise ValueError("execution_gates['rules'] must be a dict")
-    levels = dict(levels)
-    models = dict(models)
-    rules = dict(rules)
-
-    for key, value in execution_gates.items():
-        lowered = str(key).lower()
-        if lowered in {"l1", "l2"} or (lowered == "l3" and isinstance(value, bool)):
-            levels[key] = value
-
-    for key, value in levels.items():
-        if not isinstance(value, bool):
-            raise ValueError(f"execution_gates level {key!r} must be a bool")
-        normalized["levels"][str(key).lower()] = value
-    for key, value in models.items():
-        if not isinstance(value, bool):
-            raise ValueError(f"execution_gates model {key!r} must be a bool")
-        normalized["models"][str(key)] = value
-    for key, value in rules.items():
-        if not isinstance(value, bool):
-            raise ValueError(f"execution_gates rule {key!r} must be a bool")
-        normalized["rules"][str(key)] = value
-    if l3_policy is not None and not isinstance(l3_policy, bool):
-        if not isinstance(l3_policy, dict):
-            raise ValueError("execution_gates['l3'] must be a dict or bool")
-        normalized["l3"] = l3_policy
-    if conditional is not None:
-        if not isinstance(conditional, list):
-            raise ValueError("execution_gates['conditional'] must be a list")
-        normalized["conditional"] = conditional
-
-    return json.dumps(normalized)
+    return json.dumps(execution_gates)
 
 
 def _dynamic_pii_config_json(config):
@@ -211,12 +152,14 @@ class SecurityGateway:
         download_categories: Optional category allowlist for asset downloads.
             When omitted, every configured category may download if
             `download_files` is true.
-        execution_gates: Optional scan execution matrix. Use
-            `{"levels": {"l1": True, "l2": False, "l3": False},
+        execution_gates: Optional scan execution matrix in the gate schema
+            shared with the Ark API: `{"l1": True, "l2": False, "l3": False,
             "models": {"native:mcp_runtime_risk": False},
-            "rules": {"pii_email": False}}` to disable levels,
-            model/native scanner areas, or individual L1 rules for subsequent
-            scan calls.
+            "rules": {"pii_email": False, "cat.core.remote_to_exec": False}}`
+            disables levels, model/native scanner areas, or individual L1 rules
+            (Cat shell policies included) for subsequent scan calls; `pii_mode`,
+            `dlp_mode`, `explain`, `conditional` and the L3 worker policy
+            `l3_policy` complete it. Unknown keys raise `ValueError`.
             New classifier pipelines can be gated independently through
             `models`, for example `{"models": {"tool_action": False}}`.
         onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
@@ -388,7 +331,8 @@ class SecurityGateway:
         """Replace the gate matrix used by subsequent scan calls.
 
         Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
-        accepts `levels` and `models` dictionaries; model keys match result
+        uses the shared gate schema (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`,
+        `dlp_mode`, `explain`, `conditional`, `l3_policy`); model keys match result
         `model` values such as `native:mcp_runtime_risk`.
         """
         self.rust_gateway.set_execution_gates(_execution_gates_json(execution_gates))
@@ -435,6 +379,24 @@ class SecurityGateway:
         self.rust_gateway.set_dynamic_pii_config(_dynamic_pii_config_json(config))
         self._dynamic_pii_config = deepcopy(config)
         self._benchmark_gateway_config["dynamic_pii_config"] = deepcopy(config)
+
+    def set_shell_command_policy_config(
+        self,
+        policy_dirs: list[str] | None = None,
+        allowlist: dict[str, str] | None = None,
+    ):
+        """Replace the user policies and allowlist of the `shell_command` verdict.
+
+        `policy_dirs` are directories of user `*.cedar` policies, read in file-name
+        order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
+        Ark Core's `shell` config and the Ark API's `pipeline.shell_command`. A loaded
+        bundle applies the configuration at once, otherwise `warmup()` does. A refused
+        configuration raises `ValueError` and changes nothing.
+        """
+        self.rust_gateway.set_shell_command_policy_config(
+            None if policy_dirs is None else [str(path) for path in policy_dirs],
+            None if allowlist is None else dict(allowlist),
+        )
 
     def _new_benchmark_gateway(self, l3_strategy: str):
         """Create an isolated gateway for one benchmark strategy."""

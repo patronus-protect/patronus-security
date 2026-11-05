@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use super::*;
-use crate::{native::NativeEngine, ScanControl, ScanError, ScannerConfig};
+use crate::{
+    native::{NativeEngine, NativeGates, ScoreMode},
+    ScanControl, ScanError,
+};
 use std::{
     collections::HashMap,
     sync::{
@@ -11,10 +14,14 @@ use std::{
 
 #[test]
 fn registry_keeps_category_order_and_all_outer_gate_combinations() {
-    let engine = NativeEngine::new(&[Category::Pii, Category::Dlp, Category::Injection]);
+    let engine = NativeEngine::new(&[
+        SecurityCategory::Pii,
+        SecurityCategory::Dlp,
+        SecurityCategory::Injection,
+    ]);
     assert_eq!(
         engine
-            .producers(Category::Pii)
+            .producers(SecurityCategory::Pii)
             .iter()
             .map(|p| p.id())
             .collect::<Vec<_>>(),
@@ -22,7 +29,7 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
     );
     assert_eq!(
         engine
-            .producers(Category::Dlp)
+            .producers(SecurityCategory::Dlp)
             .iter()
             .map(|p| p.id())
             .collect::<Vec<_>>(),
@@ -37,7 +44,7 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
     );
     assert_eq!(
         engine
-            .producers(Category::Injection)
+            .producers(SecurityCategory::Injection)
             .iter()
             .map(|p| p.id())
             .collect::<Vec<_>>(),
@@ -64,13 +71,17 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
             "native:output_manipulation",
         ]
     );
-    for category in [Category::Pii, Category::Dlp, Category::Injection] {
+    for category in [
+        SecurityCategory::Pii,
+        SecurityCategory::Dlp,
+        SecurityCategory::Injection,
+    ] {
         for spec in engine.producers(category) {
             assert_eq!(spec.category(), category);
             for parent in [false, true] {
                 for model in [false, true] {
                     for rule in [false, true] {
-                        let mut policy = ScannerConfig::default();
+                        let mut policy = NativeGates::default();
                         policy.models.insert(spec.id().into(), model);
                         if let Some(id) = spec.parent {
                             policy.models.insert(id.into(), parent);
@@ -95,20 +106,25 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
 
 #[test]
 fn selected_categories_reuse_pipeline_state_and_preserve_internal_rule_policy() {
-    assert!(NativeEngine::new(&[]).producers(Category::Pii).is_empty());
-    let engine = NativeEngine::new(&[Category::Pii]);
-    assert!(engine.producers(Category::Dlp).is_empty());
-    assert!(engine.producers(Category::Injection).is_empty());
-    let producers = engine.producers(Category::Pii);
+    assert!(NativeEngine::new(&[])
+        .producers(SecurityCategory::Pii)
+        .is_empty());
+    let non_native = NativeEngine::new(&[SecurityCategory::ShellCommand, SecurityCategory::Threat]);
+    for category in super::super::NATIVE_CATEGORIES {
+        assert!(non_native.producers(category).is_empty());
+    }
+    assert!(non_native
+        .producers(SecurityCategory::ShellCommand)
+        .is_empty());
+    let engine = NativeEngine::new(&[SecurityCategory::Pii]);
+    assert!(engine.producers(SecurityCategory::Dlp).is_empty());
+    assert!(engine.producers(SecurityCategory::Injection).is_empty());
+    let producers = engine.producers(SecurityCategory::Pii);
     let spec = &producers[0];
     let source = format!("Kontakt: {}@{}", "alice", "example.org");
     let text = NativeText::new(&source);
-    for mode in [
-        pii::score::PiiMode::Strict,
-        pii::score::PiiMode::Balanced,
-        pii::score::PiiMode::Recall,
-    ] {
-        let policy = ScannerConfig {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let policy = NativeGates {
             pii_mode: mode,
             explain: true,
             ..Default::default()
@@ -135,10 +151,10 @@ fn selected_categories_reuse_pipeline_state_and_preserve_internal_rule_policy() 
         assert_eq!(actual.detection.details, expected.details);
         assert!(std::ptr::eq(
             producers.as_ptr(),
-            engine.producers(Category::Pii).as_ptr()
+            engine.producers(SecurityCategory::Pii).as_ptr()
         ));
     }
-    let mut disabled = ScannerConfig::default();
+    let mut disabled = NativeGates::default();
     disabled.rules.insert("pii_email".into(), false);
     assert!(engine
         .run_producer(spec, &text, &disabled, &ScanControl::default())
@@ -150,7 +166,7 @@ fn selected_categories_reuse_pipeline_state_and_preserve_internal_rule_policy() 
 
 fn probe(detect: Detect) -> NativeProducerSpec {
     NativeProducerSpec {
-        category: Category::Pii,
+        category: SecurityCategory::Pii,
         id: "test:probe",
         parent: None,
         rule: None,
@@ -175,7 +191,7 @@ fn disabled_producer_is_skipped_and_control_checks_bracket_active_detection() {
         observed.fetch_add(1, Ordering::Relaxed);
         clean_detection()
     }));
-    let mut policy = ScannerConfig::default();
+    let mut policy = NativeGates::default();
     policy.models.insert("test:probe".into(), false);
     let text = NativeText::new("text");
     if spec.enabled(&policy) {
@@ -208,14 +224,14 @@ fn producer_panic_preserves_payload_for_host_failure_policy() {
     let engine = NativeEngine::new(&[]);
     let spec = probe(Box::new(|_, _| panic!("producer sentinel")));
     assert!(
-        matches!(engine.run_producer(&spec, &NativeText::new("text"), &ScannerConfig::default(), &ScanControl::default()), Err(ScanError::Detector(message)) if message == "producer sentinel")
+        matches!(engine.run_producer(&spec, &NativeText::new("text"), &NativeGates::default(), &ScanControl::default()), Err(ScanError::Detector(message)) if message == "producer sentinel")
     );
     let spec = probe(Box::new(|_, _| std::panic::panic_any(42_u8)));
     assert!(matches!(
         engine.run_producer(
             &spec,
             &NativeText::new("text"),
-            &ScannerConfig::default(),
+            &NativeGates::default(),
             &ScanControl::default()
         ),
         Err(ScanError::Detector(message)) if message == "scanner panicked"
@@ -228,16 +244,16 @@ fn engines_share_the_pii_and_dlp_pipelines_compiled_once() {
     assert!(std::ptr::eq(dlp_pipeline(), dlp_pipeline()));
     let source = format!("Kontakt: {}@{}", "alice", "example.org");
     let text = NativeText::new(&source);
-    let policy = ScannerConfig::default();
+    let gates = NativeGates::default();
     let spans = |engine: &NativeEngine| {
-        let producers = engine.producers(Category::Pii);
+        let producers = engine.producers(SecurityCategory::Pii);
         engine
-            .run_producer(&producers[0], &text, &policy, &ScanControl::default())
+            .run_producer(&producers[0], &text, &gates, &ScanControl::default())
             .unwrap()
             .detection
             .evidence_spans
     };
-    let first = spans(&NativeEngine::new(&[Category::Pii]));
+    let first = spans(&NativeEngine::new(&[SecurityCategory::Pii]));
     assert!(!first.is_empty());
-    assert_eq!(first, spans(&NativeEngine::new(&[Category::Pii])));
+    assert_eq!(first, spans(&NativeEngine::new(&[SecurityCategory::Pii])));
 }

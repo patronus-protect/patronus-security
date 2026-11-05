@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    normalize_text as rust_normalize_text, CacheEncryptionConfig, CacheWriteMode,
-    ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend,
-    L3ClusteringStrategy, L3EarlyExitMode, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy,
-    L3Strategy, LabelScore, LayerResult, MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode,
-    PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix,
-    SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel,
-    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    detectors::shell::ShellPolicyConfig, normalize_text as rust_normalize_text,
+    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig,
+    ExecutionBackend, L3Strategy, LabelScore, LayerResult, MemoryCacheConfig, NtdbOperatingPoint,
+    OnnxBatchMode, PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult,
+    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
+    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
     SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
 };
 use pyo3::prelude::*;
@@ -182,6 +181,20 @@ impl SecurityGateway {
         self.inner
             .set_dynamic_pii_config(config)
             .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    #[pyo3(signature = (policy_dirs=None, allowlist=None))]
+    fn set_shell_command_policy_config(
+        &self,
+        policy_dirs: Option<Vec<PathBuf>>,
+        allowlist: Option<std::collections::BTreeMap<String, String>>,
+    ) -> PyResult<()> {
+        ShellPolicyConfig::load(
+            &policy_dirs.unwrap_or_default(),
+            &allowlist.unwrap_or_default(),
+        )
+        .and_then(|config| self.inner.set_shell_command_policy_config(config))
+        .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     fn scan_category(
@@ -441,368 +454,15 @@ fn parse_text_normalization_config_json(value: Option<&str>) -> PyResult<TextNor
     Ok(config)
 }
 
+/// Execution gates in the one gate schema of [`ScanGateMatrix`].
 fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMatrix>> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let parsed: serde_json::Value = serde_json::from_str(value)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
-    let object = parsed.as_object().ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err("execution_gates must be a JSON object")
-    })?;
-
-    let mut gates = ScanGateMatrix::default();
-    if let Some(explain) = object.get("explain") {
-        gates.explain = explain.as_bool().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.explain must be a boolean")
-        })?;
-    }
-    if let Some(mode) = object.get("pii_mode") {
-        gates.pii_mode = mode
-            .as_str()
-            .ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err("execution_gates.pii_mode must be a string")
-            })?
-            .parse()
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-    }
-    if let Some(mode) = object.get("dlp_mode") {
-        gates.dlp_mode = mode
-            .as_str()
-            .ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err("execution_gates.dlp_mode must be a string")
-            })?
-            .parse()
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-    }
-    if let Some(levels) = object.get("levels") {
-        let levels = levels.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")
-        })?;
-        for (level, enabled) in levels {
-            let enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "execution_gates.levels.{level} must be a boolean"
-                ))
-            })?;
-            let level = level
-                .parse::<SecurityLevel>()
-                .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            gates.set_level(level, enabled);
-        }
-    }
-    if let Some(models) = object.get("models") {
-        let models = models.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.models must be an object")
-        })?;
-        for (model, enabled) in models {
-            let enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "execution_gates.models.{model} must be a boolean"
-                ))
-            })?;
-            gates.set_model(model, enabled);
-        }
-    }
-    if let Some(rules) = object.get("rules") {
-        let rules = rules.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.rules must be an object")
-        })?;
-        for (rule, enabled) in rules {
-            let enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "execution_gates.rules.{rule} must be a boolean"
-                ))
-            })?;
-            gates.set_rule(rule, enabled);
-        }
-    }
-    if let Some(conditional) = object.get("conditional") {
-        let conditional =
-            serde_json::from_value::<Vec<ConditionalPipelineGate>>(conditional.clone())
-                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        gates
-            .set_conditional(conditional)
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-    }
-    if let Some(l3) = object.get("l3") {
-        let l3 = l3.as_object().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("execution_gates.l3 must be an object")
-        })?;
-        let mut policy = L3SchedulerPolicy::default();
-        if let Some(enabled) = l3.get("enabled") {
-            policy.enabled = enabled.as_bool().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.enabled must be a boolean",
-                )
-            })?;
-        }
-        if let Some(priority) = l3.get("priority") {
-            let priority = priority.as_array().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.priority must be an array",
-                )
-            })?;
-            policy.priority = priority
-                .iter()
-                .map(|value| {
-                    value
-                        .as_str()
-                        .map(|value| value.to_string())
-                        .ok_or_else(|| {
-                            pyo3::exceptions::PyValueError::new_err(
-                                "execution_gates.l3.priority entries must be strings",
-                            )
-                        })
-                })
-                .collect::<PyResult<Vec<_>>>()?;
-        }
-        if let Some(ttl_ms) = l3.get("ttl_ms") {
-            let ttl_ms = ttl_ms.as_object().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.ttl_ms must be an object",
-                )
-            })?;
-            for (key, value) in ttl_ms {
-                let ttl = value.as_u64().ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "execution_gates.l3.ttl_ms.{key} must be an integer"
-                    ))
-                })?;
-                policy.ttl_ms.insert(key.clone(), ttl);
-            }
-        }
-        if let Some(estimated_cost_ms) = l3.get("estimated_cost_ms") {
-            let estimated_cost_ms = estimated_cost_ms.as_object().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.estimated_cost_ms must be an object",
-                )
-            })?;
-            for (key, value) in estimated_cost_ms {
-                let cost = value.as_u64().filter(|value| *value > 0).ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "execution_gates.l3.estimated_cost_ms.{key} must be a positive integer"
-                    ))
-                })?;
-                policy.estimated_cost_ms.insert(key.clone(), cost);
-            }
-        }
-        if let Some(fairness_quantum_ms) = l3.get("fairness_quantum_ms") {
-            policy.fairness_quantum_ms = fairness_quantum_ms
-                .as_u64()
-                .filter(|value| *value > 0)
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err(
-                        "execution_gates.l3.fairness_quantum_ms must be a positive integer",
-                    )
-                })?;
-        }
-        if let Some(max_wait_ms) = l3.get("max_wait_ms") {
-            policy.max_wait_ms = max_wait_ms.as_u64().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.max_wait_ms must be a non-negative integer",
-                )
-            })?;
-        }
-        if let Some(degraded_factor) = l3.get("degraded_factor") {
-            let degraded_factor = degraded_factor.as_f64().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.degraded_factor must be a number",
-                )
-            })?;
-            if !(0.0..=1.0).contains(&degraded_factor) {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.degraded_factor must be between 0.0 and 1.0",
-                ));
-            }
-            policy.degraded_factor = degraded_factor;
-        }
-        if let Some(early_exit) = l3.get("early_exit") {
-            policy.early_exit = parse_l3_early_exit(early_exit.as_str().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.early_exit must be a string",
-                )
-            })?)?;
-        }
-        if let Some(progress) = l3.get("progress") {
-            policy.progress = parse_l3_progress(progress.as_str().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.progress must be a string",
-                )
-            })?)?;
-        }
-        if let Some(clustering) = l3.get("clustering").or_else(|| l3.get("execution")) {
-            policy.clustering = parse_l3_clustering(clustering.as_str().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.clustering/execution must be a string",
-                )
-            })?)?;
-        }
-        if let Some(representatives_per_cluster) = l3.get("representatives_per_cluster") {
-            policy.representatives_per_cluster =
-                parse_l3_cluster_count(representatives_per_cluster, "representatives_per_cluster")?;
-        }
-        if let Some(verify_representatives_per_cluster) =
-            l3.get("verify_representatives_per_cluster")
-        {
-            policy.verify_representatives_per_cluster = parse_l3_cluster_count(
-                verify_representatives_per_cluster,
-                "verify_representatives_per_cluster",
-            )?;
-        }
-        if let Some(min_similarity) = l3
-            .get("min_cluster_similarity")
-            .or_else(|| l3.get("min_similarity"))
-        {
-            policy.min_cluster_similarity =
-                parse_l3_similarity(min_similarity, "min_cluster_similarity")?;
-        }
-        if let Some(max_cluster_size) = l3.get("max_cluster_size") {
-            policy.max_cluster_size = parse_l3_cluster_count(max_cluster_size, "max_cluster_size")?;
-        }
-        if let Some(pipelines) = l3.get("pipelines") {
-            let pipelines = pipelines.as_object().ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "execution_gates.l3.pipelines must be an object",
-                )
-            })?;
-            for (name, value) in pipelines {
-                let pipeline =
-                    serde_json::from_value::<L3PipelinePolicy>(value.clone()).map_err(|error| {
-                        pyo3::exceptions::PyValueError::new_err(format!(
-                            "execution_gates.l3.pipelines.{name}: {error}"
-                        ))
-                    })?;
-                validate_l3_pipeline_policy(name, &pipeline)?;
-                policy.pipelines.insert(name.clone(), pipeline);
-            }
-        }
-        gates.set_l3_policy(policy);
-    }
-    Ok(Some(gates))
-}
-
-fn parse_l3_similarity(value: &serde_json::Value, field: &str) -> PyResult<f64> {
     value
-        .as_f64()
-        .filter(|similarity| (0.0..=1.0).contains(similarity))
-        .ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "execution_gates.l3.{field} must be between 0.0 and 1.0"
-            ))
+        .map(|value| {
+            serde_json::from_str(value).map_err(|error| {
+                pyo3::exceptions::PyValueError::new_err(format!("execution_gates: {error}"))
+            })
         })
-}
-
-fn validate_l3_pipeline_policy(name: &str, policy: &L3PipelinePolicy) -> PyResult<()> {
-    if name.trim().is_empty() {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "execution_gates.l3.pipelines keys must not be empty",
-        ));
-    }
-    for (field, value) in [
-        (
-            "representatives_per_cluster",
-            policy.representatives_per_cluster,
-        ),
-        (
-            "verify_representatives_per_cluster",
-            policy.verify_representatives_per_cluster,
-        ),
-        ("max_cluster_size", policy.max_cluster_size),
-    ] {
-        if value == Some(0) {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "execution_gates.l3.pipelines.{name}.{field} must be >= 1"
-            )));
-        }
-    }
-    if policy
-        .min_cluster_similarity
-        .is_some_and(|value| !(0.0..=1.0).contains(&value))
-    {
-        return Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "execution_gates.l3.pipelines.{name}.min_cluster_similarity must be between 0.0 and 1.0"
-        )));
-    }
-    if let Some(aggregation) = &policy.aggregation {
-        match aggregation {
-            patronus_ark::L3AggregationStrategy::AnyPositiveOrHighest {
-                positive_class,
-                threshold,
-            } => {
-                if positive_class.trim().is_empty() {
-                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                        "execution_gates.l3.pipelines.{name}.aggregation.positive_class must not be empty"
-                    )));
-                }
-                validate_l3_aggregation_threshold(name, *threshold)?;
-            }
-            patronus_ark::L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence {
-                threshold,
-            } => validate_l3_aggregation_threshold(name, *threshold)?,
-            patronus_ark::L3AggregationStrategy::MajorityVoteOrHighest => {}
-        }
-    }
-    Ok(())
-}
-
-fn validate_l3_aggregation_threshold(name: &str, threshold: f64) -> PyResult<()> {
-    if (0.0..=1.0).contains(&threshold) {
-        Ok(())
-    } else {
-        Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "execution_gates.l3.pipelines.{name}.aggregation.threshold must be between 0.0 and 1.0"
-        )))
-    }
-}
-
-fn parse_l3_cluster_count(value: &serde_json::Value, field: &str) -> PyResult<usize> {
-    let count = value.as_u64().ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!(
-            "execution_gates.l3.{field} must be a positive integer"
-        ))
-    })?;
-    if count == 0 {
-        return Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "execution_gates.l3.{field} must be >= 1"
-        )));
-    }
-    usize::try_from(count).map_err(|_| {
-        pyo3::exceptions::PyValueError::new_err(format!("execution_gates.l3.{field} is too large"))
-    })
-}
-
-fn parse_l3_early_exit(value: &str) -> PyResult<L3EarlyExitMode> {
-    match value {
-        "disabled" => Ok(L3EarlyExitMode::Disabled),
-        "class_stable" => Ok(L3EarlyExitMode::ClassStable),
-        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown execution_gates.l3.early_exit: {other}"
-        ))),
-    }
-}
-
-fn parse_l3_progress(value: &str) -> PyResult<L3ProgressMode> {
-    match value {
-        "disabled" => Ok(L3ProgressMode::Disabled),
-        "progress" => Ok(L3ProgressMode::Progress),
-        "provisional" => Ok(L3ProgressMode::Provisional),
-        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown execution_gates.l3.progress: {other}"
-        ))),
-    }
-}
-
-fn parse_l3_clustering(value: &str) -> PyResult<L3ClusteringStrategy> {
-    match value {
-        "disabled" => Ok(L3ClusteringStrategy::Disabled),
-        "rank_only" => Ok(L3ClusteringStrategy::RankOnly),
-        "representative" => Ok(L3ClusteringStrategy::Representative),
-        "verify_representative" => Ok(L3ClusteringStrategy::VerifyRepresentative),
-        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown execution_gates.l3.clustering: {other}"
-        ))),
-    }
+        .transpose()
 }
 
 #[pyclass]

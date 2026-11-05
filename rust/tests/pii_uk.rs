@@ -14,9 +14,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -29,10 +30,10 @@ const PASSPORT: &str = "pii_passport_number_uk";
 const PASSPORT_TWO_LETTERS: &str = "pii_passport_number_two_letters";
 const LICENCE: &str = "pii_driver_license_number_uk";
 const LICENCE_CONTEXT_FREE: &str = "pii_driver_license_number_uk_context_free";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -40,7 +41,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -51,7 +55,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every span with `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -61,7 +65,7 @@ fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -88,7 +92,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 }
 
 /// `rule_id` reports `value`, the only span of its label, in each of `modes`.
-fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
+fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[ScoreMode]) {
     let label = pattern(rule_id).entity_group;
     for &mode in modes {
         assert!(
@@ -105,7 +109,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
     }
 }
 
-fn assert_silent(text: &str, label: &str, modes: &[PiiMode]) {
+fn assert_silent(text: &str, label: &str, modes: &[ScoreMode]) {
     for &mode in modes {
         assert!(
             spans(text, mode, label).is_empty(),
@@ -320,8 +324,8 @@ fn the_uk_rules_have_their_label_strength_and_mode() {
     let licence_free = pattern(LICENCE_CONTEXT_FREE);
     assert!(licence_free.scored_only && !licence_free.captured_value);
 
-    let balanced = PiiMode::Balanced.min_score().unwrap();
-    let recall = PiiMode::Recall.min_score().unwrap();
+    let balanced = ScoreMode::Balanced.min_score().unwrap();
+    let recall = ScoreMode::Recall.min_score().unwrap();
     // The farthest term still clears the balanced threshold ...
     for rule_id in [NHS, PASSPORT] {
         assert!(score::score(pattern(rule_id), Context::Support { gap: 48 }) >= balanced);
@@ -437,14 +441,14 @@ fn bare_nino_in_one_case_is_reported_in_the_scored_modes_only() {
         ("Mitarbeiterin PR 482917 A, Standort London", "PR 482917 A"),
     ] {
         assert_reports(NINO_CONTEXT_FREE, text, value, &SCORED);
-        assert_silent(text, "NATIONALID", &[PiiMode::Strict]);
+        assert_silent(text, "NATIONALID", &[ScoreMode::Strict]);
     }
     for (text, value) in [
         ("hh 01 02 03 d", "hh 01 02 03 d"),
         ("AB123456C", "AB123456C"),
     ] {
         assert_eq!(
-            spans(text, PiiMode::Balanced, "NATIONALID"),
+            spans(text, ScoreMode::Balanced, "NATIONALID"),
             [(value.to_owned(), 0.50)]
         );
     }
@@ -558,12 +562,12 @@ fn bare_uk_driver_licence_is_reported_in_the_scored_modes_only() {
         ("Fahrer LEE99802123JA9MN, Depot Leeds", "LEE99802123JA9MN"),
     ] {
         assert_reports(LICENCE_CONTEXT_FREE, text, value, &SCORED);
-        assert_silent(text, "DRIVER_LICENSE_NUMBER", &[PiiMode::Strict]);
+        assert_silent(text, "DRIVER_LICENSE_NUMBER", &[ScoreMode::Strict]);
     }
     assert_eq!(
         spans(
             "MORGA657054SM9IJ",
-            PiiMode::Balanced,
+            ScoreMode::Balanced,
             "DRIVER_LICENSE_NUMBER"
         ),
         [("MORGA657054SM9IJ".to_owned(), 0.50)]

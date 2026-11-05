@@ -11,6 +11,91 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- **Breaking (API):** Python, the Ark API and Rust share one gate schema, the serde
+  `Deserialize` of `ScanGateMatrix` (unknown keys refused): native `rules`, `models`, `pii_mode`,
+  `dlp_mode`, `explain`; level switches `l1`, `l2`, `l3` (booleans); `conditional`; the L3 worker
+  policy `l3_policy`. Python `execution_gates` drops `levels` (use top-level `l1`/`l2`/`l3`), the
+  `model_areas` alias and the worker policy under `l3` (now `l3_policy`); the Ark API renames
+  `gates.policy` to `gates.l3_policy`. The `execution` alias of `clustering` (worker policy and
+  pipeline overrides) and Python's `min_similarity` alias are removed. Out-of-range L3 values
+  (zero counts or costs, fractions outside `0..=1`) are refused everywhere, in conditional
+  `l3_policy` overrides too; `ttl_ms`/`estimated_cost_ms` entries override the defaults per key in
+  both hosts. `L3SchedulerPolicy::validate` and `L3PipelinePolicy::validate` are public; the
+  hand-written Python gate parser and ark-api's `RawGates` are gone. ark-coordinator accepts the
+  same request schema as ark-api (`pii_mode`, `dlp_mode`, `chunk_overlap_tokens`, `l1`/`L1`/`1`
+  levels), checked by a shared fixture.
+- **Breaking (API):** `ShellRiskPipeline::verdict` and `ShellPolicies::evaluate` take an
+  `allows_rule` filter; `ShellConfig::policy_config` is replaced by
+  `ShellPolicyConfig::load(policy_dirs, allowlist)`. `Facts` and its parts carry a lifetime
+  (`Facts<'a>`) so parsed facts borrow their strings.
+- Cat policies are L1 rules with the id `cat.<policy id>` (`cat.core.*`, bundle-default policies
+  such as `cat.CMD-PIPE-CURL`, `cat.user.*`), gated by the same `rules` map as the other L1 rules
+  (Core `ScannerConfig`, `ScanGateMatrix.native`, per-request gates, Python, Ark API): `false`
+  turns a policy off, a missing id keeps it on, and core policies can be turned off too. Verdicts
+  keep reporting the policy id without the prefix. Disabled regex-gated policies are not evaluated.
+  The L1 rule catalog lists the 117 shipped policies (`#shell-command-policies`) with tier, scope
+  and level.
+- Python Core `Scanner.shell_verdict` takes `prior_facts` (the `facts` of earlier verdicts made
+  with `with_facts=True`); Rust parses them with `Facts::from_json`, which round-trips
+  `Facts::to_json` and `canonical_json`.
+- Full-Ark shell policies outside Rust, with Core's `policy_dirs`/`allowlist` keys: Python
+  `SecurityGateway.set_shell_command_policy_config(policy_dirs=None, allowlist=None)` (refused
+  configuration raises `ValueError` and changes nothing) and the Ark API server config
+  `pipeline.shell_command: {policy_dirs, allowlist}`, read at startup.
+- **Breaking (API):** Core and Ark share one category type. `SecurityCategory` serializes its
+  canonical name and deserializes every `FromStr` name, case-insensitively. Core's `Category` enum is
+  removed: `ScannerConfig.categories` is `Vec<SecurityCategory>`, `NativeEngine` and its producers
+  take `SecurityCategory` (`native::NATIVE_CATEGORIES` lists `pii`, `dlp`, `injection`), and Core
+  rejects other categories; `shell_command` points to `shell` and `Scanner::shell_verdict`. ark-api
+  parses `categories` by serde with the same names.
+- **Breaking (API):** Core per-call checks are a category selection, as in Ark's
+  `scan_categories`. `ScanChecks` and `Scanner::scan_with_checks` are removed; use
+  `Scanner::scan_categories(text, &[SecurityCategory])` and
+  `scan_with_control(text, &[SecurityCategory], &ScanControl)`; Wolf runs iff `injection` is
+  selected. Python: `Scanner.scan(text, *, categories=None, control=None)` replaces the
+  `pii=`/`dlp=`/`injection=` keywords.
+- **Breaking (API):** `PiiMode` and `DlpMode` are one `ScoreMode` (`patronus_ark::ScoreMode`,
+  `patronus_ark_core::native::ScoreMode`); the `pii_mode`/`dlp_mode` keys and values are unchanged.
+- **Breaking (API):** native rule, model, mode and `explain` gates are one Core struct,
+  `native::NativeGates`, with `default_rule_enabled` (moved from `detectors::dlp::dlp`).
+  `ScannerConfig.gates` and `ScanGateMatrix.native` hold it; the Core JSON/Python config keeps its
+  flat keys. The `NativePolicy` trait, `ScanGateMatrix::{allows_rule, allows_model}` and
+  `ScanExecution::{allows_rule, allows_model}` are removed; call them on `NativeGates`.
+- `SecurityLevel` deserializes every `FromStr` name (`L1`, `l1`, `1`, ...); output stays `L1`.
+- **Breaking (asset manifest, result shape, API):** `shell_command` switches to the K26
+  `cat-shell-risk-commander` bundle (revision `54617685bc2bc3b7f06ba0c7e7f86c2899940d1f`) and its
+  `patronus.verdict/1`: `max(model, Cedar policies)` on `allow < ask < block`. The detector moves
+  into `patronus-ark-core` (`detectors::shell`, same `patronus_ark::detectors::shell` path). The
+  model's token block is the `kf1` analyzer (shell tokens, legacy markers, `patronus.facts/1`
+  tokens). Core policies (`core.cedar`, compiled in), the translated DefenseClaw rules at their
+  gated levels and user policies from `.cedar` files run on the official `cedar-policy` crate.
+  The download adds `config.json` and `policy_levels.json`; the release manifest's sha256 is pinned
+  in the binary and every file read is checked against it. `layers[0].details` gains `decision`,
+  `bundle_score` and the full `verdict`; `variant`, `full_score` and `comments_stripped_score` are
+  gone (K26 scores the command as written). `ShellRiskPipeline::score` returns `Result`;
+  the `ShellRiskPipeline::with_threshold_policy` method, its `threshold_policy` field and the
+  G-format model loader are removed (the result detail `details.threshold_policy` stays);
+  `verdict(text, context, prior_facts)`, `configure`, `from_pinned_bundle_dir` and
+  `SecurityGateway::set_shell_command_policy_config` are new.
+- Ark Core runs Cat: `ScannerConfig.shell` (`ShellConfig`: bundle directory, manifest pin, user
+  `.cedar` policy directories, allowlist) and `Scanner::shell_verdict(command, context,
+  prior_facts)`, in Python `Scanner.shell_verdict(command, cwd=..., home=..., ...)`.
+  `Scanner::warmup` with `download: missing` fetches the pinned release
+  (`warmup::SHELL_REPOSITORY`, `SHELL_REVISION`, `SHELL_FILES`, `SHELL_MANIFEST_SHA256`, which
+  the full runtime's `SHELL_COMMAND_ASSET` now uses). New guide: *Check shell commands*; new
+  examples `ark-core/examples/core_scanner.rs` and `rust/examples/14_shell_command.rs`.
+- `detectors::shell::testing::write_synthetic_bundle` (feature `test-util`) writes the synthetic
+  K26 test bundle; the copies in the gateway and ark-api tests are removed.
+- Docs: the root README is a component map (Core → Ark → ark-api, ark-coordinator) with
+  quickstarts, real outputs and one "turn rules on and off" section for every surface; the Core and
+  Core Python READMEs are rewritten; `rust/README.md` is the new full-Ark README for the crate and
+  the `patronus-ark` PyPI package. New guide *Check shell commands*. Stale pages fixed: the A1 and
+  comment-stripping description of `shell_command`, Cat in Core vs. full Ark, the Package-v2 claim
+  in the asset docs, dead rule-catalog anchors (now stable `#dlp-regex-rules`), the contributor test
+  and release lists and the example index (`docs/USAGE.md`).
+  `ScanError::Asset` reads `asset error: …` (was `Wolf asset error: …`), as Cat uses it too.
+- Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
+  `evaluate_batch`); the shell detector implements it.
 - The native PII and DLP pipelines compile their rules once per process; every engine and
   gateway shares them instead of compiling all rule regexes again on construction. Detection is
   unchanged; building a gateway (and the debug test suite, which builds one per scan in many

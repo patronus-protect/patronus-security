@@ -1,4 +1,3 @@
-//! Shared native detectors plus legacy Ark shell scanning.
+//! Shared native detectors (including `shell`, the shell-command detector).
 pub use patronus_ark_core::detectors::*;
-pub mod shell;
 pub mod threat;

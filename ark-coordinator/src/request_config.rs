@@ -18,6 +18,8 @@ pub struct RequestScanConfig {
     #[serde(default)]
     ntdb_operating_point: Option<String>,
     #[serde(default)]
+    chunk_overlap_tokens: Option<i64>,
+    #[serde(default)]
     dynamic_pii: Option<DynamicPiiRequest>,
 }
 
@@ -64,33 +66,50 @@ struct DynamicPiiCondition {
     results: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+/// The worker's `SecurityLevel`: every name its `str::parse` accepts.
+#[derive(Debug, PartialEq, Eq)]
 enum SecurityLevel {
     L1,
     L2,
     L3,
 }
 
+impl<'de> Deserialize<'de> for SecurityLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        match name.to_lowercase().as_str() {
+            "1" | "l1" => Ok(Self::L1),
+            "2" | "l2" => Ok(Self::L2),
+            "3" | "l3" => Ok(Self::L3),
+            _ => Err(serde::de::Error::custom(format!(
+                "Unknown security level: {name}"
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ScoreMode {
+    Strict,
+    Balanced,
+    Recall,
+}
+
+/// Mirror of the worker's `ScanGateMatrix` gate schema.
 #[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 struct RawGates {
-    #[serde(default)]
     explain: bool,
-    #[serde(default)]
     l1: Option<bool>,
-    #[serde(default)]
     l2: Option<bool>,
-    #[serde(default)]
     l3: Option<bool>,
-    #[serde(default)]
     models: HashMap<String, bool>,
-    #[serde(default)]
     rules: HashMap<String, bool>,
-    #[serde(default)]
+    pii_mode: Option<ScoreMode>,
+    dlp_mode: Option<ScoreMode>,
     conditional: Vec<ConditionalGate>,
-    #[serde(default)]
-    policy: Option<RawL3Policy>,
+    l3_policy: Option<RawL3Policy>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,7 +156,7 @@ struct ResultCondition {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 struct RawL3Policy {
     enabled: Option<bool>,
     priority: Option<Vec<String>>,
@@ -148,7 +167,6 @@ struct RawL3Policy {
     degraded_factor: Option<f64>,
     early_exit: Option<L3EarlyExitMode>,
     progress: Option<L3ProgressMode>,
-    #[serde(alias = "execution")]
     clustering: Option<L3ClusteringStrategy>,
     representatives_per_cluster: Option<usize>,
     verify_representatives_per_cluster: Option<usize>,
@@ -184,7 +202,7 @@ enum L3ClusteringStrategy {
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct L3PipelinePolicy {
-    #[serde(default, alias = "execution")]
+    #[serde(default)]
     clustering: Option<L3ClusteringStrategy>,
     #[serde(default)]
     representatives_per_cluster: Option<usize>,
@@ -254,6 +272,12 @@ impl RequestScanConfig {
             ) {
                 return Err(format!("unknown NTDB operating point '{point}'"));
             }
+        }
+        if self
+            .chunk_overlap_tokens
+            .is_some_and(|tokens| !(0..=64).contains(&tokens))
+        {
+            return Err("config.chunk_overlap_tokens must be between 0 and 64".into());
         }
         if let Some(gates) = &self.gates {
             gates.validate()?;
@@ -385,11 +409,13 @@ impl RawGates {
             self.l3,
             &self.models,
             &self.rules,
+            &self.pii_mode,
+            &self.dlp_mode,
         );
         for gate in &self.conditional {
             gate.validate()?;
         }
-        if let Some(policy) = &self.policy {
+        if let Some(policy) = &self.l3_policy {
             policy.validate()?;
         }
         Ok(())
@@ -398,7 +424,7 @@ impl RawGates {
 
 impl ConditionalGate {
     fn validate(&self) -> Result<(), String> {
-        if matches!(self.level, SecurityLevel::L1) {
+        if self.level == SecurityLevel::L1 {
             return Err("conditional gates may only target L2 or L3".into());
         }
         if self
@@ -408,8 +434,7 @@ impl ConditionalGate {
         {
             return Err("conditional gate pipeline must not be empty".into());
         }
-        if self.l3_policy.is_some()
-            && (!matches!(self.level, SecurityLevel::L3) || self.pipeline.is_none())
+        if self.l3_policy.is_some() && (self.level != SecurityLevel::L3 || self.pipeline.is_none())
         {
             return Err("conditional l3_policy overrides require level L3 and a pipeline".into());
         }
@@ -474,26 +499,38 @@ impl RawL3Policy {
             self.enabled,
             &self.priority,
             &self.ttl_ms,
-            &self.estimated_cost_ms,
             self.max_wait_ms,
             &self.early_exit,
             &self.progress,
             &self.clustering,
-            self.representatives_per_cluster,
-            self.verify_representatives_per_cluster,
         );
-        if self.fairness_quantum_ms == Some(0) || self.max_cluster_size == Some(0) {
+        if [
+            self.fairness_quantum_ms.map(|value| value == 0),
+            self.representatives_per_cluster.map(|value| value == 0),
+            self.verify_representatives_per_cluster
+                .map(|value| value == 0),
+            self.max_cluster_size.map(|value| value == 0),
+        ]
+        .contains(&Some(true))
+            || self
+                .estimated_cost_ms
+                .as_ref()
+                .is_some_and(|costs| costs.values().any(|&cost| cost == 0))
+        {
             return Err(
-                "gates.policy fairness_quantum_ms and max_cluster_size must be positive".into(),
+                "gates.l3_policy counts, costs and fairness_quantum_ms must be positive".into(),
             );
         }
-        validate_fraction(self.degraded_factor, "gates.policy degraded_factor")?;
+        validate_fraction(self.degraded_factor, "gates.l3_policy degraded_factor")?;
         validate_fraction(
             self.min_cluster_similarity,
-            "gates.policy min_cluster_similarity",
+            "gates.l3_policy min_cluster_similarity",
         )?;
         if let Some(pipelines) = &self.pipelines {
-            for policy in pipelines.values() {
+            for (name, policy) in pipelines {
+                if name.trim().is_empty() {
+                    return Err("gates.l3_policy pipelines keys must not be empty".into());
+                }
                 policy.validate()?;
             }
         }
@@ -503,14 +540,15 @@ impl RawL3Policy {
 
 impl L3PipelinePolicy {
     fn validate(&self) -> Result<(), String> {
-        let _ = (
-            &self.clustering,
+        let _ = (&self.clustering, &self.early_exit);
+        if [
             self.representatives_per_cluster,
             self.verify_representatives_per_cluster,
-            &self.early_exit,
-        );
-        if self.max_cluster_size == Some(0) {
-            return Err("gates pipeline max_cluster_size must be positive".into());
+            self.max_cluster_size,
+        ]
+        .contains(&Some(0))
+        {
+            return Err("gates pipeline cluster counts must be positive".into());
         }
         validate_fraction(
             self.min_cluster_similarity,
@@ -567,10 +605,30 @@ mod tests {
             serde_json::from_value(serde_json::json!({"categories":["shell_command"]})).unwrap();
         assert!(shell.validate().is_ok());
         let bad_policy: RequestScanConfig = serde_json::from_value(serde_json::json!({
-            "gates":{"policy":{"degraded_factor":1.1}}
+            "gates":{"l3_policy":{"degraded_factor":1.1}}
         }))
         .unwrap();
         assert!(bad_policy.validate().is_err());
+    }
+
+    /// ark-api checks the same fixture (`routes::scan` tests).
+    #[test]
+    fn request_configs_match_the_shared_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../ark-api/tests/fixtures/scan_request_configs.json"
+        ))
+        .unwrap();
+        let check = |request: &Value| {
+            serde_json::from_value::<RequestScanConfig>(request.clone())
+                .map_err(|error| error.to_string())
+                .and_then(|request| request.validate())
+        };
+        for request in fixture["accepted"].as_array().unwrap() {
+            assert_eq!(check(request), Ok(()), "{request}");
+        }
+        for request in fixture["refused"].as_array().unwrap() {
+            assert!(check(request).is_err(), "{request} must be refused");
+        }
     }
 
     #[test]

@@ -159,6 +159,22 @@ impl SecurityCategory {
     }
 }
 
+/// Serializes the canonical [`SecurityCategory::as_str`] name.
+impl Serialize for SecurityCategory {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Deserializes every name [`str::parse`] accepts, case-insensitively.
+impl<'de> Deserialize<'de> for SecurityCategory {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 impl std::str::FromStr for SecurityCategory {
     type Err = String;
 
@@ -302,5 +318,28 @@ impl OnnxRuntimeOptions {
 impl Default for OnnxRuntimeOptions {
     fn default() -> Self {
         Self::constrained_cpu()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SecurityCategory;
+
+    #[test]
+    fn security_category_serde_accepts_from_str_names_and_writes_canonical_names() {
+        for (name, category) in [
+            ("PII", SecurityCategory::Pii),
+            ("dynamic_pii", SecurityCategory::DynamicPii),
+            ("shell-command", SecurityCategory::ShellCommand),
+        ] {
+            let parsed: SecurityCategory = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(parsed, category);
+            assert_eq!(serde_json::to_value(category).unwrap(), category.as_str());
+        }
+        assert_eq!(
+            serde_json::to_value(SecurityCategory::DynamicPii).unwrap(),
+            "dynamic-pii"
+        );
+        assert!(serde_json::from_value::<SecurityCategory>(serde_json::json!("nope")).is_err());
     }
 }

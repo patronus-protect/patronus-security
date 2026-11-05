@@ -9,16 +9,17 @@
 //! and `balanced` keep them negative (gold convention T01). Validators are not relaxed: a checksum that
 //! fails behind the obfuscation stays rejected.
 
-use patronus_ark::detectors::pii::score::{PiiMode, SPELLED_OUT_PENALTY_POINTS};
+use patronus_ark::detectors::pii::score::SPELLED_OUT_PENALTY_POINTS;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::Value;
 
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -26,7 +27,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -45,7 +49,7 @@ fn matched_rules(result: &SecurityScanResult) -> Vec<Value> {
 }
 
 /// `(label, text)` of every evidence span.
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -66,7 +70,7 @@ fn rule_on<'a>(rules: &'a [Value], text: &str, rule_id: &str, value: &str) -> Op
 
 /// Asserts that `rule_id` reports `value` (a substring of `text`) as `label` in
 /// `mode` with original byte and character offsets, and returns its rule entry.
-fn assert_reported(text: &str, label: &str, rule_id: &str, value: &str, mode: PiiMode) -> Value {
+fn assert_reported(text: &str, label: &str, rule_id: &str, value: &str, mode: ScoreMode) -> Value {
     let result = pii_result(text, mode);
     let start = text.find(value).unwrap();
     let span = result
@@ -278,9 +282,9 @@ fn checksums_decide_behind_the_obfuscation() {
         "IBAN",
         "pii_iban_de",
         "D E 8 9 3 7 0 4 0 0 4 4 0 5 3 2 0 1 3 0 0 0",
-        PiiMode::Recall,
+        ScoreMode::Recall,
     );
-    assert!(spans(invalid, PiiMode::Recall).is_empty());
+    assert!(spans(invalid, ScoreMode::Recall).is_empty());
 }
 
 #[test]
@@ -356,17 +360,17 @@ fn spelled_out_forms_are_reported_in_recall_only_below_the_plain_score() {
         ),
     ];
     for (text, label, rule_id, value, plain, kind) in cases {
-        for mode in [PiiMode::Strict, PiiMode::Balanced] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced] {
             assert!(
                 spans(text, mode).iter().all(|(found, _)| found != label),
                 "{mode}: {text:?}: {:?}",
                 spans(text, mode)
             );
         }
-        let rule = assert_reported(text, label, rule_id, value, PiiMode::Recall);
+        let rule = assert_reported(text, label, rule_id, value, ScoreMode::Recall);
         assert_eq!(obfuscation(&rule), vec![kind], "{text:?}");
         let plain_text = text.replace(value, plain);
-        let plain_rule = assert_reported(&plain_text, label, rule_id, plain, PiiMode::Recall);
+        let plain_rule = assert_reported(&plain_text, label, rule_id, plain, ScoreMode::Recall);
         let penalty = f64::from(SPELLED_OUT_PENALTY_POINTS) / 100.0;
         let (score, plain_score) = (
             rule["score"].as_f64().unwrap(),
@@ -376,7 +380,7 @@ fn spelled_out_forms_are_reported_in_recall_only_below_the_plain_score() {
             (plain_score - penalty - score).abs() < 1e-9,
             "{text:?}: {score} vs {plain_score}"
         );
-        let span = pii_result(text, PiiMode::Recall)
+        let span = pii_result(text, ScoreMode::Recall)
             .evidence_spans
             .into_iter()
             .find(|span| span.label == label)
@@ -467,7 +471,7 @@ fn bilingual_obfuscated_probes_report_in_strict() {
         };
         assert_ne!(obfuscated.de, obfuscated.en, "translate {}", probe.rule_id);
         for text in [&obfuscated.de, &obfuscated.en] {
-            let rules = matched_rules(&pii_result(text, PiiMode::Strict));
+            let rules = matched_rules(&pii_result(text, ScoreMode::Strict));
             assert!(
                 rules.iter().any(|rule| {
                     rule["rule_id"] == probe.rule_id.as_str() && !obfuscation(rule).is_empty()

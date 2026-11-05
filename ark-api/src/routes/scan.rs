@@ -16,7 +16,6 @@ use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use crate::auth::AuthenticatedKey;
-use crate::config::{parse_categories, RawGates};
 use crate::dto::{CompletionDto, QueuedScanResultDto};
 use crate::state::AppState;
 
@@ -26,11 +25,11 @@ const MAX_SCAN_INPUTS: usize = 64;
 #[serde(deny_unknown_fields)]
 pub struct RequestScanConfig {
     #[serde(default)]
-    categories: Option<Vec<String>>,
+    categories: Option<Vec<SecurityCategory>>,
     #[serde(default)]
     max_level: Option<SecurityLevel>,
     #[serde(default)]
-    gates: Option<RawGates>,
+    gates: Option<ScanGateMatrix>,
     #[serde(default = "empty_metadata")]
     metadata: Value,
     #[serde(default)]
@@ -78,7 +77,7 @@ fn resolve_request_config(
         Some(values) if values.is_empty() => {
             return Err("config.categories must not be empty".to_string())
         }
-        Some(values) => parse_categories(&values).map_err(|error| error.to_string())?,
+        Some(values) => values,
         None => defaults,
     };
     for category in &categories {
@@ -100,12 +99,7 @@ fn resolve_request_config(
         }
     }
 
-    let mut gates = match request.gates {
-        Some(gates) => gates
-            .into_gate_matrix()
-            .map_err(|error| error.to_string())?,
-        None => config.gates_for(key),
-    };
+    let mut gates = request.gates.unwrap_or_else(|| config.gates_for(key));
     if let Some(max_level) = request.max_level {
         if max_level < SecurityLevel::L3 {
             gates.l3 = Some(false);
@@ -479,6 +473,7 @@ mod tests {
                 download_files: false,
                 cache_dir: None,
                 default_gates: ScanGateMatrix::default(),
+                shell_command: None,
                 dynamic_pii: None,
                 onnx_runtime: patronus_ark::OnnxRuntimeOptions::default(),
                 l3_strategy: patronus_ark::L3Strategy::Multi,
@@ -486,6 +481,33 @@ mod tests {
             },
             key,
         )
+    }
+
+    /// The coordinator checks the same fixture (`ark-coordinator` request_config).
+    #[test]
+    fn request_configs_match_the_shared_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/scan_request_configs.json"
+        ))
+        .unwrap();
+        let (mut config, mut key) = config_and_key();
+        config.categories = ["injection", "dlp", "pii", "dynamic-pii", "shell_command"]
+            .iter()
+            .map(|name| name.parse().unwrap())
+            .collect();
+        key.allowed_categories = None;
+        let check = |request: &Value| {
+            serde_json::from_value::<RequestScanConfig>(request.clone())
+                .map_err(|error| error.to_string())
+                .and_then(|request| resolve_request_config(&config, &key, Some(request)))
+                .map(|_| ())
+        };
+        for request in fixture["accepted"].as_array().unwrap() {
+            assert_eq!(check(request), Ok(()), "{request}");
+        }
+        for request in fixture["refused"].as_array().unwrap() {
+            assert!(check(request).is_err(), "{request} must be refused");
+        }
     }
 
     #[test]
@@ -688,8 +710,9 @@ mod tests {
         let defaults = resolve_request_config(&config, &key, None).unwrap();
         assert!(!defaults
             .gates
+            .native
             .allows_rule("ark.injection.override.discard_prior"));
-        assert!(defaults.gates.allows_rule("pii_email"));
+        assert!(defaults.gates.native.allows_rule("pii_email"));
 
         let request: RequestScanConfig = serde_json::from_value(json!({
             "categories": ["injection"],
@@ -705,9 +728,11 @@ mod tests {
 
         assert!(overridden
             .gates
+            .native
             .allows_rule("ark.injection.override.discard_prior"));
         assert!(!overridden
             .gates
+            .native
             .allows_rule("ark.injection.exfil.external_sink"));
     }
 
@@ -780,20 +805,8 @@ mod tests {
             Instant::now().elapsed().as_nanos()
         ));
         let bundle = model_dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
-        std::fs::create_dir_all(&bundle).unwrap();
-        let model = std::fs::read(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../rust/tests/fixtures/shell_command_synthetic_model.json"),
-        )
-        .unwrap();
-        std::fs::write(
-            bundle.join("manifest.json"),
-            json!({"files": {"model.json": {"sha256": format!("{:x}", Sha256::digest(&model))}}})
-                .to_string(),
-        )
-        .unwrap();
-        std::fs::write(bundle.join("model.json"), model).unwrap();
-        std::fs::write(bundle.join("LICENSE"), "Apache-2.0").unwrap();
+        let manifest =
+            patronus_ark::detectors::shell::testing::write_synthetic_bundle(&bundle, None).unwrap();
         std::fs::write(
             bundle.join(".patronus-revision"),
             patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
@@ -811,6 +824,7 @@ mod tests {
             Some(model_dir.clone()),
             false,
         );
+        gateway.pin_shell_command_manifest_for_tests(manifest);
         gateway.warmup().unwrap();
         let state = AppState::new(config, gateway);
         let app = Router::new()
@@ -845,11 +859,13 @@ mod tests {
         assert_eq!(result["category"], "shell_command", "{payload}");
         assert_eq!(result["model"], "cat-shell-risk-commander");
         assert_eq!(result["level"], "L1");
-        assert!(matches!(
-            result["class_name"].as_str(),
-            Some("shell_risk" | "safe")
-        ));
         assert!(result["layers"][0]["details"]["decision_score"].is_f64());
+        // `rm -rf ~/.ssh` deletes secret material: a flagged verdict with facts.
+        assert_eq!(result["class_name"], "shell_risk", "{payload}");
+        assert_eq!(
+            result["layers"][0]["details"]["verdict"]["facts"]["segments"][0]["program"],
+            "rm"
+        );
         std::fs::remove_dir_all(model_dir).ok();
     }
 

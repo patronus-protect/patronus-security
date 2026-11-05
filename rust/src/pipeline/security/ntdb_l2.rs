@@ -46,7 +46,8 @@ pub(super) fn classifier_model_configs_for_category(
 ) -> Vec<NtdbL2ModelConfig> {
     match category {
         SecurityCategory::Injection => {
-            if execution.allows_model("injection") && execution.allows_model("wolf-defender-small")
+            if execution.gates().native.allows_model("injection")
+                && execution.gates().native.allows_model("wolf-defender-small")
             {
                 vec![NtdbL2ModelConfig {
                     category,
@@ -62,8 +63,11 @@ pub(super) fn classifier_model_configs_for_category(
             }
         }
         SecurityCategory::SensitiveDocument => {
-            if execution.allows_model("sensitive_document")
-                && execution.allows_model("orca-sonar-document-classifier")
+            if execution.gates().native.allows_model("sensitive_document")
+                && execution
+                    .gates()
+                    .native
+                    .allows_model("orca-sonar-document-classifier")
             {
                 vec![NtdbL2ModelConfig {
                     category,
@@ -111,9 +115,12 @@ pub(super) fn classifier_model_configs_for_category(
         ]
         .into_iter()
         .filter(|(model_id, _, _)| {
-            execution.allows_model("tool_tags")
-                && execution.allows_model("unified-v3-tool-tags")
-                && execution.allows_model(model_id)
+            execution.gates().native.allows_model("tool_tags")
+                && execution
+                    .gates()
+                    .native
+                    .allows_model("unified-v3-tool-tags")
+                && execution.gates().native.allows_model(model_id)
         })
         .map(|(model_id, env_key, package_name)| NtdbL2ModelConfig {
             category,
@@ -153,7 +160,9 @@ fn model_config(
     env_key: &'static str,
     package_name: &'static str,
 ) -> Vec<NtdbL2ModelConfig> {
-    if !execution.allows_model(category.as_str()) || !execution.allows_model(public_model) {
+    if !execution.gates().native.allows_model(category.as_str())
+        || !execution.gates().native.allows_model(public_model)
+    {
         return Vec::new();
     }
     vec![NtdbL2ModelConfig {
@@ -345,7 +354,10 @@ pub fn ntdb_l2_scan_result(
     );
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
-            || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
+            || execution
+                .gates()
+                .native
+                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
     let (result, layers) =
         ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3, &source_pipeline);
     let mut scan = scan_result(config.category, config.public_model, result, layers);

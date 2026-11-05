@@ -56,16 +56,13 @@ def validation_workload(path: Path, per_bucket: int = 14, seed: int = 42) -> lis
 
 def request_config(categories: list[str], ntdb_operating_point: str) -> dict:
     gates = execution_gates()
-    levels = gates.pop("levels")
-    gates.update(levels)
     gates["models"]["gliner_small-v2.5-edge"] = False
     gates["models"]["routing"] = False
     gates["models"]["unified-v3-routing"] = False
-    gates["policy"] = {
+    gates["l3_policy"] = {
         "clustering": "representative",
         "representatives_per_cluster": 1,
     }
-    gates.pop("l3", None)
     gates["conditional"] = []
     return {
         "categories": categories,

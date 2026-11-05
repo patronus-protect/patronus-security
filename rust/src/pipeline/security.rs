@@ -12,7 +12,11 @@ use std::time::Instant;
 use super::decision_cache::DecisionCache;
 use crate::{
     assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
-    detectors::{shell::shell_risk::ShellRiskPipeline, threat::ThreatPipeline, NativeDetection},
+    detectors::{
+        shell::{ShellPolicyConfig, ShellRiskPipeline},
+        threat::ThreatPipeline,
+        NativeDetection,
+    },
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
@@ -23,8 +27,8 @@ use crate::{
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 use patronus_ark_core::{
-    native::{NativeEngine, NativePolicy, NativeProducerOutcome},
-    Category as NativeCategory, ScanControl, ScanError,
+    native::{NativeEngine, NativeProducerOutcome},
+    ScanControl, ScanError,
 };
 
 mod direct_l3;
@@ -39,33 +43,6 @@ pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, Ntd
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision};
 
 const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
-
-fn native_category(category: SecurityCategory) -> Option<NativeCategory> {
-    match category {
-        SecurityCategory::Pii => Some(NativeCategory::Pii),
-        SecurityCategory::Dlp => Some(NativeCategory::Dlp),
-        SecurityCategory::Injection => Some(NativeCategory::Injection),
-        _ => None,
-    }
-}
-
-impl NativePolicy for ScanExecution {
-    fn allows_model(&self, id: &str) -> bool {
-        ScanExecution::allows_model(self, id)
-    }
-    fn allows_rule(&self, id: &str) -> bool {
-        ScanExecution::allows_rule(self, id)
-    }
-    fn explain(&self) -> bool {
-        self.gates().explain
-    }
-    fn pii_mode(&self) -> crate::PiiMode {
-        self.gates().pii_mode
-    }
-    fn dlp_mode(&self) -> crate::DlpMode {
-        self.gates().dlp_mode
-    }
-}
 
 fn distributed_unified_l3_fingerprint(base_dir: &std::path::Path) -> Result<String, String> {
     use std::io::Read;
@@ -264,6 +241,10 @@ pub struct SecurityGatewayCore {
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
+    /// User policies and allowlist of the `shell_command` verdict.
+    shell_command_policy_config: Mutex<ShellPolicyConfig>,
+    /// sha256 of the `shell_command` release manifest that warmup accepts.
+    shell_command_manifest_sha256: String,
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
@@ -412,8 +393,8 @@ fn native_engine_scan_result(
     // Keep Ark's existing result policy: only scored native PII/DLP update
     // confidence after evidence filtering. Other producer scores stay untouched.
     let scored = match model {
-        "native:pii" => execution.gates().pii_mode.min_score().is_some(),
-        "native:dlp" => execution.gates().dlp_mode.min_score().is_some(),
+        "native:pii" => execution.gates().native.pii_mode.min_score().is_some(),
+        "native:dlp" => execution.gates().native.dlp_mode.min_score().is_some(),
         _ => false,
     };
     if scored {
@@ -499,11 +480,7 @@ mod native_adapter_tests {
             None,
             false,
         );
-        for category in [
-            NativeCategory::Pii,
-            NativeCategory::Dlp,
-            NativeCategory::Injection,
-        ] {
+        for category in patronus_ark_core::native::NATIVE_CATEGORIES {
             assert!(gateway.native_engine.producers(category).is_empty());
         }
         assert!(gateway.threat_pipeline.is_some());
@@ -612,11 +589,7 @@ impl SecurityGateway {
     ) -> Result<Self, crate::CacheError> {
         let requests = Arc::new(RequestRegistry::default());
         let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
-        let native_categories: Vec<_> = categories
-            .iter()
-            .copied()
-            .filter_map(native_category)
-            .collect();
+        let native_engine = NativeEngine::new(&categories);
         let threat_pipeline = categories
             .contains(&SecurityCategory::Threat)
             .then(ThreatPipeline::new);
@@ -629,10 +602,13 @@ impl SecurityGateway {
             execution: Mutex::new(ScanExecution::new(max_level)),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
+            shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
+            shell_command_manifest_sha256: patronus_ark_core::warmup::SHELL_MANIFEST_SHA256
+                .to_string(),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
-            native_engine: NativeEngine::new(&native_categories),
+            native_engine,
             threat_pipeline,
             shell_command_pipeline: None,
             request_counter: AtomicU64::new(1),
@@ -735,7 +711,10 @@ impl SecurityGateway {
         let mut l3_models = match execution.l3_strategy() {
             crate::L3Strategy::Multi
                 if has_classifier_l3
-                    && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL) =>
+                    && execution
+                        .gates()
+                        .native
+                        .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL) =>
             {
                 vec![crate::ml::unified_onnx::UNIFIED_MODEL]
             }
@@ -748,7 +727,10 @@ impl SecurityGateway {
         };
         if self.categories.contains(&SecurityCategory::DynamicPii)
             && execution.allows_level(SecurityLevel::L3)
-            && execution.allows_model(DYNAMIC_PII_ASSET.model)
+            && execution
+                .gates()
+                .native
+                .allows_model(DYNAMIC_PII_ASSET.model)
         {
             l3_models.push(DYNAMIC_PII_ASSET.model);
         }
@@ -1184,6 +1166,35 @@ impl SecurityGateway {
         Ok(())
     }
 
+    /// Replace the user policies and allowlist of the `shell_command` verdict.
+    /// A loaded pipeline applies them at once (a refused configuration changes
+    /// nothing); otherwise `warmup` applies them.
+    pub fn set_shell_command_policy_config(&self, config: ShellPolicyConfig) -> Result<(), String> {
+        if let Some(pipeline) = &self.shell_command_pipeline {
+            pipeline.configure(&config)?;
+        }
+        *self
+            .shell_command_policy_config
+            .lock()
+            .expect("shell_command policy config mutex poisoned") = config;
+        Ok(())
+    }
+
+    /// Accept a `shell_command` bundle with this manifest instead of the
+    /// pinned release (synthetic bundles in tests).
+    #[cfg(feature = "test-util")]
+    pub fn pin_shell_command_manifest_for_tests(&mut self, manifest_sha256: impl Into<String>) {
+        self.shell_command_manifest_sha256 = manifest_sha256.into();
+    }
+
+    /// Return the configured `shell_command` user policies and allowlist.
+    pub fn shell_command_policy_config(&self) -> ShellPolicyConfig {
+        self.shell_command_policy_config
+            .lock()
+            .expect("shell_command policy config mutex poisoned")
+            .clone()
+    }
+
     /// Return the currently configured `dynamic-pii` settings.
     pub fn dynamic_pii_config(&self) -> DynamicPiiConfig {
         self.dynamic_pii_config
@@ -1205,7 +1216,10 @@ impl SecurityGateway {
     fn shell_command_configured(&self, execution: &ScanExecution) -> bool {
         self.categories.contains(&SecurityCategory::ShellCommand)
             && execution.allows_level(SecurityLevel::L1)
-            && execution.allows_model(SHELL_COMMAND_ASSET.model)
+            && execution
+                .gates()
+                .native
+                .allows_model(SHELL_COMMAND_ASSET.model)
     }
 
     fn level_enabled(&self, execution: &ScanExecution, level: SecurityLevel) -> bool {
@@ -1213,7 +1227,7 @@ impl SecurityGateway {
     }
 
     fn model_enabled(&self, execution: &ScanExecution, model: &str) -> bool {
-        execution.allows_model(model)
+        execution.gates().native.allows_model(model)
     }
 
     #[cfg(test)]
@@ -1238,34 +1252,32 @@ impl SecurityGateway {
         let category = input.category;
         let text = input.text.as_ref();
         let mut results = Vec::new();
-        if let Some(native_category) = native_category(category) {
-            if self.level_enabled(execution, SecurityLevel::L1) {
-                let control = ScanControl::default();
-                let native_results = self
-                    .native_engine
-                    .producers(native_category)
-                    .iter()
-                    .filter(|producer| producer.enabled(execution))
-                    .map(|producer| {
-                        run_measured_l1_detector(category, producer.id(), text.len(), || {
-                            native_engine_scan_result(
-                                category,
-                                producer.id(),
-                                text,
-                                self.native_engine
-                                    .run_producer(producer, prepared, execution, &control),
-                                execution,
-                            )
-                        })
+        let producers = self.native_engine.producers(category);
+        if !producers.is_empty() && self.level_enabled(execution, SecurityLevel::L1) {
+            let control = ScanControl::default();
+            let gates = &execution.gates().native;
+            let native_results = producers
+                .iter()
+                .filter(|producer| producer.enabled(gates))
+                .map(|producer| {
+                    run_measured_l1_detector(category, producer.id(), text.len(), || {
+                        native_engine_scan_result(
+                            category,
+                            producer.id(),
+                            text,
+                            self.native_engine
+                                .run_producer(producer, prepared, gates, &control),
+                            execution,
+                        )
                     })
-                    .collect::<Vec<_>>();
-                if category == SecurityCategory::Injection {
-                    if !native_results.is_empty() {
-                        results.push(injection_l1::aggregate(text, native_results));
-                    }
-                } else {
-                    results.extend(native_results);
+                })
+                .collect::<Vec<_>>();
+            if category == SecurityCategory::Injection {
+                if !native_results.is_empty() {
+                    results.push(injection_l1::aggregate(text, native_results));
                 }
+            } else {
+                results.extend(native_results);
             }
         }
         match category {
@@ -1285,7 +1297,7 @@ impl SecurityGateway {
                                     text,
                                     || {
                                         native.detect_prepared(prepared, |id| {
-                                            execution.allows_rule(id)
+                                            execution.gates().native.allows_rule(id)
                                         })
                                     },
                                 )
@@ -1306,7 +1318,9 @@ impl SecurityGateway {
                         || match self.shell_command_pipeline {
                             Some(ref pipeline) => {
                                 timed_native_detection_scan_result(category, model, text, || {
-                                    pipeline.detect(text)
+                                    pipeline.detect_with_rules(text, |id| {
+                                        execution.gates().native.allows_rule(id)
+                                    })
                                 })
                             }
                             None => scanner_error_scan_result(

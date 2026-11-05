@@ -20,14 +20,15 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -35,7 +36,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -46,7 +50,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(label, text, score)` of every span.
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -54,7 +58,7 @@ fn spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
         .collect()
 }
 
-fn document_spans(text: &str, mode: PiiMode) -> Vec<(String, String, f64)> {
+fn document_spans(text: &str, mode: ScoreMode) -> Vec<(String, String, f64)> {
     spans(text, mode)
         .into_iter()
         .filter(|(label, ..)| DOCUMENT_LABELS.contains(&label.as_str()))
@@ -68,7 +72,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
         .unwrap_or_else(|| panic!("unknown rule {rule_id}"))
 }
 
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 const DOCUMENT_LABELS: [&str; 2] = ["PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"];
 
 type Validator = fn(&str) -> bool;
@@ -181,11 +185,11 @@ fn each_document_has_its_own_scored_only_checksum_rule() {
         assert!(pattern.scored_only, "{rule}: strict stays bit-identical");
         assert!(!pattern.captured_value, "{rule}");
         assert!(
-            score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+            score::rule_score(pattern) >= ScoreMode::Balanced.min_score().unwrap(),
             "{rule}"
         );
         assert!(
-            score::score(pattern, Context::Counter) < PiiMode::Recall.min_score().unwrap(),
+            score::score(pattern, Context::Counter) < ScoreMode::Recall.min_score().unwrap(),
             "{rule}"
         );
     }
@@ -251,7 +255,10 @@ fn strict_reports_no_bare_document_number() {
             format!("Personalausweis Nr. {value}"),
             format!("Pass-Nr.: {value}"),
         ] {
-            assert!(document_spans(&text, PiiMode::Strict).is_empty(), "{text}");
+            assert!(
+                document_spans(&text, ScoreMode::Strict).is_empty(),
+                "{text}"
+            );
         }
     }
 }

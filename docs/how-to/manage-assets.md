@@ -52,11 +52,17 @@ skipped unless the environment variable is set.
 
 `shell_command` is the one L1 category with a model file. `prepare_assets()` / `warmup()` fetch
 `patronus-studio/cat-shell-risk-commander` (Apache-2.0) at pinned revision
-`30d77a80f1ddb3c5c63d9b24c6f5083b15057813` into
-`<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `model.json` ~4.4 MB,
-`LICENSE`, `.patronus-revision`). It honours `download_files` / `download_categories`; with
-downloads disabled and files missing, warmup fails with `missing shell_command assets ...
-downloads disabled`. At load, the SHA-256 of `model.json` is verified against `manifest.json`.
+`54617685bc2bc3b7f06ba0c7e7f86c2899940d1f` (K26) into
+`<model_dir>/shell_command/cat_shell_risk_commander/` (4.4 MiB: `manifest.json`, `config.json`,
+`model.json`, `policy_levels.json`, `LICENSE`, `.patronus-revision`). It honours
+`download_files` / `download_categories`; with downloads disabled and files missing, warmup fails
+with `missing shell_command assets ... downloads disabled`. At load, the SHA-256 of `manifest.json`
+must equal the one pinned in the binary (`patronus_ark_core::warmup::SHELL_MANIFEST_SHA256`), every file ARK reads is
+verified against `manifest.json`, and a release whose DefenseClaw rules or shell vocabulary differ
+from the copies ARK embeds is refused.
+
+Ark Core loads the same bundle from `ShellConfig.bundle_dir`; see
+[Check shell commands](check-shell-commands.md).
 
 ## Authenticated / rate-limited access
 

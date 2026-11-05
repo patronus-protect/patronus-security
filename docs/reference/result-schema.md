@@ -601,7 +601,7 @@ identifier and content rules carry no `subtype`.
 
 Subtypes marked planned have no rule yet; new rules for them report the listed group, so
 group filters and gates written for the existing groups keep covering them. The
-[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists the subtype of every rule.
+[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules) lists the subtype of every rule.
 
 ### DLP score and modes
 
@@ -643,35 +643,56 @@ then drops those below the threshold: its spans are always a subset of the `stri
 value dropped for its context does not free its range for a weaker rule. Each surviving
 `matched_rules` entry carries `score` and `context` (`bonus`, `penalty` and, if a term decided,
 `anchor` — the lexicon entry or `field` —, `side` and `distance`) next to the rule metadata.
-The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists base, context source and
+The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules) lists base, context source and
 score range per rule.
 
 ### Shell command results
 
 `shell_command` returns one L1 result with `model: "cat-shell-risk-commander"` and `class_name`
-`shell_risk` or `safe`. Its `confidence` is `sigmoid(|decision_score − threshold|)` — the
-distance from the threshold squashed into `0.5`–`1.0`, **not** a calibrated probability.
-`layers[0].details` contains:
+`shell_risk` (verdict `ask` or `block`) or `safe` (`allow`). The verdict is `max(model, policies)`
+on `allow < ask < block`: the model asks above the 1 % FPR cut and blocks above the 0.1 % FPR
+cut, and every fired Cedar policy sets at least its level. Its `confidence` is
+`sigmoid(|bundle_score − threshold|)` — the distance from the ask cut squashed into `0.5`–`1.0`,
+**not** a calibrated probability. `layers[0].details` contains:
 
 | Field | Meaning |
 | --- | --- |
-| `model` | `cat-shell-risk-commander`. |
-| `decision_score` | Raw logit of the scored variant. |
-| `threshold` / `threshold_policy` | Decision threshold and its policy (default `external_commands_1pct_fpr`, ≈1.15). |
-| `variant` | `full` or `comments_stripped` — whichever scored higher. |
-| `full_score` | Logit of the unmodified input. |
-| `comments_stripped_score` | Logit with comments blanked; present only when comments were found. |
+| `model` | Model name of the bundle (`k26`). |
+| `decision` | `allow`, `ask` or `block`. |
+| `decision_score` | Raw logit of the model. |
+| `bundle_score` | The logit raised to the floor of the fired policies. |
+| `threshold` / `threshold_policy` | The ask cut and its policy (`external_commands_1pct_fpr`). |
+| `verdict` | The full `patronus.verdict/1`: cuts, model score and top features, fired policies (id, tier, title, decision, where), allowlisted policies and the `patronus.facts/1` of the command. |
+
+Policies are Cedar files in one format. The core tier ships compiled in
+(`ark-core/src/detectors/shell/data/core.cedar`) and cannot be lowered; user policies are `.cedar`
+files given to `SecurityGateway::set_shell_command_policy_config`
+(`ShellPolicyConfig::add_cedar_dir` reads a directory) or listed in the Core `ShellConfig.policy_dirs`
+(see [Check shell commands](../how-to/check-shell-commands.md)). Each policy is `forbid` only, carries
+`@id("user.…")` and `@decision("block")` or `@decision("ask")` (optional `@title`), applies to
+`Action::"segment"` or `Action::"command"` and is validated against the facts schema
+(`data/shell.cedarschema`):
+
+```cedar
+@id("user.no_kubectl_delete")
+@decision("block")
+forbid (principal, action == Action::"segment", resource)
+when { context.program == "kubectl" && context.verb == "DELETE" };
+```
+
+The allowlist of the same config lowers a bundle-default policy from `block` to `ask`.
 
 Flagged results carry up to three `evidence_spans` with label `shell_risk` over the character
 n-gram regions that pushed the score up; `score` is that region's share of the positive
-contribution.
+contribution. When only the token block or a policy flags the command, the span is the trimmed
+command.
 
 ## Async queue events
 
 `consume_next_event(timeout)` returns one event dict at a time (or `None` on timeout).
 `consume_events(timeout)` yields them. There are up to four `event_type`s: `result` and
 `finished` always, plus `progress` and `provisional` when L3 progress reporting is enabled
-(`execution_gates.l3.progress`, off by default). The blocking `scan_*` helpers only ever return
+(`execution_gates.l3_policy.progress`, off by default). The blocking `scan_*` helpers only ever return
 `result` / `finished`.
 
 ### `result`
@@ -729,7 +750,7 @@ event carries no verdict — never treat it as a result.
 
 Same shape as a `result` event's `result`, but an **interim preview** re-aggregated from the
 chunks resolved so far. It is non-authoritative and may be superseded by later `result` /
-`finished` events; only emitted when `execution_gates.l3.progress` is set to `"provisional"`.
+`finished` events; only emitted when `execution_gates.l3_policy.progress` is set to `"provisional"`.
 
 ### `finished`
 

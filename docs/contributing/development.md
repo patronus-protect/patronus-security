@@ -29,15 +29,15 @@ Re-run it after changing Rust code that the Python bindings touch.
 
 | Path | What lives here |
 | --- | --- |
-| `rust/src/` | The `patronus-ark` crate: gateway, queues, model pipelines, assets and legacy shell scanning. |
-| `ark-core/` | Synchronous native scanner and optional offline Wolf FP16; shared with the gateway. |
-| `ark-core/src/detectors/` | Shared native L1 detectors (injection, dlp, pii, mcp). |
+| `rust/src/` | The `patronus-ark` crate: gateway, queues, model pipelines and assets. |
+| `ark-core/` | Synchronous native scanner, optional offline Wolf (`fp16` or `int8_int4`) and Cat shell verdicts; shared with the gateway. |
+| `ark-core/src/detectors/`, `ark-core/src/threat/` | Shared native L1 detectors (injection, dlp, pii, mcp, shell) and the threat rules. |
 | `rust/src/pipeline/` | Gateway, per-category pipelines, L3 worker, strategies, caching. |
 | `rust/src/ml/`, `rust/src/assets/` | ONNX/NTDB execution and asset download/verify/cache. |
-| `rust/examples/`, `python/examples/` | Runnable examples for the six core flows (+ stress harnesses). |
+| `rust/examples/`, `python/examples/` | Runnable examples for the main flows. |
 | `rust/tests/`, `python/tests/` | Integration and unit tests. |
 | `python/patronus_ark/` | Python wrapper, benchmark harness, GLiNER category map. |
-| `scripts/generate_docs.py` | **Generates** `docs/{rust-api,python-api,assets}.md` — do not hand-edit those. |
+| `scripts/generate_docs.py` | **Generates** `docs/{rust-api,python-api,assets}.md` and `docs/reference/{l1-rule-catalog,l1-capabilities}.md` — do not hand-edit those. |
 | `docs/` | This documentation site (MkDocs Material). |
 
 ## Making a maintainer change
@@ -73,5 +73,5 @@ mkdocs serve      # http://127.0.0.1:8000
 mkdocs build --strict   # what CI runs
 ```
 
-The generated API reference pages (`docs/rust-api.md`, `docs/python-api.md`, `docs/assets.md`)
-come from `scripts/generate_docs.py` — edit the source comments/specs, not the Markdown.
+The generated pages (`docs/rust-api.md`, `docs/python-api.md`, `docs/assets.md`,
+`docs/reference/l1-rule-catalog.md`, `docs/reference/l1-capabilities.md`) come from `scripts/generate_docs.py` — edit the source comments/specs, not the Markdown.

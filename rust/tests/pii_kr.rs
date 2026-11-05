@@ -13,9 +13,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -29,10 +30,10 @@ const BRN: &str = "pii_brn_kr";
 const BRN_CONTEXT_FREE: &str = "pii_brn_kr_context_free";
 const CONTEXT_BOUND: [&str; 3] = [RRN, FRN, BRN];
 const CONTEXT_FREE: [&str; 3] = [RRN_CONTEXT_FREE, FRN_CONTEXT_FREE, BRN_CONTEXT_FREE];
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -40,7 +41,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -51,7 +55,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every span with `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -61,7 +65,7 @@ fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -88,7 +92,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 }
 
 /// `rule_id` reports `value`, the only span of its label, in each of `modes`.
-fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
+fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[ScoreMode]) {
     let label = pattern(rule_id).entity_group;
     for &mode in modes {
         assert!(
@@ -105,7 +109,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
     }
 }
 
-fn assert_silent(text: &str, label: &str, modes: &[PiiMode]) {
+fn assert_silent(text: &str, label: &str, modes: &[ScoreMode]) {
     for &mode in modes {
         assert!(
             spans(text, mode, label).is_empty(),
@@ -244,8 +248,8 @@ fn the_korean_rules_have_their_label_validator_and_mode() {
             assert!(!rule.captured_value, "{rule_id}");
         }
     }
-    let balanced = PiiMode::Balanced.min_score().unwrap();
-    let recall = PiiMode::Recall.min_score().unwrap();
+    let balanced = ScoreMode::Balanced.min_score().unwrap();
+    let recall = ScoreMode::Recall.min_score().unwrap();
     for rule_id in CONTEXT_BOUND {
         let rule = pattern(rule_id);
         assert!(rule.requires_context && !rule.scored_only, "{rule_id}");
@@ -376,9 +380,9 @@ fn bare_values_are_reported_in_the_scored_modes_only() {
     ] {
         assert_reports(rule_id, text, value, &SCORED);
         let label = pattern(rule_id).entity_group;
-        assert_silent(text, label, &[PiiMode::Strict]);
+        assert_silent(text, label, &[ScoreMode::Strict]);
         assert_eq!(
-            spans(text, PiiMode::Balanced, label),
+            spans(text, ScoreMode::Balanced, label),
             [(value.to_owned(), 0.55)],
             "{text}"
         );

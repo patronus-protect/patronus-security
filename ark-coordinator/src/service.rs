@@ -720,7 +720,7 @@ mod tests {
         for config in [
             r#"{"unknown":true}"#,
             r#"{"categories":["not-a-category"]}"#,
-            r#"{"gates":{"policy":{"degraded_factor":1.1}}}"#,
+            r#"{"gates":{"l3_policy":{"degraded_factor":1.1}}}"#,
         ] {
             let (state, redis_writes, cube_posts, _) = service_fixture(3).await;
             let response = router(state)

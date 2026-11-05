@@ -1,0 +1,83 @@
+{
+  "_comment": "Request `config` objects of POST /v1/scan. ark-api and ark-coordinator must both accept every `accepted` entry and refuse every `refused` entry (see request_config parity tests).",
+  "accepted": [
+    {},
+    {"categories": ["injection", "dlp"], "max_level": "l2"},
+    {"max_level": "L1", "gates": {"l1": true, "l2": false, "l3": false}},
+    {"max_level": "3", "ntdb_operating_point": "best-promote", "metadata": {"tenant": "a"}},
+    {
+      "categories": ["shell_command", "pii"],
+      "gates": {
+        "rules": {"pii_email": false, "cat.core.remote_to_exec": false, "cat.CMD-PIPE-CURL": false, "cat.user.ask_terraform": false},
+        "models": {"cat-shell-risk-commander": true},
+        "pii_mode": "recall",
+        "dlp_mode": "balanced",
+        "explain": true
+      }
+    },
+    {"categories": ["injection"], "chunk_overlap_tokens": 16},
+    {
+      "categories": ["injection", "dynamic-pii"],
+      "dynamic_pii": {"labels": ["person"], "execution_gate": {"type": "if_result_in", "pipeline": "injection", "results": ["attack"]}}
+    },
+    {
+      "gates": {
+        "conditional": [{
+          "level": "L3",
+          "pipeline": "injection",
+          "when": {"any": [{"metadata": {"path": "tenant", "equals": "a"}}, {"result": {"pipeline": "dlp", "classes": ["secret"], "min_confidence": 0.5}}]},
+          "l3_policy": {"clustering": "representative", "max_cluster_size": 4}
+        }],
+        "l3_policy": {
+          "enabled": true,
+          "priority": ["injection", "dynamic-pii"],
+          "ttl_ms": {"injection": 10000},
+          "estimated_cost_ms": {"injection": 60},
+          "fairness_quantum_ms": 20,
+          "max_wait_ms": 250,
+          "degraded_factor": 0.7,
+          "early_exit": "class_stable",
+          "progress": "disabled",
+          "clustering": "rank_only",
+          "representatives_per_cluster": 2,
+          "verify_representatives_per_cluster": 1,
+          "min_cluster_similarity": 0.9,
+          "max_cluster_size": 8,
+          "pipelines": {
+            "injection": {
+              "clustering": "representative",
+              "aggregation": {"type": "any_positive_or_highest", "positive_class": "attack", "threshold": 0.93},
+              "early_exit": "request_wide_positive"
+            },
+            "tool_class": {"aggregation": {"type": "majority_vote_or_highest"}, "early_exit": "head_stable"}
+          }
+        }
+      }
+    }
+  ],
+  "refused": [
+    {"extra": true},
+    {"categories": []},
+    {"metadata": []},
+    {"max_level": "L4"},
+    {"chunk_overlap_tokens": 65},
+    {"chunk_overlap_tokens": -1},
+    {"gates": {"levels": {"l1": true}}},
+    {"gates": {"model_areas": {"native:pii": false}}},
+    {"gates": {"policy": {"enabled": true}}},
+    {"gates": {"l3": {"enabled": true}}},
+    {"gates": {"pii_mode": "fast"}},
+    {"gates": {"rules": {"pii_email": "no"}}},
+    {"gates": {"l3_policy": {"execution": "rank_only"}}},
+    {"gates": {"l3_policy": {"degraded_factor": 1.1}}},
+    {"gates": {"l3_policy": {"fairness_quantum_ms": 0}}},
+    {"gates": {"l3_policy": {"representatives_per_cluster": 0}}},
+    {"gates": {"l3_policy": {"estimated_cost_ms": {"injection": 0}}}},
+    {"gates": {"l3_policy": {"pipelines": {"": {}}}}},
+    {"gates": {"l3_policy": {"pipelines": {"injection": {"execution": "representative"}}}}},
+    {"gates": {"l3_policy": {"pipelines": {"injection": {"max_cluster_size": 0}}}}},
+    {"gates": {"conditional": [{"level": "l1", "when": {"metadata": {"path": "a", "exists": true}}}]}},
+    {"gates": {"conditional": [{"level": "l3", "pipeline": "injection", "when": {"metadata": {"path": "a", "exists": true}}, "l3_policy": {"min_cluster_similarity": 1.5}}]}},
+    {"categories": ["pii"], "dynamic_pii": {"labels": ["person"]}}
+  ]
+}

@@ -46,8 +46,17 @@ pipeline:
     inter_threads: 1
     spinning: false
 
+  # User Cedar policies and allowlist of the `shell_command` verdict (Cat),
+  # with Ark Core's `shell` keys; read at startup. Needs `shell_command` in
+  # `categories`.
+  # shell_command:
+  #   policy_dirs: ["/etc/patronus/shell-policies"]
+  #   allowlist: {C2-WEBHOOK-SITE: ask}
+
   # Default execution gates for every scan (overridable per API key above).
-  # Mirrors `patronus_ark::ScanGateMatrix`: `l1`/`l2`/`l3` are top-level
+  # The one gate schema of `patronus_ark::ScanGateMatrix`, shared with the
+  # Python `execution_gates` and request `config.gates`; the L3 worker policy
+  # is `l3_policy`. `l1`/`l2`/`l3` are top-level
   # on/off switches (omit for "enabled"), `models` disables individual
   # native scanners or models by their result `model` name (e.g.
   # `native:mcp_runtime_risk`), `rules` enables/disables one stable L1 rule

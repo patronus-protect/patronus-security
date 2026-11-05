@@ -10,12 +10,10 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::{
-        dlp::{
-            dlp::{ValidatorStrength, DLP_PATTERNS},
-            score::DlpMode,
-        },
+        dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
         validators::{crc32_base62, BASE62},
     },
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
@@ -72,10 +70,10 @@ fn flip(value: &str, index: usize) -> String {
     chars.into_iter().collect()
 }
 
-fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
+fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
-        [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall].map(|mode| {
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
             let scanner = SecurityGateway::with_max_level(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
@@ -83,7 +81,10 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
+                native: patronus_ark::NativeGates {
+                    dlp_mode: mode,
+                    ..Default::default()
+                },
                 ..ScanGateMatrix::default()
             });
             scanner
@@ -97,11 +98,11 @@ fn mode_scan(text: &str, mode: DlpMode) -> SecurityScanResult {
 }
 
 fn scan(text: &str) -> SecurityScanResult {
-    mode_scan(text, DlpMode::Strict)
+    mode_scan(text, ScoreMode::Strict)
 }
 
 /// The unsuppressed `matched_rules` entry of `rule_id`, if it reported a value.
-fn entry(text: &str, rule_id: &str, mode: DlpMode) -> Option<serde_json::Value> {
+fn entry(text: &str, rule_id: &str, mode: ScoreMode) -> Option<serde_json::Value> {
     mode_scan(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -146,7 +147,7 @@ fn generated_tokens_are_reported_in_de_and_en_carriers() {
                 let text = carrier.replace("{}", &value);
                 assert!(reports_token(&text, &value), "{gen}/{seed}: {text:?}");
                 assert!(
-                    entry(&text, "dlp_github_token", DlpMode::Strict).is_some(),
+                    entry(&text, "dlp_github_token", ScoreMode::Strict).is_some(),
                     "{text:?}"
                 );
             }
@@ -202,7 +203,7 @@ fn bodies_of_another_length_are_no_github_token() {
                 for carrier in CARRIERS {
                     let text = carrier.replace("{}", &value);
                     assert!(
-                        entry(&text, "dlp_github_token", DlpMode::Strict).is_none(),
+                        entry(&text, "dlp_github_token", ScoreMode::Strict).is_none(),
                         "{text:?}"
                     );
                 }
@@ -232,7 +233,7 @@ fn an_underscore_in_the_body_is_no_github_token() {
     for carrier in CARRIERS {
         let text = carrier.replace("{}", &glued);
         assert!(
-            entry(&text, "dlp_github_token", DlpMode::Strict).is_none(),
+            entry(&text, "dlp_github_token", ScoreMode::Strict).is_none(),
             "{text:?}"
         );
     }
@@ -286,14 +287,14 @@ fn github_tokens_score_at_checksum_strength() {
     let entry_strict = entry(
         &format!("GITHUB_TOKEN={value}\n"),
         "dlp_github_token",
-        DlpMode::Strict,
+        ScoreMode::Strict,
     )
     .expect("token must match");
     assert_eq!(entry_strict["validator_strength"], "checksum");
     assert_eq!(entry_strict["severity"], "live");
     assert_eq!(entry_strict["provider"], "github");
     // Base 55 + checksum 35 without context.
-    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+    for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
         let bare = entry(&value, "dlp_github_token", mode).expect("bare token");
         assert_eq!(bare["score"].as_f64(), Some(0.9), "{mode:?}");
     }
@@ -308,7 +309,7 @@ fn fine_grained_tokens_have_82_characters_after_the_prefix() {
             let text = carrier.replace("{}", &value);
             assert!(reports_token(&text, &value), "{text:?}");
             assert!(
-                entry(&text, "dlp_github_pat", DlpMode::Strict).is_some(),
+                entry(&text, "dlp_github_pat", ScoreMode::Strict).is_some(),
                 "{text:?}"
             );
         }
@@ -316,7 +317,7 @@ fn fine_grained_tokens_have_82_characters_after_the_prefix() {
             for carrier in CARRIERS {
                 let text = carrier.replace("{}", wrong);
                 assert!(
-                    entry(&text, "dlp_github_pat", DlpMode::Strict).is_none(),
+                    entry(&text, "dlp_github_pat", ScoreMode::Strict).is_none(),
                     "{text:?}"
                 );
             }

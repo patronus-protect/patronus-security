@@ -19,14 +19,15 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, PiiMode, ValidatorStrength},
+    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-fn scanner(mode: PiiMode) -> SecurityGateway {
+fn scanner(mode: ScoreMode) -> SecurityGateway {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -34,7 +35,10 @@ fn scanner(mode: PiiMode) -> SecurityGateway {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -48,7 +52,7 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     scan(&scanner(mode), text)
 }
 
@@ -61,7 +65,7 @@ fn matched_rules(result: &SecurityScanResult) -> Vec<serde_json::Value> {
 }
 
 /// `(text, score)` of the spans of `label`.
-fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -77,7 +81,7 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
         .unwrap_or_else(|| panic!("unknown rule {rule_id}"))
 }
 
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 const STEUER_ID: &str = "pii_steuer_id_de_context_free";
 const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
@@ -259,13 +263,13 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         // (`pii_context_engine.rs`), as the Nigerian plate (Q-M1) ...
         assert!(
             ["pii_phone_regional", "pii_vehicle_registration_ng"].contains(&pattern.name)
-                || score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+                || score::rule_score(pattern) >= ScoreMode::Balanced.min_score().unwrap(),
             "{}",
             pattern.name
         );
         // ... and a nearer counter-context term drops it in every scored mode.
         assert!(
-            score::score(pattern, Context::Counter) < PiiMode::Recall.min_score().unwrap(),
+            score::score(pattern, Context::Counter) < ScoreMode::Recall.min_score().unwrap(),
             "{}",
             pattern.name
         );
@@ -402,9 +406,9 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         }
     }
     // Strict keeps the field-name rule for the Steuer-ID (K02).
-    assert!(spans("86095742719", PiiMode::Strict, "STEUERID").is_empty());
+    assert!(spans("86095742719", ScoreMode::Strict, "STEUERID").is_empty());
     assert_eq!(
-        spans("DE89370400440532013000", PiiMode::Strict, "IBAN"),
+        spans("DE89370400440532013000", ScoreMode::Strict, "IBAN"),
         [("DE89370400440532013000".to_string(), 1.0)]
     );
 }
@@ -428,7 +432,7 @@ fn strict_never_runs_a_scored_only_rule() {
         let row: serde_json::Value = serde_json::from_str(line).unwrap();
         texts.push(row["text"].as_str().unwrap().to_string());
     }
-    let strict = scanner(PiiMode::Strict);
+    let strict = scanner(ScoreMode::Strict);
     for text in texts {
         for rule in matched_rules(&scan(&strict, &text)) {
             assert!(
@@ -441,7 +445,7 @@ fn strict_never_runs_a_scored_only_rule() {
 
 #[test]
 fn bare_steuer_id_scores_its_context() {
-    let rule_of = |text: &str, mode: PiiMode| {
+    let rule_of = |text: &str, mode: ScoreMode| {
         matched_rules(&pii_result(text, mode))
             .into_iter()
             .find(|rule| rule["rule_id"] == STEUER_ID)
@@ -602,7 +606,7 @@ fn bare_slashed_tax_number_is_reported_in_the_scored_modes_only() {
             );
         }
         assert!(
-            spans(text, PiiMode::Strict, "TAX_NUMBER_DE").is_empty(),
+            spans(text, ScoreMode::Strict, "TAX_NUMBER_DE").is_empty(),
             "{text}"
         );
     }

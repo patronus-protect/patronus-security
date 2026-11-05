@@ -1,7 +1,8 @@
 # Testing
 
-The suite has Rust unit/integration tests and Python binding tests. CI runs both on pushes to
-`main` and on internal pull requests.
+The suite has Rust unit/integration tests for Ark, Ark Core, the API, the Cube Coordinator and
+the distributed protocol, plus Python binding tests for Ark and Ark Core. CI runs them on pushes
+to `main` and on internal pull requests, limited to the crates a change touches.
 
 ## Pre-release checks
 
@@ -19,14 +20,26 @@ Run these before merging or releasing — these mirror the correctness jobs in C
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 
+# Ark Core (CI: scripts/ci_rust_tests.py core / core-features / core-all-features)
+cargo test --locked -p patronus-ark-core --no-default-features
+cargo test --locked -p patronus-ark-core --features wolf
+cargo test --locked -p patronus-ark-core --features download
+cargo test --locked -p patronus-ark-core --all-features --lib
+
 # Rust unit + integration tests
 cargo test -p patronus-ark
 cargo test -p ark-api
+cargo test --locked -p ark-coordinator
+cargo test --locked -p ark-distributed-protocol
 
 # Python binding and benchmark-script tests
 .venv/bin/python -m unittest discover -s python/tests
 .venv/bin/python -m pytest scripts/tests -q
 .venv/bin/python scripts/generate_docs.py --check
+
+# Ark Core Python package (CI: core-python.yml, on a release wheel)
+.venv/bin/python -m maturin develop --manifest-path ark-core/python/Cargo.toml
+.venv/bin/python -m pytest ark-core/python/tests -q
 cargo deny check licenses
 ```
 
@@ -43,7 +56,8 @@ cargo deny check licenses
 | `l3_scheduler.rs` | L3 worker scheduling, fairness, max-wait. |
 | `unified_l3.rs` | Unified multi-head L3 behavior. |
 | `dynamic_pii.rs` | GLiNER dynamic-PII pipeline. |
-| `shell_command.rs` | `shell_command` scoring parity with scikit-learn (fixtures from `scripts/generate_shell_command_parity_fixtures.py`). |
+| `shell_command.rs` | `shell_command` gateway wiring: bundle checks, manifest pin, user `.cedar` policies. |
+| `shell_risk_parity.rs` | K26 shell-risk verdict parity with the Python reference (`kf1`, facts, policies, scores, verdict). |
 | `assets_manifest.rs` | Asset manifest integrity. |
 | `hf_e2e.rs` | End-to-end with real Hugging Face assets (needs network / `HF_TOKEN`). |
 
@@ -54,6 +68,12 @@ cargo deny check licenses
 | `test_public_api.py` | The public `SecurityGateway` surface and result shapes. |
 | `test_native_scanners.py` | Native scanning through the bindings. |
 | `test_benchmark_data.py` | Integrity of the shipped benchmark validation samples. |
+
+### Ark Core
+
+Unit tests live next to the code in `ark-core/src/` (detectors, threat rules, Wolf, Cat, scanner).
+`ark-core/python/tests/` (`test_scanner.py`, `test_concurrency.py`) covers the `patronus_ark_core`
+Python package. `ark-coordinator` and `ark-distributed-protocol` keep their tests in their crates.
 
 ## Token pipeline (no inference)
 

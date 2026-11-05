@@ -101,7 +101,13 @@ def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> li
     category = _field(block, "category").replace("SecurityCategory::", "")
     repo = _field(block, "repo").strip('"')
     destination = _field(block, "destination_path").strip('"')
-    files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
+    if "files: &[" in block:
+        files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
+    else:
+        # A `&[&str]` constant of `ark-core/src/warmup.rs`.
+        name = _field(block, "files").removeprefix("patronus_ark_core::warmup::")
+        constants = (ROOT / "ark-core/src/warmup.rs").read_text()
+        files_block = constants.split(f"pub const {name}: &[&str] = &[", 1)[1].split("];", 1)[0]
     return [
         Asset(
             category=category,
@@ -152,7 +158,7 @@ def _field(block: str, name: str) -> str:
     # Runtime and documentation use the same official model metadata.
     if "patronus_ark_core::warmup::" in value:
         constants = (ROOT / "ark-core/src/warmup.rs").read_text()
-        for constant, literal in re.findall(r'pub const (WOLF_\w+): &str\s*=\s*"([^"\n]+)";', constants):
+        for constant, literal in re.findall(r'pub const (\w+): &str\s*=\s*"([^"\n]+)";', constants):
             value = value.replace(f"patronus_ark_core::warmup::{constant}", json.dumps(literal))
     return value
 
@@ -417,6 +423,40 @@ DLP_RELATIONSHIP_RULES = [
 ]
 
 
+SHELL_DATA_DIR = ROOT / "ark-core/src/detectors/shell/data"
+CEDAR_POLICY_RE = re.compile(
+    r'@id\("(?P<id>[^"]+)"\)\s*@decision\("(?P<decision>[^"]+)"\)\s*'
+    r'(?:@title\("(?P<title>[^"]*)"\)\s*)?forbid\s*\(\s*principal,\s*action\s*==\s*Action::"(?P<scope>[a-z]+)"'
+)
+
+
+def parse_shell_policies() -> list[dict[str, str]]:
+    """Cat's shipped policies: `core.cedar`, then the translated DefenseClaw
+    rules the loader keeps (`status == translated`, not the held-out bucket)."""
+    core = [
+        {
+            "id": match["id"],
+            "tier": "core",
+            "title": match["title"] or match["id"],
+            "scope": match["scope"],
+            "level": f"`{match['decision']}`",
+        }
+        for match in CEDAR_POLICY_RE.finditer((SHELL_DATA_DIR / "core.cedar").read_text())
+    ]
+    bundle = [
+        {
+            "id": rule["id"],
+            "tier": "bundle-default",
+            "title": rule.get("title") or rule["id"],
+            "scope": rule.get("scope") or "segment",
+            "level": "release gate",
+        }
+        for rule in json.loads((SHELL_DATA_DIR / "dc_rules.json").read_text())
+        if rule["status"] == "translated" and rule["bucket"] != "test"
+    ]
+    return sorted(core, key=lambda rule: rule["id"]) + sorted(bundle, key=lambda rule: rule["id"])
+
+
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern")
     strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
@@ -512,7 +552,7 @@ def generate_l1_rule_catalog_doc() -> str:
 
     lines.extend([
         "",
-        f"## DLP regex rules ({len(dlp)})",
+        f"## DLP regex rules ({len(dlp)}) {{ #dlp-regex-rules }}",
         "",
         "Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.",
         "",
@@ -613,6 +653,20 @@ def generate_l1_rule_catalog_doc() -> str:
     ])
     for rule in threat:
         lines.append(f"| `{rule['id']}` | `{rule['class_name']}` | {', '.join(rule['upstream_groups'])} |")
+    shell = parse_shell_policies()
+    lines.extend([
+        "", f"## Shell command policies ({len(shell)}) {{ #shell-command-policies }}", "",
+        "Cedar policies of Cat, the `shell_command` detector (see [Check shell commands](../how-to/check-shell-commands.md)). "
+        "The rule ID is `cat.` plus the policy ID that verdicts report: `{\"rules\": {\"cat.core.remote_to_exec\": false}}` "
+        "turns that policy off like any other L1 rule; a missing ID keeps the policy on. `core` policies ship with Ark at their `@decision` level; `bundle-default` "
+        "policies take the level that the release's validation gate set in the bundle's `policy_levels.json` "
+        "(`block` or `ask`; a `rejected` policy is not loaded). User policies (`user.*`, rule ID `cat.user.*`) from `policy_dirs` are rules too. "
+        "`segment` policies read one command segment, `command` policies the whole command.", "",
+        "| Rule ID | Title | Tier | Scope | Level |", "| --- | --- | --- | --- | --- |",
+    ])
+    for rule in shell:
+        title = rule["title"].replace("|", "\\|")
+        lines.append(f"| `cat.{rule['id']}` | {title} | `{rule['tier']}` | `{rule['scope']}` | {rule['level']} |")
     return "\n".join(lines) + "\n"
 
 
@@ -681,9 +735,9 @@ def ntdb_package_table(packages: list[NtdbPackage]) -> list[str]:
     lines = [
         "## NTDB L2 Packages",
         "",
-        "NTDB L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every runtime file it references from the immutable Hugging Face commit listed below. The current official packages use Package v4 with mmBERT and the Joint-v3 actionable-benefit promoter; the deprecated Package-v2 runtime remains available for older local overrides.",
+        "NTDB L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every runtime file it references from the immutable Hugging Face commit listed below. The current official packages use Package v4 with mmBERT and the Joint-v3 actionable-benefit promoter; the runtime rejects any other package version.",
         "",
-        "For mmBERT packages, the Security Lib generates `tokenizer.mmbpe` locally after the verified asset download. The former `.kit` runtime is no longer supported. The original `tokenizer.json` remains the canonical fallback.",
+        "For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the verified asset download. The former `.kit` runtime is no longer supported. The original `tokenizer.json` remains the canonical fallback.",
         "",
         "| Category | Model | Repository | Revision | Source prefix | Cache path |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -702,7 +756,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "<!-- Generated by scripts/generate_docs.py. Do not edit by hand. -->",
         "",
-        "Patronus Ark does not bundle model assets in the Rust crate or Python wheel. Rust-native rule-based scanners run without downloads. Model-backed categories load their manifest assets from the Hugging Face repositories declared in `rust/src/assets/specs.rs`.",
+        "Patronus Ark does not bundle model assets in the Rust crate or Python wheel. Rust-native rule-based scanners run without downloads; the exception is the L1 `shell_command` category, which loads the Cat bundle (`cat-shell-risk-commander`). Model-backed categories load their manifest assets from the Hugging Face repositories declared in `rust/src/assets/specs.rs`; the Cat and Wolf repositories and revisions come from `ark-core/src/warmup.rs`.",
         "",
         "## Cache Location",
         "",

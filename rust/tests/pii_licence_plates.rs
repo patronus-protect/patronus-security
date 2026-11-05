@@ -16,9 +16,10 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, PiiMode, ValidatorStrength},
+    score::{self, ValidatorStrength},
     validators,
 };
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -28,11 +29,11 @@ const DE: &str = "pii_kfz_kennzeichen_de";
 const UK: &str = "pii_vehicle_registration_uk";
 const UK_CONTEXT_FREE: &str = "pii_vehicle_registration_uk_context_free";
 const NG: &str = "pii_vehicle_registration_ng";
-const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 const LABEL: &str = "LICENSEPLATE";
-const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
+const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -40,7 +41,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -51,7 +55,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
 }
 
 /// `(text, score)` of every plate span.
-fn plates(text: &str, mode: PiiMode) -> Vec<(String, f64)> {
+fn plates(text: &str, mode: ScoreMode) -> Vec<(String, f64)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -61,7 +65,7 @@ fn plates(text: &str, mode: PiiMode) -> Vec<(String, f64)> {
 }
 
 /// Rule ids that matched with the value text they matched.
-fn rules(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn rules(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     let result = pii_result(text, mode);
     result.layers[0]
         .details
@@ -108,7 +112,7 @@ fn assert_silent(text: &str) {
     assert_silent_in(text, &MODES);
 }
 
-fn assert_silent_in(text: &str, modes: &[PiiMode]) {
+fn assert_silent_in(text: &str, modes: &[ScoreMode]) {
     for &mode in modes {
         assert!(
             plates(text, mode).is_empty(),
@@ -377,7 +381,7 @@ fn uk_plates_under_a_structural_key() {
 fn uk_plate_lookalikes_stay_silent() {
     // presidio-analyzer values reported bare in the scored modes only (Q-M1)
     for text in ["AB51 ABC", "BD62XYZ"] {
-        assert_silent_in(text, &[PiiMode::Strict]);
+        assert_silent_in(text, &[ScoreMode::Strict]);
     }
     for text in [
         // presidio-analyzer negatives
@@ -417,7 +421,7 @@ fn bare_plates_of_other_countries_stay_silent() {
         assert_silent(text);
     }
     // A Nigerian plate with a plate term is a scored-mode finding only (Q-M1).
-    assert_silent_in("Plates: APP-456CV and KJA-999PZ", &[PiiMode::Strict]);
+    assert_silent_in("Plates: APP-456CV and KJA-999PZ", &[ScoreMode::Strict]);
 }
 
 // ── Scored modes: bare UK plates, Nigerian plates with a plate term (Q-M1) ──
@@ -460,7 +464,7 @@ fn assert_scored(rule_id: &str, text: &str, values: &[&str], score: f64) {
             );
         }
     }
-    assert_silent_in(text, &[PiiMode::Strict]);
+    assert_silent_in(text, &[ScoreMode::Strict]);
 }
 
 #[test]
@@ -548,7 +552,7 @@ fn nigerian_plate_lookalikes_stay_silent() {
         // a list joined by something other than a comma, `and`, `und` or `&`
         "Plates: APP-456CV or KJA-999PZ",
     ] {
-        let found = plates(text, PiiMode::Recall);
+        let found = plates(text, ScoreMode::Recall);
         assert!(
             found
                 .iter()

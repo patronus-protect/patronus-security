@@ -34,17 +34,17 @@ fn health() { println!("ok"); }
                         }
                     },
                     "l3_policy": {
-                        "execution": "representative",
+                        "clustering": "representative",
                         "representatives_per_cluster": 1,
                         "early_exit": "disabled",
                     },
                 }
             ],
-            "l3": {
+            "l3_policy": {
                 "progress": "progress",
                 "pipelines": {
                     "injection": {
-                        "execution": "representative",
+                        "clustering": "representative",
                         "representatives_per_cluster": 1,
                         "min_cluster_similarity": 0.96,
                         "max_cluster_size": 6,
@@ -56,7 +56,7 @@ fn health() { println!("ok"); }
                         "early_exit": "request_wide_positive",
                     },
                     "tool_class": {
-                        "execution": "verify_representative",
+                        "clustering": "verify_representative",
                         "representatives_per_cluster": 1,
                         "verify_representatives_per_cluster": 1,
                         "aggregation": {"type": "majority_vote_or_highest"},

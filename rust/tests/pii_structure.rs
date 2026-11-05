@@ -10,14 +10,14 @@
 //! scores as field, a counter-context key (order, invoice … number) as counter, and
 //! a context-bound rule takes its required context from the key.
 
-use patronus_ark::detectors::pii::score::PiiMode;
+use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::Value;
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -25,7 +25,10 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
+        native: patronus_ark::NativeGates {
+            pii_mode: mode,
+            ..Default::default()
+        },
         ..Default::default()
     });
     scanner
@@ -35,7 +38,7 @@ fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
-fn matched_rules(text: &str, mode: PiiMode) -> Vec<Value> {
+fn matched_rules(text: &str, mode: ScoreMode) -> Vec<Value> {
     pii_result(text, mode).layers[0]
         .details
         .get("matched_rules")
@@ -44,7 +47,7 @@ fn matched_rules(text: &str, mode: PiiMode) -> Vec<Value> {
 }
 
 /// `(label, text)` of every evidence span.
-fn spans(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     pii_result(text, mode)
         .evidence_spans
         .into_iter()
@@ -53,7 +56,7 @@ fn spans(text: &str, mode: PiiMode) -> Vec<(String, String)> {
 }
 
 /// The structural match of `rule_id` on `value`, if any.
-fn structural(text: &str, rule_id: &str, value: &str, mode: PiiMode) -> Option<Value> {
+fn structural(text: &str, rule_id: &str, value: &str, mode: ScoreMode) -> Option<Value> {
     matched_rules(text, mode).into_iter().find(|rule| {
         rule["rule_id"] == rule_id
             && rule.get("structure").is_some()
@@ -89,13 +92,13 @@ fn every_carrier_binds_its_value_to_the_rule_in_strict() {
         ),
     ];
     for (carrier, rule_id, text, value) in cases {
-        let rule = structural(text, rule_id, value, PiiMode::Strict)
+        let rule = structural(text, rule_id, value, ScoreMode::Strict)
             .unwrap_or_else(|| panic!("{rule_id} via {carrier}: {text:?}"));
         assert_eq!(rule["structure"], carrier, "{text:?}");
         let components = rule["components"].as_array().unwrap();
         assert_eq!(components[0]["component_id"], "structure_key", "{text:?}");
         assert_eq!(components[1]["component_id"], "value", "{text:?}");
-        let found = spans(text, PiiMode::Strict);
+        let found = spans(text, ScoreMode::Strict);
         assert!(
             found.iter().any(|(_, span)| span == value),
             "{text:?}: {found:?}"
@@ -118,7 +121,7 @@ fn a_key_the_rule_does_not_accept_binds_nothing() {
         // An `iban` key is not a second finding as account number.
         r#"{"iban": "KTO-30202"}"#,
     ] {
-        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             assert!(
                 spans(text, mode).is_empty(),
                 "{mode}: {text:?}: {:?}",
@@ -136,7 +139,7 @@ fn the_value_must_match_the_rule_form_in_full() {
         r#"{"telefon": "Zentrale 030 4471230"}"#,
         "| SSN | 219-09-9997 (old) |",
     ] {
-        let rules = matched_rules(text, PiiMode::Strict);
+        let rules = matched_rules(text, ScoreMode::Strict);
         assert!(
             rules.iter().all(|rule| rule.get("structure").is_none()),
             "{text:?}: {rules:?}"
@@ -148,12 +151,12 @@ fn the_value_must_match_the_rule_form_in_full() {
 fn validators_decide_structural_values_with_checksum_vectors() {
     // Steuer-ID (ISO 7064 MOD 11,10): valid and broken check digit.
     let valid = r#"{"steuer_id": "82736451927"}"#;
-    assert!(structural(valid, "pii_steuer_id_de", "82736451927", PiiMode::Strict).is_some());
+    assert!(structural(valid, "pii_steuer_id_de", "82736451927", ScoreMode::Strict).is_some());
     for invalid in [
         r#"{"steuer_id": "82736451928"}"#,
         "<person><steuer-id>11111111111</steuer-id></person>",
     ] {
-        assert!(spans(invalid, PiiMode::Strict).is_empty(), "{invalid}");
+        assert!(spans(invalid, ScoreMode::Strict).is_empty(), "{invalid}");
     }
     // Format validators: SSN area 666, impossible dates, document alphabet.
     for invalid in [
@@ -162,18 +165,18 @@ fn validators_decide_structural_values_with_checksum_vectors() {
         r#"<traveler passportNumber="A01X00T47"/>"#,
         r#"{"username": "required"}"#,
     ] {
-        assert!(spans(invalid, PiiMode::Strict).is_empty(), "{invalid}");
+        assert!(spans(invalid, ScoreMode::Strict).is_empty(), "{invalid}");
     }
     // Luhn: a card column does not make a broken card number a finding.
     assert!(spans(
         "Kartennummer;Inhaber\n4111111111111112;Jana",
-        PiiMode::Strict
+        ScoreMode::Strict
     )
     .is_empty());
     assert_eq!(
         spans(
             "Kartennummer;Inhaber\n4111111111111111;Jana",
-            PiiMode::Strict
+            ScoreMode::Strict
         ),
         [("CREDITCARD".to_string(), "4111111111111111".to_string())]
     );
@@ -184,7 +187,7 @@ fn a_value_is_reported_once_and_whole() {
     // The key-value line and the rule's regex find the same value: one entry,
     // with the regex evidence of the field name.
     let text = "Kundennummer: KD-10293";
-    let rules: Vec<_> = matched_rules(text, PiiMode::Strict)
+    let rules: Vec<_> = matched_rules(text, ScoreMode::Strict)
         .into_iter()
         .filter(|rule| rule["rule_id"] == "pii_customer_id")
         .collect();
@@ -194,7 +197,7 @@ fn a_value_is_reported_once_and_whole() {
     // The key names the whole cell, not the part after the rule's own field name.
     let table = "| MRN | Ward |\n|---|---|\n| MRN-981134 | 7 |";
     assert_eq!(
-        spans(table, PiiMode::Strict),
+        spans(table, ScoreMode::Strict),
         [("PATIENT_ID".to_string(), "MRN-981134".to_string())]
     );
 }
@@ -202,7 +205,7 @@ fn a_value_is_reported_once_and_whole() {
 #[test]
 fn a_structural_key_scores_as_field_and_explains_itself() {
     let text = r#"{"kundennummer": "KD-99120"}"#;
-    let rule = structural(text, "pii_customer_id", "KD-99120", PiiMode::Balanced).unwrap();
+    let rule = structural(text, "pii_customer_id", "KD-99120", ScoreMode::Balanced).unwrap();
     assert_eq!(rule["context"]["bonus"], 25);
     assert_eq!(rule["context"]["side"], "key");
     assert_eq!(rule["context"]["anchor"], "pii.customer_identifier");
@@ -214,7 +217,7 @@ fn a_structural_key_scores_as_field_and_explains_itself() {
 fn keys_give_unbound_values_their_context_in_scored_modes() {
     // A phone column scores the value as field; a counter-context column drops it.
     let phone = "Name;Telefon\nJana;202-604-7110";
-    let rule = matched_rules(phone, PiiMode::Balanced)
+    let rule = matched_rules(phone, ScoreMode::Balanced)
         .into_iter()
         .find(|rule| rule["rule_id"] == "pii_phone_us")
         .expect("phone column");
@@ -222,14 +225,14 @@ fn keys_give_unbound_values_their_context_in_scored_modes() {
     assert_eq!(rule["context"]["anchor"], "pii.telephone");
     assert_eq!(rule["context"]["bonus"], 25);
     let order = "Bestellnummer;Menge\n202-604-7110;2";
-    assert!(spans(order, PiiMode::Balanced).is_empty());
-    let rule = matched_rules(order, PiiMode::Recall)
+    assert!(spans(order, ScoreMode::Balanced).is_empty());
+    let rule = matched_rules(order, ScoreMode::Recall)
         .into_iter()
         .find(|rule| rule["rule_id"] == "pii_phone_us");
     assert!(rule.is_none(), "35 + 15 - 30 is below recall");
     // Strict keeps its acceptance for unbound rules.
     assert_eq!(
-        spans(order, PiiMode::Strict),
+        spans(order, ScoreMode::Strict),
         [("PHONE".to_string(), "202-604-7110".to_string())]
     );
 }
@@ -238,14 +241,14 @@ fn keys_give_unbound_values_their_context_in_scored_modes() {
 fn a_context_bound_rule_takes_its_context_from_the_key() {
     // No phone term on the value's line: the CSV header supplies it.
     let mobile = "Name;Handy\nJana;0151 2345678";
-    assert!(matched_rules(mobile, PiiMode::Strict)
+    assert!(matched_rules(mobile, ScoreMode::Strict)
         .iter()
         .any(|rule| rule["rule_id"] == "pii_phone_de_national_proximity"));
     let order = "Name;Bestellnummer\nJana;0151 2345678";
-    assert!(spans(order, PiiMode::Strict).is_empty());
+    assert!(spans(order, ScoreMode::Strict).is_empty());
     // A number inside a longer field value is not the value the key names.
     let fragment = "Phone: (987) 012-3456";
-    assert!(matched_rules(fragment, PiiMode::Strict)
+    assert!(matched_rules(fragment, ScoreMode::Strict)
         .iter()
         .all(|rule| rule["rule_id"] != "pii_phone_de_national_proximity"));
 }
@@ -278,7 +281,7 @@ fn bilingual_structure_probes_report_through_the_structure() {
         assert_ne!(structure.de, structure.en, "translate {}", probe.rule_id);
         for text in [&structure.de, &structure.en] {
             assert!(
-                matched_rules(text, PiiMode::Strict).iter().any(|rule| {
+                matched_rules(text, ScoreMode::Strict).iter().any(|rule| {
                     rule["rule_id"] == probe.rule_id.as_str() && rule.get("structure").is_some()
                 }),
                 "{}: {text:?}",

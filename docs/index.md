@@ -28,9 +28,10 @@ while (event := scanner.consume_next_event(timeout=1.0)) is not None:
         break  # terminal "finished" event
 ```
 
-!!! tip "Only need PII, DLP and prompt injection?"
+!!! tip "Only need PII, DLP, prompt injection and shell commands?"
     [Ark Core](getting-started/core.md) (`patronus-ark-core`) runs the same native L1 rules plus
-    optional local Wolf Defender inference, synchronously and without the queue or L2/L3 models.
+    optional local Wolf Defender inference and Cat shell-command verdicts, synchronously and
+    without the queue or L2/L3 models.
     It is licensed MIT OR Apache-2.0.
 
 ## Why layered
@@ -39,7 +40,7 @@ Each category is scanned by up to three layers, escalating only when needed:
 
 | Layer | What it is | Cost | Always available |
 | --- | --- | --- | --- |
-| **L1** | Native rule-based detectors | input-dependent | yes, no assets |
+| **L1** | Native rule-based detectors | input-dependent | yes, no assets[^cat] |
 | **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + ONNX heads) | milliseconds | when assets cached |
 | **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | when assets cached |
 
@@ -50,6 +51,9 @@ already produced by L2. Most traffic never reaches L3, so model-backed detection
 transformer cost on every request or repeating promotion-time tokenization. See
 [Layered scanning](concepts/layered-scanning.md) for the full escalation model.
 
+[^cat]: Except `shell_command`, which runs in L1 but loads the 4.4 MiB Cat bundle
+    (`cat-shell-risk-commander`).
+
 ## Find your way around
 
 This documentation follows the [Diátaxis](https://diataxis.fr/) framework — four kinds of
@@ -58,7 +62,7 @@ material for four different needs:
 - **[Getting started](getting-started/installation.md)**
 
     Install the library and run your first scan. Start here if you are new, and see
-    [Ark Core](getting-started/core.md) for the lightweight L1 + Wolf package.
+    [Ark Core](getting-started/core.md) for the lightweight L1 + Wolf + Cat package.
 
 - **[Tutorials](USAGE.md)**
 

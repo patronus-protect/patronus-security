@@ -8,7 +8,7 @@ use crate::{
 
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
-use super::score::{self, PiiMode, ValidatorStrength};
+use super::score::{self, ValidatorStrength};
 use super::word_shape::{WordShape, WordShapes};
 use super::{
     at, au, be, ca, ch, common, context, crypto, de, device, driver_license, es, fin, fr,
@@ -20,6 +20,7 @@ use crate::detectors::anchors;
 use crate::detectors::dlp::prefilter::{required_value_run, RuleScan, ValueClass, ValueRun};
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::detectors::word_boundary::{self, without_unicode_word_boundaries, BoundarySearch};
+use crate::native::ScoreMode;
 use crate::EvidenceSpan;
 use regex::Regex;
 use regex_automata::meta;
@@ -354,14 +355,14 @@ impl PiiPipeline {
         texts.par_iter().map(|text| self.evaluate(text)).collect()
     }
 
-    /// Detect with an explicit output mode. `PiiMode::Strict` is identical to
+    /// Detect with an explicit output mode. `ScoreMode::Strict` is identical to
     /// the trait's `detect_prepared_with_options`.
     pub fn detect_prepared_with_mode<F>(
         &self,
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: F,
         explain: bool,
-        mode: PiiMode,
+        mode: ScoreMode,
     ) -> NativeDetection
     where
         F: Fn(&str) -> bool,
@@ -378,7 +379,7 @@ impl PiiPipeline {
         // K06: values behind zero-width, full-width or defanged characters (in
         // `recall` also spelled-out separators and spaced digits) are found in a
         // normalized view and mapped back to the original text.
-        let level = if mode == PiiMode::Recall {
+        let level = if mode == ScoreMode::Recall {
             Level::SpelledOut
         } else {
             Level::Invisible
@@ -458,7 +459,7 @@ fn merge_deobfuscated(
     mut detection: NativeDetection,
     normalized: NativeDetection,
     view: &Deobfuscated,
-    mode: PiiMode,
+    mode: ScoreMode,
 ) -> NativeDetection {
     // (normalized range, original range, label, obfuscation kinds, penalty points)
     let mut added = Vec::new();
@@ -1006,7 +1007,7 @@ impl NativeRegexDetector for PiiPipeline {
     where
         F: Fn(&str) -> bool,
     {
-        self.detect_prepared_with_mode(prepared, allows_rule, explain, PiiMode::Strict)
+        self.detect_prepared_with_mode(prepared, allows_rule, explain, ScoreMode::Strict)
     }
 
     fn anchor_gates(&self) -> &[AnchorGate] {

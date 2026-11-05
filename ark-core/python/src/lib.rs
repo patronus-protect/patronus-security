@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #![allow(clippy::useless_conversion)] // Generated PyO3 wrappers.
-use patronus_ark_core::{ScanChecks, ScanControl as Control, ScanError, Scanner as CoreScanner};
+use patronus_ark_core::{
+    detectors::shell::{Facts, ShellContext},
+    native::NATIVE_CATEGORIES,
+    ScanControl as Control, ScanError, Scanner as CoreScanner, SecurityCategory,
+};
 use pyo3::{exceptions::*, prelude::*, types::PyDict};
 use serde::de::DeserializeOwned;
 use std::{sync::Mutex, time::Duration};
@@ -17,9 +21,10 @@ fn scan_error(error: ScanError) -> PyErr {
     }
 }
 
+/// Deserialize a JSON-compatible Python value with the Core serde rules.
 fn config<T: DeserializeOwned + Default>(
     py: Python<'_>,
-    value: Option<&Bound<'_, PyDict>>,
+    value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<T> {
     match value {
         None => Ok(T::default()),
@@ -70,9 +75,9 @@ impl Scanner {
         warmup: Option<&Bound<'_, PyDict>>,
         wolf_options: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let policy = self::config(py, config)?;
-        let warmup = self::config(py, warmup)?;
-        let execution = self::config(py, wolf_options)?;
+        let policy = self::config(py, config.map(|v| v.as_any()))?;
+        let warmup = self::config(py, warmup.map(|v| v.as_any()))?;
+        let execution = self::config(py, wolf_options.map(|v| v.as_any()))?;
         let scanner = py
             .allow_threads(move || CoreScanner::warmup_with_wolf_options(policy, warmup, execution))
             .map_err(scan_error)?;
@@ -81,16 +86,17 @@ impl Scanner {
         })
     }
 
-    #[pyo3(signature = (text, *, pii=true, dlp=true, injection=true, control=None))]
+    #[pyo3(signature = (text, *, categories=None, control=None))]
     fn scan(
         &self,
         py: Python<'_>,
         text: String,
-        pii: bool,
-        dlp: bool,
-        injection: bool,
+        categories: Option<&Bound<'_, PyAny>>,
         control: Option<&ScanControl>,
     ) -> PyResult<PyObject> {
+        let categories: Option<Vec<SecurityCategory>> = categories
+            .map(|categories| self::config(py, Some(categories)))
+            .transpose()?;
         let control = control.map(|c| c.inner.clone()).unwrap_or_default();
         let output = py.allow_threads(move || {
             control.check().map_err(scan_error)?;
@@ -102,11 +108,7 @@ impl Scanner {
             let report = scanner
                 .scan_with_control(
                     &text,
-                    ScanChecks {
-                        pii,
-                        dlp,
-                        injection,
-                    },
+                    categories.as_deref().unwrap_or(&NATIVE_CATEGORIES),
                     &control,
                 )
                 .map_err(scan_error)?;
@@ -115,6 +117,52 @@ impl Scanner {
         let report = py.import_bound("json")?.call_method1("loads", (output,))?;
         report.call_method1("setdefault", ("wolf", py.None()))?;
         Ok(report.unbind())
+    }
+
+    #[pyo3(signature = (command, *, cwd=None, home=None, repo_root=None, dialect=None, prior_facts=None, with_facts=false))]
+    #[allow(clippy::too_many_arguments)]
+    fn shell_verdict(
+        &self,
+        py: Python<'_>,
+        command: String,
+        cwd: Option<String>,
+        home: Option<String>,
+        repo_root: Option<String>,
+        dialect: Option<String>,
+        prior_facts: Option<&Bound<'_, PyAny>>,
+        with_facts: bool,
+    ) -> PyResult<PyObject> {
+        let context = ShellContext {
+            cwd,
+            home,
+            repo_root,
+            dialect,
+        };
+        let prior: Vec<serde_json::Value> = self::config(py, prior_facts)?;
+        let output = py.allow_threads(move || {
+            let prior_facts = prior
+                .iter()
+                .enumerate()
+                .map(|(index, facts)| {
+                    Facts::from_json(facts).map_err(|error| {
+                        PyValueError::new_err(format!("prior_facts[{index}]: {error}"))
+                    })
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            let scanner = self.inner.try_lock().map_err(|_| {
+                ScannerBusyError::new_err(
+                    "scanner is already in use; serialize calls or use separate scanners",
+                )
+            })?;
+            let verdict = scanner
+                .shell_verdict(&command, Some(&context), &prior_facts)
+                .map_err(scan_error)?;
+            Ok::<_, PyErr>(verdict.to_json_string(with_facts))
+        })?;
+        Ok(py
+            .import_bound("json")?
+            .call_method1("loads", (output,))?
+            .unbind())
     }
 }
 

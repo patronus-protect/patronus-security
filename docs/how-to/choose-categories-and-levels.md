@@ -61,7 +61,7 @@ for what each one classifies and which layers back it.
 - `sensitive_document`, `tool_*`, `routing` → **model-only**; with no cached assets they produce
   no verdict.
 - `dynamic-pii` → **L3-only**; needs its GLiNER bundle or it cannot run.
-- `shell_command` → **L1 with a model file** (~4.4 MB); with downloads disabled and the model
+- `shell_command` → **L1 with a model bundle** (4.4 MiB); with downloads disabled and the model
   missing, warmup fails.
 
 If you need guaranteed coverage in an air-gapped environment, prefer categories with a native
@@ -88,7 +88,7 @@ specific detector below the ceiling, without rebuilding the gateway:
 === "Python"
 
     ```python
-    scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
+    scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
     # ... later ...
     scanner.set_execution_gates(None)   # reset to all enabled
     ```

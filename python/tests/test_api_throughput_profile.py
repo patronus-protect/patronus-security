@@ -50,7 +50,7 @@ class ApiThroughputProfileTests(unittest.TestCase):
             ["injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii"],
         )
         gates = profile.execution_gates()
-        self.assertEqual(gates["levels"], {"l1": True, "l2": True, "l3": True})
+        self.assertEqual((gates["l1"], gates["l2"], gates["l3"]), (True, True, True))
         self.assertTrue(gates["models"]["gliner_small-v2.5-edge"])
         self.assertTrue(gates["models"]["unified-v3-routing"])
         self.assertTrue(gates["models"]["unified-v3-threat"])
@@ -73,8 +73,8 @@ class ApiThroughputProfileTests(unittest.TestCase):
         self.assertEqual(benchmark.THROUGHPUT_CATEGORIES, ["injection", "dlp", "threat"])
         gates = benchmark.throughput_gates()
         self.assertTrue(gates["models"]["unified-v3-threat"])
-        self.assertEqual(gates["l3"]["clustering"], "representative")
-        self.assertEqual(gates["l3"]["representatives_per_cluster"], 1)
+        self.assertEqual(gates["l3_policy"]["clustering"], "representative")
+        self.assertEqual(gates["l3_policy"]["representatives_per_cluster"], 1)
 
     def test_sustained_traffic_profile_averages_100_kib_with_spikes(self):
         requests = benchmark.traffic_workload(1.0, 1, 96.0, 32, 1)
@@ -95,6 +95,9 @@ class ApiThroughputProfileTests(unittest.TestCase):
 
         self.assertEqual(config["categories"], ["injection", "dlp"])
         self.assertEqual(config["ntdb_operating_point"], "best_promote")
+        # The Ark API reads the same gate keys as the Python gateway.
+        self.assertEqual(config["gates"]["l3_policy"]["clustering"], "representative")
+        self.assertNotIn("levels", config["gates"])
 
     def test_http_profile_extracts_l3_queue_worker_and_chunk_timing(self):
         timing = http_benchmark.l3_run_timing({"layers": [{

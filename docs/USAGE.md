@@ -1,8 +1,9 @@
 # Usage walkthrough
 
-Nine numbered examples cover the
+Numbered examples cover the
 main flows ([`rust/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/examples),
 [`python/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/python/examples)).
+Run the Rust examples from `rust/`.
 
 | # | Flow | When to use it | Rust | Python |
 | --- | --- | --- | --- | --- |
@@ -12,13 +13,24 @@ main flows ([`rust/examples/`](https://github.com/patronus-protect/patronus-secu
 | 04 | Execution gates | Turn levels/models on or off per request | `cargo run --example 04_execution_gates` | `python python/examples/04_execution_gates.py` |
 | 05 | Dynamic PII | Runtime GLiNER labels + evidence spans | `cargo run --example 05_dynamic_pii` | `python python/examples/05_dynamic_pii.py` |
 | 06 | Unified L3 speedup | Compare two promoted Dedicated models with one coalesced Multi inference | `cargo run --release --example 06_multi_l3_speedup` | `python python/examples/06_multi_l3_speedup.py` |
-| 07 | Multi-head L2 validation | Run all seven L2 classifiers on real unified-v3 Val rows | — | `python python/examples/07_multitask_val_l2.py` |
+| 07 | Contextual gates (Rust) / multi-head L2 validation (Python) | Gate pipelines on metadata and other results; run all seven L2 classifiers on real unified-v3 Val rows | `cargo run --example 07_contextual_gates` | `python python/examples/07_multitask_val_l2.py` |
 | 08 | L3 pipeline policies | Configure clustering, aggregation, progress, and early exit by logical head | `cargo run --example 08_l3_pipeline_policies` | `python python/examples/08_l3_pipeline_policies.py` |
 | 09 | Caching | Compare memory-only, persistent async, write-through, and cache metadata | `cargo run --example 09_caching -- async` | `python python/examples/09_caching.py /tmp/patronus-cache.redb` |
+| 10 | Normalize text | Normalize text before scanning or before using it directly | `cargo run --example 10_normalize_text` | `python python/examples/10_normalize_text.py` |
+| 11 | L1 PII/DLP latency | Release-mode latency of native PII and DLP on short, 4 KiB and 100 KiB inputs | `cargo run --release --example 11_l1_pii_dlp_latency` | — |
+| 12 | L1 PII fixture eval | Span-level evaluation of native PII against a JSONL fixture | `cargo run --example 12_l1_pii_fixture_eval` | — |
+| 13 | L1 golden eval | Check native PII/DLP against the golden suites (`pii`, `dlp` or `all`) | `cargo run --example 13_l1_golden_eval -- all` | — |
+| 14 | Shell commands | `shell_command` (Cat) with user Cedar policies next to PII, DLP and injection | `cargo run --example 14_shell_command` | — |
 
-Examples 01, 02, and 04 run fully offline (`download_files=false`, native L1 +
-cached L2). Examples 03, 05, 06, 07, 08, and 09 need model assets and will print a
+Examples 01, 02, 04, 10, 11, 12 and 13 run fully offline (`download_files=false`, native L1 +
+cached L2). Examples 03, 05, 06, 07, 08, 09 and 14 need model assets and will print a
 warmup error if they are missing.
+
+Ark Core has its own example,
+[`ark-core/examples/core_scanner.rs`](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/examples/core_scanner.rs):
+one Core `Scanner` for PII, DLP, injection (rules + Wolf) and Cat `shell_verdict`
+(`cargo run -p patronus-ark-core --features download --example core_scanner`). See
+[Ark Core](getting-started/core.md).
 
 ## 01 — Basic scan
 
@@ -64,11 +76,11 @@ from one shared `physical_job_id`. Each strategy runs in a fresh process, L3
 sessions are materialized before timing, and the example prints median and
 mean end-to-end latency plus the measured speedup.
 
-## 07 — Multi-head L2 validation
+## 07 — Multi-head L2 validation / contextual gates
 
-Runs all seven L2 NTDB classifiers on real unified-v3 validation rows and reports their per-head
-agreement — a fast way to sanity-check the L2 packages without invoking L3. Python only
-(`07_multitask_val_l2.py`). The Rust example in slot 07 is a separate contextual-gates demo
+Python (`07_multitask_val_l2.py`) runs all seven L2 NTDB classifiers on real unified-v3 validation
+rows and reports their per-head agreement — a fast way to sanity-check the L2 packages without
+invoking L3. The Rust example in slot 07 is a separate contextual-gates demo
 (`07_contextual_gates.rs`), documented under
 [Conditional gates](reference/configuration.md#conditional-gates).
 
@@ -87,3 +99,15 @@ Runs the same input twice and prints cache metadata. The Python example also
 shows the early partial Dynamic PII `result` event. See
 [Configure and understand caching](how-to/configure-caching.md) for the exact,
 similarity, Dynamic PII, storage-mode, and latency breakdown.
+
+## 10–13 — Normalization and L1 checks
+
+`10_normalize_text` shows the text normalization step on its own. `11`–`13` are Rust-only L1
+tools: a release-mode PII/DLP latency run, a span-level PII fixture evaluation, and the golden
+suite check. See [Normalize text before scanning](how-to/normalize-text-before-scanning.md).
+
+## 14 — Shell commands
+
+The `shell_command` category (Cat) next to PII, DLP and injection, with user `.cedar` policies set
+through `set_shell_command_policy_config`. The `patronus.verdict/1` document is in
+`layers[0].details["verdict"]`. See [Check shell commands](how-to/check-shell-commands.md).

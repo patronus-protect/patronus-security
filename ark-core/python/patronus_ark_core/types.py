@@ -30,8 +30,11 @@ class LabelScore(TypedDict):
     matched: bool
 
 
+NativeCategory = Literal["pii", "dlp", "injection"]
+
+
 class NativeResult(TypedDict):
-    category: Literal["pii", "dlp", "injection"]
+    category: NativeCategory
     class_name: str
     confidence: float
     level: str
@@ -60,6 +63,49 @@ class ScanReport(TypedDict):
     wolf: WolfResult | None
 
 
+Decision = Literal["allow", "ask", "block"]
+
+
+class TopFeature(TypedDict):
+    feature: str
+    weight: float
+
+
+class ShellModelVerdict(TypedDict):
+    id: str
+    score: float
+    decision: Decision
+    top_features: list[TopFeature]
+
+
+class PolicyHit(TypedDict):
+    id: str
+    tier: Literal["core", "bundle-default", "user"]
+    title: str
+    decision: Decision
+    where: list[str]
+
+
+Lowered = TypedDict("Lowered", {"id": str, "from": Literal["block"], "to": Literal["ask"]})
+
+
+# `patronus.facts/1` of a command: the `facts` of a verdict made with
+# `with_facts=True`, passed back as `prior_facts` of later commands.
+ShellFacts = dict[str, object]
+
+
+ShellVerdict = TypedDict("ShellVerdict", {
+    "v": Literal["patronus.verdict/1"],
+    "decision": Decision,
+    "score": float,
+    "cuts": dict[str, float],
+    "model": ShellModelVerdict,
+    "policies": list[PolicyHit],
+    "allowlisted": list[Lowered],
+    "facts": NotRequired[ShellFacts],
+})
+
+
 class OnnxRuntimeOptions(TypedDict, total=False):
     intra_threads: int | None
     inter_threads: int | None
@@ -74,8 +120,15 @@ class WolfConfig(TypedDict):
     runtime_options: NotRequired[OnnxRuntimeOptions]
 
 
+class ShellConfig(TypedDict):
+    bundle_dir: str
+    manifest_sha256: NotRequired[str]
+    policy_dirs: NotRequired[list[str]]
+    allowlist: NotRequired[dict[str, Literal["ask"]]]
+
+
 class ScannerConfig(TypedDict, total=False):
-    categories: list[Literal["pii", "dlp", "injection"]]
+    categories: list[NativeCategory]
     rules: dict[str, bool]
     models: dict[str, bool]
     pii_mode: Literal["strict", "balanced", "recall"]
@@ -84,6 +137,7 @@ class ScannerConfig(TypedDict, total=False):
     max_input_bytes: int
     max_findings: int
     wolf: WolfConfig | None
+    shell: ShellConfig | None
 
 
 class WarmupOptions(TypedDict, total=False):

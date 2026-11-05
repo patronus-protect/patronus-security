@@ -122,13 +122,19 @@ impl SecurityGateway {
         let execution = self.scan_execution();
         self.shell_command_pipeline = if self.shell_command_configured(&execution) {
             let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
-            let pipeline =
-                ShellRiskPipeline::from_bundle_dir(&bundle_dir).map_err(std::io::Error::other)?;
+            let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(
+                &bundle_dir,
+                &self.shell_command_manifest_sha256,
+            )
+            .map_err(std::io::Error::other)?;
+            pipeline
+                .configure(&self.shell_command_policy_config())
+                .map_err(std::io::Error::other)?;
+            let (ask, block) = pipeline.model().cuts();
             log::info!(
-                "shell_command model {} loaded from {}; threshold_policy={}",
+                "shell_command model {} loaded from {}; cuts ask={ask} block={block}",
                 assets::SHELL_COMMAND_ASSET.model,
                 bundle_dir.display(),
-                pipeline.threshold_policy()
             );
             metrics.checkpoint("shell_command_l1", "");
             Some(pipeline)
@@ -137,7 +143,10 @@ impl SecurityGateway {
         };
         if execution.l3_strategy() == L3Strategy::Multi
             && execution.allows_level(SecurityLevel::L3)
-            && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+            && execution
+                .gates()
+                .native
+                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
             && self.categories.iter().copied().any(|category| {
                 super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                     .iter()
@@ -160,6 +169,8 @@ impl SecurityGateway {
             && self.scan_execution().allows_level(SecurityLevel::L3)
             && self
                 .scan_execution()
+                .gates()
+                .native
                 .allows_model(assets::DYNAMIC_PII_ASSET.model)
         {
             let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
@@ -212,7 +223,10 @@ impl SecurityGateway {
 
         let unified_strategy_multi = execution.l3_strategy() == L3Strategy::Multi;
         let unified_l3_allowed = execution.allows_level(SecurityLevel::L3);
-        let unified_model_allowed = execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
+        let unified_model_allowed = execution
+            .gates()
+            .native
+            .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
         let unified_category_has_l3 = self.categories.iter().copied().any(|category| {
             super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                 .iter()
@@ -301,7 +315,10 @@ impl SecurityGateway {
             if *category == SecurityCategory::DynamicPii {
                 if self.max_level < SecurityLevel::L3
                     || !execution.allows_level(SecurityLevel::L3)
-                    || !execution.allows_model(assets::DYNAMIC_PII_ASSET.model)
+                    || !execution
+                        .gates()
+                        .native
+                        .allows_model(assets::DYNAMIC_PII_ASSET.model)
                 {
                     continue;
                 }
@@ -484,7 +501,10 @@ impl SecurityGateway {
                 !ntdb_l2_model_configs_for_category(&execution, category).is_empty()
             });
         let classifier_l3 = if execution.l3_strategy() == L3Strategy::Multi {
-            execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+            execution
+                .gates()
+                .native
+                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
                 && self.categories.iter().copied().any(|category| {
                     super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                         .iter()
@@ -500,7 +520,10 @@ impl SecurityGateway {
         let l3_configured = execution.allows_level(SecurityLevel::L3)
             && (classifier_l3
                 || (self.categories.contains(&SecurityCategory::DynamicPii)
-                    && execution.allows_model(assets::DYNAMIC_PII_ASSET.model)));
+                    && execution
+                        .gates()
+                        .native
+                        .allows_model(assets::DYNAMIC_PII_ASSET.model)));
         SecurityAssetReadiness {
             l1: configured_level_readiness(self.shell_command_configured(&execution)),
             l2: configured_level_readiness(l2_configured),

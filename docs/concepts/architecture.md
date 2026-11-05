@@ -23,7 +23,7 @@ flowchart TB
     subgraph core["Rust core (patronus-ark)"]
         GW["SecurityGateway<br/>(orchestrator + request registry)"]
         GW --> PIPE["Per-category Pipelines"]
-        PIPE --> L1["L1 · native detectors<br/>(injection / dlp / pii / mcp)"]
+        PIPE --> L1["L1 · native detectors<br/>(injection / threat / dlp / pii / mcp / shell_command)"]
         PIPE --> L2["L2 · NTDB executor<br/>(shared tokenizer + static embedder + ONNX heads)"]
         L2 -.promote + token IDs.-> WORKER["L3 background worker<br/>(cost-scheduled queue)"]
         WORKER --> L3["L3 · full ONNX transformers<br/>(RAM-resident, TTL-evicted)"]

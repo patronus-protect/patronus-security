@@ -1,0 +1,16 @@
+// Cedar schema of the shell-risk requests over patronus.facts/1 (`policies/cedar.py`).
+entity Agent;
+entity Target;
+type SegmentContext = {
+  program: String, verb: String, role: String, sensitive_read: Bool, nested: String, sql: Set<String>, ops: Set<String>, access: Set<String>, classes: Set<String>,
+  objects: Set<String>, paths: Set<String>, values: Set<String>, argv: Set<String>, settings: Set<String>,
+  grants: Set<String>, host_root_mount: Bool, privileged: Bool, fixture: Bool, hosts: Set<String>,
+  net_scopes: Set<String>, dialect: String, patterns: Set<String>
+};
+type CommandContext = {
+  flows: Set<String>, objects: Set<String>, atoms: Set<String>, programs: Set<String>, ops: Set<String>,
+  settings: Set<String>, hosts: Set<String>, net_scopes: Set<String>, dialect: String, segments: Long,
+  patterns: Set<String>
+};
+action segment appliesTo { principal: Agent, resource: Target, context: SegmentContext };
+action command appliesTo { principal: Agent, resource: Target, context: CommandContext };

@@ -246,7 +246,7 @@ def _run_benign(gateway):
 
 
 def _classifier_modes(gateway):
-    modes = [("l2_only", {"levels": {"l3": False}})]
+    modes = [("l2_only", {"l3": False})]
     if gateway.max_level == "l3":
         modes.append(("with_l3", {}))
     return modes
@@ -760,7 +760,7 @@ def _native_l1_case(
 
 
 def _native_l1_gates(only_model=None):
-    gates = {"levels": {"l2": False, "l3": False}}
+    gates = {"l2": False, "l3": False}
     if only_model is not None:
         gates["models"] = {model: model == only_model for model in DLP_NATIVE_MODELS}
         # Isolated producer benchmarks explicitly opt into non-default heuristics.

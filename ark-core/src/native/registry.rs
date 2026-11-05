@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use super::NativePolicy;
+use super::NativeGates;
+use crate::detectors::NativeDetector;
 use crate::{
     detectors::{dlp, injection::*, mcp, pii, NativeDetection},
     threat::NativeText,
-    Category,
+    SecurityCategory,
 };
 use std::sync::LazyLock;
 
-type Detect = Box<dyn Fn(&NativeText<'_>, &dyn NativePolicy) -> NativeDetection + Send + Sync>;
+type Detect = Box<dyn Fn(&NativeText<'_>, &NativeGates) -> NativeDetection + Send + Sync>;
 
 /// An opaque producer and its shared outer gates. Pipeline state lives with the spec.
 pub struct NativeProducerSpec {
-    category: Category,
+    category: SecurityCategory,
     id: &'static str,
     parent: Option<&'static str>,
     rule: Option<&'static str>,
@@ -22,23 +23,19 @@ impl NativeProducerSpec {
     pub fn id(&self) -> &'static str {
         self.id
     }
-    pub fn category(&self) -> Category {
+    pub fn category(&self) -> SecurityCategory {
         self.category
     }
 
     /// Parent/model/required-rule gates, independent of host level or conditional gates.
-    pub fn enabled(&self, policy: &dyn NativePolicy) -> bool {
-        self.parent.is_none_or(|id| policy.allows_model(id))
-            && policy.allows_model(self.id)
-            && self.rule.is_none_or(|id| policy.allows_rule(id))
+    pub fn enabled(&self, gates: &NativeGates) -> bool {
+        self.parent.is_none_or(|id| gates.allows_model(id))
+            && gates.allows_model(self.id)
+            && self.rule.is_none_or(|id| gates.allows_rule(id))
     }
 
-    pub(super) fn detect(
-        &self,
-        text: &NativeText<'_>,
-        policy: &dyn NativePolicy,
-    ) -> NativeDetection {
-        (self.detect)(text, policy)
+    pub(super) fn detect(&self, text: &NativeText<'_>, gates: &NativeGates) -> NativeDetection {
+        (self.detect)(text, gates)
     }
 }
 
@@ -55,7 +52,8 @@ fn dlp_pipeline() -> &'static dlp::dlp::DlpPipeline {
     &PIPELINE
 }
 
-pub(super) fn producers(category: Category) -> Vec<NativeProducerSpec> {
+/// Producers of one native category; see [`super::NATIVE_CATEGORIES`].
+pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
     let mut specs = Vec::new();
     macro_rules! add {
         ($ty:path, $id:literal, $parent:expr, $rule:expr) => {{
@@ -65,41 +63,41 @@ pub(super) fn producers(category: Category) -> Vec<NativeProducerSpec> {
                 id: $id,
                 parent: $parent,
                 rule: $rule,
-                detect: Box::new(move |prepared, _policy| pipeline.detect_prepared(prepared)),
+                detect: Box::new(move |prepared, _gates| pipeline.detect_prepared(prepared)),
             });
         }};
     }
     match category {
-        Category::Pii => {
+        SecurityCategory::Pii => {
             let pipeline = pii_pipeline();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:pii",
                 parent: None,
                 rule: None,
-                detect: Box::new(move |prepared, policy| {
+                detect: Box::new(move |prepared, gates| {
                     pipeline.detect_prepared_with_mode(
                         prepared,
-                        |id| policy.allows_rule(id),
-                        policy.explain(),
-                        policy.pii_mode(),
+                        |id| gates.allows_rule(id),
+                        gates.explain,
+                        gates.pii_mode,
                     )
                 }),
             });
         }
-        Category::Dlp => {
+        SecurityCategory::Dlp => {
             let pipeline = dlp_pipeline();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:dlp",
                 parent: None,
                 rule: None,
-                detect: Box::new(move |prepared, policy| {
+                detect: Box::new(move |prepared, gates| {
                     pipeline.detect_prepared_with_mode(
                         prepared,
-                        |id| policy.allows_rule(id),
-                        policy.explain(),
-                        policy.dlp_mode(),
+                        |id| gates.allows_rule(id),
+                        gates.explain,
+                        gates.dlp_mode,
                     )
                 }),
             });
@@ -134,15 +132,15 @@ pub(super) fn producers(category: Category) -> Vec<NativeProducerSpec> {
                 Some("dlp_destructive_operation")
             );
         }
-        Category::Injection => {
+        SecurityCategory::Injection => {
             let pipeline = rule_catalog::InjectionRuleCatalogPipeline::new();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:injection_rule_catalog",
                 parent: Some("native:injection_l1"),
                 rule: None,
-                detect: Box::new(move |prepared, policy| {
-                    pipeline.detect_prepared(prepared, |id| policy.allows_rule(id))
+                detect: Box::new(move |prepared, gates| {
+                    pipeline.detect_prepared(prepared, |id| gates.allows_rule(id))
                 }),
             });
             add!(
@@ -234,6 +232,7 @@ pub(super) fn producers(category: Category) -> Vec<NativeProducerSpec> {
                 "native:output_manipulation"
             );
         }
+        _ => {}
     }
     specs
 }

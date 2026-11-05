@@ -5,11 +5,9 @@ use std::{
     path::Path,
 };
 
+use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{
-        dlp::{dlp::DLP_PATTERNS, score::DlpMode},
-        pii::{pii::PII_PATTERNS, score::PiiMode},
-    },
+    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -30,10 +28,10 @@ struct FixtureRow {
     known_gap: bool,
     /// PII rows for the opt-in modes (K03 context engine) name the mode they run in.
     #[serde(default)]
-    pii_mode: PiiMode,
+    pii_mode: ScoreMode,
     /// DLP rows for the opt-in modes (K04 score model) name the mode they run in.
     #[serde(default)]
-    dlp_mode: DlpMode,
+    dlp_mode: ScoreMode,
     /// Literal rows carry `text`; secret rows carry `template` + `secrets` recipes.
     text: Option<String>,
     template: Option<String>,
@@ -67,14 +65,17 @@ struct FixtureEntity {
 /// Default-off DLP classes (business records, content) are reachability-tested
 /// with exactly their own rules opted in; every other row runs on the defaults,
 /// in the PII and DLP modes the row names (default `strict`).
-fn gates_for(target_label: &str, pii_mode: PiiMode, dlp_mode: DlpMode) -> ScanGateMatrix {
+fn gates_for(target_label: &str, pii_mode: ScoreMode, dlp_mode: ScoreMode) -> ScanGateMatrix {
     let mut gates = ScanGateMatrix {
-        pii_mode,
-        dlp_mode,
+        native: patronus_ark::NativeGates {
+            pii_mode,
+            dlp_mode,
+            ..Default::default()
+        },
         ..ScanGateMatrix::default()
     };
     for pattern in DLP_PATTERNS {
-        if pattern.entity_group == target_label && !gates.allows_rule(pattern.name) {
+        if pattern.entity_group == target_label && !gates.native.allows_rule(pattern.name) {
             gates.set_rule(pattern.name, true);
         }
     }
