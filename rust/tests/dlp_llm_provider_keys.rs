@@ -282,7 +282,9 @@ fn langsmith_keys_need_a_known_kind_and_both_hex_parts() {
         let text = format!("LANGSMITH_API_KEY={candidate}\n");
         assert_eq!(rule_hit(&text, "dlp_langsmith_key"), ok, "{text}");
     }
-    let upper = value.to_ascii_uppercase().replacen("LSV2_PT_", "lsv2_pt_", 1);
+    let upper = value
+        .to_ascii_uppercase()
+        .replacen("LSV2_PT_", "lsv2_pt_", 1);
     let text = format!("LANGSMITH_API_KEY={upper}\n");
     assert!(!rule_hit(&text, "dlp_langsmith_key"), "{text}");
     let text = format!("LANGSMITH_API_KEY={value}0\n");

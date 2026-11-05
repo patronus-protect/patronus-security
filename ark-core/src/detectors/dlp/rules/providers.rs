@@ -576,6 +576,62 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_boundary("")
         .with_subtype(SecretSubtype::ApiKey),
     },
+    // P02: LangSmith personal access tokens (`lsv2_pt_`) and service keys
+    // (`lsv2_sk_`): 32 and 10 lower-case hex digits.
+    DlpPattern {
+        name: "dlp_langsmith_key",
+        pattern: r"lsv2_(?:pt|sk)_[0-9a-f]{32}_[0-9a-f]{10}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/langsmith/langsmith.go",
+            &["lsv2_"],
+        )
+        .with_provider("langsmith")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: Pinecone API keys, `pcsk_`, a 5 or 6 character key ID, `_` and a
+    // 63 character secret, base62 with both cases.
+    DlpPattern {
+        name: "dlp_pinecone_key",
+        pattern: r"pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}",
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/pinecone/pinecone.go",
+            &["pcsk_"],
+        )
+        .with_provider("pinecone")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P02: ElevenLabs API keys, `sk_` and 48 lower-case hex digits.
+    DlpPattern {
+        name: "dlp_elevenlabs_key",
+        pattern: r"sk_[0-9a-f]{48}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 45,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/elevenlabs/v2/elevenlabs.go",
+            &["sk_"],
+        )
+        .with_provider("elevenlabs")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
     // F05: credential prefixes of the IAM unique-ID table (long-term AKIA,
     // temporary ASIA, STS bearer ABIA, context-specific ACCA, legacy A3T…)

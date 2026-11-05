@@ -176,6 +176,13 @@ the M1 work on presidio_favored) are opt-in.
   example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
   finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
   strings stay silent. Matches carry `structure: "xml"`.
+- Detection change: LLM/AI provider keys (P02). New prefix rules with a token boundary, each per
+  TruffleHog: `dlp_langsmith_key` (`lsv2_pt_` or `lsv2_sk_`, 32 lower-case hex digits, `_` and 10
+  lower-case hex digits), `dlp_pinecone_key` (`pcsk_`, a 5 or 6 character key ID, `_` and 63 base62
+  with both cases) and `dlp_elevenlabs_key` (`sk_` and 48 lower-case hex digits). Azure OpenAI,
+  Weights & Biases, AssemblyAI and Deepgram keys are bare hex or lower-case alphanumeric strings
+  without an own marker and stay with the generic rules under their key names; Stability AI has no
+  format the pinned gitleaks or TruffleHog detects and gets no rule.
 - Detection change: LLM provider keys (P01). New rules `dlp_perplexity_key` (`pplx-` and 48
   base62, gitleaks perplexity-api-key), `dlp_cohere_key` (40 base62 under a Cohere or `CO_API_KEY`
   key with a credential noun, gitleaks cohere-api-token), `dlp_openrouter_key` (`sk-or-v1-` and 64
