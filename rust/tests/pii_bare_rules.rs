@@ -9,7 +9,7 @@
 //! counter-context term. Its low base score ranks it below the labelled rules in
 //! `balanced` and `recall`.
 
-use patronus_ark::detectors::pii::pii::PII_PATTERNS;
+use patronus_ark::detectors::pii::pii::{PiiPipeline, PII_PATTERNS};
 use patronus_ark::{
     NativeGates, ScanGateMatrix, ScoreMode, SecurityCategory, SecurityGateway, SecurityLevel,
     SecurityScanResult,
@@ -232,6 +232,28 @@ fn bare_values_stay_silent_with_the_default_gates_in_every_mode() {
             }
         }
     }
+}
+
+#[test]
+fn the_unfiltered_pipeline_keeps_the_bare_rules_off() {
+    let pipeline = PiiPipeline::new();
+    let texts: Vec<String> = CASES
+        .iter()
+        .flat_map(|case| BARE.map(|template| template.replace("{}", case.2)))
+        .collect();
+    let mut reported: Vec<_> = texts
+        .iter()
+        .zip(pipeline.evaluate_batch(&texts))
+        .map(|(text, result)| (text, result.class_name))
+        .filter(|(_, class)| class != "safe")
+        .collect();
+    reported.extend(
+        texts
+            .iter()
+            .map(|text| (text, pipeline.evaluate(text).class_name))
+            .filter(|(_, class)| class != "safe"),
+    );
+    assert!(reported.is_empty(), "{reported:#?}");
 }
 
 #[test]
