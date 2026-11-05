@@ -406,7 +406,11 @@ def test_cli_count_json_and_check(tmp_path):
     assert {
         "entity_id": "pii.de.tax_id",
         "country": "de",
-        "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
+        "sources": [
+            "pii_steuer_id_de: steuer_id",
+            "pii_steuer_id_de_bare: steuer_id",
+            "pii_steuer_id_de_context_free: steuer_id_issued",
+        ],
     } in payload["ark"]["units"]
     # B01/B02/B16: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
     vat = {unit["entity_id"]: unit for unit in payload["ark"]["units"] if unit["entity_id"].endswith((".vat_id", ".vat_code"))}
