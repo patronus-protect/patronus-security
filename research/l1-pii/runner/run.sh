@@ -135,6 +135,7 @@ $feedback"
     -E PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" \
     -E CARGO_TARGET_DIR="$SHARED/target" \
     -E CARGO_PROFILE_TEST_OPT_LEVEL=1 \
+    -E CARGO_PROFILE_DEV_DEBUG=line-tables-only -E CARGO_PROFILE_TEST_DEBUG=line-tables-only \
     -E ARK_L1_DEV_DATA="$ROOT/data/dev" \
     -E DISABLE_AUTOUPDATER=1 \
     "$HOME/.local/bin/claude" -p "$prompt" --model "$MODEL" --dangerously-skip-permissions --max-turns 250

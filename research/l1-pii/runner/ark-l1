@@ -1318,7 +1318,10 @@ def gate_env() -> dict[str, str]:
     # test binaries about 6x faster. Only the `test` profile changes; run.sh sets it for the agent too.
     return {"CARGO_TARGET_DIR": str(GATE_TARGET), "CARGO_HOME": str(GATE_HOME / "cargo"),
             "XDG_CACHE_HOME": str(GATE_HOME / "cache"), "VIRTUAL_ENV": str(GATE_VENV),
-            "PIP_NO_CACHE_DIR": "1", "CARGO_PROFILE_TEST_OPT_LEVEL": "1"}
+            "PIP_NO_CACHE_DIR": "1", "CARGO_PROFILE_TEST_OPT_LEVEL": "1",
+            # Small target dirs: line tables keep backtraces; the gate builds each commit once.
+            "CARGO_PROFILE_DEV_DEBUG": "line-tables-only", "CARGO_PROFILE_TEST_DEBUG": "line-tables-only",
+            "CARGO_INCREMENTAL": "0"}
 
 
 def import_agent_commits(cur: dict) -> str | None:
