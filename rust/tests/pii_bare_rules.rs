@@ -358,3 +358,123 @@ fn the_example_profile_enables_exactly_the_bare_rules() {
     assert_eq!(enabled, expected);
     assert_eq!(profile.native.rules.len(), expected.len());
 }
+
+/// Hard negatives of the PII goldens and of the bilingual fixture.
+fn hard_negatives() -> Vec<String> {
+    let goldens = include_str!("../../python/patronus_ark/benchmark_data/pii_l1.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .filter(|row| row["case_type"] == "hard_negative")
+        .map(|row| row["text"].as_str().unwrap().to_owned());
+    let fixture: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
+    let fixture = fixture
+        .into_iter()
+        .filter(|rule| rule["category"] == "pii")
+        .flat_map(|rule| {
+            ["de", "en"].map(|language| rule["hard_negatives"][language].as_array().cloned())
+        })
+        .flatten()
+        .flatten()
+        .map(|text| text.as_str().unwrap().to_owned());
+    goldens.chain(fixture).collect()
+}
+
+/// `text` of every row of the JSONL files in the directory that the environment
+/// variable names (the benign corpora of `scripts/l1_dlp/prepare_corpora.py`).
+fn benign_corpus(variable: &str) -> Vec<String> {
+    let dir = std::env::var(variable).unwrap_or_else(|_| panic!("{variable} is not set"));
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .collect();
+    files.sort();
+    files
+        .iter()
+        .flat_map(|path| {
+            std::fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .map(|line| {
+                    let row: serde_json::Value = serde_json::from_str(line).unwrap();
+                    row["text"].as_str().unwrap().to_owned()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+type Spans = std::collections::BTreeSet<(usize, usize)>;
+
+fn spans(scanner: &SecurityGateway, text: &str) -> Spans {
+    scan(scanner, text)
+        .evidence_spans
+        .iter()
+        .map(|span| (span.start_byte, span.end_byte))
+        .collect()
+}
+
+/// Spans of `on` that the default gates (`off`, one set per text) do not report.
+fn new_spans(on: &SecurityGateway, texts: &[String], off: &[Spans]) -> usize {
+    texts
+        .iter()
+        .zip(off)
+        .map(|(text, off)| spans(on, text).difference(off).count())
+        .sum()
+}
+
+/// False-positive report per bare rule, each enabled alone, against the default
+/// gates (PR #284): new spans on the PII hard negatives and per MB of the pinned
+/// benign code and docs corpora (dev split).
+///
+/// ```text
+/// ARK_BENIGN_CODE=~/ark-dlp/data/dev/benign_code ARK_BENIGN_DOCS=~/ark-dlp/data/dev/benign_docs \
+///   cargo test --release -p patronus-ark --test pii_bare_rules -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "requires ARK_BENIGN_CODE and ARK_BENIGN_DOCS"]
+fn bare_rule_false_positive_report() {
+    let corpora = [
+        hard_negatives(),
+        benign_corpus("ARK_BENIGN_CODE"),
+        benign_corpus("ARK_BENIGN_DOCS"),
+    ];
+    let megabytes = corpora
+        .each_ref()
+        .map(|texts| texts.iter().map(String::len).sum::<usize>() as f64 / 1e6);
+    println!(
+        "hard negatives: {}; benign code: {:.2} MB; benign docs: {:.2} MB",
+        corpora[0].len(),
+        megabytes[1],
+        megabytes[2]
+    );
+    println!("| Rule | Hard-negative spans strict / balanced | Code FP per MB strict / balanced | Docs FP per MB strict / balanced |");
+    println!("|---|---:|---:|---:|");
+    let modes = [ScoreMode::Strict, ScoreMode::Balanced];
+    let off = modes.map(|mode| {
+        let scanner = scanner(gates(None, mode));
+        corpora.each_ref().map(|texts| {
+            texts
+                .iter()
+                .map(|text| spans(&scanner, text))
+                .collect::<Vec<_>>()
+        })
+    });
+    for rule in bare_rule_ids() {
+        let counts = modes.map(|mode| {
+            let on = scanner(gates(Some(rule), mode));
+            let off = &off[usize::from(mode == ScoreMode::Balanced)];
+            [0, 1, 2].map(|i| new_spans(&on, &corpora[i], &off[i]))
+        });
+        let per_mb =
+            |i: usize| [0, 1].map(|m| format!("{:.2}", counts[m][i] as f64 / megabytes[i]));
+        let (code, docs) = (per_mb(1), per_mb(2));
+        println!(
+            "| `{rule}` | {} / {} | {} / {} | {} / {} |",
+            counts[0][0], counts[1][0], code[0], code[1], docs[0], docs[1]
+        );
+    }
+}
