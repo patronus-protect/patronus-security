@@ -56,13 +56,17 @@ pub fn key_field_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
 
 fn row_values(text: &str, key: &Regex, by_column: bool) -> Vec<ConfigValue> {
     let mut values = Vec::new();
-    for head in INSERT_HEAD.captures_iter(text) {
-        let columns = head
-            .get(1)
-            .filter(|_| by_column)
-            .map(|columns| column_names(text, columns.range()));
-        let rows = insert_rows(text, head.get(0).unwrap().end());
-        bind(text, key, columns.as_deref(), &rows, true, &mut values);
+    // Literal gates before the line-anchored statement regexes; dumps write
+    // `INTO` in one case.
+    if text.contains("INTO") || text.contains("into") {
+        for head in INSERT_HEAD.captures_iter(text) {
+            let columns = head
+                .get(1)
+                .filter(|_| by_column)
+                .map(|columns| column_names(text, columns.range()));
+            let rows = insert_rows(text, head.get(0).unwrap().end());
+            bind(text, key, columns.as_deref(), &rows, true, &mut values);
+        }
     }
     if text.contains("COPY ") {
         for head in COPY_HEAD.captures_iter(text) {
