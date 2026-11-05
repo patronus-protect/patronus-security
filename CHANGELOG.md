@@ -21,7 +21,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   value-shape filter (structure `sql`). `dlp_csrf_token` and `dlp_password_hash` bind through
   settings key fields only; a `password_hash` column of user digests and a container column
   (`zugangsdaten`, `credentials`) without a credential label bind nothing. SQL built in code
-  strings, DDL, `NULL`, numbers and expressions (`current_setting('…')`) bind nothing. A
+  strings, DDL, `NULL`, numbers and expressions (`current_setting('…')`) bind nothing; an
+  `INSERT` binds only when its tuples end in `;`, as in a dump. A stored password hash under a
+  password key of a row (hex digest, bcrypt, Argon2, SHA-crypt, Django/Werkzeug, `{SSHA}` …) and
+  a word or identifier in a row field (`'testpass'` in test seed rows) bind nothing. A
   placeholder after an auth scheme or a variable name (`Bearer HIER_…_EINTRAGEN`,
   `NAME=BITTE_AENDERN`) is a placeholder for every rule, and a sequential or repeated fill in a
   SQL row counts as a test value. Dev `sql.*` carrier misses of implemented credential entities
