@@ -89,3 +89,22 @@ Apache-2.0 components are licensed under the Apache License, Version 2.0. You
 may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0. PromptInject is
 used under the MIT License; its copyright and permission notice are retained
 here.
+
+-------------------------------------------------------------------------------
+5. Shell-command policies and facts  (ark-core/src/detectors/shell/)
+-------------------------------------------------------------------------------
+The bundle-default shell policies (`data/dc_rules.json`) are translations of
+DefenseClaw guardrail rules to Cedar conditions over `patronus.facts/1`, and the
+enum sets of `patronus.facts/1` (operations, path access, network scope, parse
+status, dialect) follow DefenseClaw's `defenseclaw.guardrail.semantic.v1`
+schema. Policies are evaluated with the Cedar policy engine.
+
+    DefenseClaw — Apache License 2.0
+    Copyright 2026 Cisco Systems, Inc.
+
+    Cedar (`cedar-policy`) — Apache License 2.0
+    Copyright Cedar Contributors
+    https://github.com/cedar-policy/cedar
+
+Licensed under the Apache License, Version 2.0. You may obtain a copy at
+http://www.apache.org/licenses/LICENSE-2.0
