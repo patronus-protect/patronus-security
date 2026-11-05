@@ -16,12 +16,27 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `manylinux_2_28` instead of `manylinux2014`, so it needs glibc 2.28 or newer (CentOS 7 and
   Amazon Linux 2 are no longer supported). The release workflow now loads and runs the
   injection L3 model from the built Linux wheel.
+- Model-backed scanners returned wrong results on x86-64 CPUs without VNNI (Intel before
+  Cascade Lake or Alder Lake, AMD before Zen 4): ONNX Runtime's U8S8 `MatMulInteger` kernels
+  saturate there, so GLiNER `dynamic-pii` found no entities and the L3 classifier logits drifted
+  (by up to 9.7 for injection L3 on a Haswell host). On these CPUs every ONNX session now
+  loads its int8 weights rewritten to the equivalent uint8 form; arm64 and VNNI CPUs load the
+  models unchanged. Effect on a Haswell host: GLiNER exact-span F1 on Presidio's
+  `synth_dataset_v2` PERSON 77.5 / LOCATION 61.9 / ORG 54.4 (arm64: 77.7 / 62.2 / 54.1), about
+  +10 % L3 inference time and +0.3 s model load.
 - Core ships its own `NOTICE` (crate and Python package) with the Prompt Armor, pipelock,
   PromptInject, Garak, DefenseClaw and Cedar attributions of the Core sources; 0.1.15 carried
   them only in the root and Ark `NOTICE`. The root `NOTICE` points sections 3 and 4 at their
   current `ark-core/` paths. `scripts/release_legal_files.py` checks every packaged license and
   `NOTICE` copy and that Core and root attributions agree; CI runs it on every pull request, so
   a stale copy no longer surfaces first in the release workflow.
+- Python: `dynamic-pii` no longer returns silently empty results. A gateway with `dynamic-pii`
+  and a `max_level` below `l3` raises `ValueError` (the L3-only GLiNER pipeline never ran there),
+  and `scan_all`/`scan_category`/`scan_categories` over `dynamic-pii` raise `RuntimeError` until
+  `warmup()` has loaded its model. **Breaking** for code that relied on the empty list.
+- New GLiNER model test (`rust/tests/dynamic_pii.rs`, ignored like the other model tests; run
+  with `PATRONUS_TEST_GLINER_DIR` and `--ignored`): PERSON, ORGANIZATION and LOCATION must be
+  found in two English and two German sentences.
 
 ## [0.1.15] - 2026-11-05
 
@@ -181,6 +196,20 @@ the M1 work on presidio_favored) are opt-in.
   example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
   finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
   strings stay silent. Matches carry `structure: "xml"`.
+- Detection change: LLM/AI provider keys (P02). New prefix rules with a token boundary, each per
+  TruffleHog: `dlp_langsmith_key` (`lsv2_pt_` or `lsv2_sk_`, 32 lower-case hex digits, `_` and 10
+  lower-case hex digits), `dlp_pinecone_key` (`pcsk_`, a 5 or 6 character key ID, `_` and 63 base62
+  with both cases) and `dlp_elevenlabs_key` (`sk_` and 48 lower-case hex digits). Stability AI has
+  no format the pinned gitleaks or TruffleHog detects and gets no rule.
+- Detection change: LLM/AI provider context keys (P02 review), all modes. Azure OpenAI, Weights &
+  Biases, AssemblyAI and Deepgram keys have no own marker; like TruffleHog's keyword detectors, new
+  context rules bind their lower-case hex values to the provider name: `dlp_azure_openai_key` (32
+  digits under an Azure OpenAI key or in `AzureOpenAI(api_key=…)`), `dlp_wandb_key` (40 under a
+  wandb key, after `wandb login` or in `wandb.login(key=…)`), `dlp_assemblyai_key` (32 under an
+  AssemblyAI key or `aai.settings.api_key`) and `dlp_deepgram_key` (40 under a Deepgram key or in
+  `DeepgramClient(…)`). IDs under the provider name (`WANDB_RUN_ID`, `DEEPGRAM_PROJECT_ID`) stay
+  silent. The values were reported by generic rules under a credential key only, without provider
+  attribution, and not at all in client calls or `wandb login`.
 - Detection change: LLM provider keys (P01). New rules `dlp_perplexity_key` (`pplx-` and 48
   base62, gitleaks perplexity-api-key), `dlp_cohere_key` (40 base62 under a Cohere or `CO_API_KEY`
   key with a credential noun, gitleaks cohere-api-token), `dlp_openrouter_key` (`sk-or-v1-` and 64

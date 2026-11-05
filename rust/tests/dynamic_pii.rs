@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -272,28 +274,119 @@ fn l2_gateway_does_not_run_l3_only_pipeline() {
         .is_empty());
 }
 
+/// A temporary model directory linking the GLiNER Edge bundle of
+/// `PATRONUS_TEST_GLINER_DIR`; removed on drop. The model tests are ignored by
+/// default and run where the bundle is at hand (`cargo test -- --ignored`).
+#[cfg(unix)]
+struct GlinerModelDir {
+    path: PathBuf,
+}
+
+#[cfg(unix)]
+impl GlinerModelDir {
+    fn new(name: &str) -> Self {
+        let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
+            .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("{name}_{}_{}", std::process::id(), suffix));
+        let bundle_dir = path.join(DYNAMIC_PII_ASSET.destination_path);
+        std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
+        symlink(bundle_source, &bundle_dir).unwrap();
+        Self { path }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for GlinerModelDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+#[test]
+#[cfg(unix)]
+#[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
+fn gliner_finds_person_organization_and_location_in_english_and_german() {
+    let model_dir = GlinerModelDir::new("patronus_dynamic_pii_entities_test");
+    let mut gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::DynamicPii],
+        SecurityLevel::L3,
+        Some(model_dir.path.clone()),
+        false,
+    );
+    gateway
+        .set_dynamic_pii_config(DynamicPiiConfig {
+            labels: ["person", "organization", "location"]
+                .map(String::from)
+                .to_vec(),
+            ..DynamicPiiConfig::default()
+        })
+        .unwrap();
+    gateway.warmup().unwrap();
+
+    let cases: [(&str, &[(&str, &str)]); 4] = [
+        (
+            "Alexandr Petrov arbeitet bei Siemens in Frankfurt.",
+            &[
+                ("person", "Alexandr Petrov"),
+                ("organization", "Siemens"),
+                ("location", "Frankfurt"),
+            ],
+        ),
+        (
+            "Maria Schneider zieht von Hamburg nach München und fängt bei der Deutschen Bahn an.",
+            &[
+                ("person", "Maria Schneider"),
+                ("location", "Hamburg"),
+                ("location", "München"),
+                ("organization", "Deutschen Bahn"),
+            ],
+        ),
+        (
+            "John Smith lives in London and works for Microsoft.",
+            &[
+                ("person", "John Smith"),
+                ("location", "London"),
+                ("organization", "Microsoft"),
+            ],
+        ),
+        (
+            "Angela Merkel met the board of Volkswagen in Berlin.",
+            &[
+                ("person", "Angela Merkel"),
+                ("organization", "Volkswagen"),
+                ("location", "Berlin"),
+            ],
+        ),
+    ];
+    for (text, expected) in cases {
+        let results = gateway.scan_category(SecurityCategory::DynamicPii, text);
+        let found = results
+            .iter()
+            .flat_map(|result| &result.evidence_spans)
+            .map(|span| (span.label.as_str(), span.text.as_str()))
+            .collect::<Vec<_>>();
+        for entity in expected {
+            assert!(
+                found.contains(entity),
+                "{text:?}: GLiNER missed {entity:?}, found {found:?}"
+            );
+        }
+    }
+}
+
 #[test]
 #[cfg(unix)]
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
-    let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
-        .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let model_dir = std::env::temp_dir().join(format!(
-        "patronus_dynamic_pii_test_{}_{}",
-        std::process::id(),
-        suffix
-    ));
-    let bundle_dir = model_dir.join(DYNAMIC_PII_ASSET.destination_path);
-    std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
-    symlink(bundle_source, &bundle_dir).unwrap();
+    let model_dir = GlinerModelDir::new("patronus_dynamic_pii_test");
     let mut gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        Some(model_dir.clone()),
+        Some(model_dir.path.clone()),
         false,
     );
     gateway
@@ -396,32 +489,17 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         groups[1]["labels"],
         serde_json::json!(["organization", "location"])
     );
-    drop(gateway);
-    std::fs::remove_dir_all(model_dir).unwrap();
 }
 
 #[test]
 #[cfg(unix)]
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn hey_person_score_uses_the_stable_base_only_label_group() {
-    let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
-        .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let model_dir = std::env::temp_dir().join(format!(
-        "patronus_dynamic_pii_hey_test_{}_{}",
-        std::process::id(),
-        suffix
-    ));
-    let bundle_dir = model_dir.join(DYNAMIC_PII_ASSET.destination_path);
-    std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
-    symlink(bundle_source, &bundle_dir).unwrap();
+    let model_dir = GlinerModelDir::new("patronus_dynamic_pii_hey_test");
     let mut gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        Some(model_dir.clone()),
+        Some(model_dir.path.clone()),
         false,
     );
     gateway
@@ -459,34 +537,18 @@ fn hey_person_score_uses_the_stable_base_only_label_group() {
         .unwrap();
     assert_eq!(groups[0]["labels"], serde_json::json!(["person"]));
     assert_eq!(groups[1]["labels"], serde_json::json!(["street_address"]));
-
-    drop(gateway);
-    std::fs::remove_dir_all(model_dir).unwrap();
 }
 
 #[test]
 #[cfg(unix)]
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
-    let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
-        .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let model_dir = std::env::temp_dir().join(format!(
-        "patronus_dynamic_pii_latency_test_{}_{}",
-        std::process::id(),
-        suffix
-    ));
-    let bundle_dir = model_dir.join(DYNAMIC_PII_ASSET.destination_path);
-    std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
-    symlink(bundle_source, &bundle_dir).unwrap();
+    let model_dir = GlinerModelDir::new("patronus_dynamic_pii_latency_test");
 
     let mut gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        Some(model_dir.clone()),
+        Some(model_dir.path.clone()),
         false,
     );
     gateway
@@ -522,9 +584,6 @@ fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
         scan_wall_ms < 1_000.0,
         "warmed GLiNER single scan took {scan_wall_ms:.2} ms; warmup took {warmup_ms:.2} ms and was excluded"
     );
-
-    drop(gateway);
-    std::fs::remove_dir_all(model_dir).unwrap();
 }
 
 #[test]
