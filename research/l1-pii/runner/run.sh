@@ -39,10 +39,16 @@ exec 9>"$SHARED/state/run.lock"
 flock -n 9 || { echo "== run lock busy; queued until the other run ends"; flock 9; }
 # A second programme on this host (e.g. a DLP lane next to PII) starts a new task only while the
 # priority programme's last run found nothing to do; a run in progress (resume) always finishes.
+# Its green PRs still land meanwhile: a land-only run merges one or verifies it (one short agent
+# round), never a restack, review or task. Otherwise they waited for hours (#265, 2026-11-05).
 if [ -n "${ARK_L1_WHEN_IDLE:-}" ] && [ "$ARK_L1_WHEN_IDLE" != "$PROGRAM" ] \
     && [ ! -e "$ROOT/state/current.json" ] && ! "$BIN/ark-l1" --program "$ARK_L1_WHEN_IDLE" idle; then
-  echo "== $ARK_L1_WHEN_IDLE has work; no $PROGRAM run"
-  exit 0
+  if ! "$BIN/ark-l1" --program "$PROGRAM" landable; then
+    echo "== $ARK_L1_WHEN_IDLE has work; no $PROGRAM run"
+    exit 0
+  fi
+  echo "== $ARK_L1_WHEN_IDLE has work; land-only $PROGRAM run"
+  export ARK_L1_LAND_ONLY=1
 fi
 LOG="$ROOT/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1

@@ -32,6 +32,8 @@ Subcommands:
   status          print stack, blocked tasks and the next candidate
   idle            exit 0 when the programme's last `next` found nothing to do (NOTHING_TO_DO,
                   NO_BACKLOG); run.sh starts a second programme only then (ARK_L1_WHEN_IDLE)
+  landable        exit 0 when `next` has work on this lane's open PRs (merge, verify, restack,
+                  review); run.sh then starts the second programme anyway, with ARK_L1_LAND_ONLY=1
   own BRANCH...   print the given task branches that belong to this host's lane
 
 Verify: auto-merge (and `land`) merges a PR that changes ark-core/ only after a verify run passed
@@ -128,6 +130,10 @@ MAX_OPEN = 15
 NOTHING = 10
 # Squash-merge the bottom stack PR once its GitHub CI is green (decided 2026-10-21); 0 turns it off.
 AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
+# Set by run.sh for a second programme while the priority one has work: `next` finishes the open
+# PRs (merge, verify, restack, review) but starts no backlog task. Without it the second programme's
+# PRs waited behind the priority backlog until they conflicted with main (DLP #265/#266, 2026-11-05).
+LAND_ONLY = os.environ.get("ARK_L1_LAND_ONLY") == "1"
 MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
 RESUME_LIMIT = 3         # resumes of an unpublished gated run before the watchdog drops it
 DROP_LIMIT = 2           # watchdog drops of the same task on the same base before it is blocked
@@ -1175,6 +1181,8 @@ def cmd_next() -> int:
     review = find_review(own([p for p in prs("open") if p["number"] != merged]))
     if review is not None:
         return start_review(review)
+    if LAND_ONLY:
+        return nothing("LAND_ONLY no new task while the priority programme has work")
     if len(every) >= MAX_OPEN:
         return nothing(f"PAUSED {len(every)} open stack PRs (limit {MAX_OPEN})")
     top_name, top_sha = top
@@ -2049,6 +2057,45 @@ def cmd_status() -> int:
     return 0
 
 
+def landable(open_prs: list[dict]) -> str | None:
+    """What `next` would do for an open PR of this lane, as "<action> #<n> <branch>", else None:
+    merge or verify (auto_merge's choice), restack (conflicts with main), review (threads or red CI).
+    Read-only; a blocked RESTACK/REVIEW/VERIFY does not count."""
+    blocked, stack = load(BLOCKED, {}), load(STACK, {})  # restack() skips unrecorded branches
+    main = sha("origin/main")
+    for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
+        name, head = pr["headRefName"], pr["headRefOid"]
+        label = f"#{pr['number']} {name}"
+        if pr.get("isDraft"):
+            continue
+        ci = ci_state(head)
+        if review_threads(pr["number"]) or ci == "red":
+            if f"REVIEW:{name}" not in blocked:
+                return f"review {label}"
+            continue
+        if pr["baseRefName"] == "main" and name in stack and conflicts_with(main, head):
+            if f"RESTACK:{name}" not in blocked:
+                return f"restack {label}"
+            continue
+        if (AUTO_MERGE and pr["baseRefName"] == "main" and ci == "green"
+                and pr_mergeable(pr) == "MERGEABLE"):
+            if not needs_verify(head):
+                return f"merge {label}"
+            if f"VERIFY:{name}" not in blocked:
+                return f"verify {label}"
+    return None
+
+
+def cmd_landable() -> int:
+    if CURRENT.exists():
+        print(f"BUSY={PROGRAM}")
+        return 1
+    git("fetch", "--quiet", "--prune", "origin")
+    label = landable(own(prs("open")))
+    print(f"LANDABLE={label}" if label else "LANDABLE=none")
+    return 0 if label else 1
+
+
 def cmd_idle() -> int:
     idle = IDLE.exists() and not CURRENT.exists()
     print(f"IDLE={PROGRAM} since {IDLE.read_text().strip()}" if idle else f"BUSY={PROGRAM}")
@@ -2063,6 +2110,7 @@ def main(argv: list[str]) -> int:
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
         "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci, "idle": cmd_idle,
+        "landable": cmd_landable,
         "latency": cmd_latency, "verdict": cmd_verdict,
     }
     if cmd in table:
