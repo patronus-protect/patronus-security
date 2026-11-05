@@ -95,8 +95,8 @@ fn core_preserves_gateway_native_decisions_and_source_evidence() {
         }
         counts.push(count);
     }
-    assert_eq!(counts, [200, 4033, 1822]);
-    assert_eq!(recipes, 965);
+    assert_eq!(counts, [200, 4033, 1849]);
+    assert_eq!(recipes, 982);
 }
 
 #[test]
