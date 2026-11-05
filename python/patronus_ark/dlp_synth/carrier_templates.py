@@ -1477,6 +1477,36 @@ PROFILES = {
     ),
     "dlp_aws_access_key": Profile("cloud.aws.access_key_id", "CLOUD_KEY", "secret", "aws_access_key_id", "AWS access key ID", "AWS-Access-Key-ID"),
     "dlp_aws_secret_key": Profile("cloud.aws.secret_access_key", "CLOUD_KEY", "secret", "aws_secret_access_key", "AWS secret access key", "AWS-Secret-Access-Key"),
+    "dlp_azure_storage_account_key": Profile(
+        "cloud.azure.storage_account_key", "CLOUD_KEY", "secret", "azure_storage_connection_string",
+        "Azure Storage connection string", "Azure-Storage-Verbindungszeichenfolge",
+        {
+            "azure_storage_account_key": (
+                "DefaultEndpointsProtocol=https;AccountName=stacmedata01;AccountKey=<<value>>;"
+                "EndpointSuffix=core.windows.net"
+            )
+        },
+    ),
+    "dlp_azure_entra_client_secret": Profile(
+        "cloud.azure.entra_client_secret", "CLOUD_KEY", "secret", "azure_client_secret", "Entra ID client secret",
+        "Entra-ID-Client-Secret",
+    ),
+    "dlp_alibaba_access_key_id": Profile(
+        "cloud.alibaba.access_key", "CLOUD_KEY", "secret", "alibaba_cloud_access_key_id", "Alibaba Cloud AccessKey ID",
+        "Alibaba-Cloud-AccessKey-ID",
+    ),
+    "dlp_alibaba_secret_key": Profile(
+        "cloud.alibaba.access_key", "CLOUD_KEY", "secret", "alibaba_cloud_access_key_secret",
+        "Alibaba Cloud AccessKey secret", "Alibaba-Cloud-AccessKey-Secret",
+    ),
+    "dlp_aws_bedrock_api_key": Profile(
+        "cloud.aws.bedrock_api_key", "CLOUD_KEY", "secret", "aws_bearer_token_bedrock", "Amazon Bedrock API key",
+        "Amazon-Bedrock-API-Schlüssel",
+    ),
+    "dlp_ibm_cloud_api_key": Profile(
+        "cloud.ibm.credentials", "CLOUD_KEY", "secret", "ibm_cloud_apikey", "IBM Cloud API key",
+        "IBM-Cloud-API-Schlüssel",
+    ),
     "dlp_google_api_key": Profile("cloud.gcp.api_key", "CLOUD_KEY", "secret", "google_maps_api_key", "Google Maps API key", "Google-Maps-API-Schlüssel"),
     "dlp_google_oauth_token": Profile("cloud.gcp.oauth_access_token", "CLOUD_KEY", "secret", "google_access_token", "Google OAuth access token", "Google-OAuth-Access-Token"),
     "dlp_gcp_client_secret": Profile("cloud.gcp.oauth_client_secret", "CLOUD_KEY", "secret", "google_client_secret", "Google OAuth client secret", "Google-OAuth-Client-Secret"),
@@ -1848,35 +1878,9 @@ PROFILES = {
         "Sourcegraph-Zugriffstoken",
     ),
     # GOLD-D4: hosting, cloud and data entities without an ARK rule.
-    "cloud.aws.bedrock_api_key": Profile(
-        "cloud.aws.bedrock_api_key", "CLOUD_KEY", "secret", "aws_bearer_token_bedrock", "Amazon Bedrock API key",
-        "Amazon-Bedrock-API-Schlüssel",
-    ),
-    "cloud.alibaba.access_key": Profile(
-        "cloud.alibaba.access_key", "CLOUD_KEY", "secret", "alibaba_cloud_access_key", "Alibaba Cloud AccessKey",
-        "Alibaba-Cloud-AccessKey",
-    ),
-    "cloud.azure.entra_client_secret": Profile(
-        "cloud.azure.entra_client_secret", "CLOUD_KEY", "secret", "azure_client_secret", "Entra ID client secret",
-        "Entra-ID-Client-Secret",
-    ),
-    "cloud.azure.storage_account_key": Profile(
-        "cloud.azure.storage_account_key", "CLOUD_KEY", "secret", "azure_storage_connection_string",
-        "Azure Storage connection string", "Azure-Storage-Verbindungszeichenfolge",
-        {
-            "azure_storage_account_key": (
-                "DefaultEndpointsProtocol=https;AccountName=stacmedata01;AccountKey=<<value>>;"
-                "EndpointSuffix=core.windows.net"
-            )
-        },
-    ),
     "cloud.gcp.service_account_key": Profile(
         "cloud.gcp.service_account_key", "CLOUD_KEY", "secret", "google_credentials", "GCP service account key",
         "GCP-Dienstkontoschlüssel",
-    ),
-    "cloud.ibm.credentials": Profile(
-        "cloud.ibm.credentials", "CLOUD_KEY", "secret", "ibm_cloud_apikey", "IBM Cloud API key",
-        "IBM-Cloud-API-Schlüssel",
     ),
     "cloud.yandex.credentials": Profile(
         "cloud.yandex.credentials", "CLOUD_KEY", "secret", "yandex_cloud_api_key", "Yandex Cloud API key",

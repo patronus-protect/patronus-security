@@ -91,6 +91,35 @@
       "lookalike": ["gcp_oauth_client_secret_long"],
       "probes": ["{\"installed\": {\"client_secret\": \"<<secret:0>>\"}}", "GOOGLE_CLIENT_SECRET=<<secret:0>>"]
     },
+    "dlp_azure_storage_account_key": {
+      "generators": ["azure_storage_account_key"],
+      "lookalike": ["azure_storage_account_key_short"],
+      "probes": ["DefaultEndpointsProtocol=https;AccountName=stacme01;AccountKey=<<secret:0>>;EndpointSuffix=core.windows.net", "{\"storage\": \"AccountName=stacme01;AccountKey=<<secret:0>>\"}"]
+    },
+    "dlp_azure_entra_client_secret": {
+      "generators": ["azure_entra_client_secret"],
+      "lookalike": ["azure_entra_client_secret_short"],
+      "probes": ["AZURE_CLIENT_SECRET=<<secret:0>>", "{\"clientSecret\": \"<<secret:0>>\"}"]
+    },
+    "dlp_alibaba_access_key_id": {
+      "generators": ["alibaba_access_key_id"],
+      "lookalike": ["alibaba_access_key_id_short"],
+      "probes": ["ALIBABA_CLOUD_ACCESS_KEY_ID=<<secret:0>>", "Die AccessKey-ID lautet <<secret:0>>."]
+    },
+    "dlp_alibaba_secret_key": {
+      "generators": ["alibaba_secret_key"],
+      "probes": ["ALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret:0>>", "aliyun:\n  access_key_secret: \"<<secret:0>>\""]
+    },
+    "dlp_aws_bedrock_api_key": {
+      "generators": ["bedrock_api_key"],
+      "lookalike": ["bedrock_api_key_short"],
+      "probes": ["AWS_BEARER_TOKEN_BEDROCK=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_ibm_cloud_api_key": {
+      "generators": ["ibm_cloud_iam_api_key"],
+      "lookalike": ["ibm_cloud_iam_api_key_short"],
+      "probes": ["IBM_CLOUD_API_KEY=<<secret:0>>", "{\"ibmcloud_api_key\": \"<<secret:0>>\"}"]
+    },
     "dlp_github_token": {
       "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
       "shape_only": ["github_pat_classic"],
@@ -583,12 +612,7 @@
     "devops.sonar.api_token": {"generators": ["sonar_user_token", "sonar_project_token"], "lookalike": ["sonar_user_token_short"]},
     "devops.codecov.access_token": {"generators": ["codecov_access_token"], "lookalike": ["codecov_access_token_short"]},
     "devops.sourcegraph.access_token": {"generators": ["sourcegraph_access_token", "sourcegraph_local_access_token"], "lookalike": ["sourcegraph_access_token_short"]},
-    "cloud.aws.bedrock_api_key": {"generators": ["bedrock_api_key"], "lookalike": ["bedrock_api_key_short"]},
-    "cloud.alibaba.access_key": {"generators": ["alibaba_access_key_id", "alibaba_secret_key"], "lookalike": ["alibaba_access_key_id_short"]},
-    "cloud.azure.entra_client_secret": {"generators": ["azure_entra_client_secret"], "lookalike": ["azure_entra_client_secret_short"]},
-    "cloud.azure.storage_account_key": {"generators": ["azure_storage_account_key"], "lookalike": ["azure_storage_account_key_short"]},
     "cloud.gcp.service_account_key": {"generators": ["gcp_service_account_key"], "lookalike": ["gcp_external_account_config"]},
-    "cloud.ibm.credentials": {"generators": ["ibm_cloud_iam_api_key"], "lookalike": ["ibm_cloud_iam_api_key_short"]},
     "cloud.yandex.credentials": {"generators": ["yandex_api_key", "yandex_static_access_key_secret"], "lookalike": ["yandex_api_key_short"]},
     "cloud.scalingo.api_token": {"generators": ["scalingo_api_token"], "lookalike": ["scalingo_api_token_short"]},
     "hosting.openshift.user_token": {"generators": ["openshift_user_token"], "lookalike": ["openshift_user_token_short"]},

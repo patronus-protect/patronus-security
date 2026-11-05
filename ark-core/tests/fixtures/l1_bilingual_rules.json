@@ -5569,5 +5569,143 @@
     "de": "2026-09-03T12:00:00 FEHLER Zugriff fehlgeschlagen",
     "en": "2026-09-03T12:00:00 ERROR Access failed",
     "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_azure_storage_account_key",
+    "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
+    "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",
+    "secrets": [
+      {
+        "gen": "azure_storage_account_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}",
+        "Der Kontoschlüssel steht nach AccountKey= in der Verbindungszeichenfolge."
+      ],
+      "en": [
+        "{\"ConnectionStrings\": {\"Storage\": \"UseDevelopmentStorage=true\"}}",
+        "AccountKey=<your-storage-account-key>;"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_azure_entra_client_secret",
+    "de": "Das Client-Secret der App-Registrierung lautet <<secret\u003a0>>",
+    "en": "auth:\n  azure_client_secret: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "azure_entra_client_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}",
+        "{\"azure\": {\"clientSecret\": \"<CLIENT-SECRET>\"}}"
+      ],
+      "en": [
+        "Entra client secrets contain Q~ after a digit.",
+        "AZURE_CLIENT_SECRET={{ azure_client_secret }}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_alibaba_access_key_id",
+    "de": "Die AccessKey-ID lautet <<secret\u003a0>>.",
+    "en": "$ aliyun configure set --access-key-id <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "alibaba_access_key_id",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ALIBABA_CLOUD_ACCESS_KEY_ID=${ALIBABA_CLOUD_ACCESS_KEY_ID}",
+        "Die AccessKey-ID beginnt mit LTAI."
+      ],
+      "en": [
+        "alibaba:\n  access_key_id: \"<your-access-key-id>\"",
+        "LTAI keys have 24 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_alibaba_secret_key",
+    "de": "ALIBABA_CLOUD_ACCESS_KEY_SECRET=<<secret\u003a0>>",
+    "en": "aliyun:\n  access_key_secret: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "alibaba_secret_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET=${ALIBABA_CLOUD_ACCESS_KEY_SECRET}",
+        "aliyun:\n  region_id: cnhangzhoufinancialzoneregion01"
+      ],
+      "en": [
+        "aliyun:\n  access_key_secret: \"<your-access-key-secret>\"",
+        "Alibaba AccessKey secrets have 30 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_aws_bedrock_api_key",
+    "de": "AWS_BEARER_TOKEN_BEDROCK=<<secret\u003a0>>",
+    "en": "Authorization: Bearer <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "bedrock_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AWS_BEARER_TOKEN_BEDROCK=${AWS_BEARER_TOKEN_BEDROCK}",
+        "Langfristige Bedrock-Schlüssel beginnen mit ABSK."
+      ],
+      "en": [
+        "export AWS_BEARER_TOKEN_BEDROCK=$(aws secretsmanager get-secret-value --secret-id bedrock-key --query SecretString --output text)",
+        "Long-term Bedrock keys start with ABSK."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_ibm_cloud_api_key",
+    "de": "ibm:\n  ibmcloud_api_key: <<secret\u003a0>>",
+    "en": "{\"ibm_cloud_api_key\": \"<<secret\u003a0>>\"}",
+    "secrets": [
+      {
+        "gen": "ibm_cloud_iam_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "IBMCLOUD_API_KEY=${IBM_CLOUD_API_KEY}",
+        "IBM-Cloud-API-Schlüssel haben 44 Zeichen."
+      ],
+      "en": [
+        "ibmcloud_api_key = \"{{ ibmcloud_api_key }}\"",
+        "ibm:\n  instance_id: 3f2b8c1e-9d4a-4e6b-8f1a-2c7d5e9b0a14"
+      ]
+    },
+    "language_neutral": false
   }
 ]
