@@ -96,6 +96,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `ScanError::Asset` reads `asset error: …` (was `Wolf asset error: …`), as Cat uses it too.
 - Core detectors share the `NativeDetector` trait (`detect_prepared`, `detect`, `evaluate`,
   `evaluate_batch`); the shell detector implements it.
+- The native PII and DLP pipelines compile their rules once per process; every engine and
+  gateway shares them instead of compiling all rule regexes again on construction. Detection is
+  unchanged; building a gateway (and the debug test suite, which builds one per scan in many
+  tests) gets much faster.
 - Detection change: credential files (G04). New rule `dlp_netrc_password` (`CREDENTIAL`, subtype
   `password`, structural credential tier) reports the password of a `.netrc`/`_netrc` entry
   (`machine <host> login <user> password <value>`, also one token per line, and the `default`

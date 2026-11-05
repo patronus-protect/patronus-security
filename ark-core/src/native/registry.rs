@@ -6,6 +6,7 @@ use crate::{
     threat::NativeText,
     SecurityCategory,
 };
+use std::sync::LazyLock;
 
 type Detect = Box<dyn Fn(&NativeText<'_>, &NativeGates) -> NativeDetection + Send + Sync>;
 
@@ -38,6 +39,19 @@ impl NativeProducerSpec {
     }
 }
 
+/// The PII pipeline, compiled once per process: every engine and gateway
+/// shares its rules instead of compiling them again.
+fn pii_pipeline() -> &'static pii::pii::PiiPipeline {
+    static PIPELINE: LazyLock<pii::pii::PiiPipeline> = LazyLock::new(pii::pii::PiiPipeline::new);
+    &PIPELINE
+}
+
+/// The DLP pipeline, compiled once per process as [`pii_pipeline`].
+fn dlp_pipeline() -> &'static dlp::dlp::DlpPipeline {
+    static PIPELINE: LazyLock<dlp::dlp::DlpPipeline> = LazyLock::new(dlp::dlp::DlpPipeline::new);
+    &PIPELINE
+}
+
 /// Producers of one native category; see [`super::NATIVE_CATEGORIES`].
 pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
     let mut specs = Vec::new();
@@ -55,7 +69,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
     }
     match category {
         SecurityCategory::Pii => {
-            let pipeline = pii::pii::PiiPipeline::new();
+            let pipeline = pii_pipeline();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:pii",
@@ -72,7 +86,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
             });
         }
         SecurityCategory::Dlp => {
-            let pipeline = dlp::dlp::DlpPipeline::new();
+            let pipeline = dlp_pipeline();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:dlp",
