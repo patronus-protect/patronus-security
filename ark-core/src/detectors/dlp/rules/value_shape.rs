@@ -356,7 +356,7 @@ fn is_prefixed_digest(value: &str) -> bool {
 }
 
 /// Hex digits in one case of a digest length.
-fn is_hex_digest(value: &str) -> bool {
+pub fn is_hex_digest(value: &str) -> bool {
     HEX_DIGEST_LENGTHS.contains(&value.len())
         && value.bytes().all(|byte| byte.is_ascii_hexdigit())
         && !(value.bytes().any(|byte| byte.is_ascii_lowercase())

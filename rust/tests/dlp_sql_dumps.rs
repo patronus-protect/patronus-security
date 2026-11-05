@@ -155,6 +155,8 @@ fn dumps_without_credentials_stay_silent() {
         "CREATE TABLE users (\n  id int NOT NULL,\n  password varchar(255) NOT NULL,\n  api_token varchar(64) DEFAULT NULL\n);\n",
         // A password_hash column of user digests.
         "INSERT INTO `users` (`id`, `email`, `password_hash`) VALUES (1,'ana@example.com','5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8');\n",
+        // A hex digest in a password column is the stored hash.
+        "INSERT INTO `admins` (`admin_id`, `username`, `password`) VALUES\n(1, 'admin', '0b9c2625dc21ef05f6ad4ddf47c5f203837aa32c');\n",
         // Settings keys that name no credential.
         "INSERT INTO `settings` VALUES (1,'export.batch_size','500'),(2,'token_ttl','3600'),(3,'secret_rotation_days','90');\n",
         // SQL that code builds in a string.
