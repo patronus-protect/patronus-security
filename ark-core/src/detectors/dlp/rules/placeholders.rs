@@ -310,6 +310,18 @@ pub fn is_placeholder_value(value: &str) -> bool {
     {
         return is_identifier(name);
     }
+    // T23: a placeholder after an auth scheme or a variable name
+    // (`Bearer HIER_…_EINTRAGEN`, `KUCOIN_API_SECRET=BITTE_AENDERN`).
+    if let Some((scheme, rest)) = value.split_once(' ') {
+        if ["bearer", "basic", "token"].contains(&scheme.to_ascii_lowercase().as_str()) {
+            return is_placeholder_value(rest);
+        }
+    }
+    if let Some((name, rest)) = value.split_once('=') {
+        if is_identifier(name) && !rest.is_empty() {
+            return is_placeholder_value(rest);
+        }
+    }
     is_placeholder_words(value)
 }
 
@@ -428,6 +440,8 @@ mod tests {
             "$dbPassword;",
             "%CLIENT_SECRET%",
             "YOUR_DB_PASSWORD_HERE\\n\",\"negative_reason\":\"x\"",
+            "Bearer HIER_AUTHORIZATION_EINTRAGEN",
+            "KUCOIN_API_SECRET=BITTE_AENDERN",
         ] {
             assert!(is_placeholder_value(value), "{value}");
         }
@@ -450,6 +464,8 @@ mod tests {
             "f4fcba1c3696bf9b564c7dac9b0062f5097331f9",
             "B2B6Hwjm1-l_Jt~xzC",
             "r_RP7Jvq4TzDpgn2ey8Zq1WGZKzXDWpMaXsAEBZyTyU",
+            "Bearer Kx7pQ2vL9rT4",
+            "API_SECRET=Kx7pQ2vL9rT4",
         ] {
             assert!(!is_placeholder_value(value), "{value}");
         }

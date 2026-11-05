@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::{auth_url, connection, http_auth, likeness, ConfigKey};
+use super::{auth_url, connection, http_auth, likeness, ConfigKey, ProviderKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 use crate::detectors::validators::{base64_decode, Base64Kind};
 
@@ -41,6 +41,27 @@ macro_rules! config_document_key {
         r"(?i)(?:credentials?|private[ _-]?key|secret[ _-]?key|signing[ _-]?key|passphrase|zugangsdaten|anmeldedaten|privater?[ _-]?schl(?:ü|ue)ssel|geheimer?[ _-]?schl(?:ü|ue)ssel)(?-u:\b)"
     };
 }
+
+/// `dlp_csrf_token`: the token's key; T23: SQL key fields bind through it.
+macro_rules! csrf_key {
+    () => {
+        r"(?i)(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)(?-u:\b)"
+    };
+}
+
+/// `dlp_csrf_token`: the token value.
+macro_rules! csrf_value {
+    () => {
+        r"[A-Za-z0-9._~+/%=-]{8,}"
+    };
+}
+
+/// T23: the key field of a SQL settings row that binds the next field
+/// (`dlp::sql_rows::key_field_values`) to `dlp_csrf_token`.
+pub(super) const CSRF_SQL_KEY: ProviderKey = ProviderKey {
+    key: csrf_key!(),
+    value: csrf_value!(),
+};
 
 /// G-PROSE (G06): a value handed over after a credential noun in a chat,
 /// ticket or mail ([`prose_handover`]), at the end of its line, optionally
@@ -409,11 +430,14 @@ pub(super) const RULES: &[DlpPattern] = &[
         // T09: key shapes as for the assignments; after a quoted key, a
         // subscript or a type the separator is required.
         pattern: concat!(
-            r"(?i)(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)(?-u:\b)(?:",
+            csrf_key!(),
+            "(?:",
             xml_value_attribute!(),
             "|",
             key_suffix!(),
-            r#"(?::|=>|=)|)\s*(?:\\?["'])?([A-Za-z0-9._~+/%=-]{8,})"#,
+            r#"(?::|=>|=)|)\s*(?:\\?["'])?("#,
+            csrf_value!(),
+            ")",
             // T20: `Wie lautet der Wert für „CSRF-Token“?` and the value in
             // the reply.
             r"|(?:csrf|xsrf)[ _-]?token",
