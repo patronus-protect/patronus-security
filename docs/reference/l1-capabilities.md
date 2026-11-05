@@ -16,8 +16,11 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 122 | 18 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
-| Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
+| Compared with | Presidio 2.2.364 (default and tuned; milestones against tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
+
+!!! warning "Scope of the Presidio comparison"
+    The PII numbers cover L1 identifiers with a fixed format (cards, IBANs, phone numbers, e-mail and IP addresses, national IDs) in the `balanced` mode. The default mode is `strict` (rules only, every finding scores 1.0): on `presidio_favored` 30 of 53 entities with gold score a lower F1 in `strict` than in `balanced`, mostly phone numbers, US SSNs and national IDs that need context. Ark does not report bare numbers without a field name (German tax ID, LANR, BSNR, driver's licence) that Presidio matches by format alone, so Presidio tuned leads on the German rows of `presidio_favored` (M2). PERSON, LOCATION, ORGANIZATION and NRP are `semantic` entities that L1 never reports; the optional L3 `dynamic-pii` pipeline (GLiNER) covers PERSON, LOCATION and ORGANIZATION, measured against Presidio's spaCy NER in [`research/l1-pii/scoreboard/`](https://github.com/patronus-protect/patronus-security/tree/main/research/l1-pii/scoreboard).
 
 ### Milestone status
 
