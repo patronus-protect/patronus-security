@@ -1,4 +1,5 @@
 import json
+import sys
 import unittest
 
 from patronus_ark import SecurityGateway
@@ -71,6 +72,35 @@ class NativeScannerTests(unittest.TestCase):
             [rule["start_byte"] for rule in rules],
             sorted(rule["start_byte"] for rule in rules),
         )
+
+    def test_layer_details_and_spans_hold_no_extra_references(self):
+        # The getters insert through the CPython API directly (H06-7): every
+        # list slot filled, and no reference kept or lost per key and value.
+        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        text = " ".join(f"Kontakt {n}: user{n}@example.de, Konto DE44 5001 0517 5407 3249 31." for n in range(20))
+        result = next(r for r in scanner.rust_gateway.scan_category("pii", text) if r.model == "native:pii")
+        layer = result.layers[0]
+        rules = layer.details["matched_rules"]
+        self.assertGreaterEqual(len(rules), 40)
+        for rule in rules:
+            self.assertIs(type(rule), dict)
+            self.assertTrue(rule["components"])
+            self.assertTrue(all(type(component) is dict for component in rule["components"]))
+        spans = result.evidence_spans
+        self.assertTrue(spans)
+        key = sys.intern("rule_id")
+        span_key = sys.intern("start_byte")
+        before = (sys.getrefcount(key), sys.getrefcount(span_key))
+        for _ in range(5):
+            details = layer.details
+            spans = result.evidence_spans
+            del details, spans
+        self.assertEqual((sys.getrefcount(key), sys.getrefcount(span_key)), before)
+        # One shared value string per text: held by each rule that names it.
+        rules = layer.details["matched_rules"]
+        rule_id = rules[0]["rule_id"]
+        holders = sum(rule["rule_id"] is rule_id for rule in rules)
+        self.assertEqual(sys.getrefcount(rule_id), holders + 2)
 
     def test_native_dlp_relationships_expose_direct_source_components(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
