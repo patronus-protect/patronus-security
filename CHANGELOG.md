@@ -9,6 +9,39 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-11-05
+
+### Detection changes in the default modes
+
+The default PII and DLP mode is `strict`; the detailed entries below carry the measurements and
+name the modes each change applies to. Changes that only touch `balanced` or `recall` (such as
+the M1 work on presidio_favored) are opt-in.
+
+- **Shell commands:** `shell_command` switches to the K26 bundle (Cat): verdicts are
+  `allow`/`ask`/`block` from the model plus Cedar policies (built-in, bundle defaults, user
+  `.cedar` files). New asset manifest and result shape; see *Breaking* below.
+- **DLP provider tokens:** new provider rules for LLM providers, Slack/Discord/Stripe formats,
+  CI and hosting services (P06), observability services (P07), credential files (`.netrc`), CLI
+  credentials and credentials in URLs, XML/HTML attributes and DE/EN prose. A value a generic rule
+  reported before now carries the provider rule.
+- **DLP false positives:** documented example and test values of the generic credential rules
+  (including decoded base64 values) are dropped without example context; Datadog client tokens
+  (public by design) are no longer reported.
+- **PII:** new and stricter identifier families (IBAN per the SWIFT registry, regional phone
+  numbers, passport, identity card and driver's licence fields, payment fields, and country ids
+  for DE, ES/IT, PL, IN and KR, crypto wallets, device and SIM ids, vehicle and securities ids,
+  US medical licences).
+- **Latency:** the PII and DLP pipelines are compiled once per process, and large texts run their
+  rules in parallel; the 100 KiB p95 stays within the 10 ms budget.
+
+### Breaking
+
+- One gate schema for Python, the Ark API and Rust (`rules`, `models`, `pii_mode`, `dlp_mode`,
+  `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`).
+- One `SecurityCategory` type for Core and Ark, one `ScoreMode` instead of `PiiMode`/`DlpMode`,
+  one `NativeGates` struct; Core per-call checks are a category selection.
+- Cat policies are rules `cat.<policy id>` in the shared `rules` map.
+
 ### Changed
 
 - **Breaking (API):** Python, the Ark API and Rust share one gate schema, the serde
