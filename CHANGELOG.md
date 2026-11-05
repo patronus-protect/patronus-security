@@ -11,6 +11,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in
+  `std::regex_traits<char>::transform` inside ONNX Runtime). It is now built on
+  `manylinux_2_28` instead of `manylinux2014`, so it needs glibc 2.28 or newer (CentOS 7 and
+  Amazon Linux 2 are no longer supported). The release workflow now loads and runs the
+  injection L3 model from the built Linux wheel.
 - Model-backed scanners returned wrong results on x86-64 CPUs without VNNI (Intel before
   Cascade Lake or Alder Lake, AMD before Zen 4): ONNX Runtime's U8S8 `MatMulInteger` kernels
   saturate there, so GLiNER `dynamic-pii` found no entities and the L3 classifier logits drifted
