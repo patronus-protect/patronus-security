@@ -176,6 +176,20 @@ the M1 work on presidio_favored) are opt-in.
   example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
   finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
   strings stay silent. Matches carry `structure: "xml"`.
+- Detection change: hyperscaler credentials (P03). New rules `dlp_azure_storage_account_key`
+  (base64 of 64 bytes after `AccountKey=` in a connection string, detect-secrets
+  AzureStorageKeyDetector), `dlp_azure_entra_client_secret` (three characters, a digit, `Q~` and 31
+  to 34 characters with both letter cases, gitleaks azure-ad-client-secret),
+  `dlp_alibaba_access_key_id` (`LTAI` and 20 base62, gitleaks alibaba-access-key-id),
+  `dlp_alibaba_secret_key` (30 base62 under an Alibaba or Aliyun key with a credential noun, gitleaks
+  alibaba-secret-key), `dlp_aws_bedrock_api_key` (`ABSK` and base64 that decodes to
+  `BedrockAPIKey-…`, gitleaks aws-amazon-bedrock-api-key-long-lived) and `dlp_ibm_cloud_api_key` (44
+  characters `[A-Za-z0-9_-]` under an IBM key, detect-secrets IbmCloudIamDetector). The GOLD-D4
+  baseline entities `cloud.azure.storage_account_key`, `cloud.azure.entra_client_secret`,
+  `cloud.alibaba.access_key`, `cloud.aws.bedrock_api_key` and `cloud.ibm.credentials` become shared
+  entities with these rules. GCP service account key files, AWS session tokens, Amazon MWS,
+  Azure SAS signatures beyond `dlp_signed_url_signature`, Tencent Cloud and Oracle OCI get no new
+  rule in this change.
 - Detection change: LLM provider keys (P01). New rules `dlp_perplexity_key` (`pplx-` and 48
   base62, gitleaks perplexity-api-key), `dlp_cohere_key` (40 base62 under a Cohere or `CO_API_KEY`
   key with a credential noun, gitleaks cohere-api-token), `dlp_openrouter_key` (`sk-or-v1-` and 64

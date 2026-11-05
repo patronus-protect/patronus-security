@@ -155,6 +155,27 @@ fn has_both_cases_after_prefix(value: &str) -> bool {
         .is_some_and(|(_, body)| has_both_cases(body))
 }
 
+/// P03: an Azure Storage account key is the canonical base64 of 64 random
+/// bytes.
+fn is_azure_storage_account_key(value: &str) -> bool {
+    base64_decode(value, Base64Kind::Standard).is_some_and(|raw| raw.len() == 64)
+}
+
+/// P03: a long-term Amazon Bedrock API key is `ABSK` and the canonical base64
+/// of `BedrockAPIKey-<id>-at-<account>:<secret>`.
+fn is_bedrock_api_key(value: &str) -> bool {
+    value
+        .strip_prefix("ABSK")
+        .and_then(|body| base64_decode(body, Base64Kind::Standard))
+        .is_some_and(|raw| raw.starts_with(b"BedrockAPIKey-"))
+}
+
+/// P03: an Alibaba Cloud AccessKey ID is `LTAI` and 20 random base62
+/// characters with both cases.
+fn is_alibaba_access_key_id(value: &str) -> bool {
+    value.strip_prefix("LTAI").is_some_and(has_both_cases)
+}
+
 /// P07: the JSON object that the standard base64 `body` (padded or not)
 /// encodes, the payload of Grafana and Sentry tokens.
 fn base64_json_object(body: &str) -> Option<Map<String, Value>> {
@@ -673,6 +694,120 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_boundary("-")
         .with_body_len(28, 20)
             .with_subtype(SecretSubtype::SecretKey),
+    },
+    // P03: Azure Storage account keys, the base64 of 64 bytes after
+    // `AccountKey=` in a connection string.
+    DlpPattern {
+        name: "dlp_azure_storage_account_key",
+        pattern: r"(?i:AccountKey)[ \t]*=[ \t]*([A-Za-z0-9+/]{86}==)(?:[^A-Za-z0-9+/=]|$)",
+        entity_group: "CLOUD_KEY",
+        validator: Some(is_azure_storage_account_key),
+        span_group: Some(1),
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/azure_storage_key.py",
+            &["accountkey"],
+        )
+        .with_provider("azure")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // P03: Microsoft Entra ID client secrets: three characters, a digit, `Q~`
+    // and 31 to 34 characters.
+    DlpPattern {
+        name: "dlp_azure_entra_client_secret",
+        pattern: r"[A-Za-z0-9_~.]{3}[0-9]Q~[A-Za-z0-9_~.\-]{31,34}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:azure-ad-client-secret",
+            &["q~"],
+        )
+        .with_provider("azure")
+        .with_min_entropy(3.0)
+        .with_boundary("~-")
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // P03: Alibaba Cloud AccessKey IDs, `LTAI` and 20 alphanumerics.
+    DlpPattern {
+        name: "dlp_alibaba_access_key_id",
+        pattern: r"LTAI[A-Za-z0-9]{20}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(is_alibaba_access_key_id),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:alibaba-access-key-id",
+            &["ltai"],
+        )
+        .with_provider("alibaba")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_body_len(20, 16)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P03: Alibaba Cloud AccessKey secrets: 30 alphanumerics under an
+    // Alibaba or Aliyun key.
+    DlpPattern {
+        name: "dlp_alibaba_secret_key",
+        pattern: provider_key!(r"alibaba|aliyun", r"[A-Za-z0-9]{30}"),
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:alibaba-secret-key",
+            &["alibaba", "aliyun"],
+        )
+        .with_provider("alibaba")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // P03: long-term Amazon Bedrock API keys, `ABSK` and the base64 of
+    // `BedrockAPIKey-<id>-at-<account>:<secret>`. A `/` may delimit the key
+    // in a path; the decoded payload pins the token.
+    DlpPattern {
+        name: "dlp_aws_bedrock_api_key",
+        pattern: r"ABSK[A-Za-z0-9+/]{109,269}={0,2}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(is_bedrock_api_key),
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "gitleaks:aws-amazon-bedrock-api-key-long-lived",
+            &["absk"],
+        )
+        .with_provider("aws")
+        .with_min_entropy(3.0)
+        .with_boundary("+")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P03: IBM Cloud IAM API keys: 44 characters `[A-Za-z0-9_-]` under an
+    // IBM key.
+    DlpPattern {
+        name: "dlp_ibm_cloud_api_key",
+        pattern: provider_key!(r"ibm", r"[A-Za-z0-9_\-]{44}"),
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py",
+            &["ibm"],
+        )
+        .with_provider("ibm")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────
     DlpPattern {
@@ -1869,7 +2004,7 @@ mod tests {
             .iter()
             .filter_map(|rule| xml_key(rule.pattern).map(|key| (rule.name, key)))
             .collect();
-        assert_eq!(keyed.len(), 18);
+        assert_eq!(keyed.len(), 20);
         let (_, heroku) = keyed
             .iter()
             .find(|(name, _)| *name == "dlp_heroku_legacy_api_key")

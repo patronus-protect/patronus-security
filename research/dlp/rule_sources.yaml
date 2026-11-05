@@ -90,6 +90,30 @@ rules:
     provider: google
     source_ref: https://github.com/mongodb/kingfisher/blob/main/data/rules/google.yml
     format: "GOCSPX- and exactly 28 base64url characters (Kingfisher Google OAuth client secret)"
+  dlp_azure_storage_account_key:
+    provider: azure
+    source_ref: https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/azure_storage_key.py
+    format: "Azure Storage account key after AccountKey= in a connection string: 86 base64 characters and ==, the canonical base64 of 64 bytes (detect-secrets AzureStorageKeyDetector, TruffleHog AzureStorage; P03)"
+  dlp_azure_entra_client_secret:
+    provider: azure
+    source_ref: gitleaks:azure-ad-client-secret
+    format: "Microsoft Entra ID client secret: three characters [A-Za-z0-9_~.], a digit, Q~ and 31 to 34 characters [A-Za-z0-9_~.-] with both letter cases, as a whole token (gitleaks azure-ad-client-secret; P03)"
+  dlp_alibaba_access_key_id:
+    provider: alibaba
+    source_ref: gitleaks:alibaba-access-key-id
+    format: "LTAI and exactly 20 base62 characters with both cases, as a whole token (gitleaks alibaba-access-key-id; P03)"
+  dlp_alibaba_secret_key:
+    provider: alibaba
+    source_ref: gitleaks:alibaba-secret-key
+    format: "Alibaba Cloud AccessKey secret: 30 base62 characters with both cases under a key with alibaba or aliyun and a credential noun right before the separator (gitleaks alibaba-secret-key, tightened to a credential key; P03)"
+  dlp_aws_bedrock_api_key:
+    provider: aws
+    source_ref: gitleaks:aws-amazon-bedrock-api-key-long-lived
+    format: "Long-term Amazon Bedrock API key: ABSK and 109 to 269 base64 characters that canonically decode to BedrockAPIKey-<id>-at-<account>:<secret> (gitleaks aws-amazon-bedrock-api-key-long-lived, docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html; P03)"
+  dlp_ibm_cloud_api_key:
+    provider: ibm
+    source_ref: https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py
+    format: "IBM Cloud IAM API key: 44 characters [A-Za-z0-9_-] with both letter cases under a key with ibm and a credential noun right before the separator (detect-secrets IbmCloudIamDetector, tightened to an IBM key; P03)"
 
   # ── Source control and registries ────────────────────────────────────────
   dlp_github_token:

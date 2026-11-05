@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 184 | 124 (+5 relationship rules) |
+| Regex rules | 184 | 130 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 122 | 16 |
+| Rules with a `checksum` or `structure` check | 122 | 18 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -310,7 +310,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | Result label | Family | Default | Rules | Entities | Gold | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `API_KEY` | provider_secret | on | 24 | 19 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
-| `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
+| `CLOUD_KEY` | provider_secret | on | 24 | 18 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
 | `CREDENTIAL` | generic_credential | on | 17 | 14 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
@@ -359,6 +359,11 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | `dlp_google_api_key` | format | on | gitleaks: `gcp-api-key` |
 | `cloud.gcp.oauth_access_token` | shared | `CLOUD_KEY` | `dlp_google_oauth_token` | format | on | TruffleHog: `GoogleOauth2` |
 | `cloud.gcp.oauth_client_secret` | shared | `CLOUD_KEY` | `dlp_gcp_client_secret` | format | on | – |
+| `cloud.aws.bedrock_api_key` | shared | `CLOUD_KEY` | `dlp_aws_bedrock_api_key` | structure | on | gitleaks: `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` |
+| `cloud.alibaba.access_key` | shared | `CLOUD_KEY` | `dlp_alibaba_access_key_id`, `dlp_alibaba_secret_key` | format | on | gitleaks: `alibaba-access-key-id`, `alibaba-secret-key` |
+| `cloud.azure.entra_client_secret` | shared | `CLOUD_KEY` | `dlp_azure_entra_client_secret` | format | on | gitleaks: `azure-ad-client-secret`; TruffleHog: `Azure` |
+| `cloud.azure.storage_account_key` | shared | `CLOUD_KEY` | `dlp_azure_storage_account_key` | structure | on | TruffleHog: `AzureStorage`; detect-secrets: `AzureStorageKeyDetector` |
+| `cloud.ibm.credentials` | shared | `CLOUD_KEY` | `dlp_ibm_cloud_api_key` | format | on | detect-secrets: `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
 | `vcs.github.token` | shared | `SECRET_TOKEN` | `dlp_github_token` | checksum | on | gitleaks: `github-pat`, `github-oauth`, `github-app-token`, `github-refresh-token`; TruffleHog: `Github`; detect-secrets: `GitHubTokenDetector` |
 | `vcs.github.fine_grained_pat` | shared | `SECRET_TOKEN` | `dlp_github_pat` | format | on | gitleaks: `github-fine-grained-pat`; TruffleHog: `Github`; detect-secrets: `GitHubTokenDetector` |
 | `vcs.gitlab.pat` | shared | `SECRET_TOKEN` | `dlp_gitlab_pat` | format | on | gitleaks: `gitlab-pat`, `gitlab-pat-routable`; TruffleHog: `Gitlab`; detect-secrets: `GitLabTokenDetector` |
@@ -442,12 +447,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.sql` | ark_only | `dlp.content.sql` | `dlp_sql_statement`, `dlp_sql_multiline_statement` | structure | off | – |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `gitlab-session-cookie` |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `privateai-api-token` |
-| `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` |
-| `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `alibaba-access-key-id`, `alibaba-secret-key` |
-| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `azure-ad-client-secret`; TruffleHog: `Azure` |
-| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | TruffleHog: `AzureStorage`; detect-secrets: `AzureStorageKeyDetector` |
 | `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | TruffleHog: `GCP` |
-| `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` |
 | `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `scalingo-api-token` |
 | `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `clojars-api-token` |
@@ -542,7 +542,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 67 shared, 29 ARK only, 90 baseline only, 11 out of scope.
+Entities: 72 shared, 29 ARK only, 85 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -565,6 +565,11 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `cloud.gcp.api_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 97.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
 | `cloud.gcp.oauth_access_token` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 98.7 (TruffleHog) | ARK 100.0 / best baseline 97.5 (TruffleHog) |
 | `cloud.gcp.oauth_client_secret` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `cloud.aws.bedrock_api_key` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.alibaba.access_key` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.azure.entra_client_secret` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.azure.storage_account_key` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.ibm.credentials` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
 | `vcs.github.token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks, TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
 | `vcs.github.fine_grained_pat` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks, TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog) |
 | `vcs.gitlab.pat` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
@@ -648,12 +653,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.sql` | ark_only | `dlp.content.sql` | 10 documents | ARK 90.9 (opt-in profile) | ARK 100.0 (opt-in profile) |
 | `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |

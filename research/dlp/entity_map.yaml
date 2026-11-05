@@ -267,6 +267,39 @@ entities:
     ark: [dlp_gcp_client_secret]
     google_dlp: [OAUTH_CLIENT_SECRET]
     backlog: F-LLM
+  - id: cloud.aws.bedrock_api_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_aws_bedrock_api_key]
+    gitleaks: [aws-amazon-bedrock-api-key-long-lived, aws-amazon-bedrock-api-key-short-lived]
+    backlog: P03
+  - id: cloud.alibaba.access_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_alibaba_access_key_id, dlp_alibaba_secret_key]
+    gitleaks: [alibaba-access-key-id, alibaba-secret-key]
+    backlog: P03
+  - id: cloud.azure.entra_client_secret
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_azure_entra_client_secret]
+    gitleaks: [azure-ad-client-secret]
+    trufflehog: [Azure]
+    google_dlp: [AZURE_AUTH_TOKEN]
+    backlog: P03
+  - id: cloud.azure.storage_account_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_azure_storage_account_key]
+    trufflehog: [AzureStorage]
+    detect_secrets: [AzureStorageKeyDetector]
+    backlog: P03
+  - id: cloud.ibm.credentials
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_ibm_cloud_api_key]
+    detect_secrets: [IbmCloudIamDetector, IbmCosHmacDetector, SoftlayerDetector]
+    backlog: P03
   - id: vcs.github.token
     scope: shared
     group: SECRET_TOKEN
@@ -748,21 +781,8 @@ entities:
   # P01/P02: LLM/AI
   - {id: llm.privateai.api_key, scope: baseline_only, group: API_KEY, gitleaks: [privateai-api-token], backlog: P02}
   # P03: Hyperscaler
-  - id: cloud.aws.bedrock_api_key
-    scope: baseline_only
-    group: CLOUD_KEY
-    gitleaks: [aws-amazon-bedrock-api-key-long-lived, aws-amazon-bedrock-api-key-short-lived]
-    backlog: P03
-  - {id: cloud.alibaba.access_key, scope: baseline_only, group: CLOUD_KEY,
-     gitleaks: [alibaba-access-key-id, alibaba-secret-key], backlog: P03}
-  - {id: cloud.azure.entra_client_secret, scope: baseline_only, group: CLOUD_KEY,
-     gitleaks: [azure-ad-client-secret], trufflehog: [Azure], google_dlp: [AZURE_AUTH_TOKEN], backlog: P03}
-  - {id: cloud.azure.storage_account_key, scope: baseline_only, group: CLOUD_KEY,
-     trufflehog: [AzureStorage], detect_secrets: [AzureStorageKeyDetector], backlog: P03}
   - {id: cloud.gcp.service_account_key, scope: baseline_only, group: CLOUD_KEY,
      trufflehog: [GCP], google_dlp: [GCP_CREDENTIALS], backlog: P03}
-  - {id: cloud.ibm.credentials, scope: baseline_only, group: CLOUD_KEY,
-     detect_secrets: [IbmCloudIamDetector, IbmCosHmacDetector, SoftlayerDetector], backlog: P03}
   - {id: cloud.yandex.credentials, scope: baseline_only, group: CLOUD_KEY,
      gitleaks: [yandex-access-token, yandex-api-key, yandex-aws-access-token], backlog: P03}
   # P04: EU-Cloud
