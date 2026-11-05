@@ -116,7 +116,7 @@ jobs:
         with:
           command: build
           args: --manifest-path python/Cargo.toml --release --out dist --interpreter python3.11
-          manylinux: 2014
+          manylinux: 2_28
           before-script-linux: python3.11 scripts/bootstrap_python_tls.py
       - name: Install and smoke-test wheel
         shell: bash
