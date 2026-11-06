@@ -2,6 +2,7 @@
 //! Key material: wallet keys, wallet seeds, PEM private keys, JWKs, VPN keys (C-KEYS) and
 //! symmetric keys of frameworks and code.
 use crate::detectors::dlp::key_context::has_key_context;
+use crate::detectors::dlp::seed_phrase::{has_seed_context, is_seed_phrase, phrases};
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
@@ -488,6 +489,26 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("cardano")
         .with_boundary("")
         .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_bip39_seed_phrase",
+        // C01: the words and their separators; `seed_phrase::phrases` finds
+        // the phrases, the validator checks word lists and checksum.
+        pattern: r#"[a-z]{3,9}(?:[\s0-9.):,"'-]{1,24}[a-z]{3,9}){11,23}"#,
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_seed_phrase),
+        span_group: None,
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki",
+            &[],
+        )
+        .with_value_run(ValueClass::Alphanumeric, 3)
+        .with_finder(phrases)
+        // 12- and 15-word phrases carry a 4- or 5-bit checksum.
+        .with_context_gate(has_seed_context)
+        .with_subtype(SecretSubtype::SeedPhrase),
     },
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {
