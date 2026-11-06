@@ -363,7 +363,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_bip39_seed_phrase",
         // C01: the words and their separators; `seed_phrase::phrases` finds
         // the phrases, the validator checks word lists and checksum.
-        pattern: r#"[a-z]{3,9}(?:[\s0-9.):,"'-]{1,24}[a-z]{3,9}){11,23}"#,
+        // A word is 3 to 9 letters, accented ones in NFC or NFD.
+        pattern: r#"(?:[a-z\x{e0}-\x{ff}][\x{300}-\x{36f}]*){3,9}(?:[\s0-9.):,"'-]{1,24}(?:[a-z\x{e0}-\x{ff}][\x{300}-\x{36f}]*){3,9}){11,23}"#,
         entity_group: "CRYPTO_KEY",
         validator: Some(is_seed_phrase),
         span_group: None,

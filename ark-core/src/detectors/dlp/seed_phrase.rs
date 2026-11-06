@@ -2,7 +2,9 @@
 //! C01: BIP39 mnemonic seed phrases.
 //!
 //! A phrase is 12, 15, 18, 21 or 24 words of one official word list (English,
-//! Italian, Portuguese, Czech), each word an 11-bit index; the indices spell
+//! Italian, Portuguese, Czech, Spanish, French), each word an 11-bit index;
+//! the Spanish and French words count with or without their accents, in NFC
+//! or NFD, as the BIP39 word list notes allow. The indices spell
 //! the entropy and a checksum of its SHA-256 (BIP39). Words stand in a line,
 //! numbered or one per line, so the words may be separated by whitespace,
 //! commas, quotes and list numbers (`1. abandon 2. ability`).
@@ -17,15 +19,24 @@ use rustc_hash::FxHashMap;
 use std::{ops::Range, sync::LazyLock};
 
 /// The supported word lists, in the order of the language bits.
-const LISTS: [(&str, &str); 4] = [
+const LISTS: [(&str, &str); 6] = [
     ("english", include_str!("bip39/english.txt")),
     ("italian", include_str!("bip39/italian.txt")),
     ("portuguese", include_str!("bip39/portuguese.txt")),
     ("czech", include_str!("bip39/czech.txt")),
+    ("spanish", include_str!("bip39/spanish.txt")),
+    ("french", include_str!("bip39/french.txt")),
 ];
 
 /// Words per phrase, longest first.
 const LENGTHS: [usize; 5] = [24, 21, 18, 15, 12];
+
+/// Most words and bytes (entropy and checksum) of a phrase.
+const MAX_WORDS: usize = LENGTHS[0];
+const MAX_BYTES: usize = MAX_WORDS * 11 / 8;
+
+/// Most letters of a list word.
+const MAX_LETTERS: usize = 9;
 
 /// Longest run of list words that may hold a phrase: a phrase and a few list
 /// words around it (`wallet`, `secret`, `phrase` are list words).
@@ -41,7 +52,7 @@ const CONTEXT_FREE_LEN: usize = 18;
 /// Entropies of the published BIP39 test vectors (trezor/python-mnemonic
 /// `vectors.json`, the same for every language): documentation and test
 /// suites quote their phrases.
-const TEST_VECTOR_ENTROPIES: [&str; 24] = [
+const TEST_VECTOR_HEX: [&str; 24] = [
     "00000000000000000000000000000000",
     "000000000000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000000000000000000000000000",
@@ -68,12 +79,30 @@ const TEST_VECTOR_ENTROPIES: [&str; 24] = [
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 ];
 
-/// Every word of every list: per language a bit and the word's index.
-static LEXICON: LazyLock<FxHashMap<&'static str, Entries>> = LazyLock::new(|| {
-    let mut lexicon = FxHashMap::<&str, Entries>::default();
+/// [`TEST_VECTOR_HEX`] as bytes.
+static TEST_VECTOR_ENTROPIES: LazyLock<Vec<Vec<u8>>> = LazyLock::new(|| {
+    TEST_VECTOR_HEX
+        .iter()
+        .map(|hex| {
+            (0..hex.len())
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).expect("hex entropy"))
+                .collect()
+        })
+        .collect()
+});
+
+/// Every word of every list without its accents: per language a bit and the
+/// word's index. The unaccented Spanish and French words are unique per list.
+static LEXICON: LazyLock<FxHashMap<String, Entries>> = LazyLock::new(|| {
+    let mut lexicon = FxHashMap::<String, Entries>::default();
     for (language, (_, list)) in LISTS.iter().enumerate() {
         for (index, word) in list.lines().enumerate() {
-            let entries = lexicon.entry(word).or_insert((0, [0; LISTS.len()]));
+            let mut letters = [0; MAX_LETTERS];
+            let key = fold(word.as_bytes(), &mut letters).expect("list word");
+            let entries = lexicon
+                .entry(key.to_string())
+                .or_insert((0, [0; LISTS.len()]));
             entries.0 |= 1 << language;
             entries.1[language] = index as u16;
         }
@@ -93,7 +122,8 @@ static WORDS: LazyLock<Vec<Vec<&'static str>>> = LazyLock::new(|| {
 });
 
 /// The BIP39 mnemonic of `entropy` (16 to 32 bytes, a multiple of 4) in the
-/// word list `language` (`english`, `italian`, `portuguese`, `czech`).
+/// word list `language` (`english`, `italian`, `portuguese`, `czech`,
+/// `spanish`, `french`; accented words in NFD, as in the published lists).
 pub fn mnemonic(language: &str, entropy: &[u8]) -> Option<String> {
     let list = LISTS.iter().position(|(name, _)| *name == language)?;
     if !(16..=32).contains(&entropy.len()) || !entropy.len().is_multiple_of(4) {
@@ -122,15 +152,17 @@ fn valid_indices(indices: &[u16]) -> bool {
     if !LENGTHS.contains(&indices.len()) {
         return false;
     }
-    let mut sorted = indices.to_vec();
+    let mut sorted = [0u16; MAX_WORDS];
+    let sorted = &mut sorted[..indices.len()];
+    sorted.copy_from_slice(indices);
     sorted.sort_unstable();
-    sorted.dedup();
-    if sorted.len() + 2 < indices.len() {
+    let distinct = 1 + sorted.windows(2).filter(|pair| pair[0] != pair[1]).count();
+    if distinct + 2 < indices.len() {
         return false;
     }
     let total = indices.len() * 11;
     let checksum_bits = total / 33;
-    let mut bytes = vec![0u8; total.div_ceil(8)];
+    let mut bytes = [0u8; MAX_BYTES];
     for (word, index) in indices.iter().enumerate() {
         for bit in 0..11 {
             if index >> (10 - bit) & 1 == 1 {
@@ -146,8 +178,9 @@ fn valid_indices(indices: &[u16]) -> bool {
     if expected != actual {
         return false;
     }
-    let hex: String = entropy.iter().map(|byte| format!("{byte:02x}")).collect();
-    !TEST_VECTOR_ENTROPIES.contains(&hex.as_str())
+    !TEST_VECTOR_ENTROPIES
+        .iter()
+        .any(|vector| vector.as_slice() == entropy)
 }
 
 /// A word of the text: its range and its list entries.
@@ -157,8 +190,9 @@ struct Word {
     indices: [u16; LISTS.len()],
 }
 
-/// The phrases of `text`. A word is a maximal run of 3 to 9 ASCII lowercase
-/// letters between characters that are no letters, digits or `_`. A first
+/// The phrases of `text`. A word is a maximal run of 3 to 9 lowercase
+/// letters ([`letter_len`]) between characters that are no letters, digits
+/// or `_`. A first
 /// pass finds runs of at least 12 words, each two separated by at most
 /// [`MAX_GAP`] bytes of whitespace, commas, digits, `.`, `)`, `:`, quotes
 /// and `-` with at least one space or comma ([`GAP_BYTES`]),
@@ -173,7 +207,7 @@ fn scan(text: &str, phrases: &mut Vec<Range<usize>>) {
     let mut at = 0;
     while at < bytes.len() {
         let byte = bytes[at];
-        if !byte.is_ascii_lowercase() {
+        if letter_len(bytes, at) == 0 {
             match GAP_BYTES[usize::from(byte)] {
                 Gap::Split => gap_split = true,
                 Gap::Plain => {}
@@ -184,10 +218,16 @@ fn scan(text: &str, phrases: &mut Vec<Range<usize>>) {
             continue;
         }
         let start = at;
-        while at < bytes.len() && bytes[at].is_ascii_lowercase() {
-            at += 1;
+        let mut letters = 0;
+        loop {
+            let len = letter_len(bytes, at);
+            if len == 0 {
+                break;
+            }
+            letters += usize::from(!matches!(bytes[at], 0xcc | 0xcd));
+            at += len;
         }
-        let word = (3..=9).contains(&(at - start))
+        let word = (3..=MAX_LETTERS).contains(&letters)
             && start
                 .checked_sub(1)
                 .is_none_or(|before| is_edge(bytes[before]))
@@ -203,6 +243,46 @@ fn scan(text: &str, phrases: &mut Vec<Range<usize>>) {
         (gap_len, gap_split, gap_clean) = (0, false, word);
     }
     list_runs(text, &shaped, phrases);
+}
+
+/// The bytes of the letter at `at`: 1 for an ASCII lowercase letter, 2 for
+/// a lowercase Latin-1 letter with a diacritic (NFC `é`, [`LATIN1_BASE`]) or
+/// a combining diacritic (NFD, U+0300 to U+036F), else 0 (also past the end).
+fn letter_len(bytes: &[u8], at: usize) -> usize {
+    match (bytes.get(at), bytes.get(at + 1)) {
+        (Some(byte), _) if byte.is_ascii_lowercase() => 1,
+        (Some(0xc3), Some(&next))
+            if (0xa0..=0xbf).contains(&next) && LATIN1_BASE[usize::from(next - 0xa0)] != 0 =>
+        {
+            2
+        }
+        (Some(0xcc), Some(0x80..=0xbf)) | (Some(0xcd), Some(0x80..=0xaf)) => 2,
+        _ => 0,
+    }
+}
+
+/// The base letter of U+00E0 to U+00FF (UTF-8 `c3 a0` to `c3 bf`), 0 for no
+/// letter with a diacritic.
+const LATIN1_BASE: [u8; 32] = *b"aaaaaa\0ceeeeiiii\0nooooo\0\0uuuuy\0y";
+
+/// `word` (letters as in [`letter_len`]) without its diacritics, written to
+/// `letters`; `None` for more than [`MAX_LETTERS`] letters.
+fn fold<'a>(word: &[u8], letters: &'a mut [u8; MAX_LETTERS]) -> Option<&'a str> {
+    let (mut at, mut len) = (0, 0);
+    while at < word.len() {
+        let letter = match word[at] {
+            0xc3 => LATIN1_BASE[usize::from(word[at + 1] - 0xa0)],
+            0xcc | 0xcd => {
+                at += 2;
+                continue;
+            }
+            byte => byte,
+        };
+        *letters.get_mut(len)? = letter;
+        len += 1;
+        at += if word[at] == 0xc3 { 2 } else { 1 };
+    }
+    std::str::from_utf8(&letters[..len]).ok()
 }
 
 /// Whether `byte` may border a word: no letter, digit, `_` or byte of a
@@ -248,7 +328,10 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
     let mut run: Vec<Word> = Vec::new();
     let mut shared = 0u8;
     for range in words {
-        let Some(&(mask, indices)) = LEXICON.get(&text[range.clone()]) else {
+        let mut letters = [0; MAX_LETTERS];
+        let entries =
+            fold(&text.as_bytes()[range.clone()], &mut letters).and_then(|key| LEXICON.get(key));
+        let Some(&(mask, indices)) = entries else {
             run_phrases(&run, phrases);
             run.clear();
             continue;
@@ -290,9 +373,11 @@ fn run_phrases(run: &[Word], phrases: &mut Vec<Range<usize>>) {
             let valid = (0..LISTS.len())
                 .filter(|language| mask >> language & 1 == 1)
                 .any(|language| {
-                    let indices: Vec<u16> =
-                        window.iter().map(|word| word.indices[language]).collect();
-                    valid_indices(&indices)
+                    let mut indices = [0u16; MAX_WORDS];
+                    for (index, word) in indices.iter_mut().zip(window) {
+                        *index = word.indices[language];
+                    }
+                    valid_indices(&indices[..len])
                 });
             if valid {
                 taken.push(start..start + len);
@@ -343,7 +428,7 @@ const CONTEXT_BYTES: usize = 200;
 pub(crate) fn has_seed_context(text: &str, value: Range<usize>) -> bool {
     let phrase = &text[value.clone()];
     let words = phrase
-        .split(|c: char| !c.is_ascii_lowercase())
+        .split(|c: char| c.is_ascii() && !c.is_ascii_lowercase())
         .filter(|word| !word.is_empty())
         .count();
     if words >= CONTEXT_FREE_LEN || phrase.bytes().any(|byte| byte.is_ascii_digit()) {
@@ -410,14 +495,64 @@ mod tests {
 
     #[test]
     fn rejects_published_test_vectors() {
-        for hex in TEST_VECTOR_ENTROPIES {
-            let bytes: Vec<u8> = (0..hex.len())
-                .step_by(2)
-                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
-                .collect();
-            let phrase = mnemonic("english", &bytes).unwrap();
-            assert!(!is_seed_phrase(&phrase), "{hex}");
+        assert_eq!(TEST_VECTOR_ENTROPIES.len(), TEST_VECTOR_HEX.len());
+        for (hex, bytes) in TEST_VECTOR_HEX.iter().zip(TEST_VECTOR_ENTROPIES.iter()) {
+            assert_eq!(bytes.len() * 2, hex.len());
+            for (language, _) in LISTS {
+                let phrase = mnemonic(language, bytes).unwrap();
+                assert!(!is_seed_phrase(&phrase), "{language} {hex}");
+            }
         }
+    }
+
+    #[test]
+    fn spanish_and_french_words_count_in_nfd_nfc_and_without_accents() {
+        use unicode_normalization::UnicodeNormalization;
+        for language in ["spanish", "french"] {
+            for len in [16, 24, 32] {
+                let accented = (0..=255)
+                    .map(|seed| mnemonic(language, &entropy(seed, len)).unwrap())
+                    .find(|phrase| !phrase.is_ascii())
+                    .unwrap();
+                let nfc: String = accented.nfc().collect();
+                let plain: String = accented.nfd().filter(char::is_ascii).collect();
+                assert_ne!(nfc, accented, "{language} {len}");
+                for phrase in [&accented, &nfc, &plain] {
+                    assert!(is_seed_phrase(phrase), "{language} {len}");
+                    let text = format!("seed: {phrase}\n");
+                    assert_eq!(phrases(&text), vec![6..text.len() - 1], "{language}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn folds_accents_and_rejects_other_letters() {
+        let mut letters = [0; MAX_LETTERS];
+        assert_eq!(fold("ábaco".as_bytes(), &mut letters), Some("abaco"));
+        assert_eq!(fold("a\u{301}baco".as_bytes(), &mut letters), Some("abaco"));
+        assert_eq!(fold("élève".as_bytes(), &mut letters), Some("eleve"));
+        assert_eq!(fold("abcdefghij".as_bytes(), &mut letters), None);
+        // `ß`, `æ` and uppercase accented letters are no word letters.
+        for text in ["ß", "æ", "É"] {
+            assert_eq!(letter_len(text.as_bytes(), 0), 0, "{text}");
+        }
+        assert_eq!(letter_len("ñ".as_bytes(), 0), 2);
+        assert_eq!(letter_len("\u{303}".as_bytes(), 0), 2);
+    }
+
+    #[test]
+    fn has_seed_context_counts_accented_words_once() {
+        // 12 words with an accent inside each are a short phrase that needs
+        // a context; the count looks only at the words.
+        let words: Vec<&str> = WORDS[4]
+            .iter()
+            .copied()
+            .filter(|word| word.bytes().skip(1).any(|byte| byte == 0xcc))
+            .take(12)
+            .collect();
+        let text = format!("note: {}", words.join(" "));
+        assert!(!has_seed_context(&text, 6..text.len()));
     }
 
     #[test]
@@ -439,7 +574,9 @@ mod tests {
 
     #[test]
     fn skips_word_list_dumps_and_short_runs() {
-        assert!(phrases(LISTS[0].1).is_empty());
+        for (language, list) in LISTS {
+            assert!(phrases(list).is_empty(), "{language}");
+        }
         let phrase = mnemonic("english", &entropy(9, 16)).unwrap();
         let eleven = phrase.rsplit_once(' ').unwrap().0;
         assert!(phrases(eleven).is_empty());
