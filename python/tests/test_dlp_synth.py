@@ -612,6 +612,8 @@ CHECKS = {
     "bip39_it_12": lambda v: checks.is_valid_bip39_mnemonic(v, "italian") and len(v.split(" ")) == 12,
     "bip39_pt_15": lambda v: checks.is_valid_bip39_mnemonic(v, "portuguese") and len(v.split(" ")) == 15,
     "bip39_cs_21": lambda v: checks.is_valid_bip39_mnemonic(v, "czech") and len(v.split(" ")) == 21,
+    "bip39_es_12": lambda v: checks.is_valid_bip39_mnemonic(v, "spanish") and len(v.split(" ")) == 12,
+    "bip39_fr_18": lambda v: checks.is_valid_bip39_mnemonic(v, "french") and len(v.split(" ")) == 18,
     "anthropic_api_key": prefixed("sk-ant-api03-", B64URL, 93, "AA"),
     "anthropic_admin_key": prefixed("sk-ant-admin01-", B64URL, 93, "AA"),
     "openai_project_api_key": lambda v: prefixed("sk-proj-", B64URL, 156)(v) and v[82:90] == "T3BlbkFJ",
@@ -1357,7 +1359,7 @@ class StructureTests(unittest.TestCase):
             self.assertEqual(recipes.bip39_mnemonic("english", bytes.fromhex(entropy)), mnemonic)
             self.assertTrue(checks.is_valid_bip39_mnemonic(mnemonic, "english"))
         self.assertFalse(checks.is_valid_bip39_mnemonic("abandon " * 11 + "abandon", "english"))
-        for name, language, words in (("bip39_it_12", "italian", 12), ("bip39_pt_15", "portuguese", 15), ("bip39_cs_21", "czech", 21)):
+        for name, language, words in (("bip39_it_12", "italian", 12), ("bip39_pt_15", "portuguese", 15), ("bip39_cs_21", "czech", 21), ("bip39_es_12", "spanish", 12), ("bip39_fr_18", "french", 18)):
             wordlist = set(recipes.bip39_wordlist(language))
             for seed in SEEDS:
                 value = recipes.generate(name, seed).split(" ")

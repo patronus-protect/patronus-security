@@ -28,10 +28,12 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``next_u64() % 256`` per byte, ``{"alphabet": a, "len": n}`` as above) and encodes it
     as ``hex``, ``base64`` (padded), ``base64_unpadded``, ``base64url`` (unpadded),
     ``bcrypt64`` (OpenBSD radix-64, unpadded), ``base58check`` (double SHA-256) or
-    ``bip39_english``/``bip39_italian``/``bip39_portuguese``/``bip39_czech`` (the BIP 39
+    ``bip39_english``/``bip39_italian``/``bip39_portuguese``/``bip39_czech``/``bip39_spanish``/
+    ``bip39_french`` (the BIP 39
     mnemonic of 16, 20, 24, 28 or 32 bytes of entropy: checksum = the first ``8n/32`` bits
     of SHA-256, 11-bit word indices into the official list in
-    ``ark-core/src/detectors/dlp/bip39``, words joined by single spaces).
+    ``ark-core/src/detectors/dlp/bip39``, accented words in NFD as published, joined by single
+    spaces).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
 
 A generator may set ``"entropy_above": h`` (a number below ``log2`` of its length): while
@@ -121,7 +123,7 @@ BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 CHECKSUM_LENGTHS = {"crc32_base62": 6, "crc32_hex": 8, "crc32_hex_le": 8, "iso7064_mod11_10": 1, "bech32": 6}
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 _BECH32_GENERATOR = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
-BIP39_LANGUAGES = ("english", "italian", "portuguese", "czech")
+BIP39_LANGUAGES = ("english", "italian", "portuguese", "czech", "spanish", "french")
 BIP39_DIR = Path(__file__).resolve().parents[3] / "ark-core/src/detectors/dlp/bip39"
 BIP39_ENTROPY_BYTES = (16, 20, 24, 28, 32)
 ENCODINGS = {

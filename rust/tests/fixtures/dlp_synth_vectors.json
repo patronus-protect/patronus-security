@@ -83,6 +83,8 @@
     "bip39_en_15": {"sha256_96": "39529547e49b846df37f1f28"},
     "bip39_en_18": {"sha256_96": "12d6db09e12b06074cf88100"},
     "bip39_en_24": {"sha256_96": "f365249c23ba84afd1a83616"},
+    "bip39_es_12": {"sha256_96": "7dbe8604665f8faa9bdef813"},
+    "bip39_fr_18": {"sha256_96": "3bf52496f139b6761f7806c1"},
     "bip39_it_12": {"sha256_96": "2b139ad35f1a8213b8f04b81"},
     "bip39_pt_15": {"sha256_96": "18abf67ed3fddd1c2044004c"},
     "bitbucket_client_secret": {"sha256_96": "207f34e5197be68354fd20e7"},

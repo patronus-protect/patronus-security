@@ -515,7 +515,7 @@
       "probes": ["CARDANO_SIGNING_KEY=<<secret:0>>", "Signierschlüssel der Cardano-Wallet: <<secret:0>>"]
     },
     "dlp_bip39_seed_phrase": {
-      "generators": ["bip39_en_12", "bip39_en_15", "bip39_en_18", "bip39_en_24", "bip39_it_12", "bip39_pt_15", "bip39_cs_21"],
+      "generators": ["bip39_en_12", "bip39_en_15", "bip39_en_18", "bip39_en_24", "bip39_it_12", "bip39_pt_15", "bip39_cs_21", "bip39_es_12", "bip39_fr_18"],
       "probes": ["Seed phrase of the wallet: <<secret:0>>", "MNEMONIC=\"<<secret:0>>\"", "Wiederherstellungsphrase (Backup der Wallet):\n<<secret:0>>\n"]
     },
     "dlp_private_key_block": {
