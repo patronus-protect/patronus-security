@@ -39,7 +39,7 @@ const MAX_BYTES: usize = MAX_WORDS * 11 / 8;
 const MAX_LETTERS: usize = 9;
 
 /// Longest run of list words that may hold a phrase: a phrase and a few list
-/// words around it (`wallet`, `secret`, `phrase` are list words).
+/// words around it (`secret` and `phrase` are list words).
 const MAX_RUN: usize = 27;
 
 /// Longest separator between two words of a phrase.
@@ -325,7 +325,7 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
         return;
     }
     let mut run: Vec<Word> = Vec::new();
-    let mut shared = 0u8;
+    let mut shared = u8::MAX;
     for range in words {
         let mut letters = [0; MAX_LETTERS];
         let entries =
@@ -333,12 +333,21 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
         let Some(&(mask, indices)) = entries else {
             run_phrases(&run, phrases);
             run.clear();
+            shared = u8::MAX;
             continue;
         };
-        if mask & shared == 0 || run.is_empty() {
+        if mask & shared == 0 {
+            // The new run keeps the trailing words that share a language
+            // with this word (`seed` before a French phrase whose first
+            // word is also English), at most one more than a run may hold.
             run_phrases(&run, phrases);
-            run.clear();
-            shared = u8::MAX;
+            shared = mask;
+            let mut keep = run.len();
+            while keep > 0 && run.len() - keep <= MAX_RUN && run[keep - 1].mask & shared != 0 {
+                keep -= 1;
+                shared &= run[keep].mask;
+            }
+            run.drain(..keep);
         }
         shared &= mask;
         run.push(Word {
@@ -579,6 +588,48 @@ mod tests {
         let phrase = mnemonic("english", &entropy(9, 16)).unwrap();
         let eleven = phrase.rsplit_once(' ').unwrap().0;
         assert!(phrases(eleven).is_empty());
+    }
+
+    #[test]
+    fn keeps_a_first_word_shared_with_a_list_word_before_it() {
+        let lookup = |word: &str| {
+            let mut letters = [0; MAX_LETTERS];
+            fold(word.as_bytes(), &mut letters).map_or(0, |key| LEXICON[key].0)
+        };
+        let pairs = [
+            ("english", "french"),
+            ("english", "spanish"),
+            ("italian", "spanish"),
+            ("french", "spanish"),
+            ("spanish", "english"),
+            ("spanish", "italian"),
+        ];
+        for (before, language) in pairs {
+            let list = LISTS.iter().position(|(name, _)| *name == before).unwrap();
+            let bit = 1u8 << list;
+            // A word of `before` only, then a phrase whose first word is
+            // also a `before` word (`seed: ` before a French phrase).
+            let label = WORDS[list]
+                .iter()
+                .copied()
+                .find(|word| lookup(word) == bit)
+                .unwrap();
+            let phrase = (0..=255)
+                .map(|seed| mnemonic(language, &entropy(seed, 24)).unwrap())
+                .find(|phrase| {
+                    let mut words = phrase.split(' ');
+                    lookup(words.next().unwrap()) & bit != 0
+                        && words.all(|word| lookup(word) & bit == 0)
+                })
+                .unwrap();
+            let text = format!("{label}: {phrase}\n");
+            let start = label.len() + 2;
+            assert_eq!(
+                phrases(&text),
+                vec![start..text.len() - 1],
+                "{before} {language}"
+            );
+        }
     }
 
     #[test]
