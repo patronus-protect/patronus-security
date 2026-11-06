@@ -96,8 +96,11 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
 
 - **Familien-F1:** `neutral` ARK `balanced` 70,0 (mit Bare-Profil 67,8) gegen Presidio default 18,0
   und tuned 40,5; `presidio_favored` 78,7 (mit Bare-Profil 82,7) gegen 63,6 und 77,6. HN-FP von ARK 0.
-- **M2 erfüllt** (roh, `balanced-bare`): `presidio_favored` 86,8 → **89,9** gegen tuned 87,0 und
-  default 6,6, `neutral` 62,5 gegen Ziel 36,2 bzw. 39,2. Den Rückstand machte ein FP der Opt-in-Regel
+- **M2 auf Dev erfüllt** (roh, `balanced-bare`; `scoreboard.py m2`, Macro-F1 auf deutschen Zeilen über
+  die `shared`- und `ark_only`-IDs, 11 in `presidio_favored`, 14 in `neutral`): `presidio_favored`
+  86,8 → **89,9** gegen tuned 87,0 und default 6,6, `neutral` 62,5 gegen Ziel 36,2 bzw. 39,2. Für den
+  Holdout gilt die Aussage erst, wenn die Gate-Zeile `milestones holdout (balanced-bare, …)` sie
+  belegt; das Gate druckt `balanced-bare` seit der Review-Runde von Q-RAW neben `balanced`. Den Rückstand machte ein FP der Opt-in-Regel
   `pii_steuer_id_de_bare` aus: `11112345678` hat eine gültige Prüfziffer, aber eine Ziffer viermal,
   was keine vergebene Steuer-ID hat. Die Regel prüft jetzt `validators::steuer_id_bare` (Prüfziffer,
   keine Ziffer öfter als dreimal, keine dreimal hintereinander); `98765432106` (zehn verschiedene

@@ -22,7 +22,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `--presidio PROFILE=DIR` with `default` and `tuned` required (`report --engine` is gone), and the
   JSON of `m1`/`m2`/`report` nests results per Ark engine and Presidio engine
   (`modes.<engine>.presidio-<profile>`) with the attainable view under `attainable`. The gate's
-  `milestones <split>` line scores balanced on raw gold against both profiles. `run_ark.py --gates
+  `milestones <split> (<engine>, …)` lines score balanced and balanced-bare on raw gold against both
+  profiles, one line per engine. `run_ark.py --gates
   PATH` applies the `rules` of an execution-gates file and records them as `engine.rules`. Milestone
   snapshot schema 1.2: `pii.milestone_view` and `pii.baselines` replace `pii.baseline`, and
   `docs/reference/l1-capabilities.md` shows Ark against each baseline and names the view. Detection
@@ -60,11 +61,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   BZSt scheme alike (no digit more than three times in the first ten, none three times in a row),
   without the exact distribution of `steuer_id_issued`, so ten distinct digits (`98765432106`) still
   pass and `11112345678` no longer does. Default output (all modes, default gates) is unchanged and
-  no validator of a default rule changes. On the dev split (raw gold) M2 now holds with the bare
-  profile: `presidio_favored` DE macro-F1 86.8 → 89.9 against Presidio tuned 87.0 (Steuer-ID
-  66.7 → 100), `neutral` 62.5 against target 36.2. M1 stays unmet; the remaining raw gaps per id are
+  no validator of a default rule changes. On the dev split only (raw gold, `scoreboard.py m2`), M2
+  holds with the bare profile (`balanced-bare`): M2 macro-F1 (German rows, shared and Ark-only ids)
+  on `presidio_favored` 86.8 → 89.9 against Presidio tuned 87.0 (Steuer-ID 66.7 → 100), `neutral`
+  62.5 against target 36.2; `balanced` alone stays at 63.2. Holdout evidence comes from the gate's
+  `milestones holdout (balanced-bare, …)` line. M1 stays unmet; the remaining raw gaps per id are
   listed in `research/l1-pii/README.md` (Q-RAW). No effect on default-gate latency: the bare rule is
   off by default, and when enabled the extra check runs only on a value whose check digit passed.
+- The scoreboard gate printed the raw-gold milestone line only for `balanced`, so an M1/M2 claim
+  with the bare profile had no gate evidence (Q-RAW review). It now prints one `milestones <split>`
+  line per milestone engine (`balanced`, `balanced-bare`) on dev and holdout; `balanced-bare` runs
+  `run_ark.py --gates docs/how-to/pii-bare-formats.gates.json` on the head only, and its predictions
+  are cached by the profile's content. Gate only, no detection or latency change.
 
 - The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in
   `std::regex_traits<char>::transform` inside ONNX Runtime). It is now built on
