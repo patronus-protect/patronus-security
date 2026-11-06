@@ -160,6 +160,10 @@
       "lookalike": ["atlassian_api_token_short"],
       "probes": ["JIRA_API_TOKEN=<<secret:0>>", "{\"confluence\": {\"apiToken\": \"<<secret:0>>\"}}"]
     },
+    "dlp_atlassian_legacy_api_token": {
+      "generators": ["atlassian_api_token_legacy"],
+      "probes": ["JIRA_API_TOKEN=<<secret:0>>", "confluence:\n  confluence_api_token: \"<<secret:0>>\""]
+    },
     "dlp_notion_api_token": {
       "generators": ["notion_api_token"],
       "lookalike": ["notion_api_token_short"],
@@ -170,10 +174,18 @@
       "lookalike": ["linear_api_key_short"],
       "probes": ["LINEAR_API_KEY=<<secret:0>>", "Authorization: <<secret:0>>"]
     },
+    "dlp_linear_client_secret": {
+      "generators": ["linear_client_secret"],
+      "probes": ["LINEAR_CLIENT_SECRET=<<secret:0>>", "{\"linear\": {\"linearClientSecret\": \"<<secret:0>>\"}}"]
+    },
     "dlp_airtable_pat": {
       "generators": ["airtable_personal_access_token"],
       "lookalike": ["airtable_personal_access_token_short"],
       "probes": ["AIRTABLE_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_airtable_api_key": {
+      "generators": ["airtable_api_key"],
+      "probes": ["AIRTABLE_API_KEY=<<secret:0>>", "airtable:\n  airtable_key: \"<<secret:0>>\""]
     },
     "dlp_postman_api_key": {
       "generators": ["postman_api_token"],
@@ -182,7 +194,7 @@
     },
     "dlp_mapbox_secret_token": {
       "generators": ["mapbox_secret_token"],
-      "lookalike": ["mapbox_access_token"],
+      "lookalike": ["mapbox_access_token", "mapbox_access_token_short"],
       "probes": ["MAPBOX_DOWNLOADS_TOKEN=<<secret:0>>", "mapbox:\n  secret_token: \"<<secret:0>>\""]
     },
     "dlp_github_token": {

@@ -815,16 +815,33 @@ impl DlpPipeline {
     /// `glpat-` …) of a prefix rule. A prose rule leaves such a value to
     /// the provider rule, which reports it or rejects its shape.
     fn has_token_prefix(&self, value: &str) -> bool {
-        self.metas.iter().any(|meta| {
-            meta.boundary.is_some()
-                && meta.keywords.iter().any(|keyword| {
-                    keyword.len() >= 4
-                        && keyword.ends_with(['_', '-'])
-                        && value
-                            .get(..keyword.len())
-                            .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
-                })
-        })
+        self.token_prefix_len(value).is_some()
+    }
+
+    /// The length of the token prefix (`npm_`, `glpat-` …) of a prefix rule
+    /// that `value` starts with.
+    fn token_prefix_len(&self, value: &str) -> Option<usize> {
+        self.metas
+            .iter()
+            .filter(|meta| meta.boundary.is_some())
+            .flat_map(|meta| meta.keywords.iter())
+            .find(|keyword| {
+                keyword.len() >= 4
+                    && keyword.ends_with(['_', '-'])
+                    && value
+                        .get(..keyword.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
+            })
+            .map(|keyword| keyword.len())
+    }
+
+    /// P10: whether `value`, without leading quotes, is the token prefix of
+    /// a prefix rule followed by a placeholder (`ntn_<your-secret>`,
+    /// `lin_api_${LINEAR_KEY}`, `PMAK-{{ key }}`).
+    fn has_placeholder_body(&self, value: &str) -> bool {
+        let value = value.trim_start_matches(['"', '\'', '`']);
+        self.token_prefix_len(value)
+            .is_some_and(|len| value[len..].starts_with(['<', '{', '$', '[']))
     }
 
     /// F03: whether `value`, without leading quotes, starts with a whole
@@ -1168,10 +1185,13 @@ impl NativeRegexDetector for DlpPipeline {
             return false;
         }
         // F03: a generic rule's value that is a checksummed provider token
-        // with a wrong checksum is no secret of that provider either.
+        // with a wrong checksum is no secret of that provider either; P10:
+        // nor is a token prefix with a placeholder or a public token.
         if check == ExampleCheck::Generic
             && (self.fails_token_checksum(value.as_str())
-                || self.has_wrong_token_length(text, value.range()))
+                || self.has_wrong_token_length(text, value.range())
+                || self.has_placeholder_body(value.as_str())
+                || rules::is_public_token(value.as_str()))
         {
             return false;
         }

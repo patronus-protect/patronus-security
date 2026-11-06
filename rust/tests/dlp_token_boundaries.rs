@@ -43,7 +43,7 @@ const BOUNDED: &[(&str, &str)] = &[
     ("dlp_azure_entra_client_secret", "~-"),
     ("dlp_alibaba_access_key_id", ""),
     ("dlp_aws_bedrock_api_key", "+"),
-    ("dlp_atlassian_api_token", "=-"),
+    ("dlp_atlassian_api_token", "-"),
     ("dlp_notion_api_token", ""),
     ("dlp_linear_api_key", ""),
     ("dlp_airtable_pat", "."),

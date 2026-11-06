@@ -8,8 +8,12 @@
 //! gitleaks airtable-personnal-access-token), `dlp_postman_api_key` (`PMAK-`,
 //! 24 and 34 hex digits, gitleaks postman-api-token) and
 //! `dlp_mapbox_secret_token` (`sk.`, TruffleHog Mapbox; public `pk.` tokens
-//! are no secret). Values come from the golden generator or are built here at
-//! test time.
+//! are no secret). Formats without a prefix only count under a key with the
+//! provider name and a credential noun: `dlp_atlassian_legacy_api_token` (24
+//! alphanumerics), `dlp_linear_client_secret` (32 hex digits, gitleaks
+//! linear-client-secret) and `dlp_airtable_api_key` (`key` and 14, gitleaks
+//! airtable-api-key). Values come from the golden generator or are built here
+//! at test time.
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -185,6 +189,8 @@ fn public_mapbox_tokens_are_no_secret() {
         format!("NEXT_PUBLIC_MAPBOX_TOKEN={public}\n"),
     ] {
         assert!(!rule_hit(&text, "dlp_mapbox_secret_token"), "{text}");
+        // Nor is it a secret for the generic assignment rules.
+        assert!(scan(&text).evidence_spans.is_empty(), "{text}");
     }
     let text = format!("MAPBOX_DOWNLOADS_TOKEN={secret}\n");
     assert!(rule_hit(&text, "dlp_mapbox_secret_token"), "{text}");
@@ -236,5 +242,84 @@ fn single_case_fills_are_not_reported() {
     for (rule_id, key, value) in &fills {
         let text = format!("{key}={value}\n");
         assert!(!rule_hit(&text, rule_id), "{rule_id}: {value}");
+    }
+}
+
+/// Rules without an own prefix, their provider key and generator.
+const CONTEXT_RULES: &[(&str, &str, &str)] = &[
+    (
+        "dlp_atlassian_legacy_api_token",
+        "JIRA_API_TOKEN",
+        "atlassian_api_token_legacy",
+    ),
+    (
+        "dlp_linear_client_secret",
+        "LINEAR_CLIENT_SECRET",
+        "linear_client_secret",
+    ),
+    (
+        "dlp_airtable_api_key",
+        "AIRTABLE_API_KEY",
+        "airtable_api_key",
+    ),
+];
+
+#[test]
+fn context_values_are_reported_under_their_provider_key() {
+    for (rule_id, key, gen) in CONTEXT_RULES {
+        for seed in 0..6 {
+            let value = generated(gen, seed);
+            for (index, template) in CARRIERS[..6].iter().enumerate() {
+                let text = carrier(template, key, &value);
+                assert!(rule_hit(&text, rule_id), "{gen}/{seed}: carrier {index}");
+                assert!(reports(&text, &value), "{gen}/{seed}: carrier {index}");
+            }
+        }
+    }
+}
+
+#[test]
+fn context_values_need_their_provider_name() {
+    for (rule_id, _, gen) in CONTEXT_RULES {
+        let value = generated(gen, 3);
+        for text in [
+            format!("SERVICE_API_TOKEN={value}\n"),
+            NEUTRAL_CARRIER.replace("{}", &value),
+            // A provider name without a credential noun names an ID.
+            format!("JIRA_ISSUE_ID={value}\nLINEAR_TEAM_ID={value}\nAIRTABLE_BASE={value}\n"),
+        ] {
+            assert!(!rule_hit(&text, rule_id), "{rule_id}: {text}");
+        }
+    }
+}
+
+#[test]
+fn context_fills_without_mixed_characters_are_not_reported() {
+    for (rule_id, text) in [
+        (
+            "dlp_atlassian_legacy_api_token",
+            format!("JIRA_API_TOKEN={}\n", "abcdefgh".repeat(3)),
+        ),
+        (
+            "dlp_airtable_api_key",
+            format!("AIRTABLE_API_KEY=key{}\n", "abcdefg".repeat(2)),
+        ),
+        (
+            "dlp_linear_client_secret",
+            format!("LINEAR_CLIENT_SECRET={}\n", "0".repeat(32)),
+        ),
+    ] {
+        assert!(!rule_hit(&text, rule_id), "{rule_id}: {text}");
+    }
+}
+
+#[test]
+fn token_prefixes_with_a_placeholder_are_no_secret() {
+    for text in [
+        "notion:\n  token: \"ntn_<your-integration-secret>\"\n",
+        "{\"linear\": {\"apiKey\": \"lin_api_${LINEAR_API_KEY}\"}}\n",
+        "postman:\n  api_key: \"PMAK-{{ postman_key }}\"\n",
+    ] {
+        assert!(scan(text).evidence_spans.is_empty(), "{text}");
     }
 }

@@ -835,6 +835,7 @@ CHECKS = {
     "intercom_api_key": prefixed("", B64URL, 59, "="),
     "postman_api_token": groups("PMAK-", HEX, 24, 34),
     "mapbox_access_token": groups("pk.", ALNUM, 60, 22, sep="."),
+    "mapbox_secret_token": groups("sk.", ALNUM, 60, 22, sep="."),
     "launchdarkly_access_token": lambda v: v.startswith("api-") and uuid_shaped(v[4:]),
     "launchdarkly_sdk_key": lambda v: v.startswith("sdk-") and uuid_shaped(v[4:]),
     "typeform_api_token": prefixed("tfp_", B64URL, 59),

@@ -176,6 +176,41 @@ fn is_alibaba_access_key_id(value: &str) -> bool {
     value.strip_prefix("LTAI").is_some_and(has_both_cases)
 }
 
+/// P10: a legacy Atlassian API token is 24 lower-case base36 characters with
+/// letters and digits.
+fn has_letters_and_digits(value: &str) -> bool {
+    value.bytes().any(|byte| byte.is_ascii_digit())
+        && value.bytes().any(|byte| byte.is_ascii_alphabetic())
+}
+
+/// P10: a Mapbox secret token is `sk.`, a random segment and a 22 character
+/// signature, both with upper- and lower-case letters.
+fn is_mapbox_secret_token(value: &str) -> bool {
+    value
+        .strip_prefix("sk.")
+        .and_then(|body| body.split_once('.'))
+        .is_some_and(|(payload, signature)| has_both_cases(payload) && has_both_cases(signature))
+}
+
+/// P10: whether `value`, without quotes, is a public Mapbox token: `pk.`, a
+/// segment of 50 to 200 and one of 22 characters `[A-Za-z0-9_-]`. Mapbox
+/// ships it to the browser; the `sk.` scope of the same shape is the secret.
+pub fn is_public_token(value: &str) -> bool {
+    let is_segment = |segment: &str, len: std::ops::RangeInclusive<usize>| {
+        len.contains(&segment.len())
+            && segment
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    };
+    value
+        .trim_matches(['"', '\'', '`'])
+        .strip_prefix("pk.")
+        .and_then(|body| body.split_once('.'))
+        .is_some_and(|(payload, signature)| {
+            is_segment(payload, 50..=200) && is_segment(signature, 22..=22)
+        })
+}
+
 /// P07: the JSON object that the standard base64 `body` (padded or not)
 /// encodes, the payload of Grafana and Sentry tokens.
 fn base64_json_object(body: &str) -> Option<Map<String, Value>> {
@@ -967,6 +1002,175 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("ibm")
         .with_min_entropy(3.0)
         .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Atlassian API tokens (Jira, Confluence, Bitbucket), `ATATT3` and
+    // 186 characters `[A-Za-z0-9_=-]`.
+    DlpPattern {
+        name: "dlp_atlassian_api_token",
+        pattern: r"ATATT3[A-Za-z0-9_=\-]{186}",
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:atlassian-api-token",
+            &["atatt3"],
+        )
+        .with_provider("atlassian")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: legacy Atlassian API tokens, 24 lower-case alphanumerics under an
+    // Atlassian, Jira or Confluence key.
+    DlpPattern {
+        name: "dlp_atlassian_legacy_api_token",
+        pattern: provider_key!(r"atlassian|jira|confluence", r"[a-z0-9]{24}"),
+        entity_group: "API_KEY",
+        validator: Some(has_letters_and_digits),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:atlassian-api-token",
+            &["atlassian", "jira", "confluence"],
+        )
+        .with_provider("atlassian")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Notion integration secrets, `ntn_`, 11 digits and 35
+    // alphanumerics.
+    DlpPattern {
+        name: "dlp_notion_api_token",
+        pattern: r"ntn_[0-9]{11}[A-Za-z0-9]{35}",
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:notion-api-token",
+            &["ntn_"],
+        )
+        .with_provider("notion")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Linear personal API keys, `lin_api_` and 40 alphanumerics.
+    DlpPattern {
+        name: "dlp_linear_api_key",
+        pattern: r"lin_api_[A-Za-z0-9]{40}",
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:linear-api-key",
+            &["lin_api_"],
+        )
+        .with_provider("linear")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Linear OAuth client secrets, 32 lower-case hex digits under a
+    // Linear key.
+    DlpPattern {
+        name: "dlp_linear_client_secret",
+        pattern: provider_key!(r"linear", r"[0-9a-f]{32}"),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:linear-client-secret",
+            &["linear"],
+        )
+        .with_provider("linear")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // P10: Airtable personal access tokens, `pat`, a 14 character token ID,
+    // `.` and 64 lower-case hex digits.
+    DlpPattern {
+        name: "dlp_airtable_pat",
+        pattern: r"pat[A-Za-z0-9]{14}\.[0-9a-f]{64}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:airtable-personnal-access-token",
+            &["pat"],
+        )
+        .with_provider("airtable")
+        .with_min_entropy(3.0)
+        .with_boundary(".")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // P10: legacy Airtable API keys, `key` and 14 alphanumerics under an
+    // Airtable key.
+    DlpPattern {
+        name: "dlp_airtable_api_key",
+        pattern: provider_key!(r"airtable", r"key[A-Za-z0-9]{14}"),
+        entity_group: "API_KEY",
+        validator: Some(has_both_cases),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:airtable-api-key",
+            &["airtable"],
+        )
+        .with_provider("airtable")
+        .with_min_entropy(3.0)
+        .with_key_gate(likeness::is_provider_handover)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Postman API keys, `PMAK-`, 24 and 34 lower-case hex digits.
+    DlpPattern {
+        name: "dlp_postman_api_key",
+        pattern: r"PMAK-[0-9a-f]{24}-[0-9a-f]{34}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:postman-api-token",
+            &["pmak-"],
+        )
+        .with_provider("postman")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // P10: Mapbox secret tokens, `sk.`, a random segment and a 22 character
+    // signature. Public `pk.` tokens ship to the browser and are no secret.
+    DlpPattern {
+        name: "dlp_mapbox_secret_token",
+        pattern: r"sk\.[A-Za-z0-9_\-]{50,200}\.[A-Za-z0-9_\-]{22}",
+        entity_group: "API_KEY",
+        validator: Some(is_mapbox_secret_token),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/mapbox/mapbox.go",
+            &["sk."],
+        )
+        .with_provider("mapbox")
+        .with_min_entropy(3.0)
+        .with_boundary("-.")
         .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────
@@ -2164,7 +2368,7 @@ mod tests {
             .iter()
             .filter_map(|rule| xml_key(rule.pattern).map(|key| (rule.name, key)))
             .collect();
-        assert_eq!(keyed.len(), 24);
+        assert_eq!(keyed.len(), 27);
         let (_, heroku) = keyed
             .iter()
             .find(|(name, _)| *name == "dlp_heroku_legacy_api_key")

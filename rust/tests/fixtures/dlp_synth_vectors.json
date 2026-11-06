@@ -307,6 +307,7 @@
     "mailgun_signing_key": {"sha256_96": "e281baeafac59801ccf57b33"},
     "mapbox_access_token": {"sha256_96": "acab74535118fcba29ef1c8f"},
     "mapbox_access_token_short": {"sha256_96": "6a698639dbbc6c284d1f7fd6"},
+    "mapbox_secret_token": {"sha256_96": "fb449aec866785314b58b317"},
     "mattermost_access_token": {"sha256_96": "7376b0ef24a6b61dc6f892e5"},
     "mattermost_access_token_short": {"sha256_96": "29a37bfced6a14cd924f6013"},
     "maxmind_license_key": {"sha256_96": "a7cbc7b5103e2d8d1757d610"},

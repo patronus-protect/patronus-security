@@ -1532,6 +1532,9 @@ PROFILES = {
         "saas.atlassian.api_token", "API_KEY", "secret", "atlassian_api_token", "Atlassian API token",
         "Atlassian-API-Token",
     ),
+    "dlp_atlassian_legacy_api_token": Profile(
+        "saas.atlassian.api_token", "API_KEY", "secret", "jira_api_token", "Jira API token", "Jira-API-Token",
+    ),
     "dlp_notion_api_token": Profile(
         "saas.notion.api_token", "API_KEY", "secret", "notion_api_token", "Notion integration secret",
         "Notion-Integrations-Secret",
@@ -1539,9 +1542,16 @@ PROFILES = {
     "dlp_linear_api_key": Profile(
         "saas.linear.secret", "API_KEY", "secret", "linear_api_key", "Linear API key", "Linear-API-Schlüssel",
     ),
+    "dlp_linear_client_secret": Profile(
+        "saas.linear.secret", "API_KEY", "secret", "linear_client_secret", "Linear OAuth client secret",
+        "Linear-OAuth-Client-Secret",
+    ),
     "dlp_airtable_pat": Profile(
         "saas.airtable.token", "API_KEY", "secret", "airtable_api_token", "Airtable access token",
         "Airtable-Zugriffstoken",
+    ),
+    "dlp_airtable_api_key": Profile(
+        "saas.airtable.token", "API_KEY", "secret", "airtable_api_key", "Airtable API key", "Airtable-API-Schlüssel",
     ),
     "dlp_postman_api_key": Profile(
         "saas.postman.api_token", "API_KEY", "secret", "postman_api_key", "Postman API key", "Postman-API-Schlüssel",

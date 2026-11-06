@@ -905,13 +905,13 @@ entities:
      gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key],
      trufflehog: [DuffelToken, Shippo, Lob], backlog: P09}
   # P10: Produktivität/SaaS
-  - {id: saas.atlassian.api_token, scope: shared, group: API_KEY, ark: [dlp_atlassian_api_token],
+  - {id: saas.atlassian.api_token, scope: shared, group: API_KEY, ark: [dlp_atlassian_api_token, dlp_atlassian_legacy_api_token],
      gitleaks: [atlassian-api-token], trufflehog: [Atlassian, JiraToken], backlog: P10}
   - {id: saas.notion.api_token, scope: shared, group: API_KEY, ark: [dlp_notion_api_token],
      gitleaks: [notion-api-token], backlog: P10}
-  - {id: saas.linear.secret, scope: shared, group: API_KEY, ark: [dlp_linear_api_key],
+  - {id: saas.linear.secret, scope: shared, group: API_KEY, ark: [dlp_linear_api_key, dlp_linear_client_secret],
      gitleaks: [linear-api-key, linear-client-secret], trufflehog: [LinearAPI], backlog: P10}
-  - {id: saas.airtable.token, scope: shared, group: API_KEY, ark: [dlp_airtable_pat],
+  - {id: saas.airtable.token, scope: shared, group: API_KEY, ark: [dlp_airtable_pat, dlp_airtable_api_key],
      gitleaks: [airtable-api-key, airtable-personnal-access-token],
      trufflehog: [AirtablePersonalAccessToken], backlog: P10}
   - {id: saas.asana.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [asana-client-secret], backlog: P10}

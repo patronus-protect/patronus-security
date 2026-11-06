@@ -14826,6 +14826,51 @@ DLP_P10_CASES = {
             "MAPBOX_SECRET_TOKEN = \"<<secret:0>>\"\n# Nur serverseitig für die Tiles-API verwenden\n",
             "mapbox_secret_token", 21012, carrier="code",
         ),
+        ds(
+            "API_KEY", "en", "dlp_atlassian_legacy_api_token",
+            "jira:\n  url: https://jira.acme.example\n  jira_api_token: \"<<secret:0>>\"\n",
+            "atlassian_api_token_legacy", 21020, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_atlassian_legacy_api_token",
+            "# alter Confluence-Zugang, bis Jahresende ersetzen\nCONFLUENCE_API_TOKEN=<<secret:0>>\n",
+            "atlassian_api_token_legacy", 21021, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_linear_client_secret",
+            "LINEAR_CLIENT_ID=lin_oauth_app\nLINEAR_CLIENT_SECRET=<<secret:0>>\n",
+            "linear_client_secret", 21022, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_linear_client_secret",
+            "{\n  \"oauth\": {\n    \"linearClientSecret\": \"<<secret:0>>\"\n  }\n}\n",
+            "linear_client_secret", 21023, carrier="json",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_airtable_api_key",
+            "import airtable\n\nAIRTABLE_API_KEY = \"<<secret:0>>\"\n",
+            "airtable_api_key", 21024, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_airtable_api_key",
+            "$ export AIRTABLE_API_KEY=<<secret:0>>\n",
+            "airtable_api_key", 21025, carrier="cli",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_linear_client_secret",
+            "LINEAR_TEAM_ID=3f9c1e7a-2b4d-4c6e-8a0b-1c2d3e4f5a6b\nLINEAR_CLIENT_SECRET=${LINEAR_CLIENT_SECRET}\n",
+            "team ID and environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_airtable_api_key",
+            "airtable:\n  airtable_base: appR4nd0mBase12\n  airtable_api_key: \"<AIRTABLE-SCHLÜSSEL>\"\n",
+            "base ID and placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_atlassian_legacy_api_token",
+            "Ticket-Link: https://jira.acme.example/browse/PLAT-4711, Commit 9f2c1e7ab4d3c6e8a0b1c2d3\n",
+            "issue key and commit hash", carrier="prose",
+        ),
         dl(
             "API_KEY", "en", "dlp_atlassian_api_token",
             "2026-11-06T05:02:11Z WARN jira: rejected <<secret:0>> (length)\n",

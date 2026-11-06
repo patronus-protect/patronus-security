@@ -172,7 +172,7 @@ pub fn config_key(rule_id: &str) -> Option<ConfigKey> {
     credentials::config_key(rule_id)
 }
 
-pub use providers::ProviderKey;
+pub use providers::{is_public_token, ProviderKey};
 
 /// T21: the key and value regexes of a key-bound provider rule
 /// (`provider_key!`), which also binds the value of an XML config element
