@@ -189,7 +189,14 @@ the M1 work on presidio_favored) are opt-in.
   placeholder after an auth scheme or a variable name (`Bearer HIER_…_EINTRAGEN`,
   `NAME=BITTE_AENDERN`) is a placeholder for every rule, and a sequential or repeated fill in a
   SQL row counts as a test value. Dev `sql.*` carrier misses of implemented credential entities
-  11 -> 1 (the last one is a value that the member-access check rejects in every carrier).
+  11 -> 0.
+- Detection change: `dlp_connection_string_password` and `dlp_ldap_bind_password` (all modes)
+  report a bare password whose dotted letter runs end in `-` and a letter or digit
+  (`Password=yogRXHK.OY.KvDC-C9;`): the member-access check no longer reads it as a subtraction.
+  A whole member access (`Password=cfg.DbPassword;`) stays code (T23).
+- Detection change: an SQL dump statement (T23) ends at the next `INSERT`/`COPY` head at the
+  latest, so a `COPY … FROM stdin;` block without `\.` no longer reads the following `INSERT`
+  lines as its rows; many heads without an end cost linear instead of quadratic time.
 - Detection change: example/test check on decoded base64 values for the generic rules (T22).
   `dlp_generic_credential_assignment`, `dlp_env_var_secret`, `dlp_password_assignment`,
   `dlp_prose_password` and `dlp_prose_secret` decode a value that is canonical standard or

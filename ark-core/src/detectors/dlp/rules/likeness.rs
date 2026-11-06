@@ -1220,9 +1220,19 @@ pub fn is_connection_password(text: &str, range: Range<usize>) -> bool {
     let code = match before.chars().next_back() {
         Some('"' | '\'') => closes_string(before),
         Some('{') => false,
-        _ => is_code_expression(value),
+        _ => is_code_expression(value) && !is_dashed_password(value),
     };
     !code && is_chosen_secret(value)
+}
+
+/// T23: whether a member access runs straight into `-` and a letter or
+/// digit (`yogRXHK.OY.KvDC-C9`): a connection string or bind password holds
+/// no subtraction, so the dotted letter runs belong to a password.
+fn is_dashed_password(value: &str) -> bool {
+    MEMBER_ACCESS.find(value).is_some_and(|access| {
+        access.as_str().ends_with('-')
+            && value[access.end()..].starts_with(|c: char| c.is_ascii_alphanumeric())
+    })
 }
 
 /// G03: [`is_connection_password`] for a command-line argument. A shell
@@ -1957,6 +1967,11 @@ mod tests {
         assert!(gate("bindpw \"Violet.River!82\"", "Violet.River!82"));
         assert!(gate("Pwd={Violet.River!82};", "Violet.River!82"));
         assert!(!gate("bindpw Violet.River!82", "Violet.River!82"));
+        // T23: letter runs joined by `.` and ended by `-` and a digit or
+        // letter are a password; a connection string holds no subtraction.
+        assert!(gate("Password=yogRXHK.OY.KvDC-C9;", "yogRXHK.OY.KvDC-C9"));
+        assert!(!gate("Password=cfg.DbPassword;", "cfg.DbPassword"));
+        assert!(!gate("Password=cfg.DbPassword -1;", "cfg.DbPassword -1"));
         assert!(!gate(
             "cs = \"Server=db;Password=\" + cfg.DbPassword + \";\"",
             " + cfg.DbPassword + "
