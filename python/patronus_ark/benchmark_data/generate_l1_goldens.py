@@ -5221,6 +5221,10 @@ DLP_LOOKALIKE_GENERATORS = (
     # P03: wrong length of the Azure, Alibaba, Bedrock and IBM Cloud formats
     "azure_storage_account_key_short", "azure_entra_client_secret_short", "alibaba_access_key_id_short",
     "bedrock_api_key_short", "ibm_cloud_iam_api_key_short",
+    # P10: wrong length of the Atlassian, Notion, Linear, Airtable and Postman formats; public Mapbox pk. tokens
+    "atlassian_api_token_short", "notion_api_token_short", "linear_api_key_short",
+    "airtable_personal_access_token_short", "postman_api_token_short", "mapbox_access_token",
+    "mapbox_access_token_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
@@ -14752,6 +14756,210 @@ DLP_T23_CASES["CREDENTIAL"] += [
     for language, rule, text, reason in _T23_NEGATIVES
 ]
 for _label, _rows in DLP_T23_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# P10: productivity/SaaS tokens with an own prefix. Atlassian API tokens (ATATT3 + 186, gitleaks
+# atlassian-api-token), Notion integration secrets (ntn_ + 11 digits + 35, gitleaks notion-api-token),
+# Linear API keys (lin_api_ + 40, gitleaks linear-api-key), Airtable personal access tokens (pat + 14 + .
+# + 64 hex, gitleaks airtable-personnal-access-token), Postman API keys (PMAK- + 24 hex + - + 34 hex,
+# gitleaks postman-api-token) and Mapbox secret tokens (sk., TruffleHog Mapbox). Hard negatives are
+# lookalikes with a wrong length, public Mapbox pk. tokens, env and template references, placeholders
+# and format prose.
+DLP_P10_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "en", "dlp_atlassian_api_token",
+            "# Jira automation\nJIRA_BASE_URL=https://acme.atlassian.net\nJIRA_API_TOKEN=<<secret:0>>\n",
+            "atlassian_api_token", 21001, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_atlassian_api_token",
+            "Hallo Jonas,\n\nhier das API-Token für Confluence: <<secret:0>>\nBitte nach dem Import löschen.\n",
+            "atlassian_api_token", 21002, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_notion_api_token",
+            "import { Client } from \"@notionhq/client\"\n\nconst notion = new Client({ auth: \"<<secret:0>>\" })\n",
+            "notion_api_token", 21003, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_notion_api_token",
+            "notion:\n  # Integration für das Wiki\n  token: \"<<secret:0>>\"\n",
+            "notion_api_token", 21004, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_linear_api_key",
+            "$ curl -H \"Authorization: <<secret:0>>\" -H \"Content-Type: application/json\" https://api.linear.app/graphql\n",
+            "linear_api_key", 21005, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_linear_api_key",
+            "{\n  \"linear\": {\n    \"apiKey\": \"<<secret:0>>\",\n    \"team\": \"PLATTFORM\"\n  }\n}\n",
+            "linear_api_key", 21006, carrier="json",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_airtable_pat",
+            "2026-11-06T05:02:11Z DEBUG sync: GET https://api.airtable.com/v0/meta/bases Authorization=Bearer <<secret:0>>\n",
+            "airtable_personal_access_token", 21007, carrier="log",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_airtable_pat",
+            "# Zugriff auf die Kundenbasis\nAIRTABLE_TOKEN=<<secret:0>>\n",
+            "airtable_personal_access_token", 21008, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_postman_api_key",
+            "postman:\n  workspace: platform\n  api_key: \"<<secret:0>>\"\n",
+            "postman_api_token", 21009, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_postman_api_key",
+            "$ newman run sammlung.json --env-var \"postmanApiKey=<<secret:0>>\"\n",
+            "postman_api_token", 21010, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_mapbox_secret_token",
+            "# ~/.netrc-free download token for the iOS SDK\nMAPBOX_DOWNLOADS_TOKEN=<<secret:0>>\n",
+            "mapbox_secret_token", 21011, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_mapbox_secret_token",
+            "MAPBOX_SECRET_TOKEN = \"<<secret:0>>\"\n# Nur serverseitig für die Tiles-API verwenden\n",
+            "mapbox_secret_token", 21012, carrier="code",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_atlassian_legacy_api_token",
+            "jira:\n  url: https://jira.acme.example\n  jira_api_token: \"<<secret:0>>\"\n",
+            "atlassian_api_token_legacy", 21020, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_atlassian_legacy_api_token",
+            "# alter Confluence-Zugang, bis Jahresende ersetzen\nCONFLUENCE_API_TOKEN=<<secret:0>>\n",
+            "atlassian_api_token_legacy", 21021, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_linear_client_secret",
+            "LINEAR_CLIENT_ID=lin_oauth_app\nLINEAR_CLIENT_SECRET=<<secret:0>>\n",
+            "linear_client_secret", 21022, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_linear_client_secret",
+            "{\n  \"oauth\": {\n    \"linearClientSecret\": \"<<secret:0>>\"\n  }\n}\n",
+            "linear_client_secret", 21023, carrier="json",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_airtable_api_key",
+            "import airtable\n\nAIRTABLE_API_KEY = \"<<secret:0>>\"\n",
+            "airtable_api_key", 21024, carrier="code",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_airtable_api_key",
+            "$ export AIRTABLE_API_KEY=<<secret:0>>\n",
+            "airtable_api_key", 21025, carrier="cli",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_linear_client_secret",
+            "LINEAR_TEAM_ID=3f9c1e7a-2b4d-4c6e-8a0b-1c2d3e4f5a6b\nLINEAR_CLIENT_SECRET=${LINEAR_CLIENT_SECRET}\n",
+            "team ID and environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_airtable_api_key",
+            "airtable:\n  airtable_base: appR4nd0mBase12\n  airtable_api_key: \"<AIRTABLE-SCHLÜSSEL>\"\n",
+            "base ID and placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_atlassian_legacy_api_token",
+            "Ticket-Link: https://jira.acme.example/browse/PLAT-4711, Commit 9f2c1e7ab4d3c6e8a0b1c2d3\n",
+            "issue key and commit hash", carrier="prose",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_atlassian_api_token",
+            "2026-11-06T05:02:11Z WARN jira: rejected <<secret:0>> (length)\n",
+            "atlassian_api_token_short", 21013, "ATATT3 shape with 185 instead of 186 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_notion_api_token",
+            "2026-11-06T05:02:11Z WARN wiki: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "notion_api_token_short", 21014, "ntn_ shape with 34 instead of 35 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_linear_api_key",
+            "2026-11-06T05:02:11Z WARN issues: rejected <<secret:0>> (length)\n",
+            "linear_api_key_short", 21015, "lin_api_ shape with 39 instead of 40 characters", carrier="log",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_airtable_pat",
+            "2026-11-06T05:02:11Z WARN sync: Wert <<secret:0>> abgelehnt (Länge)\n",
+            "airtable_personal_access_token_short", 21016, "pat shape with 63 instead of 64 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_postman_api_key",
+            "2026-11-06T05:02:11Z WARN newman: rejected <<secret:0>> (length)\n",
+            "postman_api_token_short", 21017, "PMAK- shape with 33 instead of 34 hex digits", carrier="log",
+        ),
+        dl(
+            "API_KEY", "en", "dlp_mapbox_secret_token",
+            "const map = new mapboxgl.Map({ container: \"map\", accessToken: \"<<secret:0>>\" })\n",
+            "mapbox_access_token", 21018, "public Mapbox pk. token meant for the browser", carrier="code",
+        ),
+        dl(
+            "API_KEY", "de", "dlp_mapbox_secret_token",
+            "# öffentliches Token für die Karte im Browser\nNEXT_PUBLIC_MAPBOX_TOKEN=<<secret:0>>\n",
+            "mapbox_access_token", 21019, "public Mapbox pk. token meant for the browser", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_atlassian_api_token",
+            "JIRA_API_TOKEN=${JIRA_API_TOKEN}\nJIRA_USER=bot@acme.example\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_notion_api_token",
+            "notion:\n  token: \"ntn_<your-integration-secret>\"\n",
+            "placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_linear_api_key",
+            "Linear personal API keys start with lin_api_ and are created under Settings > API.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_airtable_pat",
+            "{\"airtable\": {\"token\": \"{{ airtable_token }}\", \"baseId\": \"appR4nd0mBase12\"}}\n",
+            "template reference and base ID", carrier="json",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_postman_api_key",
+            "$ newman run collection.json --env-var \"postmanApiKey=$POSTMAN_API_KEY\"\n",
+            "environment reference", carrier="cli",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_atlassian_api_token",
+            "Atlassian-API-Tokens beginnen mit ATATT und werden unter id.atlassian.com erstellt.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_notion_api_token",
+            "# Secret kommt aus dem Tresor\nNOTION_TOKEN=${NOTION_TOKEN}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_linear_api_key",
+            "{\"linear\": {\"apiKey\": \"<LINEAR-API-SCHLÜSSEL>\"}}\n",
+            "placeholder", carrier="json",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_postman_api_key",
+            "postman:\n  api_key: \"PMAK-xxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n",
+            "masked placeholder", carrier="yaml",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_mapbox_secret_token",
+            "MAPBOX_SECRET_TOKEN = os.environ[\"MAPBOX_SECRET_TOKEN\"]\n# Geheime Tokens beginnen mit sk.\n",
+            "environment lookup", carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_P10_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

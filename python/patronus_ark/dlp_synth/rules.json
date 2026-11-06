@@ -155,6 +155,48 @@
       "lookalike": ["ibm_cloud_iam_api_key_short"],
       "probes": ["IBM_CLOUD_API_KEY=<<secret:0>>", "{\"ibmcloud_api_key\": \"<<secret:0>>\"}"]
     },
+    "dlp_atlassian_api_token": {
+      "generators": ["atlassian_api_token"],
+      "lookalike": ["atlassian_api_token_short"],
+      "probes": ["JIRA_API_TOKEN=<<secret:0>>", "{\"confluence\": {\"apiToken\": \"<<secret:0>>\"}}"]
+    },
+    "dlp_atlassian_legacy_api_token": {
+      "generators": ["atlassian_api_token_legacy"],
+      "probes": ["JIRA_API_TOKEN=<<secret:0>>", "confluence:\n  confluence_api_token: \"<<secret:0>>\""]
+    },
+    "dlp_notion_api_token": {
+      "generators": ["notion_api_token"],
+      "lookalike": ["notion_api_token_short"],
+      "probes": ["NOTION_TOKEN=<<secret:0>>", "const notion = new Client({ auth: \"<<secret:0>>\" })"]
+    },
+    "dlp_linear_api_key": {
+      "generators": ["linear_api_key"],
+      "lookalike": ["linear_api_key_short"],
+      "probes": ["LINEAR_API_KEY=<<secret:0>>", "Authorization: <<secret:0>>"]
+    },
+    "dlp_linear_client_secret": {
+      "generators": ["linear_client_secret"],
+      "probes": ["LINEAR_CLIENT_SECRET=<<secret:0>>", "{\"linear\": {\"linearClientSecret\": \"<<secret:0>>\"}}"]
+    },
+    "dlp_airtable_pat": {
+      "generators": ["airtable_personal_access_token"],
+      "lookalike": ["airtable_personal_access_token_short"],
+      "probes": ["AIRTABLE_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_airtable_api_key": {
+      "generators": ["airtable_api_key"],
+      "probes": ["AIRTABLE_API_KEY=<<secret:0>>", "airtable:\n  airtable_key: \"<<secret:0>>\""]
+    },
+    "dlp_postman_api_key": {
+      "generators": ["postman_api_token"],
+      "lookalike": ["postman_api_token_short"],
+      "probes": ["POSTMAN_API_KEY=<<secret:0>>", "X-Api-Key: <<secret:0>>"]
+    },
+    "dlp_mapbox_secret_token": {
+      "generators": ["mapbox_secret_token"],
+      "lookalike": ["mapbox_access_token", "mapbox_access_token_short"],
+      "probes": ["MAPBOX_DOWNLOADS_TOKEN=<<secret:0>>", "mapbox:\n  secret_token: \"<<secret:0>>\""]
+    },
     "dlp_github_token": {
       "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
       "shape_only": ["github_pat_classic"],
@@ -666,16 +708,10 @@
     "key.age_secret_key": {"generators": ["age_secret_key"], "lookalike": ["age_public_key"]},
     "key.pkcs12_file": {"generators": ["pkcs12_keystore"], "lookalike": ["x509_certificate"]},
     "key.symmetric_key": {"generators": ["laravel_app_key", "fernet_key", "aes256_hex_key"], "lookalike": ["sha1_hex_digest"]},
-    "saas.atlassian.api_token": {"generators": ["atlassian_api_token", "atlassian_api_token_legacy"], "lookalike": ["atlassian_api_token_short"]},
-    "saas.notion.api_token": {"generators": ["notion_api_token"], "lookalike": ["notion_api_token_short"]},
-    "saas.linear.secret": {"generators": ["linear_api_key", "linear_client_secret"], "lookalike": ["linear_api_key_short"]},
-    "saas.airtable.token": {"generators": ["airtable_personal_access_token", "airtable_api_key"], "lookalike": ["airtable_personal_access_token_short"]},
     "saas.asana.client_secret": {"generators": ["asana_client_secret"], "lookalike": ["asana_client_secret_short"]},
     "saas.hubspot.api_key": {"generators": ["hubspot_api_key"], "lookalike": ["hubspot_api_key_short"]},
     "saas.zendesk.secret_key": {"generators": ["zendesk_secret_key"], "lookalike": ["zendesk_secret_key_short"]},
     "saas.intercom.api_key": {"generators": ["intercom_api_key"], "lookalike": ["intercom_api_key_short"]},
-    "saas.postman.api_token": {"generators": ["postman_api_token"], "lookalike": ["postman_api_token_short"]},
-    "saas.mapbox.secret_token": {"generators": ["mapbox_access_token"], "lookalike": ["mapbox_access_token_short"]},
     "saas.launchdarkly.access_token": {"generators": ["launchdarkly_access_token", "launchdarkly_sdk_key"], "lookalike": ["launchdarkly_access_token_short"]},
     "saas.typeform.api_token": {"generators": ["typeform_api_token"], "lookalike": ["typeform_api_token_short"]},
     "saas.contentful.delivery_token": {"generators": ["contentful_delivery_token"], "lookalike": ["contentful_delivery_token_short"]},

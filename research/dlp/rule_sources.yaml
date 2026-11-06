@@ -142,6 +142,42 @@ rules:
     provider: ibm
     source_ref: https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py
     format: "IBM Cloud IAM API key: 44 characters [A-Za-z0-9_-] with both letter cases under a key with ibm and a credential noun right before the separator (detect-secrets IbmCloudIamDetector, tightened to an IBM key; P03)"
+  dlp_atlassian_api_token:
+    provider: atlassian
+    source_ref: gitleaks:atlassian-api-token
+    format: "Atlassian API token (Jira, Confluence, Bitbucket): ATATT3 and 186 characters [A-Za-z0-9_=-] with both letter cases, as a whole token (gitleaks atlassian-api-token; P10)"
+  dlp_atlassian_legacy_api_token:
+    provider: atlassian
+    source_ref: gitleaks:atlassian-api-token
+    format: "Legacy Atlassian API token: 24 lower-case base36 characters with letters and digits under a key with atlassian, jira or confluence and a credential noun right before the separator (gitleaks atlassian-api-token keyword branch, tightened to a credential key; P10)"
+  dlp_notion_api_token:
+    provider: notion
+    source_ref: gitleaks:notion-api-token
+    format: "Notion integration secret: ntn_, 11 digits and 35 base62 characters with both letter cases, as a whole token (gitleaks notion-api-token; P10)"
+  dlp_linear_api_key:
+    provider: linear
+    source_ref: gitleaks:linear-api-key
+    format: "Linear personal API key: lin_api_ and 40 base62 characters with both letter cases, as a whole token (gitleaks linear-api-key; P10)"
+  dlp_linear_client_secret:
+    provider: linear
+    source_ref: gitleaks:linear-client-secret
+    format: "Linear OAuth client secret: 32 lower-case hex digits under a key with linear and a credential noun right before the separator (gitleaks linear-client-secret, tightened to a credential key; P10)"
+  dlp_airtable_pat:
+    provider: airtable
+    source_ref: gitleaks:airtable-personnal-access-token
+    format: "Airtable personal access token: pat, a 14 character base62 token ID, . and 64 lower-case hex digits, as a whole token (gitleaks airtable-personnal-access-token; P10)"
+  dlp_airtable_api_key:
+    provider: airtable
+    source_ref: gitleaks:airtable-api-key
+    format: "Legacy Airtable API key: key and 14 base62 characters with both letter cases under a key with airtable and a credential noun right before the separator (gitleaks airtable-api-key, tightened to a credential key; P10)"
+  dlp_postman_api_key:
+    provider: postman
+    source_ref: gitleaks:postman-api-token
+    format: "Postman API key: PMAK-, 24 lower-case hex digits, - and 34 lower-case hex digits, as a whole token (gitleaks postman-api-token; P10)"
+  dlp_mapbox_secret_token:
+    provider: mapbox
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/mapbox/mapbox.go
+    format: "Mapbox secret-scope token: sk., 50 to 200 characters [A-Za-z0-9_-], . and a 22 character signature, both segments with both letter cases (TruffleHog Mapbox; docs.mapbox.com/accounts/guides/tokens: pk. public tokens are no secret; P10)"
 
   # ── Source control and registries ────────────────────────────────────────
   dlp_github_token:

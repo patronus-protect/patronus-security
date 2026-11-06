@@ -1528,6 +1528,38 @@ PROFILES = {
         "cloud.ibm.credentials", "CLOUD_KEY", "secret", "ibm_cloud_apikey", "IBM Cloud API key",
         "IBM-Cloud-API-Schlüssel",
     ),
+    "dlp_atlassian_api_token": Profile(
+        "saas.atlassian.api_token", "API_KEY", "secret", "atlassian_api_token", "Atlassian API token",
+        "Atlassian-API-Token",
+    ),
+    "dlp_atlassian_legacy_api_token": Profile(
+        "saas.atlassian.api_token", "API_KEY", "secret", "jira_api_token", "Jira API token", "Jira-API-Token",
+    ),
+    "dlp_notion_api_token": Profile(
+        "saas.notion.api_token", "API_KEY", "secret", "notion_api_token", "Notion integration secret",
+        "Notion-Integrations-Secret",
+    ),
+    "dlp_linear_api_key": Profile(
+        "saas.linear.secret", "API_KEY", "secret", "linear_api_key", "Linear API key", "Linear-API-Schlüssel",
+    ),
+    "dlp_linear_client_secret": Profile(
+        "saas.linear.secret", "API_KEY", "secret", "linear_client_secret", "Linear OAuth client secret",
+        "Linear-OAuth-Client-Secret",
+    ),
+    "dlp_airtable_pat": Profile(
+        "saas.airtable.token", "API_KEY", "secret", "airtable_api_token", "Airtable access token",
+        "Airtable-Zugriffstoken",
+    ),
+    "dlp_airtable_api_key": Profile(
+        "saas.airtable.token", "API_KEY", "secret", "airtable_api_key", "Airtable API key", "Airtable-API-Schlüssel",
+    ),
+    "dlp_postman_api_key": Profile(
+        "saas.postman.api_token", "API_KEY", "secret", "postman_api_key", "Postman API key", "Postman-API-Schlüssel",
+    ),
+    "dlp_mapbox_secret_token": Profile(
+        "saas.mapbox.secret_token", "API_KEY", "secret", "mapbox_secret_token", "Mapbox secret token",
+        "Mapbox-Secret-Token",
+    ),
     "dlp_google_api_key": Profile("cloud.gcp.api_key", "CLOUD_KEY", "secret", "google_maps_api_key", "Google Maps API key", "Google-Maps-API-Schlüssel"),
     "dlp_google_oauth_token": Profile("cloud.gcp.oauth_access_token", "CLOUD_KEY", "secret", "google_access_token", "Google OAuth access token", "Google-OAuth-Access-Token"),
     "dlp_gcp_client_secret": Profile("cloud.gcp.oauth_client_secret", "CLOUD_KEY", "secret", "google_client_secret", "Google OAuth client secret", "Google-OAuth-Client-Secret"),
@@ -1981,21 +2013,6 @@ PROFILES = {
         "key.symmetric_key", "CRYPTO_KEY", "secret", "encryption_key", "encryption key", "Verschlüsselungsschlüssel"
     ),
     # GOLD-D1: saas entities without an ARK rule.
-    "saas.atlassian.api_token": Profile(
-        "saas.atlassian.api_token", "API_KEY", "secret", "atlassian_api_token", "Atlassian API token",
-        "Atlassian-API-Token",
-    ),
-    "saas.notion.api_token": Profile(
-        "saas.notion.api_token", "API_KEY", "secret", "notion_api_token", "Notion integration secret",
-        "Notion-Integrations-Secret",
-    ),
-    "saas.linear.secret": Profile(
-        "saas.linear.secret", "API_KEY", "secret", "linear_api_key", "Linear API key", "Linear-API-Schlüssel",
-    ),
-    "saas.airtable.token": Profile(
-        "saas.airtable.token", "API_KEY", "secret", "airtable_api_token", "Airtable access token",
-        "Airtable-Zugriffstoken",
-    ),
     "saas.asana.client_secret": Profile(
         "saas.asana.client_secret", "API_KEY", "secret", "asana_client_secret", "Asana client secret",
         "Asana-Client-Secret",
@@ -2009,13 +2026,6 @@ PROFILES = {
     "saas.intercom.api_key": Profile(
         "saas.intercom.api_key", "API_KEY", "secret", "intercom_access_token", "Intercom access token",
         "Intercom-Zugriffstoken",
-    ),
-    "saas.postman.api_token": Profile(
-        "saas.postman.api_token", "API_KEY", "secret", "postman_api_key", "Postman API key", "Postman-API-Schlüssel",
-    ),
-    "saas.mapbox.secret_token": Profile(
-        "saas.mapbox.secret_token", "API_KEY", "secret", "mapbox_access_token", "Mapbox access token",
-        "Mapbox-Zugriffstoken",
     ),
     "saas.launchdarkly.access_token": Profile(
         "saas.launchdarkly.access_token", "API_KEY", "secret", "launchdarkly_access_token",

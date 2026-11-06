@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 199 | 137 (+5 relationship rules) |
+| Regex rules | 199 | 146 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 18 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
@@ -312,7 +312,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 
 | Result label | Family | Default | Rules | Entities | Gold | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `API_KEY` | provider_secret | on | 31 | 26 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
+| `API_KEY` | provider_secret | on | 40 | 32 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 24 | 18 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
@@ -426,6 +426,12 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
 | `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | `dlp_slack_app_token` | format | on | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
+| `saas.atlassian.api_token` | shared | `API_KEY` | `dlp_atlassian_api_token`, `dlp_atlassian_legacy_api_token` | format | on | gitleaks: `atlassian-api-token`; TruffleHog: `Atlassian`, `JiraToken` |
+| `saas.notion.api_token` | shared | `API_KEY` | `dlp_notion_api_token` | format | on | gitleaks: `notion-api-token` |
+| `saas.linear.secret` | shared | `API_KEY` | `dlp_linear_api_key`, `dlp_linear_client_secret` | format | on | gitleaks: `linear-api-key`, `linear-client-secret`; TruffleHog: `LinearAPI` |
+| `saas.airtable.token` | shared | `API_KEY` | `dlp_airtable_pat`, `dlp_airtable_api_key` | format | on | gitleaks: `airtable-api-key`, `airtable-personnal-access-token`; TruffleHog: `AirtablePersonalAccessToken` |
+| `saas.postman.api_token` | shared | `API_KEY` | `dlp_postman_api_key` | format | on | gitleaks: `postman-api-token`; TruffleHog: `Postman` |
+| `saas.mapbox.secret_token` | shared | `API_KEY` | `dlp_mapbox_secret_token` | format | on | gitleaks: `mapbox-api-token`; TruffleHog: `Mapbox` |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – |
@@ -497,16 +503,10 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` |
 | `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `freemius-secret-key` |
 | `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key`; TruffleHog: `DuffelToken`, `Shippo`, `Lob` |
-| `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `atlassian-api-token`; TruffleHog: `Atlassian`, `JiraToken` |
-| `saas.notion.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `notion-api-token` |
-| `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linear-api-key`, `linear-client-secret`; TruffleHog: `LinearAPI` |
-| `saas.airtable.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `airtable-api-key`, `airtable-personnal-access-token`; TruffleHog: `AirtablePersonalAccessToken` |
 | `saas.asana.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `asana-client-secret` |
 | `saas.hubspot.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `hubspot-api-key`; TruffleHog: `HubSpotApiKey` |
 | `saas.zendesk.secret_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `zendesk-secret-key` |
 | `saas.intercom.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `intercom-api-key` |
-| `saas.postman.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `postman-api-token`; TruffleHog: `Postman` |
-| `saas.mapbox.secret_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mapbox-api-token` |
 | `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `launchdarkly-access-token`; TruffleHog: `LaunchDarkly` |
 | `saas.typeform.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `typeform-api-token`; TruffleHog: `Typeform` |
 | `saas.contentful.delivery_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `contentful-delivery-api-token` |
@@ -552,7 +552,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 79 shared, 29 ARK only, 85 baseline only, 11 out of scope.
+Entities: 85 shared, 29 ARK only, 79 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -639,6 +639,12 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
 | `content.system_log` | shared | `dlp.content.system_log` | 456 documents | ARK 0.0 (opt-in profile) | ARK 0.0 (opt-in profile) |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `saas.atlassian.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `saas.notion.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `saas.linear.secret` | shared | `API_KEY` | 0 | no gold | no gold |
+| `saas.airtable.token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `saas.postman.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `saas.mapbox.secret_token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
@@ -710,16 +716,10 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
 | `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
 | `commerce.shipping.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.atlassian.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.notion.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.linear.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.airtable.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.asana.client_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.hubspot.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.zendesk.secret_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.intercom.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.postman.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `saas.mapbox.secret_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.typeform.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `saas.contentful.delivery_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |

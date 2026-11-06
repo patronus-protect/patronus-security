@@ -390,7 +390,7 @@ tasks:
   - {id: P07, title: "Observability: Datadog, New Relic, Sentry (token + DSN), Grafana (cloud/service account), Dynatrace, Splunk HEC, Elastic, Honeycomb, PagerDuty", type: new-entity, deps: [K04], status: done}
   - {id: P08, title: "Communication/webhooks: Slack/Teams/Discord webhook URLs, Telegram bot, Twilio (SK/AC + context), SendGrid, Mailgun, Mailchimp, Postmark, Brevo", type: new-entity, deps: [F-PROV, T-NEG]}
   - {id: P09, title: "Payment/commerce: PayPal/Braintree, Square, Adyen, Mollie, Klarna, Shopify (all token types), Coinbase, Plaid, GoCardless", type: new-entity, deps: [F-PROV, T-NEG]}
-  - {id: P10, title: "Productivity/SaaS: Atlassian, Notion, Linear, Airtable, Figma, Asana, monday, HubSpot, Salesforce (context), Zendesk, Intercom, Postman, Mapbox (sk vs. pk)", type: new-entity, deps: [K04]}
+  - {id: P10, title: "Productivity/SaaS: Atlassian, Notion, Linear, Airtable, Figma, Asana, monday, HubSpot, Salesforce (context), Zendesk, Intercom, Postman, Mapbox (sk vs. pk)", type: new-entity, deps: [K04], status: done}
   - {id: P11, title: "Identity/auth: Okta, Auth0 (client secret context), Clerk, Supabase (service role JWT, sbp_), Firebase (Admin SDK JSON), age secret key, 1Password service account", type: new-entity, deps: [F-STRUCT, T-NEG]}
   - {id: P12, title: "Data/DB platforms: Databricks, Snowflake, PlanetScale, Neon, MongoDB Atlas API, Confluent, Algolia admin key (context), Elastic Cloud", type: new-entity, deps: [K04, T-NEG]}
   - {id: G04, title: "Credential files: .netrc, .git-credentials, .npmrc _authToken, .pypirc, docker config.json auths, Maven settings.xml, NuGet.config, rclone/s3cfg", type: new-entity, deps: [K05C], status: done}
