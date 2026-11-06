@@ -89,30 +89,43 @@ fn row_values(
 }
 
 /// The `INSERT` and `COPY` statements of `text` that hold rows, in order.
+/// A statement ends at the next statement head at the latest: every byte is
+/// read by one statement only, so many heads without an end (`\.`, `;`, a
+/// closing parenthesis) cost linear time, and a malformed statement hides
+/// none that follow.
 pub fn statements(text: &str) -> Vec<Statement> {
+    let heads: Vec<(usize, regex::Captures<'_>, bool)> = line_starts(text)
+        .into_iter()
+        .filter_map(|line_start| {
+            let line = &text[line_start..];
+            INSERT_HEAD
+                .captures(line)
+                .map(|head| (line_start, head, true))
+                .or_else(|| {
+                    COPY_HEAD
+                        .captures(line)
+                        .map(|head| (line_start, head, false))
+                })
+        })
+        .collect();
     let mut statements = Vec::new();
-    for line_start in line_starts(text) {
-        let line = &text[line_start..];
-        let list = |columns: regex::Match<'_>| {
+    for (index, (line_start, head, insert)) in heads.iter().enumerate() {
+        let bounded = &text[..heads.get(index + 1).map_or(text.len(), |next| next.0)];
+        let at = line_start + head.get(0).unwrap().end();
+        let columns = head.get(1).map_or_else(Vec::new, |columns| {
             column_names(
                 text,
                 line_start + columns.start()..line_start + columns.end(),
             )
-        };
-        let statement = if let Some(head) = INSERT_HEAD.captures(line) {
-            Statement {
-                columns: head.get(1).map(list).unwrap_or_default(),
-                rows: insert_rows(text, line_start + head.get(0).unwrap().end()),
-                quoted: true,
-            }
-        } else if let Some(head) = COPY_HEAD.captures(line) {
-            Statement {
-                columns: list(head.get(1).unwrap()),
-                rows: copy_rows(text, line_start + head.get(0).unwrap().end()),
-                quoted: false,
-            }
-        } else {
-            continue;
+        });
+        let statement = Statement {
+            columns,
+            rows: if *insert {
+                insert_rows(bounded, at)
+            } else {
+                copy_rows(bounded, at)
+            },
+            quoted: *insert,
         };
         if !statement.rows.is_empty() {
             statements.push(statement);
@@ -365,6 +378,38 @@ mod tests {
             .collect();
         assert_eq!(bound, vec!["digest-two"]);
         assert_eq!(sql_values(text, &parsed, &key).len(), 2);
+    }
+
+    #[test]
+    fn statements_end_at_the_next_head() {
+        let text =
+            "COPY t (password) FROM stdin;\npw-one\nINSERT INTO u (password) VALUES ('pw-two');\n";
+        assert_eq!(
+            pairs(text),
+            vec![("password", "pw-one"), ("password", "pw-two")]
+        );
+        let text = "INSERT INTO t VALUES ((\nINSERT INTO u (secret) VALUES ('s-one');\n";
+        assert_eq!(pairs(text), vec![("secret", "s-one")]);
+    }
+
+    #[test]
+    fn many_heads_without_an_end_stay_linear() {
+        for line in [
+            "COPY t (a) FROM stdin;\n",
+            "INSERT INTO t VALUES ((((((((((\n",
+            "INSERT INTO t VALUES (1),\n",
+            "INSERT INTO t VALUES ('a\n",
+        ] {
+            let text = line.repeat(100 * 1024 / line.len());
+            let started = std::time::Instant::now();
+            let parsed = statements(&text);
+            let elapsed = started.elapsed();
+            assert!(parsed.len() <= 1, "{line}");
+            assert!(
+                elapsed < std::time::Duration::from_millis(100),
+                "{line}: {elapsed:?}"
+            );
+        }
     }
 
     #[test]
