@@ -36,6 +36,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`ed25519_sk`, `ed25519e_sk`, `addr`/`stake`/`acct`/`root`/`policy`/`drep` `_sk` and `_xsk`) with
   a valid checksum and the key length of the prefix (32/64 bytes, 96 for `_xsk`); verification keys
   (`_vk`) stay silent. Keyword prefilters and linear bounded regexes.
+- Detection change: BIP39 seed phrases (C01). `dlp_bip39_seed_phrase` (`CRYPTO_KEY`, subtype
+  `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one official BIP39 word
+  list (English, Italian, Portuguese, Czech) whose checksum (the first ENT/32 bits of SHA-256 of the
+  entropy) holds, written in a line, comma-separated, as a quoted array, numbered (`1. word`) or one
+  word per line. The span runs from the first to the last word. The rule has no literal to search
+  for: one pass over the lowercase words of a text finds runs of list words of one language and
+  checks the windows of a phrase length; a run of more than 27 list words (a word list) holds no
+  phrase. The published test vectors (trezor/python-mnemonic `vectors.json`, e.g. the all-zero
+  `abandon … about`), phrases that repeat more than two words, uppercase words and runs of 11
+  words are no phrases; 12- and 15-word phrases (4- and 5-bit checksum) also need numbered words
+  or a context term (seed, mnemonic, recovery, phrase, wallet, backup, passphrase,
+  Wiederherstellung …) in the 200 bytes before them. The Spanish and French lists (accented words)
+  and the CJK lists are not covered yet. The golden generator gains the `bip39_<language>`
+  encodings. `RuleMeta::with_finder` lets a rule match its regex only at the ranges a scanner finds.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
