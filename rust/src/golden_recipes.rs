@@ -12,9 +12,12 @@
 //! (`crc32_hex` over the last literal and that text, `crc32_hex_le` over the text before the
 //! last literal as little-endian hex), and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
-//! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
-//! Base58Check; seed word segments draw wallet seed phrases (Electrum, Monero)
-//! from the words of one length of a word list. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
+//! optionally wrapped), unpadded base64, base64url, bcrypt radix-64,
+//! Base58Check or a BIP 39 mnemonic (`bip39_english`, `bip39_italian`,
+//! `bip39_portuguese`, `bip39_czech`, through
+//! `patronus_ark_core::detectors::dlp::seed_phrase::mnemonic`); seed word
+//! segments draw wallet seed phrases (Electrum, Monero) from the words of one
+//! length of a word list. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
 //! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
 //! v2). A recipe with `fill` yields the documented example/test variant of the
 //! generator's shape for hard negatives (T06). A generator with `entropy_above`
@@ -240,7 +243,19 @@ const ENCODINGS: &[&str] = &[
     "base64url",
     "bcrypt64",
     "base58check",
+    "bip39_english",
+    "bip39_italian",
+    "bip39_portuguese",
+    "bip39_czech",
 ];
+
+/// Entropy sizes in bytes that BIP 39 encodes (12 to 24 words).
+const BIP39_ENTROPY_BYTES: [usize; 5] = [16, 20, 24, 28, 32];
+
+/// The word list language of a `bip39_<language>` encoding.
+fn bip39_language(encoding: &str) -> Option<&str> {
+    encoding.strip_prefix("bip39_")
+}
 
 /// Output alphabet of an encoding that a fill word may repeat over (T06).
 fn encoded_alphabet(encoding: &str) -> Option<&'static [u8]> {
@@ -457,9 +472,13 @@ impl Encoded {
             .sum()
     }
 
-    fn length(&self) -> usize {
+    /// Encoded length in characters, `None` for a mnemonic (its words differ in length).
+    fn length(&self) -> Option<usize> {
+        if bip39_language(&self.encode).is_some() {
+            return None;
+        }
         let size = self.byte_length();
-        match self.encode.as_str() {
+        Some(match self.encode.as_str() {
             "hex" => 2 * size,
             "base64" => {
                 let length = size.div_ceil(3) * 4;
@@ -484,7 +503,7 @@ impl Encoded {
                 (((value as f64 + 1.0).log2() + 8.0 * rest as f64) / 58f64.log2()).ceil() as usize
             }
             _ => (size * 4).div_ceil(3),
-        }
+        })
     }
 }
 
@@ -539,8 +558,10 @@ impl GeneratorSet {
                 }
             }
             if let Some(limit) = generator.entropy_above {
-                let length = Self::segments_length(&generator.segments) as f64;
-                if !(limit > 0.0 && limit < length.log2() && Self::draws_randomly(generator)) {
+                let length = Self::segments_length(&generator.segments);
+                if !length.is_some_and(|length| {
+                    limit > 0.0 && limit < (length as f64).log2() && Self::draws_randomly(generator)
+                }) {
                     return Err(RecipeError::Spec(format!(
                         "{name}: invalid entropy_above {limit}"
                     )));
@@ -572,7 +593,13 @@ impl GeneratorSet {
         let wrap_valid = encoded
             .wrap
             .is_none_or(|width| width > 0 && encoded.encode == "base64");
-        parts_valid && lead_valid && wrap_valid && ENCODINGS.contains(&encoded.encode.as_str())
+        let entropy_valid = bip39_language(&encoded.encode).is_none()
+            || BIP39_ENTROPY_BYTES.contains(&encoded.byte_length());
+        parts_valid
+            && lead_valid
+            && wrap_valid
+            && entropy_valid
+            && ENCODINGS.contains(&encoded.encode.as_str())
     }
 
     pub fn names(&self) -> Vec<&str> {
@@ -585,8 +612,8 @@ impl GeneratorSet {
             .ok_or_else(|| RecipeError::UnknownGenerator(name.to_owned()))
     }
 
-    /// Fixed output length in characters (all generators are fixed-length).
-    pub fn length(&self, name: &str) -> Result<usize, RecipeError> {
+    /// Fixed output length in characters, `None` for a generator with a BIP 39 mnemonic.
+    pub fn length(&self, name: &str) -> Result<Option<usize>, RecipeError> {
         Ok(Self::segments_length(&self.generator(name)?.segments))
     }
 
@@ -601,14 +628,14 @@ impl GeneratorSet {
         })
     }
 
-    fn segments_length(segments: &[Segment]) -> usize {
+    fn segments_length(segments: &[Segment]) -> Option<usize> {
         segments
             .iter()
             .map(|segment| match segment {
-                Segment::Literal(Literal { lit }) => lit.chars().count(),
-                Segment::Random(Random { len, .. }) => *len,
+                Segment::Literal(Literal { lit }) => Some(lit.chars().count()),
+                Segment::Random(Random { len, .. }) => Some(*len),
                 Segment::Checksum(Checksum { checksum }) => {
-                    checksum_length(checksum).expect("validated checksum kind")
+                    Some(checksum_length(checksum).expect("validated checksum kind"))
                 }
                 Segment::Encoded(encoded) => encoded.length(),
                 Segment::SeedWords(SeedWords {
@@ -651,6 +678,10 @@ impl GeneratorSet {
     }
 
     fn encode_raw(encoded: &Encoded, raw: &[u8]) -> String {
+        if let Some(language) = bip39_language(&encoded.encode) {
+            return patronus_ark_core::detectors::dlp::seed_phrase::mnemonic(language, raw)
+                .expect("validated BIP 39 language and entropy size");
+        }
         match encoded.encode.as_str() {
             "hex" => raw.iter().map(|byte| format!("{byte:02x}")).collect(),
             "base58check" => base58check(raw),
@@ -679,11 +710,11 @@ impl GeneratorSet {
         rng: &mut SplitMix64,
         fill: &str,
     ) -> Result<(String, bool), RecipeError> {
-        if encoded.encode == "base58check" {
-            return Err(RecipeError::Template(
-                "a fill recipe cannot use Base58Check segments (the check value stays valid)"
-                    .into(),
-            ));
+        if encoded.encode == "base58check" || bip39_language(&encoded.encode).is_some() {
+            return Err(RecipeError::Template(format!(
+                "a fill recipe cannot use {} segments (the check value stays valid)",
+                encoded.encode
+            )));
         }
         let all_random = encoded
             .bytes

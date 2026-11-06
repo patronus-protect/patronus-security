@@ -209,7 +209,11 @@ fn every_rule_has_a_proven_prefilter() {
     );
     assert_eq!(
         coverage.get("structural"),
-        Some(&vec!["dlp_discord_token", "dlp_btc_wif"]),
+        Some(&vec![
+            "dlp_discord_token",
+            "dlp_btc_wif",
+            "dlp_bip39_seed_phrase"
+        ]),
         "{coverage:?}"
     );
 }
@@ -511,9 +515,16 @@ fn keywordless_rules_open_on_their_value_run() {
     let scan = rules.prefilter.scan(&long);
     assert!(scan.is_active(wif));
     rules.assert_exact("wif", &long);
+    // C01: the seed phrase rule opens on any three-letter word; its finder
+    // (`seed_phrase::phrases`) is the actual prefilter.
     let quiet = "Hallo Team, bitte lest die Liste bis Freitag.";
     let scan = rules.prefilter.scan(quiet);
     for (index, rule) in DLP_PATTERNS.iter().enumerate() {
-        assert!(!scan.is_active(index), "{}", rule.name);
+        assert_eq!(
+            scan.is_active(index),
+            rule.name == "dlp_bip39_seed_phrase",
+            "{}",
+            rule.name
+        );
     }
 }

@@ -157,6 +157,18 @@ def is_valid_cardano_signing_key(value: str) -> bool:
     if decoded is None or not value.islower() or not re.fullmatch(r"(?:(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)", decoded[0]):
         return False
     return len(decoded[1]) == 96 if decoded[0].endswith("_xsk") else len(decoded[1]) in (32, 64)
+def is_valid_bip39_mnemonic(value: str, language: str) -> bool:
+    """BIP 39: 12-24 words of the official ``language`` list, single-space separated, whose
+    trailing ``words * 11 / 33`` bits equal the leading bits of SHA-256 over the entropy."""
+    path = Path(__file__).resolve().parents[3] / "ark-core/src/detectors/dlp/bip39" / f"{language}.txt"
+    index = {word: number for number, word in enumerate(path.read_text(encoding="utf-8").split())}
+    words = value.split(" ")
+    if len(words) not in (12, 15, 18, 21, 24) or any(word not in index for word in words):
+        return False
+    bits = "".join(format(index[word], "011b") for word in words)
+    check_bits = len(bits) // 33
+    entropy = int(bits[:-check_bits], 2).to_bytes((len(bits) - check_bits) // 8, "big")
+    return format(hashlib.sha256(entropy).digest()[0], "08b")[:check_bits] == bits[-check_bits:]
 
 
 def is_valid_eth_private_key(value: str) -> bool:

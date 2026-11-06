@@ -91,7 +91,11 @@ class GeneratorTests(unittest.TestCase):
         for name in generators:
             value = recipes.generate(name, 7)
             self.assertEqual(value, recipes.generate(name, 7), name)
-            self.assertEqual(len(value), recipes.generator_length(name), name)
+            # BIP 39 mnemonics have no fixed length; every other generator has one.
+            length = recipes.generator_length(name)
+            self.assertEqual(length is None, name.startswith("bip39_"), name)
+            if length is not None:
+                self.assertEqual(len(value), length, name)
             self.assertTrue(value.isascii(), name)
 
     def test_random_generators_depend_on_the_seed(self):
@@ -209,6 +213,7 @@ class FillRecipeTests(unittest.TestCase):
             ("github_ghp_token", 5),
             ("md5_hex", "TESTKEY"),  # fits no segment: the value would stay random
             ("btc_wif_mainnet_compressed", "EXAMPLEKEY"),  # Base58Check stays valid
+            ("bip39_en_12", "EXAMPLEKEY"),  # the BIP 39 checksum stays valid
         ):
             with self.assertRaises(recipes.RecipeError, msg=(name, fill)):
                 recipes.generate(name, 1, fill)
