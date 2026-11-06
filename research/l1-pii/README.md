@@ -38,7 +38,8 @@ nicht meldet; blanke Formen sind seit D-BARE als Opt-in-Regeln schaltbar statt w
   `run_ark.py --pii-mode balanced --gates …`). Ein Meilenstein ist erfüllt, wenn `balanced` **oder**
   `balanced-bare` gegen beide Profile hält; `strict` und `recall` werden berichtet. Der Bericht nennt,
   welche Engine trägt (`holding`), damit eine Aussage „mit Bare-Profil“ als solche erkennbar bleibt.
-- **Gate:** Die Zeile `milestones <split> …` rechnet `balanced` auf rohem Gold gegen beide Profile;
+- **Gate:** Die Zeilen `milestones <split> (balanced, …)` und `milestones <split> (balanced-bare, …)`
+  rechnen je Engine auf rohem Gold gegen beide Profile;
   Regressionen, Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen wie bisher roh.
 - **Snapshot** (`research/scoreboard/*.json`, Schema 1.2): `pii.milestone_view` (`raw`, bei älteren
   Messungen `attainable`) und `pii.baselines` (die Presidio-Engines des Urteils) ersetzen
