@@ -517,6 +517,9 @@ Review-Pausen.
   SecretBench) werden nicht verwendet. Hard Negatives mit Beispiel-/Testwerten im Provider-Format
   speichern die `fill`-Variante des Rezepts (`{"gen": …, "seed": 0, "fill": "EXAMPLEKEY"}`, T06);
   Tests setzen Provider-Werte zur Testzeit aus Stücken zusammen (`concat!`/`format!`/`"".join`).
+  Das gilt auch für **alle** Hard Negatives im Provider-Format (falsche Länge, falsches Präfix,
+  Alphabet oder Prüfsumme): Sie stehen als Rezept mit Mutation im Generator, nie als Literal in
+  Generator, Fixtures oder Tests; sonst schlägt die Secret-Prüfung des Gates an (T-NEG, 2026-11-06).
 - **Holdout**: Der Generator nutzt einen getrennten Seed **und** getrennte Carrier-Template-Familien
   für Dev und Holdout. Der Benign-Code-Korpus wird nach Repository gesplittet. Die Fixtures von
   gitleaks und detect-secrets sind nur Dev-Smoke-Tests und nie Teil des Holdouts.
