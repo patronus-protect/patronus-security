@@ -367,6 +367,15 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Bedrock-API-Schlüssel (`ABSK` und Base64 von `BedrockAPIKey-…`, gitleaks) und IBM-Cloud-API-Keys
   (44 Zeichen unter `ibm`, detect-secrets). Offen bleiben GCP-Service-Account-JSON (die Entity
   bleibt `baseline_only`), AWS-Session-Token/MWS, Tencent Cloud und Oracle OCI.
+  Seit P10 decken neun Regeln Produktivitäts-/SaaS-Tokens ab (`API_KEY`): Präfix-Regeln mit
+  Token-Grenze für Atlassian (`ATATT3` und 186 Zeichen), Notion (`ntn_`, 11 Ziffern und 35),
+  Linear (`lin_api_` und 40), Airtable-PAT (`pat`, 14, `.` und 64 Hex), Postman (`PMAK-`, 24 und
+  34 Hex) und Mapbox-Secret-Tokens (`sk.`, TruffleHog), dazu Kontextregeln (`provider_key!`) für
+  alte Atlassian-Tokens (24 unter `atlassian`/`jira`/`confluence`), Linear-Client-Secrets (32 Hex)
+  und alte Airtable-Keys (`key` und 14). Öffentliche Mapbox-Tokens (`pk.`) und ein Token-Präfix
+  mit Platzhalter (`ntn_<…>`) sind auch für generische Regeln kein Secret. Offen bleiben Figma
+  (`figd_`, ohne Generator), Asana, monday.com, HubSpot, Salesforce, Zendesk und Intercom (nur
+  Kontextformate; die Entities bleiben `baseline_only`).
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

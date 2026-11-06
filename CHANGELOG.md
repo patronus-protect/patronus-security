@@ -264,6 +264,23 @@ the M1 work on presidio_favored) are opt-in.
   example checks and keeps its provider rule instead of `dlp_generic_credential_assignment` or no
   finding; IDs under the provider name (`HerokuAppId`), HTML forms, XML comments and XML in code
   strings stay silent. Matches carry `structure: "xml"`.
+- Detection change: productivity/SaaS tokens (P10). New prefix rules with a token boundary:
+  `dlp_atlassian_api_token` (`ATATT3` and 186 characters `[A-Za-z0-9_=-]`, gitleaks
+  atlassian-api-token), `dlp_notion_api_token` (`ntn_`, 11 digits and 35 base62, gitleaks
+  notion-api-token), `dlp_linear_api_key` (`lin_api_` and 40 base62, gitleaks linear-api-key),
+  `dlp_airtable_pat` (`pat`, 14 base62, `.` and 64 hex, gitleaks airtable-personnal-access-token),
+  `dlp_postman_api_key` (`PMAK-`, 24 and 34 hex, gitleaks postman-api-token) and
+  `dlp_mapbox_secret_token` (`sk.`, a 50 to 200 and a 22 character segment, TruffleHog Mapbox).
+  Context rules under a provider key with a credential noun (`provider_key!`):
+  `dlp_atlassian_legacy_api_token` (24 base36 under `atlassian`/`jira`/`confluence`),
+  `dlp_linear_client_secret` (32 hex, gitleaks linear-client-secret) and `dlp_airtable_api_key`
+  (`key` and 14 base62, gitleaks airtable-api-key). Random bodies need both letter cases. Generic
+  rules no longer report a public Mapbox `pk.` token or a token prefix followed by a placeholder
+  (`ntn_<your-secret>`, `lin_api_${KEY}`). The GOLD-D1 baseline entities `saas.atlassian.api_token`,
+  `saas.notion.api_token`, `saas.linear.secret`, `saas.airtable.token`, `saas.postman.api_token`
+  and `saas.mapbox.secret_token` become shared; the Mapbox gold now holds secret `sk.` tokens and
+  the public `pk.` token as its lookalike. Figma, Asana, monday.com, HubSpot, Salesforce, Zendesk
+  and Intercom get no new rule in this change.
 - Detection change: hyperscaler credentials (P03). New rules `dlp_azure_storage_account_key`
   (base64 of 64 bytes after `AccountKey=` in a connection string, detect-secrets
   AzureStorageKeyDetector), `dlp_azure_entra_client_secret` (three characters, a digit, `Q~` and 31
