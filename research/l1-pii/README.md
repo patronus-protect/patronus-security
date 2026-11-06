@@ -197,7 +197,8 @@ Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14;
 - **Meilensteine auf `balanced`:** M1–M3 und „Immer“ werden im PII-Modus `balanced` gemessen, dem
   Modus, der gegen Presidio tuned (kontextfreie Muster, Kontext hebt den Score, Schwelle 0,4) antritt.
   `strict` bleibt der Standard des Builds und wird weiter berichtet, entscheidet aber keinen Meilenstein.
-  `scoreboard.py m1` und `report` drucken jeden übergebenen Modus und lesen das Urteil aus `balanced`.
+  `scoreboard.py m1`, `m2` und `report` drucken jede übergebene ARK-Engine gegen Presidio `default` und
+  `tuned` und lesen das Urteil aus `balanced` oder `balanced-bare` (`balanced` mit dem Bare-Profil, M-RAW).
 - **Das Gate schützt beide Modi:** `scoreboard.py gate` rechnet Head und Basis in `strict` und in
   `balanced` und ist rot bei > 0,5 pp F1-Verlust (je Entität, alle L1-IDs, Familie, DE/EN, exakt oder
   überlappend) oder einem neuen Hard-Negative-Treffer in **einem** der beiden Modi. Ein Gewinn in einem
