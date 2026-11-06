@@ -192,12 +192,11 @@ struct Word {
 
 /// The phrases of `text`. A word is a maximal run of 3 to 9 lowercase
 /// letters ([`letter_len`]) between characters that are no letters, digits
-/// or `_`. A first
-/// pass finds runs of at least 12 words, each two separated by at most
-/// [`MAX_GAP`] bytes of whitespace, commas, digits, `.`, `)`, `:`, quotes
-/// and `-` with at least one space or comma ([`GAP_BYTES`]),
-/// without looking the words up; only their words are looked up and split
-/// into runs of list words that share a language.
+/// or `_`. A first pass finds runs of at least 12 words, each two separated
+/// by at most [`MAX_GAP`] bytes of whitespace, commas, digits, `.`, `)`, `:`,
+/// quotes and `-` with at least one space or comma ([`GAP_BYTES`]), without
+/// looking the words up; only their words are looked up (without accents,
+/// [`fold`]) and split into runs of list words that share a language.
 fn scan(text: &str, phrases: &mut Vec<Range<usize>>) {
     let bytes = text.as_bytes();
     let mut shaped: Vec<Range<usize>> = Vec::new();
