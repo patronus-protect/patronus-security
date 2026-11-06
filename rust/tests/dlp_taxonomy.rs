@@ -27,8 +27,9 @@ const SECRET_GROUPS: &[&str] = &[
     "SECRET_TOKEN",
 ];
 
-/// The entity groups of the DLP rules before K09; taxonomy v2 adds none.
-const GROUPS_V1: &[&str] = &[
+/// The entity groups of the DLP rules: those before K09 (taxonomy v2 adds
+/// none) and the document classes of the content class engine (M01).
+const DLP_GROUPS: &[&str] = &[
     "API_KEY",
     "CLOUD_KEY",
     "CREDENTIAL",
@@ -42,6 +43,7 @@ const GROUPS_V1: &[&str] = &[
     "dlp.content.sql",
     "dlp.content.system_log",
     "dlp.de.commercial_register_number",
+    "dlp.document.legal_privileged",
     "dlp.de.facility_number_bsnr",
     "dlp.de.vat_id",
     "dlp.internal.business_metric",
@@ -273,7 +275,7 @@ const BASE62: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 #[test]
 fn entity_groups_are_unchanged() {
     let groups: BTreeSet<_> = DLP_PATTERNS.iter().map(|rule| rule.entity_group).collect();
-    assert_eq!(groups, GROUPS_V1.iter().copied().collect());
+    assert_eq!(groups, DLP_GROUPS.iter().copied().collect());
     for (kind, _) in K09_KINDS {
         let group = kind.to_ascii_uppercase();
         assert!(
