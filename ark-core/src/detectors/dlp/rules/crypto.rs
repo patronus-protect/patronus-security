@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Key material: wallet keys, wallet seeds and PEM private keys.
+//! Key material: wallet keys, wallet seeds, PEM private keys, JWKs, VPN keys (C-KEYS) and
+//! symmetric keys of frameworks and code.
 use crate::detectors::dlp::key_context::has_key_context;
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
 };
 use crate::detectors::validators::{
-    base58check_decode, bech32_decode_with_limit, convert_bits, crc32, Bech32Variant,
+    base58check_decode, base64_decode, bech32_decode_with_limit, convert_bits, crc32, Base64Kind,
+    Bech32Variant,
 };
 use regex::bytes::Regex;
+use serde_json::Value;
 use std::ops::Range;
 use std::sync::LazyLock;
 
@@ -214,6 +217,144 @@ fn is_eth_private_key(value: &str) -> bool {
     })
 }
 
+/// C-KEYS: private JWK members of published test vectors (RFC 7517 A.2 EC
+/// `d`, RFC 7517 A.3 AES `k`, RFC 8037 A.1 Ed25519 `d`); documentation
+/// copies them verbatim.
+const JWK_TEST_VECTORS: &[&str] = &[
+    "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
+    "GawgguFyGrWKav7AX4VKUg",
+    "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A",
+];
+
+/// C-KEYS: a JSON Web Key (RFC 7517) that holds private key material: an
+/// object with `kty` and its private member, `d` for RSA, EC and OKP keys
+/// (RFC 7518 section 6, RFC 8037) or `k` for symmetric `oct` keys, as
+/// base64url of at least 16 bytes. A public JWK has no such member. The
+/// regex takes a flat object with `"kty"`, so a JWKS (`{"keys": [...]}`)
+/// yields its keys one by one.
+fn is_jwk_private_key(value: &str) -> bool {
+    let Ok(Value::Object(jwk)) = serde_json::from_str::<Value>(value) else {
+        return false;
+    };
+    let member = match jwk.get("kty").and_then(Value::as_str) {
+        Some("RSA" | "EC" | "OKP") => "d",
+        Some("oct") => "k",
+        _ => return false,
+    };
+    jwk.get(member)
+        .and_then(Value::as_str)
+        .filter(|secret| !JWK_TEST_VECTORS.contains(secret))
+        .and_then(|secret| base64_decode(secret, Base64Kind::UrlSafe))
+        .is_some_and(|raw| raw.len() >= 16 && is_varied_key(&raw))
+}
+
+/// Key bytes that no placeholder or counter fills: at least half of the
+/// bytes distinct and no run of consecutive values (`00 01 02 …`, FIPS-197).
+fn is_varied_key(raw: &[u8]) -> bool {
+    let mut seen = [false; 256];
+    let mut distinct = 0;
+    for byte in raw {
+        if !std::mem::replace(&mut seen[usize::from(*byte)], true) {
+            distinct += 1;
+        }
+    }
+    distinct * 2 >= raw.len().min(64)
+        && !raw
+            .windows(2)
+            .all(|pair| pair[1] == pair[0].wrapping_add(1))
+}
+
+/// C-KEYS: a WireGuard private or preshared key is the standard base64 of
+/// 32 bytes (`wg genkey`, `wg genpsk`).
+fn is_wireguard_key(value: &str) -> bool {
+    base64_decode(value, Base64Kind::Standard)
+        .is_some_and(|raw| raw.len() == 32 && is_varied_key(&raw))
+}
+
+/// C-KEYS: the 512 hex digits of an OpenVPN static key block decode to 256
+/// varied bytes.
+fn is_openvpn_static_key(value: &str) -> bool {
+    let digits = value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with("-----"))
+        .collect::<String>();
+    hex_bytes(&digits).is_some_and(|raw| raw.len() == 256 && is_varied_key(&raw))
+}
+
+fn hex_bytes(hex: &str) -> Option<Vec<u8>> {
+    if !hex.len().is_multiple_of(2) {
+        return None;
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(hex.get(at..at + 2)?, 16).ok())
+        .collect()
+}
+
+/// C-KEYS: AES keys of published test vectors (NIST SP 800-38A F.1, 128,
+/// 192 and 256 bits) that tutorials and test suites copy.
+const SYMMETRIC_TEST_VECTORS: &[&str] = &[
+    "2b7e151628aed2a6abf7158809cf4f3c",
+    "8e73b0f7da0e6452c810f32b809079e562f8ead2522c6b7b",
+    "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
+];
+
+/// The bytes of a symmetric key constant: a `0x..` byte array, hex digits,
+/// or standard or URL-safe base64 (Fernet keys keep their `=`).
+fn symmetric_key_bytes(value: &str) -> Option<Vec<u8>> {
+    if let Some(array) = value.strip_prefix(['[', '{']) {
+        return array
+            .split([',', ']', '}'])
+            .map(str::trim)
+            .filter(|item| !item.is_empty())
+            .map(|item| u8::from_str_radix(item.strip_prefix("0x")?, 16).ok())
+            .collect();
+    }
+    if value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return hex_bytes(value);
+    }
+    base64_decode(value, Base64Kind::Standard)
+        .or_else(|| base64_decode(value, Base64Kind::StandardUnpadded))
+        .or_else(|| base64_decode(value.trim_end_matches('='), Base64Kind::UrlSafe))
+}
+
+/// C-KEYS: an AES or HMAC key of 128, 192 or 256 bits that is no published
+/// test vector.
+fn is_symmetric_key(value: &str) -> bool {
+    symmetric_key_bytes(value).is_some_and(|raw| {
+        matches!(raw.len(), 16 | 24 | 32)
+            && is_varied_key(&raw)
+            && !SYMMETRIC_TEST_VECTORS
+                .iter()
+                .any(|vector| hex_bytes(vector).is_some_and(|known| known == raw))
+    })
+}
+
+/// C-KEYS: Laravel's `APP_KEY` is `base64:` and the base64 of a 16- or
+/// 32-byte AES key (`php artisan key:generate`).
+fn is_laravel_app_key(value: &str) -> bool {
+    value
+        .strip_prefix("base64:")
+        .and_then(|key| base64_decode(key, Base64Kind::Standard))
+        .is_some_and(|raw| matches!(raw.len(), 16 | 32) && is_varied_key(&raw))
+}
+
+/// C-KEYS: `get_random_secret_key()` draws 50 characters from lower-case
+/// letters, digits and `!@#$%^&*(-_=+)`; a random key holds all three
+/// kinds.
+fn is_django_secret_key(value: &str) -> bool {
+    let key = value.strip_prefix("django-insecure-").unwrap_or(value);
+    key.bytes().any(|byte| byte.is_ascii_lowercase())
+        && key.bytes().any(|byte| byte.is_ascii_digit())
+        && key.bytes().any(|byte| b"!@#$%^&*(-_=+)".contains(&byte))
+}
+
+/// C-KEYS: `bin/rails secret` writes 64 random bytes as 128 hex digits.
+fn is_rails_secret_key_base(value: &str) -> bool {
+    hex_bytes(value).is_some_and(|raw| is_varied_key(&raw))
+}
+
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Crypto ───────────────────────────────────────────────────────────────
     DlpPattern {
@@ -385,6 +526,170 @@ pub(super) const RULES: &[DlpPattern] = &[
             "gitleaks:private-key",
             &["-----begin"],
         )
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    // ── C-KEYS: key material in config and code ──────────────────────────────
+    DlpPattern {
+        name: "dlp_jwk_private_key",
+        pattern: r#"\{[^{}]{0,4096}"kty"[^{}]{0,4096}\}"#,
+        entity_group: "PRIVATE_KEY",
+        validator: Some(is_jwk_private_key),
+        span_group: None,
+        base_score: 70,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://datatracker.ietf.org/doc/html/rfc7517",
+            &["kty"],
+        )
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_wireguard_private_key",
+        pattern: concat!(
+            r"(?i:(?-u:\b)(?:[a-z0-9]+[_-]){0,2}(?:private|preshared)[_-]?key",
+            key_suffix!(),
+            r")(?:=>|:=|[=:])[ \t]*\\?[\x22'`]?([A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)(?:[^A-Za-z0-9+/=]|$)",
+        ),
+        entity_group: "PRIVATE_KEY",
+        validator: Some(is_wireguard_key),
+        span_group: Some(1),
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://www.wireguard.com/quickstart/",
+            &[
+                "privatekey",
+                "private_key",
+                "private-key",
+                "presharedkey",
+                "preshared_key",
+                "preshared-key",
+            ],
+        )
+        .with_provider("wireguard")
+        .with_min_entropy(3.5)
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_openvpn_static_key",
+        pattern: r"-----BEGIN OpenVPN Static key V1-----\s+(?:[0-9a-fA-F]{32}\s+){16}-----END OpenVPN Static key V1-----",
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_openvpn_static_key),
+        span_group: None,
+        base_score: 70,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://openvpn.net/community-resources/reference-manual-for-openvpn-2-6/",
+            &["openvpn static key"],
+        )
+        .with_provider("openvpn")
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_ipsec_psk",
+        pattern: r#":[ \t]*PSK[ \t]+\\?"([^"\\\s<>$%{}]{8,256})\\?""#,
+        entity_group: "CRYPTO_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "https://docs.strongswan.org/docs/latest/config/ipsecSecrets.html",
+            &["psk"],
+        )
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_symmetric_key",
+        pattern: concat!(
+            r"(?i:(?-u:\b)(?:[a-z0-9]+[_-]){0,3}(?:aes|hmac|encryption|encrypt|enc|cipher|crypto|signing|fernet|symmetric)[_-]?(?:secret[_-]?)?key(?:\[\d{0,3}\])?",
+            key_suffix!(),
+            r")(?:\s*:\s*&?\[u8;\s*\d{1,3}\]\s*)?(?:=>|:=|[=:])[ \t]*",
+            r"(?:[A-Za-z_][A-Za-z0-9_.:!]{0,40}\(\s*|new\s+byte\s*\[\s*\]\s*)?b?\\?[\x22'`]?",
+            r"([0-9a-fA-F]{64}|[0-9a-fA-F]{48}|[0-9a-fA-F]{32}",
+            r"|[A-Za-z0-9+/_-]{43}=|[A-Za-z0-9+/_-]{22}==|[A-Za-z0-9+/_-]{32}",
+            r"|[\[{]\s*(?:0x[0-9a-fA-F]{2}\s*,\s*){15,31}0x[0-9a-fA-F]{2}\s*,?\s*[\]}])",
+            r"(?:[^A-Za-z0-9+/=_-]|$)",
+        ),
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_symmetric_key),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://docs.openssl.org/master/man1/openssl-rand/",
+            &[
+                "aes",
+                "hmac",
+                "enc",
+                "cipher",
+                "crypto",
+                "signing",
+                "fernet",
+                "symmetric",
+            ],
+        )
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_laravel_app_key",
+        pattern: r"(?:^|[^A-Za-z0-9+/_])(base64:(?:[A-Za-z0-9+/]{43}=|[A-Za-z0-9+/]{22}==))(?:[^A-Za-z0-9+/=]|$)",
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_laravel_app_key),
+        span_group: Some(1),
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://laravel.com/docs/encryption",
+            &["base64:"],
+        )
+        .with_provider("laravel")
+        .with_min_entropy(3.5)
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_django_secret_key",
+        pattern: concat!(
+            r"(?i:(?-u:\b)(?:django_)?secret_key",
+            key_suffix!(),
+            r")(?:=>|:=|[=:])[ \t]*(?:[A-Za-z_][A-Za-z0-9_.]{0,40}\([^,()\r\n]{0,80},[ \t]*)?\\?[\x22'`]?",
+            r"((?:django-insecure-)?[a-z0-9!@#$%^&*(\-_=+)]{50})(?:[\x22'`\\\s]|$)",
+        ),
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_django_secret_key),
+        span_group: Some(1),
+        base_score: 45,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.djangoproject.com/en/stable/ref/settings/#secret-key",
+            &["secret_key"],
+        )
+        .with_provider("django")
+        // `startproject` writes `django-insecure-` keys for development.
+        .with_test_prefixes(&["django-insecure-"])
+        .with_min_entropy(3.5)
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_rails_secret_key_base",
+        pattern: concat!(
+            r"(?i:secret_key_base",
+            key_suffix!(),
+            r")(?:=>|:=|[=:])[ \t]*\\?[\x22'`]?([0-9a-f]{128})(?:[^0-9A-Za-z]|$)",
+        ),
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_rails_secret_key_base),
+        span_group: Some(1),
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://guides.rubyonrails.org/security.html#custom-credentials",
+            &["secret_key_base"],
+        )
+        .with_provider("rails")
+        .with_min_entropy(3.0)
         .with_subtype(SecretSubtype::PrivateKey),
     },
 ];
