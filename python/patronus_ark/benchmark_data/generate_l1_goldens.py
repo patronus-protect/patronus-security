@@ -5234,8 +5234,9 @@ DLP_LOOKALIKE_GENERATORS = (
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
     # G-URL: Base32 seed and auth URL token shorter than the rules take
     "totp_base32_secret_short", "auth_url_token_short",
-    # C-KEYS: a public JWK without d, an OpenVPN block with 15 lines
-    "jwk_okp_public_key", "openvpn_static_key_short",
+    # C-KEYS: a public JWK without d, a 31-byte WireGuard key, an OpenVPN block with 15 lines, a
+    # 40-digit SHA-1 hex digest instead of a 128- or 256-bit key
+    "jwk_okp_public_key", "wireguard_private_key_short", "openvpn_static_key_short", "sha1_hex_digest",
 )
 
 
