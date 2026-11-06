@@ -324,3 +324,47 @@ pub(super) const IDENTITY_CARD_NUMBER_LEGACY: PiiPattern = PiiPattern {
     requires_context: true,
     scored_only: true,
 };
+
+/// A bare Steuer-ID with its check digit, without the issued digit distribution of
+/// [`STEUER_ID_CONTEXT_FREE`]. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const STEUER_ID_BARE: PiiPattern = PiiPattern {
+    name: "pii_steuer_id_de_bare",
+    validator: Some(validators::steuer_id),
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..STEUER_ID_CONTEXT_FREE
+};
+
+/// A bare Steuernummer in the 13-digit ELSTER form, its Land and office prefix
+/// checked (Q-DE). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const STEUERNUMMER_BARE: PiiPattern = PiiPattern {
+    name: "pii_steuernummer_de_bare",
+    pattern: r"(?-u:\b)[0-9]{13}(?-u:\b)",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..STEUERNUMMER_CONTEXT_FREE
+};
+
+/// A bare LANR with its mod-10 check digit (B-DE1). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const PHYSICIAN_NUMBER_LANR_BARE: PiiPattern = PiiPattern {
+    name: "pii_physician_number_lanr_de_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..PHYSICIAN_NUMBER_LANR_PROXIMITY
+};
+
+/// A bare BSNR, nine digits without a check digit (B-DE1). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const FACILITY_NUMBER_BSNR_BARE: PiiPattern = PiiPattern {
+    name: "pii_facility_number_bsnr_de_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..FACILITY_NUMBER_BSNR
+};

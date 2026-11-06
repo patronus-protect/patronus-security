@@ -755,6 +755,7 @@ checksums:
     lanr: {algorithm: "gewichtet 4-9 mod 10"}  # B-DE1, LANR
     de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
     de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
+    de_driver_license_number_bare: null # D-BARE, 11 Zeichen mit Buchstaben und Ziffern, keine Prüfziffer
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
     nine_digits: null                   # B-UK/B-DE1, neun Ziffern (UK-Pass, BSNR), keine Prüfziffer

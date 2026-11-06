@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use patronus_ark::detectors::pii::pii::PII_PATTERNS;
+use patronus_ark::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
 use serde::Deserialize;
 
 const LANGUAGES: [&str; 2] = ["de", "en"];
@@ -82,7 +82,13 @@ fn every_pii_rule_has_gated_positives_in_both_languages_and_a_hard_negative() {
             negatives.insert(row.rule_id.as_str());
         }
     }
-    for pattern in PII_PATTERNS {
+    // The goldens run on the default gates; the opt-in bare rules (D-BARE) stay
+    // off there and have their own positives and hard negatives in
+    // `pii_bare_rules.rs`.
+    for pattern in PII_PATTERNS
+        .iter()
+        .filter(|pattern| !is_bare_rule(pattern.name))
+    {
         for language in LANGUAGES {
             assert!(
                 positives.contains(&(pattern.name, language)),

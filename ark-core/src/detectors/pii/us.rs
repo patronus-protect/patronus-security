@@ -170,3 +170,23 @@ pub(super) const NPI_CONTEXT_FREE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: true,
 };
+
+/// A bare SSN, grouped or nine digits, in the SSA ranges (B-SSN). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const SSN_BARE: PiiPattern = PiiPattern {
+    name: "pii_ssn_us_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..SSN_PROXIMITY
+};
+
+/// A bare NPI, plain or grouped, with its Luhn check digit (A06). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const NPI_BARE: PiiPattern = PiiPattern {
+    name: "pii_npi_us_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..NPI
+};

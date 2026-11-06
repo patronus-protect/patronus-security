@@ -740,6 +740,14 @@ pub fn de_driver_license_number(s: &str) -> bool {
     s.len() == 11 && s.chars().all(|ch| ch.is_ascii_alphanumeric())
 }
 
+/// A bare German card licence (D-BARE): the licence form with letters and digits,
+/// so that an upper-case word (`INFORMATION`) or eleven digits are none.
+pub fn de_driver_license_number_bare(s: &str) -> bool {
+    de_driver_license_number(s)
+        && s.bytes().any(|byte| byte.is_ascii_digit())
+        && s.bytes().any(|byte| byte.is_ascii_uppercase())
+}
+
 /// The US state formats of a driver's licence number (F15), without the hyphens
 /// that group its digits: the letter and digit runs that presidio-analyzer's
 /// `UsLicenseRecognizer` lists after ntsi.com/drivers-license-format, from one

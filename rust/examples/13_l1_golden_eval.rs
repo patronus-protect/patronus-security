@@ -7,7 +7,10 @@ use std::{
 
 use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
+    detectors::{
+        dlp::dlp::DLP_PATTERNS,
+        pii::pii::{is_bare_rule, PII_PATTERNS},
+    },
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -347,9 +350,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &root.join("pii_l1.jsonl"),
             SecurityCategory::Pii,
             "native:pii",
+            // The goldens run on the default gates, where the opt-in bare rules
+            // (D-BARE) stay off; rust/tests/pii_bare_rules.rs covers them.
             &PII_PATTERNS
                 .iter()
                 .map(|pattern| pattern.name)
+                .filter(|name| !is_bare_rule(name))
                 .collect::<Vec<_>>(),
         )?;
     }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::detectors::dlp::dlp::{DLP_PATTERNS, SECRET_GROUPS};
+use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, str::FromStr};
 
@@ -65,9 +66,13 @@ const OPT_IN_RULES: [&str; 3] = [
 ];
 
 /// Default of a rule without an explicit gate, shared by every host: all
-/// non-DLP rules (Cat's shell policies included) and the DLP credential/secret
-/// rules are on, the other DLP content rules are opt-in.
+/// non-DLP rules (Cat's shell policies included) except the bare PII forms
+/// (D-BARE) and the DLP credential/secret rules are on, the other DLP content
+/// rules are opt-in.
 pub fn default_rule_enabled(rule_id: &str) -> bool {
+    if is_bare_rule(rule_id) {
+        return false;
+    }
     if !rule_id.starts_with("dlp_") {
         return true;
     }
@@ -100,12 +105,19 @@ pub struct NativeGates {
 }
 
 impl NativeGates {
-    /// Gates with every native rule enabled, including the opt-in DLP content families.
+    /// Gates with every native rule enabled, including the opt-in DLP content
+    /// families and the bare PII forms.
     pub fn all_enabled() -> Self {
         let rules = DLP_PATTERNS
             .iter()
             .map(|pattern| pattern.name)
             .chain(OPT_IN_RULES)
+            .chain(
+                PII_PATTERNS
+                    .iter()
+                    .map(|pattern| pattern.name)
+                    .filter(|name| is_bare_rule(name)),
+            )
             .map(|id| (id.to_owned(), true))
             .collect();
         Self {
@@ -139,6 +151,8 @@ mod tests {
         assert!(gates.allows_model("native:pii"));
         assert!(!gates.allows_rule("dlp_mcp_policy"));
         assert!(NativeGates::all_enabled().allows_rule("dlp_mcp_policy"));
+        assert!(!gates.allows_rule("pii_ssn_us_bare"));
+        assert!(NativeGates::all_enabled().allows_rule("pii_ssn_us_bare"));
         // Cat's shell policies are rules too, enabled unless gated off.
         for id in ["core.remote_to_exec", "CMD-PIPE-CURL", "user.ask_terraform"] {
             assert!(default_rule_enabled(id), "{id}");

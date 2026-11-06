@@ -12,10 +12,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 184 | 137 (+5 relationship rules) |
+| Regex rules | 199 | 137 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 122 | 18 |
-| Default state | all rules on | credential/secret groups on, broader families opt-in |
+| Rules with a `checksum` or `structure` check | 130 | 18 |
+| Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
 
@@ -51,18 +51,18 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |
 | `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` |
 | `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free`, `pii_bban_gb` | checksum | on (1 of 4 rules `balanced`/`recall` only) | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
-| `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free` | format | on (1 of 3 rules `balanced`/`recall` only) | `US_SSN` |
+| `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free`, `pii_ssn_us_bare` | format | on (1 of 3 rules `balanced`/`recall` only), bare form opt-in | `US_SSN` |
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
-| `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |
-| `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de`, `pii_steuernummer_de_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_NUMBER` |
+| `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free`, `pii_steuer_id_de_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `DE_TAX_ID` |
+| `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de`, `pii_steuernummer_de_context_free`, `pii_steuernummer_de_bare` | format | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `DE_TAX_NUMBER` |
 | `pii.de.commercial_register` | shared | `COMMERCIAL_REGISTER_DE` | `pii_commercial_register_de`, `pii_commercial_register_de_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `DE_HANDELSREGISTER` |
 | `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de`, `pii_rentenversicherung_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_SOCIAL_SECURITY` |
 | `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de`, `pii_health_insurance_number_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_HEALTH_INSURANCE` |
-| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de`, `pii_physician_number_lanr_de_proximity` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_LANR` |
-| `pii.de.bsnr` | shared | `FACILITY_NUMBER_BSNR` | `pii_facility_number_bsnr_de` | format | on | `DE_BSNR` |
+| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de`, `pii_physician_number_lanr_de_proximity`, `pii_physician_number_lanr_de_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `DE_LANR` |
+| `pii.de.bsnr` | shared | `FACILITY_NUMBER_BSNR` | `pii_facility_number_bsnr_de`, `pii_facility_number_bsnr_de_bare` | format | on, bare form opt-in | `DE_BSNR` |
 | `pii.uk.nhs_number` | shared | `NHS_NUMBER` | `pii_nhs_number_uk` | checksum | on | `UK_NHS` |
 | `pii.au.abn` | shared | `AU_ABN` | `pii_abn_au`, `pii_abn_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_ABN` |
-| `pii.au.acn` | shared | `AU_ACN` | `pii_acn_au` | checksum | on | `AU_ACN` |
+| `pii.au.acn` | shared | `AU_ACN` | `pii_acn_au`, `pii_acn_au_bare` | checksum | on, bare form opt-in | `AU_ACN` |
 | `pii.au.tfn` | shared | `AU_TFN` | `pii_tfn_au` | checksum | on | `AU_TFN` |
 | `pii.au.medicare` | shared | `AU_MEDICARE` | `pii_medicare_au`, `pii_medicare_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_MEDICARE` |
 | `pii.sg.nric_fin` | shared | `SG_NRIC_FIN` | `pii_nric_fin_sg`, `pii_nric_fin_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_NRIC_FIN` |
@@ -70,28 +70,28 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.se.personnummer` | shared | `SE_PERSONNUMMER` | `pii_personnummer_se`, `pii_personnummer_se_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SE_PERSONNUMMER` |
 | `pii.fi.personal_identity_code` | shared | `FI_PERSONAL_IDENTITY_CODE` | `pii_hetu_fi`, `pii_hetu_fi_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `FI_PERSONAL_IDENTITY_CODE` |
 | `pii.se.organisationsnummer` | shared | `SE_ORGANISATIONSNUMMER` | `pii_organisationsnummer_se`, `pii_organisationsnummer_se_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SE_ORGANISATIONSNUMMER` |
-| `pii.ca.sin` | shared | `CA_SIN` | `pii_sin_ca`, `pii_sin_ca_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `CA_SIN` |
+| `pii.ca.sin` | shared | `CA_SIN` | `pii_sin_ca`, `pii_sin_ca_context_free`, `pii_sin_ca_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `CA_SIN` |
 | `pii.tr.national_id` | shared | `TR_NATIONAL_ID` | `pii_national_id_tr` | checksum | on | `TR_NATIONAL_ID` |
 | `pii.za.id_number` | shared | `ZA_ID_NUMBER` | `pii_id_number_za`, `pii_id_number_za_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `ZA_ID_NUMBER` |
 | `pii.kr.rrn` | shared | `KR_RRN` | `pii_rrn_kr`, `pii_rrn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_RRN` |
 | `pii.kr.frn` | shared | `KR_FRN` | `pii_frn_kr`, `pii_frn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_FRN` |
-| `pii.kr.brn` | shared | `KR_BRN` | `pii_brn_kr`, `pii_brn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_BRN` |
+| `pii.kr.brn` | shared | `KR_BRN` | `pii_brn_kr`, `pii_brn_kr_context_free`, `pii_brn_kr_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `KR_BRN` |
 | `pii.es.nif` | shared | `ES_NIF` | `pii_nif_es`, `pii_nif_es_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `ES_NIF` |
 | `pii.es.nie` | shared | `ES_NIE` | `pii_nie_es`, `pii_nie_es_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `ES_NIE` |
 | `pii.it.fiscal_code` | shared | `IT_FISCAL_CODE` | `pii_fiscal_code_it`, `pii_fiscal_code_it_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `IT_FISCAL_CODE` |
-| `pii.pl.pesel` | shared | `PL_PESEL` | `pii_pesel_pl` | checksum | on | `PL_PESEL` |
-| `pii.in.aadhaar` | shared | `IN_AADHAAR` | `pii_aadhaar_in`, `pii_aadhaar_in_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `IN_AADHAAR` |
+| `pii.pl.pesel` | shared | `PL_PESEL` | `pii_pesel_pl`, `pii_pesel_pl_bare` | checksum | on, bare form opt-in | `PL_PESEL` |
+| `pii.in.aadhaar` | shared | `IN_AADHAAR` | `pii_aadhaar_in`, `pii_aadhaar_in_context_free`, `pii_aadhaar_in_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `IN_AADHAAR` |
 | `pii.in.gstin` | shared | `IN_GSTIN` | `pii_gstin_in`, `pii_gstin_in_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `IN_GSTIN` |
-| `pii.in.pan` | shared | `IN_PAN` | `pii_pan_in` | format | on | `IN_PAN` |
-| `pii.in.voter_id` | shared | `IN_VOTER` | `pii_voter_id_in` | format | on | `IN_VOTER` |
+| `pii.in.pan` | shared | `IN_PAN` | `pii_pan_in`, `pii_pan_in_bare` | format | on, bare form opt-in | `IN_PAN` |
+| `pii.in.voter_id` | shared | `IN_VOTER` | `pii_voter_id_in`, `pii_voter_id_in_bare` | format | on, bare form opt-in | `IN_VOTER` |
 | `pii.us.medical_license` | shared | `MEDICAL_LICENSE` | `pii_dea_number_us` | checksum | on | `MEDICAL_LICENSE` |
-| `pii.us.npi` | shared | `US_NPI` | `pii_npi_us`, `pii_npi_us_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `US_NPI` |
+| `pii.us.npi` | shared | `US_NPI` | `pii_npi_us`, `pii_npi_us_context_free`, `pii_npi_us_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `US_NPI` |
 | `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_field`, `pii_passport_number_us`, `pii_passport_number_at_ch`, `pii_passport_number_es`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 9 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
 | `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_at_ch`, `pii_identity_card_number_it`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
-| `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
+| `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free`, `pii_driver_license_number_de_bare` | format | on (1 of 5 rules `balanced`/`recall` only), bare form opt-in | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
 | `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` |
 | `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` |
-| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de`, `pii_vehicle_registration_uk`, `pii_vehicle_registration_uk_context_free`, `pii_vehicle_registration_ng` | format | on (2 of 4 rules `balanced`/`recall` only) | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
+| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de`, `pii_vehicle_registration_uk`, `pii_vehicle_registration_uk_context_free`, `pii_vehicle_registration_ng`, `pii_vehicle_registration_ng_bare` | format | on (2 of 4 rules `balanced`/`recall` only), bare form opt-in | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
 | `pii.crypto_wallet` | shared | `CRYPTO` | `pii_crypto_btc`, `pii_crypto_ltc`, `pii_crypto_eth`, `pii_crypto_eth_unchecked` | checksum | on | `CRYPTO` |
 | `pii.swift_bic` | ark_only | `SWIFT_CODE` | `pii_swift_bic_context` | format | on | – |
 | `pii.credit_card.cvv` | ark_only | `CREDITCARD_CVV` | `pii_credit_card_cvv` | format | on | – |

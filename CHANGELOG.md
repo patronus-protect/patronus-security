@@ -9,6 +9,33 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Detection change: opt-in bare-format PII rules (D-BARE). Every value that the default rules
+  report only with a term of its label or after its field name (`known_gaps` with `bare: true`)
+  has its own rule `<rule>_bare`: `pii_steuer_id_de_bare`, `pii_steuernummer_de_bare` (13-digit
+  ELSTER form), `pii_physician_number_lanr_de_bare`, `pii_facility_number_bsnr_de_bare`,
+  `pii_driver_license_number_de_bare`, `pii_ssn_us_bare`, `pii_sin_ca_bare`,
+  `pii_aadhaar_in_bare`, `pii_npi_us_bare`, `pii_pesel_pl_bare`, `pii_acn_au_bare`,
+  `pii_brn_kr_bare`, `pii_pan_in_bare`, `pii_voter_id_in_bare` and
+  `pii_vehicle_registration_ng_bare`. They are off in every mode until the existing `rules` gate
+  enables them (no new API; example profile `docs/how-to/pii-bare-formats.gates.json`). An enabled
+  bare rule keeps the validator of its id, reports in every mode a value that stands alone,
+  outside a key that names another value and without a nearer counter-context term, and scores
+  the `balanced` threshold `0.50` (base `15` with a check digit, `35` format-only), so every
+  enabled bare rule reports in `balanced` and `recall` too; a labelled hit scores at least as high
+  and keeps its span. Default output (all modes, default gates) is unchanged; the
+  goldens are unchanged. `NativeGates::all_enabled()` includes the bare rules;
+  `PiiPipeline::evaluate()` keeps the defaults.
+  Measured per rule with only that rule on (new spans against the defaults, strict/balanced):
+  on the 2311 PII hard negatives of goldens and fixture (many are deliberately bare valid values)
+  from 6/6 (`pii_steuernummer_de_bare`, `pii_pan_in_bare`) to 64/64
+  (`pii_driver_license_number_de_bare`); on the pinned benign corpora (dev split) at most 6.1/MB
+  of code in both modes (`pii_facility_number_bsnr_de_bare`, `pii_ssn_us_bare` 5.9), at most
+  0.13/MB of docs. Default-gate latency is
+  unchanged within noise (100 KiB p95, median of four A/B pairs: +1.5 % Python, −8 % native).
+  Per-rule table and commands: `research/l1-pii/scoreboard/d-bare.md`.
+
 ### Fixed
 
 - The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in

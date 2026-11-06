@@ -9,7 +9,7 @@
 
 use patronus_ark::detectors::pii::{
     context,
-    pii::PII_PATTERNS,
+    pii::{is_bare_rule, PII_PATTERNS},
     score::{self, Context, ValidatorStrength},
     validators,
 };
@@ -344,9 +344,11 @@ fn score_is_base_plus_validator_strength_plus_field_context() {
             pattern.name,
             pattern.base_score
         );
-        // Context-bound rules emit only with support (pii_context_engine.rs).
+        // Context-bound rules emit only with support (pii_context_engine.rs); the
+        // opt-in bare rules (D-BARE) are off by default and rank below on purpose.
         assert!(
             pattern.requires_context
+                || is_bare_rule(pattern.name)
                 || score::rule_score(pattern) >= ScoreMode::Balanced.min_score().unwrap(),
             "{} would change balanced output",
             pattern.name
@@ -494,7 +496,15 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_pzn_de",
             "pii_crypto_btc",
             "pii_crypto_ltc",
-            "pii_crypto_eth"
+            "pii_crypto_eth",
+            "pii_steuer_id_de_bare",
+            "pii_physician_number_lanr_de_bare",
+            "pii_sin_ca_bare",
+            "pii_aadhaar_in_bare",
+            "pii_npi_us_bare",
+            "pii_pesel_pl_bare",
+            "pii_acn_au_bare",
+            "pii_brn_kr_bare",
         ]
     );
 }

@@ -1826,8 +1826,9 @@ pub fn default_rule_enabled(rule_id: &str) -> bool;
 ```
 
 Default of a rule without an explicit gate, shared by every host: all
-non-DLP rules (Cat's shell policies included) and the DLP credential/secret
-rules are on, the other DLP content rules are opt-in.
+non-DLP rules (Cat's shell policies included) except the bare PII forms
+(D-BARE) and the DLP credential/secret rules are on, the other DLP content
+rules are opt-in.
 
 ```rust
 pub struct NativeGates {
@@ -1853,7 +1854,8 @@ the Core scanner and the full gateway. Missing rule entries use
 pub fn all_enabled() -> Self;
 ```
 
-Gates with every native rule enabled, including the opt-in DLP content families.
+Gates with every native rule enabled, including the opt-in DLP content
+families and the bare PII forms.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;

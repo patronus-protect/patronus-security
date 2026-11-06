@@ -98,3 +98,34 @@ pub(super) const VOTER_ID: PiiPattern = PiiPattern {
     requires_context: true,
     scored_only: false,
 };
+
+/// A bare Aadhaar number, plain or grouped, with its Verhoeff check digit.
+/// Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const AADHAAR_BARE: PiiPattern = PiiPattern {
+    name: "pii_aadhaar_in_bare",
+    base_score: 15,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..AADHAAR
+};
+
+/// A bare PAN, format only. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const PAN_BARE: PiiPattern = PiiPattern {
+    name: "pii_pan_in_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..PAN
+};
+
+/// A bare voter ID (EPIC), format only. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const VOTER_ID_BARE: PiiPattern = PiiPattern {
+    name: "pii_voter_id_in_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..VOTER_ID
+};

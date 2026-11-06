@@ -215,6 +215,21 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_crypto_ltc", "CRYPTO"),
     ("pii_crypto_eth", "CRYPTO"),
     ("pii_crypto_eth_unchecked", "CRYPTO"),
+    ("pii_steuer_id_de_bare", "STEUERID"),
+    ("pii_steuernummer_de_bare", "TAX_NUMBER_DE"),
+    ("pii_physician_number_lanr_de_bare", "PHYSICIAN_NUMBER_LANR"),
+    ("pii_facility_number_bsnr_de_bare", "FACILITY_NUMBER_BSNR"),
+    ("pii_driver_license_number_de_bare", "DRIVER_LICENSE_NUMBER"),
+    ("pii_ssn_us_bare", "SSN"),
+    ("pii_sin_ca_bare", "CA_SIN"),
+    ("pii_aadhaar_in_bare", "IN_AADHAAR"),
+    ("pii_npi_us_bare", "US_NPI"),
+    ("pii_pesel_pl_bare", "PL_PESEL"),
+    ("pii_acn_au_bare", "AU_ACN"),
+    ("pii_brn_kr_bare", "KR_BRN"),
+    ("pii_pan_in_bare", "IN_PAN"),
+    ("pii_voter_id_in_bare", "IN_VOTER"),
+    ("pii_vehicle_registration_ng_bare", "LICENSEPLATE"),
 ];
 
 #[test]

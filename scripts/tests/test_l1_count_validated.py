@@ -406,7 +406,11 @@ def test_cli_count_json_and_check(tmp_path):
     assert {
         "entity_id": "pii.de.tax_id",
         "country": "de",
-        "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
+        "sources": [
+            "pii_steuer_id_de: steuer_id",
+            "pii_steuer_id_de_bare: steuer_id",
+            "pii_steuer_id_de_context_free: steuer_id_issued",
+        ],
     } in payload["ark"]["units"]
     # B01/B02/B16: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
     vat = {unit["entity_id"]: unit for unit in payload["ark"]["units"] if unit["entity_id"].endswith((".vat_id", ".vat_code"))}
@@ -426,7 +430,7 @@ def test_cli_count_json_and_check(tmp_path):
     apac = {unit["entity_id"]: unit["sources"] for unit in payload["ark"]["units"] if unit["country"] in ("au", "sg")}
     assert apac == {
         "pii.au.abn": ["pii_abn_au: au_abn", "pii_abn_au_context_free: au_abn"],
-        "pii.au.acn": ["pii_acn_au: au_acn"],
+        "pii.au.acn": ["pii_acn_au: au_acn", "pii_acn_au_bare: au_acn"],
         "pii.au.tfn": ["pii_tfn_au: au_tfn"],
         "pii.au.medicare": ["pii_medicare_au: au_medicare", "pii_medicare_au_context_free: au_medicare"],
         "pii.sg.nric_fin": ["pii_nric_fin_sg: sg_nric_fin", "pii_nric_fin_sg_context_free: sg_nric_fin"],
@@ -448,7 +452,11 @@ def test_cli_count_json_and_check(tmp_path):
             "pii_health_insurance_number_de: de_health_insurance_number",
             "pii_health_insurance_number_de_context_free: de_health_insurance_number",
         ],
-        "pii.de.lanr": ["pii_physician_number_lanr_de: lanr", "pii_physician_number_lanr_de_proximity: lanr"],
+        "pii.de.lanr": [
+            "pii_physician_number_lanr_de: lanr",
+            "pii_physician_number_lanr_de_bare: lanr",
+            "pii_physician_number_lanr_de_proximity: lanr",
+        ],
     }
     assert "pii.de.bsnr" not in {unit["entity_id"] for unit in payload["ark"]["units"]}
     # B-NORD: one unit per country; the CPR unit rests on its mod-11 sum, which dk_cpr requires.
@@ -508,7 +516,7 @@ def test_cli_count_json_and_check(tmp_path):
             "pii_organisationsnummer_se: se_organisationsnummer",
             "pii_organisationsnummer_se_context_free: se_organisationsnummer",
         ],
-        "pii.ca.sin": ["pii_sin_ca: ca_sin", "pii_sin_ca_context_free: ca_sin"],
+        "pii.ca.sin": ["pii_sin_ca: ca_sin", "pii_sin_ca_bare: ca_sin", "pii_sin_ca_context_free: ca_sin"],
         "pii.tr.national_id": ["pii_national_id_tr: tr_national_id"],
         "pii.za.id_number": ["pii_id_number_za: za_id_number", "pii_id_number_za_context_free: za_id_number"],
     }
@@ -537,7 +545,7 @@ def test_cli_count_json_and_check(tmp_path):
     assert kr == {
         "pii.kr.rrn": ["pii_rrn_kr: kr_rrn", "pii_rrn_kr_context_free: kr_rrn"],
         "pii.kr.frn": ["pii_frn_kr: kr_frn", "pii_frn_kr_context_free: kr_frn"],
-        "pii.kr.brn": ["pii_brn_kr: kr_brn", "pii_brn_kr_context_free: kr_brn"],
+        "pii.kr.brn": ["pii_brn_kr: kr_brn", "pii_brn_kr_bare: kr_brn", "pii_brn_kr_context_free: kr_brn"],
     }
     # B-ESIT: NIF, NIE and codice fiscale are units of their own; the bare CIF and Partita IVA rules
     # reuse the VAT validators and count with the VAT IDs (no second unit).
@@ -561,7 +569,7 @@ def test_cli_count_json_and_check(tmp_path):
         for unit in payload["ark"]["units"]
         if unit["entity_id"] in ("pii.pl.pesel", "pii.pl.regon")
     }
-    assert pl == {"pii.pl.pesel": ["pii_pesel_pl: pl_pesel"], "pii.pl.regon": ["pii_regon_pl: pl_regon"]}
+    assert pl == {"pii.pl.pesel": ["pii_pesel_pl: pl_pesel", "pii_pesel_pl_bare: pl_pesel"], "pii.pl.regon": ["pii_regon_pl: pl_regon"]}
     assert vat["pii.pl.vat_id"]["sources"] == ["pii_vat_id_pl: pl_vat_id", "pii_vat_id_pl_proximity: pl_vat_id"]
     # B-IN: Aadhaar (Verhoeff) and GSTIN (mod 36) count; the PAN validator checks a form only and the voter
     # ID has none.
@@ -571,7 +579,7 @@ def test_cli_count_json_and_check(tmp_path):
         if unit["entity_id"].startswith("pii.in.")
     }
     assert india == {
-        "pii.in.aadhaar": ["pii_aadhaar_in: in_aadhaar", "pii_aadhaar_in_context_free: in_aadhaar"],
+        "pii.in.aadhaar": ["pii_aadhaar_in: in_aadhaar", "pii_aadhaar_in_bare: in_aadhaar", "pii_aadhaar_in_context_free: in_aadhaar"],
         "pii.in.gstin": ["pii_gstin_in: in_gstin", "pii_gstin_in_context_free: in_gstin"],
     }
     # A06: the DEA number (mod-10 digit) and the NPI (Luhn behind 80840) count once each, shared with Presidio.
@@ -582,7 +590,7 @@ def test_cli_count_json_and_check(tmp_path):
     }
     assert medical == {
         "pii.us.medical_license": ["pii_dea_number_us: us_dea_number"],
-        "pii.us.npi": ["pii_npi_us: us_npi", "pii_npi_us_context_free: us_npi"],
+        "pii.us.npi": ["pii_npi_us: us_npi", "pii_npi_us_bare: us_npi", "pii_npi_us_context_free: us_npi"],
     }
     # B-DEVID: the IMEI, MEID and ICCID are international and count once each; the IMSI is format only.
     device = {
