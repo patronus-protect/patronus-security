@@ -316,7 +316,7 @@ def test_main_m1_needs_balanced_or_bare_to_beat_presidio_default_and_tuned(tmp_p
     only_tuned = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", f"tuned={dirs['tuned']}",
                   "--ark", f"balanced={dirs['perfect']}"]
     assert MODULE.main(only_tuned) == 2
-    assert "missing: presidio-default" in capsys.readouterr().err
+    assert "(missing: presidio-default)" in capsys.readouterr().err
     for bad in (str(dirs["tuned"]), f"custom={dirs['tuned']}", f"tuned={dirs['tuned']}"):
         assert MODULE.main(args + ["--presidio", bad]) == 2
     (dirs["weak"] / "g.jsonl").unlink()

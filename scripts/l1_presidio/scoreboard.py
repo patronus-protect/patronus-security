@@ -3119,7 +3119,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.json:
                     args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
                 return 0
-            check_milestone_engines(ark, map(presidio_engine, presidio))
+            check_milestone_engines(ark, {presidio_engine(profile) for profile in presidio})
             checks = gold_checks(emap)
             report_fn, lines_fn = (m1_report, m1_lines) if args.command == "m1" else (m2_report, m2_lines)
             reports = {}
