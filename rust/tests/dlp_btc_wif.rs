@@ -8,6 +8,10 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+#[path = "support/base58check.rs"]
+mod base58check;
+
+use base58check::base58check_encode;
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::{
@@ -106,38 +110,6 @@ fn reports_key(text: &str, value: &str) -> bool {
         .evidence_spans
         .iter()
         .any(|span| span.label == "CRYPTO_KEY" && span.text == value)
-}
-
-fn base58check_encode(payload: &[u8]) -> String {
-    let digest = ring::digest::digest(
-        &ring::digest::SHA256,
-        ring::digest::digest(&ring::digest::SHA256, payload).as_ref(),
-    );
-    let mut raw = payload.to_vec();
-    raw.extend_from_slice(&digest.as_ref()[..4]);
-    let mut digits: Vec<u8> = Vec::new();
-    for byte in &raw {
-        let mut carry = u32::from(*byte);
-        for digit in digits.iter_mut() {
-            carry += u32::from(*digit) << 8;
-            *digit = (carry % 58) as u8;
-            carry /= 58;
-        }
-        while carry > 0 {
-            digits.push((carry % 58) as u8);
-            carry /= 58;
-        }
-    }
-    let zeros = raw.iter().take_while(|byte| **byte == 0).count();
-    let alphabet = BASE58.as_bytes();
-    std::iter::repeat_n('1', zeros)
-        .chain(
-            digits
-                .iter()
-                .rev()
-                .map(|digit| alphabet[*digit as usize] as char),
-        )
-        .collect()
 }
 
 const CARRIERS: &[&str] = &[

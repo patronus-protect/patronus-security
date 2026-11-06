@@ -488,6 +488,19 @@
       "shape_only": ["btc_wif_uncompressed", "btc_wif_testnet_compressed_shape"],
       "probes": ["importprivkey <<secret:0>>", "WIF-Schlüssel der Cold Wallet: <<secret:0>>", "bitcoin-cli -testnet importprivkey <<secret:0>>"]
     },
+    "dlp_bip32_extended_private_key": {
+      "generators": ["bip32_xprv", "bip32_xprv_child", "bip32_yprv", "bip32_zprv", "bip32_tprv"],
+      "lookalike": ["bip32_xpub", "bip32_tpub", "bip32_xprv_shape"],
+      "probes": ["BTC_MASTER_XPRV=<<secret:0>>", "Der Wallet-Master-Key <<secret:0>> lag im Backup."]
+    },
+    "dlp_eth_keystore_ciphertext": {
+      "generators": ["eth_keystore_ciphertext"],
+      "probes": ["{\"crypto\":{\"kdf\":\"pbkdf2\",\"mac\":\"8f0e2a6c41d97b35e0c4a8d1f6b29e73c5a0d48e1b7f2c96a3e5d0b8f14c7a29\",\n  \"ciphertext\": \"<<secret:0>>\"}}", "{\"version\":3,\"crypto\":{\"cipher\":\"aes-128-ctr\",\"ciphertext\":\"<<secret:0>>\",\"kdf\":\"scrypt\",\"mac\":\"8f0e2a6c41d97b35e0c4a8d1f6b29e73c5a0d48e1b7f2c96a3e5d0b8f14c7a29\"}}"]
+    },
+    "dlp_solana_keypair": {
+      "generators": ["solana_keypair_array"],
+      "probes": ["SOLANA_KEYPAIR=<<secret:0>>", "const signer = Keypair.fromSecretKey(Uint8Array.from(<<secret:0>>));"]
+    },
     "dlp_private_key_block": {
       "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key"],
       "shape_only": ["pem_pkcs8_private_key", "pem_rsa_private_key"],

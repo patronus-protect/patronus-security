@@ -89,6 +89,38 @@ def is_valid_btc_wif(value: str) -> bool:
     return 0 < int.from_bytes(payload[1:33], "big") < SECP256K1_ORDER
 
 
+EXTENDED_PRIVATE_VERSIONS = {
+    "xprv": 0x0488ADE4,
+    "yprv": 0x049D7878,
+    "zprv": 0x04B2430C,
+    "tprv": 0x04358394,
+    "uprv": 0x044A4E28,
+    "vprv": 0x045F18BC,
+}
+
+
+def is_valid_extended_private_key(value: str) -> bool:
+    """BIP 32 / SLIP-0132 extended private key: 78 bytes under Base58Check, the version of
+    the prefix, zero parent fields at depth 0, 0x00 before a secp256k1 scalar."""
+    version = EXTENDED_PRIVATE_VERSIONS.get(value[:4])
+    payload = base58check_decode(value)
+    if version is None or payload is None or len(payload) != 78:
+        return False
+    if int.from_bytes(payload[:4], "big") != version or payload[45] != 0:
+        return False
+    if payload[4] == 0 and any(payload[5:13]):
+        return False
+    return 0 < int.from_bytes(payload[46:], "big") < SECP256K1_ORDER
+
+
+def is_valid_solana_keypair(value: str) -> bool:
+    """64 comma-separated bytes in brackets, at least 24 distinct."""
+    if not re.fullmatch(r"\[\s*(?:[0-9]{1,3}\s*,\s*){63}[0-9]{1,3}\s*\]", value):
+        return False
+    numbers = [int(number) for number in value.strip("[]").split(",")]
+    return all(number < 256 for number in numbers) and len(set(numbers)) >= 24
+
+
 def is_valid_eth_private_key(value: str) -> bool:
     if not re.fullmatch(r"0x[0-9a-f]{64}", value):
         return False

@@ -251,8 +251,11 @@ def _encoded_length(segment: dict) -> int:
         length = 4 * math.ceil(size / 3)
         return length + (length - 1) // segment["wrap"] if "wrap" in segment else length
     if encoding == "base58check":
-        # Constant leading bytes keep the value in one base58 digit range.
-        return math.ceil((size + 4) * 8 / math.log2(58))
+        # Constant leading bytes (up to 8 of the first hex part) keep the value in one
+        # base58 digit range: below (lead + 1) * 256^rest.
+        lead = bytes.fromhex(segment["bytes"][0]["hex"])[:8]
+        rest = size + 4 - len(lead)
+        return math.ceil((math.log2(int.from_bytes(lead, "big") + 1) + 8 * rest) / math.log2(58))
     return math.ceil(size * 4 / 3)
 
 

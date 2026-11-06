@@ -1751,6 +1751,8 @@ PROFILES = {
     "dlp_discord_token": Profile("comm.discord.bot_token", "SECRET_TOKEN", "secret", "discord_bot_token", "Discord bot token", "Discord-Bot-Token"),
     "dlp_eth_private_key": Profile("crypto.ethereum.private_key", "CRYPTO_KEY", "secret", "wallet_private_key", "wallet private key", "Wallet-Private-Key"),
     "dlp_btc_wif": Profile("crypto.bitcoin.wif", "CRYPTO_KEY", "secret", "btc_wif_key", "Bitcoin WIF key", "Bitcoin-WIF-Schlüssel"),
+    "dlp_bip32_extended_private_key": Profile("crypto.bitcoin.extended_private_key", "CRYPTO_KEY", "secret", "wallet_xprv", "wallet extended private key", "erweiterter privater Wallet-Schlüssel"),
+    "dlp_solana_keypair": Profile("crypto.solana.keypair", "CRYPTO_KEY", "secret", "solana_keypair", "Solana keypair", "Solana-Keypair"),
     "dlp_private_key_block": Profile("key.pem_private_key", "PRIVATE_KEY", "secret", "tls_private_key", "TLS private key", "privater TLS-Schlüssel"),
     "dlp_private_key_header": Profile("key.pem_private_key", "PRIVATE_KEY", "fragment", "ssh_private_key", "SSH private key", "privater SSH-Schlüssel"),
     "dlp_jwt_token": Profile("token.jwt", "SECRET_TOKEN", "secret", "id_token", "ID token", "ID-Token"),

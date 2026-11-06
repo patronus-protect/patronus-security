@@ -759,6 +759,21 @@ entities:
     group: CRYPTO_KEY
     ark: [dlp_btc_wif]
     backlog: F02
+  - id: crypto.bitcoin.extended_private_key
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_bip32_extended_private_key]
+    backlog: C-WALLET
+  - id: crypto.ethereum.keystore
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_eth_keystore_ciphertext]
+    backlog: C-WALLET
+  - id: crypto.solana.keypair
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_solana_keypair]
+    backlog: C-WALLET
   - id: credential.url_userinfo_token
     scope: ark_only
     group: SECRET_TOKEN

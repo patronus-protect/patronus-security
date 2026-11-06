@@ -5221,6 +5221,8 @@ DLP_LOOKALIKE_GENERATORS = (
     # P03: wrong length of the Azure, Alibaba, Bedrock and IBM Cloud formats
     "azure_storage_account_key_short", "azure_entra_client_secret_short", "alibaba_access_key_id_short",
     "bedrock_api_key_short", "ibm_cloud_iam_api_key_short",
+    # C-WALLET: extended public keys and an xprv shape without Base58Check
+    "bip32_xpub", "bip32_tpub", "bip32_xprv_shape",
     # P10: wrong length of the Atlassian, Notion, Linear, Airtable and Postman formats; public Mapbox pk. tokens
     "atlassian_api_token_short", "notion_api_token_short", "linear_api_key_short",
     "airtable_personal_access_token_short", "postman_api_token_short", "mapbox_access_token",
@@ -14960,6 +14962,144 @@ DLP_P10_CASES = {
     ],
 }
 for _label, _rows in DLP_P10_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# C-WALLET (C02 + C03): BIP 32 / SLIP-0132 extended private keys (xprv/yprv/zprv/tprv, Base58Check
+# with the version bytes of the prefix), Ethereum keystore v3 ciphertexts (crypto.ciphertext next to
+# kdf and mac) and Solana keypair arrays (64 bytes after a key term). Hard negatives are extended
+# public keys (xpub/tpub), an xprv shape without Base58Check, public keystore fields with a redacted
+# ciphertext, JSON ciphertexts without a key derivation, number arrays without key context, env
+# references, placeholders and format prose.
+DLP_C_WALLET_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "# Hot wallet signer\nBTC_NETWORK=mainnet\nWALLET_XPRV=<<secret:0>>\n",
+            "bip32_xprv", 22001, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            '{"wallet_type": "standard", "keystore": {"type": "bip32", "xprv": "<<secret:0>>"}, "seed_version": 18}\n',
+            "bip32_zprv", 22002, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "2026-11-02T10:14:07Z DEBUG wallet: importing descriptor wpkh(<<secret:0>>/84'/1'/0'/0/*)\n",
+            "bip32_tprv", 22003, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_keystore_ciphertext",
+            '{\n  "address": "5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d",\n  "crypto": {\n    "cipher": "aes-128-ctr",\n    "cipherparams": {"iv": "6087dab2f9fdbbfaddc31a909735c1e6"},\n    "ciphertext": "<<secret:0>>",\n    "kdf": "scrypt",\n    "kdfparams": {"dklen": 32, "n": 262144, "p": 8, "r": 1, "salt": "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd"},\n    "mac": "517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2"\n  },\n  "id": "3198bc9c-6672-5ab3-d995-4942343ae5b6",\n  "version": 3\n}\n',
+            "eth_keystore_ciphertext", 22004, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_solana_keypair",
+            "$ cat ~/.config/solana/id.json\n<<secret:0>>\n",
+            "solana_keypair_array", 22005, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_solana_keypair",
+            "import { Keypair } from \"@solana/web3.js\";\n\nconst payer = Keypair.fromSecretKey(Uint8Array.from(<<secret:0>>));\n",
+            "solana_keypair_array", 22006, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "Hallo Team,\n\nder Master-Key der Cold Wallet ist versehentlich ins Ticket gerutscht: <<secret:0>>\nBitte sofort alle Mittel umbuchen.\n",
+            "bip32_xprv_child", 22007, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "wallet:\n  netzwerk: mainnet\n  # Kontoschlüssel BIP49\n  yprv: \"<<secret:0>>\"\n",
+            "bip32_yprv", 22008, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "$ bitcoin-cli -testnet importdescriptors '[{\"desc\": \"wpkh(<<secret:0>>/0/*)\", \"timestamp\": \"now\"}]'\n",
+            "bip32_tprv", 22009, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_keystore_ciphertext",
+            'Anbei die Keystore-Datei aus dem Support-Fall, das Passwort schicke ich separat:\n\n{\n  "address": "5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d",\n  "crypto": {\n    "cipher": "aes-128-ctr",\n    "cipherparams": {"iv": "6087dab2f9fdbbfaddc31a909735c1e6"},\n    "ciphertext": "<<secret:0>>",\n    "kdf": "scrypt",\n    "kdfparams": {"dklen": 32, "n": 262144, "p": 8, "r": 1, "salt": "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd"},\n    "mac": "517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2"\n  },\n  "id": "3198bc9c-6672-5ab3-d995-4942343ae5b6",\n  "version": 3\n}\n',
+            "eth_keystore_ciphertext", 22010, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_solana_keypair",
+            "# Signer für das Devnet-Deployment\nSOLANA_PRIVATE_KEY=<<secret:0>>\n",
+            "solana_keypair_array", 22011, carrier="env",
+        ),
+        dl(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "watch_only:\n  # public account key, safe to share with the explorer\n  xpub: \"<<secret:0>>\"\n",
+            "bip32_xpub", 22012, "extended public key of a watch-only wallet", carrier="yaml",
+        ),
+        dl(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "2026-11-02T10:15:41Z INFO wallet: watching descriptor wpkh(<<secret:0>>/0/*)\n",
+            "bip32_tpub", 22013, "testnet extended public key", carrier="log",
+        ),
+        dl(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "Error: invalid extended key <<secret:0>> (Base58Check checksum mismatch)\n",
+            "bip32_xprv_shape", 22014, "xprv shape without a valid Base58Check", carrier="log",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_eth_keystore_ciphertext",
+            '{\n  "address": "5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d",\n  "crypto": {\n    "cipher": "aes-128-ctr",\n    "cipherparams": {"iv": "6087dab2f9fdbbfaddc31a909735c1e6"},\n    "ciphertext": "<redacted>",\n    "kdf": "scrypt",\n    "kdfparams": {"dklen": 32, "n": 262144, "p": 8, "r": 1, "salt": "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd"},\n    "mac": "517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2"\n  },\n  "id": "3198bc9c-6672-5ab3-d995-4942343ae5b6",\n  "version": 3\n}\n',
+            "public keystore fields with a redacted ciphertext", carrier="json",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_eth_keystore_ciphertext",
+            '{"protected": "eyJhbGciOiJkaXIifQ", "iv": "9c1e2f4a7b3d8e6f0a5c2b1d", "ciphertext": "c8d1f0e3a2b5c4d7e6f9a8b1c0d3e2f5a4b7c6d9e8f1a0b3c2d5e4f7a6b9c8d1", "tag": "4e1f2a3b5c6d7e8f9a0b1c2d3e4f5a6b"}\n',
+            "JWE ciphertext without a key derivation", carrier="json",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_solana_keypair",
+            "const weights = [11, 48, 85, 122, 159, 196, 233, 14, 51, 88, 125, 162, 199, 236, 17, 54, 91, 128, 165, 202, 239, 20, 57, 94, 131, 168, 205, 242, 23, 60, 97, 134, 171, 208, 245, 26, 63, 100, 137, 174, 211, 248, 29, 66, 103, 140, 177, 214, 251, 32, 69, 106, 143, 180, 217, 254, 35, 72, 109, 146, 183, 220, 1, 38];\n",
+            "number array without key context", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_solana_keypair",
+            "SOLANA_KEYPAIR_PATH=${SOLANA_KEYPAIR_PATH:-~/.config/solana/id.json}\n",
+            "environment reference to the keypair file", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip32_extended_private_key",
+            "Extended private keys start with xprv on mainnet and tprv on testnet; never paste them into a ticket.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dl(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "Für das Watch-only-Wallet reicht der öffentliche Kontoschlüssel: <<secret:0>>\n",
+            "bip32_xpub", 22015, "extended public key of a watch-only wallet", carrier="prose",
+        ),
+        dl(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "# Beispielwert mit falscher Prüfsumme für den Parser-Test\nINVALID_XKEY=<<secret:0>>\n",
+            "bip32_xprv_shape", 22016, "xprv shape without a valid Base58Check", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip32_extended_private_key",
+            "# Schlüssel kommt aus dem Tresor\nWALLET_XPRV=${WALLET_XPRV}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_solana_keypair",
+            "# Messwerte Sensor 7\nwerte = [7,60,113,166,219,16,69,122,175,228,25,78,131,184,237,34,87,140,193,246,43,96,149,202,255,52,105,158,211,8,61,114,167,220,17,70,123,176,229,26,79,132,185,238,35,88,141,194,247,44,97,150,203,0,53,106,159,212,9,62,115,168,221,18]\n",
+            "number array without key context", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_solana_keypair",
+            "solana:\n  keypair: \"<pfad/zur/id.json>\"\n  publicKey: [3,32,61,90,119,148,177,206,235,8,37,66,95,124,153,182,211,240,13,42,71,100,129,158,187,216,245,18,47,76,105,134]\n",
+            "placeholder path and a 32-byte public key", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_eth_keystore_ciphertext",
+            "Die Keystore-Datei enthält unter crypto.ciphertext den verschlüsselten Schlüssel und unter kdf die Schlüsselableitung.\n",
+            "format description without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_C_WALLET_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

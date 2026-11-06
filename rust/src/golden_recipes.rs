@@ -408,8 +408,23 @@ impl Encoded {
                 self.wrap
                     .map_or(length, |width| length + length.saturating_sub(1) / width)
             }
-            // Constant leading bytes keep the value in one base58 digit range.
-            "base58check" => ((size + 4) as f64 * 8.0 / 58f64.log2()).ceil() as usize,
+            // Constant leading bytes (up to 8 of the first hex part) keep the
+            // value in one base58 digit range: below (lead + 1) * 256^rest.
+            "base58check" => {
+                let lead = match self.bytes.first() {
+                    Some(BytePart::Hex(HexPart { hex })) => decode_hex(hex)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .take(8)
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                let value = lead
+                    .iter()
+                    .fold(0_u64, |value, byte| (value << 8) | u64::from(*byte));
+                let rest = size + 4 - lead.len();
+                (((value as f64 + 1.0).log2() + 8.0 * rest as f64) / 58f64.log2()).ceil() as usize
+            }
             _ => (size * 4).div_ceil(3),
         }
     }
