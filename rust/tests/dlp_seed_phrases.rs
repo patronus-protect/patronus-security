@@ -112,7 +112,7 @@ fn reports_spanish_and_french_phrases_with_or_without_accents() {
         let plain: String = value.nfd().filter(char::is_ascii).collect();
         for value in [value, nfc, plain] {
             let text = format!("{intro} : {value}\n");
-            assert_eq!(reported(&text), [value.clone()], "{language}");
+            assert_eq!(reported(&text), std::slice::from_ref(&value), "{language}");
             let numbered: String = value
                 .split(' ')
                 .enumerate()
