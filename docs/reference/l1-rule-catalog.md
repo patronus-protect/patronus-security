@@ -421,7 +421,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_notion_api_token` | `API_KEY` | `api_key` | `notion` | `format` | `gitleaks:notion-api-token` | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_linear_api_key` | `API_KEY` | `api_key` | `linear` | `format` | `gitleaks:linear-api-key` | yes | on | 50 | proximity | 0.65–0.90 |
 | `dlp_linear_client_secret` | `API_KEY` | `secret_key` | `linear` | `format` | `gitleaks:linear-client-secret` | no | on | 40 | field | 0.80 |
-| `dlp_airtable_pat` | `API_KEY` | `access_token` | `airtable` | `format` | `gitleaks:airtable-personnal-access-token` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_airtable_pat` | `API_KEY` | `api_key` | `airtable` | `format` | `gitleaks:airtable-personnal-access-token` | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_airtable_api_key` | `API_KEY` | `api_key` | `airtable` | `format` | `gitleaks:airtable-api-key` | yes | on | 40 | field | 0.80 |
 | `dlp_postman_api_key` | `API_KEY` | `api_key` | `postman` | `format` | `gitleaks:postman-api-token` | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_mapbox_secret_token` | `API_KEY` | `api_key` | `mapbox` | `format` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/mapbox/mapbox.go) | yes | on | 50 | proximity | 0.65–0.90 |
