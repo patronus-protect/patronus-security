@@ -1051,6 +1051,7 @@ tasks:
       code/docs FP measured with the rule on, reported in the PR. Behind the existing prefilters; default
       L1 latency unchanged. Tests per rule (positive bare, labelled, hard negatives)
   - id: M-RAW
+    status: done
     title: "Milestones in the raw view against Presidio default and tuned, Ark balanced with and without the bare profile"
     type: eval-infra
     deps: [D-BARE]
