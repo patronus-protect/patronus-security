@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! dlp_bip39_seed_phrase (C01): BIP39 mnemonics of 12 to 24 words of the
-//! English, Italian, Portuguese or Czech word list with a valid checksum, in
+//! English, Italian, Portuguese, Czech, Spanish or French word list with a valid checksum, in
 //! a line, comma-separated, numbered or one word per line. Phrases are built
 //! here from entropy at test time; invalid vectors are no phrases.
 
@@ -81,12 +81,63 @@ fn rule_metadata() {
 
 #[test]
 fn reports_phrases_of_every_length_and_language() {
-    for language in ["english", "italian", "portuguese", "czech"] {
+    for language in [
+        "english",
+        "italian",
+        "portuguese",
+        "czech",
+        "spanish",
+        "french",
+    ] {
         for (seed, len) in [(1, 16), (2, 20), (3, 24), (4, 28), (5, 32)] {
             let value = phrase(language, seed, len);
             let text = format!("MNEMONIC=\"{value}\"\n");
             assert_eq!(reported(&text), [value], "{language} {len}");
         }
+    }
+}
+
+#[test]
+fn reports_spanish_and_french_phrases_with_or_without_accents() {
+    use unicode_normalization::UnicodeNormalization;
+    for (language, intro) in [
+        ("spanish", "Frase de recuperación"),
+        ("french", "Phrase de récupération"),
+    ] {
+        let value = (0..=255)
+            .map(|seed| phrase(language, seed, 16))
+            .find(|value| !value.is_ascii())
+            .expect("an accented phrase");
+        let nfc: String = value.nfc().collect();
+        let plain: String = value.nfd().filter(char::is_ascii).collect();
+        for value in [value, nfc, plain] {
+            let text = format!("{intro} : {value}\n");
+            assert_eq!(reported(&text), [value.clone()], "{language}");
+            let numbered: String = value
+                .split(' ')
+                .enumerate()
+                .map(|(at, word)| format!("{}. {word}\n", at + 1))
+                .collect();
+            assert_eq!(reported(&numbered).len(), 1, "{language}");
+        }
+    }
+}
+
+#[test]
+fn rejects_spanish_and_french_word_lists_and_short_phrases_without_context() {
+    for language in ["spanish", "french"] {
+        let value = phrase(language, 21, 16);
+        assert!(reported(&format!("note: {value}")).is_empty(), "{language}");
+        let dump: Vec<String> = (0..40)
+            .map(|seed| {
+                phrase(language, seed, 16)
+                    .split(' ')
+                    .next()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        assert!(reported(&format!("mnemonic:\n{}", dump.join("\n"))).is_empty());
     }
 }
 
