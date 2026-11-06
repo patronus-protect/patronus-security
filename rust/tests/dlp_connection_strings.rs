@@ -134,6 +134,14 @@ fn key_value_connection_strings_report_the_password() {
             rule,
         );
     }
+    // T23: a dotted password ended by `-` and a letter or digit in a
+    // pg_dump row (DE) and in .env (EN) is no member access.
+    for template in [
+        "INSERT INTO public.schnittstellen (id, bezeichnung, zugangsdaten) VALUES (1, 'Lieferantenportal – Verbindungszeichenfolge', 'Server=db.internal;Database=app;User Id=app;Password={v};');\n",
+        "ORDERS_DB=\"Server=sql01;Database=orders;User Id=app;Password={v};\"\n",
+    ] {
+        assert_exact(template, "yogRXHK.OY.KvDC-C9", rule);
+    }
     assert_exact(
         "Server=sql01; Password = {v} ;",
         "Kx7pQ2vL9! part=Wm3zR8tQ4yN1",

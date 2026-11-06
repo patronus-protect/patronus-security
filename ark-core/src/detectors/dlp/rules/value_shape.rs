@@ -355,6 +355,26 @@ fn is_prefixed_digest(value: &str) -> bool {
         .any(|kind| base64_decode(digest, kind).is_some_and(|decoded| decoded.len() == bytes))
 }
 
+/// T23: a stored password hash in a crypt or framework format: modular
+/// crypt (`$2y$…`, `$argon2id$…`, `$6$…`), Django and Werkzeug
+/// (`pbkdf2_sha256$…$…`, `scrypt:32768:8:1$…$…`), optionally after a Spring
+/// or LDAP scheme (`{bcrypt}`, `{SSHA}`; `{noop}` is a plain password).
+static PASSWORD_DIGEST: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"^(?:(?i:\{(?:bcrypt|s?sha(?:256|512)?|s?md5|crypt|pbkdf2|scrypt|argon2)\})[A-Za-z0-9+/.$=,_-]{20,}",
+        r"|\$(?:2[abxy]|argon2(?:i|d|id)|[1567y]|apr1|pbkdf2(?:-sha\d+)?|scrypt)\$[./A-Za-z0-9$=,+-]{20,}",
+        r"|(?i:pbkdf2_sha(?:1|256|512)|bcrypt_sha256|argon2|bcrypt|sha1|md5|pbkdf2:sha(?:1|256|512)(?::\d+)?|scrypt(?::\d+)+)",
+        r"\$[^\s$]+\$[A-Za-z0-9./+=$:-]{16,})$",
+    ))
+    .unwrap()
+});
+
+/// T23: whether `value` is the stored hash of a password: a hex digest
+/// ([`is_hex_digest`]) or a crypt or framework hash ([`PASSWORD_DIGEST`]).
+pub fn is_password_digest(value: &str) -> bool {
+    is_hex_digest(value) || PASSWORD_DIGEST.is_match(value)
+}
+
 /// Hex digits in one case of a digest length.
 fn is_hex_digest(value: &str) -> bool {
     HEX_DIGEST_LENGTHS.contains(&value.len())
@@ -476,8 +496,34 @@ pub fn key_before(text: &str, value_start: usize) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        key_before, key_names_digest, non_secret_shape, non_secret_shape_under, NonSecretShape,
+        is_password_digest, key_before, key_names_digest, non_secret_shape, non_secret_shape_under,
+        NonSecretShape,
     };
+
+    #[test]
+    fn password_digests_in_crypt_and_framework_formats() {
+        for value in [
+            "0b9c2625dc21ef05f6ad4ddf47c5f203837aa32c",
+            "$2a$10$Qm7Lp2vN9xTz8Wm4K93RVqe7xAb2LpKx7pQ2vL9rT4mN8bW3sDe1u",
+            "{bcrypt}$2y$12$Tz8Wm4K93RVqe7xAb2LpKe7xAb2LpKx7pQ2vL9rT4mN8bW3sDQm7Lp",
+            "$argon2id$v=19$m=65536,t=3,p=4$VHo4V200SzkzUlZx$ZTd4QWIyTHBLeDdwUTJ2TDlyVDRtTjhi",
+            "$6$Tz8Wm4K93RVqe7xA$Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz8Wm4K93RVqe7xAb",
+            "pbkdf2_sha256$600000$Tz8Wm4K93RVqe7xA$Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz8Wm4K93RVq=",
+            "scrypt:32768:8:1$Tz8Wm4K93RVqe7xA$0b9c2625dc21ef05f6ad4ddf47c5f203",
+            "{SSHA}Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz",
+        ] {
+            assert!(is_password_digest(value), "{value}");
+        }
+        for value in [
+            "Xzvk;fov8032?",
+            "Kx7pQ2vL9rT4mN8bW3sDQm7Lp2vN9xTz",
+            "{noop}Kx7pQ2vL9rT4mN8bW3sD",
+            "$2a$short",
+            "0b9c2625dc21ef05f6ad4ddf47c5f20",
+        ] {
+            assert!(!is_password_digest(value), "{value}");
+        }
+    }
 
     fn shape(line: &str) -> Option<NonSecretShape> {
         let start = line.find('=').map(|index| index + 1).unwrap();

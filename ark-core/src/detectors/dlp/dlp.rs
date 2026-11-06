@@ -481,24 +481,34 @@ pub struct DlpPipeline {
     structured_regexes: Vec<Option<Regex>>,
     /// K05: per generic key-bound rule, its key grammar for config lines.
     config_keys: Vec<Option<ConfigKeyRegexes>>,
-    /// T21: per key-bound provider rule, its key for XML config elements.
-    provider_xml_keys: Vec<Option<ProviderXmlKey>>,
+    /// T21: per key-bound provider rule, its key for XML config elements;
+    /// T23: per rule of [`rules::sql_key`], its key for SQL rows.
+    bound_keys: Vec<Option<BoundKey>>,
 }
 
 /// T21: the key of a key-bound provider rule (`provider_key!`), compiled for
 /// the `key`/`name` attribute or element name of an XML config element.
-struct ProviderXmlKey {
+/// T23: the key of a rule of [`rules::sql_key`], compiled for the key field
+/// of a SQL row.
+struct BoundKey {
     /// Finds the key in the text.
     find: Regex,
     /// The key at the end of a bound key (`HerokuApiKey`, `App.HerokuApiKey`).
     whole: Regex,
+    /// The values whose key holds a match of `find`.
+    values: BoundValues,
 }
 
-impl ProviderXmlKey {
-    fn new(key: rules::ProviderKey) -> Self {
+/// Reads the values of a [`BoundKey`] from the prepared text.
+type BoundValues =
+    fn(&crate::threat::NativeText<'_>, &Regex) -> Vec<super::config_keys::ConfigValue>;
+
+impl BoundKey {
+    fn new(key: rules::ProviderKey, values: BoundValues) -> Self {
         Self {
             find: Regex::new(key.key).unwrap(),
             whole: Regex::new(&format!("(?:{})$", key.key)).unwrap(),
+            values,
         }
     }
 }
@@ -597,11 +607,12 @@ impl DlpPipeline {
     /// so named, read by `config_keys` (K05C: no HTML form, XML in code or XML
     /// comment). The key gate of the rule reads the key alone, as the value may
     /// stand before it. The anchor gate of the rule's regex applies, since the
-    /// key holds the provider name.
-    fn provider_xml_values(
+    /// key holds the provider name. T23: the same for the next field after a
+    /// key field of a SQL row (`sql_rows`).
+    fn bound_key_values(
         &self,
         index: usize,
-        key: &ProviderXmlKey,
+        key: &BoundKey,
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
         let gate = &self.anchor_gates[index];
@@ -610,7 +621,7 @@ impl DlpPipeline {
         }
         let text = prepared.text();
         let key_gate = self.metas[index].key_gate;
-        super::config_keys::xml_values(text, &key.find)
+        (key.values)(prepared, &key.find)
             .into_iter()
             .filter(|config| {
                 key.whole
@@ -651,7 +662,7 @@ impl DlpPipeline {
         let mut tiers = Vec::new();
         let mut structured_regexes = Vec::new();
         let mut config_keys = Vec::new();
-        let mut provider_xml_keys = Vec::new();
+        let mut bound_keys = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -668,17 +679,40 @@ impl DlpPipeline {
             tiers.push(rules::overlap_tier(p.name));
             let config_key = rules::config_key(p.name);
             let xml_key = rules::provider_xml_key(p.name);
+            let sql_key = rules::sql_key(p.name);
             structured_regexes.push(
                 config_key
                     .map(|key| {
                         let max = key.max_len.map_or(String::new(), |max| max.to_string());
                         format!(r"(?P<structured>[^\r\n]{{{},{max}}})\z", key.min_len)
                     })
-                    .or_else(|| xml_key.map(|key| format!(r"(?P<structured>(?:{}))\z", key.value)))
+                    .or_else(|| {
+                        xml_key
+                            .or(sql_key)
+                            .map(|key| format!(r"(?P<structured>(?:{}))\z", key.value))
+                    })
                     .map(|pattern| Regex::new(&pattern).unwrap()),
             );
             config_keys.push(config_key.map(ConfigKeyRegexes::new));
-            provider_xml_keys.push(xml_key.map(ProviderXmlKey::new));
+            bound_keys.push(
+                xml_key
+                    .map(|key| {
+                        BoundKey::new(key, |prepared, find| {
+                            super::config_keys::xml_values(prepared.text(), find)
+                        })
+                    })
+                    .or_else(|| {
+                        sql_key.map(|key| {
+                            BoundKey::new(key, |prepared, find| {
+                                super::sql_rows::key_field_values(
+                                    prepared.text(),
+                                    prepared.sql_statements(),
+                                    find,
+                                )
+                            })
+                        })
+                    }),
+            );
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -701,7 +735,7 @@ impl DlpPipeline {
             anchor_regexes,
             structured_regexes,
             config_keys,
-            provider_xml_keys,
+            bound_keys,
         }
     }
 
@@ -956,18 +990,19 @@ impl NativeRegexDetector for DlpPipeline {
         index: usize,
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
-        if let Some(key) = &self.provider_xml_keys[index] {
-            return self.provider_xml_values(index, key, prepared);
+        if let Some(key) = &self.bound_keys[index] {
+            return self.bound_key_values(index, key, prepared);
         }
         let Some(keys) = &self.config_keys[index] else {
             return Vec::new();
         };
         let text = prepared.text();
         let key_gate = self.metas[index].key_gate;
-        let mut values = super::config_keys::config_values(text, &keys.find);
+        let mut values =
+            super::config_keys::config_values(text, prepared.sql_statements(), &keys.find);
         let mut failed_lists = Vec::new();
         // G02: whether the text is a config document, per family of formats.
-        let documents: [std::cell::OnceCell<bool>; 3] = Default::default();
+        let documents: [std::cell::OnceCell<bool>; 4] = Default::default();
         values.retain(|config| {
             let binds = keys.binds(text, config, key_gate, || {
                 let family = super::config_keys::DocumentFamily::of(config.format);
@@ -978,12 +1013,26 @@ impl NativeRegexDetector for DlpPipeline {
             let key = &text[config.key.clone()];
             // K05C: the shape check under the bound key, which need not stand
             // before the value on its line.
+            // T23: a hex digest or a crypt hash under a password key of a SQL
+            // row is the stored hash of a password (a `password` column of a
+            // user table).
             let shaped = || {
                 !(self.tiers[index] == Some(OverlapTier::Generic)
-                    && rules::non_secret_shape_under(text, config.value.clone(), key).is_some())
+                    && (rules::non_secret_shape_under(text, config.value.clone(), key).is_some()
+                        || (config.format == super::config_keys::ConfigFormat::Sql
+                            && self.rule_ids[index] == "dlp_password_assignment"
+                            && rules::is_password_digest(&text[config.value.clone()]))))
+            };
+            // T23: a field of a SQL row is a quoted field, as in JSON; a
+            // value-gated rule wants a value that suits one (no word or
+            // identifier: `'testpass'` in the seed rows of a test database).
+            let field = || {
+                config.format != super::config_keys::ConfigFormat::Sql
+                    || self.metas[index].value_gate.is_none()
+                    || rules::suits_field_key(&text[config.value.clone()])
             };
             if !config.item {
-                return binds == Some(false) && shaped();
+                return binds == Some(false) && shaped() && field();
             }
             let passes = binds.is_some()
                 && rules::is_item_value(&text[config.value.clone()])

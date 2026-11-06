@@ -16,3 +16,4 @@ pub use rules::documented_reference_metadata;
 pub mod score;
 pub mod secret_transfer;
 pub mod sensitive_material;
+pub(crate) mod sql_rows;

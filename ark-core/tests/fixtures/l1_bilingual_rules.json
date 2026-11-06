@@ -5357,7 +5357,9 @@
         "ENV POSTGRES_PASSWORD=\"<hier-passwort-eintragen>\"",
         "export LAGER_DB_PASSWORT=\"$(vault kv get -field=passwort secret/lager/db)\"",
         "LAGER_DB_PASSWORD=3f2b8c1e-7d4a-4e9b-a6c2-91d0e5f4b7a8",
-        "passwort = konto.zugang.passwort;"
+        "passwort = konto.zugang.passwort;",
+        "INSERT INTO benutzer (id, email, passwort_hash) VALUES (1, 'anna@example.com', '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8');",
+        "    op.execute(\"INSERT INTO einstellungen (name, wert) VALUES ('smtp_passwort', '%s')\" % wert)"
       ],
       "en": [
         "Password: TODO",
@@ -5384,7 +5386,9 @@
         "ENV MYSQL_ROOT_PASSWORD=\"${MYSQL_ROOT_PASSWORD}\"",
         "export SMTP_PASSWORD=<your-smtp-password>",
         "ORDERS_DB_PASSWORD=changeme",
-        "const password = user.credentials.password;"
+        "const password = user.credentials.password;",
+        "CREATE TABLE users (\n  id int NOT NULL,\n  password varchar(255) NOT NULL\n);",
+        "cursor.execute(\"INSERT INTO users (login, password) VALUES ('svc', '%s')\" % password)"
       ]
     },
     "language_neutral": false
@@ -5417,7 +5421,9 @@
         "const client = new LagerClient({\n  privateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n  credentials: \"Tz8Wm4K93RVqe7xAb2Lp\"\n});",
         "signer = Signer(private_key=\"Tz8Wm4K93RVqe7xAb2Lp\", passphrase=\"Tz8Wm4K93RVqe7xAb2Lp\")",
         "lager:\n  zugangsdaten: ${LAGER_ZUGANGSDATEN}\n  private_key: ./schluessel/lager.pem",
-        "apiVersion: v1\nkind: Secret\ndata:\n  password: RVhBTVBMRUtFWUVYQU1QTEVLRVlFWEFN"
+        "apiVersion: v1\nkind: Secret\ndata:\n  password: RVhBTVBMRUtFWUVYQU1QTEVLRVlFWEFN",
+        "INSERT INTO `einstellungen` VALUES (1,'token_gueltigkeit','3600'),(2,'secret_rotation_tage','90');",
+        "INSERT INTO sitzungen (id, benutzer_id, refresh_token) VALUES (1, 42, '3f2b8c1e-7d4a-4f6b-9e2c-1a5d8b7c9e0f');"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -5444,7 +5450,9 @@
         "public final class SigningConfig {\n    private String secretKey = \"Tz8Wm4K93RVqe7xAb2Lp\";\n}",
         "type Config struct {\n\tPrivateKey string\n}\n\nvar cfg = Config{\n\tPrivateKey: \"Tz8Wm4K93RVqe7xAb2Lp\",\n}",
         "app.signing.private-key=classpath:keys/private.pem",
-        "apiVersion: v1\nkind: Secret\ndata:\n  password: VEVTVEtFWVRFU1RLRVlURVNUS0VZVEVT"
+        "apiVersion: v1\nkind: Secret\ndata:\n  password: VEVTVEtFWVRFU1RLRVlURVNUS0VZVEVT",
+        "INSERT INTO app_settings VALUES('api_secret','${API_SECRET}','2026-08-30T10:02:11Z');",
+        "COPY public.sessions (id, refresh_token) FROM stdin;\n1\t3f2b8c1e-7d4a-4f6b-9e2c-1a5d8b7c9e0f\n\\."
       ]
     },
     "language_neutral": false
