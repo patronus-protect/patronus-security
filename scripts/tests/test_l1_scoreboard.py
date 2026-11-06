@@ -266,33 +266,59 @@ def perfect(rows):
     return [pred(row["id"], [(e["entity_type"], e["start"], e["end"]) for e in row["entities"]]) for row in rows]
 
 
-def test_main_m1_subcommand_prints_every_mode_and_decides_on_balanced(tmp_path, capsys):
+def nothing(rows):
+    return [pred(row["id"], []) for row in rows]
+
+
+def test_main_m1_needs_balanced_or_bare_to_beat_presidio_default_and_tuned(tmp_path, capsys):
     rows, ark, presidio = m1_rows()
-    dirs = write_tree(tmp_path, rows, {"weak": ark, "perfect": perfect(rows), "presidio": presidio})
-    base = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"])]
+    dirs = write_tree(tmp_path, rows, {"weak": ark, "perfect": perfect(rows), "default": nothing(rows),
+                                       "tuned": presidio})
+    base = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", f"default={dirs['default']}",
+            "--presidio", f"tuned={dirs['tuned']}"]
     args = base + ["--ark", f"strict={dirs['weak']}", "--ark", f"balanced={dirs['perfect']}"]
     assert MODULE.main(args + ["--json", str(tmp_path / "m1.json")]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert "== Ark strict (reported, decides no milestone)" in lines and "== Ark balanced (milestone mode)" in lines
-    strict = lines[lines.index("== Ark strict (reported, decides no milestone)"):lines.index("== Ark balanced (milestone mode)")]
+    assert "== Ark strict vs presidio-tuned (reported, decides no milestone)" in lines
+    assert "== Ark balanced vs presidio-default (milestone pair)" in lines
+    assert "== Ark balanced vs presidio-tuned (milestone pair)" in lines
+    strict = lines[lines.index("== Ark strict vs presidio-tuned (reported, decides no milestone)"):]
     assert "neutral: NOT MET, 1/2 shared ids" in strict
-    assert "M1 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
-    assert "M1 balanced: MET (neutral holds, presidio_favored holds)" in lines
-    assert lines[-1] == "M1: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
+    assert "M1 strict vs presidio-tuned: NOT MET (neutral not met, presidio_favored holds)" in lines
+    assert "M1 strict vs presidio-default: MET (neutral holds, presidio_favored holds)" in lines
+    assert lines[-1] == "M1: MET (raw gold; balanced: presidio-default holds, presidio-tuned holds)"
     report = json.loads((tmp_path / "m1.json").read_text())
-    assert report["milestone_mode"] == "balanced" and report["met"] is True
-    assert report["modes"]["strict"]["met"] is False and report["modes"]["balanced"]["met"] is True
+    assert report["view"] == "raw" and report["met"] is True and report["holding"] == ["balanced"]
+    assert report["milestone_modes"] == ["balanced"]
+    assert report["milestone_profiles"] == ["presidio-default", "presidio-tuned"]
+    assert report["modes"]["strict"]["presidio-tuned"]["met"] is False
+    assert report["modes"]["strict"]["presidio-default"]["met"] is True
     assert MODULE.main(args + ["--check"]) == 0
-    # Swapped: strict meets M1, balanced does not, so M1 is not met.
+    # Swapped: balanced beats Presidio default but not tuned, so M1 is not met.
     swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
     assert MODULE.main(swapped + ["--check"]) == 1
-    assert capsys.readouterr().out.strip().endswith("M1: NOT MET (balanced, attainable gold: neutral not met, presidio_favored holds)")
-    # Balanced is required; modes are named once and must exist.
+    assert capsys.readouterr().out.strip().endswith(
+        "M1: NOT MET (raw gold; balanced: presidio-default holds, presidio-tuned not met)")
+    # Balanced with the bare profile is a milestone engine of its own: it beats both profiles.
+    assert MODULE.main(swapped + ["--ark", f"balanced-bare={dirs['perfect']}", "--check", "--json",
+                                  str(tmp_path / "bare.json")]) == 0
+    assert capsys.readouterr().out.strip().endswith(
+        "M1: MET (raw gold; balanced: presidio-default holds, presidio-tuned not met; "
+        "balanced-bare: presidio-default holds, presidio-tuned holds)")
+    assert json.loads((tmp_path / "bare.json").read_text())["holding"] == ["balanced-bare"]
+    # Balanced and both Presidio profiles are required; names are known and given once.
     assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
+    assert MODULE.main(base + ["--ark", f"balanced-bare={dirs['perfect']}"]) == 2
     assert MODULE.main(base + ["--ark", f"balanced={dirs['weak']}"]) == 0
     for bad in (str(dirs["weak"]), f"fast={dirs['weak']}"):
         assert MODULE.main(base + ["--ark", f"balanced={dirs['weak']}", "--ark", bad]) == 2
     assert MODULE.main(swapped + ["--ark", f"balanced={dirs['weak']}"]) == 2
+    only_tuned = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", f"tuned={dirs['tuned']}",
+                  "--ark", f"balanced={dirs['perfect']}"]
+    assert MODULE.main(only_tuned) == 2
+    assert "missing: presidio-default" in capsys.readouterr().err
+    for bad in (str(dirs["tuned"]), f"custom={dirs['tuned']}", f"tuned={dirs['tuned']}"):
+        assert MODULE.main(args + ["--presidio", bad]) == 2
     (dirs["weak"] / "g.jsonl").unlink()
     assert MODULE.main(swapped) == 2
 
@@ -414,32 +440,37 @@ def test_m2_lines_print_macro_f1_target_and_excluded_ids():
     assert lines[-1] == "M2: MET (neutral holds, presidio_favored holds)"
 
 
-def test_main_m2_subcommand_prints_every_mode_and_exits_1_unless_balanced_holds(tmp_path, capsys):
+def test_main_m2_exits_1_unless_balanced_or_bare_beats_presidio_default_and_tuned(tmp_path, capsys):
     # write_tree has no recognizer-test file; the postal-code rows stay out (covered above).
     rows, weak, presidio = m2_rows(neutral_phones=1)
-    dirs = write_tree(tmp_path, rows, {"weak": weak, "perfect": perfect(rows), "presidio": presidio})
-    base = ["m2", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"])]
+    dirs = write_tree(tmp_path, rows, {"weak": weak, "perfect": perfect(rows), "default": nothing(rows),
+                                       "tuned": presidio})
+    base = ["m2", "--gold", str(tmp_path / "gold"), "--presidio", f"default={dirs['default']}",
+            "--presidio", f"tuned={dirs['tuned']}"]
     args = base + ["--ark", f"strict={dirs['weak']}", "--ark", f"balanced={dirs['perfect']}"]
     assert MODULE.main(args + ["--json", str(tmp_path / "m2.json")]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert "== Ark strict (reported, decides no milestone)" in lines and "== Ark balanced (milestone mode)" in lines
-    strict = lines[lines.index("== Ark strict (reported, decides no milestone)"):lines.index("== Ark balanced (milestone mode)")]
+    strict = lines[lines.index("== Ark strict vs presidio-tuned (reported, decides no milestone)"):]
     assert any(line.startswith("neutral: NOT MET, macro-F1 Ark  59.1 < target  65.0") for line in strict)
-    assert "M2 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
-    assert "M2 balanced: MET (neutral holds, presidio_favored holds)" in lines
-    assert lines[-1] == "M2: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
+    assert "M2 strict vs presidio-tuned: NOT MET (neutral not met, presidio_favored holds)" in lines
+    assert "M2 strict vs presidio-default: MET (neutral holds, presidio_favored holds)" in lines
+    assert lines[-1] == "M2: MET (raw gold; balanced: presidio-default holds, presidio-tuned holds)"
     report = json.loads((tmp_path / "m2.json").read_text())
-    assert report["milestone_mode"] == "balanced" and report["met"] is True and report["language"] == "de"
-    assert report["modes"]["strict"]["met"] is False
-    assert report["modes"]["balanced"]["families"]["neutral"]["margin_pp"] == 15.0
-    # Swapped: balanced misses the rule, so m2 exits 1 without any extra flag.
+    assert report["met"] is True and report["language"] == "de"
+    assert report["modes"]["strict"]["presidio-tuned"]["met"] is False
+    assert report["modes"]["balanced"]["presidio-tuned"]["families"]["neutral"]["margin_pp"] == 15.0
+    # Swapped: balanced misses the rule against tuned, so m2 exits 1 without any extra flag.
     swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
     assert MODULE.main(swapped) == 1
-    assert capsys.readouterr().out.strip().endswith("M2: NOT MET (balanced, attainable gold: neutral not met, presidio_favored holds)")
-    # Balanced is required; modes are named once and must exist.
+    assert capsys.readouterr().out.strip().endswith(
+        "M2: NOT MET (raw gold; balanced: presidio-default holds, presidio-tuned not met)")
+    assert MODULE.main(swapped + ["--ark", f"balanced-bare={dirs['perfect']}"]) == 0
+    # Balanced and both Presidio profiles are required; names are known and given once.
     assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
     assert MODULE.main(base + ["--ark", f"balanced={dirs['perfect']}"]) == 0
     assert MODULE.main(base + ["--ark", f"balanced={dirs['perfect']}", "--ark", f"fast={dirs['weak']}"]) == 2
+    assert MODULE.main(["m2", "--gold", str(tmp_path / "gold"), "--presidio", f"default={dirs['default']}",
+                        "--ark", f"balanced={dirs['perfect']}"]) == 2
     (dirs["weak"] / "g.jsonl").unlink()
     assert MODULE.main(swapped) == 2
 
@@ -460,29 +491,38 @@ def write_report_tree(tmp_path):
 def test_report_scores_every_engine_per_family_corpus_and_entity(tmp_path):
     engines = write_report_tree(tmp_path)
     ark = {"strict": engines["ark"], "balanced": engines["balanced"]}
-    report = MODULE.baseline_report(tmp_path / "gold", ark, {"presidio-tuned": engines["tuned"]}, EMAP)
-    assert list(report["engines"]) == ["ark-strict", "ark-balanced", "presidio-tuned"]
+    presidio = {"default": engines["default"], "tuned": engines["tuned"]}
+    report = MODULE.baseline_report(tmp_path / "gold", ark, presidio, EMAP)
+    assert list(report["engines"]) == ["ark-strict", "ark-balanced", "presidio-default", "presidio-tuned"]
     strict, tuned = report["engines"]["ark-strict"], report["engines"]["presidio-tuned"]
     assert strict["buckets"]["family/neutral"] == {"gold": 20, "predicted": 15, "exact": 15, "gold_found": 15,
                                                    "predicted_correct": 15}
     assert strict["buckets"][f"corpus/{GRETEL}"] == strict["buckets"]["family/neutral"]
     assert report["engines"]["ark-balanced"]["buckets"]["family/neutral"]["exact"] == 20
     # Hard-negative hits are attributed to the family of their row.
-    assert report["hard_negative_fp"] == {"ark-strict": {}, "ark-balanced": {}, "presidio-tuned": {"ark_authored": 1}}
+    assert report["hard_negative_fp"] == {"ark-strict": {}, "ark-balanced": {}, "presidio-default": {},
+                                          "presidio-tuned": {"ark_authored": 1}}
     assert tuned["buckets"]["family/ark_authored"]["predicted"] == 20
-    # M1 compares every Ark mode with every Presidio profile; the milestone is read from balanced.
-    assert report["milestone_mode"] == "balanced"
-    assert list(report["m1"]) == ["presidio-tuned"]
-    m1 = report["m1"]["presidio-tuned"]
-    assert m1["modes"]["strict"]["families"]["presidio_favored"]["holds"] and not m1["modes"]["strict"]["met"]
-    assert m1["modes"]["balanced"]["met"] and m1["met"]
-    # M2 likewise per profile and mode; these rows carry no German gold, so no family holds.
-    m2 = report["m2"]["presidio-tuned"]
+    # M1 compares every Ark engine with every Presidio profile; balanced must beat both on raw gold.
+    assert report["milestone_mode"] == "balanced" and report["milestone_view"] == "raw"
+    m1 = report["m1"]
+    assert m1["milestone_profiles"] == ["presidio-default", "presidio-tuned"] and m1["holding"] == ["balanced"]
+    assert m1["modes"]["strict"]["presidio-tuned"]["families"]["presidio_favored"]["holds"]
+    assert not m1["modes"]["strict"]["presidio-tuned"]["met"] and m1["modes"]["strict"]["presidio-default"]["met"]
+    assert m1["modes"]["balanced"]["presidio-tuned"]["met"] and m1["met"]
+    # M2 likewise per engine and profile; these rows carry no German gold, so no family holds.
+    m2 = report["m2"]
     assert m2["language"] == "de" and m2["met"] is False and set(m2["modes"]) == {"strict", "balanced"}
     with pytest.raises(MODULE.ScoreboardError, match="balanced"):
-        MODULE.baseline_report(tmp_path / "gold", {"strict": engines["ark"]}, {"presidio-tuned": engines["tuned"]}, EMAP)
-    with pytest.raises(MODULE.ScoreboardError, match="Presidio"):
-        MODULE.baseline_report(tmp_path / "gold", ark, {}, EMAP)
+        MODULE.baseline_report(tmp_path / "gold", {"strict": engines["ark"]}, presidio, EMAP)
+    with pytest.raises(MODULE.ScoreboardError, match="missing: presidio-default"):
+        MODULE.baseline_report(tmp_path / "gold", ark, {"tuned": engines["tuned"]}, EMAP)
+    # Balanced with the bare profile is scored as an engine of its own and may hold the milestone.
+    bare = MODULE.baseline_report(tmp_path / "gold", {"balanced": engines["ark"], "balanced-bare": engines["balanced"]},
+                                  presidio, EMAP)
+    assert list(bare["engines"])[:2] == ["ark-balanced", "ark-balanced-bare"]
+    assert bare["m1"]["milestone_modes"] == ["balanced", "balanced-bare"]
+    assert bare["m1"]["holding"] == ["balanced-bare"] and bare["m1"]["met"]
 
 
 def test_report_markdown_tables(tmp_path):
@@ -490,7 +530,7 @@ def test_report_markdown_tables(tmp_path):
     report = MODULE.baseline_report(
         tmp_path / "gold",
         {"strict": engines["ark"], "balanced": engines["balanced"]},
-        {"presidio-default": engines["default"], "presidio-tuned": engines["tuned"]},
+        {"default": engines["default"], "tuned": engines["tuned"]},
         EMAP,
     )
     lines = MODULE.report_lines(report)
@@ -504,8 +544,8 @@ def test_report_markdown_tables(tmp_path):
     # Per entity: exact F1 per engine, the best one in bold, shared ids marked.
     assert "| neutral | pii.phone | shared | 10 | 66.7 | **100.0** | 0.0 | **100.0** |" in lines
     assert "| presidio_favored | pii.email | shared | 10 | **100.0** | **100.0** | 0.0 | 94.7 |" in lines
-    # M1 per Ark mode and milestone family against each Presidio profile; balanced decides.
-    assert "| Ark mode | Profile | M1 | neutral | presidio_favored | ark_authored ¹ |" in lines
+    # M1 per Ark engine and milestone family against each Presidio profile; balanced must beat both.
+    assert "| Ark engine | Profile | M1 | neutral | presidio_favored | ark_authored ¹ |" in lines
     assert "| balanced | presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
     assert "| balanced | presidio-tuned | MET | 2/2 | 2/2 | 2/2 |" in lines
     assert "| strict ² | presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |" in lines
@@ -513,17 +553,20 @@ def test_report_markdown_tables(tmp_path):
     assert lines.index("| balanced | presidio-tuned | MET | 2/2 | 2/2 | 2/2 |") < lines.index(
         "| strict ² | presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |")
     assert "¹ ark_authored is reported and decides no milestone." in text
-    assert "² reported; milestones are judged on balanced (T15)." in text
-    # M2 per Ark mode and profile: DE rows, macro-F1 over shared + ark_only ids; no German gold here.
-    assert "| Ark mode | Profile | M2 | neutral | presidio_favored | ark_authored ¹ |" in lines
+    assert "² reported; a milestone is met only if balanced holds against presidio-default and presidio-tuned (M-RAW)." in text
+    assert "**M1: MET (balanced: presidio-default holds, presidio-tuned holds)**" in lines
+    # M2 per Ark engine and profile: DE rows, macro-F1 over shared + ark_only ids; no German gold here.
+    assert "| Ark engine | Profile | M2 | neutral | presidio_favored | ark_authored ¹ |" in lines
+    assert "**M2: NOT MET (balanced: presidio-default not met, presidio-tuned not met)**" in lines
     assert "| balanced | presidio-tuned | NOT MET | no data | no data | no data |" in lines
     assert "| strict ² | presidio-default | NOT MET | no data | no data | no data |" in lines
 
 
 def test_report_m2_cells_show_macro_f1_and_target(tmp_path):
     rows, ark, presidio = m2_rows()
-    dirs = write_tree(tmp_path, rows, {"ark": ark, "tuned": presidio})
-    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]}, {"presidio-tuned": dirs["tuned"]}, EMAP)
+    dirs = write_tree(tmp_path, rows, {"ark": ark, "default": nothing(rows), "tuned": presidio})
+    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]},
+                                    {"default": dirs["default"], "tuned": dirs["tuned"]}, EMAP)
     assert ("| balanced | presidio-tuned | MET | 83.3 vs 65.0 (50.0 + 15), 2 ids | 100.0 vs 100.0 (100.0 + 0), 2 ids "
             "| no data |") in MODULE.report_lines(report)
 
@@ -531,17 +574,19 @@ def test_report_m2_cells_show_macro_f1_and_target(tmp_path):
 def test_main_report_subcommand(tmp_path, capsys):
     engines = write_report_tree(tmp_path)
     args = ["report", "--gold", str(tmp_path / "gold"), "--ark", f"strict={engines['ark']}",
-            "--ark", f"balanced={engines['balanced']}", "--engine", f"presidio-tuned={engines['tuned']}"]
+            "--ark", f"balanced={engines['balanced']}", "--presidio", f"default={engines['default']}",
+            "--presidio", f"tuned={engines['tuned']}"]
     assert MODULE.main(args + ["--json", str(tmp_path / "report.json")]) == 0
     out = capsys.readouterr().out
     assert out.startswith("## ") and "| neutral | ark-strict |" in out and "## Gold gaps" in out
     report = json.loads((tmp_path / "report.json").read_text())
-    assert report["m1"]["presidio-tuned"]["met"] is True
-    assert report["m1"]["presidio-tuned"]["modes"]["strict"]["met"] is False
-    assert MODULE.main(args + ["--engine", "broken"]) == 2
-    assert MODULE.main(args + ["--engine", f"presidio-tuned={engines['default']}"]) == 2
-    assert MODULE.main(args + ["--engine", f"ark-strict={engines['default']}"]) == 2
+    assert report["m1"]["met"] is True and report["m1"]["view"] == "raw"
+    assert report["m1"]["modes"]["strict"]["presidio-tuned"]["met"] is False
+    assert MODULE.main(args + ["--presidio", "broken"]) == 2
+    assert MODULE.main(args + ["--presidio", f"tuned={engines['default']}"]) == 2
+    assert MODULE.main(args + ["--presidio", f"custom={engines['default']}"]) == 2
     assert MODULE.main(args + ["--ark", f"balanced={engines['default']}"]) == 2
+    assert MODULE.main(args[:-2]) == 2
     (engines["tuned"] / "g.jsonl").unlink()
     assert MODULE.main(args) == 2
 
@@ -636,9 +681,9 @@ def test_gold_gaps_follow_the_scored_ids_of_a_row():
 
 def test_gold_gaps_change_no_metric(tmp_path):
     rows, ark, presidio = gap_rows()
-    dirs = write_tree(tmp_path, rows, {"strict": ark, "balanced": ark, "tuned": presidio})
+    dirs = write_tree(tmp_path, rows, {"strict": ark, "balanced": ark, "default": nothing(rows), "tuned": presidio})
     report = MODULE.baseline_report(tmp_path / "gold", {"strict": dirs["strict"], "balanced": dirs["balanced"]},
-                                    {"presidio-tuned": dirs["tuned"]}, EMAP)
+                                    {"default": dirs["default"], "tuned": dirs["tuned"]}, EMAP)
     assert report["engines"]["ark-strict"] == MODULE.score_rows(rows, ark, EMAP, "g.jsonl")
     assert report["engines"]["presidio-tuned"] == MODULE.score_rows(rows, presidio, EMAP, "g.jsonl")
     gaps = report["gold_gaps"]
@@ -647,14 +692,16 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert email["gold"] == 2 and email["gold_invalid"] is None
     assert email["engines"] == {"ark-strict": {"duplicate_fp": 3, "invalid_found": None},
                                 "ark-balanced": {"duplicate_fp": 3, "invalid_found": None},
+                                "presidio-default": {"duplicate_fp": 0, "invalid_found": None},
                                 "presidio-tuned": {"duplicate_fp": 1, "invalid_found": None}}
     lines = MODULE.report_lines(report)
     assert "## Gold gaps (T16, T27)" in lines
-    assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-tuned |" in lines
-    assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
-    assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
-    assert f"| {GRETEL} | pii.credit_card.pan | payment_card | 2 | 1 | 0 | 0 | 1 |" in lines
-    assert f"| {GRETEL} | pii.iban | iban | 1 | 0 | 0 | 0 | 0 |" in lines
+    assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-default | presidio-tuned |" in lines
+    assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 0 | 1 |" in lines
+    assert ("| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-default | "
+            "presidio-tuned |") in lines
+    assert f"| {GRETEL} | pii.credit_card.pan | payment_card | 2 | 1 | 0 | 0 | 0 | 1 |" in lines
+    assert f"| {GRETEL} | pii.iban | iban | 1 | 0 | 0 | 0 | 0 | 0 |" in lines
 
 
 def test_gold_checks_cover_every_checksum_validator():
@@ -1292,23 +1339,26 @@ class FakePresidio:
 
 def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_path):
     base = run_git(repo, "rev-parse", "HEAD")
-    # The PAN gold of the shared fixture fails Luhn (no attainable gold): score e-mail addresses instead.
+    # M1 compares shared ids on EN rows: score e-mail addresses in the holdout.
     frozen_split(data["holdout"], {"c.jsonl": [gold(f"h{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en")
                                                for i in range(10)]})
     presidio = FakePresidio(drop=["h0", "h1"])
     lines, regressed, _ = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", presidio)
     assert not regressed and lines[-1] == "RESULT: PASS"
-    assert presidio.runs == [("dev", "tuned"), ("holdout", "tuned")]
-    prefix = "milestones {} (balanced, attainable gold, vs Presidio tuned): "
-    # Holdout: the neutral e-mail beats Presidio (100 vs 88.9); no presidio_favored gold, so M1 is not met.
+    assert presidio.runs == [("dev", "default"), ("dev", "tuned"), ("holdout", "default"), ("holdout", "tuned")]
+    prefix = "milestones {} (balanced, raw gold, vs Presidio default and tuned): "
+    # Holdout: the neutral e-mail beats both profiles (100 vs 88.9); no presidio_favored gold, so M1 is not met.
     assert lines[-2] == prefix.format("holdout") + (
-        "M1 NOT MET (neutral 1/1, presidio_favored 0/0 shared ids) | "
-        "M2 NOT MET (macro-F1 neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
-    assert lines[-3].startswith(prefix.format("dev") + "M1 NOT MET (neutral 0/0, presidio_favored 0/0 shared ids)")
+        "M1 NOT MET (vs default: neutral 1/1, presidio_favored 0/0; vs tuned: neutral 1/1, presidio_favored 0/0 "
+        "shared ids) | M2 NOT MET (macro-F1 vs default: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0; "
+        "vs tuned: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
+    assert lines[-3].startswith(prefix.format("dev") + "M1 NOT MET (vs default: neutral 0/0, presidio_favored 0/0;")
     # Aggregates only: no holdout row id reaches stdout.
     assert not any("h0" in line or "h1" in line for line in lines)
     # Presidio predictions are cached per runner, profile and input; a second gate does not run Presidio.
-    assert len(list((tmp_path / "cache" / "scoreboard" / "predictions" / MODULE.presidio_key() / "tuned").glob("*.jsonl"))) == 2
+    for profile in ("default", "tuned"):
+        cached = tmp_path / "cache" / "scoreboard" / "predictions" / MODULE.presidio_key(profile) / profile
+        assert len(list(cached.glob("*.jsonl"))) == 2
     again = FakePresidio(drop=["h0", "h1"])
     assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-2] == lines[-2]
     assert again.runs == []
@@ -1589,7 +1639,7 @@ def test_gold_gaps_count_country_document_checks_and_known_gaps():
     assert gaps[GRETEL]["entity.passport_number"]["gold_invalid"] == 0
 
 
-def test_main_m1_and_m2_judge_the_attainable_view_and_print_the_raw_one(tmp_path, capsys):
+def test_main_m1_and_m2_judge_the_raw_view_and_print_the_attainable_one(tmp_path, capsys):
     rows, _, presidio = m1_rows()
     # A loopback address Presidio finds and Ark leaves out (D-IP): raw M1 fails on presidio_favored.
     text = "Host 127.0.0.1 answered"
@@ -1598,25 +1648,27 @@ def test_main_m1_and_m2_judge_the_attainable_view_and_print_the_raw_one(tmp_path
     ark = [pred(row["id"], [(e["entity_type"], e["start"], e["end"]) for e in row["entities"]
                             if e["entity_type"] != "pii.ip_address"]) for row in rows]
     dirs = write_tree(tmp_path, rows, {"ark": ark, "presidio": presidio})
-    args = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"]), "--ark",
-            f"balanced={dirs['ark']}", "--check", "--json", str(tmp_path / "m1.json")]
-    assert MODULE.main(args) == 0
+    args = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", f"default={dirs['presidio']}",
+            "--presidio", f"tuned={dirs['presidio']}", "--ark", f"balanced={dirs['ark']}", "--check",
+            "--json", str(tmp_path / "m1.json")]
+    assert MODULE.main(args) == 1
     lines = capsys.readouterr().out.strip().splitlines()
-    raw = lines[lines.index("=== raw gold (reported, decides no milestone)"):
-                lines.index("=== attainable gold (milestone view, T27)")]
-    assert "M1 raw: NOT MET (balanced: neutral holds, presidio_favored not met)" in raw
-    assert "M1 attainable: MET (balanced: neutral holds, presidio_favored holds)" in lines
-    assert lines[-1] == "M1: MET (balanced, attainable gold: neutral holds, presidio_favored holds)"
+    attainable = lines[lines.index("=== attainable gold (diagnostic, decides no milestone)"):
+                       lines.index("=== raw gold (milestone view, M-RAW)")]
+    assert "M1 attainable: MET (balanced: presidio-default holds, presidio-tuned holds)" in attainable
+    assert "M1 raw: NOT MET (balanced: presidio-default not met, presidio-tuned not met)" in lines
+    assert lines[-1] == "M1: NOT MET (raw gold; balanced: presidio-default not met, presidio-tuned not met)"
     report = json.loads((tmp_path / "m1.json").read_text())
-    assert report["view"] == "attainable" and report["met"] is True and report["raw"]["met"] is False
-    assert "pii.ip_address" in report["raw"]["modes"]["balanced"]["families"]["presidio_favored"]["entities"]
-    assert "pii.ip_address" not in report["modes"]["balanced"]["families"]["presidio_favored"]["entities"]
+    assert report["view"] == "raw" and report["met"] is False and report["attainable"]["met"] is True
+    raw_ids = report["modes"]["balanced"]["presidio-tuned"]["families"]["presidio_favored"]["entities"]
+    attainable_ids = report["attainable"]["modes"]["balanced"]["presidio-tuned"]["families"]["presidio_favored"]["entities"]
+    assert "pii.ip_address" in raw_ids and "pii.ip_address" not in attainable_ids
     args[0] = "m2"
     args.remove("--check")
     MODULE.main(args)
     out = capsys.readouterr().out
-    assert "=== raw gold (reported, decides no milestone)" in out and out.strip().splitlines()[-1].startswith(
-        "M2: NOT MET (balanced, attainable gold: ")
+    assert "=== attainable gold (diagnostic, decides no milestone)" in out and out.strip().splitlines()[-1].startswith(
+        "M2: NOT MET (raw gold; balanced: ")
 
 
 def test_report_shows_both_views_and_the_known_gaps(tmp_path):
@@ -1626,19 +1678,20 @@ def test_report_shows_both_views_and_the_known_gaps(tmp_path):
     write_jsonl(tmp_path / "gold" / "presidio_favored" / "r.jsonl", rows[:5])
     write_jsonl(tmp_path / "ark" / "presidio_favored" / "r.jsonl", ark[:5])
     write_jsonl(tmp_path / "tuned" / "presidio_favored" / "r.jsonl", presidio[:5])
-    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]}, {"presidio-tuned": dirs["tuned"]}, EMAP)
-    assert report["milestone_view"] == "attainable"
+    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]},
+                                    {"default": dirs["tuned"], "tuned": dirs["tuned"]}, EMAP)
+    assert report["milestone_view"] == "raw"
     assert report["attainable"]["ark-balanced"]["buckets"]["all"]["gold"] == 4
     assert report["engines"]["ark-balanced"]["buckets"]["all"]["gold"] == 7
-    assert report["m1"]["presidio-tuned"]["view"] == "attainable" and "raw" in report["m1"]["presidio-tuned"]
+    assert report["m1"]["view"] == "raw" and report["m1"]["met"] is False and "attainable" in report["m1"]
     lines = MODULE.report_lines(report)
-    assert lines.index("## Per entity (exact F1, best in bold)") < lines.index(
-        "## Per entity, attainable gold (exact F1, best in bold; the F1 >= 80 floor is judged here, T27)")
-    attainable = lines.index("## M1, attainable gold, milestone view (each Ark mode vs each profile; EN rows, exact F1, "
-                             "shared ids with gold; milestone on balanced)")
-    assert attainable < lines.index("## M1, raw gold, reported, decides no milestone (each Ark mode vs each profile; "
-                                    "EN rows, exact F1, shared ids with gold; milestone on balanced)")
-    assert f"| {RECOGNIZER_TESTS} | pii.identity_card_number | de: de_identity_card_number | 2 | 1 | 0 | 1 |" in lines
+    assert lines.index("## Per entity (exact F1, best in bold; raw gold, the F1 >= 80 floor is judged here, M-RAW)") < (
+        lines.index("## Per entity, attainable gold (exact F1, best in bold; diagnostic, T27)"))
+    raw = lines.index("## M1, raw gold, milestone view (each Ark engine vs each profile; EN rows, exact F1, "
+                      "shared ids with gold)")
+    assert raw < lines.index("## M1, attainable gold, diagnostic, decides no milestone (each Ark engine vs each "
+                             "profile; EN rows, exact F1, shared ids with gold)")
+    assert f"| {RECOGNIZER_TESTS} | pii.identity_card_number | de: de_identity_card_number | 2 | 1 | 0 | 1 | 1 |" in lines
     assert "| Corpus | Entity | Gold | Known gap | Decisions recorded for the id |" in lines
     assert f"| {RECOGNIZER_TESTS} | pii.ip_address | 2 | 1 | D-IP, T28 |" in lines
 

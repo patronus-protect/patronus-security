@@ -1,5 +1,7 @@
 {
   "schema": "ark-l1-scoreboard-v1",
+  "milestone_view": "raw",
+  "m1": {"milestone_modes": ["balanced", "balanced-bare"], "milestone_profiles": ["presidio-default", "presidio-tuned"]},
   "scopes": {"pii.email": "shared", "pii.iban": "shared", "pii.us.itin": "shared"},
   "engines": {
     "ark-balanced": {"buckets": {

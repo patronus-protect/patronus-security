@@ -297,6 +297,56 @@ def test_run_records_an_explicit_pii_mode_and_keeps_strict_metadata(tmp_path):
         MODULE.main(["--input", str(source), "--output", str(tmp_path / "y.jsonl"), "--pii-mode", "fast"])
 
 
+BARE_GATES = ROOT / "docs" / "how-to" / "pii-bare-formats.gates.json"
+
+
+def test_load_rules_reads_the_bare_profile_and_checks_its_mode(tmp_path):
+    rules = MODULE.load_rules(BARE_GATES, "balanced")
+    assert rules["pii_steuer_id_de_bare"] is True and list(rules) == sorted(rules)
+    assert all(rule.endswith("_bare") for rule in rules)
+    with pytest.raises(ValueError, match="pii_mode 'balanced'"):
+        MODULE.load_rules(BARE_GATES, "strict")
+    for body in ('{"rules": {}}', '{"rules": {"pii_ssn_us_bare": "yes"}}', '{"rules": {"a": true}, "pii_categories": []}',
+                 "[]", "{"):
+        bad = tmp_path / "bad.json"
+        bad.write_text(body, encoding="utf-8")
+        with pytest.raises(ValueError):
+            MODULE.load_rules(bad, "balanced")
+    # Without pii_mode the file applies to any mode.
+    loose = tmp_path / "loose.json"
+    loose.write_text('{"rules": {"pii_ssn_us_bare": true}}', encoding="utf-8")
+    assert MODULE.load_rules(loose, "strict") == {"pii_ssn_us_bare": True}
+
+
+def test_run_records_the_enabled_rules(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, gold_rows())
+    meta = MODULE.run(input_path=source, output_path=tmp_path / "bare.jsonl", meta_path=tmp_path / "bare.meta.json",
+                      gateway=FakeGateway(fake_spans()), build={"native_sha256": "0" * 64}, pii_mode="balanced",
+                      rules={"pii_ssn_us_bare": True})
+    assert meta["engine"] == {"categories": ["pii"], "max_level": "l1", "pii_mode": "balanced",
+                              "rules": {"pii_ssn_us_bare": True}}
+    with pytest.raises(SystemExit):
+        MODULE.main(["--input", str(source), "--output", str(tmp_path / "y.jsonl"), "--gates", str(BARE_GATES)])
+    with pytest.raises(SystemExit):
+        MODULE.main(["--input", str(source), "--output", str(tmp_path / "y.jsonl"), "--pii-mode", "balanced",
+                     "--gates", str(tmp_path / "missing.json")])
+
+
+@pytest.mark.skipif(not native_available(), reason="patronus_ark native binding is not built")
+def test_real_ark_binding_applies_the_bare_profile(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, [{"id": "bare", "language": "de", "text": "Bitte 1121081508150 eintragen."}])
+    labels = {}
+    for name, extra in (("balanced", []), ("bare", ["--gates", str(BARE_GATES)])):
+        out = tmp_path / f"{name}.jsonl"
+        assert MODULE.main(["--input", str(source), "--output", str(out), "--pii-mode", "balanced", *extra]) == 0
+        labels[name] = [span["ark_label"] for span in json.loads(out.read_text(encoding="utf-8"))["evidence_spans"]]
+    assert "TAX_NUMBER_DE" not in labels["balanced"] and "TAX_NUMBER_DE" in labels["bare"]
+    meta = json.loads((tmp_path / "bare.meta.json").read_text(encoding="utf-8"))
+    assert meta["engine"]["rules"] == MODULE.load_rules(BARE_GATES, "balanced")
+
+
 @pytest.mark.skipif(not native_available(), reason="patronus_ark native binding is not built")
 def test_real_ark_binding_scores_spans_in_opt_in_modes(tmp_path):
     source = tmp_path / "gold.jsonl"
