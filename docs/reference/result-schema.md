@@ -588,7 +588,7 @@ identifier and content rules carry no `subtype`.
 | `access_token` | `SECRET_TOKEN`, `CLOUD_KEY` | OAuth, personal, bot and bearer tokens, JWTs (GitHub, GitLab, npm, Slack, Discord, Google OAuth). |
 | `secret_key` | `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY` | The secret half of a key pair or client credential, signing secrets (AWS secret access key, GCP client secret, Stripe webhook secret). |
 | `private_key` | `PRIVATE_KEY`, `CRYPTO_KEY` | PEM private keys, wallet keys (Ethereum, Bitcoin WIF). |
-| `seed_phrase` | `CRYPTO_KEY` | Mnemonic wallet seeds (planned). |
+| `seed_phrase` | `CRYPTO_KEY` | Mnemonic wallet seeds: BIP39, Electrum, Monero (`dlp_bip39_seed_phrase`, `dlp_electrum_seed`, `dlp_monero_seed`). |
 | `password` | `CREDENTIAL` | Passwords in assignments and prose, URL userinfo, Basic auth, LDAP bind passwords. |
 | `password_hash` | `PASSWORD_HASH` | Password hashes. |
 | `generic_secret` | `CREDENTIAL` | Any value under a secret-like key or variable name. |
