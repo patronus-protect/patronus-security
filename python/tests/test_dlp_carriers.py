@@ -370,6 +370,13 @@ class BuildTests(unittest.TestCase):
                 raw = number.to_bytes(size, "big")
                 self.assertEqual(raw[:2], version + b"\x7e", name)
                 self.assertEqual(checks.base58check_decode(recipes.base58check(raw[:-4])), raw[:-4], name)
+            # BIP 39: word count and word list intact, only the checksum bits are wrong.
+            for name, language, count in (("bip39_en_12", "english", 12), ("bip39_cs_21", "czech", 21)):
+                value = carriers.hard_negative_value(name, variant)
+                words = value.split(" ")
+                self.assertEqual(len(words), count, name)
+                self.assertLessEqual(set(words), set(recipes.bip39_wordlist(language)), name)
+                self.assertFalse(checks.is_valid_bip39_mnemonic(value, language), name)
             # JWT: every segment is canonical base64url, the header still reads as JSON
             # up to its last byte, which is what breaks it.
             for name in ("jwt_signed_hs256", "jwt_signed_rs256"):

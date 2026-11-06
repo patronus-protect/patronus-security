@@ -116,6 +116,7 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_electrum_seed",
     "dlp_monero_seed",
     "dlp_cardano_signing_key",
+    "dlp_bip39_seed_phrase",
     "dlp_private_key_block",
     "dlp_private_key_header",
     "dlp_jwk_private_key",
