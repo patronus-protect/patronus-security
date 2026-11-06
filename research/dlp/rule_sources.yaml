@@ -458,7 +458,7 @@ rules:
     format: "CIP-5 Bech32 signing key: secret-key prefixes acct/addr/drep/policy/root/stake _sk or _xsk and ed25519_sk/ed25519e_sk, Bech32 (BIP 173) checksum, zero padding bits, 32 or 64 bytes (Ed25519 or extended key) and 96 bytes for _xsk (extended key and chain code); verification keys (_vk, _xvk) are public (C-WALLET)"
   dlp_bip39_seed_phrase:
     source_ref: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
-    format: "BIP39 mnemonic: 12/15/18/21/24 words of one official word list (English, Italian, Portuguese, Czech; bip-0039/*.txt), 11 bits per word, checksum = first ENT/32 bits of SHA-256(entropy); words separated by spaces, commas, quotes, list numbers or line breaks (C01). Published test vectors (trezor/python-mnemonic vectors.json) and runs of more than 27 list words are no phrases; 12/15-word phrases need numbering or a context term"
+    format: "BIP39 mnemonic: 12/15/18/21/24 words of one official word list (English, Italian, Portuguese, Czech, Spanish, French; bip-0039/*.txt; Spanish and French words compared without diacritics, NFC or NFD), 11 bits per word, checksum = first ENT/32 bits of SHA-256(entropy); words separated by spaces, commas, quotes, list numbers or line breaks (C01). Published test vectors (trezor/python-mnemonic vectors.json) and runs of more than 27 list words are no phrases; 12/15-word phrases need numbering or a context term"
   dlp_private_key_block:
     source_ref: gitleaks:private-key
     format: "PEM armor BEGIN/END … PRIVATE KEY with body"
