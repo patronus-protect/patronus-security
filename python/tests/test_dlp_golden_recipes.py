@@ -96,7 +96,8 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual(length is None, name.startswith("bip39_"), name)
             if length is not None:
                 self.assertEqual(len(value), length, name)
-            self.assertTrue(value.isascii(), name)
+            # Spanish and French mnemonics keep the NFD accents of their lists.
+            self.assertTrue(value.isascii() or name.startswith("bip39_"), name)
 
     def test_random_generators_depend_on_the_seed(self):
         for name in recipes.load_generators():
