@@ -325,11 +325,12 @@ pub(super) const IDENTITY_CARD_NUMBER_LEGACY: PiiPattern = PiiPattern {
     scored_only: true,
 };
 
-/// A bare Steuer-ID with its check digit, without the issued digit distribution of
+/// A bare Steuer-ID with its check digit and the bounds of the digit distribution
+/// ([`validators::steuer_id_bare`]), without the exact issued distribution of
 /// [`STEUER_ID_CONTEXT_FREE`]. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
 pub(super) const STEUER_ID_BARE: PiiPattern = PiiPattern {
     name: "pii_steuer_id_de_bare",
-    validator: Some(validators::steuer_id),
+    validator: Some(validators::steuer_id_bare),
     base_score: 15,
     captured_value: false,
     requires_context: false,

@@ -561,6 +561,15 @@ def steuer_id_issued(value: str) -> bool:
     return len(repeated) == 1 and repeated[0] in (2, 3) and not runs
 
 
+def steuer_id_bare(value: str) -> bool:
+    """Port of ``validators::steuer_id_bare``: checksum, no digit more than three times, none three in a row."""
+    if not steuer_id(value):
+        return False
+    digits = _digits(value)[:10]
+    runs = any(digits[i] == digits[i + 1] == digits[i + 2] for i in range(len(digits) - 2))
+    return max(digits.count(d) for d in set(digits)) <= 3 and not runs
+
+
 def _vat_body(value: str, prefix: str) -> str:
     """Upper-case alphanumerics of a VAT ID without its country prefix (``DE.136.695.976`` → ``136695976``)."""
     compact = "".join(ch.upper() for ch in value if ch.isascii() and ch.isalnum())
@@ -1669,6 +1678,7 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "iban": iban_registry,
     "steuer_id": steuer_id,
     "steuer_id_issued": steuer_id_issued,
+    "steuer_id_bare": steuer_id_bare,
     "de_vat_id": de_vat_id,
     "at_vat_id": at_vat_id,
     "ch_vat_id": ch_vat_id,
