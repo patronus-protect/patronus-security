@@ -5224,6 +5224,7 @@ DLP_LOOKALIKE_GENERATORS = (
     # P10: wrong length of the Atlassian, Notion, Linear, Airtable and Postman formats; public Mapbox pk. tokens
     "atlassian_api_token_short", "notion_api_token_short", "linear_api_key_short",
     "airtable_personal_access_token_short", "postman_api_token_short", "mapbox_access_token",
+    "mapbox_access_token_short",
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
