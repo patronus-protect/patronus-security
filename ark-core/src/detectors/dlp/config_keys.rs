@@ -128,8 +128,13 @@ const MAX_HEADER_LINES: usize = 100;
 
 /// The config values on the lines where `key` matches, ordered by position.
 /// `key` finds the credential part of a key; whether it binds the value the
-/// caller decides from [`ConfigValue::key`].
-pub fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
+/// caller decides from [`ConfigValue::key`]. T23: also the values of the
+/// SQL `statements` of the text ([`super::sql_rows`]).
+pub fn config_values(
+    text: &str,
+    statements: &[super::sql_rows::Statement],
+    key: &Regex,
+) -> Vec<ConfigValue> {
     let mut values = Vec::new();
     let mut last_line = None;
     // A line read as an env, INI/properties or header line: it holds one key.
@@ -160,7 +165,7 @@ pub fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
             );
         }
     }
-    values.extend(super::sql_rows::sql_values(text, key));
+    values.extend(super::sql_rows::sql_values(text, statements, key));
     values.sort_by_key(|value| (value.value.start, value.key.start));
     values.dedup_by(|a, b| a.value == b.value && a.key == b.key);
     values
@@ -1259,7 +1264,7 @@ mod tests {
     /// key holds a credential noun.
     fn nested(text: &str) -> Vec<(&str, &str, ConfigFormat, bool)> {
         let key = Regex::new(r"(?i)(?:password|secret|token|api_key)s?(?-u:\b)").unwrap();
-        config_values(text, &key)
+        config_values(text, &[], &key)
             .into_iter()
             .map(|value| {
                 (
@@ -1365,7 +1370,7 @@ mod tests {
     fn values_are_collected_where_the_key_holds_the_match() {
         let key = Regex::new(r"(?i)password").unwrap();
         let text = "user=password\nDB_PASSWORD=Kx7,pQ2\nPASSWORD_POLICY=strict password\n";
-        let values: Vec<_> = config_values(text, &key)
+        let values: Vec<_> = config_values(text, &[], &key)
             .into_iter()
             .map(|value| (&text[value.key], &text[value.value]))
             .collect();
@@ -1564,15 +1569,15 @@ mod tests {
     fn key_precondition_and_http_start_line_gate_the_lines() {
         let key = Regex::new(r"(?i)password|api-key").unwrap();
         let text = "- DB_PASSWORD=Kx7,pQ2\nlog(password)=Kx7,pQ2\n  export DB_PASSWORD=Kx7,pQ3\napp.db.password = Kx7,pQ4\n";
-        let values: Vec<_> = config_values(text, &key)
+        let values: Vec<_> = config_values(text, &[], &key)
             .into_iter()
             .map(|value| &text[value.value])
             .collect();
         assert_eq!(values, vec!["Kx7,pQ3", "Kx7,pQ4"]);
         let headers = "X-Api-Key: Kx7,pQ2vL9\n";
-        assert!(config_values(headers, &key).is_empty());
+        assert!(config_values(headers, &[], &key).is_empty());
         let request = format!("GET /v1/items HTTP/1.1\n{headers}");
-        let values: Vec<_> = config_values(&request, &key)
+        let values: Vec<_> = config_values(&request, &[], &key)
             .into_iter()
             .map(|value| (&request[value.key], value.format))
             .collect();

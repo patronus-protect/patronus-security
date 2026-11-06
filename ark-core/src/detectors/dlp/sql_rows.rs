@@ -43,44 +43,82 @@ static COPY_HEAD: LazyLock<Regex> = LazyLock::new(|| {
 /// Longest key field in bytes, as for a quoted config key.
 const MAX_KEY_FIELD: usize = 64;
 
+/// An `INSERT` or `COPY` statement of a dump, parsed once per text
+/// ([`crate::threat::NativeText::sql_statements`]) for every key-bound rule.
+pub struct Statement {
+    /// The names of the column list; empty without one.
+    columns: Vec<Range<usize>>,
+    /// Per row, per field the range of a quoted string or COPY field, or
+    /// `None` for any other field.
+    rows: Vec<Vec<Option<Range<usize>>>>,
+    /// The fields of an `INSERT`, where only a quoted key field binds.
+    quoted: bool,
+}
+
 /// The SQL row values whose column name or key field holds a match of
 /// `key`, by statement.
-pub fn sql_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
-    row_values(text, key, true)
+pub fn sql_values(text: &str, statements: &[Statement], key: &Regex) -> Vec<ConfigValue> {
+    row_values(text, statements, key, true)
 }
 
 /// The SQL row values whose key field holds a match of `key`: a settings
 /// row that names its value, not a column of per-row values.
-pub fn key_field_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
-    row_values(text, key, false)
+pub fn key_field_values(text: &str, statements: &[Statement], key: &Regex) -> Vec<ConfigValue> {
+    row_values(text, statements, key, false)
 }
 
 /// The literals of the statement heads; dumps write `INTO` in one case.
 static HEAD_LITERAL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"INTO|into|COPY ").unwrap());
 
-fn row_values(text: &str, key: &Regex, by_column: bool) -> Vec<ConfigValue> {
+fn row_values(
+    text: &str,
+    statements: &[Statement],
+    key: &Regex,
+    by_column: bool,
+) -> Vec<ConfigValue> {
     let mut values = Vec::new();
-    for line_start in line_starts(text) {
-        let line = &text[line_start..];
-        if let Some(head) = INSERT_HEAD.captures(line) {
-            let columns = head.get(1).filter(|_| by_column).map(|columns| {
-                column_names(
-                    text,
-                    line_start + columns.start()..line_start + columns.end(),
-                )
-            });
-            let rows = insert_rows(text, line_start + head.get(0).unwrap().end());
-            bind(text, key, columns.as_deref(), &rows, true, &mut values);
-        } else if let Some(head) = COPY_HEAD.captures(line) {
-            let columns = by_column.then(|| {
-                let list = head.get(1).unwrap();
-                column_names(text, line_start + list.start()..line_start + list.end())
-            });
-            let rows = copy_rows(text, line_start + head.get(0).unwrap().end());
-            bind(text, key, columns.as_deref(), &rows, false, &mut values);
-        }
+    for statement in statements {
+        let columns = if by_column {
+            &statement.columns[..]
+        } else {
+            &[]
+        };
+        bind(text, key, columns, statement, &mut values);
     }
     values
+}
+
+/// The `INSERT` and `COPY` statements of `text` that hold rows, in order.
+pub fn statements(text: &str) -> Vec<Statement> {
+    let mut statements = Vec::new();
+    for line_start in line_starts(text) {
+        let line = &text[line_start..];
+        let list = |columns: regex::Match<'_>| {
+            column_names(
+                text,
+                line_start + columns.start()..line_start + columns.end(),
+            )
+        };
+        let statement = if let Some(head) = INSERT_HEAD.captures(line) {
+            Statement {
+                columns: head.get(1).map(list).unwrap_or_default(),
+                rows: insert_rows(text, line_start + head.get(0).unwrap().end()),
+                quoted: true,
+            }
+        } else if let Some(head) = COPY_HEAD.captures(line) {
+            Statement {
+                columns: list(head.get(1).unwrap()),
+                rows: copy_rows(text, line_start + head.get(0).unwrap().end()),
+                quoted: false,
+            }
+        } else {
+            continue;
+        };
+        if !statement.rows.is_empty() {
+            statements.push(statement);
+        }
+    }
+    statements
 }
 
 /// The starts of the lines that hold a statement head literal
@@ -108,14 +146,13 @@ pub fn is_row_value(text: &str, at: usize) -> bool {
     INSERT_HEAD.is_match(&text[line_start..at])
 }
 
-/// The values of `rows` bound by a key column or a key field. `quoted`:
-/// the fields of an `INSERT`, where only a quoted key field binds.
+/// The values of `statement` bound by a key column of `columns` or a key
+/// field.
 fn bind(
     text: &str,
     key: &Regex,
-    columns: Option<&[Range<usize>]>,
-    rows: &[Vec<Option<Range<usize>>>],
-    quoted: bool,
+    columns: &[Range<usize>],
+    statement: &Statement,
     values: &mut Vec<ConfigValue>,
 ) {
     let value = |key: &Range<usize>, value: &Range<usize>| ConfigValue {
@@ -125,12 +162,12 @@ fn bind(
         item: false,
     };
     let key_columns: Vec<(usize, &Range<usize>)> = columns
-        .unwrap_or_default()
         .iter()
         .enumerate()
         .filter(|(_, column)| key.is_match(&text[(*column).clone()]))
         .collect();
-    for row in rows {
+    let quoted = statement.quoted;
+    for row in &statement.rows {
         for &(index, column) in &key_columns {
             if let Some(Some(field)) = row.get(index) {
                 values.push(value(column, field));
@@ -281,7 +318,7 @@ mod tests {
 
     fn pairs(text: &str) -> Vec<(&str, &str)> {
         let key = Regex::new(r"(?i)(?:password|secret|token|zugangsdaten)").unwrap();
-        sql_values(text, &key)
+        sql_values(text, &statements(text), &key)
             .into_iter()
             .map(|value| (&text[value.key], &text[value.value]))
             .collect()
@@ -321,12 +358,13 @@ mod tests {
         let key = Regex::new(r"(?i)password[ _-]?hash").unwrap();
         let text = "INSERT INTO users (id, password_hash) VALUES (1, 'digest-one');\n\
                     INSERT INTO settings VALUES ('admin_password_hash', 'digest-two');\n";
-        let bound: Vec<_> = key_field_values(text, &key)
+        let parsed = statements(text);
+        let bound: Vec<_> = key_field_values(text, &parsed, &key)
             .into_iter()
             .map(|value| &text[value.value])
             .collect();
         assert_eq!(bound, vec!["digest-two"]);
-        assert_eq!(sql_values(text, &key).len(), 2);
+        assert_eq!(sql_values(text, &parsed, &key).len(), 2);
     }
 
     #[test]

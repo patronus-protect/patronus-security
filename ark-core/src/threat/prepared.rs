@@ -13,6 +13,7 @@ pub struct NativeText<'a> {
     tags: OnceLock<Vec<(usize, NativeText<'a>)>>,
     anchors: OnceLock<crate::detectors::lexical_anchors::AnchorPresence>,
     structure: OnceLock<crate::detectors::structure::Fields>,
+    sql: OnceLock<Vec<crate::detectors::dlp::sql_rows::Statement>>,
 }
 
 impl<'a> NativeText<'a> {
@@ -28,6 +29,7 @@ impl<'a> NativeText<'a> {
             tags: OnceLock::new(),
             anchors: OnceLock::new(),
             structure: OnceLock::new(),
+            sql: OnceLock::new(),
         }
     }
 
@@ -50,6 +52,13 @@ impl<'a> NativeText<'a> {
     pub fn structure(&self) -> &crate::detectors::structure::Fields {
         self.structure
             .get_or_init(|| crate::detectors::structure::Fields::parse(self.text()))
+    }
+
+    /// The `INSERT` and `COPY` statements of a SQL dump (T23), read once for
+    /// every key-bound DLP rule.
+    pub fn sql_statements(&self) -> &[crate::detectors::dlp::sql_rows::Statement] {
+        self.sql
+            .get_or_init(|| crate::detectors::dlp::sql_rows::statements(self.text()))
     }
 
     pub fn lower_windows(&self) -> &[(Range<usize>, MatchText)] {
@@ -91,6 +100,8 @@ mod tests {
         });
         assert!(std::ptr::eq(text.lower_windows(), text.lower_windows()));
         assert!(std::ptr::eq(text.tags(), text.tags()));
+        assert!(text.sql.get().is_none());
+        assert!(std::ptr::eq(text.sql_statements(), text.sql_statements()));
         for (range, view) in text.lower_windows() {
             assert_eq!(
                 view.text,

@@ -496,14 +496,15 @@ struct BoundKey {
     /// The key at the end of a bound key (`HerokuApiKey`, `App.HerokuApiKey`).
     whole: Regex,
     /// The values whose key holds a match of `find`.
-    values: fn(&str, &Regex) -> Vec<super::config_keys::ConfigValue>,
+    values: BoundValues,
 }
 
+/// Reads the values of a [`BoundKey`] from the prepared text.
+type BoundValues =
+    fn(&crate::threat::NativeText<'_>, &Regex) -> Vec<super::config_keys::ConfigValue>;
+
 impl BoundKey {
-    fn new(
-        key: rules::ProviderKey,
-        values: fn(&str, &Regex) -> Vec<super::config_keys::ConfigValue>,
-    ) -> Self {
+    fn new(key: rules::ProviderKey, values: BoundValues) -> Self {
         Self {
             find: Regex::new(key.key).unwrap(),
             whole: Regex::new(&format!("(?:{})$", key.key)).unwrap(),
@@ -620,7 +621,7 @@ impl DlpPipeline {
         }
         let text = prepared.text();
         let key_gate = self.metas[index].key_gate;
-        (key.values)(text, &key.find)
+        (key.values)(prepared, &key.find)
             .into_iter()
             .filter(|config| {
                 key.whole
@@ -695,9 +696,21 @@ impl DlpPipeline {
             config_keys.push(config_key.map(ConfigKeyRegexes::new));
             bound_keys.push(
                 xml_key
-                    .map(|key| BoundKey::new(key, super::config_keys::xml_values))
+                    .map(|key| {
+                        BoundKey::new(key, |prepared, find| {
+                            super::config_keys::xml_values(prepared.text(), find)
+                        })
+                    })
                     .or_else(|| {
-                        sql_key.map(|key| BoundKey::new(key, super::sql_rows::key_field_values))
+                        sql_key.map(|key| {
+                            BoundKey::new(key, |prepared, find| {
+                                super::sql_rows::key_field_values(
+                                    prepared.text(),
+                                    prepared.sql_statements(),
+                                    find,
+                                )
+                            })
+                        })
                     }),
             );
         }
@@ -985,7 +998,8 @@ impl NativeRegexDetector for DlpPipeline {
         };
         let text = prepared.text();
         let key_gate = self.metas[index].key_gate;
-        let mut values = super::config_keys::config_values(text, &keys.find);
+        let mut values =
+            super::config_keys::config_values(text, prepared.sql_statements(), &keys.find);
         let mut failed_lists = Vec::new();
         // G02: whether the text is a config document, per family of formats.
         let documents: [std::cell::OnceCell<bool>; 4] = Default::default();
