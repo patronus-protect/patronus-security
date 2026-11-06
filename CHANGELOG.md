@@ -124,9 +124,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `abandon … about`), phrases that repeat more than two words, uppercase words and runs of 11
   words are no phrases; 12- and 15-word phrases (4- and 5-bit checksum) also need numbered words
   or a context term (seed, mnemonic, recovery, phrase, wallet, backup, passphrase,
-  Wiederherstellung …) in the 200 bytes before them. The Spanish and French lists (accented words)
-  and the CJK lists are not covered yet. The golden generator gains the `bip39_<language>`
-  encodings. `RuleMeta::with_finder` lets a rule match its regex only at the ranges a scanner finds.
+  Wiederherstellung …) in the 200 bytes before them. The CJK lists are not covered yet. The golden
+  generator gains the `bip39_<language>` encodings. `RuleMeta::with_finder` lets a rule match its
+  regex only at the ranges a scanner finds.
+- Detection change (all DLP modes): `dlp_bip39_seed_phrase` also reads the official Spanish and
+  French word lists (C01 review). Their words count with or without their accents, in NFC or NFD
+  (the unaccented words stay unique per list, as the BIP39 word list notes state); the 18-word
+  context threshold counts an accented word once. The checksum check no longer allocates per
+  candidate window (stack arrays; the test vectors are decoded once).
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
