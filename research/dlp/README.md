@@ -376,6 +376,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   mit Platzhalter (`ntn_<…>`) sind auch für generische Regeln kein Secret. Offen bleiben Figma
   (`figd_`, ohne Generator), Asana, monday.com, HubSpot, Salesforce, Zendesk und Intercom (nur
   Kontextformate; die Entities bleiben `baseline_only`).
+  Seit C-WALLET (C02 + C03) melden drei Regeln Wallet-Schlüssel (`CRYPTO_KEY`, `private_key`):
+  `dlp_bip32_extended_private_key` (BIP 32 / SLIP-0132 `xprv`/`yprv`/`zprv`, Testnetz
+  `tprv`/`uprv`/`vprv` mit Schweregrad `test`; Base58Check über 78 Bytes mit den Versionsbytes des
+  Präfixes), `dlp_eth_keystore_ciphertext` (`crypto.ciphertext` eines Keystore v3 nur neben `kdf`
+  und `mac`) und `dlp_solana_keypair` (64 Bytes als JSON-Array nur nach einem Schlüsselbegriff).
+  `xpub`/`tpub`, öffentliche Keystore-Felder und Zahlen-Arrays ohne Schlüsselkontext bleiben
+  stumm. Offen bleiben Electrum-Seeds (Wortliste) und Monero/Cardano-Signierschlüssel.
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

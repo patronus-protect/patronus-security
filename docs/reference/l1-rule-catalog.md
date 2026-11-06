@@ -337,7 +337,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (146) { #dlp-regex-rules }
+## DLP regex rules (149) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -485,6 +485,9 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_discord_token` | `SECRET_TOKEN` | `access_token` | `discord` | `structure` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/discordbottoken/discordbottoken.go) | yes | on | 35 | proximity | 0.60–0.85 |
 | `dlp_eth_private_key` | `CRYPTO_KEY` | `private_key` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | yes | on | 25 | proximity | 0.40–0.65 |
 | `dlp_btc_wif` | `CRYPTO_KEY` | `private_key` | `bitcoin` | `checksum` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | yes | on | 30 | proximity | 0.65–0.90 |
+| `dlp_bip32_extended_private_key` | `CRYPTO_KEY` | `private_key` | `bitcoin` | `checksum` | [github.com](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format) | yes | on | 30 | proximity | 0.65–0.90 |
+| `dlp_eth_keystore_ciphertext` | `CRYPTO_KEY` | `private_key` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/data-structures-and-encoding/web3-secret-storage/) | no | on | 30 | field | 0.70 |
+| `dlp_solana_keypair` | `CRYPTO_KEY` | `private_key` | `solana` | `format` | [solana.com](https://solana.com/docs/core/accounts#keypair) | yes | on | 25 | field | 0.65 |
 | `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
 | `dlp_private_key_header` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |

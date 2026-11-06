@@ -11,6 +11,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: wallet keys and wallet files (C-WALLET, C02 + C03), all `CRYPTO_KEY` with
+  subtype `private_key`, on by default. `dlp_bip32_extended_private_key` reports BIP 32 / SLIP-0132
+  extended private keys (`xprv`, `yprv`, `zprv`, testnet `tprv`, `uprv`, `vprv` with severity
+  `test`) after Base58Check over 78 bytes with the version bytes of the prefix, zero parent fields at
+  depth 0, the `0x00` key lead and a secp256k1 scalar; extended public keys (`xpub`, `tpub`) stay
+  silent. `dlp_eth_keystore_ciphertext` reports the `crypto.ciphertext` of an Ethereum keystore v3
+  only next to a `kdf` (scrypt or pbkdf2) and a 32-byte `mac` of the same file, so JWE or KMS
+  ciphertexts do not count. `dlp_solana_keypair` reports a Solana keypair array (64 bytes, at least
+  24 distinct) only after a key term (`keypair`, secret/private key, `signer`, `id.json`). Each rule
+  has a keyword prefilter and a bounded regex. Electrum seeds and Monero/Cardano signing keys stay
+  open. The golden recipe length of Base58Check segments now reads up to 8 constant leading bytes.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
