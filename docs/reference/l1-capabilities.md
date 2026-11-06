@@ -16,7 +16,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 18 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
-| Compared with | Presidio 2.2.364 (default and tuned; milestones against tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
+| Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
 
 !!! warning "Scope of the Presidio comparison"
@@ -171,100 +171,100 @@ Entities: 49 shared, 58 ARK only, 9 Presidio only, 6 semantic. Hard-negative fal
 
 ### F1 per entity
 
-Exact F1 in percent on the dev split, measured 2026-11-02, per source family: ARK in `balanced` vs Presidio tuned, over all rows of the family (EN and DE; M1 counts EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.
+Exact F1 in percent on the dev split, measured 2026-11-02, per source family: ARK in `balanced` vs Presidio tuned, raw gold, over all rows of the family (EN and DE; M1 counts EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.
 
-Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the family has no gold span for the id; `–` = the id was not part of the measurement (added later, or `semantic`).
+Legend: `ARK x / Presidio tuned y` = exact F1 of each; `no gold` = measured, but the family has no gold span for the id; `–` = the id was not part of the measurement (added later, or `semantic`).
 
 | Benchmark id | Scope | Gold | F1 neutral | F1 presidio_favored | F1 ark_authored ¹ |
 | --- | --- | --- | --- | --- | --- |
-| `pii.email` | shared | 417 / 16 / 144 | ARK 68.8 / Presidio 67.9 | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
-| `pii.phone` | shared | 504 / 46 / 85 | ARK 82.1 / Presidio 36.7 | ARK 91.8 / Presidio 65.1 | ARK 98.2 / Presidio 26.0 |
-| `pii.ip_address` | shared | 88 / 41 / 84 | ARK 96.7 / Presidio 94.6 | ARK 86.1 / Presidio 96.2 | ARK 100.0 / Presidio 100.0 |
-| `pii.mac_address` | shared | 0 / 6 / 22 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
-| `pii.iban` | shared | 55 / 65 / 81 | ARK 91.7 / Presidio 91.7 | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
-| `pii.credit_card.pan` | shared | 135 / 49 / 19 | ARK 47.9 / Presidio 35.6 | ARK 100.0 / Presidio 91.1 | ARK 100.0 / Presidio 79.2 |
-| `pii.financial_account_number` | shared | 126 / 5 / 20 | ARK 49.2 / Presidio 12.5 | ARK 57.1 / Presidio 0.0 | ARK 100.0 / Presidio 37.5 |
-| `pii.us.social_security_number` | shared | 44 / 15 / 29 | ARK 68.5 / Presidio 66.7 | ARK 75.0 / Presidio 88.9 | ARK 100.0 / Presidio 55.6 |
-| `pii.uk.national_insurance_number` | shared | 0 / 3 / 22 | no gold | ARK 66.7 / Presidio 100.0 | ARK 100.0 / Presidio 50.0 |
-| `pii.de.tax_id` | shared | 0 / 1 / 27 | no gold | ARK 0.0 / Presidio 100.0 | ARK 100.0 / Presidio 29.3 |
-| `pii.de.tax_number` | shared | 0 / 2 / 55 | no gold | ARK 66.7 / Presidio 100.0 | ARK 100.0 / Presidio 84.5 |
-| `pii.de.commercial_register` | shared | 0 / 1 / 56 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 88.0 |
-| `pii.de.social_security_number` | shared | 0 / 1 / 25 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 27.6 |
-| `pii.de.health_insurance_number` | shared | 0 / 3 / 55 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 86.6 |
-| `pii.de.lanr` | shared | 0 / 3 / 53 | no gold | ARK 50.0 / Presidio 100.0 | ARK 100.0 / Presidio 81.6 |
-| `pii.de.bsnr` | shared | 0 / 5 / 50 | no gold | ARK 57.1 / Presidio 57.1 | ARK 100.0 / Presidio 65.0 |
-| `pii.uk.nhs_number` | shared | 0 / 0 / 53 | no gold | no gold | ARK 96.1 / Presidio 83.0 |
-| `pii.au.abn` | shared | 0 / 1 / 18 | no gold | ARK 100.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.au.acn` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.au.tfn` | shared | 0 / 0 / 20 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.au.medicare` | shared | 0 / 1 / 19 | no gold | ARK 100.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.sg.nric_fin` | shared | 0 / 3 / 21 | no gold | ARK 50.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.sg.uen` | shared | 0 / 4 / 24 | no gold | ARK 85.7 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.se.personnummer` | shared | 0 / 2 / 19 | no gold | ARK 100.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.fi.personal_identity_code` | shared | 0 / 14 / 28 | no gold | ARK 96.3 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.se.organisationsnummer` | shared | 0 / 3 / 20 | no gold | ARK 50.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.ca.sin` | shared | 0 / 5 / 23 | no gold | ARK 57.1 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.tr.national_id` | shared | 0 / 4 / 21 | no gold | ARK 66.7 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.za.id_number` | shared | 0 / 3 / 23 | no gold | ARK 100.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.kr.rrn` | shared | 0 / 5 / 24 | no gold | ARK 57.1 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.kr.frn` | shared | 0 / 3 / 23 | no gold | ARK 80.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.kr.brn` | shared | 0 / 2 / 27 | no gold | ARK 66.7 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.es.nif` | shared | 0 / 3 / 26 | no gold | ARK 80.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.es.nie` | shared | 0 / 5 / 26 | no gold | ARK 88.9 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.it.fiscal_code` | shared | 0 / 3 / 23 | no gold | ARK 50.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.pl.pesel` | shared | 0 / 3 / 22 | no gold | ARK 50.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.in.aadhaar` | shared | 0 / 4 / 22 | no gold | ARK 85.7 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.in.gstin` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.in.pan` | shared | 0 / 3 / 19 | no gold | ARK 50.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.in.voter_id` | shared | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.us.medical_license` | shared | 0 / 0 / 22 | no gold | no gold | ARK 100.0 / Presidio 32.3 |
-| `pii.us.npi` | shared | 0 / 5 / 22 | no gold | ARK 88.9 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `entity.passport_number` | shared | 98 / 29 / 24 | ARK 68.0 / Presidio 38.4 | ARK 55.0 / Presidio 51.3 | ARK 97.9 / Presidio 52.6 |
-| `pii.identity_card_number` | shared | 0 / 11 / 31 | no gold | ARK 42.9 / Presidio 84.2 | ARK 100.0 / Presidio 38.5 |
-| `entity.driver_license_number` | shared | 120 / 14 / 23 | ARK 40.3 / Presidio 6.2 | ARK 83.3 / Presidio 78.3 | ARK 100.0 / Presidio 47.3 |
-| `pii.de.vat_id` | shared | 0 / 5 / 87 | no gold | ARK 75.0 / Presidio 100.0 | ARK 100.0 / Presidio 65.1 |
-| `pii.it.vat_code` | shared | 0 / 1 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 100.0 / Presidio 0.0 |
-| `pii.license_plate` | shared | 0 / 21 / 19 | no gold | ARK 9.1 / Presidio 0.0 | ARK 100.0 / Presidio 69.0 |
-| `pii.crypto_wallet` | shared | 0 / 1 / 21 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
-| `pii.swift_bic` | ark_only | 79 / 0 / 84 | ARK 73.4 / Presidio 0.0 | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.credit_card.cvv` | ark_only | 47 / 0 / 27 | ARK 63.4 / Presidio 0.0 | no gold | ARK 68.3 / Presidio 0.0 |
-| `pii.credit_card.expiry` | ark_only | 0 / 0 / 26 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
-| `pii.date_of_birth` | ark_only | 82 / 0 / 144 | ARK 67.0 / Presidio 0.0 | no gold | ARK 99.7 / Presidio 0.0 |
-| `pii.employee_id` | ark_only | 75 / 0 / 27 | ARK 88.2 / Presidio 0.0 | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.customer_id` | ark_only | 90 / 0 / 93 | ARK 60.9 / Presidio 0.0 | no gold | ARK 99.5 / Presidio 0.0 |
-| `pii.patient_id` | ark_only | 0 / 0 / 22 | no gold | no gold | ARK 92.7 / Presidio 0.0 |
-| `pii.student_id` | ark_only | 0 / 0 / 30 | no gold | no gold | ARK 98.3 / Presidio 0.0 |
-| `pii.applicant_id` | ark_only | 0 / 0 / 24 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.username` | ark_only | 26 / 0 / 84 | ARK 10.3 / Presidio 0.0 | no gold | ARK 98.2 / Presidio 0.0 |
-| `pii.at.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.ch.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.fr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.nl.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.be.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.es.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.bg.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.cy.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.cz.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.dk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.ee.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.gr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.fi.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.hr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.hu.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.ie.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.lt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.lu.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.lv.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.mt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.pl.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
+| `pii.email` | shared | 417 / 16 / 144 | ARK 68.8 / Presidio tuned 67.9 | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 100.0 |
+| `pii.phone` | shared | 504 / 46 / 85 | ARK 82.1 / Presidio tuned 36.7 | ARK 91.8 / Presidio tuned 65.1 | ARK 98.2 / Presidio tuned 26.0 |
+| `pii.ip_address` | shared | 88 / 41 / 84 | ARK 96.7 / Presidio tuned 94.6 | ARK 86.1 / Presidio tuned 96.2 | ARK 100.0 / Presidio tuned 100.0 |
+| `pii.mac_address` | shared | 0 / 6 / 22 | no gold | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 100.0 |
+| `pii.iban` | shared | 55 / 65 / 81 | ARK 91.7 / Presidio tuned 91.7 | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 100.0 |
+| `pii.credit_card.pan` | shared | 135 / 49 / 19 | ARK 47.9 / Presidio tuned 35.6 | ARK 100.0 / Presidio tuned 91.1 | ARK 100.0 / Presidio tuned 79.2 |
+| `pii.financial_account_number` | shared | 126 / 5 / 20 | ARK 49.2 / Presidio tuned 12.5 | ARK 57.1 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 37.5 |
+| `pii.us.social_security_number` | shared | 44 / 15 / 29 | ARK 68.5 / Presidio tuned 66.7 | ARK 75.0 / Presidio tuned 88.9 | ARK 100.0 / Presidio tuned 55.6 |
+| `pii.uk.national_insurance_number` | shared | 0 / 3 / 22 | no gold | ARK 66.7 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 50.0 |
+| `pii.de.tax_id` | shared | 0 / 1 / 27 | no gold | ARK 0.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 29.3 |
+| `pii.de.tax_number` | shared | 0 / 2 / 55 | no gold | ARK 66.7 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 84.5 |
+| `pii.de.commercial_register` | shared | 0 / 1 / 56 | no gold | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 88.0 |
+| `pii.de.social_security_number` | shared | 0 / 1 / 25 | no gold | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 27.6 |
+| `pii.de.health_insurance_number` | shared | 0 / 3 / 55 | no gold | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 86.6 |
+| `pii.de.lanr` | shared | 0 / 3 / 53 | no gold | ARK 50.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 81.6 |
+| `pii.de.bsnr` | shared | 0 / 5 / 50 | no gold | ARK 57.1 / Presidio tuned 57.1 | ARK 100.0 / Presidio tuned 65.0 |
+| `pii.uk.nhs_number` | shared | 0 / 0 / 53 | no gold | no gold | ARK 96.1 / Presidio tuned 83.0 |
+| `pii.au.abn` | shared | 0 / 1 / 18 | no gold | ARK 100.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.au.acn` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.au.tfn` | shared | 0 / 0 / 20 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.au.medicare` | shared | 0 / 1 / 19 | no gold | ARK 100.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.sg.nric_fin` | shared | 0 / 3 / 21 | no gold | ARK 50.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.sg.uen` | shared | 0 / 4 / 24 | no gold | ARK 85.7 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.se.personnummer` | shared | 0 / 2 / 19 | no gold | ARK 100.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.fi.personal_identity_code` | shared | 0 / 14 / 28 | no gold | ARK 96.3 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.se.organisationsnummer` | shared | 0 / 3 / 20 | no gold | ARK 50.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.ca.sin` | shared | 0 / 5 / 23 | no gold | ARK 57.1 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.tr.national_id` | shared | 0 / 4 / 21 | no gold | ARK 66.7 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.za.id_number` | shared | 0 / 3 / 23 | no gold | ARK 100.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.kr.rrn` | shared | 0 / 5 / 24 | no gold | ARK 57.1 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.kr.frn` | shared | 0 / 3 / 23 | no gold | ARK 80.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.kr.brn` | shared | 0 / 2 / 27 | no gold | ARK 66.7 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.es.nif` | shared | 0 / 3 / 26 | no gold | ARK 80.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.es.nie` | shared | 0 / 5 / 26 | no gold | ARK 88.9 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.it.fiscal_code` | shared | 0 / 3 / 23 | no gold | ARK 50.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.pl.pesel` | shared | 0 / 3 / 22 | no gold | ARK 50.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.in.aadhaar` | shared | 0 / 4 / 22 | no gold | ARK 85.7 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.in.gstin` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.in.pan` | shared | 0 / 3 / 19 | no gold | ARK 50.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.in.voter_id` | shared | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.us.medical_license` | shared | 0 / 0 / 22 | no gold | no gold | ARK 100.0 / Presidio tuned 32.3 |
+| `pii.us.npi` | shared | 0 / 5 / 22 | no gold | ARK 88.9 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `entity.passport_number` | shared | 98 / 29 / 24 | ARK 68.0 / Presidio tuned 38.4 | ARK 55.0 / Presidio tuned 51.3 | ARK 97.9 / Presidio tuned 52.6 |
+| `pii.identity_card_number` | shared | 0 / 11 / 31 | no gold | ARK 42.9 / Presidio tuned 84.2 | ARK 100.0 / Presidio tuned 38.5 |
+| `entity.driver_license_number` | shared | 120 / 14 / 23 | ARK 40.3 / Presidio tuned 6.2 | ARK 83.3 / Presidio tuned 78.3 | ARK 100.0 / Presidio tuned 47.3 |
+| `pii.de.vat_id` | shared | 0 / 5 / 87 | no gold | ARK 75.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 65.1 |
+| `pii.it.vat_code` | shared | 0 / 1 / 28 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.license_plate` | shared | 0 / 21 / 19 | no gold | ARK 9.1 / Presidio tuned 0.0 | ARK 100.0 / Presidio tuned 69.0 |
+| `pii.crypto_wallet` | shared | 0 / 1 / 21 | no gold | ARK 100.0 / Presidio tuned 100.0 | ARK 100.0 / Presidio tuned 100.0 |
+| `pii.swift_bic` | ark_only | 79 / 0 / 84 | ARK 73.4 / Presidio tuned 0.0 | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.credit_card.cvv` | ark_only | 47 / 0 / 27 | ARK 63.4 / Presidio tuned 0.0 | no gold | ARK 68.3 / Presidio tuned 0.0 |
+| `pii.credit_card.expiry` | ark_only | 0 / 0 / 26 | no gold | no gold | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.date_of_birth` | ark_only | 82 / 0 / 144 | ARK 67.0 / Presidio tuned 0.0 | no gold | ARK 99.7 / Presidio tuned 0.0 |
+| `pii.employee_id` | ark_only | 75 / 0 / 27 | ARK 88.2 / Presidio tuned 0.0 | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.customer_id` | ark_only | 90 / 0 / 93 | ARK 60.9 / Presidio tuned 0.0 | no gold | ARK 99.5 / Presidio tuned 0.0 |
+| `pii.patient_id` | ark_only | 0 / 0 / 22 | no gold | no gold | ARK 92.7 / Presidio tuned 0.0 |
+| `pii.student_id` | ark_only | 0 / 0 / 30 | no gold | no gold | ARK 98.3 / Presidio tuned 0.0 |
+| `pii.applicant_id` | ark_only | 0 / 0 / 24 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.username` | ark_only | 26 / 0 / 84 | ARK 10.3 / Presidio tuned 0.0 | no gold | ARK 98.2 / Presidio tuned 0.0 |
+| `pii.at.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.ch.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.fr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.nl.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.be.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.es.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.bg.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.cy.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.cz.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.dk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.ee.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.gr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.fi.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.hr.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.hu.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.ie.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.lt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.lu.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.lv.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.mt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.pl.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
 | `pii.pl.regon` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
-| `pii.pt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.ro.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.se.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.si.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.sk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.no.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
-| `pii.uk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio 0.0 |
+| `pii.pt.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.ro.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.se.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.si.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.sk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.no.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
+| `pii.uk.vat_id` | ark_only | 0 / 0 / 16 | no gold | no gold | ARK 100.0 / Presidio tuned 0.0 |
 | `pii.vin` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.isin` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.lei` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
@@ -284,15 +284,15 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.meid` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.iccid` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.imsi` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
-| `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
-| `pii.us.itin` | presidio_only | 0 / 2 / 22 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 58.1 |
-| `pii.us.mbi` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.uk.postcode` | presidio_only | 0 / 4 / 249 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.de.postal_code` | presidio_only | 0 / 0 / 231 | no gold | no gold | ARK 0.0 / Presidio 82.8 |
-| `pii.ng.nin` | presidio_only | 0 / 0 / 28 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
-| `pii.ph.tin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.ph.umid` | presidio_only | 0 / 8 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.th.tnin` | presidio_only | 0 / 6 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio tuned 77.8 | ARK 0.0 / Presidio tuned 8.2 |
+| `pii.us.itin` | presidio_only | 0 / 2 / 22 | no gold | ARK 0.0 / Presidio tuned 100.0 | ARK 0.0 / Presidio tuned 58.1 |
+| `pii.us.mbi` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.uk.postcode` | presidio_only | 0 / 4 / 249 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.de.postal_code` | presidio_only | 0 / 0 / 231 | no gold | no gold | ARK 0.0 / Presidio tuned 82.8 |
+| `pii.ng.nin` | presidio_only | 0 / 0 / 28 | no gold | no gold | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.ph.tin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.ph.umid` | presidio_only | 0 / 8 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 0.0 / Presidio tuned 0.0 |
+| `pii.th.tnin` | presidio_only | 0 / 6 / 24 | no gold | ARK 0.0 / Presidio tuned 0.0 | ARK 0.0 / Presidio tuned 0.0 |
 | `entity.person_name` | semantic | – | – | – | – |
 | `entity.organization` | semantic | – | – | – | – |
 | `entity.location` | semantic | – | – | – | – |

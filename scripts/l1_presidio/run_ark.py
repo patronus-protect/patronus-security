@@ -12,7 +12,10 @@ namespaced as ``ark.<LABEL>`` and are therefore never scored by accident.
 
 The engine is ``SecurityGateway(categories=["pii"], max_level="l1")`` without model
 downloads, in the default PII mode ``strict`` unless ``--pii-mode balanced|recall`` asks for
-the scored modes (K02; the sidecar then records ``engine.pii_mode``). Only primary findings
+the scored modes (K02; the sidecar then records ``engine.pii_mode``). ``--gates PATH`` applies the
+``rules`` of an execution-gates JSON file on top, e.g. the opt-in bare rules of
+``docs/how-to/pii-bare-formats.gates.json`` (D-BARE; the sidecar records ``engine.rules``, and a
+``pii_mode`` in the file must equal ``--pii-mode``). Only primary findings
 are written: a span the result lists under ``details.secondary_evidence`` (in ``strict`` the
 card-shaped part of a valid IBAN and an account finding on an IBAN value, T07) is dropped
 and counted as ``secondary_spans`` in the sidecar. The metadata sidecar records input and output digests and the SHA-256
@@ -121,14 +124,29 @@ def _check_pii_mode(pii_mode: str) -> None:
         raise ValueError(f"pii_mode must be one of {', '.join(PII_MODES)}, got {pii_mode!r}")
 
 
-def build_gateway(pii_mode: str = DEFAULT_PII_MODE) -> Any:
+def load_rules(path: Path, pii_mode: str) -> dict[str, bool]:
+    """The ``rules`` of an execution-gates JSON file; its ``pii_mode``, if set, must be ``pii_mode``."""
+    gates = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(gates, dict) or set(gates) - {"pii_mode", "rules"}:
+        raise ValueError(f"{path}: expected an object with pii_mode and rules only")
+    if gates.get("pii_mode", pii_mode) != pii_mode:
+        raise ValueError(f"{path} sets pii_mode {gates['pii_mode']!r}, but the run uses {pii_mode!r}")
+    rules = gates.get("rules")
+    if not isinstance(rules, dict) or not rules or not all(isinstance(on, bool) for on in rules.values()):
+        raise ValueError(f"{path}: rules must map rule ids to true or false")
+    return dict(sorted(rules.items()))
+
+
+def build_gateway(pii_mode: str = DEFAULT_PII_MODE, rules: dict[str, bool] | None = None) -> Any:
     """Create the L1 PII gateway (imports the native binding lazily)."""
     from patronus_ark import SecurityGateway
 
     _check_pii_mode(pii_mode)
     gateway = SecurityGateway(categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False)
-    if pii_mode != DEFAULT_PII_MODE:
-        gateway.set_execution_gates({"pii_mode": pii_mode})
+    gates: dict[str, Any] = {**({"pii_mode": pii_mode} if pii_mode != DEFAULT_PII_MODE else {}),
+                             **({"rules": rules} if rules else {})}
+    if gates:
+        gateway.set_execution_gates(gates)
     return gateway
 
 
@@ -231,6 +249,7 @@ def run(
     gateway: Any = None,
     build: dict[str, str] | None = None,
     pii_mode: str = DEFAULT_PII_MODE,
+    rules: dict[str, bool] | None = None,
     dynamic_pii: dict[str, Any] | None = None,
     dynamic: Any = None,
     dynamic_labels: dict[str, str] | None = None,
@@ -242,7 +261,7 @@ def run(
     engine; ``latency_path`` writes the per-row wall times (``latency.write_row_latency``)."""
     _check_pii_mode(pii_mode)
     if gateway is None:
-        gateway = build_gateway(pii_mode)
+        gateway = build_gateway(pii_mode, rules)
     if dynamic_pii is not None:
         if dynamic_labels is None:
             dynamic_labels = dynamic_label_map()
@@ -262,6 +281,8 @@ def run(
     engine: dict[str, Any] = {"categories": [CATEGORY], "max_level": MAX_LEVEL}
     if pii_mode != DEFAULT_PII_MODE:
         engine["pii_mode"] = pii_mode
+    if rules:
+        engine["rules"] = rules
     if dynamic_pii is not None:
         engine["categories"].append(DYNAMIC_CATEGORY)
         engine["max_level"] = DYNAMIC_MAX_LEVEL
@@ -298,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--pii-mode", choices=PII_MODES, default=DEFAULT_PII_MODE, help="PII output mode (default: strict)"
     )
+    parser.add_argument("--gates", type=Path, metavar="PATH",
+                        help="execution-gates JSON whose rules are applied (e.g. docs/how-to/pii-bare-formats.gates.json)")
     parser.add_argument("--dynamic-pii", action="store_true", help="add the L3 dynamic-pii pipeline (GLiNER)")
     parser.add_argument("--dynamic-pii-labels", default=",".join(DEFAULT_DYNAMIC_LABELS),
                         help="comma-separated GLiNER labels (default: %(default)s)")
@@ -327,8 +350,14 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
     elif args.dynamic_pii_label_threshold:
         parser.error("--dynamic-pii-label-threshold needs --dynamic-pii")
+    rules = None
+    if args.gates:
+        try:
+            rules = load_rules(args.gates, args.pii_mode)
+        except (OSError, ValueError) as error:
+            parser.error(f"--gates: {error}")
     meta_path = args.meta or args.output.with_name(args.output.stem + ".meta.json")
-    meta = run(args.input, args.output, meta_path, pii_mode=args.pii_mode, dynamic_pii=dynamic_pii,
+    meta = run(args.input, args.output, meta_path, pii_mode=args.pii_mode, rules=rules, dynamic_pii=dynamic_pii,
                dynamic_labels=dynamic_labels if dynamic_pii else None, latency_path=args.latency)
     print(
         f"ark {meta['engine']['max_level']}: {meta['rows']} rows, {meta['spans']} spans -> {args.output} "

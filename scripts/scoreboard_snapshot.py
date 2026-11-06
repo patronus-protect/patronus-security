@@ -17,6 +17,11 @@ fills the measured per-entity and per-group results from the aggregated reports 
   ``entities.<id>.<family>.<en|de>`` with gold and exact F1 per engine, ``latency.<engine>`` with p50/p95
   per text and the machine. Hand-written keys there (e.g. ``note`` on platform and method) are kept.
 
+Schema 1.2 (M-RAW): ``pii.milestone_view`` names the gold view the milestones were judged on (``raw``
+since M-RAW, ``attainable`` for measurements under T27) and ``pii.baselines`` the Presidio engines they
+were judged against (report engine keys, e.g. ``presidio-default`` and ``presidio-tuned``); both come
+from the PII report and replace the single ``pii.baseline`` of 1.1.
+
 Only counts and rates are read; reports never carry text. Ids of the measurement without gold get
 ``"gold": 0``; ids that were not part of the measurement are left out.
 
@@ -36,7 +41,7 @@ import yaml
 
 
 SCHEMA = "ark-l1-scoreboard-snapshot-v1"
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 PII_FAMILIES = ("neutral", "presidio_favored", "ark_authored")
 PII_LANGUAGES = ("en", "de")
 DLP_TOOLS = ("ark", "gitleaks", "trufflehog", "detect-secrets")
@@ -204,6 +209,9 @@ def from_reports(snapshot: dict[str, Any], pii_report: dict[str, Any] | None,
         pii["families"] = list(PII_FAMILIES)
         pii["engines"] = list(pii_report["engines"])
         pii["entities"] = entities
+        pii.pop("baseline", None)
+        pii["milestone_view"] = pii_report["milestone_view"]
+        pii["baselines"] = list(pii_report["m1"]["milestone_profiles"])
         mode = f"ark-{pii.get('decision_mode', 'balanced')}"
         pii["overall_f1"] = {family: overall[family][mode] for family in ("neutral", "presidio_favored")
                              if mode in overall.get(family, {})}
