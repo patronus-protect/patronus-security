@@ -113,7 +113,7 @@ pub(super) const AADHAAR_BARE: PiiPattern = PiiPattern {
 /// A bare PAN, format only. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
 pub(super) const PAN_BARE: PiiPattern = PiiPattern {
     name: "pii_pan_in_bare",
-    base_score: 15,
+    base_score: 35,
     captured_value: false,
     requires_context: false,
     scored_only: false,
@@ -123,7 +123,7 @@ pub(super) const PAN_BARE: PiiPattern = PiiPattern {
 /// A bare voter ID (EPIC), format only. Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
 pub(super) const VOTER_ID_BARE: PiiPattern = PiiPattern {
     name: "pii_voter_id_in_bare",
-    base_score: 15,
+    base_score: 35,
     captured_value: false,
     requires_context: false,
     scored_only: false,

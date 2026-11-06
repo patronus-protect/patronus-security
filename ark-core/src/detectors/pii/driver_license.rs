@@ -128,7 +128,7 @@ pub(super) const DE_BARE: PiiPattern = PiiPattern {
     name: "pii_driver_license_number_de_bare",
     pattern: r"(?-u:\b)[A-Z0-9]{11}(?-u:\b)",
     validator: Some(validators::de_driver_license_number_bare),
-    base_score: 15,
+    base_score: 35,
     captured_value: false,
     requires_context: false,
     scored_only: false,
