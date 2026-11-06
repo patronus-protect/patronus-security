@@ -6,8 +6,8 @@
 //! off in every mode until the `rules` gate enables it; then it reports the bare
 //! value with the validator of its id, in every mode, and drops a value inside a
 //! longer number, under a field that names another value or nearer a
-//! counter-context term. Its low base score ranks it below the labelled rules in
-//! `balanced` and `recall`.
+//! counter-context term. It scores the `balanced` threshold `0.50`, below the
+//! labelled rules of its id in `balanced` and `recall`.
 
 use patronus_ark::detectors::pii::pii::{PiiPipeline, PII_PATTERNS};
 use patronus_ark::{
@@ -15,17 +15,16 @@ use patronus_ark::{
     SecurityScanResult,
 };
 
-/// `(rule, label, valid bare value, invalid value, labelled text, model score)`.
-/// The invalid value fails the validator of the id: a check digit where one
-/// exists, else the format.
-const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
+/// `(rule, label, valid bare value, invalid value, labelled text)`. The invalid
+/// value matches the pattern and fails the validator of the id: a check digit
+/// where one exists, else the format.
+const CASES: &[(&str, &str, &str, &str, &str)] = &[
     (
         "pii_steuer_id_de_bare",
         "STEUERID",
         "86095742719",
         "86095742718",
         "Steuer-ID: 86095742719",
-        0.50,
     ),
     (
         "pii_steuernummer_de_bare",
@@ -33,7 +32,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "1121081508150",
         "2893181508152",
         "Steuernummer: 1121081508150",
-        0.30,
     ),
     (
         "pii_physician_number_lanr_de_bare",
@@ -41,7 +39,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "987654401",
         "987654501",
         "LANR: 987654401",
-        0.50,
     ),
     (
         "pii_facility_number_bsnr_de_bare",
@@ -49,7 +46,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "711234567",
         "000000000",
         "BSNR 711234567 der Praxis.",
-        0.30,
     ),
     (
         "pii_driver_license_number_de_bare",
@@ -57,7 +53,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "B072RRE2A57",
         "INFORMATION",
         "Führerscheinnummer: B072RRE2A57",
-        0.30,
     ),
     (
         "pii_ssn_us_bare",
@@ -65,7 +60,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "422687360",
         "987654320",
         "SSN: 422-68-7360",
-        0.30,
     ),
     (
         "pii_sin_ca_bare",
@@ -73,7 +67,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "435418165",
         "435418166",
         "My social insurance number is 435418165.",
-        0.50,
     ),
     (
         "pii_aadhaar_in_bare",
@@ -81,7 +74,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "599979610811",
         "599979610812",
         "My Aadhaar is 599979610811.",
-        0.50,
     ),
     (
         "pii_npi_us_bare",
@@ -89,7 +81,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "1565277724",
         "1072090843",
         "NPI: 1565277724",
-        0.50,
     ),
     (
         "pii_pesel_pl_bare",
@@ -97,7 +88,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "02070803628",
         "02130803627",
         "PESEL: 02070803628",
-        0.50,
     ),
     (
         "pii_acn_au_bare",
@@ -105,7 +95,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "006 249 976",
         "135 506 072",
         "ACN: 006 249 976",
-        0.50,
     ),
     (
         "pii_brn_kr_bare",
@@ -113,7 +102,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "1048656659",
         "0899614156",
         "Business Registration Number: 1048656659",
-        0.50,
     ),
     (
         "pii_pan_in_bare",
@@ -121,7 +109,6 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "AFZPK7190K",
         "DKLQR3307N",
         "Indische PAN: DKLPR3307N",
-        0.30,
     ),
     (
         "pii_voter_id_in_bare",
@@ -129,17 +116,18 @@ const CASES: &[(&str, &str, &str, &str, &str, f64)] = &[
         "KLT4471920",
         "KLT0000000",
         "Voter ID: KLT4471920",
-        0.30,
     ),
     (
         "pii_vehicle_registration_ng_bare",
         "LICENSEPLATE",
         "APP-456CV",
-        "APP 456 CV",
+        "APP-000CV",
         "Kennzeichen: APP-456CV",
-        0.30,
     ),
 ];
+
+/// Model score of every bare hit without context: the `balanced` threshold.
+const BARE_SCORE: f64 = 0.50;
 
 /// Bare carriers per language: no term of any label, no counter-context term.
 const BARE: [&str; 2] = ["Bitte {} eintragen.", "Please put {} there."];
@@ -258,11 +246,8 @@ fn the_unfiltered_pipeline_keeps_the_bare_rules_off() {
 
 #[test]
 fn an_enabled_bare_rule_reports_the_valid_bare_value_in_every_mode() {
-    for &(rule, label, value, _, _, score) in CASES {
+    for &(rule, label, value, ..) in CASES {
         for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
-            if mode.min_score().is_some_and(|min| score < min) {
-                continue;
-            }
             let scanner = scanner(gates(Some(rule), mode));
             for template in BARE {
                 let text = template.replace("{}", value);
@@ -270,7 +255,7 @@ fn an_enabled_bare_rule_reports_the_valid_bare_value_in_every_mode() {
                 let expected = if mode == ScoreMode::Strict {
                     1.0
                 } else {
-                    score
+                    BARE_SCORE
                 };
                 assert_eq!(
                     rule_score(&result, rule),
@@ -291,18 +276,16 @@ fn an_enabled_bare_rule_reports_the_valid_bare_value_in_every_mode() {
 }
 
 #[test]
-fn a_format_only_bare_value_stays_below_the_balanced_threshold() {
-    for &(rule, _, value, _, _, score) in CASES.iter().filter(|case| case.5 < 0.5) {
-        let scanner = scanner(gates(Some(rule), ScoreMode::Balanced));
-        let result = scan(&scanner, &BARE[1].replace("{}", value));
-        assert_eq!(rule_score(&result, rule), None, "{rule} {score}");
-    }
-}
-
-#[test]
 fn an_enabled_bare_rule_keeps_the_validator_of_its_id() {
     let mut reported = Vec::new();
     for &(rule, _, _, invalid, ..) in CASES {
+        let pattern = PII_PATTERNS.iter().find(|p| p.name == rule).unwrap();
+        // The invalid value reaches the validator: the pattern matches it whole.
+        let regex = regex::Regex::new(&format!("^(?:{})$", pattern.pattern)).unwrap();
+        assert!(
+            regex.is_match(invalid),
+            "{rule}: the pattern rejects the invalid value"
+        );
         let scanner = scanner(gates(Some(rule), ScoreMode::Recall));
         for template in BARE {
             let text = template.replace("{}", invalid);
@@ -332,7 +315,7 @@ fn an_enabled_bare_rule_drops_counter_context_fragments_and_foreign_fields() {
 #[test]
 fn an_enabled_bare_rule_ranks_below_and_leaves_the_labelled_hit_unchanged() {
     let mut changed = Vec::new();
-    for &(rule, _, _, _, labelled, score) in CASES {
+    for &(rule, _, _, _, labelled) in CASES {
         for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
             let off = scan(&scanner(gates(None, mode)), labelled);
             let on = scan(&scanner(gates(Some(rule), mode)), labelled);
@@ -342,7 +325,10 @@ fn an_enabled_bare_rule_ranks_below_and_leaves_the_labelled_hit_unchanged() {
             if (mode != ScoreMode::Strict && off.evidence_spans.is_empty())
                 || (!scored_only && on.evidence_spans != off.evidence_spans)
                 || (mode != ScoreMode::Strict
-                    && off.evidence_spans.iter().any(|span| span.score <= score))
+                    && off
+                        .evidence_spans
+                        .iter()
+                        .any(|span| span.score <= BARE_SCORE))
             {
                 changed.push(format!(
                     "{rule} {mode}: {labelled}: {:?} -> {:?}",
@@ -379,6 +365,18 @@ fn the_example_profile_enables_exactly_the_bare_rules() {
     expected.sort_unstable();
     assert_eq!(enabled, expected);
     assert_eq!(profile.native.rules.len(), expected.len());
+    // Every listed rule reports in the mode of the profile.
+    let scanner = scanner(profile);
+    for &(rule, _, value, ..) in CASES {
+        for template in BARE {
+            let text = template.replace("{}", value);
+            assert_eq!(
+                rule_score(&scan(&scanner, &text), rule),
+                Some(BARE_SCORE),
+                "{rule}: {text}"
+            );
+        }
+    }
 }
 
 /// Hard negatives of the PII goldens and of the bilingual fixture.
