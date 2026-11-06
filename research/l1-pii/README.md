@@ -121,6 +121,11 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
   - Jede dieser Lücken liegt unter einer festgehaltenen Entscheidung (`known_gaps`) oder an Gold
     mit ungültiger Prüfziffer; schließen ließe sie sich nur durch gelockerte Validatoren oder
     revidierte Entscheidungen, die nicht Teil von Q-RAW sind.
+- **Abnahme von Q-RAW offen.** Die Abnahme verlangt M1 und M2 in der Rohsicht; M1 hält mit keiner
+  Engine, M2 nur auf Dev mit `balanced-bare`. Q-RAW ist erst erfüllt, wenn das Gate auf dem Head
+  `MET` für M1 und M2 druckt (je Split eine Zeile `milestones <split> (balanced, …)` und
+  `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
+  (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
 
 ## Untergrenze `presidio_favored` für die Länder-IDs seit W44 (T33)
 
