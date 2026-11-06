@@ -708,7 +708,7 @@ def test_gold_checks_cover_every_checksum_validator():
     validators = MODULE.gold_checks(EMAP).validators
     assert validators["pii.iban"] == ("iban",)
     assert validators["pii.credit_card.pan"] == ("payment_card",)
-    assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
+    assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_bare", "steuer_id_issued")
     assert validators["pii.de.vat_id"] == ("de_vat_id",)
     assert validators["pii.it.vat_code"] == ("it_vat_id",)
     assert validators["pii.kr.rrn"] == ("kr_rrn",)
