@@ -136,6 +136,7 @@ DLP_LABELS = {
     "dlp.content.sql",
     "dlp.content.system_log",
     "dlp.de.commercial_register_number",
+    "dlp.document.legal_privileged",
     "dlp.de.facility_number_bsnr",
     "dlp.de.vat_id",
     "dlp.internal.business_metric",
