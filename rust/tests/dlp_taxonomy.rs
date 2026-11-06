@@ -119,7 +119,7 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_notion_api_token", "api_key"),
     ("dlp_linear_api_key", "api_key"),
     ("dlp_linear_client_secret", "secret_key"),
-    ("dlp_airtable_pat", "access_token"),
+    ("dlp_airtable_pat", "api_key"),
     ("dlp_airtable_api_key", "api_key"),
     ("dlp_postman_api_key", "api_key"),
     ("dlp_mapbox_secret_token", "api_key"),

@@ -6123,6 +6123,29 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_atlassian_legacy_api_token",
+    "de": "CONFLUENCE_API_TOKEN=<<secret\u003a0>>",
+    "en": "jira:\n  jira_api_token: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "atlassian_api_token_legacy",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CONFLUENCE_API_TOKEN=${CONFLUENCE_API_TOKEN}",
+        "Ticket PLAT-4711, Commit 9f2c1e7ab4d3c6e8a0b1c2d3"
+      ],
+      "en": [
+        "JIRA_ISSUE_ID=PLAT-4711",
+        "jira:\n  jira_api_token: \"<your-api-token>\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_notion_api_token",
     "de": "notion:\n  token: \"<<secret\u003a0>>\"",
     "en": "const notion = new Client({ auth: \"<<secret\u003a0>>\" })",
@@ -6169,6 +6192,29 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_linear_client_secret",
+    "de": "{\"oauth\": {\"linearClientSecret\": \"<<secret\u003a0>>\"}}",
+    "en": "LINEAR_CLIENT_SECRET=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "linear_client_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "LINEAR_CLIENT_SECRET=${LINEAR_CLIENT_SECRET}",
+        "LINEAR_TEAM_ID=3f9c1e7a-2b4d-4c6e-8a0b-1c2d3e4f5a6b"
+      ],
+      "en": [
+        "linear:\n  client_secret: \"<LINEAR-CLIENT-SECRET>\"",
+        "model = nn.Linear(128, 64)"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_airtable_pat",
     "de": "AIRTABLE_TOKEN=<<secret\u003a0>>",
     "en": "Authorization: Bearer <<secret\u003a0>>",
@@ -6186,6 +6232,29 @@
       "en": [
         "{\"airtable\": {\"token\": \"{{ airtable_token }}\"}}",
         "pattern = re.compile(r\"pat[A-Za-z0-9]{14}\")"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_airtable_api_key",
+    "de": "$ export AIRTABLE_API_KEY=<<secret\u003a0>>",
+    "en": "AIRTABLE_API_KEY = \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "airtable_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "airtable:\n  airtable_base: appR4nd0mBase12",
+        "AIRTABLE_API_KEY=${AIRTABLE_API_KEY}"
+      ],
+      "en": [
+        "airtable_api_key: \"<AIRTABLE-API-KEY>\"",
+        "Legacy Airtable API keys start with key and were retired in 2024."
       ]
     },
     "language_neutral": false

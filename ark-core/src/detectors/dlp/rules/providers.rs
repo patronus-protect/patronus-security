@@ -1114,8 +1114,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("airtable")
         .with_min_entropy(3.0)
-        .with_boundary(".")
-        .with_subtype(SecretSubtype::AccessToken),
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
     },
     // P10: legacy Airtable API keys, `key` and 14 alphanumerics under an
     // Airtable key.
@@ -1170,7 +1170,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("mapbox")
         .with_min_entropy(3.0)
-        .with_boundary("-.")
+        .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────
