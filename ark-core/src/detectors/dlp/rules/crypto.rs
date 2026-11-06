@@ -363,8 +363,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_bip39_seed_phrase",
         // C01: the words and their separators; `seed_phrase::phrases` finds
         // the phrases, the validator checks word lists and checksum.
-        // A word is 3 to 9 letters, accented ones in NFC or NFD.
-        pattern: r#"(?:[a-z\x{e0}-\x{ff}][\x{300}-\x{36f}]*){3,9}(?:[\s0-9.):,"'-]{1,24}(?:[a-z\x{e0}-\x{ff}][\x{300}-\x{36f}]*){3,9}){11,23}"#,
+        // A word has an ASCII letter among its letters, accented ones in NFC
+        // or NFD (`año`, `a\u{303}o`); the finder checks the word lengths.
+        pattern: r#"[\x{e0}-\x{ff}\x{300}-\x{36f}]{0,2}[a-z][a-z\x{e0}-\x{ff}\x{300}-\x{36f}]{1,17}(?:[\s0-9.):,"'-]{1,24}[\x{e0}-\x{ff}\x{300}-\x{36f}]{0,2}[a-z][a-z\x{e0}-\x{ff}\x{300}-\x{36f}]{1,17}){11,23}"#,
         entity_group: "CRYPTO_KEY",
         validator: Some(is_seed_phrase),
         span_group: None,
@@ -374,7 +375,9 @@ pub(super) const RULES: &[DlpPattern] = &[
             "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki",
             &[],
         )
-        .with_value_run(ValueClass::Alphanumeric, 3)
+        // Every word has an ASCII letter (`año` in NFC no more than one);
+        // the finder is the actual prefilter.
+        .with_value_run(ValueClass::Alphanumeric, 1)
         .with_finder(phrases)
         // 12- and 15-word phrases carry a 4- or 5-bit checksum.
         .with_context_gate(has_seed_context)

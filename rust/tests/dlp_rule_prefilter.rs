@@ -515,7 +515,7 @@ fn keywordless_rules_open_on_their_value_run() {
     let scan = rules.prefilter.scan(&long);
     assert!(scan.is_active(wif));
     rules.assert_exact("wif", &long);
-    // C01: the seed phrase rule opens on any three-letter word; its finder
+    // C01: the seed phrase rule opens on any ASCII letter; its finder
     // (`seed_phrase::phrases`) is the actual prefilter.
     let quiet = "Hallo Team, bitte lest die Liste bis Freitag.";
     let scan = rules.prefilter.scan(quiet);
