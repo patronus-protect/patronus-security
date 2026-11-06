@@ -54,6 +54,8 @@ def test_snapshot_is_documented_and_used():
     assert data["schema_version"] == scoreboard_snapshot.SCHEMA_VERSION
     page = PAGE.read_text(encoding="utf-8")
     assert f"{snapshot['date']} on `main` {snapshot['commit']}" in page
+    baselines = " and ".join(l1_capabilities_doc._engine_title(b) for b in snapshot["pii"]["baselines"])
+    assert f"milestones against {baselines} on {snapshot['pii']['milestone_view']} gold" in page
     for programme in ("pii", "dlp"):
         for milestone in snapshot[programme]["milestones"]:
             assert milestone["value"] in page
@@ -72,7 +74,9 @@ def test_every_measured_pii_id_with_gold_shows_its_f1():
         row = _row(page, entity_id, "### F1 per entity")
         for family, values in pii["entities"][entity_id].items():
             if values.get("gold"):
-                expected = f"ARK {values['f1']['ark-balanced']:.1f} / Presidio {values['f1']['presidio-tuned']:.1f}"
+                expected = l1_capabilities_doc.pii_f1_cell(pii["entities"][entity_id], family, "ark-balanced",
+                                                           pii["baselines"])
+                assert expected.startswith(f"ARK {values['f1']['ark-balanced']:.1f} / Presidio ")
                 assert expected in row, (entity_id, family)
             else:
                 assert "no gold" in row, (entity_id, family)
@@ -98,10 +102,14 @@ def test_every_measured_dlp_entity_with_gold_shows_its_f1():
 
 def test_cells_distinguish_no_gold_from_not_measured():
     measured = {"neutral": {"gold": 0}, "presidio_favored": {"gold": 3, "f1": {"ark-balanced": 50.0, "presidio-tuned": 100.0}}}
-    assert l1_capabilities_doc.pii_f1_cell(measured, "neutral", "ark-balanced", "presidio-tuned") == "no gold"
-    assert (l1_capabilities_doc.pii_f1_cell(measured, "presidio_favored", "ark-balanced", "presidio-tuned")
-            == "ARK 50.0 / Presidio 100.0")
-    assert l1_capabilities_doc.pii_f1_cell(None, "neutral", "ark-balanced", "presidio-tuned") == "–"
+    measured["presidio_favored"]["f1"]["presidio-default"] = 25.0
+    assert l1_capabilities_doc.pii_f1_cell(measured, "neutral", "ark-balanced", ["presidio-tuned"]) == "no gold"
+    assert (l1_capabilities_doc.pii_f1_cell(measured, "presidio_favored", "ark-balanced", ["presidio-tuned"])
+            == "ARK 50.0 / Presidio tuned 100.0")
+    assert (l1_capabilities_doc.pii_f1_cell(measured, "presidio_favored", "ark-balanced",
+                                            ["presidio-default", "presidio-tuned"])
+            == "ARK 50.0 / Presidio default 25.0 / Presidio tuned 100.0")
+    assert l1_capabilities_doc.pii_f1_cell(None, "neutral", "ark-balanced", ["presidio-tuned"]) == "–"
     assert l1_capabilities_doc.pii_gold_cell(measured) == "0 / 3 / 0"
     assert l1_capabilities_doc.dlp_cell({"gold": 0}) == "no gold"
     assert l1_capabilities_doc.dlp_cell(None) == "–"
@@ -122,8 +130,11 @@ def test_converter_round_trip(tmp_path):
     ])
     assert code == 0
     snapshot = json.loads(output.read_text(encoding="utf-8"))
-    assert snapshot["schema"] == "ark-l1-scoreboard-snapshot-v1" and snapshot["schema_version"] == "1.1"
+    assert snapshot["schema"] == "ark-l1-scoreboard-snapshot-v1" and snapshot["schema_version"] == "1.2"
     pii = snapshot["pii"]
+    # M-RAW: the milestone view and the Presidio baselines come from the report and replace "baseline".
+    assert pii["milestone_view"] == "raw" and pii["baselines"] == ["presidio-default", "presidio-tuned"]
+    assert "baseline" not in pii
     assert pii["overall_f1"] == {"neutral": 66.7, "presidio_favored": 100.0}
     assert pii["entities"]["pii.email"]["neutral"] == {"gold": 10, "f1": {"ark-balanced": 66.7, "presidio-tuned": 50.0}}
     assert pii["entities"]["pii.email"]["presidio_favored"] == {"gold": 0}

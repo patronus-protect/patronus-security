@@ -5,7 +5,10 @@
   "commit": "3eda3e8",
   "splits": "dev",
   "pii": {
-    "baseline": "Presidio tuned",
+    "baselines": [
+      "presidio-tuned"
+    ],
+    "milestone_view": "attainable",
     "decision_mode": "balanced",
     "overall_f1": {
       "neutral": 70.0,
@@ -3850,5 +3853,5 @@
       }
     }
   },
-  "schema_version": "1.1"
+  "schema_version": "1.2"
 }

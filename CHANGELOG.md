@@ -11,6 +11,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
+  2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
+  and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
+  stays as a diagnostic column. Every Ark engine (`strict`, `balanced`, `balanced-bare`, `recall`) is
+  scored against every Presidio profile, and a milestone holds only if Ark `balanced` or
+  `balanced-bare` (balanced with the opt-in bare profile `docs/how-to/pii-bare-formats.gates.json`)
+  beats both Presidio default (threshold 0) and Presidio tuned; the report names the engine that holds
+  (`holding`). Breaking for the evaluation CLI: the three commands take `--ark ENGINE=DIR` and
+  `--presidio PROFILE=DIR` with `default` and `tuned` required (`report --engine` is gone), and the
+  JSON of `m1`/`m2`/`report` nests results per Ark engine and Presidio engine
+  (`modes.<engine>.presidio-<profile>`) with the attainable view under `attainable`. The gate's
+  `milestones <split>` line scores balanced on raw gold against both profiles. `run_ark.py --gates
+  PATH` applies the `rules` of an execution-gates file and records them as `engine.rules`. Milestone
+  snapshot schema 1.2: `pii.milestone_view` and `pii.baselines` replace `pii.baseline`, and
+  `docs/reference/l1-capabilities.md` shows Ark against each baseline and names the view. Detection
+  change: none; evaluation tooling and docs only, no effect on L1 latency.
 - Detection change: opt-in bare-format PII rules (D-BARE). Every value that the default rules
   report only with a term of its label or after its field name (`known_gaps` with `bare: true`)
   has its own rule `<rule>_bare`: `pii_steuer_id_de_bare`, `pii_steuernummer_de_bare` (13-digit

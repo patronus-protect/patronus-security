@@ -19,9 +19,32 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
 - **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU; GOLD-VAT2: `ark-synthetic-vat-2` für IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK und UK (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)). Damit erzeugen die drei Goldsets zusammen jede ID der Entity-Map außer DK CPR und NO fødselsnummer aus B-NORD (`NOT_GENERATED`).
-- **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung. Seit T27 (2026-11-02) gilt die Untergrenze auf **erreichbarem Gold** (Abschnitt unten; PII-Tabelle „Per entity, attainable gold“ in `scoreboard.py report`); die Rohwerte werden daneben berichtet.
+- **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung. Seit M-RAW (2026-11-05) gilt die Untergrenze wieder auf **rohem Gold** (PII-Tabelle „Per entity“ in `scoreboard.py report`); die erreichbare Sicht aus T27 steht als Diagnose daneben („Per entity, attainable gold“).
 
-## Erreichbares Gold: Meilensteine und Untergrenze (T27)
+## Rohe Sicht: Meilensteine gegen Presidio default und tuned (M-RAW)
+
+Entschieden am 2026-11-05 (Owner); ersetzt T27 für öffentliche Aussagen. Anlass: ein externer Nachtest
+auf Presidios 1.500 EN-Texten zählte alles Gold, auch Werte, die ARK nach festgehaltenen Entscheidungen
+nicht meldet; blanke Formen sind seit D-BARE als Opt-in-Regeln schaltbar statt wegentschieden.
+
+- **Urteil auf rohem Gold:** `scoreboard.py m1`, `m2` und `report` urteilen auf allem Gold, ohne
+  Ausschluss über `known_gaps` oder Validatoren. Die erreichbare Sicht (T27, unten) bleibt als
+  Diagnose-Spalte daneben und entscheidet nichts.
+- **Gegen beide Presidio-Profile:** M1 und M2 gelten nur, wenn ARK sowohl Presidio `default`
+  (Schwelle 0, wie ausgeliefert) als auch Presidio `tuned` schlägt. Beide Profile sind Pflicht
+  (`--presidio default=DIR --presidio tuned=DIR`).
+- **ARK-Engines:** `strict`, `balanced` und `balanced-bare` (`balanced` mit dem Opt-in-Profil
+  [`docs/how-to/pii-bare-formats.gates.json`](../../docs/how-to/pii-bare-formats.gates.json), erzeugt mit
+  `run_ark.py --pii-mode balanced --gates …`). Ein Meilenstein ist erfüllt, wenn `balanced` **oder**
+  `balanced-bare` gegen beide Profile hält; `strict` und `recall` werden berichtet. Der Bericht nennt,
+  welche Engine trägt (`holding`), damit eine Aussage „mit Bare-Profil“ als solche erkennbar bleibt.
+- **Gate:** Die Zeile `milestones <split> …` rechnet `balanced` auf rohem Gold gegen beide Profile;
+  Regressionen, Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen wie bisher roh.
+- **Snapshot** (`research/scoreboard/*.json`, Schema 1.2): `pii.milestone_view` (`raw`, bei älteren
+  Messungen `attainable`) und `pii.baselines` (die Presidio-Engines des Urteils) ersetzen
+  `pii.baseline`; `docs/reference/l1-capabilities.md` zeigt beide.
+
+## Erreichbares Gold: Diagnose-Sicht (T27, seit M-RAW nicht mehr entscheidend)
 
 Entschieden am 2026-11-02 (TRIAGE 2026-W44, Buckets 1–4, 10, 15): **Option (b), global für jede
 Familie und beide Engines.** Auf Dev, `balanced`, mit allen offenen Aufgaben als erfolgreich
@@ -36,8 +59,8 @@ neutrale PAN (86 von 90 FN Luhn/IIN-ungültig, Obergrenze 53,3), neutrale US-SSN
 enthält SE-, IT-, UK- und NL-Kennungen) und auf `presidio_favored` für Kennzeichen (blanke TR/IN/NG-Werte)
 unerreichbar.
 
-- **Erreichbares Gold:** Meilensteine (M1, M2) und die Untergrenze F1 ≥ 80 werden auf erreichbarem
-  Gold geurteilt. Für ARK (je Modus) und Presidio (je Profil) gleich fallen heraus: Gold-Werte, die jeden
+- **Erreichbares Gold:** Von 2026-11-02 bis M-RAW wurden Meilensteine (M1, M2) und die Untergrenze
+  F1 ≥ 80 auf erreichbarem Gold geurteilt; seitdem ist es eine Diagnose-Sicht. Für ARK (je Modus) und Presidio (je Profil) gleich fallen heraus: Gold-Werte, die jeden
   Prüfziffer-Validator ihrer ID verfehlen (nur IDs, deren Regeln alle einen tragen, T31; Pass und
   Ausweis nur gegen den Validator ihres Ausstellerlandes und nur, wo die Zeile das Land nennt), und
   Gold-Werte unter einer festgehaltenen Entscheidung. Vorhersagen derselben ID, die solches Gold
@@ -54,9 +77,9 @@ unerreichbar.
   mit zwölf Ziffern am Stück (B-IN), blanke NPI mit zehn Ziffern am Stück (A06, Q-M1), blanke 13-stellige
   ELSTER-Steuernummer (Q-DE, eingetragen mit Q-M2). Eine neue Ausnahme braucht eine Entscheidung
   und einen Eintrag dort, keine Prosa-Ausnahme im README.
-- **Rohwerte bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken beide Sichten
-  (`raw`, `attainable`); Urteil und Exit-Code kommen aus `balanced` auf erreichbarem Gold. Gate,
-  Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen weiter auf allem Gold (`raw`).
+- **Beide Sichten bleiben sichtbar:** `scoreboard.py m1`, `m2` und `report` drucken `raw` und
+  `attainable`; Urteil und Exit-Code kommen seit M-RAW aus der rohen Sicht (Abschnitt oben). Gate,
+  Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen auf allem Gold (`raw`).
 - **Wirkung auf Dev** (`presidio_favored`, `balanced` gegen Presidio tuned, Stand dieser Aufgabe):
   M1 roh 22/25, erreichbar 24/24; M2 roh Macro-F1 63,2 gegen 87,0 (11 IDs), erreichbar 96,3 gegen
   100,0 (9 IDs; offen bleibt die Steuernummer mit 66,7 gegen 100). Seit Q-M2 steht die blanke
@@ -143,8 +166,8 @@ englische Recognizer einer `shared`-ID).
 
 | Meilenstein | Kriterium |
 |---|---|
-| M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned), auf erreichbarem Gold (T27) |
-| M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio tuned + 15 pp und auf `presidio_favored` ≥ Presidio tuned, auf erreichbarem Gold (Regel unten, T27) |
+| M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio) gegen `default` und `tuned`, auf rohem Gold (M-RAW) |
+| M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio + 15 pp und auf `presidio_favored` ≥ Presidio, je gegen `default` und `tuned`, auf rohem Gold (Regel unten, M-RAW) |
 | M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
@@ -156,6 +179,11 @@ tuned, siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.
 **M4 gilt als erreicht** (entschieden am 2026-11-05): nativ 100 KiB p95 9,8 ms (≤ 10 ms seit H06-2);
 die Python-Bindings bleiben bei etwa 15 ms, weitere Durchgänge der Performance-Schleife lagen im
 Rauschen. Die Schleife endet mit H06-6; H05 berichtet nativ und Python getrennt.
+
+Für M1 und M2 zählt seit M-RAW nur die rohe Sicht gegen Presidio `default` und `tuned`, mit ARK
+`balanced` oder `balanced-bare` (Abschnitt oben); die folgenden Zahlen aus H05 sind auf erreichbarem
+Gold gegen tuned gemessen und belegen die Meilensteine nicht mehr (Abschlussbericht in der rohen Sicht:
+H05-2).
 
 **Abschlussbericht (H05):** [`scoreboard/final.md`](scoreboard/final.md). Auf Dev (2026-11-05) sind M1
 (neutral 9/9, presidio_favored 22/22), M2 (66,1 ≥ 36,2 und 100,0 ≥ 100,0), M3 (83 ≥ 70) und M4 nativ
@@ -169,7 +197,8 @@ Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14;
 - **Meilensteine auf `balanced`:** M1–M3 und „Immer“ werden im PII-Modus `balanced` gemessen, dem
   Modus, der gegen Presidio tuned (kontextfreie Muster, Kontext hebt den Score, Schwelle 0,4) antritt.
   `strict` bleibt der Standard des Builds und wird weiter berichtet, entscheidet aber keinen Meilenstein.
-  `scoreboard.py m1` und `report` drucken jeden übergebenen Modus und lesen das Urteil aus `balanced`.
+  `scoreboard.py m1`, `m2` und `report` drucken jede übergebene ARK-Engine gegen Presidio `default` und
+  `tuned` und lesen das Urteil aus `balanced` oder `balanced-bare` (`balanced` mit dem Bare-Profil, M-RAW).
 - **Das Gate schützt beide Modi:** `scoreboard.py gate` rechnet Head und Basis in `strict` und in
   `balanced` und ist rot bei > 0,5 pp F1-Verlust (je Entität, alle L1-IDs, Familie, DE/EN, exakt oder
   überlappend) oder einem neuen Hard-Negative-Treffer in **einem** der beiden Modi. Ein Gewinn in einem
@@ -207,15 +236,15 @@ Werkzeug begünstigt Presidio. Deshalb trägt jede Gold-Quelle genau eine Famili
 | `presidio_favored` | presidio-evaluator `synth_dataset_v2.json` (presidio-research, MIT, Commit `7f568b6`), Positiv-/Negativfälle der presidio-analyzer-Recognizer-Tests (MIT, Release 2.2.364) | entscheidet |
 
 - **M1 gilt nur, wenn es auf `neutral` und auf `presidio_favored` je für sich hält:** auf jeder der
-  beiden Familien je gemeinsamer Pattern-Entität mit Gold in der Familie F1(ARK) ≥ F1(Presidio tuned),
-  exakte Spans, englische Zeilen. Ein Vorsprung auf der einen Familie gleicht keinen Rückstand auf der
+  beiden Familien je gemeinsamer Pattern-Entität mit Gold in der Familie F1(ARK) ≥ F1(Presidio), gegen
+  `default` und `tuned` (M-RAW), exakte Spans, englische Zeilen. Ein Vorsprung auf der einen Familie gleicht keinen Rückstand auf der
   anderen aus; eine Familie ohne Gold für gemeinsame Entitäten erfüllt M1 nicht. Prüfung:
   `scoreboard.py m1` (siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)).
 - **M2 gilt nur, wenn es auf `neutral` und auf `presidio_favored` je für sich hält** (D-M2, entschieden
   am 2026-10-21): Macro-F1 = ungewichtetes Mittel des exakten F1 über alle `shared`- und `ark_only`-IDs
-  mit Gold auf den deutschen Zeilen der Familie, gemessen in `balanced`. Auf `neutral` muss ARK
-  Presidio tuned um ≥ 15 pp übertreffen, auf `presidio_favored` genügt Parität (≥ Presidio tuned):
-  dort liegt tuned bei 87 und tuned + 15 pp über 100. Eine Mindestzahl an Gold je ID gibt es nicht;
+  mit Gold auf den deutschen Zeilen der Familie, gemessen in `balanced` (oder `balanced-bare`). Auf
+  `neutral` muss ARK Presidio um ≥ 15 pp übertreffen, auf `presidio_favored` genügt Parität (≥ Presidio):
+  dort liegt tuned bei 87 und tuned + 15 pp über 100. Seit M-RAW gilt beides gegen `default` und `tuned`. Eine Mindestzahl an Gold je ID gibt es nicht;
   eine Familie ohne deutsches Gold für eine zählende ID erfüllt M2 nicht. `presidio_only`-IDs
   (PLZ, URL, US ITIN …) zählen nicht zum Mittel, bis `entity_map.yaml` sie
   `shared` führt, weil ARK sie erkennt; `semantic` zählt nie. Prüfung: `scoreboard.py m2` (Exit 1,

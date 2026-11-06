@@ -119,26 +119,22 @@ PII_FAMILIES = ["neutral", "presidio_favored", "ark_authored"]
 DLP_TOOL_NAMES = {"ark": "ARK", "gitleaks": "gitleaks", "trufflehog": "TruffleHog", "detect-secrets": "detect-secrets"}
 
 
-def _engine(name: str) -> str:
-    """Report engine key of a display name (`Presidio tuned` -> `presidio-tuned`)."""
-    return name.strip().lower().replace(" ", "-")
-
-
 def pii_gold_cell(entry: dict | None) -> str:
     if not entry:
         return NOT_MEASURED
     return " / ".join(str(entry.get(family, {}).get("gold", 0)) for family in PII_FAMILIES)
 
 
-def pii_f1_cell(entry: dict | None, family: str, ark_engine: str, baseline_engine: str) -> str:
-    """`ARK x / Presidio y` (exact F1), `no gold`, or `–` for an id outside the measurement."""
+def pii_f1_cell(entry: dict | None, family: str, ark_engine: str, baselines: list[str]) -> str:
+    """`ARK x / Presidio default y / Presidio tuned z` (exact F1 of ARK and every milestone baseline),
+    `no gold`, or `–` for an id outside the measurement."""
     values = (entry or {}).get(family)
     if not values:
         return NOT_MEASURED
     if not values.get("gold"):
         return NO_GOLD
     f1 = values["f1"]
-    return f"ARK {f1[ark_engine]:.1f} / Presidio {f1[baseline_engine]:.1f}"
+    return " / ".join([f"ARK {f1[ark_engine]:.1f}", *(f"{_engine_title(b)} {f1[b]:.1f}" for b in baselines)])
 
 
 def dlp_cell(entry: dict | None, metric: str = "f1") -> str:
@@ -212,6 +208,11 @@ def _engine_title(name: str) -> str:
     return " ".join([{"ark": "ARK", "presidio": "Presidio"}.get(head, head), rest.replace("-", " ")]).strip()
 
 
+def _baseline_titles(baselines: list[str]) -> str:
+    """`Presidio default and Presidio tuned`."""
+    return " and ".join(_engine_title(b) for b in baselines)
+
+
 def _met(flag: bool) -> str:
     return "met" if flag else "not met"
 
@@ -269,7 +270,8 @@ def generate(
         f"{sum(rule['strength'] == 'checksum' for rule in pii_rules)} | "
         f"{sum(rule['validator_strength'] in ('checksum', 'structure') for rule in dlp_rules)} |",
         f"| Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |",
-        f"| Compared with | Presidio {pii_map['presidio_version']} (default and tuned; milestones against tuned) | "
+        f"| Compared with | Presidio {pii_map['presidio_version']} (default and tuned; milestones against "
+        f"{_baseline_titles(pii['baselines'])} on {pii['milestone_view']} gold) | "
         + ", ".join(
             f"{name} {dlp_map['baselines'][key]['version']}"
             for key, name in (("gitleaks", "gitleaks"), ("trufflehog", "TruffleHog"), ("detect_secrets", "detect-secrets"))
@@ -342,17 +344,18 @@ def generate(
         f"positives ({date}): ARK {pii['hard_negative_fp']['ark']}, Presidio {pii['hard_negative_fp']['presidio']}.",
     ])
 
-    ark_engine, baseline_engine = f"ark-{pii['decision_mode']}", _engine(pii["baseline"])
+    ark_engine, baselines = f"ark-{pii['decision_mode']}", pii["baselines"]
     measured = pii["entities"]
     lines.extend([
         "",
         "### F1 per entity",
         "",
         f"Exact F1 in percent on the {splits} split, measured {date}, per source family: ARK in "
-        f"`{pii['decision_mode']}` vs {pii['baseline']}, over all rows of the family (EN and DE; M1 counts "
-        "EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.",
+        f"`{pii['decision_mode']}` vs {_baseline_titles(baselines)}, raw gold, over all rows of the family (EN and DE; "
+        "M1 counts EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.",
         "",
-        f"Legend: `ARK x / Presidio y` = exact F1 of both; `{NO_GOLD}` = measured, but the family has no "
+        f"Legend: `ARK x / {' / '.join(f'{_engine_title(b)} y' for b in baselines)}` = exact F1 of each; "
+        f"`{NO_GOLD}` = measured, but the family has no "
         f"gold span for the id; `{NOT_MEASURED}` = the id was not part of the measurement (added later, or "
         "`semantic`).",
         "",
@@ -364,7 +367,7 @@ def generate(
             entry = measured.get(entity["id"])
             lines.append(
                 f"| `{entity['id']}` | {scope} | {pii_gold_cell(entry)} | "
-                + " | ".join(pii_f1_cell(entry, family, ark_engine, baseline_engine) for family in PII_FAMILIES)
+                + " | ".join(pii_f1_cell(entry, family, ark_engine, baselines) for family in PII_FAMILIES)
                 + " |"
             )
     with_gold = sum(any(v.get("gold") for v in entry.values()) for entry in measured.values())
