@@ -54,7 +54,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   French word lists (C01 review). Their words count with or without their accents, in NFC or NFD
   (the unaccented words stay unique per list, as the BIP39 word list notes state); the 18-word
   context threshold counts an accented word once. The checksum check no longer allocates per
-  candidate window (stack arrays; the test vectors are decoded once).
+  candidate window (stack arrays; the test vectors are decoded once). The golden generator gains
+  `bip39_spanish` and `bip39_french` (`bip39_es_12`, `bip39_fr_18`) and `dlp_l1.jsonl` two
+  positives.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
