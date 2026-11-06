@@ -54,6 +54,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Detection change (opt-in bare profile only): `pii_steuer_id_de_bare` no longer reports an
+  11-digit value whose check digit is valid but whose digit distribution no issued Steuer-ID has
+  (Q-RAW). The new `validators::steuer_id_bare` adds the bounds every issued ID meets, old and new
+  BZSt scheme alike (no digit more than three times in the first ten, none three times in a row),
+  without the exact distribution of `steuer_id_issued`, so ten distinct digits (`98765432106`) still
+  pass and `11112345678` no longer does. Default output (all modes, default gates) is unchanged and
+  no validator of a default rule changes. On the dev split (raw gold) M2 now holds with the bare
+  profile: `presidio_favored` DE macro-F1 86.8 → 89.9 against Presidio tuned 87.0 (Steuer-ID
+  66.7 → 100), `neutral` 62.5 against target 36.2. M1 stays unmet; the remaining raw gaps per id are
+  listed in `research/l1-pii/README.md` (Q-RAW). No effect on default-gate latency: the bare rule is
+  off by default, and when enabled the extra check runs only on a value whose check digit passed.
+
 - The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in
   `std::regex_traits<char>::transform` inside ONNX Runtime). It is now built on
   `manylinux_2_28` instead of `manylinux2014`, so it needs glibc 2.28 or newer (CentOS 7 and
