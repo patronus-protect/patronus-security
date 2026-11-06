@@ -791,6 +791,12 @@ entities:
     group: CRYPTO_KEY
     ark: [dlp_cardano_signing_key]
     backlog: C-WALLET
+  - id: crypto.bip39.seed_phrase
+    scope: ark_only
+    group: CRYPTO_KEY
+    subtype: seed_phrase
+    ark: [dlp_bip39_seed_phrase]
+    backlog: C01
   - id: credential.url_userinfo_token
     scope: ark_only
     group: SECRET_TOKEN

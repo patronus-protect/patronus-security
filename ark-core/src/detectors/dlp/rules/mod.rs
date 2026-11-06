@@ -109,7 +109,13 @@ pub enum ExampleCheck {
     /// repeated-chunk values always, sequential-run values in explicit example
     /// context.
     FixedFormat,
+    /// Rules whose value is made of dictionary words (C01 seed phrases, which
+    /// may hold `test` or `example`): explicit example context only.
+    Context,
 }
+
+/// C01: rules whose value is made of dictionary words.
+const WORD_VALUE_RULES: &[&str] = &["dlp_bip39_seed_phrase"];
 
 /// Credential-family rules whose values have a platform-defined format
 /// (JWT, SigV4/GCS signatures, server session IDs) rather than a chosen secret.
@@ -121,7 +127,9 @@ const FIXED_FORMAT_CREDENTIALS: &[&str] = &[
 
 pub fn example_check(rule_id: &str) -> ExampleCheck {
     let in_family = |family: &[DlpPattern]| family.iter().any(|rule| rule.name == rule_id);
-    if in_family(providers::RULES)
+    if WORD_VALUE_RULES.contains(&rule_id) {
+        ExampleCheck::Context
+    } else if in_family(providers::RULES)
         || in_family(crypto::RULES)
         || in_family(hashes::RULES)
         || FIXED_FORMAT_CREDENTIALS.contains(&rule_id)
@@ -260,6 +268,7 @@ pub fn is_example_match(
     };
     match check {
         ExampleCheck::Off => false,
+        ExampleCheck::Context => example_context(),
         // F-GEN2, T18: the machine-issued run of a generic value (a long
         // hex value, the run of `SK…`, `…-us10`, `shippo_live_…`) takes the
         // fixed-format check, so repeated chunks (`deadbeef…`) mark it as an
