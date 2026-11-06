@@ -759,6 +759,9 @@ def test_gold_checks_leave_out_ids_with_a_rule_without_checksum(monkeypatch):
      ["86095742718", "06095742719", "8609574271", "860957427190"]),
     ("steuer_id_issued", ["86095742719", "86 095 742 719"],
      ["86095742718", "12345678903", "47110815008", "86555742194", "11111111111"]),
+    # Q-RAW: the bare rule bounds the distribution only; ten distinct digits pass.
+    ("steuer_id_bare", ["86095742719", "98765432106", "12345678903"],
+     ["86095742718", "11112345678", "86555742194", "11111111111"]),
     # B01: VAT IDs per country (rust/tests/pii_vat_id.rs).
     ("de_vat_id", ["DE136695976", "DE 136 695 976", "DE.136.695.976", "DE123456788"],
      ["DE136695977", "DE987654321", "DE100000001", "DE036695976", "DE13669597", "ATU13585627"]),

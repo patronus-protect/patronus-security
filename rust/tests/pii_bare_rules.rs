@@ -10,6 +10,7 @@
 //! labelled rules of its id in `balanced` and `recall`.
 
 use patronus_ark::detectors::pii::pii::{PiiPipeline, PII_PATTERNS};
+use patronus_ark::detectors::pii::validators;
 use patronus_ark::{
     NativeGates, ScanGateMatrix, ScoreMode, SecurityCategory, SecurityGateway, SecurityLevel,
     SecurityScanResult,
@@ -295,6 +296,42 @@ fn an_enabled_bare_rule_keeps_the_validator_of_its_id() {
         }
     }
     assert!(reported.is_empty(), "{reported:#?}");
+}
+
+/// Q-RAW: the bare Steuer-ID keeps the bounds of the BZSt digit distribution. Ten
+/// distinct digits pass (Presidio's test value), a digit four times or three in a
+/// row fails despite a valid check digit.
+#[test]
+fn the_bare_steuer_id_rule_bounds_the_digit_distribution() {
+    for valid in ["98765432106", "86095742719", "12345678903"] {
+        assert!(validators::steuer_id_bare(valid), "{valid}");
+    }
+    for invalid in ["11112345678", "86555742194", "86095742718"] {
+        assert!(!validators::steuer_id_bare(invalid), "{invalid}");
+    }
+    // The check digit alone accepts them; the distribution rejects them.
+    assert!(validators::steuer_id("11112345678"));
+    assert!(validators::steuer_id("86555742194"));
+
+    let rule = "pii_steuer_id_de_bare";
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let scanner = scanner(gates(Some(rule), mode));
+        for template in BARE {
+            let text = template.replace("{}", "98765432106");
+            assert!(
+                rule_score(&scan(&scanner, &text), rule).is_some(),
+                "{mode:?}: {text}"
+            );
+            for invalid in ["11112345678", "86555742194"] {
+                let text = template.replace("{}", invalid);
+                assert_eq!(
+                    rule_score(&scan(&scanner, &text), rule),
+                    None,
+                    "{mode:?}: {text}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

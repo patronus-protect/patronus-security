@@ -3102,10 +3102,12 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang 86095742719 wurde abgeschlossen."
+        "Vorgang 86095742719 wurde abgeschlossen.",
+        "Bitte 11112345678 im Formular eintragen."
       ],
       "en": [
-        "Reference 86095742719 was archived."
+        "Reference 86095742719 was archived.",
+        "Please copy 11112345678 into the form."
       ]
     }
   },
