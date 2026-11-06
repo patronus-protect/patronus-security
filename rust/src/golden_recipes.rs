@@ -14,7 +14,7 @@
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64,
 //! Base58Check or a BIP 39 mnemonic (`bip39_english`, `bip39_italian`,
-//! `bip39_portuguese`, `bip39_czech`, through
+//! `bip39_portuguese`, `bip39_czech`, `bip39_spanish`, `bip39_french`, through
 //! `patronus_ark_core::detectors::dlp::seed_phrase::mnemonic`); seed word
 //! segments draw wallet seed phrases (Electrum, Monero) from the words of one
 //! length of a word list. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
@@ -247,6 +247,8 @@ const ENCODINGS: &[&str] = &[
     "bip39_italian",
     "bip39_portuguese",
     "bip39_czech",
+    "bip39_spanish",
+    "bip39_french",
 ];
 
 /// Entropy sizes in bytes that BIP 39 encodes (12 to 24 words).

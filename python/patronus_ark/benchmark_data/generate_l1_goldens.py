@@ -15186,9 +15186,9 @@ for _label, _rows in DLP_C_WALLET_SEED_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
-# C01: BIP 39 seed phrases (`dlp_bip39_seed_phrase`, English, Italian, Portuguese and Czech
-# word lists, valid checksum). Positives are `bip39_*` recipes; they need 18 words or a
-# seed/wallet/recovery term before the phrase. Hard negatives keep their words in clear: none
+# C01: BIP 39 seed phrases (`dlp_bip39_seed_phrase`, English, Italian, Portuguese, Czech,
+# Spanish and French word lists, valid checksum). Positives are `bip39_*` recipes; they need
+# 18 words or a seed/wallet/recovery term before the phrase. Hard negatives keep their words in clear: none
 # is a usable mnemonic (wrong checksum, 11 words, a word list dump, or the published BIP 39
 # test vector of zero entropy).
 _BIP39_TEST_VECTOR = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
@@ -15342,6 +15342,17 @@ DLP_C01_CASES = {
             "Wiederherstellungswörter (unvollständig, eins fehlt): listopad komora vydat opice fronta "
             "nutrie orlice tuzemsko utkat nerost drogerie",
             "eleven words are no mnemonic", carrier="prose",
+        ),
+        # Spanish and French lists (C01 review); the values keep the NFD accents of the lists.
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "wallet_restore: {\"lang\": \"fr\", \"words\": \"<<secret:0>>\"}\n",
+            "bip39_fr_18", 10719, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Notiz aus Madrid, Seed-Phrase der Hardware-Wallet: <<secret:0>>\n",
+            "bip39_es_12", 10718, carrier="prose",
         ),
     ],
 }

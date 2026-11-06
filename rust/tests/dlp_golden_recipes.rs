@@ -110,7 +110,8 @@ fn generators_are_deterministic_and_fixed_length() {
         if let Some(length) = length {
             assert_eq!(value.len(), length, "{name}");
         }
-        assert!(value.is_ascii(), "{name}");
+        // Spanish and French mnemonics keep the NFD accents of their lists.
+        assert!(value.is_ascii() || name.starts_with("bip39_"), "{name}");
     }
     assert!(matches!(
         generators.generate("no_such_generator", 1),
@@ -162,6 +163,8 @@ fn bip39_generators_emit_checksum_valid_mnemonics_and_reject_fills() {
         ("bip39_it_12", "italian", 12),
         ("bip39_pt_15", "portuguese", 15),
         ("bip39_cs_21", "czech", 21),
+        ("bip39_es_12", "spanish", 12),
+        ("bip39_fr_18", "french", 18),
     ] {
         assert_eq!(generators.length(name).unwrap(), None, "{name}");
         for seed in [0, 1, 2, 17, u64::MAX] {
