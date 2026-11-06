@@ -391,6 +391,14 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Seed-Kontext; `dlp_cardano_signing_key` meldet CIP-5-Signierschlüssel (`…_sk1`, `…_xsk1`) nach
   Bech32-Prüfsumme und der Schlüssellänge des Präfixes, Verifikationsschlüssel (`…_vk1`) bleiben
   stumm.
+  Seit C-KEYS erkennen acht Regeln Schlüsselmaterial in Konfiguration und Code: private JWKs
+  (`kty` und `d` bzw. `k`, als JSON geparst; `PRIVATE_KEY`), WireGuard-`PrivateKey`/`PresharedKey`
+  (32 Byte Base64; `PRIVATE_KEY`), OpenVPN-Static-Keys (`<tls-auth>`), IPsec-PSK aus
+  ipsec.secrets, symmetrische Schlüssel unter AES-/HMAC-/Encryption-Schlüsselnamen (Hex, Base64,
+  Fernet, `0x`-Byte-Arrays), Laravel-`APP_KEY`, Django-`SECRET_KEY` und Rails-`secret_key_base`
+  (`CRYPTO_KEY`). Veröffentlichte Testvektoren (RFC 7517/8037, NIST SP 800-38A, FIPS-197) und
+  öffentliche Schlüssel sind kein Treffer. Offen bleiben strongSwan-`swanctl.conf`-Secrets und
+  Byte-Arrays ohne Schlüsselnamen.
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

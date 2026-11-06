@@ -337,7 +337,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (152) { #dlp-regex-rules }
+## DLP regex rules (160) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -493,6 +493,14 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_cardano_signing_key` | `CRYPTO_KEY` | `private_key` | `cardano` | `checksum` | [cips.cardano.org](https://cips.cardano.org/cip/CIP-0005) | yes | on | 30 | proximity | 0.65–0.90 |
 | `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
 | `dlp_private_key_header` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_jwk_private_key` | `PRIVATE_KEY` | `private_key` | – | `structure` | [datatracker.ietf.org](https://datatracker.ietf.org/doc/html/rfc7517) | yes | on | 70 | proximity | 0.95–1.00 |
+| `dlp_wireguard_private_key` | `PRIVATE_KEY` | `private_key` | `wireguard` | `structure` | [www.wireguard.com](https://www.wireguard.com/quickstart/) | yes | on | 50 | field | 1.00 |
+| `dlp_openvpn_static_key` | `CRYPTO_KEY` | `private_key` | `openvpn` | `structure` | [openvpn.net](https://openvpn.net/community-resources/reference-manual-for-openvpn-2-6/) | yes | on | 70 | proximity | 0.95–1.00 |
+| `dlp_ipsec_psk` | `CRYPTO_KEY` | `private_key` | – | `none` | [docs.strongswan.org](https://docs.strongswan.org/docs/latest/config/ipsecSecrets.html) | no | on | 40 | field | 0.65 |
+| `dlp_symmetric_key` | `CRYPTO_KEY` | `private_key` | – | `structure` | [docs.openssl.org](https://docs.openssl.org/master/man1/openssl-rand/) | yes | on | 40 | field | 0.90 |
+| `dlp_laravel_app_key` | `CRYPTO_KEY` | `private_key` | `laravel` | `structure` | [laravel.com](https://laravel.com/docs/encryption) | yes | on | 50 | field | 1.00 |
+| `dlp_django_secret_key` | `CRYPTO_KEY` | `private_key` | `django` | `format` | [docs.djangoproject.com](https://docs.djangoproject.com/en/stable/ref/settings/#secret-key) | yes | on | 45 | field | 0.85 |
+| `dlp_rails_secret_key_base` | `CRYPTO_KEY` | `private_key` | `rails` | `format` | [guides.rubyonrails.org](https://guides.rubyonrails.org/security.html#custom-credentials) | yes | on | 50 | field | 0.90 |
 | `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
 | `dlp_credential_in_url` | `CREDENTIAL` | `auth_url` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
 | `dlp_auth_url_token` | `CREDENTIAL` | `auth_url` | – | `none` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2) | yes | on | 25 | field | 0.50 |

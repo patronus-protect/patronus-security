@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 199 | 152 (+5 relationship rules) |
+| Regex rules | 199 | 160 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 130 | 22 |
+| Rules with a `checksum` or `structure` check | 130 | 27 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -318,8 +318,8 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `SECRET_TOKEN` | provider_secret | on | 36 | 29 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
 | `CREDENTIAL` | generic_credential | on | 17 | 14 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
-| `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
-| `CRYPTO_KEY` | key_material | on | 8 | 8 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
+| `PRIVATE_KEY` | key_material | on | 4 | 3 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
+| `CRYPTO_KEY` | key_material | on | 14 | 11 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `dlp.de.vat_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
 | `dlp.de.commercial_register_number` | business_identifier | off | 1 | 1 | 32 | ARK 50.0 (opt-in profile) |
 | `dlp.de.facility_number_bsnr` | business_identifier | off | 1 | 1 | 32 | ARK 28.6 (opt-in profile) |
@@ -432,8 +432,13 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `saas.airtable.token` | shared | `API_KEY` | `dlp_airtable_pat`, `dlp_airtable_api_key` | format | on | gitleaks: `airtable-api-key`, `airtable-personnal-access-token`; TruffleHog: `AirtablePersonalAccessToken` |
 | `saas.postman.api_token` | shared | `API_KEY` | `dlp_postman_api_key` | format | on | gitleaks: `postman-api-token`; TruffleHog: `Postman` |
 | `saas.mapbox.secret_token` | shared | `API_KEY` | `dlp_mapbox_secret_token` | format | on | gitleaks: `mapbox-api-token`; TruffleHog: `Mapbox` |
+| `key.symmetric_key` | shared | `CRYPTO_KEY` | `dlp_symmetric_key`, `dlp_laravel_app_key`, `dlp_django_secret_key`, `dlp_rails_secret_key_base` | structure | on | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
+| `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |
+| `key.wireguard_private_key` | ark_only | `PRIVATE_KEY` | `dlp_wireguard_private_key` | structure | on | – |
+| `key.openvpn_static_key` | ark_only | `CRYPTO_KEY` | `dlp_openvpn_static_key` | structure | on | – |
+| `key.ipsec_psk` | ark_only | `CRYPTO_KEY` | `dlp_ipsec_psk` | none | on | – |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – |
 | `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | `dlp_dockerhub_token` | format | on | – |
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | `dlp_cratesio_token` | format | on | – |
@@ -542,7 +547,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `kubernetes-secret-yaml` |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | detect-secrets: `Base64HighEntropyString`, `HexHighEntropyString` |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `pkcs12-file` |
-| `key.symmetric_key` | baseline_only | `CRYPTO_KEY` | – | – | – | – |
 | `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | – | – | – | – |
 | `document.hr` | baseline_only | `dlp.document.hr` | – | – | – | – |
 | `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – | – |
@@ -558,7 +562,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 85 shared, 35 ARK only, 79 baseline only, 11 out of scope.
+Entities: 86 shared, 39 ARK only, 78 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -651,8 +655,13 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `saas.airtable.token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `saas.postman.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `saas.mapbox.secret_token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `key.symmetric_key` | shared | `CRYPTO_KEY` | 0 | no gold | no gold |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
+| `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |
+| `key.wireguard_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |
+| `key.openvpn_static_key` | ark_only | `CRYPTO_KEY` | – | – | – |
+| `key.ipsec_psk` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
@@ -761,7 +770,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
-| `key.symmetric_key` | baseline_only | `CRYPTO_KEY` | 0 | no gold | no gold |
 | `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | planned / not implemented | planned / not implemented | planned / not implemented |
 | `document.hr` | baseline_only | `dlp.document.hr` | planned / not implemented | planned / not implemented | planned / not implemented |
 | `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | planned / not implemented | planned / not implemented | planned / not implemented |
