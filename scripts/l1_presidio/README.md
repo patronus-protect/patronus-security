@@ -54,6 +54,11 @@ Regel denselben Span, bleibt er einmal mit dem höchsten Score. ARK-Labels ohne 
 `ark.<LABEL>` und werden nicht gewertet. Standard ist der PII-Modus `strict` (jeder Span 1.0);
 `--pii-mode balanced|recall` liefert die Modell-Scores (K02) und trägt den Modus als
 `engine.pii_mode` in die Metadaten ein. Das Gate rechnet `strict` und `balanced` (T15).
+`--gates DATEI` schaltet zusätzlich die `rules` einer Execution-Gates-Datei, etwa die Opt-in-Regeln für
+blanke Werte aus [`docs/how-to/pii-bare-formats.gates.json`](../../docs/how-to/pii-bare-formats.gates.json)
+(D-BARE); die Metadaten tragen sie als `engine.rules`, ein `pii_mode` in der Datei muss `--pii-mode`
+gleichen. So entsteht die ARK-Engine `balanced-bare` der Meilensteine (M-RAW):
+`run_ark.py --pii-mode balanced --gates docs/how-to/pii-bare-formats.gates.json …`.
 
 ```bash
 .venv/bin/python scripts/l1_presidio/run_ark.py --input /tmp/gold.jsonl --output /tmp/ark.jsonl
@@ -333,10 +338,11 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   bedient beide Modi. `run_ark.py` muss den Modus in den Metadaten bestätigen (`engine.pii_mode`, bei
   `strict` fehlend), sonst Exit 2: ein Runner, der `--pii-mode` ignoriert, würde `strict` als
   `balanced` ausgeben. Meilensteine liest `m1`/`report` aus `balanced`.
-- **Meilensteine im Gate (H05):** Vor der Zeile `RESULT` steht je Split eine Zeile
-  `milestones <split> (balanced, attainable gold, vs Presidio tuned): M1 … | M2 …` mit M1 (gehaltene
-  gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel) des Heads. Presidio
-  tuned läuft mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
+- **Meilensteine im Gate (H05, M-RAW):** Vor der Zeile `RESULT` steht je Split eine Zeile
+  `milestones <split> (balanced, raw gold, vs Presidio default and tuned): M1 … | M2 …` mit M1 (gehaltene
+  gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel) des Heads, je Profil
+  (`vs default: …; vs tuned: …`); erfüllt nur, wenn `balanced` gegen beide hält. Presidio default und
+  tuned laufen mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
   Runner, Profil und Eingabe-SHA-256 gecacht. So erreichen die Holdout-Meilensteine den Gate-Bericht
   (der Runner übernimmt das Ende einer grünen Scoreboard-Ausgabe), nur als Aggregat. Scheitert die
   Messung (lokal ohne Presidio im Interpreter), steht `not measured (<Fehlertyp>)` da; der Exit-Code
@@ -368,9 +374,10 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   Commit und Modus: `CACHE/scoreboard/results/<sha>.json` (`modes.<modus>.<split>`). Ein Head mit uncommitteten Änderungen an diesen
   Pfaden wird gerechnet, aber nicht gecacht.
 
-### Erreichbares Gold (T27)
+### Rohe und erreichbare Sicht (M-RAW, T27)
 
-`m1`, `m2` und `report` rechnen zwei Sichten: `raw` (alles Gold) und `attainable`. Die erreichbare
+`m1`, `m2` und `report` rechnen zwei Sichten: `raw` (alles Gold, entscheidet seit M-RAW) und
+`attainable` (Diagnose). Die erreichbare
 Sicht lässt für jede Engine gleich (ARK je Modus, Presidio je Profil) das Gold weg, das keine
 Engine unter den geltenden Entscheidungen treffen soll, zusammen mit den Vorhersagen derselben ID,
 die es überlappen (kein FN, kein FP; wie `IGNORED_GOLD`):
@@ -383,26 +390,31 @@ die es überlappen (kein FN, kein FP; wie `IGNORED_GOLD`):
   [`entity_map.yaml`](../../research/l1-pii/entity_map.yaml), je Eintrag ID, Entscheidung, Grund und
   Bedingungen (`span`, `bare`, `rows`, `corpora`), geprüft von `entity_map.py check`.
 
-Meilensteine (M1, M2) und die Untergrenze F1 ≥ 80 werden auf `attainable` geurteilt, `raw` steht
-daneben. `gate` und `score` bleiben bei `raw`; die Validatoren ändern sich dadurch nicht.
+Meilensteine (M1, M2) und die Untergrenze F1 ≥ 80 werden auf `raw` geurteilt, `attainable` steht als
+Diagnose daneben (von T27 bis M-RAW war es umgekehrt). `gate` und `score` rechnen nur `raw`; die
+Validatoren ändern sich dadurch nicht.
 
 ### M1 je Quellfamilie
 
 `m1` vergleicht ARK- und Presidio-Vorhersagen, die unter denselben relativen Dateinamen wie das Gold
-liegen (`run_ark.py --pii-mode MODUS` bzw. `run_presidio.py --profile tuned` je Datei):
+liegen (`run_ark.py --pii-mode MODUS [--gates …]` bzw. `run_presidio.py --profile default|tuned` je Datei):
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py m1 --gold "$ARK_L1_DEV_DATA" \
-  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
-  --presidio /tmp/presidio-tuned   # [--language en|de|all] [--metric exact|overlap] [--check] [--json F]
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced --ark balanced-bare=/tmp/ark-balanced-bare \
+  --presidio default=/tmp/presidio-default --presidio tuned=/tmp/presidio-tuned \
+  # [--language en|de|all] [--metric exact|overlap] [--check] [--json F]
 ```
 
-`--ark MODUS=DIR` ist wiederholbar (`strict`, `balanced`, `recall`), `balanced` ist Pflicht. Erst die
-Sicht `raw` (`=== raw gold (reported, decides no milestone)`), dann `attainable`
-(`=== attainable gold (milestone view, T27)`); darin erscheint jeder Modus als eigener Abschnitt
-(`== Ark strict (reported, decides no milestone)`). Die letzte Zeile
-`M1: MET|NOT MET (balanced, attainable gold: …)` und `--check` folgen `balanced` auf erreichbarem Gold
-(T15, T27); `--json` schreibt den erreichbaren Bericht mit dem rohen unter `raw`.
+`--ark ENGINE=DIR` ist wiederholbar (`strict`, `balanced`, `balanced-bare`, `recall`), `balanced` ist
+Pflicht; `--presidio PROFIL=DIR` braucht `default` und `tuned`. Jede ARK-Engine wird gegen jedes Profil
+gerechnet (`== Ark balanced vs presidio-tuned (milestone pair)`, andere Paare mit „reported, decides no
+milestone“). Erst die Sicht `attainable` (`=== attainable gold (diagnostic, decides no milestone)`),
+dann `raw` (`=== raw gold (milestone view, M-RAW)`). Die letzte Zeile
+`M1: MET|NOT MET (raw gold; balanced: presidio-default holds, presidio-tuned …; balanced-bare: …)` und
+`--check` folgen der rohen Sicht: erfüllt, wenn `balanced` oder `balanced-bare` gegen beide Profile hält
+(`holding` im JSON nennt die tragende Engine); `--json` schreibt den rohen Bericht mit dem erreichbaren
+unter `attainable`.
 
 Je Familie und gemeinsamer (`shared`) Entität mit Gold in der Familie: F1(ARK) ≥ F1(Presidio)?
 Standard: englische Zeilen, exakte Spans. Eine Familie hält, wenn das für jede solche Entität gilt
@@ -417,8 +429,9 @@ nicht erfüllt ist; fehlende Vorhersagedateien sind Exit 2.
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py m2 --gold "$ARK_L1_DEV_DATA" \
-  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
-  --presidio /tmp/presidio-tuned   # [--language de|en|all] [--metric exact|overlap] [--json F]
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced --ark balanced-bare=/tmp/ark-balanced-bare \
+  --presidio default=/tmp/presidio-default --presidio tuned=/tmp/presidio-tuned \
+  # [--language de|en|all] [--metric exact|overlap] [--json F]
 ```
 
 Je Familie: Macro-F1 = ungewichtetes Mittel des F1 über alle `shared`- und `ark_only`-IDs mit Gold auf
@@ -427,30 +440,30 @@ deutschen Zeilen der Familie (exakte Spans; für Presidio zählt eine `ark_only`
 `entity_map.yaml` sie `shared` führt (ARK hat dann ein Label dafür); `semantic` zählt nie. `neutral`
 hält bei Macro-F1(ARK) ≥ Macro-F1(Presidio) + 15 pp, `presidio_favored` bei Macro-F1(ARK) ≥
 Macro-F1(Presidio), jeweils nur mit mindestens einer ID. `ark_authored` wird mit +15 pp gedruckt und
-entscheidet nicht. Sichten und Modi wie bei `m1`; `M2: MET|NOT MET (balanced, attainable gold: …)` und
-der Exit-Code folgen `balanced` auf erreichbarem Gold: Exit 1, solange nicht beide Familien halten
-(ohne Schalter), fehlende Vorhersagedateien sind Exit 2.
+entscheidet nicht. Sichten, Engines und Profile wie bei `m1`; `M2: MET|NOT MET (raw gold; …)` und der
+Exit-Code folgen der rohen Sicht: Exit 1, solange nicht `balanced` oder `balanced-bare` gegen beide
+Profile auf beiden Familien hält (ohne Schalter), fehlende Vorhersagedateien sind Exit 2.
 
 ### Baseline-Bericht
 
-`report` rechnet ARK je Modus und Presidio je Profil auf denselben Gold-Dateien und schreibt
+`report` rechnet ARK je Engine und Presidio je Profil auf denselben Gold-Dateien und schreibt
 Markdown-Tabellen nach stdout (Grundlage von [`research/l1-pii/scoreboard/baseline.md`](../../research/l1-pii/scoreboard/baseline.md), E11):
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
-  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
-  --engine presidio-default=/tmp/presidio-default --engine presidio-tuned=/tmp/presidio-tuned   # [--json F]
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced --ark balanced-bare=/tmp/ark-balanced-bare \
+  --presidio default=/tmp/presidio-default --presidio tuned=/tmp/presidio-tuned   # [--json F]
 ```
 
 - je Quellfamilie und Engine: Zeilen, Gold, Vorhersagen, exakt P/R/F1, überlappend F1, EN- und
   DE-F1, Hard-Negative-Treffer (der Familie ihrer Zeile zugeordnet);
 - je Korpus exakt P/R/F1 je Engine, je Familie und Entität mit Gold exakt F1 je Engine, jeweils
-  bestes F1 fett; die Entitätstabelle zusätzlich auf erreichbarem Gold (dort gilt die Untergrenze
-  F1 ≥ 80, T27);
-- M1 und M2 je Sicht, erst `attainable` (entscheidet), dann `raw`:
-- M1 jedes ARK-Modus gegen jedes Profil: je Familie gehaltene gemeinsame IDs und die Entitäten
-  darunter; `balanced` zuerst, weitere Modi mit dem Hinweis, dass sie keinen Meilenstein entscheiden;
-- M2 jedes ARK-Modus gegen jedes Profil: je Familie Macro-F1 von ARK gegen das Ziel (Presidio + Marge)
+  bestes F1 fett (rohes Gold, dort gilt die Untergrenze F1 ≥ 80, M-RAW); die Entitätstabelle
+  zusätzlich auf erreichbarem Gold als Diagnose (T27);
+- M1 und M2 je Sicht, erst `raw` (entscheidet), dann `attainable`, je mit dem Urteil als fetter Zeile:
+- M1 jeder ARK-Engine gegen jedes Profil: je Familie gehaltene gemeinsame IDs und die Entitäten
+  darunter; `balanced` und `balanced-bare` zuerst, weitere Engines mit „²“ (entscheiden nicht);
+- M2 jeder ARK-Engine gegen jedes Profil: je Familie Macro-F1 von ARK gegen das Ziel (Presidio + Marge)
   und die Zahl der IDs, Regel wie bei `m2`;
 - Gold-Lücken je Korpus und Entität (T16), nur berichtet: Vorhersagen, die unter exakter Wertung FP
   sind und deren Wert einem annotierten Gold-Wert derselben ID an anderer Stelle der Zeile gleicht
@@ -467,13 +480,13 @@ python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
   und Entität die Zahl der Gold-Werte unter einer `known_gaps`-Entscheidung. Rohe Metriken und Gate
   bleiben unverändert.
 
-Engines heißen `ark-<modus>` und dann wie die Profile; `--ark balanced=DIR` und mindestens ein
-`--engine` sind Pflicht, Namen eindeutig, fehlende Vorhersagedateien sind Exit 2.
+Engines heißen `ark-<engine>` und `presidio-<profil>`; `--ark balanced=DIR`, `--presidio default=DIR`
+und `--presidio tuned=DIR` sind Pflicht, Namen eindeutig, fehlende Vorhersagedateien sind Exit 2.
 
 ### Meilenstein-Snapshot für die Capabilities-Seite
 
 `research/scoreboard/YYYY-MM-DD.json` (Schema `ark-l1-scoreboard-snapshot-v1`, `schema_version`
-1.1) speist [`docs/reference/l1-capabilities.md`](../../docs/reference/l1-capabilities.md); die neueste
+1.2) speist [`docs/reference/l1-capabilities.md`](../../docs/reference/l1-capabilities.md); die neueste
 Datei gewinnt. Meilensteine, Latenz und Notizen werden von Hand gepflegt, die Ergebnisse je Entität
 und Gruppe erzeugt `scripts/scoreboard_snapshot.py` aus den aggregierten Berichten einer Messung:
 
@@ -488,7 +501,9 @@ python3 scripts/generate_docs.py
 - `--pii-report`: JSON von `scoreboard.py report --json` (oben). Je gemessener ID (`scopes` des
   Berichts) und Quellfamilie `gold` und exakt F1 je Engine (`ark-balanced`, `ark-strict`,
   `presidio-default`, `presidio-tuned`) über alle Zeilen der Familie; Familien ohne Gold-Span stehen als
-  `{"gold": 0}`.
+  `{"gold": 0}`. Dazu `pii.milestone_view` (Sicht des Urteils, `raw`) und `pii.baselines` (die
+  Presidio-Engines des Urteils, `presidio-default` und `presidio-tuned`; Schema 1.2, ersetzt
+  `pii.baseline`); die Capabilities-Seite zeigt ARK gegen jede dieser Baselines.
 - `--dlp-reports`: `--output-dir` von `scripts/l1_dlp/baseline_report.py`. Secret-Entitäten und -Gruppen
   bekommen F1/Precision/Recall des Default-Profils für ARK und jede Baseline, die einen getypten Span
   meldet; standardmäßig aus geschaltete Familien (Business-Identifier, Content-Klassen) die Werte von
