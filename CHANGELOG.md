@@ -36,6 +36,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`ed25519_sk`, `ed25519e_sk`, `addr`/`stake`/`acct`/`root`/`policy`/`drep` `_sk` and `_xsk`) with
   a valid checksum and the key length of the prefix (32/64 bytes, 96 for `_xsk`); verification keys
   (`_vk`) stay silent. Keyword prefilters and linear bounded regexes.
+- Detection change: content class engine for document classes (M01). A document class is a rule
+  whose regex matches a strong anchor (a marker); that match is the evidence span and the document
+  label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum
+  density): strong marker 3 points, each distinct medium anchor (domain term) 2, each structural
+  anchor (Subject:, Betreff:, Dear, Mit freundlichen Grüßen) 1, each counter-context anchor
+  (example, template, Vorlage, Seminar, definition) minus 3; at least one medium anchor is required.
+  Anchors are whole-word literals on one Aho-Corasick automaton per class, built once and searched
+  only where the marker matched, so documents without a marker cost one prefilter keyword lookup.
+  First class: opt-in `dlp_document_legal_privileged` (`dlp.document.legal_privileged`,
+  attorney-client privileged correspondence DE/EN: "privileged and confidential", "attorney work
+  product", "Anwaltskorrespondenz", "Mandatsgeheimnis", "Verteidigerpost" next to counsel, court,
+  Kanzlei, Rechtsstreit). Off by default like every content class; the default profile is unchanged.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
