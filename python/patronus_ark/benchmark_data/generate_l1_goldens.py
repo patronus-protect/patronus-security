@@ -5234,6 +5234,8 @@ DLP_LOOKALIKE_GENERATORS = (
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
     # G-URL: Base32 seed and auth URL token shorter than the rules take
     "totp_base32_secret_short", "auth_url_token_short",
+    # C-KEYS: a public JWK without d, an OpenVPN block with 15 lines
+    "jwk_okp_public_key", "openvpn_static_key_short",
 )
 
 
@@ -15183,6 +15185,230 @@ DLP_C_WALLET_SEED_CASES = {
     ],
 }
 for _label, _rows in DLP_C_WALLET_SEED_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# C-KEYS: key material in config and code. JWKs with kty and a private member (RFC 7517/7518/8037),
+# WireGuard private and preshared keys (32 bytes base64), OpenVPN static keys (<tls-auth>), IPsec PSK
+# entries, AES/HMAC/Fernet keys under a key name, Laravel APP_KEY (base64: and 16/32 bytes), Django
+# SECRET_KEY and Rails secret_key_base. Hard negatives are public JWKs, WireGuard public keys, published
+# test vectors (RFC 8037, RFC 7517, NIST SP 800-38A), lookalikes of a wrong length, env and template
+# references and placeholders.
+DLP_CKEYS_CASES = {
+    "PRIVATE_KEY": [
+        ds(
+            "PRIVATE_KEY", "en", "dlp_jwk_private_key",
+            "{\n  \"keys\": [\n    <<secret:0>>\n  ]\n}\n",
+            "jwk_okp_private_key", 22001, carrier="json",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_jwk_private_key",
+            "auth:\n  # Signaturschlüssel des Token-Dienstes\n  jwk: '<<secret:0>>'\n",
+            "jwk_ec_private_key", 22002, carrier="yaml",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_jwk_private_key",
+            "import { importJWK } from \"jose\"\n\nconst jwk = <<secret:0>>\nconst key = await importJWK(jwk, \"RS256\")\n",
+            "jwk_rsa_private_key", 22003, carrier="code",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_jwk_private_key",
+            "Hallo Lena,\n\nhier der JWK für die Staging-Umgebung: <<secret:0>>\nBitte nicht ins Wiki kopieren.\n",
+            "jwk_okp_private_key", 22004, carrier="prose",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_wireguard_private_key",
+            "[Interface]\nAddress = 10.8.0.2/24\nPrivateKey = <<secret:0>>\nListenPort = 51820\nDNS = 10.8.0.1\n",
+            "wireguard_private_key", 22005, carrier="ini",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_wireguard_private_key",
+            "# Tunnel zum Standort Köln\n[Peer]\nPublicKey = siehe Keepass\nPresharedKey = <<secret:0>>\nAllowedIPs = 10.20.0.0/16\n",
+            "wireguard_private_key", 22006, carrier="ini",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_wireguard_private_key",
+            "wireguard:\n  interface: wg0\n  private_key: \"<<secret:0>>\"\n",
+            "wireguard_private_key", 22007, carrier="yaml",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_wireguard_private_key",
+            "$ export WG_PRIVATE_KEY=<<secret:0>>  # Schlüssel des Gateways\n",
+            "wireguard_private_key", 22008, carrier="cli",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_jwk_private_key",
+            "{\"keys\": [{\"kty\": \"OKP\", \"crv\": \"Ed25519\", \"use\": \"sig\", \"kid\": \"2026-11\", "
+            "\"x\": \"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo\"}]}\n",
+            "public JWK without a private member", carrier="json",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_jwk_private_key",
+            "RFC 8037 appendix A.1 test key:\n{\"kty\":\"OKP\",\"crv\":\"Ed25519\","
+            "\"d\":\"nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A\",\"x\":\"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo\"}\n",
+            "published test vector", carrier="markdown",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_wireguard_private_key",
+            "[Interface]\nPrivateKey = <your-private-key>\n\n[Peer]\nPublicKey = 11qYAYKxCrfVS7TyWQHOg7hcvPapiMlrwIaaPcHURo=\nEndpoint = vpn.example.net:51820\n",
+            "placeholder and public key", carrier="ini",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_wireguard_private_key",
+            "$ wg genkey | tee privatekey | wg pubkey > publickey\n",
+            "key generation command", carrier="cli",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_wireguard_private_key",
+            "PostUp = wg set %i private-key /etc/wireguard/private.key\n",
+            "key file path", carrier="ini",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_jwk_private_key",
+            "Der öffentliche Schlüssel liegt unter /.well-known/jwks.json: "
+            "{\"kty\":\"RSA\",\"e\":\"AQAB\",\"kid\":\"prod-1\",\"n\":\"…\"}\n",
+            "public JWK without a private member", carrier="prose",
+        ),
+        dl(
+            "PRIVATE_KEY", "de", "dlp_jwk_private_key",
+            "# Öffentlicher Schlüssel für die Verifikation\nJWT_PUBLIC_JWK='<<secret:0>>'\n",
+            "jwk_okp_public_key", 22010, "public JWK without d", carrier="env",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_wireguard_private_key",
+            "# Gegenstelle Hamburg\n[Peer]\nPublicKey = 11qYAYKxCrfVS7TyWQHOg7hcvPapiMlrwIaaPcHURo=\nAllowedIPs = 10.30.0.0/16\n",
+            "WireGuard public key", carrier="ini",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_wireguard_private_key",
+            "[Interface]\n# Schlüssel kommt aus dem Vault\nPrivateKey = ${WG_PRIVATE_KEY}\n",
+            "environment reference", carrier="ini",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_wireguard_private_key",
+            "[Interface]\nPrivateKey = <hier den privaten Schlüssel eintragen>\n",
+            "placeholder", carrier="ini",
+        ),
+    ],
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_openvpn_static_key",
+            "client\nremote vpn.example.net 1194\n<tls-auth>\n<<secret:0>>\n</tls-auth>\nkey-direction 1\n",
+            "openvpn_static_key", 22101, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_openvpn_static_key",
+            "Anbei die ta.key für den neuen Laptop:\n\n<<secret:0>>\n\nGruß, IT\n",
+            "openvpn_static_key", 22102, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_ipsec_psk",
+            "# /etc/ipsec.secrets\n192.0.2.10 198.51.100.7 : PSK \"<<secret:0>>\"\n",
+            "ipsec_psk", 22103, carrier="line",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_ipsec_psk",
+            "# ipsec.secrets – Standort Hamburg\n%any %any : PSK \"<<secret:0>>\"\n",
+            "ipsec_psk", 22104, carrier="line",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_symmetric_key",
+            "from cryptography.hazmat.primitives.ciphers.aead import AESGCM\n\nAES_KEY = bytes.fromhex(\"<<secret:0>>\")\naead = AESGCM(AES_KEY)\n",
+            "aes256_hex_key", 22105, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_symmetric_key",
+            "# Schlüssel für verschlüsselte Kundenfelder\nFERNET_KEY=<<secret:0>>\n",
+            "fernet_key", 22106, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_symmetric_key",
+            "{\n  \"webhooks\": {\n    \"hmac_key\": \"<<secret:0>>\"\n  }\n}\n",
+            "aes256_hex_key", 22107, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_laravel_app_key",
+            "APP_NAME=Shop\nAPP_ENV=production\nAPP_KEY=<<secret:0>>\nAPP_DEBUG=false\n",
+            "laravel_app_key", 22108, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_laravel_app_key",
+            "[2026-11-06 07:14:02] production.ERROR: Entschlüsselung fehlgeschlagen, APP_KEY=<<secret:0>> geladen\n",
+            "laravel_app_key", 22109, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_django_secret_key",
+            "# settings.py\nDEBUG = False\nSECRET_KEY = '<<secret:0>>'\nALLOWED_HOSTS = ['shop.example.com']\n",
+            "django_secret_key", 22110, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_django_secret_key",
+            "# Produktivwerte, nicht einchecken\nDJANGO_SECRET_KEY=<<secret:0>>\n",
+            "django_secret_key", 22111, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_rails_secret_key_base",
+            "production:\n  secret_key_base: <<secret:0>>\n",
+            "rails_secret_key_base", 22112, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_rails_secret_key_base",
+            "$ export SECRET_KEY_BASE=<<secret:0>>  # aus der alten Pipeline übernommen\n",
+            "rails_secret_key_base", 22113, carrier="cli",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_symmetric_key",
+            "# NIST SP 800-38A F.1.1 test vector\nAES_KEY = bytes.fromhex(\"2b7e151628aed2a6abf7158809cf4f3c\")\n",
+            "published test vector", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_laravel_app_key",
+            "APP_NAME=Shop\nAPP_KEY=\n# run php artisan key:generate to set APP_KEY\n",
+            "empty value", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_django_secret_key",
+            "SECRET_KEY = os.environ[\"DJANGO_SECRET_KEY\"]\n",
+            "environment lookup", carrier="code",
+        ),
+        dl(
+            "CRYPTO_KEY", "en", "dlp_openvpn_static_key",
+            "<tls-auth>\n<<secret:0>>\n</tls-auth>\n",
+            "openvpn_static_key_short", 22114, "15 instead of 16 key lines", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_ipsec_psk",
+            "%any %any : PSK \"${IPSEC_PSK}\"\n",
+            "environment reference", carrier="line",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_symmetric_key",
+            "/* FIPS-197 Anhang C.1, Testschlüssel */\nstatic const uint8_t aes_key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, "
+            "0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};\n",
+            "published test vector", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_rails_secret_key_base",
+            "production:\n  # Wert kommt aus der Umgebung\n  secret_key_base: <%= ENV[\"SECRET_KEY_BASE\"] %>\n",
+            "template reference", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_laravel_app_key",
+            "APP_KEY=${LARAVEL_APP_KEY}  # Schlüssel aus dem Secret-Store\n",
+            "environment reference", carrier="env",
+        ),
+        dl(
+            "CRYPTO_KEY", "de", "dlp_openvpn_static_key",
+            "Gekürzte ta.key aus dem Ticket:\n<<secret:0>>\n",
+            "openvpn_static_key_short", 22115, "15 instead of 16 key lines", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_ipsec_psk",
+            "# Platzhalter, echter Wert im Vault\n%any %any : PSK \"<psk>\"\n",
+            "placeholder", carrier="line",
+        ),
+    ],
+}
+for _label, _rows in DLP_CKEYS_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

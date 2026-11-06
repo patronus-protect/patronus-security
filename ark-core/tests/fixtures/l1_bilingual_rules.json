@@ -6433,5 +6433,189 @@
       ]
     },
     "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_jwk_private_key",
+    "de": "Hier der JWK für Staging: <<secret\u003a0>>",
+    "en": "{\"keys\": [<<secret\u003a0>>]}",
+    "secrets": [
+      {
+        "gen": "jwk_okp_private_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Der öffentliche Schlüssel: {\"kty\":\"RSA\",\"e\":\"AQAB\",\"n\":\"…\"}",
+        "JWKs mit privatem Anteil enthalten das Feld d."
+      ],
+      "en": [
+        "{\"kty\":\"oct\",\"alg\":\"A128KW\",\"k\":\"GawgguFyGrWKav7AX4VKUg\"}",
+        "Publish only the public JWK set under /.well-known/jwks.json."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_wireguard_private_key",
+    "de": "# Gateway Köln\n[Interface]\nPrivateKey = <<secret\u003a0>>",
+    "en": "wireguard:\n  private_key: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "wireguard_private_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "[Interface]\nPrivateKey = <hier den privaten Schlüssel eintragen>",
+        "[Interface]\nPrivateKey = ${WG_PRIVATE_KEY}"
+      ],
+      "en": [
+        "$ wg genkey | tee privatekey | wg pubkey > publickey",
+        "PostUp = wg set %i private-key /etc/wireguard/private.key"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openvpn_static_key",
+    "de": "Anbei die ta.key:\n<<secret\u003a0>>",
+    "en": "<tls-auth>\n<<secret\u003a0>>\n</tls-auth>",
+    "secrets": [
+      {
+        "gen": "openvpn_static_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "tls-auth ta.key 1",
+        "Die ta.key liegt im Tresor, nicht im Repository."
+      ],
+      "en": [
+        "openvpn --genkey secret ta.key",
+        "<tls-auth>\n[inline key removed]\n</tls-auth>"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_ipsec_psk",
+    "de": "# Standort Hamburg\n%any %any : PSK \"<<secret\u003a0>>\"",
+    "en": "192.0.2.10 198.51.100.7 : PSK \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "ipsec_psk",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "%any %any : PSK \"<psk>\"",
+        "Der PSK steht im Vault unter vpn/hamburg."
+      ],
+      "en": [
+        "%any : PSK \"${IPSEC_PSK}\"",
+        "Set the PSK in ipsec.secrets and reload the daemon."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_symmetric_key",
+    "de": "# Schlüssel für Kundenfelder\nFERNET_KEY=<<secret\u003a0>>",
+    "en": "AES_KEY = bytes.fromhex(\"<<secret\u003a0>>\")",
+    "secrets": [
+      {
+        "gen": "aes256_hex_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ENCRYPTION_KEY={{ vault_encryption_key }}",
+        "Der AES-Schlüssel wird beim Start aus dem KMS geladen."
+      ],
+      "en": [
+        "# NIST SP 800-38A test vector\nAES_KEY = bytes.fromhex(\"2b7e151628aed2a6abf7158809cf4f3c\")",
+        "aes_key = os.environ[\"AES_KEY\"]"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_laravel_app_key",
+    "de": "Der App-Key der Produktion ist <<secret\u003a0>>",
+    "en": "APP_ENV=production\nAPP_KEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "laravel_app_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "APP_KEY=${LARAVEL_APP_KEY}",
+        "APP_KEY= # mit php artisan key:generate setzen"
+      ],
+      "en": [
+        "APP_KEY=",
+        "'key' => env('APP_KEY'),"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_django_secret_key",
+    "de": "# Produktivwerte\nDJANGO_SECRET_KEY=<<secret\u003a0>>",
+    "en": "SECRET_KEY = '<<secret\u003a0>>'",
+    "secrets": [
+      {
+        "gen": "django_secret_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "SECRET_KEY = os.environ[\"DJANGO_SECRET_KEY\"]",
+        "Der SECRET_KEY kommt aus der Umgebung."
+      ],
+      "en": [
+        "SECRET_KEY = env(\"DJANGO_SECRET_KEY\")",
+        "SECRET_KEY = '<generate with get_random_secret_key()>'"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_rails_secret_key_base",
+    "de": "$ export SECRET_KEY_BASE=<<secret\u003a0>>  # aus der Pipeline",
+    "en": "production:\n  secret_key_base: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "rails_secret_key_base",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "secret_key_base: <%= ENV[\"SECRET_KEY_BASE\"] %>",
+        "Den secret_key_base mit bin/rails secret erzeugen."
+      ],
+      "en": [
+        "config.secret_key_base = ENV.fetch(\"SECRET_KEY_BASE\")",
+        "secret_key_base: <%= Rails.application.credentials.secret_key_base %>"
+      ]
+    },
+    "language_neutral": false
   }
 ]
