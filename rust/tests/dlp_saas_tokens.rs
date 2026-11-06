@@ -184,16 +184,28 @@ fn public_mapbox_tokens_are_no_secret() {
     // A pk. token ships to the browser; only the sk. scope is a secret.
     let secret = generated("mapbox_secret_token", 4);
     let public = format!("pk.{}", &secret[3..]);
-    for text in [
+    for (index, text) in [
         format!("mapboxgl.accessToken = \"{public}\";\n"),
         format!("NEXT_PUBLIC_MAPBOX_TOKEN={public}\n"),
-    ] {
-        assert!(!rule_hit(&text, "dlp_mapbox_secret_token"), "{text}");
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert!(
+            !rule_hit(text, "dlp_mapbox_secret_token"),
+            "public carrier {index}"
+        );
         // Nor is it a secret for the generic assignment rules.
-        assert!(scan(&text).evidence_spans.is_empty(), "{text}");
+        assert!(
+            scan(text).evidence_spans.is_empty(),
+            "public carrier {index}"
+        );
     }
     let text = format!("MAPBOX_DOWNLOADS_TOKEN={secret}\n");
-    assert!(rule_hit(&text, "dlp_mapbox_secret_token"), "{text}");
+    assert!(
+        rule_hit(&text, "dlp_mapbox_secret_token"),
+        "MAPBOX_DOWNLOADS_TOKEN carrier"
+    );
 }
 
 #[test]
