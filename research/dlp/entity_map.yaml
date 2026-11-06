@@ -905,12 +905,13 @@ entities:
      gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key],
      trufflehog: [DuffelToken, Shippo, Lob], backlog: P09}
   # P10: Produktivität/SaaS
-  - {id: saas.atlassian.api_token, scope: baseline_only, group: API_KEY, gitleaks: [atlassian-api-token],
-     trufflehog: [Atlassian, JiraToken], backlog: P10}
-  - {id: saas.notion.api_token, scope: baseline_only, group: API_KEY, gitleaks: [notion-api-token], backlog: P10}
-  - {id: saas.linear.secret, scope: baseline_only, group: API_KEY,
+  - {id: saas.atlassian.api_token, scope: shared, group: API_KEY, ark: [dlp_atlassian_api_token],
+     gitleaks: [atlassian-api-token], trufflehog: [Atlassian, JiraToken], backlog: P10}
+  - {id: saas.notion.api_token, scope: shared, group: API_KEY, ark: [dlp_notion_api_token],
+     gitleaks: [notion-api-token], backlog: P10}
+  - {id: saas.linear.secret, scope: shared, group: API_KEY, ark: [dlp_linear_api_key],
      gitleaks: [linear-api-key, linear-client-secret], trufflehog: [LinearAPI], backlog: P10}
-  - {id: saas.airtable.token, scope: baseline_only, group: API_KEY,
+  - {id: saas.airtable.token, scope: shared, group: API_KEY, ark: [dlp_airtable_pat],
      gitleaks: [airtable-api-key, airtable-personnal-access-token],
      trufflehog: [AirtablePersonalAccessToken], backlog: P10}
   - {id: saas.asana.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [asana-client-secret], backlog: P10}
@@ -918,9 +919,10 @@ entities:
      trufflehog: [HubSpotApiKey], backlog: P10}
   - {id: saas.zendesk.secret_key, scope: baseline_only, group: API_KEY, gitleaks: [zendesk-secret-key], backlog: P10}
   - {id: saas.intercom.api_key, scope: baseline_only, group: API_KEY, gitleaks: [intercom-api-key], backlog: P10}
-  - {id: saas.postman.api_token, scope: baseline_only, group: API_KEY, gitleaks: [postman-api-token],
-     trufflehog: [Postman], backlog: P10}
-  - {id: saas.mapbox.secret_token, scope: baseline_only, group: API_KEY, gitleaks: [mapbox-api-token], backlog: P10}
+  - {id: saas.postman.api_token, scope: shared, group: API_KEY, ark: [dlp_postman_api_key],
+     gitleaks: [postman-api-token], trufflehog: [Postman], backlog: P10}
+  - {id: saas.mapbox.secret_token, scope: shared, group: API_KEY, ark: [dlp_mapbox_secret_token],
+     gitleaks: [mapbox-api-token], trufflehog: [Mapbox], backlog: P10}
   - {id: saas.launchdarkly.access_token, scope: baseline_only, group: API_KEY, gitleaks: [launchdarkly-access-token],
      trufflehog: [LaunchDarkly], backlog: P10}
   - {id: saas.typeform.api_token, scope: baseline_only, group: API_KEY, gitleaks: [typeform-api-token],

@@ -6097,5 +6097,143 @@
       ]
     },
     "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_atlassian_api_token",
+    "de": "Das API-Token für Jira lautet <<secret\u003a0>>",
+    "en": "JIRA_API_TOKEN=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "atlassian_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "JIRA_API_TOKEN=${JIRA_API_TOKEN}",
+        "Atlassian-API-Tokens beginnen mit ATATT."
+      ],
+      "en": [
+        "confluence:\n  api_token: \"<your-api-token>\"",
+        "Create the token under id.atlassian.com, then paste it into the CI secret store."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_notion_api_token",
+    "de": "notion:\n  token: \"<<secret\u003a0>>\"",
+    "en": "const notion = new Client({ auth: \"<<secret\u003a0>>\" })",
+    "secrets": [
+      {
+        "gen": "notion_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NOTION_TOKEN=${NOTION_TOKEN}",
+        "Das Integrations-Secret beginnt mit ntn_."
+      ],
+      "en": [
+        "notion:\n  token: \"ntn_<your-integration-secret>\"",
+        "const notion = new Client({ auth: process.env.NOTION_TOKEN })"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_linear_api_key",
+    "de": "{\"linear\": {\"apiKey\": \"<<secret\u003a0>>\"}}",
+    "en": "Authorization: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "linear_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "{\"linear\": {\"apiKey\": \"<LINEAR-API-SCHLÜSSEL>\"}}",
+        "Persönliche Linear-Schlüssel beginnen mit lin_api_."
+      ],
+      "en": [
+        "LINEAR_API_KEY=${LINEAR_API_KEY}",
+        "Linear personal API keys start with lin_api_."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_airtable_pat",
+    "de": "AIRTABLE_TOKEN=<<secret\u003a0>>",
+    "en": "Authorization: Bearer <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "airtable_personal_access_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AIRTABLE_TOKEN=${AIRTABLE_TOKEN}",
+        "Die Basis-ID appR4nd0mBase12 steht in der URL."
+      ],
+      "en": [
+        "{\"airtable\": {\"token\": \"{{ airtable_token }}\"}}",
+        "pattern = re.compile(r\"pat[A-Za-z0-9]{14}\")"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_postman_api_key",
+    "de": "$ newman run sammlung.json --env-var \"postmanApiKey=<<secret\u003a0>>\"",
+    "en": "X-Api-Key: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "postman_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "postman:\n  api_key: \"PMAK-xxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"",
+        "Postman-Schlüssel beginnen mit PMAK-."
+      ],
+      "en": [
+        "POSTMAN_API_KEY=${POSTMAN_API_KEY}",
+        "$ newman run collection.json --env-var \"postmanApiKey=$POSTMAN_API_KEY\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_mapbox_secret_token",
+    "de": "MAPBOX_SECRET_TOKEN = \"<<secret\u003a0>>\"",
+    "en": "MAPBOX_DOWNLOADS_TOKEN=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "mapbox_secret_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "MAPBOX_SECRET_TOKEN = os.environ[\"MAPBOX_SECRET_TOKEN\"]",
+        "Geheime Mapbox-Tokens beginnen mit sk., öffentliche mit pk."
+      ],
+      "en": [
+        "MAPBOX_DOWNLOADS_TOKEN=${MAPBOX_DOWNLOADS_TOKEN}",
+        "mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;"
+      ]
+    },
+    "language_neutral": false
   }
 ]
