@@ -29,11 +29,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `PiiPipeline::evaluate()` keeps the defaults.
   Measured per rule with only that rule on (new spans against the defaults, strict/balanced):
   on the 2311 PII hard negatives of goldens and fixture (many are deliberately bare valid values)
-  from 6/0 (`pii_steuernummer_de_bare`, `pii_pan_in_bare`) to 64/0
-  (`pii_driver_license_number_de_bare`), at most 24 in `balanced` (`pii_sin_ca_bare`); on the
-  pinned benign corpora (dev split) at most 6.1/MB of code in strict
-  (`pii_facility_number_bsnr_de_bare`, `pii_ssn_us_bare` 5.9) and 0.72/MB in `balanced`
-  (`pii_physician_number_lanr_de_bare`), at most 0.13/MB of docs. Default-gate latency is
+  from 6/6 (`pii_steuernummer_de_bare`, `pii_pan_in_bare`) to 64/64
+  (`pii_driver_license_number_de_bare`); on the pinned benign corpora (dev split) at most 6.1/MB
+  of code in both modes (`pii_facility_number_bsnr_de_bare`, `pii_ssn_us_bare` 5.9), at most
+  0.13/MB of docs. Default-gate latency is
   unchanged within noise (100 KiB p95, median of four A/B pairs: +1.5 % Python, −8 % native).
   Per-rule table and commands: `research/l1-pii/scoreboard/d-bare.md`.
 
