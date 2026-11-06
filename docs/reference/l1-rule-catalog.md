@@ -199,20 +199,20 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_crypto_eth` | `CRYPTO` | yes | checksum | 30 | key or proximity | 0.65–0.90 |
 | `pii_crypto_eth_unchecked` | `CRYPTO` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_steuer_id_de_bare` | `STEUERID` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
-| `pii_steuernummer_de_bare` | `TAX_NUMBER_DE` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
+| `pii_steuernummer_de_bare` | `TAX_NUMBER_DE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_physician_number_lanr_de_bare` | `PHYSICIAN_NUMBER_LANR` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
-| `pii_facility_number_bsnr_de_bare` | `FACILITY_NUMBER_BSNR` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
-| `pii_driver_license_number_de_bare` | `DRIVER_LICENSE_NUMBER` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
-| `pii_ssn_us_bare` | `SSN` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
+| `pii_facility_number_bsnr_de_bare` | `FACILITY_NUMBER_BSNR` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_driver_license_number_de_bare` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_ssn_us_bare` | `SSN` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_sin_ca_bare` | `CA_SIN` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_aadhaar_in_bare` | `IN_AADHAAR` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_npi_us_bare` | `US_NPI` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_pesel_pl_bare` | `PL_PESEL` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_acn_au_bare` | `AU_ACN` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_brn_kr_bare` | `KR_BRN` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
-| `pii_pan_in_bare` | `IN_PAN` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
-| `pii_voter_id_in_bare` | `IN_VOTER` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
-| `pii_vehicle_registration_ng_bare` | `LICENSEPLATE` | yes | format | 15 | none, opt-in (off by default) | 0.30–0.55 |
+| `pii_pan_in_bare` | `IN_PAN` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_voter_id_in_bare` | `IN_VOTER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_vehicle_registration_ng_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 
 ### PII context lexicon
 

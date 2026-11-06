@@ -218,9 +218,9 @@ in every mode until the `rules` gate enables it:
 An enabled bare rule reports in every mode with the validator of its id. The value must stand
 alone (not inside a longer number), not under a key that names another value, and no
 counter-context term (order, reference, invoice …) may be nearer than a support term. Its base
-score is low (`15`): a checksum value scores `0.50` and reaches `balanced`, a format-only value
-scores `0.30` and reaches only `recall`; a labelled hit of the same value always ranks above and
-wins the overlap. The example profile
+score is the `balanced` threshold `0.50` (base `15` with a checksum, `35` with a format-only
+validator), so it reports in `balanced` and `recall` as in `strict`; a labelled hit of the same
+value scores at least as high and wins the overlap. The example profile
 [`pii-bare-formats.gates.json`](../how-to/pii-bare-formats.gates.json) enables all of them in
 `balanced`:
 

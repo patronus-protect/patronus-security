@@ -22,8 +22,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   enables them (no new API; example profile `docs/how-to/pii-bare-formats.gates.json`). An enabled
   bare rule keeps the validator of its id, reports in every mode a value that stands alone,
   outside a key that names another value and without a nearer counter-context term, and scores
-  base `15`: `0.50` with a check digit (`balanced`), `0.30` format-only (`recall` only), below every
-  labelled hit, which keeps its span. Default output (all modes, default gates) is unchanged; the
+  the `balanced` threshold `0.50` (base `15` with a check digit, `35` format-only), so every
+  enabled bare rule reports in `balanced` and `recall` too; a labelled hit scores at least as high
+  and keeps its span. Default output (all modes, default gates) is unchanged; the
   goldens are unchanged. `NativeGates::all_enabled()` includes the bare rules;
   `PiiPipeline::evaluate()` keeps the defaults.
   Measured per rule with only that rule on (new spans against the defaults, strict/balanced):
