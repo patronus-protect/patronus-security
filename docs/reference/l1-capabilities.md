@@ -11,8 +11,8 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 107 | 28 |
-| Regex rules | 199 | 170 (+5 relationship rules) |
+| Result labels (entity groups) | 107 | 30 |
+| Regex rules | 199 | 172 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 28 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
@@ -340,6 +340,8 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `dlp.document.unpublished_financials` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.m_and_a` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.board_minutes` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.nda_trade_secret` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.contract` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 | `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 
@@ -442,6 +444,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `document.unpublished_financials` | ark_only | `dlp.document.unpublished_financials` | `dlp_document_unpublished_financials` | format | off | – |
 | `document.m_and_a` | ark_only | `dlp.document.m_and_a` | `dlp_document_m_and_a` | format | off | – |
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | `dlp_document_board_minutes` | format | off | – |
+| `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | `dlp_document_nda_trade_secret` | format | off | – |
+| `document.contract` | ark_only | `dlp.document.contract` | `dlp_document_contract` | format | off | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |
@@ -571,7 +575,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 87 shared, 44 ARK only, 77 baseline only, 11 out of scope.
+Entities: 87 shared, 46 ARK only, 77 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -670,6 +674,8 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `document.unpublished_financials` | ark_only | `dlp.document.unpublished_financials` | – | – | – |
 | `document.m_and_a` | ark_only | `dlp.document.m_and_a` | – | – | – |
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | – | – | – |
+| `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | – | – | – |
+| `document.contract` | ark_only | `dlp.document.contract` | – | – | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |

@@ -337,7 +337,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (170) { #dlp-regex-rules }
+## DLP regex rules (172) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups and the classification markings (`dlp.document.classification_marking`, M23: VS/GEHEIM, corporate levels, Confidential/Restricted/Internal Only, TLP 2.0, NATO/EU) by default; every other content and document class is opt-in. A marking counts where it stands as a banner (upper case, alone on its line apart from markdown or comment decoration) or as the value of a classification key (`Classification:`, `Einstufung:`, `sensitivity`), with no template/example context and no other level of its family within 160 bytes. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -551,6 +551,8 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_document_unpublished_financials` | `dlp.document.unpublished_financials` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_document_m_and_a` | `dlp.document.m_and_a` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_document_board_minutes` | `dlp.document.board_minutes` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_document_nda_trade_secret` | `dlp.document.nda_trade_secret` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_document_contract` | `dlp.document.contract` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_marking_de_government` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
 | `dlp_marking_de_corporate` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
 | `dlp_marking_en_corporate` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |

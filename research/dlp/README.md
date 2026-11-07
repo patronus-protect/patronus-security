@@ -584,6 +584,11 @@ Review-Pausen.
   Vermerk zählt nur als Banner (Großschreibung, allein auf der Zeile bis auf Markdown-/Kommentar-
   Dekoration) oder als Wert eines Einstufungsschlüssels; Gegenkontext (Vorlage, Beispiel) und weitere
   Stufen derselben Familie im Umkreis von 160 Byte (Artikel, Enums) heben ihn auf.
+- **Rechtsdokumente (M-LEGAL)**: `dlp_document_nda_trade_secret` (NDA, Geschäftsgeheimnis,
+  GeschGehG, Sperrfrist/Embargo), `dlp_document_contract` (Kunden-/Lieferantenverträge; Fenster
+  3.000 Byte, mindestens vier Vertragsanker: Parteien, Vergütung, Laufzeit, Vertraulichkeit) und
+  Vergleichsmarker (WITHOUT PREJUDICE, ohne Präjudiz) in `dlp_document_legal_privileged`. Gesetze,
+  Urteile und Vertragsmuster sind Gegenkontext.
 - Montags läuft `TRIAGE` wie bei PII.
 
 ## Abgrenzung

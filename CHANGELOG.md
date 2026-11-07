@@ -99,6 +99,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   p50 9.74 ms, p95 14.24 ms (M01 head 9.48 / 15.38 ms), 4 KiB p95 1.94 ms; no measurable change,
   the classes are opt-in and their anchors are searched only where a marker matched. The legal
   class shares its letter-structure and generic counter lists with them (same anchors as before).
+- Detection change: legal document classes on the M01 content class engine (M-LEGAL), all opt-in
+  (off by default; the default profile is unchanged). New `dlp_document_nda_trade_secret`
+  (`dlp.document.nda_trade_secret`, M04): non-disclosure/confidentiality agreements, NDA, trade
+  secret markers, Geheimhaltungs-/Vertraulichkeitsvereinbarung, Geschäfts-/Betriebsgeheimnis,
+  GeschGehG and embargo periods (embargoed until, Sperrfrist) next to parties, confidential
+  information, disclosure duties or press-release terms. New `dlp_document_contract`
+  (`dlp.document.contract`, M22): customer and supplier contracts (Master Services/Supply/License
+  Agreement, Rahmen-, Liefer-, Dienstleistungs-, Lizenzvertrag …) only when at least four contract
+  terms (parties, remuneration, term, termination, confidentiality, liability) stand within 3,000
+  bytes of the title. `dlp_document_legal_privileged` (M05) also reports settlement negotiation
+  markers (WITHOUT PREJUDICE, for settlement purposes only, ohne Präjudiz, ohne Anerkennung einer
+  Rechtspflicht) under the same legal-anchor gate. Published laws, court decisions (Leitsatz,
+  Urteil, the court held), contract templates (Muster, Vorlage, [Party A]) and explanations are
+  counter-context.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

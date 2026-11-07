@@ -178,10 +178,11 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Document classes (M01 content class engine) ─────────────────────────
     // M01: attorney-client privileged correspondence. The privilege marker is
     // the evidence span; legal terms and letter structure around it make the
-    // document (`LEGAL_PRIVILEGED`).
+    // document (`LEGAL_PRIVILEGED`). M-LEGAL (M05) adds the markers of
+    // settlement negotiations (WITHOUT PREJUDICE, ohne Präjudiz).
     DlpPattern {
         name: "dlp_document_legal_privileged",
-        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost)\b",
+        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz|ohne\s+anerkennung\s+einer\s+rechtspflicht)\b",
         entity_group: "dlp.document.legal_privileged",
         validator: None,
         span_group: None,
@@ -196,6 +197,10 @@ pub(super) const RULES: &[DlpPattern] = &[
                 "mandat",
                 "mandant",
                 "verteidigerpost",
+                "prejudice",
+                "settlement",
+                "präjudiz",
+                "rechtspflicht",
             ],
         )
         .with_context_gate(is_legal_privileged_document),
@@ -266,6 +271,51 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["minutes", "resolution", "protokoll", "beschl"],
         )
         .with_context_gate(is_board_minutes_document),
+    },
+    // M-LEGAL (M04): non-disclosure agreements, trade secret (GeschGehG)
+    // notices and embargo periods. The agreement title, trade secret marker
+    // or embargo phrase is the evidence span; parties, confidential
+    // information and disclosure duties around it make the document
+    // (`NDA_TRADE_SECRET`). Law texts and court decisions on trade secrets
+    // are counter-context.
+    DlpPattern {
+        name: "dlp_document_nda_trade_secret",
+        pattern: r"(?i)\b(?:(?:mutual\s+)?non[- ]disclosure\s+agreement|confidentiality\s+agreement|(?-i:NDA)|trade\s+secrets?|(?:under\s+)?embargo(?:ed)?\s+(?:until|bis)|embargo\s+period|geheimhaltungsvereinbarung|vertraulichkeitsvereinbarung|verschwiegenheitsvereinbarung|geschäftsgeheimnis(?:se[ns]?)?|betriebsgeheimnis(?:se[ns]?)?|geschgehg|sperrfrist)\b",
+        entity_group: "dlp.document.nda_trade_secret",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "disclosure",
+                "confidentiality agreement",
+                "nda",
+                "trade secret",
+                "embargo",
+                "vereinbarung",
+                "geheimnis",
+                "geschgehg",
+                "sperrfrist",
+            ],
+        )
+        .with_context_gate(is_nda_trade_secret_document),
+    },
+    // M-LEGAL (M22): customer and supplier contracts. The contract title is
+    // the evidence span; the document holds when contracting parties,
+    // remuneration, term and confidentiality clauses stand around it
+    // (`CONTRACT`). Contract templates, law texts and court decisions are
+    // counter-context.
+    DlpPattern {
+        name: "dlp_document_contract",
+        pattern: r"(?i)\b(?:(?:master\s+)?(?:services?|supply|purchase|license|licence|distribution|consulting|framework|reseller)\s+agreement|rahmenvertrag|liefervertrag|dienstleistungsvertrag|werkvertrag|lizenzvertrag|kaufvertrag|vertriebsvertrag|beratungsvertrag|wartungsvertrag)\b",
+        entity_group: "dlp.document.contract",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["agreement", "vertrag"])
+            .with_context_gate(is_contract_document),
     },
 ];
 
@@ -722,6 +772,205 @@ fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
     BOARD_MINUTES.holds(text, marker)
 }
 
+/// M-LEGAL (M04): the anchors of a non-disclosure agreement, trade secret
+/// notice or embargo around its marker.
+static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
+    ContentClass::new(
+        &[
+            ("disclosing party", Tier::Medium),
+            ("receiving party", Tier::Medium),
+            ("recipient", Tier::Medium),
+            ("confidential information", Tier::Medium),
+            ("proprietary", Tier::Medium),
+            ("do not distribute", Tier::Medium),
+            ("do not forward", Tier::Medium),
+            ("need-to-know", Tier::Medium),
+            ("need to know", Tier::Medium),
+            ("non-public", Tier::Medium),
+            ("not be disclosed", Tier::Medium),
+            ("shall not disclose", Tier::Medium),
+            ("press release", Tier::Medium),
+            ("announcement", Tier::Medium),
+            ("publication", Tier::Medium),
+            ("formula", Tier::Medium),
+            ("source code", Tier::Medium),
+            ("customer list", Tier::Medium),
+            ("prototype", Tier::Medium),
+            ("signed", Tier::Medium),
+            ("parties", Tier::Medium),
+            ("penalty", Tier::Medium),
+            ("offenlegende partei", Tier::Medium),
+            ("empfangende partei", Tier::Medium),
+            ("empfänger", Tier::Medium),
+            ("vertrauliche informationen", Tier::Medium),
+            ("geheimhaltung", Tier::Medium),
+            ("geheimhaltungspflicht", Tier::Medium),
+            ("geheimhaltungsmaßnahmen", Tier::Medium),
+            ("nicht weitergeben", Tier::Medium),
+            ("nicht weiterleiten", Tier::Medium),
+            ("nicht öffentlich", Tier::Medium),
+            ("pressemitteilung", Tier::Medium),
+            ("veröffentlichung", Tier::Medium),
+            ("rezeptur", Tier::Medium),
+            ("quellcode", Tier::Medium),
+            ("kundenliste", Tier::Medium),
+            ("prototyp", Tier::Medium),
+            ("unterzeichnet", Tier::Medium),
+            ("parteien", Tier::Medium),
+            ("vertragsstrafe", Tier::Medium),
+            ("subject:", Tier::Structural),
+            ("re:", Tier::Structural),
+            ("from:", Tier::Structural),
+            ("to:", Tier::Structural),
+            ("dear", Tier::Structural),
+            ("kind regards", Tier::Structural),
+            ("best regards", Tier::Structural),
+            ("between", Tier::Structural),
+            ("effective date", Tier::Structural),
+            ("betreff:", Tier::Structural),
+            ("von:", Tier::Structural),
+            ("an:", Tier::Structural),
+            ("sehr geehrte", Tier::Structural),
+            ("sehr geehrter", Tier::Structural),
+            ("mit freundlichen grüßen", Tier::Structural),
+            ("viele grüße", Tier::Structural),
+            ("zwischen", Tier::Structural),
+            ("example", Tier::Counter),
+            ("for example", Tier::Counter),
+            ("sample", Tier::Counter),
+            ("template", Tier::Counter),
+            ("placeholder", Tier::Counter),
+            ("e.g.", Tier::Counter),
+            ("wikipedia", Tier::Counter),
+            ("definition", Tier::Counter),
+            ("means", Tier::Counter),
+            ("refers to", Tier::Counter),
+            ("tutorial", Tier::Counter),
+            ("lecture", Tier::Counter),
+            ("directive", Tier::Counter),
+            ("the court held", Tier::Counter),
+            ("held that", Tier::Counter),
+            ("judgment", Tier::Counter),
+            ("[party a]", Tier::Counter),
+            ("[company name]", Tier::Counter),
+            ("beispiel", Tier::Counter),
+            ("zum beispiel", Tier::Counter),
+            ("z. b.", Tier::Counter),
+            ("muster", Tier::Counter),
+            ("vorlage", Tier::Counter),
+            ("platzhalter", Tier::Counter),
+            ("bezeichnet", Tier::Counter),
+            ("im sinne dieses gesetzes", Tier::Counter),
+            ("richtlinie", Tier::Counter),
+            ("urteil", Tier::Counter),
+            ("leitsatz", Tier::Counter),
+            ("seminar", Tier::Counter),
+            ("[firma]", Tier::Counter),
+        ],
+        Density {
+            window: 1500,
+            min_score: 8,
+            min_medium: 1,
+        },
+    )
+});
+
+fn is_nda_trade_secret_document(text: &str, marker: Range<usize>) -> bool {
+    NDA_TRADE_SECRET.holds(text, marker)
+}
+
+/// M-LEGAL (M22): the anchors of a customer or supplier contract around its
+/// title: contracting parties, remuneration, term and confidentiality. A
+/// contract needs several of them, hence the higher minimum.
+static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
+    ContentClass::new(
+        &[
+            ("customer", Tier::Medium),
+            ("supplier", Tier::Medium),
+            ("contractor", Tier::Medium),
+            ("licensee", Tier::Medium),
+            ("licensor", Tier::Medium),
+            ("hereinafter", Tier::Medium),
+            ("fees", Tier::Medium),
+            ("remuneration", Tier::Medium),
+            ("compensation", Tier::Medium),
+            ("purchase price", Tier::Medium),
+            ("payment terms", Tier::Medium),
+            ("term", Tier::Medium),
+            ("termination", Tier::Medium),
+            ("notice period", Tier::Medium),
+            ("confidentiality", Tier::Medium),
+            ("confidential information", Tier::Medium),
+            ("liability", Tier::Medium),
+            ("auftraggeber", Tier::Medium),
+            ("auftragnehmer", Tier::Medium),
+            ("lieferant", Tier::Medium),
+            ("kunde", Tier::Medium),
+            ("käufer", Tier::Medium),
+            ("verkäufer", Tier::Medium),
+            ("lizenznehmer", Tier::Medium),
+            ("nachfolgend", Tier::Medium),
+            ("vergütung", Tier::Medium),
+            ("kaufpreis", Tier::Medium),
+            ("zahlungsbedingungen", Tier::Medium),
+            ("laufzeit", Tier::Medium),
+            ("kündigung", Tier::Medium),
+            ("kündigungsfrist", Tier::Medium),
+            ("vertraulichkeit", Tier::Medium),
+            ("geheimhaltung", Tier::Medium),
+            ("haftung", Tier::Medium),
+            ("between", Tier::Structural),
+            ("effective date", Tier::Structural),
+            ("signature", Tier::Structural),
+            ("signed", Tier::Structural),
+            ("eur", Tier::Structural),
+            ("usd", Tier::Structural),
+            ("zwischen", Tier::Structural),
+            ("vertragsgegenstand", Tier::Structural),
+            ("unterschrift", Tier::Structural),
+            ("datum", Tier::Structural),
+            ("§ 1", Tier::Structural),
+            ("example", Tier::Counter),
+            ("sample", Tier::Counter),
+            ("template", Tier::Counter),
+            ("placeholder", Tier::Counter),
+            ("e.g.", Tier::Counter),
+            ("wikipedia", Tier::Counter),
+            ("definition", Tier::Counter),
+            ("refers to", Tier::Counter),
+            ("tutorial", Tier::Counter),
+            ("the court held", Tier::Counter),
+            ("held that", Tier::Counter),
+            ("judgment", Tier::Counter),
+            ("[party a]", Tier::Counter),
+            ("[company name]", Tier::Counter),
+            ("[amount]", Tier::Counter),
+            ("beispiel", Tier::Counter),
+            ("muster", Tier::Counter),
+            ("mustervertrag", Tier::Counter),
+            ("vorlage", Tier::Counter),
+            ("vertragsvorlage", Tier::Counter),
+            ("platzhalter", Tier::Counter),
+            ("bezeichnet", Tier::Counter),
+            ("durch den", Tier::Counter),
+            ("bgb", Tier::Counter),
+            ("urteil", Tier::Counter),
+            ("leitsatz", Tier::Counter),
+            ("[firma]", Tier::Counter),
+            ("[betrag]", Tier::Counter),
+        ],
+        Density {
+            window: 3000,
+            min_score: 14,
+            min_medium: 4,
+        },
+    )
+});
+
+fn is_contract_document(text: &str, marker: Range<usize>) -> bool {
+    CONTRACT.holds(text, marker)
+}
+
 fn is_non_placeholder_source_assignment(candidate: &str) -> bool {
     let Some((_, value)) = candidate.split_once('=') else {
         return true;
@@ -831,8 +1080,8 @@ fn is_structured_sql_statement(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_board_minutes_document, is_legal_privileged_document, is_m_and_a_document,
-        is_unpublished_financials_document,
+        is_board_minutes_document, is_contract_document, is_legal_privileged_document,
+        is_m_and_a_document, is_nda_trade_secret_document, is_unpublished_financials_document,
     };
     use std::ops::Range;
 
@@ -843,6 +1092,14 @@ mod tests {
 
     fn gate(text: &str, marker: &str) -> bool {
         holds(is_legal_privileged_document, text, marker)
+    }
+
+    fn nda(text: &str, marker: &str) -> bool {
+        holds(is_nda_trade_secret_document, text, marker)
+    }
+
+    fn contract(text: &str, marker: &str) -> bool {
+        holds(is_contract_document, text, marker)
     }
 
     #[test]
@@ -904,6 +1161,22 @@ mod tests {
     }
 
     #[test]
+    fn settlement_negotiation_markers_hold_with_legal_anchors() {
+        assert!(gate(
+            "WITHOUT PREJUDICE\n\nDear Mr. Grant, on behalf of our client we propose a settlement of the claim.",
+            "WITHOUT PREJUDICE",
+        ));
+        assert!(gate(
+            "Sehr geehrter Herr Kollege, namens unserer Mandantin bieten wir ohne Präjudiz einen Vergleich an.",
+            "ohne Präjudiz",
+        ));
+        assert!(!gate(
+            "Glossary: WITHOUT PREJUDICE refers to a settlement offer, for example between lawyers.",
+            "WITHOUT PREJUDICE",
+        ));
+    }
+
+    #[test]
     fn published_releases_and_reports_are_counter_context() {
         let class = is_unpublished_financials_document;
         assert!(!holds(
@@ -918,6 +1191,22 @@ mod tests {
             "Geschäftsbericht 2025 – Corporate Governance\n\nDie Gesellschaft führt eine Insiderliste \
              nach Art. 18 MAR. Umsatzerlöse und Ergebnis erläutert der Lagebericht.",
             "Insiderliste",
+        ));
+    }
+
+    #[test]
+    fn nda_and_trade_secret_documents_hold_in_de_and_en() {
+        assert!(nda(
+            "Subject: Drawings\n\nThe drawings are covered by our NDA. Do not forward them; the prototype is non-public.",
+            "NDA",
+        ));
+        assert!(nda(
+            "Betreff: Kiefer\n\nDie Rezeptur ist ein Geschäftsgeheimnis, bitte nicht weiterleiten.\n\nViele Grüße",
+            "Geschäftsgeheimnis",
+        ));
+        assert!(nda(
+            "PRESSEMITTEILUNG\nSperrfrist: 12. November 2026\nBis zur Veröffentlichung nicht öffentlich.",
+            "Sperrfrist",
         ));
     }
 
@@ -954,6 +1243,26 @@ mod tests {
     }
 
     #[test]
+    fn law_texts_court_decisions_and_templates_are_no_nda_document() {
+        assert!(!nda(
+            "Im Sinne dieses Gesetzes ist Geschäftsgeheimnis eine Information mit angemessenen Geheimhaltungsmaßnahmen.",
+            "Geschäftsgeheimnis",
+        ));
+        assert!(!nda(
+            "The court held that the customer list was not a trade secret.",
+            "trade secret",
+        ));
+        assert!(!nda(
+            "## NDA template\n\nThis Non-Disclosure Agreement is made between [Party A] and [Party B].",
+            "Non-Disclosure Agreement",
+        ));
+        assert!(!nda(
+            "// embargo period for vulnerability reports",
+            "embargo period"
+        ));
+    }
+
+    #[test]
     fn board_minutes_hold_and_job_ads_do_not() {
         let class = is_board_minutes_document;
         assert!(holds(
@@ -985,6 +1294,35 @@ mod tests {
             class,
             "## Muster Umlaufbeschluss\n\nDer Aufsichtsrat beschließt einstimmig: [Text]. Platzhalter.",
             "Umlaufbeschluss",
+        ));
+    }
+
+    #[test]
+    fn a_contract_needs_parties_remuneration_term_and_confidentiality() {
+        let en = "Master Services Agreement between Contoso (the Customer) and Fabrikam (the Supplier). \
+                  Fees: EUR 18,400 per month. Term: 24 months. Confidentiality applies.";
+        assert!(contract(en, "Master Services Agreement"));
+        let de = "Rahmenvertrag zwischen Nordlicht (Auftraggeber) und Brandt (Auftragnehmer). \
+                  Vergütung: 7.800 EUR monatlich. Laufzeit: 36 Monate. Vertraulichkeit gilt.";
+        assert!(contract(de, "Rahmenvertrag"));
+        // A title with only two contract terms is a mention, not a contract.
+        assert!(!contract(
+            "We negotiate the framework agreement; let's discuss the term and the fees on Monday.",
+            "framework agreement",
+        ));
+    }
+
+    #[test]
+    fn contract_templates_and_law_texts_are_no_contract_document() {
+        assert!(!contract(
+            "## Mustervertrag Rahmenvertrag\n\nzwischen [Firma] (nachfolgend Auftraggeber) und [Partner] \
+             (nachfolgend Auftragnehmer). Vergütung: [Betrag] EUR. Laufzeit: [Monate].",
+            "Rahmenvertrag",
+        ));
+        assert!(!contract(
+            "(1) Durch den Kaufvertrag wird der Verkäufer verpflichtet, dem Käufer die Sache zu übergeben. \
+             (2) Der Käufer zahlt dem Verkäufer den vereinbarten Kaufpreis; die Haftung regelt das Gesetz.",
+            "Kaufvertrag",
         ));
     }
 }

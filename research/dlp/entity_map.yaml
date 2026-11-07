@@ -143,6 +143,8 @@ taxonomy:
   dlp.document.unpublished_financials: {family: document_class}
   dlp.document.m_and_a: {family: document_class}
   dlp.document.board_minutes: {family: document_class}
+  dlp.document.nda_trade_secret: {family: document_class}
+  dlp.document.contract: {family: document_class}
   dlp.document.hr: {family: document_class, planned: true}
   dlp.document.rnd_ip: {family: document_class, planned: true}
 
@@ -727,6 +729,16 @@ entities:
     group: dlp.document.board_minutes
     ark: [dlp_document_board_minutes]
     backlog: M-CORP
+  - id: document.nda_trade_secret
+    scope: ark_only
+    group: dlp.document.nda_trade_secret
+    ark: [dlp_document_nda_trade_secret]
+    backlog: M-LEGAL
+  - id: document.contract
+    scope: ark_only
+    group: dlp.document.contract
+    ark: [dlp_document_contract]
+    backlog: M-LEGAL
   - id: credential.file.netrc
     scope: ark_only
     group: CREDENTIAL
