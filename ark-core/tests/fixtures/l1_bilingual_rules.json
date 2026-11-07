@@ -5287,6 +5287,69 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_electrum_seed",
+    "de": "Mein Electrum-Seed lautet: <<secret\u003a0>>",
+    "en": "ELECTRUM_SEED=\"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "electrum_seed_standard",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Electrum zeigt beim Anlegen der Wallet einen Seed aus zwölf Wörtern an."
+      ],
+      "en": [
+        "Electrum seed: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_monero_seed",
+    "de": "Wiederherstellungsphrase der Monero-Wallet:\n<<secret\u003a0>>",
+    "en": "Monero seed: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "monero_seed",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Die Monero-Wallet zeigt den Seed aus 25 Wörtern nur einmal an."
+      ],
+      "en": [
+        "monero:\n  seed: \"<your 25 seed words>\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_cardano_signing_key",
+    "de": "Signierschlüssel der Cardano-Wallet: <<secret\u003a0>>",
+    "en": "CARDANO_PAYMENT_SKEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "cardano_ed25519_sk",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Cardano-Signierschlüssel beginnen mit addr_xsk1 oder ed25519_sk1."
+      ],
+      "en": [
+        "CARDANO_PAYMENT_SKEY=${CARDANO_PAYMENT_SKEY}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_private_key_block",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
