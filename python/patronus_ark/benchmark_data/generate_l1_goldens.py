@@ -15186,6 +15186,180 @@ for _label, _rows in DLP_C_WALLET_SEED_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# C01: BIP 39 seed phrases (`dlp_bip39_seed_phrase`, English, Italian, Portuguese, Czech,
+# Spanish and French word lists, valid checksum). Positives are `bip39_*` recipes; they need
+# 18 words or a seed/wallet/recovery term before the phrase. Hard negatives keep their words in clear: none
+# is a usable mnemonic (wrong checksum, 11 words, a word list dump, or the published BIP 39
+# test vector of zero entropy).
+_BIP39_TEST_VECTOR = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+DLP_C01_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "# wallet of the deploy bot (sepolia)\nRPC_URL=https://rpc.example.org\nMNEMONIC=\"<<secret:0>>\"\n",
+            "bip39_en_12", 10701, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "{\n  \"network\": \"sepolia\",\n  \"mnemonic\": \"<<secret:0>>\",\n  \"accounts\": 5\n}\n",
+            "bip39_en_24", 10702, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "const signer = ethers.Wallet.fromPhrase(\"<<secret:0>>\", provider);\n",
+            "bip39_en_15", 10703, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "$ cast wallet import deployer --mnemonic \"<<secret:0>>\"\n",
+            "bip39_it_12", 10704, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "2026-03-02T10:14:07Z WARN keystore: restoring wallet from mnemonic <<secret:0>> (account 0)\n",
+            "bip39_en_18", 10705, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Grandma's note from the drawer, copied as is:\n<<secret:0>>\n",
+            "bip39_en_24", 10706, carrier="prose", tags=("no_context",),
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "from mnemonic import Mnemonic\n\nwords = \"<<secret:0>>\"\nseed_bytes = Mnemonic(\"portuguese\").to_seed(words)\n",
+            "bip39_pt_15", 10707, carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "# wallet of the deploy bot\nMNEMONIC=\"<your 12 word mnemonic>\"\n",
+            "template placeholder", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "const signer = ethers.Wallet.fromPhrase(process.env.MNEMONIC, provider);\n",
+            "environment reference", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "// BIP39 test vector (all-zero entropy), never fund it\nconst mnemonic = \"" + _BIP39_TEST_VECTOR + "\";\n",
+            "published BIP 39 test vector", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "wallet:\n  mnemonic: lawsuit super warfare owner educate sun disorder length nuclear balcony moon parrot\n",
+            "list words with a wrong BIP 39 checksum", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Never type your recovery words into a website. Write them down on paper and keep the "
+            "sheet in a safe place, away from your phone.",
+            "ordinary prose about seed phrases", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "BIP39 English word list, entries 601-640: enrich enroll ensure enter entire entry envelope "
+            "episode equal equip era erase erode erosion error erupt escape essay essence estate eternal "
+            "ethics evidence evil evoke evolve exact example excess exchange excite exclude excuse execute "
+            "exercise exhaust exhibit exile exist exit\n",
+            "word list dump, no phrase", carrier="markdown",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Recovery words I still remember (one is missing): owner smoke next occur bless silent ocean fee jeans icon core",
+            "eleven words are no mnemonic", carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Hier meine Seed-Phrase, bitte gut aufbewahren: <<secret:0>>",
+            "bip39_en_12", 10711, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "wallet:\n  # Wiederherstellungsphrase des Cold Wallets\n  mnemonic: <<secret:0>>\n",
+            "bip39_it_12", 10712, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Testnetz-Deployer, nicht einchecken\nMNEMONIC=\"<<secret:0>>\"\nCHAIN_ID=11155111\n",
+            "bip39_pt_15", 10713, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Die Wörter für die Wiederherstellung lauten <<secret:0>>. Bitte danach löschen.",
+            "bip39_cs_21", 10714, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "{\"kasse\": \"Filiale 3\", \"seed_phrase\": \"<<secret:0>>\"}\n",
+            "bip39_en_24", 10715, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "2026-05-11 08:12:44 INFO wallet-sync: Wiederherstellung mit <<secret:0>> gestartet\n",
+            "bip39_en_18", 10716, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Backup-Wallet der Buchhaltung\nwallet = Wallet.from_mnemonic(\"<<secret:0>>\")\n",
+            "bip39_it_12", 10717, carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Bitte trage hier deine Seed-Phrase ein: word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+            "template placeholder", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "wallet:\n  # Wiederherstellungsphrase kommt aus dem Tresor\n  mnemonic: ${MNEMONIC}\n",
+            "environment reference", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Testvektor aus der BIP39-Spezifikation, kein echtes Wallet\nMNEMONIC=\"" + _BIP39_TEST_VECTOR + "\"\n",
+            "published BIP 39 test vector", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Seed (italienisch): grattare gobba gufo farinoso equatore merenda sabbiare derapata cartolina fiore brevetto vivido",
+            "list words with a wrong BIP 39 checksum",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Die Wiederherstellungsphrase besteht aus 12 bis 24 Wörtern der BIP39-Liste und gehört "
+            "niemals in ein Ticket oder eine E-Mail.",
+            "ordinary prose about seed phrases", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Auszug aus der portugiesischen BIP39-Wortliste: abacate abaixo abalar abater abduzir abelha "
+            "aberto abismo abotoar abranger abreviar abrigar abrupto absinto absoluto absurdo abutre acabado "
+            "acalmar acampar acanhar acaso aceitar acelerar acenar acervo acessar acetona achatar acidez "
+            "acima acionado acirrar aclamar aclive acolhida acomodar acoplar acordar acumular\n",
+            "word list dump, no phrase", carrier="markdown",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Wiederherstellungswörter (unvollständig, eins fehlt): listopad komora vydat opice fronta "
+            "nutrie orlice tuzemsko utkat nerost drogerie",
+            "eleven words are no mnemonic", carrier="prose",
+        ),
+        # Spanish and French lists (C01 review); the values keep the NFD accents of the lists.
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "wallet_restore: {\"lang\": \"fr\", \"words\": \"<<secret:0>>\"}\n",
+            "bip39_fr_18", 10719, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Notiz aus Madrid, Seed-Phrase der Hardware-Wallet: <<secret:0>>\n",
+            "bip39_es_12", 10718, carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_C01_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

@@ -206,12 +206,10 @@ fn rust_generators_match_the_pinned_python_vectors() {
             .iter()
             .map(|seed| generators.generate(name, *seed).unwrap())
             .collect::<Vec<_>>();
-        for value in &values {
-            assert_eq!(
-                value.chars().count(),
-                generators.length(name).unwrap(),
-                "{name}"
-            );
+        if let Some(length) = generators.length(name).unwrap() {
+            for value in &values {
+                assert_eq!(value.chars().count(), length, "{name}");
+            }
         }
         assert_eq!(fingerprint(&values.join("\n")), pinned.sha256_96, "{name}");
     }
@@ -245,7 +243,10 @@ fn high_entropy_generators_stay_above_the_detect_secrets_limit() {
                 shannon_entropy(&value) > limit,
                 "{name} seed={seed} below {limit} bits"
             );
-            assert_eq!(value.chars().count(), generators.length(name).unwrap());
+            assert_eq!(
+                value.chars().count(),
+                generators.length(name).unwrap().unwrap()
+            );
         }
     }
 }

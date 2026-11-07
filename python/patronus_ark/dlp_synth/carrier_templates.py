@@ -1762,6 +1762,7 @@ PROFILES = {
     "dlp_electrum_seed": Profile("crypto.bitcoin.electrum_seed", "CRYPTO_KEY", "secret", "electrum_seed", "Electrum seed", "Electrum-Seed"),
     "dlp_monero_seed": Profile("crypto.monero.seed", "CRYPTO_KEY", "secret", "monero_seed", "Monero seed", "Monero-Seed"),
     "dlp_cardano_signing_key": Profile("crypto.cardano.signing_key", "CRYPTO_KEY", "secret", "cardano_signing_key", "Cardano signing key", "Cardano-Signierschlüssel"),
+    "dlp_bip39_seed_phrase": Profile("crypto.bip39.seed_phrase", "CRYPTO_KEY", "secret", "wallet_mnemonic", "wallet seed phrase", "Seed-Phrase der Wallet"),
     "dlp_private_key_block": Profile("key.pem_private_key", "PRIVATE_KEY", "secret", "tls_private_key", "TLS private key", "privater TLS-Schlüssel"),
     "dlp_private_key_header": Profile("key.pem_private_key", "PRIVATE_KEY", "fragment", "ssh_private_key", "SSH private key", "privater SSH-Schlüssel"),
     "dlp_jwt_token": Profile("token.jwt", "SECRET_TOKEN", "secret", "id_token", "ID token", "ID-Token"),

@@ -27,7 +27,13 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     (``{"hex": s}``, ``{"utf8": s}`` with ASCII ``s``, ``{"random": n}`` drawing
     ``next_u64() % 256`` per byte, ``{"alphabet": a, "len": n}`` as above) and encodes it
     as ``hex``, ``base64`` (padded), ``base64_unpadded``, ``base64url`` (unpadded),
-    ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
+    ``bcrypt64`` (OpenBSD radix-64, unpadded), ``base58check`` (double SHA-256) or
+    ``bip39_english``/``bip39_italian``/``bip39_portuguese``/``bip39_czech``/``bip39_spanish``/
+    ``bip39_french`` (the BIP 39
+    mnemonic of 16, 20, 24, 28 or 32 bytes of entropy: checksum = the first ``8n/32`` bits
+    of SHA-256, 11-bit word indices into the official list in
+    ``ark-core/src/detectors/dlp/bip39``, accented words in NFD as published, joined by single
+    spaces).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
 
 A generator may set ``"entropy_above": h`` (a number below ``log2`` of its length): while
@@ -61,7 +67,8 @@ word at CRC-32 of the 3-letter prefixes modulo 24. Words are joined by one space
 does not change this segment.
 
 Base58Check generators start with constant bytes so their length stays fixed. Every
-generator therefore has one length, which ``generator_length`` reports.
+generator without a BIP 39 segment therefore has one length, which ``generator_length``
+reports (``None`` for mnemonics, whose words differ in length).
 
 A recipe may add ``"fill": word`` (T06): the documented example or test variant of the
 generator's shape for hard negatives (``EXAMPLEKEY``, ``TESTKEY``, ``deadbeef``,
@@ -70,8 +77,8 @@ characters of ``word`` repeats ``word`` to its length (restarting per segment), 
 are drawn as usual; check values are zeros (ones if zeros happen to be valid). An encoded
 segment of random bytes only repeats ``word`` over its encoded characters (padding and line
 breaks kept) if its output alphabet holds ``word``; otherwise random bytes become the bytes
-of ``word`` repeated before encoding. Base58Check segments reject a fill (the check value
-would be valid), and a fill that fits no segment is an error. The value keeps the length
+of ``word`` repeated before encoding. Base58Check and BIP 39 segments reject a fill (the
+check value would be valid), and a fill that fits no segment is an error. The value keeps the length
 and prefix of the generator, so the rule pattern still matches.
 
 Values are synthetic. Generators listed as ``shape_only`` in ``rules.json`` predate E03
@@ -104,19 +111,30 @@ _URL_UNRESERVED = frozenset(
 )
 _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 _MASK = (1 << 64) - 1
-SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp" / "rules" / "data"
+SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp"
 # Seed word kinds: word list, words drawn, words in the value, Electrum version prefix.
 SEED_KINDS = {
-    "electrum_standard": ("bip39_english.txt", 12, 12, "01"),
-    "electrum_segwit": ("bip39_english.txt", 12, 12, "100"),
-    "monero": ("monero_english.txt", 24, 25, None),
+    "electrum_standard": ("bip39/english.txt", 12, 12, "01"),
+    "electrum_segwit": ("bip39/english.txt", 12, 12, "100"),
+    "monero": ("rules/data/monero_english.txt", 24, 25, None),
 }
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 CHECKSUM_LENGTHS = {"crc32_base62": 6, "crc32_hex": 8, "crc32_hex_le": 8, "iso7064_mod11_10": 1, "bech32": 6}
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 _BECH32_GENERATOR = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
-ENCODINGS = {"hex", "base64", "base64_unpadded", "base64url", "bcrypt64", "base58check"}
+BIP39_LANGUAGES = ("english", "italian", "portuguese", "czech", "spanish", "french")
+BIP39_DIR = Path(__file__).resolve().parents[3] / "ark-core/src/detectors/dlp/bip39"
+BIP39_ENTROPY_BYTES = (16, 20, 24, 28, 32)
+ENCODINGS = {
+    "hex",
+    "base64",
+    "base64_unpadded",
+    "base64url",
+    "bcrypt64",
+    "base58check",
+    *(f"bip39_{language}" for language in BIP39_LANGUAGES),
+}
 _BCRYPT64 = str.maketrans(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
     "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
@@ -174,9 +192,10 @@ def _valid_entropy_limit(generator: dict) -> bool:
     if "entropy_above" not in generator:
         return True
     limit = generator["entropy_above"]
-    length = sum(_segment_length(segment) for segment in generator["segments"])
+    length = _segments_length(generator["segments"])
     return (
-        type(limit) in (int, float)
+        length is not None
+        and type(limit) in (int, float)
         and 0 < limit < math.log2(length)
         and _draws_randomly(generator["segments"])
     )
@@ -204,6 +223,8 @@ def _valid_segment(segment, alphabets: dict) -> bool:
             return False
         if not all(_valid_part(part, alphabets) for part in parts):
             return False
+        if _is_bip39(segment["encode"]):
+            return _byte_length(parts) in BIP39_ENTROPY_BYTES
         # Base58Check needs a constant non-zero lead byte for a fixed length.
         return segment["encode"] != "base58check" or (
             "hex" in parts[0] and bytes.fromhex(parts[0]["hex"])[0] != 0
@@ -300,7 +321,7 @@ def seed_words(kind: str, word_len: int, rng: SplitMix64) -> str:
             return phrase
 
 
-def _segment_length(segment: dict) -> int:
+def _segment_length(segment: dict) -> int | None:
     if "lit" in segment:
         return len(segment["lit"])
     if "seed_words" in segment:
@@ -310,11 +331,19 @@ def _segment_length(segment: dict) -> int:
         return segment["len"]
     if "checksum" in segment:
         return CHECKSUM_LENGTHS[segment["checksum"]]
+    if _is_bip39(segment["encode"]):
+        return None
     return _encoded_length(segment)
 
 
-def generator_length(name: str) -> int:
-    return sum(_segment_length(segment) for segment in _generator(name)["segments"])
+def _segments_length(segments: list[dict]) -> int | None:
+    lengths = [_segment_length(segment) for segment in segments]
+    return None if None in lengths else sum(lengths)
+
+
+def generator_length(name: str) -> int | None:
+    """The fixed length of the generator's values, ``None`` if it emits a BIP 39 mnemonic."""
+    return _segments_length(_generator(name)["segments"])
 
 
 def _draws_randomly(segments: list[dict]) -> bool:
@@ -408,6 +437,32 @@ def base58(raw: bytes) -> str:
     return "1" * (len(raw) - len(raw.lstrip(b"\0"))) + encoded
 
 
+def _is_bip39(encoding: str) -> bool:
+    return encoding.startswith("bip39_")
+
+
+@lru_cache(maxsize=None)
+def bip39_wordlist(language: str) -> tuple[str, ...]:
+    """The official BIP 39 word list of ``language`` (2048 words)."""
+    if language not in BIP39_LANGUAGES:
+        raise RecipeError(f"unknown BIP 39 language {language!r}")
+    words = tuple((BIP39_DIR / f"{language}.txt").read_text(encoding="utf-8").split())
+    if len(words) != 2048:
+        raise RecipeError(f"BIP 39 list {language} has {len(words)} words, expected 2048")
+    return words
+
+
+def bip39_mnemonic(language: str, entropy: bytes) -> str:
+    """The BIP 39 mnemonic of ``entropy`` (16, 20, 24, 28 or 32 bytes) in ``language``."""
+    if len(entropy) not in BIP39_ENTROPY_BYTES:
+        raise RecipeError(f"BIP 39 entropy must be 16-32 bytes in steps of 4, got {len(entropy)}")
+    check_bits = len(entropy) * 8 // 32
+    bits = int.from_bytes(entropy, "big") << check_bits | hashlib.sha256(entropy).digest()[0] >> (8 - check_bits)
+    count = (len(entropy) * 8 + check_bits) // 11
+    words = bip39_wordlist(language)
+    return " ".join(words[bits >> 11 * (count - 1 - index) & 0x7FF] for index in range(count))
+
+
 def _draw(rng: SplitMix64, alphabet: str, count: int) -> str:
     return "".join(alphabet[rng.next_u64() % len(alphabet)] for _ in range(count))
 
@@ -432,6 +487,8 @@ def encode_bytes(raw: bytes, encoding: str, wrap: int | None = None) -> str:
         return raw.hex()
     if encoding == "base58check":
         return base58check(raw)
+    if _is_bip39(encoding):
+        return bip39_mnemonic(encoding.removeprefix("bip39_"), raw)
     if encoding == "base64url":
         return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
     encoded = base64.b64encode(raw).decode("ascii")
@@ -456,8 +513,8 @@ def _encode_filled(segment: dict, rng: SplitMix64, alphabets: dict, fill: str) -
     """An encoded segment of a ``fill`` recipe and whether the fill word went into it."""
     encoding = segment["encode"]
     parts = segment["bytes"]
-    if encoding == "base58check":
-        raise RecipeError("a fill recipe cannot use Base58Check segments (the check value stays valid)")
+    if encoding == "base58check" or _is_bip39(encoding):
+        raise RecipeError(f"a fill recipe cannot use {encoding} segments (the check value stays valid)")
     if all("random" in part for part in parts) and _fits(fill, _ENCODED_ALPHABETS[encoding]):
         shape = encode_bytes(bytes(_byte_length(parts)), encoding, segment.get("wrap"))
         characters = iter(_repeat(fill, len(shape)))

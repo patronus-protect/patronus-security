@@ -104,13 +104,97 @@ fn generators_are_deterministic_and_fixed_length() {
     for name in generators.names() {
         let value = generators.generate(name, 7).expect("known generator");
         assert_eq!(value, generators.generate(name, 7).unwrap(), "{name}");
-        assert_eq!(value.len(), generators.length(name).unwrap(), "{name}");
-        assert!(value.is_ascii(), "{name}");
+        // BIP 39 mnemonics have no fixed length; every other generator has one.
+        let length = generators.length(name).unwrap();
+        assert_eq!(length.is_none(), name.starts_with("bip39_"), "{name}");
+        if let Some(length) = length {
+            assert_eq!(value.len(), length, "{name}");
+        }
+        // Spanish and French mnemonics keep the NFD accents of their lists.
+        assert!(value.is_ascii() || name.starts_with("bip39_"), "{name}");
     }
     assert!(matches!(
         generators.generate("no_such_generator", 1),
         Err(RecipeError::UnknownGenerator(_))
     ));
+}
+
+/// Whether `phrase` is a BIP 39 mnemonic of `words` words from the `language` list with a
+/// valid checksum (decoded here, independently of the generator).
+fn is_valid_bip39(phrase: &str, language: &str, words: usize) -> bool {
+    let list = std::fs::read_to_string(
+        repo_root().join(format!("ark-core/src/detectors/dlp/bip39/{language}.txt")),
+    )
+    .expect("BIP 39 word list");
+    let list = list.split_whitespace().collect::<Vec<_>>();
+    let Some(indices) = phrase
+        .split(' ')
+        .map(|word| list.iter().position(|entry| *entry == word))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    if indices.len() != words {
+        return false;
+    }
+    let bits = indices
+        .iter()
+        .flat_map(|index| (0..11).rev().map(move |bit| (index >> bit) & 1 == 1))
+        .collect::<Vec<_>>();
+    let check_bits = bits.len() / 33;
+    let entropy = bits[..bits.len() - check_bits]
+        .chunks(8)
+        .map(|byte| byte.iter().fold(0u8, |acc, bit| acc << 1 | u8::from(*bit)))
+        .collect::<Vec<_>>();
+    let hash = ring::digest::digest(&ring::digest::SHA256, &entropy);
+    (0..check_bits).all(|bit| {
+        (hash.as_ref()[0] >> (7 - bit)) & 1 == u8::from(bits[bits.len() - check_bits + bit])
+    })
+}
+
+#[test]
+fn bip39_generators_emit_checksum_valid_mnemonics_and_reject_fills() {
+    let generators = generators();
+    for (name, language, words) in [
+        ("bip39_en_12", "english", 12),
+        ("bip39_en_15", "english", 15),
+        ("bip39_en_18", "english", 18),
+        ("bip39_en_24", "english", 24),
+        ("bip39_it_12", "italian", 12),
+        ("bip39_pt_15", "portuguese", 15),
+        ("bip39_cs_21", "czech", 21),
+        ("bip39_es_12", "spanish", 12),
+        ("bip39_fr_18", "french", 18),
+    ] {
+        assert_eq!(generators.length(name).unwrap(), None, "{name}");
+        for seed in [0, 1, 2, 17, u64::MAX] {
+            let value = generators.generate(name, seed).unwrap();
+            assert!(
+                is_valid_bip39(&value, language, words),
+                "{name} seed={seed}"
+            );
+        }
+        assert!(generators
+            .generate_filled(name, 1, Some("EXAMPLEKEY"))
+            .is_err());
+    }
+    // A changed last word breaks the checksum (the check itself is not vacuous).
+    assert!(!is_valid_bip39(
+        &format!("{} zoo", "abandon ".repeat(11).trim_end()),
+        "english",
+        12
+    ));
+    assert!(is_valid_bip39(
+        &format!("{} about", "abandon ".repeat(11).trim_end()),
+        "english",
+        12
+    ));
+    for spec in [
+        r#"{"version": 2, "prng": "splitmix64", "alphabets": {}, "generators": {"g": {"segments": [{"encode": "bip39_english", "bytes": [{"random": 17}]}]}}}"#,
+        r#"{"version": 2, "prng": "splitmix64", "alphabets": {}, "generators": {"g": {"segments": [{"encode": "bip39_klingon", "bytes": [{"random": 16}]}]}}}"#,
+    ] {
+        assert!(GeneratorSet::parse(spec).is_err(), "{spec}");
+    }
 }
 
 #[test]
@@ -214,7 +298,11 @@ fn fill_recipes_match_the_python_vectors_and_keep_the_shape() {
             let Ok(value) = generators.generate_filled(name, 3, Some(fill)) else {
                 continue;
             };
-            assert_eq!(value.len(), generators.length(name).unwrap(), "{name}");
+            assert_eq!(
+                value.len(),
+                generators.length(name).unwrap().unwrap(),
+                "{name}"
+            );
         }
     }
     for (name, fill) in [
@@ -224,6 +312,7 @@ fn fill_recipes_match_the_python_vectors_and_keep_the_shape() {
         ("github_ghp_token", "Müster"),
         ("md5_hex", "TESTKEY"),
         ("btc_wif_mainnet_compressed", "EXAMPLEKEY"),
+        ("bip39_en_12", "EXAMPLEKEY"),
     ] {
         assert!(
             generators.generate_filled(name, 1, Some(fill)).is_err(),

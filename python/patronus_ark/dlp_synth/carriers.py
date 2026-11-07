@@ -240,10 +240,13 @@ def _hard_negative_encoded(segment: dict, alphabets: dict, variant: str) -> str:
     stay those of a real value. Only the checksum or decoded structure is broken:
     Base58Check gets a wrong check value, binary layouts (leading hex part: DER) a wrong
     outer tag, text layouts (JSON, ``user:password``, OpenSSH padding, snowflake digits)
-    an invalid last non-random byte.
+    an invalid last non-random byte. A BIP 39 mnemonic (``_hard_negative_mnemonic``) keeps
+    its word count and list and gets wrong checksum bits.
     """
     encoding = segment["encode"]
     parts = segment["bytes"]
+    if recipes._is_bip39(encoding):
+        return _hard_negative_mnemonic(encoding.removeprefix("bip39_"), recipes._byte_length(parts), variant)
     if all("random" in part for part in parts):
         unwrapped = dict(segment)
         unwrapped.pop("wrap", None)
@@ -281,6 +284,19 @@ def _hard_negative_encoded(segment: dict, alphabets: dict, variant: str) -> str:
         index = last_constant if last_constant is not None else last_alphabet
         raw[index] = ord("?") if raw[index] == ord("!") else ord("!")
     return recipes.encode_bytes(bytes(raw), encoding, segment.get("wrap"))
+
+
+def _hard_negative_mnemonic(language: str, size: int, variant: str) -> str:
+    """The BIP 39 mnemonic of the fill word's bytes with every checksum bit inverted.
+
+    Word count and word list stay those of a real phrase; only the checksum fails.
+    """
+    word = FILL_WORDS[variant][0].encode("ascii")
+    words = recipes.encode_bytes((word * (size // len(word) + 1))[:size], f"bip39_{language}").split(" ")
+    wordlist = recipes.bip39_wordlist(language)
+    check_mask = (1 << size * 8 // 32) - 1
+    words[-1] = wordlist[wordlist.index(words[-1]) ^ check_mask]
+    return " ".join(words)
 
 
 def _derive(*parts: object) -> int:
