@@ -138,7 +138,7 @@ taxonomy:
   dlp.content.sql: {family: content_class}
   dlp.content.database_dump: {family: content_class}
   dlp.content.system_log: {family: content_class}
-  dlp.document.legal_privileged: {family: document_class, planned: true}
+  dlp.document.legal_privileged: {family: document_class}
   dlp.document.hr: {family: document_class, planned: true}
   dlp.document.rnd_ip: {family: document_class, planned: true}
 
@@ -695,6 +695,12 @@ entities:
     ark: [dlp_stacktrace_block, dlp_structured_system_log]
     google_dlp: [DOCUMENT_TYPE/R&D/SYSTEM_LOG]
     backlog: M19
+  - id: document.legal_privileged
+    scope: shared
+    group: dlp.document.legal_privileged
+    ark: [dlp_document_legal_privileged]
+    google_dlp: [DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING]
+    backlog: M-LEGAL
 
   # ── ark_only ────────────────────────────────────────────────────────────
   - id: credential.file.netrc
@@ -1013,9 +1019,6 @@ entities:
   - {id: key.pkcs12_file, scope: baseline_only, group: PRIVATE_KEY, gitleaks: [pkcs12-file], backlog: C05}
   - {id: key.symmetric_key, scope: baseline_only, group: CRYPTO_KEY, google_dlp: [ENCRYPTION_KEY], backlog: C08}
   # M: Dokumentklassen
-  - {id: document.legal_privileged, scope: baseline_only, group: dlp.document.legal_privileged,
-     google_dlp: [DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING],
-     backlog: M05}
   - {id: document.hr, scope: baseline_only, group: dlp.document.hr, google_dlp: [DOCUMENT_TYPE/HR/RESUME], backlog: M06}
   - {id: document.rnd_ip, scope: baseline_only, group: dlp.document.rnd_ip, google_dlp: [DOCUMENT_TYPE/R&D/PATENT], backlog: M17}
 

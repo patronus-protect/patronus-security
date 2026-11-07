@@ -99,7 +99,9 @@ fn fingerprint(text: &str) -> String {
 }
 
 fn is_content_group(group: &str) -> bool {
-    group.starts_with("dlp.content.") || group.starts_with("dlp.internal.")
+    group.starts_with("dlp.content.")
+        || group.starts_with("dlp.internal.")
+        || group.starts_with("dlp.document.")
 }
 
 #[test]

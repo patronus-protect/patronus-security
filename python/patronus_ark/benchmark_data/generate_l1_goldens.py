@@ -7107,6 +7107,129 @@ DLP_CASES = {
         dn("dlp.content.system_log", "en", "dlp_stacktrace_block", "There was an error in the log, I will check tomorrow.", "prose about logs", carrier="prose"),
         dn("dlp.content.system_log", "en", "dlp_stacktrace_block", "Error handling is described in the manual.", "prose with a log keyword", carrier="prose"),
     ],
+    # M01: document class on the content class engine. The evidence span is the strong anchor
+    # (privilege marker); the label needs legal medium/structural anchors around it, and
+    # counter-context (definitions, templates, courses, examples) vetoes it.
+    "dlp.document.legal_privileged": [
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "From: Jonathan Reyes\nTo: Maria Chen\nSubject: Draft settlement terms\n\n", "PRIVILEGED AND CONFIDENTIAL",
+            "\n\nDear Maria,\nour litigation team reviewed the draft settlement with opposing counsel. We advise "
+            "against signing before the court hearing.\n\nKind regards,\nJonathan Reyes\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# Memo to the board\nRe: Pending lawsuit against Northwind\n\n**", "Attorney-Client Privileged",
+            "**\n\nOur counsel recommends that the company preserves all records related to the pending lawsuit.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Hi team,\nthe attached analysis is ", "attorney work product",
+            " prepared at the request of our client for the upcoming deposition. Please keep it in the "
+            "litigation folder.\nBest regards,\nLegal\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            '{"subject": "Settlement offer", "classification": "', "Legally Privileged",
+            '", "body": "Our lawyer advises the plaintiff to accept the settlement before trial."}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Dear Mr. Patel,\n\nthis letter is ", "privileged & confidential",
+            " and contains legal advice from our law firm regarding the claim filed by your former supplier."
+            "\n\nSincerely,\nHarper and Lowe LLP\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Von: Dr. Katrin Vogel\nAn: Geschäftsführung Nordlicht GmbH\nBetreff: Klageentwurf gegen Lieferant\n\n"
+            "Vertrauliche ", "Anwaltskorrespondenz",
+            "\n\nSehr geehrte Damen und Herren,\nanbei der Klageentwurf zum Rechtsstreit mit der Gegenseite. Bitte "
+            "prüfen Sie den Stand der Vergleichsverhandlung vor dem Termin am Landgericht.\n\nMit freundlichen "
+            "Grüßen\nDr. Katrin Vogel, Rechtsanwältin\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "# Aktenvermerk\nAz. 12 O 345/26\n\n**", "Mandatsgeheimnis",
+            "**: Die Mandantin wünscht eine Rechtsberatung zur Kündigung des Rahmenvertrags.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Kurze Info an das Team: der Schriftsatz an das Amtsgericht unterliegt dem ", "anwaltlichen Berufsgeheimnis",
+            ". Bitte nicht an den Mandanten weiterleiten, bevor die Kanzlei ihn freigibt.\nViele Grüße\nJonas\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "dokument:\n  titel: Stellungnahme zur Klage\n  einstufung: ", "Verteidigerpost",
+            "\n  verfasser: Rechtsanwalt Peter Brandt\n  aktenzeichen: 3 Js 1234/26\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Sehr geehrter Herr Krüger,\n\ndieses Schreiben unterliegt dem ", "Anwaltsgeheimnis",
+            ". Als Ihr Rechtsanwalt rate ich, den Vergleich im Verfahren vor dem Landgericht anzunehmen.\n\n"
+            "Mit freundlichen Grüßen\nKanzlei Hartmann\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Attorney-client privilege is a legal concept that protects communications between a lawyer and a "
+            "client. For example, a court cannot compel the attorney to disclose legal advice.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "## Email footer template\n\nAdd the line PRIVILEGED AND CONFIDENTIAL below your signature and "
+            "replace [Firm] with the law firm name.",
+            "footer template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# banner text: Privileged & Confidential", "marker without legal context", carrier="code",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Lecture 7 covers the attorney work product doctrine and the duties of counsel in discovery.",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "2026-10-02 08:14:00 INFO label 'legally privileged' applied to 12 documents",
+            "marker without legal context", carrier="log",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Das Anwaltsgeheimnis bezeichnet die Pflicht zur Verschwiegenheit. Zum Beispiel darf ein Gericht "
+            "die Herausgabe der Handakte nicht verlangen.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "## Vorlage Fußzeile\n\nVertrauliche Anwaltskorrespondenz – Kanzleiname und Rechtsanwalt hier eintragen",
+            "footer template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            'footer_label: "Mandatsgeheimnis"', "marker without legal context", carrier="yaml",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Seminar Berufsrecht, Termin 3: anwaltliche Schweigepflicht und Verteidigerpost im Strafverfahren",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Der Begriff Verteidigerpost ist mir neu, kannst du ihn erklären?",
+            "marker without legal context", carrier="prose",
+        ),
+    ],
 }
 
 

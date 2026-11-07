@@ -337,7 +337,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (152) { #dlp-regex-rules }
+## DLP regex rules (153) { #dlp-regex-rules }
 
 Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
@@ -537,6 +537,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_database_dump_header` | `dlp.content.database_dump` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_stacktrace_block` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_structured_system_log` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_document_legal_privileged` | `dlp.document.legal_privileged` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 
 ## DLP relationship rules (5)
 
