@@ -444,6 +444,18 @@ rules:
     provider: solana
     source_ref: https://solana.com/docs/core/accounts#keypair
     format: "Solana CLI keypair file (solana-keygen, id.json; https://docs.anza.xyz/cli/wallets/file-system): JSON array of 64 bytes (ed25519 seed and public key), reported only after a key term (keypair, secret/private key, signer, id.json) (C-WALLET)"
+  dlp_electrum_seed:
+    provider: bitcoin
+    source_ref: https://electrum.readthedocs.io/en/latest/seedphrase.html
+    format: "Electrum seed (version 2.0 and later; electrum/mnemonic.py is_new_seed): 12 words of the BIP39 English word list (https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt) whose HMAC-SHA512 under the key 'Seed version' starts with the hex prefix of a seed type (01 standard, 100 segwit, 101 2FA, 102 2FA segwit); reported only after a seed term (electrum, seed, mnemonic, recovery, Wiederherstellung) on the line or the line before (C-WALLET)"
+  dlp_monero_seed:
+    provider: monero
+    source_ref: https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp
+    format: "Monero mnemonic seed (the text form of the private spend key): 24 words of the English word list (src/mnemonics/english.h, 1626 words, unique 3-letter prefixes) and a checksum word, the word at CRC-32 of the concatenated 3-letter prefixes modulo 24; also over line breaks; reported only after a seed term (monero, seed, mnemonic, recovery, Wiederherstellung) on the line or the line before (C-WALLET)"
+  dlp_cardano_signing_key:
+    provider: cardano
+    source_ref: https://cips.cardano.org/cip/CIP-0005
+    format: "CIP-5 Bech32 signing key: secret-key prefixes acct/addr/drep/policy/root/stake _sk or _xsk and ed25519_sk/ed25519e_sk, Bech32 (BIP 173) checksum, zero padding bits, 32 or 64 bytes (Ed25519 or extended key) and 96 bytes for _xsk (extended key and chain code); verification keys (_vk, _xvk) are public (C-WALLET)"
   dlp_private_key_block:
     source_ref: gitleaks:private-key
     format: "PEM armor BEGIN/END … PRIVATE KEY with body"

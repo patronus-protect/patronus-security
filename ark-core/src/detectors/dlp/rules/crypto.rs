@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Key material: wallet keys and PEM private keys.
+//! Key material: wallet keys, wallet seeds and PEM private keys.
 use crate::detectors::dlp::key_context::has_key_context;
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
 };
-use crate::detectors::validators::base58check_decode;
+use crate::detectors::validators::{
+    base58check_decode, bech32_decode_with_limit, convert_bits, crc32, Bech32Variant,
+};
 use regex::bytes::Regex;
 use std::ops::Range;
 use std::sync::LazyLock;
@@ -116,6 +118,88 @@ fn is_solana_keypair(value: &str) -> bool {
     count == 64 && seen.iter().filter(|seen| **seen).count() >= 24
 }
 
+/// The BIP39 English word list (2048 sorted words), also Electrum's default
+/// word list for new seeds.
+static BIP39_ENGLISH: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| include_str!("data/bip39_english.txt").lines().collect());
+
+/// C-WALLET: an Electrum seed (version 2.0 and later): 12 words of the
+/// English word list whose HMAC-SHA512 under the key `Seed version` starts
+/// with the hex prefix of a seed type, `01` (standard), `100` (segwit), `101`
+/// (2FA) or `102` (2FA segwit). The match is lowercase words with single
+/// whitespace, already Electrum's normalized form once the runs are joined
+/// by one space.
+fn is_electrum_seed(value: &str) -> bool {
+    let words: Vec<&str> = value.split_ascii_whitespace().collect();
+    if words.len() != 12
+        || !words
+            .iter()
+            .all(|word| BIP39_ENGLISH.binary_search(word).is_ok())
+    {
+        return false;
+    }
+    let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA512, b"Seed version");
+    let tag = ring::hmac::sign(&key, words.join(" ").as_bytes());
+    match tag.as_ref() {
+        [0x01, ..] => true,
+        [0x10, second, ..] => second >> 4 <= 2,
+        _ => false,
+    }
+}
+
+/// The Monero English word list (1626 sorted words with unique 3-letter
+/// prefixes), `src/mnemonics/english.h`.
+static MONERO_ENGLISH: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| include_str!("data/monero_english.txt").lines().collect());
+
+/// C-WALLET: a Monero mnemonic seed, the text form of the private spend key:
+/// 24 words of the English word list and a checksum word, the word at the
+/// CRC-32 of the 3-letter prefixes of the 24 words modulo 24.
+fn is_monero_seed(value: &str) -> bool {
+    let words: Vec<&str> = value.split_ascii_whitespace().collect();
+    if words.len() != 25
+        || !words
+            .iter()
+            .all(|word| MONERO_ENGLISH.binary_search(word).is_ok())
+    {
+        return false;
+    }
+    let prefixes: String = words[..24].iter().map(|word| &word[..3]).collect();
+    let index = crc32(prefixes.as_bytes()) as usize % 24;
+    words[24][..3] == words[index][..3]
+}
+
+/// A seed term (`electrum`, `monero`, `seed`, `mnemonic`, recovery phrase,
+/// Wiederherstellungsphrase) on the line of the seed or the line before.
+fn has_seed_context(text: &str, range: Range<usize>) -> bool {
+    static SEED_TERM: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?i)electrum|monero|seed|mnemonic|recovery|wiederherstellung")
+            .expect("valid regex")
+    });
+    let line_start = text[..range.start].rfind('\n').map_or(0, |index| index + 1);
+    let start = text[..line_start.saturating_sub(1)]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    SEED_TERM.is_match(&text.as_bytes()[start..range.start])
+}
+
+/// C-WALLET: a Cardano signing key in the Bech32 form of CIP-5: Bech32 (not
+/// Bech32m) under a secret-key prefix, with the 32 bytes of an Ed25519 key,
+/// the 64 bytes of an extended key or the 96 bytes of an extended key with
+/// chain code (`_xsk`), and zero padding bits.
+fn is_cardano_signing_key(value: &str) -> bool {
+    bech32_decode_with_limit(value, 200).is_some_and(|decoded| {
+        decoded.variant == Bech32Variant::Bech32
+            && convert_bits(&decoded.data, 5, 8, false).is_some_and(|key| {
+                if decoded.hrp.ends_with("_xsk") {
+                    key.len() == 96
+                } else {
+                    matches!(key.len(), 32 | 64)
+                }
+            })
+    })
+}
+
 /// Order of the secp256k1 group as 64 lowercase hex digits.
 const SECP256K1_ORDER_HEX: &str =
     "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141";
@@ -224,6 +308,57 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["keypair", "secret", "private", "signer", "id.json"],
         )
         .with_provider("solana")
+        .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_electrum_seed",
+        // Exactly 12 lowercase words, not inside a longer run of words.
+        pattern: r"(?m)(?:^|[^A-Za-z \t])[ \t]*((?:[a-z]{3,8}[ \t]+){11}[a-z]{3,8})[ \t]*(?:$|[^A-Za-z \t])",
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_electrum_seed),
+        span_group: Some(1),
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://electrum.readthedocs.io/en/latest/seedphrase.html",
+            &["electrum", "seed", "mnemonic", "recovery", "wiederherstellung"],
+        )
+        .with_provider("bitcoin")
+        .with_context_gate(has_seed_context)
+        .with_subtype(SecretSubtype::SeedPhrase),
+    },
+    DlpPattern {
+        name: "dlp_monero_seed",
+        // Exactly 25 lowercase words, also over line breaks (monero-wallet-cli
+        // prints the seed on several lines), not inside a longer run of words.
+        pattern: r"(?m)(?:^|[^A-Za-z \t\n])[ \t]*((?:[a-z]{4,12}(?:[ \t]+|[ \t]*\r?\n[ \t]*)){24}[a-z]{4,12})[ \t]*(?:$|[^A-Za-z \t])",
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_monero_seed),
+        span_group: Some(1),
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp",
+            &["monero", "seed", "mnemonic", "recovery", "wiederherstellung"],
+        )
+        .with_provider("monero")
+        .with_context_gate(has_seed_context)
+        .with_subtype(SecretSubtype::SeedPhrase),
+    },
+    DlpPattern {
+        name: "dlp_cardano_signing_key",
+        pattern: r"\b(?P<anchor_1>(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)1[02-9ac-hj-np-z]{58,160}\b",
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_cardano_signing_key),
+        span_group: None,
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://cips.cardano.org/cip/CIP-0005",
+            &["_sk1", "_xsk1"],
+        )
+        .with_provider("cardano")
+        .with_boundary("")
         .with_subtype(SecretSubtype::PrivateKey),
     },
     // ── Private key material ─────────────────────────────────────────────────

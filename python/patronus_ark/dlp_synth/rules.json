@@ -501,6 +501,11 @@
       "generators": ["solana_keypair_array"],
       "probes": ["SOLANA_KEYPAIR=<<secret:0>>", "const signer = Keypair.fromSecretKey(Uint8Array.from(<<secret:0>>));"]
     },
+    "dlp_cardano_signing_key": {
+      "generators": ["cardano_ed25519_sk", "cardano_addr_xsk"],
+      "lookalike": ["cardano_addr_vk"],
+      "probes": ["CARDANO_SIGNING_KEY=<<secret:0>>", "Signierschlüssel der Cardano-Wallet: <<secret:0>>"]
+    },
     "dlp_private_key_block": {
       "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key"],
       "shape_only": ["pem_pkcs8_private_key", "pem_rsa_private_key"],

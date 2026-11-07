@@ -2,8 +2,12 @@
 //! C-WALLET (C02 + C03): BIP 32 / SLIP-0132 extended private keys
 //! (Base58Check with the version bytes of their prefix, severity `test` on
 //! testnet), Ethereum keystore v3 ciphertexts (only inside a keystore with
-//! `kdf` and `mac`) and Solana keypair arrays (64 bytes after a key term).
-//! Values come from the golden generator; invalid vectors are built here.
+//! `kdf` and `mac`), Solana keypair arrays (64 bytes after a key term),
+//! Cardano CIP-5 signing keys (Bech32 with the key length of the prefix),
+//! Electrum seeds (12 words with the version prefix of a seed type) and Monero
+//! mnemonic seeds (25 words with the CRC-32 checksum word), both after a seed
+//! term. Values come from the golden generator; invalid vectors and
+//! Electrum seeds are built here.
 
 #[path = "support/base58check.rs"]
 mod base58check;
@@ -14,7 +18,8 @@ use std::sync::OnceLock;
 use base58check::base58check_encode;
 use patronus_ark::{
     detectors::dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
+    detectors::validators::crc32,
+    golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
@@ -313,5 +318,277 @@ fn number_arrays_that_are_no_keypair_are_no_key() {
         ),
     ] {
         assert!(entry(&text, "dlp_solana_keypair").is_none(), "{text}");
+    }
+}
+
+// ── Electrum seeds ───────────────────────────────────────────────────────────
+
+fn bip39_words() -> Vec<&'static str> {
+    include_str!("../../ark-core/src/detectors/dlp/rules/data/bip39_english.txt")
+        .lines()
+        .collect()
+}
+
+/// The hex digits of Electrum's seed version, HMAC-SHA512 under `Seed version`.
+fn seed_version(phrase: &str) -> String {
+    let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA512, b"Seed version");
+    ring::hmac::sign(&key, phrase.as_bytes())
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// `count` deterministic picks from `list` for `seed`.
+fn pick(list: &[&'static str], seed: u64, count: usize) -> Vec<&'static str> {
+    let mut rng = SplitMix64::new(seed);
+    (0..count)
+        .map(|_| list[(rng.next_u64() % list.len() as u64) as usize])
+        .collect()
+}
+
+/// The first 12-word phrase from deterministic word picks after `start`
+/// whose seed version satisfies `accept`.
+fn phrase(start: u64, accept: impl Fn(&str) -> bool) -> String {
+    let words = bip39_words();
+    (start..)
+        .map(|attempt| pick(&words, attempt, 12).join(" "))
+        .find(|phrase| accept(&seed_version(phrase)))
+        .expect("a phrase with the version prefix")
+}
+
+/// Electrum seed types: standard, segwit, 2FA and 2FA segwit.
+const SEED_TYPES: [&str; 4] = ["01", "100", "101", "102"];
+
+fn electrum_seed(seed_type: &str, start: u64) -> String {
+    phrase(start, |version| version.starts_with(seed_type))
+}
+
+const SEED_CARRIERS: [&str; 10] = [
+    "ELECTRUM_SEED=\"{}\"\n",
+    "electrum:\n  seed: {}\n",
+    "{\"wallet\": \"electrum\", \"seed\": \"{}\"}",
+    "Your wallet generation seed is:\n{}\n",
+    "Here is my Electrum seed: {}. Please keep it safe.",
+    "Mein Electrum-Seed lautet: {}",
+    "Wiederherstellungsphrase der Electrum-Wallet:\n{}\n",
+    "Seed-Phrase (Electrum, Segwit): „{}“ – bitte sicher aufbewahren.",
+    "seed = '{}'  # electrum restore",
+    "Recovery phrase: {}",
+];
+
+#[test]
+fn electrum_seeds_of_every_type_are_reported_after_a_seed_term() {
+    for seed_type in SEED_TYPES {
+        for start in [0, 5000] {
+            let seed = electrum_seed(seed_type, start);
+            for carrier in SEED_CARRIERS {
+                let text = carrier.replace("{}", &seed);
+                let found = entry(&text, "dlp_electrum_seed");
+                assert!(found.is_some(), "{seed_type}: {carrier:?}");
+                assert!(reports_key(&text, &seed), "{seed_type}: {carrier:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn electrum_seeds_have_checksum_strength_and_the_seed_phrase_subtype() {
+    let rule = DLP_PATTERNS
+        .iter()
+        .find(|rule| rule.name == "dlp_electrum_seed")
+        .expect("rule exists");
+    assert_eq!(rule.meta.validator_strength, ValidatorStrength::Checksum);
+    let text = format!("Electrum seed: {}\n", electrum_seed("01", 0));
+    let found = entry(&text, "dlp_electrum_seed").expect("seed is reported");
+    assert_eq!(found["subtype"], "seed_phrase");
+}
+
+#[test]
+fn phrases_that_are_no_electrum_seed_are_no_key() {
+    let no_version = phrase(0, |version| {
+        !SEED_TYPES
+            .iter()
+            .any(|seed_type| version.starts_with(seed_type))
+    });
+    let seed = electrum_seed("01", 0);
+    let words: Vec<&str> = seed.split(' ').collect();
+    let mut outside_list = words.clone();
+    outside_list[5] = "zzzz";
+    for text in [
+        // A word-list phrase without the version prefix of a seed type
+        // (a BIP39 mnemonic, not an Electrum seed).
+        format!("Electrum seed: {no_version}\n"),
+        format!("Mein Electrum-Seed lautet: {no_version}"),
+        // A word outside the list.
+        format!("Electrum seed: {}\n", outside_list.join(" ")),
+        // 11 or 13 words, or the seed inside a longer run of words.
+        format!("Electrum seed: {}\n", words[..11].join(" ")),
+        format!("Electrum seed: {seed} able\n"),
+        format!("Seed: the words {seed}\n"),
+        // No seed term on the line or the line before.
+        format!("{seed}\n"),
+        format!("Notiz: {seed}\n"),
+        format!("electrum restore\n\n\nwords: {seed}\n"),
+        // Format prose and placeholders.
+        "Electrum seed: <your twelve seed words here>\n".to_string(),
+        "Electrum zeigt den Seed aus zwölf Wörtern beim Erstellen der Wallet an.".to_string(),
+    ] {
+        assert!(entry(&text, "dlp_electrum_seed").is_none(), "{text}");
+    }
+}
+
+// ── Cardano signing keys ─────────────────────────────────────────────────────
+
+const CARDANO_CARRIERS: [&str; 6] = [
+    "CARDANO_SIGNING_KEY={}\n",
+    "payment:\n  signing_key: \"{}\"\n",
+    "cardano-address key child 1852H/1815H/0H/0/0 < root.xsk # {}\n",
+    "Signierschlüssel der Cardano-Wallet: {}",
+    "Der Schlüssel {} lag im Klartext im Backup.",
+    "Here is the payment signing key: {}.",
+];
+
+#[test]
+fn cardano_signing_keys_are_reported_in_de_and_en_carriers() {
+    for gen in ["cardano_ed25519_sk", "cardano_addr_xsk"] {
+        for seed in 0..8 {
+            let value = generate(gen, seed);
+            for carrier in CARDANO_CARRIERS {
+                let text = carrier.replace("{}", &value);
+                assert!(reports_key(&text, &value), "{gen} {seed}: {carrier:?}");
+                assert!(
+                    entry(&text, "dlp_cardano_signing_key").is_some(),
+                    "{gen} {seed}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn cardano_lookalikes_are_no_key() {
+    let key = generate("cardano_ed25519_sk", 3);
+    let xsk = generate("cardano_addr_xsk", 3);
+    // One data character changed: the Bech32 checksum fails.
+    let mut broken = key.clone().into_bytes();
+    let index = broken.len() - 10;
+    broken[index] = if broken[index] == b'q' { b'p' } else { b'q' };
+    let broken = String::from_utf8(broken).unwrap();
+    for text in [
+        // A verification key is public.
+        format!(
+            "CARDANO_VERIFICATION_KEY={}\n",
+            generate("cardano_addr_vk", 3)
+        ),
+        format!("Cardano-Schlüssel: {broken}\n"),
+        // The 32-byte body under an _xsk prefix or the 96-byte body under _sk:
+        // the key length does not fit the prefix (and the checksum fails).
+        format!("key: addr_xsk1{}\n", &key["ed25519_sk1".len()..]),
+        format!("key: addr_sk1{}\n", &xsk["addr_xsk1".len()..]),
+        "Cardano signing keys look like addr_xsk1… or ed25519_sk1…".to_string(),
+    ] {
+        assert!(entry(&text, "dlp_cardano_signing_key").is_none(), "{text}");
+    }
+}
+
+// ── Monero mnemonic seeds ────────────────────────────────────────────────────
+
+fn monero_words() -> Vec<&'static str> {
+    include_str!("../../ark-core/src/detectors/dlp/rules/data/monero_english.txt")
+        .lines()
+        .collect()
+}
+
+/// 24 deterministic words from `start` and the checksum word of Monero's
+/// `electrum-words.cpp`: the word at CRC-32 of the 3-letter prefixes mod 24.
+fn monero_seed(start: u64) -> Vec<&'static str> {
+    let mut words = pick(&monero_words(), start, 24);
+    let prefixes: String = words.iter().map(|word| &word[..3]).collect();
+    words.push(words[crc32(prefixes.as_bytes()) as usize % 24]);
+    words
+}
+
+const MONERO_CARRIERS: [&str; 6] = [
+    "MONERO_SEED=\"{}\"\n",
+    "monero:\n  mnemonic: {}\n",
+    "NOTE: the following 25 words can be used to recover access to your wallet.\nWrite them down and store them somewhere safe and secure. Your seed:\n{}\n",
+    "Mein Monero-Seed: {}",
+    "Wiederherstellungsphrase der Monero-Wallet:\n{}\n",
+    "Here is the recovery phrase of my Monero wallet: {}. Keep it offline.",
+];
+
+#[test]
+fn monero_seeds_are_reported_after_a_seed_term() {
+    for start in [0, 17, 4000] {
+        let seed = monero_seed(start).join(" ");
+        for carrier in MONERO_CARRIERS {
+            let text = carrier.replace("{}", &seed);
+            assert!(
+                entry(&text, "dlp_monero_seed").is_some(),
+                "{start}: {carrier:?}"
+            );
+            assert!(reports_key(&text, &seed), "{start}: {carrier:?}");
+        }
+    }
+    // monero-wallet-cli prints the seed over three lines.
+    let words = monero_seed(3);
+    let lines = [&words[..8], &words[8..16], &words[16..]].map(|line| line.join(" "));
+    let text = format!("Monero seed:\n{}\n", lines.join("\n"));
+    let found = entry(&text, "dlp_monero_seed").expect("multi-line seed");
+    assert_eq!(found["subtype"], "seed_phrase");
+}
+
+#[test]
+fn list_words_that_look_like_example_markers_keep_a_seed_reported() {
+    // `dummy` is a Monero word, `sample` and `test` are BIP39 words.
+    let mut words = monero_seed(1);
+    words[3] = "dummy";
+    let prefixes: String = words[..24].iter().map(|word| &word[..3]).collect();
+    words[24] = words[crc32(prefixes.as_bytes()) as usize % 24];
+    let text = format!("Monero seed: {}\n", words.join(" "));
+    assert!(entry(&text, "dlp_monero_seed").is_some());
+    let words = bip39_words();
+    let electrum = (0..)
+        .map(|attempt| pick(&words, attempt, 12).join(" "))
+        .find(|seed| {
+            seed_version(seed).starts_with("01")
+                && seed
+                    .split(' ')
+                    .any(|word| matches!(word, "sample" | "test"))
+        })
+        .expect("a standard seed with a marker-like word");
+    let text = format!("Electrum seed: {electrum}\n");
+    assert!(entry(&text, "dlp_electrum_seed").is_some());
+}
+
+#[test]
+fn phrases_that_are_no_monero_seed_are_no_key() {
+    let words = monero_seed(5);
+    let seed = words.join(" ");
+    let list = monero_words();
+    // A checksum word with another prefix.
+    let mut wrong_checksum = words.clone();
+    wrong_checksum[24] = list
+        .iter()
+        .find(|word| word[..3] != words[24][..3])
+        .unwrap();
+    let mut outside_list = words.clone();
+    outside_list[7] = "zzzzz";
+    for text in [
+        format!("Monero seed: {}\n", wrong_checksum.join(" ")),
+        format!("Monero seed: {}\n", outside_list.join(" ")),
+        // 24 words or the seed inside a longer run of words.
+        format!("Monero seed: {}\n", words[..24].join(" ")),
+        format!("Monero seed: {seed} abbey\n"),
+        // No seed term on the line or the line before.
+        format!("{seed}\n"),
+        format!("Notiz: {seed}\n"),
+        "Monero zeigt beim Anlegen der Wallet einen Seed aus 25 Wörtern an.".to_string(),
+        // Explicit example context around the seed.
+        format!("Example Monero seed: {seed}\n"),
+        format!("Monero seed: {seed} # Beispiel\n"),
+    ] {
+        assert!(entry(&text, "dlp_monero_seed").is_none(), "{text}");
     }
 }

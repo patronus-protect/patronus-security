@@ -20,8 +20,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
   only next to a `kdf` (scrypt or pbkdf2) and a 32-byte `mac` of the same file, so JWE or KMS
   ciphertexts do not count. `dlp_solana_keypair` reports a Solana keypair array (64 bytes, at least
   24 distinct) only after a key term (`keypair`, secret/private key, `signer`, `id.json`). Each rule
-  has a keyword prefilter and a bounded regex. Electrum seeds and Monero/Cardano signing keys stay
-  open. The golden recipe length of Base58Check segments now reads up to 8 constant leading bytes.
+  has a keyword prefilter and a bounded regex. The golden recipe length of Base58Check segments now
+  reads up to 8 constant leading bytes.
+- Detection change (all modes, on by default): Electrum seeds, Monero seeds and Cardano signing keys
+  close the C-WALLET scope (review of #292), all `CRYPTO_KEY` with checksum strength.
+  `dlp_electrum_seed` (subtype `seed_phrase`) reports 12 words of the BIP39 English word list whose
+  HMAC-SHA512 under `Seed version` carries the prefix of an Electrum seed type (`01` standard, `100`
+  segwit, `101` 2FA, `102` 2FA segwit). `dlp_monero_seed` (subtype `seed_phrase`) reports the
+  Monero mnemonic of the private spend key: 24 words of the Monero English word list and the CRC-32
+  checksum word, also over the line breaks of `monero-wallet-cli`. Both report only a whole run of
+  words after a seed term (`electrum`, `monero`, `seed`, `mnemonic`, `recovery`,
+  `Wiederherstellung`) on the line or the line before; BIP39 mnemonics without the Electrum
+  prefix, wrong checksum words, shorter or longer runs and words outside the list stay silent.
+  `dlp_cardano_signing_key` (subtype `private_key`) reports CIP-5 Bech32 signing keys
+  (`ed25519_sk`, `ed25519e_sk`, `addr`/`stake`/`acct`/`root`/`policy`/`drep` `_sk` and `_xsk`) with
+  a valid checksum and the key length of the prefix (32/64 bytes, 96 for `_xsk`); verification keys
+  (`_vk`) stay silent. Keyword prefilters and linear bounded regexes.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view

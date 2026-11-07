@@ -243,6 +243,14 @@ pub fn is_example_match(
     text: &str,
     range: Range<usize>,
 ) -> bool {
+    // C-WALLET: the words of a word-list seed are dictionary words (`dummy`,
+    // `sample`, `test`), no markers; only the text around the seed can call
+    // it an example.
+    if matches!(rule_id, "dlp_electrum_seed" | "dlp_monero_seed") {
+        return check != ExampleCheck::Off
+            && (credentials::has_example_context(&text[..range.start], range.start, range.start)
+                || credentials::has_example_context(&text[range.end..], 0, 0));
+    }
     let value = checked_value(rule_id, text, range.clone());
     // T23: a dump row has no comment beside it that could call its value a
     // test value, so a fill in a SQL row (`12345678-1234-…`) counts as one.

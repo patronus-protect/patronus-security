@@ -637,6 +637,8 @@ CHECKS = {
     "bip32_tprv": lambda v: v.startswith("tprv") and checks.is_valid_extended_private_key(v),
     "eth_keystore_ciphertext": lambda v: re.fullmatch(r"[0-9a-f]{64}", v) is not None,
     "solana_keypair_array": checks.is_valid_solana_keypair,
+    "cardano_ed25519_sk": lambda v: v.startswith("ed25519_sk1") and checks.is_valid_cardano_signing_key(v),
+    "cardano_addr_xsk": lambda v: v.startswith("addr_xsk1") and checks.is_valid_cardano_signing_key(v),
     "btc_wif_mainnet_uncompressed": lambda v: v[0] == "5" and len(v) == 51 and checks.is_valid_btc_wif(v),
     "btc_wif_mainnet_compressed": lambda v: v[0] in "KL" and len(v) == 52 and checks.is_valid_btc_wif(v),
     "btc_wif_testnet_uncompressed": lambda v: v[0] == "9" and len(v) == 51 and checks.is_valid_btc_wif(v),
@@ -1107,6 +1109,8 @@ LOOKALIKE_FAILURES = {
     "bip32_xpub": checks.is_valid_extended_private_key,
     "bip32_tpub": checks.is_valid_extended_private_key,
     "bip32_xprv_shape": checks.is_valid_extended_private_key,
+    # C-WALLET: a CIP-5 verification key is public
+    "cardano_addr_vk": checks.is_valid_cardano_signing_key,
     # P10: the public pk. token is no Mapbox secret token
     "mapbox_access_token": CHECKS["mapbox_secret_token"],
     "mapbox_access_token_short": CHECKS["mapbox_secret_token"],

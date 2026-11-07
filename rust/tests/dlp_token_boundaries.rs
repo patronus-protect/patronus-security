@@ -89,6 +89,7 @@ const BOUNDED: &[(&str, &str)] = &[
     ("dlp_eth_private_key", ""),
     ("dlp_btc_wif", ""),
     ("dlp_bip32_extended_private_key", ""),
+    ("dlp_cardano_signing_key", ""),
     ("dlp_jwt_token", "-"),
 ];
 

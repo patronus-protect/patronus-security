@@ -121,6 +121,15 @@ def is_valid_solana_keypair(value: str) -> bool:
     return all(number < 256 for number in numbers) and len(set(numbers)) >= 24
 
 
+def is_valid_cardano_signing_key(value: str) -> bool:
+    """CIP-5 signing key: lower-case Bech32 under a secret-key prefix with 32 or 64 bytes,
+    96 bytes (key and chain code) under an ``_xsk`` prefix."""
+    decoded = bech32_decode(value)
+    if decoded is None or not value.islower() or not re.fullmatch(r"(?:(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)", decoded[0]):
+        return False
+    return len(decoded[1]) == 96 if decoded[0].endswith("_xsk") else len(decoded[1]) in (32, 64)
+
+
 def is_valid_eth_private_key(value: str) -> bool:
     if not re.fullmatch(r"0x[0-9a-f]{64}", value):
         return False
