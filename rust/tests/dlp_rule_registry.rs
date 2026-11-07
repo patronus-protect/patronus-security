@@ -188,6 +188,8 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_marking_en_corporate",
     "dlp_marking_tlp",
     "dlp_marking_nato_eu",
+    "dlp_document_nda_trade_secret",
+    "dlp_document_contract",
 ];
 
 #[test]

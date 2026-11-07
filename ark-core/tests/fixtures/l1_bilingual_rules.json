@@ -6213,6 +6213,20 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_document_nda_trade_secret",
+    "de": "Betreff: Projekt Kiefer\n\nAnbei die Rezeptur. Sie ist ein Geschäftsgeheimnis unseres Hauses, bitte nicht weiterleiten.\n\nViele Grüße",
+    "en": "Subject: Drawings\n\nThe drawings are covered by our NDA with Fabrikam. Do not forward them; the prototype is non-public.\n\nBest regards",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_contract",
+    "de": "Rahmenvertrag zwischen der Nordlicht GmbH (Auftraggeber) und der Brandt AG (Auftragnehmer). Vergütung: 7.800 EUR monatlich. Laufzeit: 36 Monate. Vertraulichkeit gilt.",
+    "en": "Master Services Agreement between Contoso (the Customer) and Fabrikam (the Supplier). Fees: EUR 18,400 per month. Term: 24 months. Confidentiality applies.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_azure_storage_account_key",
     "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
     "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",
