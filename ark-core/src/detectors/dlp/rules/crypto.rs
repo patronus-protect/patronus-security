@@ -344,7 +344,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_cardano_signing_key",
-        pattern: r"\b(?P<anchor_1>(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)1[02-9ac-hj-np-z]{58,160}\b",
+        pattern: r"(?P<anchor_1>(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)1[02-9ac-hj-np-z]{58,160}",
         entity_group: "CRYPTO_KEY",
         validator: Some(is_cardano_signing_key),
         span_group: None,
