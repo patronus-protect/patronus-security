@@ -644,7 +644,7 @@ impl GeneratorSet {
                     word_len,
                 }) => {
                     let count = seed_kind(seed_words).expect("validated seed kind").2;
-                    count * word_len + count - 1
+                    Some(count * word_len + count - 1)
                 }
             })
             .sum()
