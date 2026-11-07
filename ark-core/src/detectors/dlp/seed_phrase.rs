@@ -12,7 +12,8 @@
 //! The rule's regex has no literal to search for, so [`phrases`] finds the
 //! candidates in one pass over the words of the text: a run of list words of
 //! one language, at most [`MAX_RUN`] long (a longer run is a word list, not a
-//! phrase), and in it the windows of a phrase length whose checksum holds.
+//! phrase, unless a line of it is that short), and in it the windows of a
+//! phrase length whose checksum holds.
 //! [`is_seed_phrase`] checks a value in full; [`has_seed_context`] asks for a
 //! context of the shorter phrases, whose checksum has 4 to 6 bits.
 use rustc_hash::FxHashMap;
@@ -331,7 +332,7 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
         let entries =
             fold(&text.as_bytes()[range.clone()], &mut letters).and_then(|key| LEXICON.get(key));
         let Some(&(mask, indices)) = entries else {
-            run_phrases(&run, phrases);
+            run_phrases(text, &run, phrases);
             run.clear();
             shared = u8::MAX;
             continue;
@@ -340,7 +341,7 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
             // The new run keeps the trailing words that share a language
             // with this word (`seed` before a French phrase whose first
             // word is also English), at most one more than a run may hold.
-            run_phrases(&run, phrases);
+            run_phrases(text, &run, phrases);
             shared = mask;
             let mut keep = run.len();
             while keep > 0 && run.len() - keep <= MAX_RUN && run[keep - 1].mask & shared != 0 {
@@ -356,13 +357,29 @@ fn list_runs(text: &str, words: &[Range<usize>], phrases: &mut Vec<Range<usize>>
             indices,
         });
     }
-    run_phrases(&run, phrases);
+    run_phrases(text, &run, phrases);
 }
 
 /// The phrase windows of a run: longest first, then left to right, without
-/// overlap.
-fn run_phrases(run: &[Word], phrases: &mut Vec<Range<usize>>) {
-    if run.len() < LENGTHS[LENGTHS.len() - 1] || run.len() > MAX_RUN {
+/// overlap. A run of more than [`MAX_RUN`] words is a word list; only its
+/// lines of at most [`MAX_RUN`] words may hold phrases (two phrases on
+/// consecutive lines, a phrase before a line of list words).
+fn run_phrases(text: &str, run: &[Word], phrases: &mut Vec<Range<usize>>) {
+    if run.len() > MAX_RUN {
+        let mut line = 0;
+        for at in 1..=run.len() {
+            if at == run.len()
+                || text.as_bytes()[run[at - 1].range.end..run[at].range.start].contains(&b'\n')
+            {
+                if at - line <= MAX_RUN {
+                    run_phrases(text, &run[line..at], phrases);
+                }
+                line = at;
+            }
+        }
+        return;
+    }
+    if run.len() < LENGTHS[LENGTHS.len() - 1] {
         return;
     }
     let mut taken: Vec<Range<usize>> = Vec::new();

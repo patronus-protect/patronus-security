@@ -61,6 +61,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the run before it, the new run keeps the trailing words that share a language with it (C01
   review). A French or Spanish phrase whose first word is also on the list of the word before it
   (`seed: ` before a French phrase) is no longer cut to its second word and missed.
+- Detection change (all DLP modes): a run of more than 27 list words no longer drops the
+  `dlp_bip39_seed_phrase` phrases on its lines (C01 review). Its lines of 12 to 27 list words are
+  checked on their own, so two phrases on consecutive lines, three 12-word phrases one per line and
+  a phrase followed by a line of list words (`keep this safe never share`) are found; a
+  one-word-per-line word list stays no phrase. The catalog names the rule's structural prefilter
+  correctly (an ASCII letter or digit).
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
