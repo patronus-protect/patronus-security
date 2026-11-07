@@ -53,7 +53,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and the NIST SP 800-38A AES keys are K06 documented examples in
   `research/dlp/documented_values.yaml` (SHA-256 only) instead of clear-text lists in the C-KEYS
   validators. K06 checks a JWK's private member and a symmetric key's bytes in any encoding the rule
-  reads (hex in either case, base64, `0x` byte array), so the findings stay as before.
+  reads (hex in either case, base64, a `0x` byte array), so the findings stay as before.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view

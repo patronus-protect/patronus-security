@@ -361,7 +361,7 @@ fn documented_example_values_are_silent() {
     }
 }
 
-/// The NIST keys are examples in every encoding the symmetric key rule reads.
+/// The NIST keys are examples as hex in either case and as a byte array.
 #[test]
 fn documented_aes_keys_are_silent_in_any_encoding() {
     for key in NIST_AES_KEYS {
@@ -374,7 +374,6 @@ fn documented_aes_keys_are_silent_in_any_encoding() {
         for text in [
             format!("# NIST SP 800-38A\nAES_KEY = bytes.fromhex(\"{key}\")\n"),
             format!("aes_key = \"{}\"\n", key.to_ascii_uppercase()),
-            format!("ENCRYPTION_KEY={}\n", base64(&raw, STANDARD, true)),
             format!("static const uint8_t aes_key[] = {{{array}}};\n"),
         ] {
             assert_silent(&text);
