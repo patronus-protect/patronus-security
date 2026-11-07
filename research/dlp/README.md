@@ -69,10 +69,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Französisch; spanische und französische Wörter mit oder ohne Akzente, NFC oder NFD) mit
   gültiger Prüfsumme, in einer Zeile, mit Kommas, als Array, nummeriert oder Zeile für Zeile. Die
   Regel hat kein Literal; `seed_phrase::phrases` (`RuleMeta::finder`) findet die Kandidaten in einem
-  Durchlauf über die Wörter, die Regex läuft nur dort. Läufe über 27 Listenwörter (Wortlisten),
-  veröffentlichte Testvektoren und Phrasen mit mehr als zwei Wiederholungen zählen nicht; 12- und
-  15-Wort-Phrasen brauchen Nummerierung oder einen Kontextbegriff davor. Offen: die CJK-Listen
-  (chinesisch, japanisch, koreanisch).
+  Durchlauf über die Wörter, die Regex läuft nur dort. In Läufen über 27 Listenwörter (Wortlisten)
+  zählen nur Zeilen mit 12 bis 27 Listenwörtern; veröffentlichte Testvektoren und Phrasen mit mehr
+  als zwei Wiederholungen zählen nicht; 12- und 15-Wort-Phrasen brauchen Nummerierung oder einen
+  Kontextbegriff davor. Offen: die CJK-Listen (chinesisch, japanisch, koreanisch).
   Seit F03 prüft `dlp_github_token` die CRC32 der GitHub-Tokens: `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`
   und genau 36 Base62-Zeichen, die letzten sechs sind die CRC32 der ersten 30. `dlp_github_pat`
   nimmt `github_pat_` und genau 82 Zeichen. Die Regel wertet mit Prüfsummen-Stärke (0,90 ohne

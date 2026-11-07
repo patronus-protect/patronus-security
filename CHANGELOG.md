@@ -41,32 +41,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
   list (English, Italian, Portuguese, Czech) whose checksum (the first ENT/32 bits of SHA-256 of the
   entropy) holds, written in a line, comma-separated, as a quoted array, numbered (`1. word`) or one
   word per line. The span runs from the first to the last word. The rule has no literal to search
+- Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
+  (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
+  official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
+  first ENT/32 bits of SHA-256 of the entropy) holds, written in a line, comma-separated, as a quoted
+  array, numbered (`1. word`) or one word per line. Spanish and French words count with or without
+  their accents, in NFC or NFD (the unaccented words stay unique per list, as the BIP39 word list
+  notes state). The span runs from the first to the last word. The rule has no literal to search
   for: one pass over the lowercase words of a text finds runs of list words of one language and
-  checks the windows of a phrase length; a run of more than 27 list words (a word list) holds no
-  phrase. The published test vectors (trezor/python-mnemonic `vectors.json`, e.g. the all-zero
-  `abandon … about`), phrases that repeat more than two words, uppercase words and runs of 11
-  words are no phrases; 12- and 15-word phrases (4- and 5-bit checksum) also need numbered words
-  or a context term (seed, mnemonic, recovery, phrase, wallet, backup, passphrase,
-  Wiederherstellung …) in the 200 bytes before them. The CJK lists are not covered yet. The golden
-  generator gains the `bip39_<language>` encodings. `RuleMeta::with_finder` lets a rule match its
-  regex only at the ranges a scanner finds.
-- Detection change (all DLP modes): `dlp_bip39_seed_phrase` also reads the official Spanish and
-  French word lists (C01 review). Their words count with or without their accents, in NFC or NFD
-  (the unaccented words stay unique per list, as the BIP39 word list notes state); the 18-word
-  context threshold counts an accented word once. The checksum check no longer allocates per
-  candidate window (stack arrays; the test vectors are decoded once). The golden generator gains
-  `bip39_spanish` and `bip39_french` (`bip39_es_12`, `bip39_fr_18`) and `dlp_l1.jsonl` two
-  positives.
-- Detection change (all DLP modes): when a word of `dlp_bip39_seed_phrase` shares no language with
-  the run before it, the new run keeps the trailing words that share a language with it (C01
-  review). A French or Spanish phrase whose first word is also on the list of the word before it
-  (`seed: ` before a French phrase) is no longer cut to its second word and missed.
-- Detection change (all DLP modes): a run of more than 27 list words no longer drops the
-  `dlp_bip39_seed_phrase` phrases on its lines (C01 review). Its lines of 12 to 27 list words are
-  checked on their own, so two phrases on consecutive lines, three 12-word phrases one per line and
-  a phrase followed by a line of list words (`keep this safe never share`) are found; a
-  one-word-per-line word list stays no phrase. The catalog names the rule's structural prefilter
-  correctly (an ASCII letter or digit).
+  checks the windows of a phrase length; when a word shares no language with the run before it, the
+  new run keeps the trailing words that share a language with it, so a phrase whose first word is
+  also on the list of the word before it (`seed: ` before a French phrase) is not cut. A run of more
+  than 27 list words (a word list) is checked only line by line: its lines of 12 to 27 list words
+  may hold phrases (two phrases on consecutive lines, three 12-word phrases one per line, a phrase
+  before a line of list words), a one-word-per-line word list holds none. The published test
+  vectors (trezor/python-mnemonic `vectors.json`, e.g. the all-zero `abandon … about`), phrases that
+  repeat more than two words, uppercase words and runs of 11 words are no phrases; 12- and 15-word
+  phrases (4- and 5-bit checksum) also need numbered words or a context term (seed, mnemonic,
+  recovery, phrase, wallet, backup, passphrase, Wiederherstellung …) in the 200 bytes before
+  them; this length gate counts an accented word once. The checksum check does not allocate per
+  candidate window (stack arrays; the test vectors are decoded once). The CJK lists (Chinese simplified and traditional, Japanese, Korean) are not
+  covered yet. The golden generator gains the `bip39_<language>` encodings and `dlp_l1.jsonl` the
+  Spanish and French positives (`bip39_es_12`, `bip39_fr_18`). `RuleMeta::with_finder` lets a rule
+  match its regex only at the ranges a scanner finds; the catalog names the rule's structural
+  prefilter (an ASCII letter or digit).
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
