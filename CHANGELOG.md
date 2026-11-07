@@ -113,11 +113,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Kanzlei, Rechtsstreit). Off by default like every content class; the default profile is unchanged.
   Latency (`scripts/l1_dlp/latency.py`, release, same machine, base → head): 100 KiB p50 9.50 →
   9.48 ms, p95 15.26 → 15.38 ms, 4 KiB p95 1.66 → 1.24 ms; no measurable change.
-- Detection change: BIP39 seed phrases (C01). `dlp_bip39_seed_phrase` (`CRYPTO_KEY`, subtype
-  `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one official BIP39 word
-  list (English, Italian, Portuguese, Czech) whose checksum (the first ENT/32 bits of SHA-256 of the
-  entropy) holds, written in a line, comma-separated, as a quoted array, numbered (`1. word`) or one
-  word per line. The span runs from the first to the last word. The rule has no literal to search
 - Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
   (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
   official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
