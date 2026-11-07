@@ -111,12 +111,12 @@ _URL_UNRESERVED = frozenset(
 )
 _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 _MASK = (1 << 64) - 1
-SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp" / "rules" / "data"
+SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp"
 # Seed word kinds: word list, words drawn, words in the value, Electrum version prefix.
 SEED_KINDS = {
-    "electrum_standard": ("bip39_english.txt", 12, 12, "01"),
-    "electrum_segwit": ("bip39_english.txt", 12, 12, "100"),
-    "monero": ("monero_english.txt", 24, 25, None),
+    "electrum_standard": ("bip39/english.txt", 12, 12, "01"),
+    "electrum_segwit": ("bip39/english.txt", 12, 12, "100"),
+    "monero": ("rules/data/monero_english.txt", 24, 25, None),
 }
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"

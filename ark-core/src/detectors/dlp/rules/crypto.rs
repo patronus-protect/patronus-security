@@ -122,7 +122,7 @@ fn is_solana_keypair(value: &str) -> bool {
 /// The BIP39 English word list (2048 sorted words), also Electrum's default
 /// word list for new seeds.
 static BIP39_ENGLISH: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| include_str!("data/bip39_english.txt").lines().collect());
+    LazyLock::new(|| include_str!("../bip39/english.txt").lines().collect());
 
 /// C-WALLET: an Electrum seed (version 2.0 and later): 12 words of the
 /// English word list whose HMAC-SHA512 under the key `Seed version` starts

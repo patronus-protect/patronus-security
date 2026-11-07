@@ -36,11 +36,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`ed25519_sk`, `ed25519e_sk`, `addr`/`stake`/`acct`/`root`/`policy`/`drep` `_sk` and `_xsk`) with
   a valid checksum and the key length of the prefix (32/64 bytes, 96 for `_xsk`); verification keys
   (`_vk`) stay silent. Keyword prefilters and linear bounded regexes.
-- Detection change: BIP39 seed phrases (C01). `dlp_bip39_seed_phrase` (`CRYPTO_KEY`, subtype
-  `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one official BIP39 word
-  list (English, Italian, Portuguese, Czech) whose checksum (the first ENT/32 bits of SHA-256 of the
-  entropy) holds, written in a line, comma-separated, as a quoted array, numbered (`1. word`) or one
-  word per line. The span runs from the first to the last word. The rule has no literal to search
 - Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
   (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
   official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
