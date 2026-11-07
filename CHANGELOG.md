@@ -67,7 +67,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`Classification:`, `sensitivity`, `Einstufung:`, `Vertraulichkeit`). Levels quoted in prose,
   another level of the same family as a marking within 160 bytes (articles, level lists, code enums)
   and counter-context on the M01 engine (template, example, Vorlage, Beispiel, Seminar) are no label.
-  Default profile (M23): markings on, every other content and document class stays opt-in.
+  Default profile (M23): markings on, every other content and document class stays opt-in. No
+  marking span on any dev corpus (benign code, benign docs incl. Wikipedia and German law texts,
+  external, synthetic carriers). Latency (release, same machine, default profile with the five
+  marking rules gated off → on, 100 KiB benign code with carrier rows): 100 KiB p50 9.32 → 9.20 ms,
+  p95 14.83 → 12.98 ms, 4 KiB p95 0.79 → 0.78 ms; no measurable change.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum
