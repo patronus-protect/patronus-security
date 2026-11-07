@@ -112,7 +112,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   markers (WITHOUT PREJUDICE, for settlement purposes only, ohne Präjudiz, ohne Anerkennung einer
   Rechtspflicht) under the same legal-anchor gate. Published laws, court decisions (Leitsatz,
   Urteil, the court held), contract templates (Muster, Vorlage, [Party A]) and explanations are
-  counter-context.
+  counter-context. Latency (`scripts/l1_dlp/latency.py`, release, same machine as M01): 100 KiB p50
+  9.53 ms, p95 13.66 ms (M01: 9.48 / 15.38 ms), 4 KiB p95 1.98 ms; no measurable change.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum
