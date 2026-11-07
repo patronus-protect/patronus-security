@@ -90,7 +90,9 @@ fn assert_decoded(template: &str, encoded: &str, rule_id: &str, encodings: &[&st
         vec![(start, start + encoded.chars().count(), encoded)],
         "{rule_id}: {text:?}"
     );
-    let rules = result.layers[0].details["matched_rules"].as_array().unwrap();
+    let rules = result.layers[0].details["matched_rules"]
+        .as_array()
+        .unwrap();
     let rule = rules
         .iter()
         .find(|rule| rule["rule_id"] == rule_id)
@@ -118,11 +120,31 @@ fn assert_silent(texts: &[String]) {
 #[test]
 fn base64_encoded_provider_tokens_point_to_the_encoded_range() {
     let cases = [
-        ("LLM_ZUGANG_B64={v}\nREGION=eu-central-1\n", "anthropic_api_key", "dlp_anthropic_key"),
-        ("{\"nutzlast\": \"{v}\", \"kodierung\": \"base64\"}", "openai_project_api_key", "dlp_openai_key"),
-        ("2026-11-02 09:12:44 DEBUG upstream header x-goog-blob: {v}\n", "google_api_key", "dlp_google_api_key"),
-        ("$ echo {v} | base64 -d > ~/.config/gh/token\n", "github_ghp_token", "dlp_github_token"),
-        ("The support log contained {v}, which decodes to the live key.", "stripe_secret_live", "dlp_stripe_key"),
+        (
+            "LLM_ZUGANG_B64={v}\nREGION=eu-central-1\n",
+            "anthropic_api_key",
+            "dlp_anthropic_key",
+        ),
+        (
+            "{\"nutzlast\": \"{v}\", \"kodierung\": \"base64\"}",
+            "openai_project_api_key",
+            "dlp_openai_key",
+        ),
+        (
+            "2026-11-02 09:12:44 DEBUG upstream header x-goog-blob: {v}\n",
+            "google_api_key",
+            "dlp_google_api_key",
+        ),
+        (
+            "$ echo {v} | base64 -d > ~/.config/gh/token\n",
+            "github_ghp_token",
+            "dlp_github_token",
+        ),
+        (
+            "The support log contained {v}, which decodes to the live key.",
+            "stripe_secret_live",
+            "dlp_stripe_key",
+        ),
     ];
     for (seed, (template, generator, rule)) in (1..).zip(cases) {
         let token = generate(generator, seed);
@@ -137,10 +159,20 @@ fn base64url_and_two_layers_decode() {
         .map(|seed| base64url(format!("token: {}", generate("github_ghp_token", seed)).as_bytes()))
         .find(|encoded| encoded.contains(['-', '_']))
         .unwrap();
-    assert_decoded("payload={v}&v=2", &encoded, "dlp_github_token", &["base64url"]);
+    assert_decoded(
+        "payload={v}&v=2",
+        &encoded,
+        "dlp_github_token",
+        &["base64url"],
+    );
     let token = generate("github_ghp_token", 7);
     let twice = base64(base64(token.as_bytes()).as_bytes());
-    assert_decoded("ci_blob: {v}\n", &twice, "dlp_github_token", &["base64", "base64"]);
+    assert_decoded(
+        "ci_blob: {v}\n",
+        &twice,
+        "dlp_github_token",
+        &["base64", "base64"],
+    );
 }
 
 #[test]
@@ -174,7 +206,9 @@ fn a_plain_finding_keeps_its_span_over_the_decoded_one() {
         base64(b"deploy-user:Wq8#vLz2!pRt5mKx")
     );
     let result = scan(&text);
-    let rules = result.layers[0].details["matched_rules"].as_array().unwrap();
+    let rules = result.layers[0].details["matched_rules"]
+        .as_array()
+        .unwrap();
     assert!(
         rules.iter().all(|rule| rule.get("decoded").is_none()),
         "{rules:?}"
@@ -186,9 +220,14 @@ fn decoded_non_secrets_stay_silent() {
     let filled = generators()
         .generate_filled("anthropic_api_key", 0, Some("EXAMPLEKEY"))
         .unwrap();
-    let binary: Vec<u8> = (0u8..64).map(|i| i.wrapping_mul(53).wrapping_add(7)).collect();
+    let binary: Vec<u8> = (0u8..64)
+        .map(|i| i.wrapping_mul(53).wrapping_add(7))
+        .collect();
     assert_silent(&[
-        format!("LLM_ZUGANG_B64={}\n", base64(b"OPENAI_API_KEY=${OPENAI_API_KEY}")),
+        format!(
+            "LLM_ZUGANG_B64={}\n",
+            base64(b"OPENAI_API_KEY=${OPENAI_API_KEY}")
+        ),
         format!("blob: {}\n", base64(b"password=${DB_PASSWORD}")),
         format!("einstellungen: {}\n", base64(b"api_key: BITTE_AENDERN")),
         format!("$ echo {} | base64 -d\n", base64(b"token: YOUR_TOKEN_HERE")),
@@ -200,7 +239,10 @@ fn decoded_non_secrets_stay_silent() {
             "request id {}",
             base64(b"550e8400-e29b-41d4-a716-446655440000")
         ),
-        format!("header = \"{}\"", base64url(br#"{"alg":"RS256","typ":"JWT"}"#)),
+        format!(
+            "header = \"{}\"",
+            base64url(br#"{"alg":"RS256","typ":"JWT"}"#)
+        ),
         format!("LLM_ZUGANG_B64={}\n", base64(filled.as_bytes())),
         format!("{{\"integrity\": \"sha512-{}\"}}", base64(&binary)),
     ]);

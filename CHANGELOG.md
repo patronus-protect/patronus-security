@@ -89,6 +89,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Kanzlei, Rechtsstreit). Off by default like every content class; the default profile is unchanged.
   Latency (`scripts/l1_dlp/latency.py`, release, same machine, base → head): 100 KiB p50 9.50 →
   9.48 ms, p95 15.26 → 15.38 ms, 4 KiB p95 1.66 → 1.24 ms; no measurable change.
+- Detection change: DLP decoder pipeline (D01). Canonical base64 and base64url runs (24 to 65 536
+  characters) whose bytes are printable UTF-8 text are decoded, runs inside the decoded text once
+  more (recursion depth 2), into one size-limited view (128 KiB per text) that the DLP rules scan
+  once. A finding of the view is reported on the encoded characters that hold its bytes (every 3
+  decoded bytes map to 4 encoded characters), its `matched_rules` entry carries `decoded` (the
+  encodings undone, outermost first); a finding of the text itself on the same range keeps its
+  span. Provider tokens in Kubernetes `data:` values, CI variables, JSON payloads and
+  `echo … | base64 -d` lines are now reported; environment references, placeholders, prose, example
+  values and binary data stay silent after decoding. Latency: one byte pass over the text, decoding
+  only runs whose first eight characters decode to text, and a second rule pass only over the
+  decoded view.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
