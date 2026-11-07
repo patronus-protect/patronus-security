@@ -7287,6 +7287,30 @@ DLP_CASES = {
             carrier="prose",
         ),
         dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_de_government",
+            "Classification: ", "VS-VERTRAULICH",
+            "\nBriefing for the liaison officer on the site security of the Berlin office.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_de_corporate",
+            "document:\n  title: Salary bands Berlin office\n  classification: ", "vertraulich",
+            "\n  owner: people-team\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_en_corporate",
+            "Einstufung: ", "Internal Only",
+            "\nLieferantenbewertung für den Einkauf, Stand November.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_nato_eu",
+            "", "NATO CONFIDENTIAL",
+            "\n\nÜbungsplan Nordtor, Phase zwei: Marschwege und Sammelräume.\n",
+            carrier="prose",
+        ),
+        dp(
             "dlp.document.classification_marking", "de", "dlp_marking_de_government",
             "", "VS-NUR FÜR DEN DIENSTGEBRAUCH",
             "\n\nLagebericht Liegenschaft Nord\nZugangsregelung für Gebäude 4 ab Montag geändert.\n",

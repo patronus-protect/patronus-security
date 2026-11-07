@@ -4,7 +4,7 @@ use patronus_ark::{
 };
 
 #[test]
-fn default_and_partial_matrices_share_the_credential_only_inventory() {
+fn default_and_partial_matrices_share_the_credential_and_marking_inventory() {
     for gates in [
         ScanGateMatrix::default(),
         ScanGateMatrix::levels(true, false, false),
@@ -21,9 +21,11 @@ fn default_and_partial_matrices_share_the_credential_only_inventory() {
                     | "PRIVATE_KEY"
                     | "SECRET_TOKEN"
             );
+            // M23: classification markings are the one document class on by default.
+            let marking = pattern.entity_group == "dlp.document.classification_marking";
             assert_eq!(
                 gates.native.allows_rule(pattern.name),
-                credential,
+                credential || marking,
                 "{}",
                 pattern.name
             );
