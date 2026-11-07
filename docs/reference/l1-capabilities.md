@@ -11,8 +11,8 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 107 | 24 |
-| Regex rules | 199 | 161 (+5 relationship rules) |
+| Result labels (entity groups) | 107 | 25 |
+| Regex rules | 199 | 166 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 27 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
@@ -336,7 +336,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `dlp.content.database_dump` | content_class | off | 2 | 1 | 0 | no gold |
 | `dlp.content.system_log` | content_class | off | 2 | 1 | 456 documents | ARK 0.0 (opt-in profile) |
 | `dlp.document.legal_privileged` | document_class | off | 1 | 1 | – | – |
-| `dlp.document.classification_marking` | document_class | on | 0 | 1 | – | – |
+| `dlp.document.classification_marking` | document_class | on | 5 | 1 | – | – |
 | `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 | `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 
@@ -435,7 +435,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `saas.postman.api_token` | shared | `API_KEY` | `dlp_postman_api_key` | format | on | gitleaks: `postman-api-token`; TruffleHog: `Postman` |
 | `saas.mapbox.secret_token` | shared | `API_KEY` | `dlp_mapbox_secret_token` | format | on | gitleaks: `mapbox-api-token`; TruffleHog: `Mapbox` |
 | `key.symmetric_key` | shared | `CRYPTO_KEY` | `dlp_symmetric_key`, `dlp_laravel_app_key`, `dlp_django_secret_key`, `dlp_rails_secret_key_base` | structure | on | – |
-| `document.classification_marking` | ark_only | `dlp.document.classification_marking` | `dlp_marking_de_government`, `dlp_marking_de_corporate`, `dlp_marking_en_corporate`, `dlp_marking_tlp`, `dlp_marking_nato_eu` | – | off | – |
+| `document.classification_marking` | ark_only | `dlp.document.classification_marking` | `dlp_marking_de_government`, `dlp_marking_de_corporate`, `dlp_marking_en_corporate`, `dlp_marking_tlp`, `dlp_marking_nato_eu` | format | on | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |

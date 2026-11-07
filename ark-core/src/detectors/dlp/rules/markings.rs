@@ -21,14 +21,12 @@ use regex::Regex;
 use std::ops::Range;
 use std::sync::LazyLock;
 
-const GROUP: &str = "dlp.document.classification_marking";
-
 pub(super) const RULES: &[DlpPattern] = &[
     // M02: VS-NfD, VS-VERTRAULICH, GEHEIM, STRENG GEHEIM (VSA).
     DlpPattern {
         name: "dlp_marking_de_government",
         pattern: r"(?i)\b(?:VS ?- ?NUR FÜR DEN DIENSTGEBRAUCH|VS-NfD|VS-VERTRAULICH|STRENG GEHEIM|GEHEIM)\b",
-        entity_group: GROUP,
+        entity_group: "dlp.document.classification_marking",
         validator: None,
         span_group: None,
         base_score: 40,
@@ -43,7 +41,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_marking_de_corporate",
         pattern: r"(?i)\b(?:STRENG VERTRAULICH|NUR FÜR DEN INTERNEN GEBRAUCH|VERTRAULICH|INTERN)\b",
-        entity_group: GROUP,
+        entity_group: "dlp.document.classification_marking",
         validator: None,
         span_group: None,
         base_score: 40,
@@ -54,7 +52,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_marking_en_corporate",
         pattern: r"(?i)\b(?:(?:STRICTLY|HIGHLY|COMPANY) CONFIDENTIAL|CONFIDENTIAL|RESTRICTED|(?:FOR )?INTERNAL (?:USE )?ONLY|INTERNAL)\b",
-        entity_group: GROUP,
+        entity_group: "dlp.document.classification_marking",
         validator: None,
         span_group: None,
         base_score: 40,
@@ -69,7 +67,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_marking_tlp",
         pattern: r"\bTLP: ?(?:CLEAR|WHITE|GREEN|AMBER\+STRICT|AMBER|RED)\b",
-        entity_group: GROUP,
+        entity_group: "dlp.document.classification_marking",
         validator: None,
         span_group: None,
         base_score: 40,
@@ -80,7 +78,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_marking_nato_eu",
         pattern: r"\b(?:COSMIC TOP SECRET|NATO (?:SECRET|CONFIDENTIAL|RESTRICTED)|TR[EÈ]S SECRET UE/EU TOP SECRET|SECRET UE/EU SECRET|CONFIDENTIEL UE/EU CONFIDENTIAL|RESTREINT UE/EU RESTRICTED)\b",
-        entity_group: GROUP,
+        entity_group: "dlp.document.classification_marking",
         validator: None,
         span_group: None,
         base_score: 40,
