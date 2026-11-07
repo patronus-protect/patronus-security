@@ -72,6 +72,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   external, synthetic carriers). Latency (release, same machine, default profile with the five
   marking rules gated off → on, 100 KiB benign code with carrier rows): 100 KiB p50 9.32 → 9.20 ms,
   p95 14.83 → 12.98 ms, 4 KiB p95 0.79 → 0.78 ms; no measurable change.
+- Detection change (all modes, default profile): a bare level of the same family on a list-shaped
+  line (`    CONFIDENTIAL,` / `INTERN;`) also vetoes a marking within 160 bytes, so the last member of
+  a code enum without a trailing separator is no banner.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

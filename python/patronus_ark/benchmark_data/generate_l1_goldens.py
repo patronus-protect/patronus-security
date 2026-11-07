@@ -7369,6 +7369,16 @@ DLP_CASES = {
         ),
         dn(
             "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "enum Level {\n    PUBLIC,\n    INTERNAL,\n    CONFIDENTIAL,\n    RESTRICTED\n}\n",
+            "code enum of levels, last member without comma", carrier="code",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            "enum Stufe {\n    OEFFENTLICH,\n    INTERN,\n    STRENG_VERTRAULICH,\n    VERTRAULICH\n}\n",
+            "code enum of levels, last member without comma", carrier="code",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
             "Report header template:\nCONFIDENTIAL\nReplace the title before sending.",
             "header template", carrier="prose",
         ),

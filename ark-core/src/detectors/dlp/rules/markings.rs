@@ -196,38 +196,56 @@ fn is_nato_eu_marking(text: &str, marking: Range<usize>) -> bool {
 
 /// Whether the match of `family` at `marking` labels the document: it stands
 /// as a banner or a key's value, no counter-context is near and no other
-/// level of its family stands as a marking near it.
+/// level of its family stands as a marking or a list item near it.
 fn is_marking(text: &str, marking: Range<usize>, family: &Regex) -> bool {
     if !stands_as_marking(text, &marking) || !COUNTER.holds(text, marking.clone()) {
         return false;
     }
     let level = normalized(&text[marking.clone()]);
-    let start = floor_char_boundary(text, marking.start.saturating_sub(WINDOW));
-    let end = ceil_char_boundary(text, marking.end.saturating_add(WINDOW));
+    let start = text.floor_char_boundary(marking.start.saturating_sub(WINDOW));
+    let end = text.ceil_char_boundary(marking.end.saturating_add(WINDOW));
     !family.find_iter(&text[start..end]).any(|other| {
         let range = start + other.start()..start + other.end();
-        range != marking && normalized(other.as_str()) != level && stands_as_marking(text, &range)
+        range != marking
+            && normalized(other.as_str()) != level
+            && (stands_as_marking(text, &range) || is_list_item(text, &range))
     })
 }
 
 /// Whether the match at `marking` stands as a banner line or a key's value.
 fn stands_as_marking(text: &str, marking: &Range<usize>) -> bool {
+    let (before, after) = line_around(text, marking);
+    is_banner(before, &text[marking.clone()], after) || is_key_value(before, after)
+}
+
+/// Whether the match at `marking` is a bare member of a list on its own line
+/// (`    CONFIDENTIAL,` in an enum), so the last member without the separator
+/// is no banner.
+fn is_list_item(text: &str, marking: &Range<usize>) -> bool {
+    let (before, after) = line_around(text, marking);
+    before.chars().all(char::is_whitespace)
+        && after
+            .trim_start()
+            .strip_prefix([',', ';'])
+            .is_some_and(|rest| rest.trim().is_empty())
+}
+
+/// The rest of the marking's line before and after it.
+fn line_around<'a>(text: &'a str, marking: &Range<usize>) -> (&'a str, &'a str) {
     // A line longer than `LINE` on either side holds no banner, and a key
     // stands right before its value: the scan stays bounded on long lines.
-    let from = floor_char_boundary(text, marking.start.saturating_sub(LINE));
-    let to = ceil_char_boundary(text, marking.end.saturating_add(LINE));
+    let from = text.floor_char_boundary(marking.start.saturating_sub(LINE));
+    let to = text.ceil_char_boundary(marking.end.saturating_add(LINE));
     let line_start = text[from..marking.start]
         .rfind('\n')
         .map_or(from, |at| from + at + 1);
     let line_end = text[marking.end..to]
         .find('\n')
         .map_or(to, |at| marking.end + at);
-    let (before, value, after) = (
+    (
         &text[line_start..marking.start],
-        &text[marking.clone()],
         &text[marking.end..line_end],
-    );
-    is_banner(before, value, after) || is_key_value(before, after)
+    )
 }
 
 fn is_banner(before: &str, value: &str, after: &str) -> bool {
@@ -270,21 +288,6 @@ fn normalized(level: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .to_uppercase()
-}
-
-fn floor_char_boundary(text: &str, mut at: usize) -> usize {
-    while !text.is_char_boundary(at) {
-        at -= 1;
-    }
-    at
-}
-
-fn ceil_char_boundary(text: &str, at: usize) -> usize {
-    let mut at = at.min(text.len());
-    while !text.is_char_boundary(at) {
-        at += 1;
-    }
-    at
 }
 
 #[cfg(test)]
@@ -416,6 +419,12 @@ mod tests {
         assert!(!gate(is_tlp_marking, tlp, "TLP:AMBER"));
         let levels = "enum Level {\n    PUBLIC\n    CONFIDENTIAL\n    RESTRICTED\n}";
         assert!(!gate(is_en_corporate_marking, levels, "CONFIDENTIAL"));
+        // The last member of an enum has no comma; the listed members veto it.
+        let enum_ =
+            "enum Level {\n    PUBLIC,\n    INTERNAL,\n    CONFIDENTIAL,\n    RESTRICTED\n}";
+        assert!(!gate(is_en_corporate_marking, enum_, "RESTRICTED"));
+        let liste = "enum Stufe {\n    OEFFENTLICH;\n    INTERN;\n    VERTRAULICH\n}";
+        assert!(!gate(is_de_corporate_marking, liste, "VERTRAULICH"));
         assert!(!gate(
             is_de_corporate_marking,
             "Vorlage Deckblatt:\nVERTRAULICH\nTitel",
