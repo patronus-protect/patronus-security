@@ -587,7 +587,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
     }
 
     #[test]
-    fn example_config_defaults_dlp_l1_to_credentials_and_secrets() {
+    fn example_config_defaults_dlp_l1_to_credentials_secrets_and_markings() {
         let config = Config::load(Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/config.example.yaml"
@@ -603,11 +603,14 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
             "PRIVATE_KEY",
             "SECRET_TOKEN",
         ];
+        // M23 default profile: classification markings are the one document class on by default.
+        let default_on_groups = ["dlp.document.classification_marking"];
 
         for pattern in DLP_PATTERNS {
             assert_eq!(
                 config.default_gates.native.allows_rule(pattern.name),
-                credential_groups.contains(&pattern.entity_group),
+                credential_groups.contains(&pattern.entity_group)
+                    || default_on_groups.contains(&pattern.entity_group),
                 "unexpected default DLP gate for {} ({})",
                 pattern.name,
                 pattern.entity_group
