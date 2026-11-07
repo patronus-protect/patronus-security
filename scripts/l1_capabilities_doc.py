@@ -220,7 +220,7 @@ def _met(flag: bool) -> str:
 def generate(
     pii_rules: list[dict],
     dlp_rules: list[dict],
-    credential_groups: set[str],
+    default_on_groups: set[str],
     relationship_rules: list[tuple[str, str, bool]],
 ) -> str:
     pii_map = yaml.safe_load(PII_ENTITY_MAP_PATH.read_text(encoding="utf-8"))
@@ -269,7 +269,7 @@ def generate(
         f"| Rules with a `checksum` or `structure` check | "
         f"{sum(rule['strength'] == 'checksum' for rule in pii_rules)} | "
         f"{sum(rule['validator_strength'] in ('checksum', 'structure') for rule in dlp_rules)} |",
-        f"| Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |",
+        f"| Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |",
         f"| Compared with | Presidio {pii_map['presidio_version']} (default and tuned; milestones against "
         f"{_baseline_titles(pii['baselines'])} on {pii['milestone_view']} gold) | "
         + ", ".join(
@@ -414,7 +414,7 @@ def generate(
         entity_count = sum(e.get("group") == group and e["scope"] in ("shared", "ark_only") for e in dlp_entities)
         entry = dlp["groups"].get(group)
         lines.append(
-            f"| `{group}` | {family} | {'on' if group in credential_groups else 'off'} | {rule_count} "
+            f"| `{group}` | {family} | {'on' if group in default_on_groups else 'off'} | {rule_count} "
             f"| {entity_count} | {PLANNED if planned and not rule_count else dlp_gold_cell(entry)} "
             f"| {PLANNED if planned and not rule_count else dlp_cell(entry)} |"
         )
@@ -441,7 +441,7 @@ def generate(
             regex = [dlp_by_id[rule_id] for rule_id in ark if rule_id in dlp_by_id]
             check = _strongest([rule["validator_strength"] for rule in regex], DLP_STRENGTH_ORDER) if regex else "–"
             if regex:
-                default = "on" if any(rule["entity_group"] in credential_groups for rule in regex) else "off"
+                default = "on" if any(rule["entity_group"] in default_on_groups for rule in regex) else "off"
             elif ark:
                 default = "on" if any(relationship_defaults.get(rule_id) for rule_id in ark) else "off"
             else:
@@ -516,8 +516,8 @@ def generate(
         "## Configuration",
         "",
         "Every rule above can be switched on or off on its own with the `rules` execution gate; missing "
-        "IDs inherit the shared defaults (all PII rules on; credential/secret DLP rules on, broader DLP "
-        "families opt-in). `levels` (`l1`, `l2`, `l3`) switch layers, `models` switch whole producers "
+        "IDs inherit the shared defaults (all PII rules on; credential/secret DLP rules and classification "
+        "markings on, broader DLP families opt-in). `levels` (`l1`, `l2`, `l3`) switch layers, `models` switch whole producers "
         "(`native:pii`, `native:dlp`, …). `pii_mode` and `dlp_mode` choose the output mode: `strict` "
         "(default; every finding scores `1.0`), `balanced` or `recall` (model scores with thresholds "
         "0.50 and 0.30).",

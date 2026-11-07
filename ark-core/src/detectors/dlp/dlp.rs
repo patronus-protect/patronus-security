@@ -371,6 +371,10 @@ pub const SECRET_GROUPS: &[&str] = &[
     "SECRET_TOKEN",
 ];
 
+/// Document classes on by default (M23): classification markings (M-MARK).
+/// Every other content and document class is opt-in.
+pub const DEFAULT_ON_DOCUMENT_GROUPS: &[&str] = &["dlp.document.classification_marking"];
+
 /// K08: the overlap tier of a secret rule (provider > token > hash >
 /// credential > generic); `None` for identifier and content rules.
 pub fn overlap_tier(rule_id: &str) -> Option<OverlapTier> {

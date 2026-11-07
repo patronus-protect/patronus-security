@@ -54,6 +54,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `research/dlp/documented_values.yaml` (SHA-256 only) instead of clear-text lists in the C-KEYS
   validators. K06 checks a JWK's private member and a symmetric key's bytes in any encoding the rule
   reads (hex in either case, base64, a `0x` byte array), so the findings stay as before.
+- Detection change: classification markings (M-MARK: M02 + M03 + M23), the first document class
+  on by default. New entity group `dlp.document.classification_marking` with five rules, one per
+  marking family: `dlp_marking_de_government` (VS-NUR FÜR DEN DIENSTGEBRAUCH, VS-NfD,
+  VS-VERTRAULICH, GEHEIM, STRENG GEHEIM), `dlp_marking_de_corporate` (intern, vertraulich, streng
+  vertraulich), `dlp_marking_en_corporate` (Confidential, Strictly/Highly Confidential, Restricted,
+  Internal Only), `dlp_marking_tlp` (TLP 2.0 CLEAR/GREEN/AMBER/AMBER+STRICT/RED and TLP:WHITE) and
+  `dlp_marking_nato_eu` (NATO SECRET/CONFIDENTIAL/RESTRICTED, COSMIC TOP SECRET, the EU
+  RESTREINT UE/EU RESTRICTED … TRÈS SECRET UE/EU TOP SECRET). The marking is the evidence span and
+  the document label where it stands as a banner (upper case, alone on its line apart from markdown
+  or comment decoration; bare INTERNAL/INTERN are no banner) or as the value of a classification key
+  (`Classification:`, `sensitivity`, `Einstufung:`, `Vertraulichkeit`). Levels quoted in prose,
+  another level of the same family as a marking within 160 bytes (articles, level lists, code enums)
+  and counter-context on the M01 engine (template, example, Vorlage, Beispiel, Seminar) are no label.
+  Default profile (M23): markings on, every other content and document class stays opt-in.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

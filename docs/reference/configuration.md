@@ -112,8 +112,8 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 ## Execution gates
 
 Gates decide which levels and which model/native scanners are active for subsequent scans.
-Unspecified rules inherit shared defaults: credential/secret DLP rules are enabled, broader DLP
-rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
+Unspecified rules inherit shared defaults: credential/secret DLP rules and the classification
+markings (`dlp_marking_*`) are enabled, broader DLP rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
 
 Python (`execution_gates`, `set_execution_gates`, `enqueue`), the Ark API (`gates` in the server
 config, per key and per request) and Rust (`ScanGateMatrix`, which deserializes it) share **one

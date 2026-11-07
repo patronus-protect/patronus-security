@@ -60,6 +60,7 @@ mod hashes;
 mod http_auth;
 mod identifiers;
 mod likeness;
+mod markings;
 mod placeholders;
 mod providers;
 mod value_shape;
@@ -77,6 +78,7 @@ const PARTS: &[&[DlpPattern]] = &[
     credentials::CONNECTION_RULES,
     identifiers::RULES,
     content::RULES,
+    markings::RULES,
 ];
 
 pub(super) static DLP_RULES: [DlpPattern; rule_count(PARTS)] = concat(PARTS);
