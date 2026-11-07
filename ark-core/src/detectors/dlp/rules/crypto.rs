@@ -217,15 +217,6 @@ fn is_eth_private_key(value: &str) -> bool {
     })
 }
 
-/// C-KEYS: private JWK members of published test vectors (RFC 7517 A.2 EC
-/// `d`, RFC 7517 A.3 AES `k`, RFC 8037 A.1 Ed25519 `d`); documentation
-/// copies them verbatim.
-const JWK_TEST_VECTORS: &[&str] = &[
-    "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
-    "GawgguFyGrWKav7AX4VKUg",
-    "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A",
-];
-
 /// C-KEYS: a JSON Web Key (RFC 7517) that holds private key material: an
 /// object with `kty` and its private member, `d` for RSA, EC and OKP keys
 /// (RFC 7518 section 6, RFC 8037) or `k` for symmetric `oct` keys, as
@@ -233,19 +224,26 @@ const JWK_TEST_VECTORS: &[&str] = &[
 /// regex takes a flat object with `"kty"`, so a JWKS (`{"keys": [...]}`)
 /// yields its keys one by one.
 fn is_jwk_private_key(value: &str) -> bool {
-    let Ok(Value::Object(jwk)) = serde_json::from_str::<Value>(value) else {
-        return false;
+    jwk_private_member(value)
+        .and_then(|secret| base64_decode(&secret, Base64Kind::UrlSafe))
+        .is_some_and(|raw| raw.len() >= 16 && is_varied_key(&raw))
+}
+
+/// The private member of a JWK object (`d` or `k` by `kty`), the value
+/// that K06 checks against the documented RFC examples.
+pub(super) fn jwk_private_member(value: &str) -> Option<String> {
+    let Ok(Value::Object(mut jwk)) = serde_json::from_str::<Value>(value) else {
+        return None;
     };
     let member = match jwk.get("kty").and_then(Value::as_str) {
         Some("RSA" | "EC" | "OKP") => "d",
         Some("oct") => "k",
-        _ => return false,
+        _ => return None,
     };
-    jwk.get(member)
-        .and_then(Value::as_str)
-        .filter(|secret| !JWK_TEST_VECTORS.contains(secret))
-        .and_then(|secret| base64_decode(secret, Base64Kind::UrlSafe))
-        .is_some_and(|raw| raw.len() >= 16 && is_varied_key(&raw))
+    match jwk.remove(member) {
+        Some(Value::String(secret)) => Some(secret),
+        _ => None,
+    }
 }
 
 /// Key bytes that no placeholder or counter fills: at least half of the
@@ -292,14 +290,6 @@ fn hex_bytes(hex: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-/// C-KEYS: AES keys of published test vectors (NIST SP 800-38A F.1, 128,
-/// 192 and 256 bits) that tutorials and test suites copy.
-const SYMMETRIC_TEST_VECTORS: &[&str] = &[
-    "2b7e151628aed2a6abf7158809cf4f3c",
-    "8e73b0f7da0e6452c810f32b809079e562f8ead2522c6b7b",
-    "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
-];
-
 /// The bytes of a symmetric key constant: a `0x..` byte array, hex digits,
 /// or standard or URL-safe base64 (Fernet keys keep their `=`).
 fn symmetric_key_bytes(value: &str) -> Option<Vec<u8>> {
@@ -319,16 +309,16 @@ fn symmetric_key_bytes(value: &str) -> Option<Vec<u8>> {
         .or_else(|| base64_decode(value.trim_end_matches('='), Base64Kind::UrlSafe))
 }
 
-/// C-KEYS: an AES or HMAC key of 128, 192 or 256 bits that is no published
-/// test vector.
+/// C-KEYS: an AES or HMAC key of 128, 192 or 256 bits.
 fn is_symmetric_key(value: &str) -> bool {
-    symmetric_key_bytes(value).is_some_and(|raw| {
-        matches!(raw.len(), 16 | 24 | 32)
-            && is_varied_key(&raw)
-            && !SYMMETRIC_TEST_VECTORS
-                .iter()
-                .any(|vector| hex_bytes(vector).is_some_and(|known| known == raw))
-    })
+    symmetric_key_bytes(value)
+        .is_some_and(|raw| matches!(raw.len(), 16 | 24 | 32) && is_varied_key(&raw))
+}
+
+/// A symmetric key constant as lower-case hex, so that K06 finds a
+/// documented key (NIST SP 800-38A) in any encoding the rule reads.
+pub(super) fn symmetric_key_hex(value: &str) -> Option<String> {
+    symmetric_key_bytes(value).map(|raw| raw.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 /// C-KEYS: Laravel's `APP_KEY` is `base64:` and the base64 of a 16- or

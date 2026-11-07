@@ -88,6 +88,42 @@ const DOCUMENTED_VALUES: &[DocumentedValue] = &[
         kind: DocumentedKind::Example,
         sha256: "8be5d113c0871ce1a122d68a7dff940ab7b09ad8dfcfd9a85aa5c1acc026279e",
     },
+    DocumentedValue {
+        id: "rfc7517_ec_private_key",
+        rule_id: "dlp_jwk_private_key",
+        kind: DocumentedKind::Example,
+        sha256: "a45404ae333dd955dcff82cf28972e0f81b1e673cb70e2fc2d7d0d4c42a893bc",
+    },
+    DocumentedValue {
+        id: "rfc7517_symmetric_key",
+        rule_id: "dlp_jwk_private_key",
+        kind: DocumentedKind::Example,
+        sha256: "57afc11665beb68de7ccd6df1b38453be8682ac63bb8ccdf67cce63c2db9afd2",
+    },
+    DocumentedValue {
+        id: "rfc8037_ed25519_private_key",
+        rule_id: "dlp_jwk_private_key",
+        kind: DocumentedKind::Example,
+        sha256: "190edf59d5736c3b3ea6bb36d57f5eb415a9b79f3201b381b8f3cb089135981f",
+    },
+    DocumentedValue {
+        id: "nist_sp800_38a_aes128_key",
+        rule_id: "dlp_symmetric_key",
+        kind: DocumentedKind::Example,
+        sha256: "2ef2503d964e9668092e6878d3c390ca7909bbbffabd781857115e3be4bb3e5a",
+    },
+    DocumentedValue {
+        id: "nist_sp800_38a_aes192_key",
+        rule_id: "dlp_symmetric_key",
+        kind: DocumentedKind::Example,
+        sha256: "c12ce25303a023aa1317614428c0ac8ef707c5a370d7c766353c66df5d2cb46f",
+    },
+    DocumentedValue {
+        id: "nist_sp800_38a_aes256_key",
+        rule_id: "dlp_symmetric_key",
+        kind: DocumentedKind::Example,
+        sha256: "837e8e636d452b6133d5a5c56de1eb57c08a94bbe632804fa621a49014c5c034",
+    },
 ];
 
 /// A documented claim value.

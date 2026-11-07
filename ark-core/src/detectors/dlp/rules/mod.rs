@@ -294,9 +294,14 @@ pub fn is_documented_test_value(value: &str) -> bool {
 
 /// The part of a match that the value checks see: PEM rules check the key
 /// body without the armor lines; the bare header rule checks the body that
-/// follows it.
+/// follows it; a JWK checks its private member and a symmetric key its bytes
+/// as lower-case hex.
 fn checked_value<'a>(rule_id: &str, text: &'a str, range: Range<usize>) -> Cow<'a, str> {
     match rule_id {
+        "dlp_jwk_private_key" => crypto::jwk_private_member(&text[range.clone()])
+            .map_or_else(|| text[range].into(), Cow::Owned),
+        "dlp_symmetric_key" => crypto::symmetric_key_hex(&text[range.clone()])
+            .map_or_else(|| text[range].into(), Cow::Owned),
         "dlp_private_key_block" => pem_body(&text[range]).into(),
         "dlp_private_key_header" => {
             let rest = &text[range.end..];
