@@ -234,3 +234,29 @@ fn marker_words_inside_a_phrase_are_list_words() {
     let text = format!("seed phrase: {value}\n");
     assert_eq!(reported(&text), [value]);
 }
+
+#[test]
+fn reports_phrases_on_their_own_lines_in_a_longer_run() {
+    // Review of C01: a run of more than 27 list words over several lines
+    // still holds the phrases that fill a line.
+    let (first, second) = (phrase("english", 16, 32), phrase("english", 17, 32));
+    let text = format!("wallet backup:\n{first}\n{second}\n");
+    assert_eq!(reported(&text), [first.clone(), second]);
+    let short: Vec<String> = (18..21).map(|seed| phrase("english", seed, 16)).collect();
+    let text = format!("seed phrases:\n{}\n", short.join("\n"));
+    assert_eq!(reported(&text), short);
+    let text = format!("{first}\nkeep this safe never share\n");
+    assert_eq!(reported(&text), [first.clone()]);
+    let text = format!("Wiederherstellungsphrase:\n{first}\nnie teilen, sicher aufbewahren\n");
+    assert_eq!(reported(&text), [first]);
+    // A one-word-per-line dump of more than 27 words stays no phrase.
+    let dump: Vec<String> = (0..3)
+        .flat_map(|seed| {
+            phrase("english", seed, 16)
+                .split(' ')
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(reported(&format!("mnemonic:\n{}\n", dump.join("\n"))).is_empty());
+}
