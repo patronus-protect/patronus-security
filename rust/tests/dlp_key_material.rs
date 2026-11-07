@@ -255,23 +255,12 @@ fn jwk_needs_kty_and_its_private_member() {
 }
 
 #[test]
-fn published_test_vectors_are_no_secrets() {
-    for (index, text) in [
-        // RFC 8037 A.1 (Ed25519) and RFC 7517 A.2 (P-256) private keys.
-        r#"{"kty":"OKP","crv":"Ed25519","d":"nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}"#,
-        r#"{"kty":"EC","crv":"P-256","x":"MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4","y":"4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM","d":"870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE"}"#,
-        // RFC 7517 A.3 symmetric key.
-        r#"{"kty":"oct","alg":"A128KW","k":"GawgguFyGrWKav7AX4VKUg"}"#,
-        // NIST SP 800-38A and FIPS-197 AES keys.
-        "AES_KEY = bytes.fromhex(\"2b7e151628aed2a6abf7158809cf4f3c\")\n",
-        "aes_key = \"603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4\"\n",
-        "static const uint8_t aes_key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};\n",
-    ]
-    .iter()
-    .enumerate()
-    {
-        assert!(scan(text).evidence_spans.is_empty(), "vector {index}");
-    }
+fn counter_keys_are_no_secrets() {
+    // FIPS-197 C.1 counts its AES key bytes up; the published key vectors
+    // (RFC 7517, RFC 8037, NIST SP 800-38A) are K06 documented examples,
+    // tested in `dlp_documented_values.rs`.
+    let text = "static const uint8_t aes_key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};\n";
+    assert!(scan(text).evidence_spans.is_empty());
 }
 
 #[test]
