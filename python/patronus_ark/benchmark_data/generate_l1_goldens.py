@@ -7233,6 +7233,162 @@ DLP_CASES = {
             "marker without legal context", carrier="prose",
         ),
     ],
+    # M-MARK: classification markings (M02 + M03), on by default (M23). The marking is the evidence
+    # span when it stands as a banner line (upper case, only decoration around it) or as the value of
+    # a classification key; quoted levels in prose, level lists, templates and code enums are hard
+    # negatives.
+    "dlp.document.classification_marking": [
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "**", "CONFIDENTIAL",
+            "**\n\n# Q3 pricing review\n\nThe discount floor for the northern region moves to 18 percent.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "document:\n  title: Supplier audit 2026\n  classification: ", "Internal Only",
+            "\n  owner: procurement\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            '{"title": "Board deck October", "sensitivity": "', "Highly Confidential",
+            '", "owner": "cfo-office"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "// ", "RESTRICTED",
+            "\n// Margin engine for the partner portal, do not distribute.\nfn margin(cost: f64) -> f64 {\n    cost * 1.18\n}\n",
+            carrier="code",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_tlp",
+            "", "TLP:AMBER",
+            "\n\nIncident report 2026-117\nAffected host: build-07, lateral movement observed on Tuesday.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_tlp",
+            "# Advisory 44\n\n**", "TLP:AMBER+STRICT",
+            "**\n\nThe phishing kit targets the payroll portal of our subsidiary.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_nato_eu",
+            "", "NATO RESTRICTED",
+            "\n\nExercise plan Northern Gate, phase two: convoy routes and assembly areas.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "en", "dlp_marking_nato_eu",
+            "", "RESTREINT UE/EU RESTRICTED",
+            "\n\nDraft position paper on the negotiation mandate, working party meeting of 12 November.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "", "VS-NUR FÜR DEN DIENSTGEBRAUCH",
+            "\n\nLagebericht Liegenschaft Nord\nZugangsregelung für Gebäude 4 ab Montag geändert.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "Aktenzeichen: 21-4711/26\nEinstufung: ", "VS-VERTRAULICH",
+            "\nBetreff: Bewertung der Standortsicherung\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "# ", "STRENG GEHEIM",
+            "\n\nVerlegungsplanung Einheit 3, Zeitfenster und Marschwege.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            "dokument:\n  titel: Gehaltsbänder 2027\n  klassifizierung: ", "streng vertraulich",
+            "\n  verantwortlich: Personalabteilung\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            "**", "VERTRAULICH",
+            "**\n\nProtokoll der Geschäftsführungssitzung vom 3. November\nDer Standort Kassel wird geschlossen.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            '{"titel": "Lieferantenbewertung", "vertraulichkeit": "', "intern",
+            '", "abteilung": "Einkauf"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.classification_marking", "de", "dlp_marking_tlp",
+            "", "TLP:GREEN",
+            "\n\nSicherheitshinweis: Angreifer nutzen die VPN-Schwachstelle unserer Außenstelle.\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "Classified information in the United States has three levels: Top Secret, Secret and Confidential.",
+            "article about classification levels", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_tlp",
+            "The Traffic Light Protocol defines four labels:\nTLP:RED\nTLP:AMBER\nTLP:GREEN\nTLP:CLEAR\n",
+            "article listing the TLP levels", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "enum Level {\n    PUBLIC,\n    INTERNAL,\n    CONFIDENTIAL,\n    RESTRICTED,\n}\n",
+            "code enum of levels", carrier="code",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "Report header template:\nCONFIDENTIAL\nReplace the title before sending.",
+            "header template", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_en_corporate",
+            "2026-10-02 08:14:00 INFO policy confidential=true applied to 12 documents",
+            "log flag", carrier="log",
+        ),
+        dn(
+            "dlp.document.classification_marking", "en", "dlp_marking_nato_eu",
+            "NATO SECRET and COSMIC TOP SECRET are the two highest NATO classification levels.",
+            "article about NATO levels", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "Die Geheimhaltungsgrade sind STRENG GEHEIM, GEHEIM, VS-VERTRAULICH und VS-NUR FÜR DEN DIENSTGEBRAUCH.",
+            "article about classification levels", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "(2) Verschlusssachen werden eingestuft als\n1. STRENG GEHEIM, wenn die Kenntnisnahme den Bestand gefährden kann,\n2. GEHEIM, wenn sie die Sicherheit gefährden kann.",
+            "law text listing levels", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            "Vorlage Deckblatt:\nVERTRAULICH\nTitel hier eintragen",
+            "cover sheet template", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_government",
+            "Das bleibt aber geheim, versprochen!",
+            "prose", carrier="prose",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            'const INTERN = "intern";',
+            "code constant", carrier="code",
+        ),
+        dn(
+            "dlp.document.classification_marking", "de", "dlp_marking_de_corporate",
+            "Unsere Stufen sind öffentlich, intern, vertraulich und streng vertraulich.",
+            "prose listing levels", carrier="prose",
+        ),
+    ],
 }
 
 

@@ -6098,6 +6098,65 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_marking_de_government",
+    "de": "VS-NUR FÜR DEN DIENSTGEBRAUCH\n\nLagebericht Liegenschaft Nord, Zugang zu Gebäude 4 geändert.",
+    "en": "Classification: VS-VERTRAULICH\nAssessment of the site protection for the liaison office.",
+    "hard_negatives": {
+      "de": [
+        "Die Geheimhaltungsgrade sind STRENG GEHEIM, GEHEIM, VS-VERTRAULICH und VS-NUR FÜR DEN DIENSTGEBRAUCH."
+      ],
+      "en": [
+        "German levels such as VS-VERTRAULICH and GEHEIM are explained in the handbook."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_marking_de_corporate",
+    "de": "**STRENG VERTRAULICH**\n\nProtokoll der Geschäftsführungssitzung vom 3. November.",
+    "en": "Classification: vertraulich\nMinutes of the management meeting held in Kassel.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_marking_en_corporate",
+    "de": "Einstufung: Internal Only\nLieferantenbewertung für den Einkauf.",
+    "en": "CONFIDENTIAL\n\nQ3 pricing review: the discount floor moves to 18 percent.",
+    "hard_negatives": {
+      "de": [
+        "Vorlage Deckblatt:\nCONFIDENTIAL\nTitel hier eintragen"
+      ],
+      "en": [
+        "enum Level {\n    PUBLIC,\n    INTERNAL,\n    CONFIDENTIAL,\n}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_marking_tlp",
+    "de": "TLP:AMBER\n\nSicherheitshinweis: Angreifer nutzen die VPN-Schwachstelle der Außenstelle.",
+    "en": "TLP:RED\n\nIncident report: lateral movement observed on build-07.",
+    "hard_negatives": {
+      "de": [
+        "Das Traffic Light Protocol kennt diese Stufen:\nTLP:RED\nTLP:AMBER\nTLP:GREEN\nTLP:CLEAR"
+      ],
+      "en": [
+        "The Traffic Light Protocol defines four labels:\nTLP:RED\nTLP:AMBER\nTLP:GREEN\nTLP:CLEAR"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_marking_nato_eu",
+    "de": "NATO CONFIDENTIAL\n\nÜbungsplan Nordtor, Phase zwei: Marschwege und Sammelräume.",
+    "en": "SECRET UE/EU SECRET\n\nDraft negotiation mandate for the working party.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_azure_storage_account_key",
     "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
     "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",

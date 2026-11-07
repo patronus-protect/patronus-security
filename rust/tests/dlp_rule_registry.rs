@@ -179,6 +179,11 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_stacktrace_block",
     "dlp_structured_system_log",
     "dlp_document_legal_privileged",
+    "dlp_marking_de_government",
+    "dlp_marking_de_corporate",
+    "dlp_marking_en_corporate",
+    "dlp_marking_tlp",
+    "dlp_marking_nato_eu",
 ];
 
 #[test]

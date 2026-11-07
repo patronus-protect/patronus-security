@@ -28,7 +28,8 @@ const SECRET_GROUPS: &[&str] = &[
 ];
 
 /// The entity groups of the DLP rules: those before K09 (taxonomy v2 adds
-/// none) and the document classes of the content class engine (M01).
+/// none) and the document classes of the content class engine (M01,
+/// M-MARK).
 const DLP_GROUPS: &[&str] = &[
     "API_KEY",
     "CLOUD_KEY",
@@ -43,6 +44,7 @@ const DLP_GROUPS: &[&str] = &[
     "dlp.content.sql",
     "dlp.content.system_log",
     "dlp.de.commercial_register_number",
+    "dlp.document.classification_marking",
     "dlp.document.legal_privileged",
     "dlp.de.facility_number_bsnr",
     "dlp.de.vat_id",
