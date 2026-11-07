@@ -5228,6 +5228,10 @@ DLP_LOOKALIKE_GENERATORS = (
     # F-PROV: wrong segment, length or prefix of the Slack, Discord and Stripe formats
     "slack_bot_token_no_ids", "slack_user_token_short", "slack_app_token_lower_id", "slack_config_refresh_token_short", "discord_bot_token_non_snowflake",
     "stripe_secret_live_long", "stripe_restricted_dash", "stripe_publishable_live", "stripe_webhook_secret_short",
+    # F-STRUCT: JWT header without alg, claims that are no JSON, empty signature; PEM armor whose
+    # body is no DER SEQUENCE, an ellipsis or a placeholder
+    "jwt_header_no_alg", "jwt_claims_not_json", "jwt_empty_signature", "pem_pkcs1_rsa_bad_der",
+    "pem_rsa_armor_ellipsis", "pem_openssh_armor_placeholder",
     # G-URL: Base32 seed and auth URL token shorter than the rules take
     "totp_base32_secret_short", "auth_url_token_short",
 )
@@ -5995,9 +5999,9 @@ DLP_CASES = {
         ),
     ],
     "PRIVATE_KEY": [
-        ds("PRIVATE_KEY", "en", "dlp_private_key_block", "<<secret:0>>", "pem_pkcs8_private_key", 701),
+        ds("PRIVATE_KEY", "en", "dlp_private_key_block", "<<secret:0>>", "pem_pkcs8_ed25519_private_key", 701),
         ds("PRIVATE_KEY", "de", "dlp_private_key_header", "Schlüsseldatei:\n<<secret:0>>", "pem_openssh_private_key_header", 702),
-        ds("PRIVATE_KEY", "en", "dlp_private_key_block", "<<secret:0>>", "pem_rsa_private_key", 703),
+        ds("PRIVATE_KEY", "en", "dlp_private_key_block", "<<secret:0>>", "pem_pkcs1_rsa_private_key", 703),
         dn("PRIVATE_KEY", "en", "dlp_private_key_header", "-----BEGIN PUBLIC KEY-----", "public key is not private material"),
         dn("PRIVATE_KEY", "de", "dlp_private_key_header", "BEGIN PRIVATE KEY", "PEM delimiters are incomplete"),
         ds(
@@ -6105,7 +6109,7 @@ DLP_CASES = {
         # F03: dlp_github_token checks the CRC32; the shape-only `github_pat_classic` has none.
         ds("SECRET_TOKEN", "en", "dlp_github_token", "GITHUB_TOKEN=<<secret:0>>", "github_ghp_token", 801),
         ds("SECRET_TOKEN", "de", "dlp_gitlab_pat", "GitLab Token: <<secret:0>>", "gitlab_pat", 802),
-        ds("SECRET_TOKEN", "en", "dlp_jwt_token", "Authorization: Bearer <<secret:0>>", "jwt_hs256", 803),
+        ds("SECRET_TOKEN", "en", "dlp_jwt_token", "Authorization: Bearer <<secret:0>>", "jwt_signed_hs256", 803),
         dn("SECRET_TOKEN", "en", "dlp_github_token", "Truncated GitHub prefix in the docs: ghp_short", "provider token is too short"),
         dn("SECRET_TOKEN", "de", "dlp_generic_credential_assignment", "Token: your-token-here", "documented placeholder"),
         ds(
@@ -7788,7 +7792,7 @@ DLP_K04_CASES = {
         ds(
             "PRIVATE_KEY", "en", "dlp_private_key_block",
             "const SERVER_KEY = `<<secret:0>>`;\n",
-            "pem_pkcs8_private_key", 8026, carrier="code", mode="balanced",
+            "pem_pkcs8_ed25519_private_key", 8026, carrier="code", mode="balanced",
         ),
     ],
 }
@@ -13201,6 +13205,195 @@ DLP_FPROV_CASES = {
     ],
 }
 for _label, _rows in DLP_FPROV_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# F-STRUCT (F07 + F08 + C07): dlp_jwt_token parses the header (base64url JSON with alg) and the
+# claims, takes unsecured alg none tokens with an empty signature and names Supabase service-role
+# and Firebase custom tokens; dlp_private_key_block checks the body of every PEM type (PKCS#1/#8,
+# ENCRYPTED, EC, DSA, OPENSSH, PGP PRIVATE KEY BLOCK) and PuTTY PPK files structurally (DER,
+# openssh-key-v1, secret-key packet), and reports OpenSSH bcrypt KDF keys as encrypted. Hard
+# negatives: lookalikes with a broken header or DER, authorized_keys/known_hosts lines, public
+# keys, certificates and armor around a placeholder body.
+_SSH_PUB_DEPLOY = "AAAAC3NzaC1lZDI1NTE5AAAAIHB1YmxpYyBoYWxmIG9mIGEgZGVwbG95IGtleSBvbmx5"
+_SSH_PUB_HOST = "AAAAC3NzaC1lZDI1NTE5AAAAIGhvc3Qga2V5IG9mIHRoZSBnaXQgbWlycm9yLCBwdWIu"
+_SPKI_ED25519 = "MCowBQYDK2VwAyEAcHVibGljIGhhbGYgb2YgYSBzaWduaW5nIGtleSBvayE="
+DLP_FSTRUCT_CASES = {
+    "PRIVATE_KEY": [
+        ds(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "$ cat ~/.ssh/id_ed25519   # mit Passphrase geschützt\n<<secret:0>>\n$ ssh-add ~/.ssh/id_ed25519\n",
+            "pem_openssh_ed25519_encrypted", 23501, carrier="cli",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "tls:\n  cert_file: /etc/ssl/certs/api.crt\n  key: |\n<<secret:0>>\n  key_password_env: TLS_KEY_PASS\n",
+            "pem_pkcs8_encrypted_private_key", 23502, carrier="yaml",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "Hallo zusammen,\n\nhier der Signaturschlüssel für das Release-Repo:\n\n<<secret:0>>\n\nViele Grüße\nJana\n",
+            "pgp_private_key_block", 23503, carrier="prose",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "RELEASE_SIGNING_KEY = \"\"\"\n<<secret:0>>\n\"\"\"\n\ngpg.import_keys(RELEASE_SIGNING_KEY)\n",
+            "pgp_private_key_block", 23504, carrier="code",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "# Inhalt von C:\\Users\\build\\deploy.ppk\n<<secret:0>>\n",
+            "putty_ppk_ed25519", 23505, carrier="line",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "2026-11-07T06:02:11Z DEBUG sftp-sync: loaded key file\n<<secret:0>>\n2026-11-07T06:02:12Z INFO sftp-sync: connected\n",
+            "putty_ppk_ed25519", 23506, carrier="log",
+        ),
+        ds(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "deploy:\n  ssh_key: |\n<<secret:0>>\n",
+            "pem_pkcs8_encrypted_private_key", 23507, carrier="yaml",
+        ),
+        ds(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "$ cat ~/.ssh/id_ed25519\n<<secret:0>>\n",
+            "pem_openssh_ed25519_encrypted", 23508, carrier="cli",
+        ),
+        dl(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "# Testdatei für den Parser (absichtlich kaputt)\n<<secret:0>>\n",
+            "pem_pkcs1_rsa_bad_der", 23509, "RSA armor around a body that is no DER SEQUENCE",
+        ),
+        dl(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "fixtures/corrupt_key.pem:\n<<secret:0>>\n",
+            "pem_pkcs1_rsa_bad_der", 23510, "RSA armor around a body that is no DER SEQUENCE",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            f"# ~/.ssh/authorized_keys\nssh-ed25519 {_SSH_PUB_DEPLOY} deploy@ci\n",
+            "authorized_keys entry is a public key", carrier="line",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            f"# ~/.ssh/known_hosts des Build-Servers\ngit.example.de,10.0.4.12 ssh-ed25519 {_SSH_PUB_HOST}\n",
+            "known_hosts entry is a public host key", carrier="line",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            f"$ ssh-keyscan github.example.com\ngithub.example.com ssh-ed25519 {_SSH_PUB_HOST}\n",
+            "known_hosts line from ssh-keyscan is a public host key", carrier="cli",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            f"verify_key: |\n  -----BEGIN PUBLIC KEY-----\n  {_SPKI_ED25519}\n  -----END PUBLIC KEY-----\n",
+            "public key block", carrier="yaml",
+        ),
+        dl(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "Paste your key between the markers:\n\n<<secret:0>>\n",
+            "pem_rsa_armor_ellipsis", 23526, "armor around an ellipsis, no key body", carrier="markdown",
+        ),
+        dl(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "Schlüssel hier einfügen:\n<<secret:0>>\n",
+            "pem_openssh_armor_placeholder", 23527, "armor around a placeholder, no key body", carrier="prose",
+        ),
+        dn(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "ssh_authorized_keys:\n  - ssh-ed25519 " + _SSH_PUB_DEPLOY + " deploy@ci\n",
+            "cloud-init authorized key is public", carrier="yaml",
+        ),
+        dn(
+            "PRIVATE_KEY", "de", "dlp_private_key_block",
+            "PuTTY-Schlüssel liegen unter %USERPROFILE%\\.ssh\\*.ppk; die Datei beginnt mit PuTTY-User-Key-File-3.\n",
+            "PPK file name and format name without key lines", carrier="prose",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "# .env.local\nNEXT_PUBLIC_SUPABASE_URL=https://abcd.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=<<secret:0>>\n",
+            "jwt_supabase_service_role", 23511, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "{\n  \"supabase\": {\n    \"serviceRoleKey\": \"<<secret:0>>\"\n  }\n}\n",
+            "jwt_supabase_service_role", 23512, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "// Custom Token aus dem Admin-SDK, nur für Tests\nconst customToken = \"<<secret:0>>\";\nawait signInWithCustomToken(auth, customToken);\n",
+            "jwt_firebase_custom_token", 23513, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "Hi team, the integration test still signs in with this Firebase custom token: <<secret:0>> - please rotate the service account.\n",
+            "jwt_firebase_custom_token", 23514, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN auth: accepted unsigned token <<secret:0>> for /admin\n",
+            "jwt_unsecured_none", 23515, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "auth:\n  # Token ohne Signatur aus dem Pentest-Bericht\n  session_token: \"<<secret:0>>\"\n",
+            "jwt_unsecured_none", 23516, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "[supabase]\nservice_role_key = \"<<secret:0>>\"\n",
+            "jwt_supabase_service_role", 23517, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "$ curl -s https://api.example.com/v1/me -H 'X-Session: <<secret:0>>'\n",
+            "jwt_signed_rs256", 23518, carrier="cli",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN auth: Token <<secret:0>> abgelehnt (Header ohne alg)\n",
+            "jwt_header_no_alg", 23519, "JWT shape whose header has no alg member", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN auth: rejected <<secret:0>> (header without alg)\n",
+            "jwt_header_no_alg", 23520, "JWT shape whose header has no alg member", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN parser: malformed <<secret:0>>",
+            "jwt_claims_not_json", 23521, "claims segment is no base64url JSON object", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "Der Header beginnt immer mit eyJhbGciOiJ... und der Payload mit eyJzdWIiOi..., die Signatur folgt nach dem zweiten Punkt.",
+            "truncated JWT segments in documentation prose", carrier="prose",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN parser: Kopfzeile ohne gültige Claims in <<secret:0>>\n",
+            "jwt_claims_not_json", 23522, "claims segment is no base64url JSON object", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "next_page: <<secret:0>>",
+            "jwt_header_no_alg", 23523, "cursor segments without a JOSE alg", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "{\"redirect_state\": \"<<secret:0>>\"}",
+            "jwt_header_no_alg", 23524, "OAuth state blob without alg", carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "2026-11-07T06:04:51Z WARN auth: signature missing for <<secret:0>>\n",
+            "jwt_empty_signature", 23525, "HS256 header with an empty signature is no issued token", carrier="log",
+        ),
+    ],
+}
+for _label, _rows in DLP_FSTRUCT_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 # G-URL (F12 + G08 + G09): otpauth:// URIs and TOTP seeds after a 2FA key (Base32 of at least

@@ -492,14 +492,18 @@ fn private_key_blocks_with_example_bodies_are_silent() {
             block.replace('\n', "\\n")
         ));
     }
+    // F-STRUCT: a random key in a PKCS#8 Ed25519 structure is reported.
     let block = format!(
         concat!(
             "-----BEGIN ",
             "PRIVATE KEY-----",
-            "\n{}\n{}\n-----END PRIVATE KEY-----"
+            "\nMC4CAQAwBQYDK2VwBCIEIA{}\n-----END PRIVATE KEY-----"
         ),
-        random(42, ALNUM, 64),
-        random(43, ALNUM, 40)
+        random(
+            42,
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+            42
+        )
     );
     let result = scan(&block);
     assert!(matched_rules(&result)

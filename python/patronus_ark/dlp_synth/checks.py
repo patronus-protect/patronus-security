@@ -296,6 +296,59 @@ def is_valid_openssh_ed25519(raw: bytes) -> bool:
     )
 
 
+def is_valid_pkcs8_encrypted(der: bytes) -> bool:
+    """RFC 5958 EncryptedPrivateKeyInfo: AlgorithmIdentifier with an OID and an OCTET STRING."""
+    fields = _der_sequence(der)
+    if not fields or [tag for tag, _ in fields] != [0x30, 0x04]:
+        return False
+    algorithm = der_parse(fields[0][1])
+    return bool(algorithm) and algorithm[0][0] == 0x06 and len(fields[1][1]) > 0
+
+
+def openssh_kdf(raw: bytes) -> tuple[bytes, bytes] | None:
+    """``(ciphername, kdfname)`` of an openssh-key-v1 blob with at least one key."""
+    magic = b"openssh-key-v1\0"
+    if not raw.startswith(magic):
+        return None
+    header = _ssh_strings(raw[len(magic) :], 3)
+    if header is None or int.from_bytes(header[1][:4], "big") < 1:
+        return None
+    return header[0][0], header[0][1]
+
+
+def pgp_secret_key_packet(text: str) -> bytes | None:
+    """First packet of an armored PGP private key block if it is a secret-key packet (tag 5)."""
+    match = re.fullmatch(
+        r"-{5}BEGIN PGP PRIVATE KEY BLOCK-{5}\n\n(?P<body>[A-Za-z0-9+/=\n]+)\n=[A-Za-z0-9+/]{4}\n"
+        r"-{5}END PGP PRIVATE KEY BLOCK-{5}",
+        text,
+    )
+    raw = b64decode(match.group("body").replace("\n", "")) if match else None
+    if not raw or len(raw) < 2 or raw[0] != 0xC5 or raw[1] >= 192 or raw[1] > len(raw) - 2:
+        return None
+    return raw[2 : 2 + raw[1]]
+
+
+def ppk_private_blob(text: str) -> bytes | None:
+    """Decoded private lines of an unencrypted PuTTY PPK v3 file."""
+    match = re.fullmatch(
+        r"PuTTY-User-Key-File-3: (?P<alg>[a-z0-9-]+)\nEncryption: none\nComment: [^\n]*\n"
+        r"Public-Lines: (?P<public>\d+)\n(?P<public_body>(?:[A-Za-z0-9+/=]+\n)+)"
+        r"Private-Lines: (?P<private>\d+)\n(?P<private_body>(?:[A-Za-z0-9+/=]+\n)+)"
+        r"Private-MAC: [0-9a-f]{64}",
+        text,
+    )
+    if not match:
+        return None
+    public_lines = match.group("public_body").splitlines()
+    private_lines = match.group("private_body").splitlines()
+    if len(public_lines) != int(match.group("public")) or len(private_lines) != int(match.group("private")):
+        return None
+    if b64decode("".join(public_lines)) is None:
+        return None
+    return b64decode("".join(private_lines))
+
+
 def jwt_parts(token: str) -> tuple[dict, dict, bytes] | None:
     """Return ``(header, claims, signature)`` of a compact JWS, or ``None``."""
     parts = token.split(".")

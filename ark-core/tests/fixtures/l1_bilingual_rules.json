@@ -5226,10 +5226,19 @@
     "en": "<<secret\u003a0>>",
     "secrets": [
       {
-        "gen": "pem_pkcs8_private_key",
+        "gen": "pem_pkcs8_ed25519_private_key",
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "git.example.de,10.0.4.12 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGhvc3Qga2V5IG9mIHRoZSBnaXQgbWlycm9yLCBwdWIu"
+      ],
+      "en": [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHB1YmxpYyBoYWxmIG9mIGEgZGVwbG95IGtleSBvbmx5 deploy@ci",
+        "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAcHVibGljIGhhbGYgb2YgYSBzaWduaW5nIGtleSBvayE=\n-----END PUBLIC KEY-----"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -5252,10 +5261,18 @@
     "en": "<<secret\u003a0>>",
     "secrets": [
       {
-        "gen": "jwt_hs256",
+        "gen": "jwt_signed_hs256",
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Der Header beginnt immer mit eyJhbGciOiJ... und der Payload mit eyJzdWIiOi..., die Signatur folgt nach dem zweiten Punkt."
+      ],
+      "en": [
+        "next_page: eyJwIjoxfQ.eyJjIjoiYWJjZGVmMTIzNCJ9.dmVyc2lvbi0yMDI2"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
