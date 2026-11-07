@@ -154,18 +154,30 @@ fn base64_encoded_provider_tokens_point_to_the_encoded_range() {
 
 #[test]
 fn base64url_and_two_layers_decode() {
-    // A seed whose encoding needs the url-safe alphabet.
-    let encoded = (1..)
-        .map(|seed| base64url(format!("token: {}", generate("github_ghp_token", seed)).as_bytes()))
-        .find(|encoded| encoded.contains(['-', '_']))
-        .unwrap();
-    assert_decoded(
-        "payload={v}&v=2",
-        &encoded,
-        "dlp_github_token",
-        &["base64url"],
-    );
+    // `~~~` encodes to `fn5-`: the run needs the url-safe alphabet.
     let token = generate("github_ghp_token", 7);
+    let encoded = base64url(format!("token: {token} ~~~").as_bytes());
+    assert!(encoded.contains('-'));
+    let text = format!("payload={encoded}&v=2");
+    let result = scan(&text);
+    let offset = "token: ".len();
+    let quads = 8 + offset / 3 * 4..8 + (offset + token.len()).div_ceil(3) * 4;
+    let spans: Vec<_> = result
+        .evidence_spans
+        .iter()
+        .map(|span| span.start_byte..span.end_byte)
+        .collect();
+    assert_eq!(spans, vec![quads], "{text:?}");
+    let rules = result.layers[0].details["matched_rules"]
+        .as_array()
+        .unwrap();
+    assert!(
+        rules
+            .iter()
+            .any(|rule| rule["rule_id"] == "dlp_github_token"
+                && rule["decoded"] == serde_json::json!(["base64url"])),
+        "{rules:?}"
+    );
     let twice = base64(base64(token.as_bytes()).as_bytes());
     assert_decoded(
         "ci_blob: {v}\n",
