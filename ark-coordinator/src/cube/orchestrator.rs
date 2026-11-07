@@ -541,6 +541,9 @@ mod tests {
             .snapshot()
             .iter()
             .all(|(_, active)| *active == 0));
+        // A poll sent just before the deadline may reach the mock handler only
+        // after scan returned; let it drain before taking the baseline.
+        tokio::time::sleep(Duration::from_millis(50)).await;
         let polls = state.polls.load(Ordering::SeqCst);
         let posts = state.posts.load(Ordering::SeqCst);
         tokio::time::sleep(Duration::from_millis(80)).await;

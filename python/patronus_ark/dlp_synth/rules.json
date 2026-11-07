@@ -523,6 +523,42 @@
       "generators": ["pem_openssh_private_key_header"],
       "probes": ["$ head -1 deploy/id_ed25519\n<<secret:0>>", "Die Datei beginnt mit <<secret:0>> und wurde eingecheckt."]
     },
+    "dlp_jwk_private_key": {
+      "generators": ["jwk_okp_private_key", "jwk_ec_private_key", "jwk_rsa_private_key"],
+      "lookalike": ["jwk_okp_public_key"],
+      "probes": ["{\"keys\": [<<secret:0>>]}", "signing_jwk.json:\n<<secret:0>>\n", "JWK_PRIVATE_KEY='<<secret:0>>'"]
+    },
+    "dlp_wireguard_private_key": {
+      "generators": ["wireguard_private_key"],
+      "lookalike": ["wireguard_private_key_short"],
+      "probes": ["[Interface]\nAddress = 10.8.0.2/24\nPrivateKey = <<secret:0>>\n", "[Peer]\nPresharedKey = <<secret:0>>\n", "wireguard:\n  private_key: \"<<secret:0>>\""]
+    },
+    "dlp_openvpn_static_key": {
+      "generators": ["openvpn_static_key"],
+      "lookalike": ["openvpn_static_key_short"],
+      "probes": ["key-direction 1\n<tls-auth>\n<<secret:0>>\n", "# ta.key\n<<secret:0>>\n"]
+    },
+    "dlp_ipsec_psk": {
+      "generators": ["ipsec_psk"],
+      "probes": ["# /etc/ipsec.secrets\n%any %any : PSK \"<<secret:0>>\"\n", "192.0.2.10 198.51.100.7 : PSK \"<<secret:0>>\""]
+    },
+    "dlp_symmetric_key": {
+      "generators": ["aes256_hex_key", "fernet_key"],
+      "lookalike": ["sha1_hex_digest"],
+      "probes": ["ENCRYPTION_KEY=<<secret:0>>", "{\"crypto\": {\"aes_key\": \"<<secret:0>>\"}}", "HMAC_SECRET_KEY = '<<secret:0>>'"]
+    },
+    "dlp_laravel_app_key": {
+      "generators": ["laravel_app_key"],
+      "probes": ["APP_NAME=Shop\nAPP_KEY=<<secret:0>>\n", "'key' => env('APP_KEY', '<<secret:0>>'),"]
+    },
+    "dlp_django_secret_key": {
+      "generators": ["django_secret_key"],
+      "probes": ["SECRET_KEY = '<<secret:0>>'", "DJANGO_SECRET_KEY=<<secret:0>>"]
+    },
+    "dlp_rails_secret_key_base": {
+      "generators": ["rails_secret_key_base"],
+      "probes": ["production:\n  secret_key_base: <<secret:0>>\n", "SECRET_KEY_BASE=<<secret:0>>"]
+    },
     "dlp_jwt_token": {
       "generators": ["jwt_signed_hs256", "jwt_signed_rs256"],
       "shape_only": ["jwt_hs256"],
@@ -733,7 +769,6 @@
     "credential.high_entropy_string": {"generators": ["base64_high_entropy_string", "hex_high_entropy_string"], "lookalike": ["uuid_v4"]},
     "key.age_secret_key": {"generators": ["age_secret_key"], "lookalike": ["age_public_key"]},
     "key.pkcs12_file": {"generators": ["pkcs12_keystore"], "lookalike": ["x509_certificate"]},
-    "key.symmetric_key": {"generators": ["laravel_app_key", "fernet_key", "aes256_hex_key"], "lookalike": ["sha1_hex_digest"]},
     "saas.asana.client_secret": {"generators": ["asana_client_secret"], "lookalike": ["asana_client_secret_short"]},
     "saas.hubspot.api_key": {"generators": ["hubspot_api_key"], "lookalike": ["hubspot_api_key_short"]},
     "saas.zendesk.secret_key": {"generators": ["zendesk_secret_key"], "lookalike": ["zendesk_secret_key_short"]},

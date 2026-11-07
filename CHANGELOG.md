@@ -36,6 +36,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`ed25519_sk`, `ed25519e_sk`, `addr`/`stake`/`acct`/`root`/`policy`/`drep` `_sk` and `_xsk`) with
   a valid checksum and the key length of the prefix (32/64 bytes, 96 for `_xsk`); verification keys
   (`_vk`) stay silent. Keyword prefilters and linear bounded regexes.
+- Detection change: key material in config and code (C-KEYS). New rules `dlp_jwk_private_key`
+  (a flat JSON object with `kty` and its private member, `d` for RSA/EC/OKP or `k` for `oct`, as
+  base64url of at least 16 bytes; public JWKs and the RFC 7517/8037 example keys stay silent),
+  `dlp_wireguard_private_key` (`PrivateKey`/`PresharedKey` of 32 bytes in base64; `PublicKey` is no
+  match), `dlp_openvpn_static_key` (the 16-line V1 block of `--genkey secret`, inline in
+  `<tls-auth>`), `dlp_ipsec_psk` (the quoted `PSK` of an ipsec.secrets entry), `dlp_symmetric_key`
+  (16, 24 or 32 bytes as hex, base64, Fernet or a `0x` byte array under an AES, HMAC, encryption,
+  cipher, crypto, signing or Fernet key name; NIST SP 800-38A and counting test keys stay silent),
+  `dlp_laravel_app_key` (`base64:` and 16 or 32 bytes), `dlp_django_secret_key` (50 characters of
+  Django's alphabet with a letter, a digit and a symbol; `django-insecure-` keys have severity
+  `test`) and `dlp_rails_secret_key_base` (128 hex digits). The baseline entity `key.symmetric_key`
+  becomes shared; `key.jwk_private_key`, `key.wireguard_private_key`, `key.openvpn_static_key` and
+  `key.ipsec_psk` are new ARK-only entities.
+- Detection change (all modes, same findings): the RFC 7517 A.2/A.3 and RFC 8037 A.1 example JWKs
+  and the NIST SP 800-38A AES keys are K06 documented examples in
+  `research/dlp/documented_values.yaml` (SHA-256 only) instead of clear-text lists in the C-KEYS
+  validators. K06 checks a JWK's private member and a symmetric key's bytes in any encoding the rule
+  reads (hex in either case, base64, a `0x` byte array), so the findings stay as before.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view

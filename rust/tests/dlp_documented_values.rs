@@ -269,6 +269,41 @@ fn base32(raw: &[u8]) -> String {
     out
 }
 
+/// Private JWK members of RFC 7517 A.2 (EC `d`), RFC 7517 A.3 (`oct` `k`)
+/// and RFC 8037 A.1 (Ed25519 `d`).
+const JWK_EC_D: &str = concat!("870MB6gfuTJ4HtUn", "UvYMyJpr5eUZNP4B", "k43bVdj3eAE");
+const JWK_OCT_K: &str = concat!("GawgguFyGrWK", "av7AX4VKUg");
+const JWK_OKP_D: &str = concat!("nWGxne_9WmC6hEr0", "kuwsxERJxWl7MmkZ", "cDusAxyuf2A");
+
+/// The JWKs of those RFC examples.
+fn rfc_jwks() -> [String; 3] {
+    [
+        format!(
+            concat!(
+                r#"{{"kty":"EC","crv":"P-256","x":"MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4","#,
+                r#""y":"4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM","d":"{}"}}"#
+            ),
+            JWK_EC_D
+        ),
+        format!(r#"{{"kty":"oct","alg":"A128KW","k":"{JWK_OCT_K}"}}"#),
+        format!(
+            r#"{{"kty":"OKP","crv":"Ed25519","d":"{JWK_OKP_D}","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}}"#
+        ),
+    ]
+}
+
+/// AES-128, -192 and -256 keys of NIST SP 800-38A F.1.
+const NIST_AES_KEYS: [&str; 3] = [
+    concat!("2b7e151628aed2a6", "abf7158809cf4f3c"),
+    concat!("8e73b0f7da0e6452", "c810f32b809079e5", "62f8ead2522c6b7b"),
+    concat!(
+        "603deb1015ca71be",
+        "2b73aef0857d7781",
+        "1f352c073b6108d7",
+        "2d9810a30914dff4"
+    ),
+];
+
 /// Deterministic pseudo-random bytes (SplitMix64).
 fn random_bytes(seed: u64, length: usize) -> Vec<u8> {
     let mut state = seed;
@@ -317,8 +352,32 @@ fn documented_example_values_are_silent() {
             "PROXY_AUTHORIZATION=Basic {}\n",
             base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true)
         ),
-    ] {
+    ]
+    .into_iter()
+    .chain(rfc_jwks())
+    .chain(rfc_jwks().map(|jwk| format!("{{\"keys\": [{jwk}]}}")))
+    {
         assert_silent(&text);
+    }
+}
+
+/// The NIST keys are examples as hex in either case and as a byte array.
+#[test]
+fn documented_aes_keys_are_silent_in_any_encoding() {
+    for key in NIST_AES_KEYS {
+        let raw = hex(key);
+        let array = raw
+            .iter()
+            .map(|byte| format!("0x{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        for text in [
+            format!("# NIST SP 800-38A\nAES_KEY = bytes.fromhex(\"{key}\")\n"),
+            format!("aes_key = \"{}\"\n", key.to_ascii_uppercase()),
+            format!("static const uint8_t aes_key[] = {{{array}}};\n"),
+        ] {
+            assert_silent(&text);
+        }
     }
 }
 
@@ -383,6 +442,18 @@ fn same_shapes_with_other_values_stay_live_findings() {
             "live",
         );
     }
+    let other_jwk = rfc_jwks()[1].replace(JWK_OCT_K, &base64url(&random_bytes(15, 16)));
+    assert_reported(&other_jwk, "dlp_jwk_private_key", &other_jwk, "live");
+    let other_aes = random_bytes(16, 16)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_reported(
+        &format!("AES_KEY = bytes.fromhex(\"{other_aes}\")\n"),
+        "dlp_symmetric_key",
+        &other_aes,
+        "live",
+    );
     let other_key = format!(
         "0x{}",
         random_bytes(14, 32)
@@ -441,8 +512,12 @@ fn documented_values_yaml_lists_exactly_the_built_values() {
         ed25519_pkcs8(&hex(RFC8410_KEY)),
         base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true),
         base32(KEY_URI_SECRET),
+        JWK_EC_D.to_owned(),
+        JWK_OCT_K.to_owned(),
+        JWK_OKP_D.to_owned(),
     ]
     .into_iter()
+    .chain(NIST_AES_KEYS.map(str::to_owned))
     .chain(
         HARDHAT_KEYS
             .iter()

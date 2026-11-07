@@ -1764,6 +1764,34 @@ PROFILES = {
     "dlp_cardano_signing_key": Profile("crypto.cardano.signing_key", "CRYPTO_KEY", "secret", "cardano_signing_key", "Cardano signing key", "Cardano-Signierschlüssel"),
     "dlp_private_key_block": Profile("key.pem_private_key", "PRIVATE_KEY", "secret", "tls_private_key", "TLS private key", "privater TLS-Schlüssel"),
     "dlp_private_key_header": Profile("key.pem_private_key", "PRIVATE_KEY", "fragment", "ssh_private_key", "SSH private key", "privater SSH-Schlüssel"),
+    "dlp_jwk_private_key": Profile(
+        "key.jwk_private_key", "PRIVATE_KEY", "secret", "signing_jwk", "private signing JWK", "privater Signatur-JWK",
+    ),
+    "dlp_wireguard_private_key": Profile(
+        "key.wireguard_private_key", "PRIVATE_KEY", "secret", "wireguard_private_key", "WireGuard private key",
+        "privater WireGuard-Schlüssel",
+    ),
+    "dlp_openvpn_static_key": Profile(
+        "key.openvpn_static_key", "CRYPTO_KEY", "secret", "openvpn_tls_auth_key", "OpenVPN tls-auth key",
+        "OpenVPN-tls-auth-Schlüssel",
+    ),
+    "dlp_ipsec_psk": Profile(
+        "key.ipsec_psk", "CRYPTO_KEY", "secret", "ipsec_secrets", "IPsec pre-shared key", "IPsec-Pre-Shared-Key",
+        '%any %any : PSK "<<value>>"',
+    ),
+    "dlp_symmetric_key": Profile(
+        "key.symmetric_key", "CRYPTO_KEY", "secret", "encryption_key", "encryption key", "Verschlüsselungsschlüssel"
+    ),
+    "dlp_laravel_app_key": Profile(
+        "key.symmetric_key", "CRYPTO_KEY", "secret", "app_key", "Laravel app key", "Laravel-App-Key",
+    ),
+    "dlp_django_secret_key": Profile(
+        "key.symmetric_key", "CRYPTO_KEY", "secret", "django_secret_key", "Django secret key", "Django-Secret-Key",
+    ),
+    "dlp_rails_secret_key_base": Profile(
+        "key.symmetric_key", "CRYPTO_KEY", "secret", "secret_key_base", "Rails secret_key_base",
+        "Rails-secret_key_base",
+    ),
     "dlp_jwt_token": Profile("token.jwt", "SECRET_TOKEN", "secret", "id_token", "ID token", "ID-Token"),
     "dlp_credential_in_url": Profile(
         "credential.url_query_secret", "CREDENTIAL", "secret", "export_url", "export link", "Export-Link",
@@ -2019,9 +2047,6 @@ PROFILES = {
     "key.pkcs12_file": Profile(
         "key.pkcs12_file", "PRIVATE_KEY", "secret", "keystore_p12_base64", "PKCS#12 keystore (base64)",
         "PKCS#12-Keystore (Base64)",
-    ),
-    "key.symmetric_key": Profile(
-        "key.symmetric_key", "CRYPTO_KEY", "secret", "encryption_key", "encryption key", "Verschlüsselungsschlüssel"
     ),
     # GOLD-D1: saas entities without an ARK rule.
     "saas.asana.client_secret": Profile(
