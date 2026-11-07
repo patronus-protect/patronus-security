@@ -587,7 +587,7 @@ entities:
     gitleaks: [private-key]
     trufflehog: [PrivateKey]
     detect_secrets: [PrivateKeyDetector]
-    backlog: F08
+    backlog: F-STRUCT
   - id: token.jwt
     scope: shared
     group: SECRET_TOKEN
@@ -596,7 +596,7 @@ entities:
     trufflehog: [JWT]
     detect_secrets: [JwtTokenDetector]
     google_dlp: [JSON_WEB_TOKEN]
-    backlog: F07
+    backlog: F-STRUCT
   - id: credential.secret_assignment
     scope: shared
     group: CREDENTIAL

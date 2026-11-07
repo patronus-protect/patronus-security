@@ -485,9 +485,9 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_discord_token` | `SECRET_TOKEN` | `access_token` | `discord` | `structure` | [github.com](https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/discordbottoken/discordbottoken.go) | yes | on | 35 | proximity | 0.60–0.85 |
 | `dlp_eth_private_key` | `CRYPTO_KEY` | `private_key` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | yes | on | 25 | proximity | 0.40–0.65 |
 | `dlp_btc_wif` | `CRYPTO_KEY` | `private_key` | `bitcoin` | `checksum` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | yes | on | 30 | proximity | 0.65–0.90 |
-| `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
+| `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `structure` | `gitleaks:private-key` | yes | on | 70 | proximity | 0.95–1.00 |
 | `dlp_private_key_header` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `structure` | `gitleaks:jwt` | yes | on | 45 | proximity | 0.70–0.95 |
 | `dlp_credential_in_url` | `CREDENTIAL` | `auth_url` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
 | `dlp_auth_url_token` | `CREDENTIAL` | `auth_url` | – | `none` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2) | yes | on | 25 | field | 0.50 |
 | `dlp_otp_secret` | `CREDENTIAL` | `otp_secret` | – | `structure` | [github.com](https://github.com/google/google-authenticator/wiki/Key-Uri-Format) | yes | on | 30 | field | 0.80 |

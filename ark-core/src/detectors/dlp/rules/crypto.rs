@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Key material: wallet keys and PEM private keys.
+use super::structure;
 use crate::detectors::dlp::key_context::has_key_context;
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
@@ -49,6 +50,11 @@ fn is_eth_private_key(value: &str) -> bool {
     })
 }
 
+/// F08: a PEM block or PPK file whose body has its type's structure.
+fn is_private_key_block(block: &str) -> bool {
+    structure::private_key(block).is_some()
+}
+
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Crypto ───────────────────────────────────────────────────────────────
     DlpPattern {
@@ -93,21 +99,27 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {
         name: "dlp_private_key_block",
-        pattern: r"(?s)-----BEGIN\s+(?P<anchor_2>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----.*?-----END\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
+        // F08: every PEM private key type, the PGP armor and PuTTY PPK files;
+        // the body is checked structurally.
+        pattern: concat!(
+            r"(?s)-----BEGIN\s+(?P<anchor_2>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----.*?-----END\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----",
+            r"|(?s)-----BEGIN PGP PRIVATE KEY BLOCK-----.*?-----END PGP PRIVATE KEY BLOCK-----",
+            r"|PuTTY-User-Key-File-[23]: (?s:.*?)Private-MAC: [0-9a-fA-F]{40,64}",
+        ),
         entity_group: "PRIVATE_KEY",
-        validator: None,
+        validator: Some(is_private_key_block),
         span_group: None,
         base_score: 70,
         meta: RuleMeta::new(
-            ValidatorStrength::Format,
+            ValidatorStrength::Structure,
             "gitleaks:private-key",
-            &["-----begin"],
+            &["-----begin", "putty-user-key-file-"],
         )
         .with_subtype(SecretSubtype::PrivateKey),
     },
     DlpPattern {
         name: "dlp_private_key_header",
-        pattern: r"-----BEGIN\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
+        pattern: r"-----BEGIN\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|ENCRYPTED\s+|PGP\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?-----",
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
@@ -117,6 +129,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             "gitleaks:private-key",
             &["-----begin"],
         )
+        // F08: armor around a body that is no key is no fragment of one.
+        .with_context_gate(structure::is_key_header)
         .with_subtype(SecretSubtype::PrivateKey),
     },
 ];

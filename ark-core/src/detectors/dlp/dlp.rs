@@ -1267,6 +1267,11 @@ impl NativeRegexDetector for DlpPipeline {
         if let Some(subtype) = meta.subtype {
             details.insert("subtype".into(), subtype.as_str().into());
         }
+        details.extend(
+            rules::structure_details(self.rule_ids[index], value)
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value)),
+        );
         details
     }
 

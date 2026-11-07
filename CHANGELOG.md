@@ -11,6 +11,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: JWT and PEM structure (F-STRUCT, F07 + F08 + C07). `dlp_jwt_token` reports a
+  token only when its header decodes to a JSON object with a string `alg` and its claims to a JSON
+  object (validator strength `structure`); unsecured tokens (`alg` `none`) with an empty signature
+  are now reported and carry `jwt_alg` in `matched_rules`, Supabase and Firebase service tokens
+  carry `provider`. `dlp_private_key_block` covers `ENCRYPTED PRIVATE KEY`, `PGP PRIVATE KEY
+  BLOCK` and PuTTY PPK files besides PKCS#1/PKCS#8/EC/DSA/OpenSSH, checks the body structurally
+  (DER, `openssh-key-v1`, secret-key packet, PPK key lines; validator strength `structure`) and
+  reports `key_encrypted` (OpenSSH bcrypt KDF, encrypted PKCS#8, OpenSSL `Proc-Type`, PPK
+  `Encryption`). `dlp_private_key_header` keeps a bare header line but drops armor around a body
+  that is no key (`...`, placeholders, broken DER). authorized_keys/known_hosts lines and public
+  keys stay negative. L1 latency: the checks run only on JWT/PEM matches.
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
