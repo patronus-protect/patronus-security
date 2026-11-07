@@ -51,6 +51,15 @@ Placeholders (golden schema v2, E13) may transform the value they insert:
   value exactly: the first starts at 0, each next one where the previous ended, the
   last ends at the value length.
 
+A ``{"seed_words": kind, "word_len": n}`` segment (C-WALLET) draws words of ``n`` letters
+from a wallet word list (``ark-core/src/detectors/dlp/rules/data``), each word
+``words[next_u64() % len(words)]`` in list order: ``electrum_standard`` and
+``electrum_segwit`` draw 12 BIP39 English words again and again until the HMAC-SHA512 of
+the phrase under ``Seed version`` starts with the hex prefix ``01`` or ``100``;
+``monero`` draws 24 words of the Monero English list and appends the checksum word, the
+word at CRC-32 of the 3-letter prefixes modulo 24. Words are joined by one space. A fill
+does not change this segment.
+
 Base58Check generators start with constant bytes so their length stays fixed. Every
 generator therefore has one length, which ``generator_length`` reports.
 
@@ -75,6 +84,7 @@ from __future__ import annotations
 import base64
 import copy
 import hashlib
+import hmac
 import json
 import math
 import re
@@ -94,6 +104,13 @@ _URL_UNRESERVED = frozenset(
 )
 _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 _MASK = (1 << 64) - 1
+SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp" / "rules" / "data"
+# Seed word kinds: word list, words drawn, words in the value, Electrum version prefix.
+SEED_KINDS = {
+    "electrum_standard": ("bip39_english.txt", 12, 12, "01"),
+    "electrum_segwit": ("bip39_english.txt", 12, 12, "100"),
+    "monero": ("monero_english.txt", 24, 25, None),
+}
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 CHECKSUM_LENGTHS = {"crc32_base62": 6, "crc32_hex": 8, "crc32_hex_le": 8, "iso7064_mod11_10": 1, "bech32": 6}
@@ -175,6 +192,10 @@ def _valid_segment(segment, alphabets: dict) -> bool:
         return segment["alphabet"] in alphabets and _valid_count(segment["len"])
     if keys == {"checksum"}:
         return segment["checksum"] in CHECKSUM_LENGTHS
+    if keys == {"seed_words", "word_len"}:
+        return segment["seed_words"] in SEED_KINDS and _valid_count(segment["word_len"]) and bool(
+            _seed_word_list(segment["seed_words"], segment["word_len"])
+        )
     if keys in ({"encode", "bytes"}, {"encode", "bytes", "wrap"}):
         parts = segment["bytes"]
         if segment["encode"] not in ENCODINGS or not isinstance(parts, list) or not parts:
@@ -251,14 +272,40 @@ def _encoded_length(segment: dict) -> int:
         length = 4 * math.ceil(size / 3)
         return length + (length - 1) // segment["wrap"] if "wrap" in segment else length
     if encoding == "base58check":
-        # Constant leading bytes keep the value in one base58 digit range.
-        return math.ceil((size + 4) * 8 / math.log2(58))
+        # Constant leading bytes (up to 8 of the first hex part) keep the value in one
+        # base58 digit range: below (lead + 1) * 256^rest.
+        lead = bytes.fromhex(segment["bytes"][0]["hex"])[:8]
+        rest = size + 4 - len(lead)
+        return math.ceil((math.log2(int.from_bytes(lead, "big") + 1) + 8 * rest) / math.log2(58))
     return math.ceil(size * 4 / 3)
+
+
+@lru_cache(maxsize=None)
+def _seed_word_list(kind: str, word_len: int) -> tuple[str, ...]:
+    words = (SEED_WORD_LISTS / SEED_KINDS[kind][0]).read_text(encoding="ascii").split()
+    return tuple(word for word in words if len(word) == word_len)
+
+
+def seed_words(kind: str, word_len: int, rng: SplitMix64) -> str:
+    """Draw a seed phrase of ``kind`` from the words of ``word_len`` letters (module docstring)."""
+    words = _seed_word_list(kind, word_len)
+    _, drawn_count, _, prefix = SEED_KINDS[kind]
+    while True:
+        drawn = [words[rng.next_u64() % len(words)] for _ in range(drawn_count)]
+        if prefix is None:
+            drawn.append(drawn[zlib.crc32("".join(word[:3] for word in drawn).encode("ascii")) % 24])
+            return " ".join(drawn)
+        phrase = " ".join(drawn)
+        if hmac.new(b"Seed version", phrase.encode("ascii"), hashlib.sha512).hexdigest().startswith(prefix):
+            return phrase
 
 
 def _segment_length(segment: dict) -> int:
     if "lit" in segment:
         return len(segment["lit"])
+    if "seed_words" in segment:
+        count = SEED_KINDS[segment["seed_words"]][2]
+        return count * segment["word_len"] + count - 1
     if "alphabet" in segment:
         return segment["len"]
     if "checksum" in segment:
@@ -273,6 +320,7 @@ def generator_length(name: str) -> int:
 def _draws_randomly(segments: list[dict]) -> bool:
     return any(
         "alphabet" in segment
+        or "seed_words" in segment
         or any("random" in part or "alphabet" in part for part in segment.get("bytes", []))
         for segment in segments
     )
@@ -469,6 +517,8 @@ def _draw_segments(name: str, generator: dict, rng: SplitMix64, fill: str | None
                 filled = True
             else:
                 part = _draw(rng, alphabet, segment["len"])
+        elif "seed_words" in segment:
+            part = seed_words(segment["seed_words"], segment["word_len"], rng)
         elif "checksum" in segment:
             part = checksum(segment["checksum"], since_literal, literal, before_literal)
             if fill is not None:

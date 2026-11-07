@@ -110,6 +110,12 @@ const REGISTRY_ORDER: &[&str] = &[
     // crypto
     "dlp_eth_private_key",
     "dlp_btc_wif",
+    "dlp_bip32_extended_private_key",
+    "dlp_eth_keystore_ciphertext",
+    "dlp_solana_keypair",
+    "dlp_electrum_seed",
+    "dlp_monero_seed",
+    "dlp_cardano_signing_key",
     "dlp_private_key_block",
     "dlp_private_key_header",
     // credentials

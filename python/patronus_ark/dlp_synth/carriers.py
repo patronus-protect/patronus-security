@@ -38,7 +38,7 @@ import sys
 from functools import lru_cache
 from typing import Iterable, Iterator
 
-from . import recipes, rules
+from . import checks, recipes, rules
 from .carrier_templates import FAMILIES, FILL_WORDS, LOOKALIKE_KEY, PLACEHOLDERS, PROFILES, Family, Profile
 
 
@@ -201,6 +201,8 @@ def hard_negative_value(generator: str, variant: str) -> str:
             continue
         if "alphabet" in segment:
             parts.append(_fill(alphabets[segment["alphabet"]], segment["len"], variant))
+        elif "seed_words" in segment:
+            parts.append(_hard_negative_seed(segment))
         elif "checksum" in segment:
             check = "0" * recipes.CHECKSUM_LENGTHS[segment["checksum"]]
             valid = recipes.checksum(segment["checksum"], since_literal, literal, before_literal)
@@ -209,6 +211,23 @@ def hard_negative_value(generator: str, variant: str) -> str:
             parts.append(_hard_negative_encoded(segment, alphabets, variant))
         since_literal += parts[-1]
     return "".join(parts)
+
+
+def _hard_negative_seed(segment: dict) -> str:
+    """A seed phrase of list words that fails its check: one word repeated (the documented
+    filler), for Monero with another word as checksum word; the first such phrase whose
+    Electrum version prefix or Monero checksum is wrong."""
+    kind = segment["seed_words"]
+    words = recipes._seed_word_list(kind, segment["word_len"])
+    count = recipes.SEED_KINDS[kind][2]
+    valid = checks.is_valid_monero_seed if kind == "monero" else checks.is_valid_electrum_seed
+    for index, word in enumerate(words):
+        phrase = [word] * count
+        if kind == "monero":
+            phrase[-1] = words[(index + 1) % len(words)]
+        if not valid(" ".join(phrase)):
+            return " ".join(phrase)
+    raise CarrierError(f"no hard-negative seed for {kind!r}")
 
 
 def _hard_negative_encoded(segment: dict, alphabets: dict, variant: str) -> str:

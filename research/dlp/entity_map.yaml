@@ -153,7 +153,7 @@ subtypes:
   access_token: {groups: [SECRET_TOKEN, CLOUD_KEY]}
   secret_key: {groups: [API_KEY, CLOUD_KEY, PAYMENT_KEY]}
   private_key: {groups: [PRIVATE_KEY, CRYPTO_KEY]}
-  seed_phrase: {groups: [CRYPTO_KEY], planned: true}  # C01
+  seed_phrase: {groups: [CRYPTO_KEY]}  # C-WALLET (Electrum), C01 (BIP39)
   password: {groups: [CREDENTIAL]}
   password_hash: {groups: [PASSWORD_HASH]}
   generic_secret: {groups: [CREDENTIAL]}
@@ -759,6 +759,38 @@ entities:
     group: CRYPTO_KEY
     ark: [dlp_btc_wif]
     backlog: F02
+  - id: crypto.bitcoin.extended_private_key
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_bip32_extended_private_key]
+    backlog: C-WALLET
+  - id: crypto.ethereum.keystore
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_eth_keystore_ciphertext]
+    backlog: C-WALLET
+  - id: crypto.solana.keypair
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_solana_keypair]
+    backlog: C-WALLET
+  - id: crypto.bitcoin.electrum_seed
+    scope: ark_only
+    group: CRYPTO_KEY
+    subtype: seed_phrase
+    ark: [dlp_electrum_seed]
+    backlog: C-WALLET
+  - id: crypto.monero.seed
+    scope: ark_only
+    group: CRYPTO_KEY
+    subtype: seed_phrase
+    ark: [dlp_monero_seed]
+    backlog: C-WALLET
+  - id: crypto.cardano.signing_key
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_cardano_signing_key]
+    backlog: C-WALLET
   - id: credential.url_userinfo_token
     scope: ark_only
     group: SECRET_TOKEN

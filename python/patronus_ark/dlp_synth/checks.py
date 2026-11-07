@@ -11,9 +11,11 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 import re
 import zlib
+from pathlib import Path
 
 
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -87,6 +89,74 @@ def is_valid_btc_wif(value: str) -> bool:
     if len(payload) == 34 and payload[-1] != 0x01:
         return False
     return 0 < int.from_bytes(payload[1:33], "big") < SECP256K1_ORDER
+
+
+EXTENDED_PRIVATE_VERSIONS = {
+    "xprv": 0x0488ADE4,
+    "yprv": 0x049D7878,
+    "zprv": 0x04B2430C,
+    "tprv": 0x04358394,
+    "uprv": 0x044A4E28,
+    "vprv": 0x045F18BC,
+}
+
+
+def is_valid_extended_private_key(value: str) -> bool:
+    """BIP 32 / SLIP-0132 extended private key: 78 bytes under Base58Check, the version of
+    the prefix, zero parent fields at depth 0, 0x00 before a secp256k1 scalar."""
+    version = EXTENDED_PRIVATE_VERSIONS.get(value[:4])
+    payload = base58check_decode(value)
+    if version is None or payload is None or len(payload) != 78:
+        return False
+    if int.from_bytes(payload[:4], "big") != version or payload[45] != 0:
+        return False
+    if payload[4] == 0 and any(payload[5:13]):
+        return False
+    return 0 < int.from_bytes(payload[46:], "big") < SECP256K1_ORDER
+
+
+def is_valid_solana_keypair(value: str) -> bool:
+    """64 comma-separated bytes in brackets, at least 24 distinct."""
+    if not re.fullmatch(r"\[\s*(?:[0-9]{1,3}\s*,\s*){63}[0-9]{1,3}\s*\]", value):
+        return False
+    numbers = [int(number) for number in value.strip("[]").split(",")]
+    return all(number < 256 for number in numbers) and len(set(numbers)) >= 24
+
+
+SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp" / "rules" / "data"
+
+
+def _word_list(name: str) -> frozenset[str]:
+    return frozenset((SEED_WORD_LISTS / name).read_text(encoding="ascii").split())
+
+
+def is_valid_electrum_seed(value: str) -> bool:
+    """Electrum seed v2+: 12 BIP39 English words, HMAC-SHA512 under 'Seed version' with the
+    hex prefix of a seed type (01, 100, 101, 102)."""
+    words = value.split(" ")
+    if len(words) != 12 or not set(words) <= _word_list("bip39_english.txt"):
+        return False
+    version = hmac.new(b"Seed version", value.encode("ascii"), hashlib.sha512).hexdigest()
+    return version.startswith(("01", "100", "101", "102"))
+
+
+def is_valid_monero_seed(value: str) -> bool:
+    """Monero mnemonic: 25 words of the English list, the last the checksum word at CRC-32
+    of the 3-letter prefixes of the first 24 modulo 24."""
+    words = value.split(" ")
+    if len(words) != 25 or not set(words) <= _word_list("monero_english.txt"):
+        return False
+    index = zlib.crc32("".join(word[:3] for word in words[:24]).encode("ascii")) % 24
+    return words[24][:3] == words[index][:3]
+
+
+def is_valid_cardano_signing_key(value: str) -> bool:
+    """CIP-5 signing key: lower-case Bech32 under a secret-key prefix with 32 or 64 bytes,
+    96 bytes (key and chain code) under an ``_xsk`` prefix."""
+    decoded = bech32_decode(value)
+    if decoded is None or not value.islower() or not re.fullmatch(r"(?:(?:acct|addr|drep|policy|root|stake)_x?sk|ed25519e?_sk)", decoded[0]):
+        return False
+    return len(decoded[1]) == 96 if decoded[0].endswith("_xsk") else len(decoded[1]) in (32, 64)
 
 
 def is_valid_eth_private_key(value: str) -> bool:

@@ -5221,6 +5221,135 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_bip32_extended_private_key",
+    "de": "Erweiterter privater Schlüssel der Wallet: <<secret\u003a0>>",
+    "en": "WALLET_XPRV=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "bip32_xprv",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Erweiterte private Schlüssel beginnen mit xprv, im Testnetz mit tprv.",
+        "WALLET_XPRV=${WALLET_XPRV}"
+      ],
+      "en": [
+        "xprv: \"<your-extended-private-key>\"",
+        "Paste the account xpub, never the xprv, into the watch-only wallet."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_eth_keystore_ciphertext",
+    "de": "Keystore-Datei: {\"address\": \"5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d\", \"crypto\": {\"cipher\": \"aes-128-ctr\", \"ciphertext\": \"<<secret\u003a0>>\", \"kdf\": \"pbkdf2\", \"kdfparams\": {\"c\": 262144, \"dklen\": 32, \"prf\": \"hmac-sha256\", \"salt\": \"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\"}, \"mac\": \"517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2\"}, \"version\": 3}",
+    "en": "{\"address\": \"5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d\", \"crypto\": {\"cipher\": \"aes-128-ctr\", \"ciphertext\": \"<<secret\u003a0>>\", \"kdf\": \"pbkdf2\", \"kdfparams\": {\"c\": 262144, \"dklen\": 32, \"prf\": \"hmac-sha256\", \"salt\": \"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\"}, \"mac\": \"517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2\"}, \"version\": 3}",
+    "secrets": [
+      {
+        "gen": "eth_keystore_ciphertext",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Keystore-Datei: {\"address\": \"5d3c0f1e9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d\", \"crypto\": {\"cipher\": \"aes-128-ctr\", \"ciphertext\": \"<geschwärzt>\", \"kdf\": \"pbkdf2\", \"kdfparams\": {\"c\": 262144, \"dklen\": 32, \"prf\": \"hmac-sha256\", \"salt\": \"ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd\"}, \"mac\": \"517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2\"}, \"version\": 3}"
+      ],
+      "en": [
+        "{\"iv\": \"9c1e2f4a7b3d8e6f0a5c2b1d\", \"ciphertext\": \"c8d1f0e3a2b5c4d7e6f9a8b1c0d3e2f5a4b7c6d9e8f1a0b3c2d5e4f7a6b9c8d1\", \"tag\": \"4e1f2a3b5c6d7e8f9a0b1c2d3e4f5a6b\"}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_solana_keypair",
+    "de": "Privater Schlüssel des Signers: <<secret\u003a0>>",
+    "en": "SOLANA_KEYPAIR=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "solana_keypair_array",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Messwerte = [5,46,87,128,169,210,251,36,77,118,159,200,241,26,67,108,149,190,231,16,57,98,139,180,221,6,47,88,129,170,211,252,37,78,119,160,201,242,27,68,109,150,191,232,17,58,99,140,181,222,7,48,89,130,171,212,253,38,79,120,161,202,243,28]"
+      ],
+      "en": [
+        "const histogram = [5,46,87,128,169,210,251,36,77,118,159,200,241,26,67,108,149,190,231,16,57,98,139,180,221,6,47,88,129,170,211,252,37,78,119,160,201,242,27,68,109,150,191,232,17,58,99,140,181,222,7,48,89,130,171,212,253,38,79,120,161,202,243,28];",
+        "SOLANA_KEYPAIR=${SOLANA_KEYPAIR}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_electrum_seed",
+    "de": "Mein Electrum-Seed lautet: <<secret\u003a0>>",
+    "en": "ELECTRUM_SEED=\"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "electrum_seed_standard",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Electrum zeigt beim Anlegen der Wallet einen Seed aus zwölf Wörtern an."
+      ],
+      "en": [
+        "Electrum seed: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_monero_seed",
+    "de": "Wiederherstellungsphrase der Monero-Wallet:\n<<secret\u003a0>>",
+    "en": "Monero seed: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "monero_seed",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Die Monero-Wallet zeigt den Seed aus 25 Wörtern nur einmal an."
+      ],
+      "en": [
+        "monero:\n  seed: \"<your 25 seed words>\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_cardano_signing_key",
+    "de": "Signierschlüssel der Cardano-Wallet: <<secret\u003a0>>",
+    "en": "CARDANO_PAYMENT_SKEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "cardano_ed25519_sk",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Cardano-Signierschlüssel beginnen mit addr_xsk1 oder ed25519_sk1."
+      ],
+      "en": [
+        "CARDANO_PAYMENT_SKEY=${CARDANO_PAYMENT_SKEY}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_private_key_block",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",

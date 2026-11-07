@@ -376,6 +376,21 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   mit Platzhalter (`ntn_<…>`) sind auch für generische Regeln kein Secret. Offen bleiben Figma
   (`figd_`, ohne Generator), Asana, monday.com, HubSpot, Salesforce, Zendesk und Intercom (nur
   Kontextformate; die Entities bleiben `baseline_only`).
+  Seit C-WALLET (C02 + C03) melden drei Regeln Wallet-Schlüssel (`CRYPTO_KEY`, `private_key`):
+  `dlp_bip32_extended_private_key` (BIP 32 / SLIP-0132 `xprv`/`yprv`/`zprv`, Testnetz
+  `tprv`/`uprv`/`vprv` mit Schweregrad `test`; Base58Check über 78 Bytes mit den Versionsbytes des
+  Präfixes), `dlp_eth_keystore_ciphertext` (`crypto.ciphertext` eines Keystore v3 nur neben `kdf`
+  und `mac`) und `dlp_solana_keypair` (64 Bytes als JSON-Array nur nach einem Schlüsselbegriff).
+  `xpub`/`tpub`, öffentliche Keystore-Felder und Zahlen-Arrays ohne Schlüsselkontext bleiben
+  stumm. `dlp_electrum_seed` (`CRYPTO_KEY`, `seed_phrase`) meldet Electrum-Seeds: 12 Wörter der
+  BIP39-Wortliste (Englisch), deren HMAC-SHA512 unter `Seed version` mit dem Präfix eines Seed-Typs
+  beginnt (`01`, `100`, `101`, `102`), nur als ganze Wortfolge und nach einem Seed-Begriff auf der
+  Zeile oder der Zeile davor. BIP39-Mnemonics ohne dieses Präfix bleiben C01 überlassen.
+  `dlp_monero_seed` (`seed_phrase`) meldet die Monero-Mnemonic des privaten Spend-Keys (24 Wörter
+  der Monero-Wortliste und das CRC-32-Prüfwort, auch über Zeilenumbrüche) unter demselben
+  Seed-Kontext; `dlp_cardano_signing_key` meldet CIP-5-Signierschlüssel (`…_sk1`, `…_xsk1`) nach
+  Bech32-Prüfsumme und der Schlüssellänge des Präfixes, Verifikationsschlüssel (`…_vk1`) bleiben
+  stumm.
   Seit G-PROSE (G06) melden `dlp_prose_password` (Untertyp `password`) und `dlp_prose_secret`
   (`generic_secret`, generische Stufe) einen Wert, den Chats, Tickets und Mails nach dem
   Credential-Nomen übergeben: nach einem `:` auf der Zeile des Nomens oder der nächsten, am

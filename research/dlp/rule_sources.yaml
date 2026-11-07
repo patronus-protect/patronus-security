@@ -432,6 +432,30 @@ rules:
     provider: bitcoin
     source_ref: https://en.bitcoin.it/wiki/Wallet_import_format
     format: "Base58Check WIF: version byte 0x80 (mainnet) or 0xef (testnet/signet/regtest, severity test), 32-byte secp256k1 scalar, 0x01 flag for compressed keys; 51 characters starting with 5/9 or 52 starting with K/L/c (F02)"
+  dlp_bip32_extended_private_key:
+    provider: bitcoin
+    source_ref: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format
+    format: "Base58Check over 78 bytes: 4 version bytes per prefix (BIP 32 xprv 0488ade4 and tprv 04358394; SLIP-0132 https://github.com/satoshilabs/slips/blob/master/slip-0132.md yprv 049d7878, zprv 04b2430c, uprv 044a4e28, vprv 045f18bc), depth, parent fingerprint and child number (zero at depth 0), 32-byte chain code, 0x00 and a secp256k1 scalar; 111 characters; testnet prefixes tprv/uprv/vprv have severity test (C-WALLET)"
+  dlp_eth_keystore_ciphertext:
+    provider: ethereum
+    source_ref: https://ethereum.org/en/developers/docs/data-structures-and-encoding/web3-secret-storage/
+    format: "Web3 Secret Storage v3 keystore: crypto.ciphertext (AES-128-CTR of the 32-byte key, 64 hex digits) reported only next to kdf scrypt/pbkdf2 and a 32-byte mac of the same keystore (C-WALLET)"
+  dlp_solana_keypair:
+    provider: solana
+    source_ref: https://solana.com/docs/core/accounts#keypair
+    format: "Solana CLI keypair file (solana-keygen, id.json; https://docs.anza.xyz/cli/wallets/file-system): JSON array of 64 bytes (ed25519 seed and public key), reported only after a key term (keypair, secret/private key, signer, id.json) (C-WALLET)"
+  dlp_electrum_seed:
+    provider: bitcoin
+    source_ref: https://electrum.readthedocs.io/en/latest/seedphrase.html
+    format: "Electrum seed (version 2.0 and later; electrum/mnemonic.py is_new_seed): 12 words of the BIP39 English word list (https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt) whose HMAC-SHA512 under the key 'Seed version' starts with the hex prefix of a seed type (01 standard, 100 segwit, 101 2FA, 102 2FA segwit); reported only after a seed term (electrum, monero, seed, mnemonic, recover, Wiederherstellung) on the line or the line before (C-WALLET)"
+  dlp_monero_seed:
+    provider: monero
+    source_ref: https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp
+    format: "Monero mnemonic seed (the text form of the private spend key): 24 words of the English word list (src/mnemonics/english.h, 1626 words, unique 3-letter prefixes) and a checksum word, the word at CRC-32 of the concatenated 3-letter prefixes modulo 24; also over line breaks; reported only after a seed term (monero, seed, mnemonic, recover, Wiederherstellung) on the line or the line before (C-WALLET)"
+  dlp_cardano_signing_key:
+    provider: cardano
+    source_ref: https://cips.cardano.org/cip/CIP-0005
+    format: "CIP-5 Bech32 signing key: secret-key prefixes acct/addr/drep/policy/root/stake _sk or _xsk and ed25519_sk/ed25519e_sk, Bech32 (BIP 173) checksum, zero padding bits, 32 or 64 bytes (Ed25519 or extended key) and 96 bytes for _xsk (extended key and chain code); verification keys (_vk, _xvk) are public (C-WALLET)"
   dlp_private_key_block:
     source_ref: gitleaks:private-key
     format: "PEM armor BEGIN/END … PRIVATE KEY with body"
