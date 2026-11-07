@@ -147,6 +147,17 @@ fn is_electrum_seed(value: &str) -> bool {
     }
 }
 
+/// Seed terms (DE/EN) before a word-list seed, the prefilter keywords of the
+/// seed rules and the term alternation of their patterns.
+const SEED_TERMS: &[&str] = &[
+    "electrum",
+    "monero",
+    "seed",
+    "mnemonic",
+    "recover",
+    "wiederherstellung",
+];
+
 /// The Monero English word list (1626 sorted words with unique 3-letter
 /// prefixes), `src/mnemonics/english.h`.
 static MONERO_ENGLISH: LazyLock<Vec<&'static str>> =
@@ -167,20 +178,6 @@ fn is_monero_seed(value: &str) -> bool {
     let prefixes: String = words[..24].iter().map(|word| &word[..3]).collect();
     let index = crc32(prefixes.as_bytes()) as usize % 24;
     words[24][..3] == words[index][..3]
-}
-
-/// A seed term (`electrum`, `monero`, `seed`, `mnemonic`, recover/recovery,
-/// Wiederherstellungsphrase) on the line of the seed or the line before.
-fn has_seed_context(text: &str, range: Range<usize>) -> bool {
-    static SEED_TERM: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)electrum|monero|seed|mnemonic|recover|wiederherstellung")
-            .expect("valid regex")
-    });
-    let line_start = text[..range.start].rfind('\n').map_or(0, |index| index + 1);
-    let start = text[..line_start.saturating_sub(1)]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
-    SEED_TERM.is_match(&text.as_bytes()[start..range.start])
 }
 
 /// C-WALLET: a Cardano signing key in the Bech32 form of CIP-5: Bech32 (not
@@ -312,8 +309,10 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_electrum_seed",
-        // Exactly 12 lowercase words, not inside a longer run of words.
-        pattern: r"(?m)(?:^|[^A-Za-z \t])[ \t]*((?:[a-z]{3,8}[ \t]+){11}[a-z]{3,8})[ \t]*(?:$|[^A-Za-z \t])",
+        // A seed term, then at most 80 characters on its line and exactly 12
+        // lowercase words after punctuation or at the start of the next line,
+        // not inside a longer run of words.
+        pattern: r"(?m)(?i:electrum|monero|seed|mnemonic|recover|wiederherstellung)[^\n]{0,80}?(?:[^A-Za-z \t\r\n]|\r?\n)[ \t]*((?:[a-z]{3,8}[ \t]+){11}[a-z]{3,8})[ \t]*(?:$|[^A-Za-z \t])",
         entity_group: "CRYPTO_KEY",
         validator: Some(is_electrum_seed),
         span_group: Some(1),
@@ -321,17 +320,16 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Checksum,
             "https://electrum.readthedocs.io/en/latest/seedphrase.html",
-            &["electrum", "seed", "mnemonic", "recover", "wiederherstellung"],
+            SEED_TERMS,
         )
         .with_provider("bitcoin")
-        .with_context_gate(has_seed_context)
         .with_subtype(SecretSubtype::SeedPhrase),
     },
     DlpPattern {
         name: "dlp_monero_seed",
-        // Exactly 25 lowercase words, also over line breaks (monero-wallet-cli
-        // prints the seed on several lines), not inside a longer run of words.
-        pattern: r"(?m)(?:^|[^A-Za-z \t\n])[ \t]*((?:[a-z]{4,12}(?:[ \t]+|[ \t]*\r?\n[ \t]*)){24}[a-z]{4,12})[ \t]*(?:$|[^A-Za-z \t])",
+        // The seed term and run of `dlp_electrum_seed` with 25 words, also
+        // over line breaks (monero-wallet-cli prints the seed on several lines).
+        pattern: r"(?m)(?i:electrum|monero|seed|mnemonic|recover|wiederherstellung)[^\n]{0,80}?(?:[^A-Za-z \t\r\n]|\r?\n)[ \t]*((?:[a-z]{4,12}(?:[ \t]+|[ \t]*\r?\n[ \t]*)){24}[a-z]{4,12})[ \t]*(?:$|[^A-Za-z \t])",
         entity_group: "CRYPTO_KEY",
         validator: Some(is_monero_seed),
         span_group: Some(1),
@@ -339,10 +337,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Checksum,
             "https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp",
-            &["monero", "seed", "mnemonic", "recover", "wiederherstellung"],
+            SEED_TERMS,
         )
         .with_provider("monero")
-        .with_context_gate(has_seed_context)
         .with_subtype(SecretSubtype::SeedPhrase),
     },
     DlpPattern {
