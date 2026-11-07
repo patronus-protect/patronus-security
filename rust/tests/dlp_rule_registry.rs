@@ -178,6 +178,7 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_database_dump_header",
     "dlp_stacktrace_block",
     "dlp_structured_system_log",
+    "dlp_document_legal_privileged",
 ];
 
 #[test]

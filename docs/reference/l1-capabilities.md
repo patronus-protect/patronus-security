@@ -11,8 +11,8 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 107 | 23 |
-| Regex rules | 199 | 160 (+5 relationship rules) |
+| Result labels (entity groups) | 107 | 24 |
+| Regex rules | 199 | 161 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 27 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
@@ -335,7 +335,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `dlp.content.sql` | content_class | off | 2 | 1 | 10 documents | ARK 90.9 (opt-in profile) |
 | `dlp.content.database_dump` | content_class | off | 2 | 1 | 0 | no gold |
 | `dlp.content.system_log` | content_class | off | 2 | 1 | 456 documents | ARK 0.0 (opt-in profile) |
-| `dlp.document.legal_privileged` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
+| `dlp.document.legal_privileged` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 | `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 
@@ -425,6 +425,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.source_code` | shared | `dlp.content.source_code` | `dlp_source_code_fence`, `dlp_source_code_statement`, `dlp_source_code_python_rust_assignment`, `dlp_source_code_declaration`, `dlp_source_code_import` | format | off | – |
 | `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
 | `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
+| `document.legal_privileged` | shared | `dlp.document.legal_privileged` | `dlp_document_legal_privileged` | format | off | – |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | `dlp_slack_app_token` | format | on | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
 | `saas.atlassian.api_token` | shared | `API_KEY` | `dlp_atlassian_api_token`, `dlp_atlassian_legacy_api_token` | format | on | gitleaks: `atlassian-api-token`; TruffleHog: `Atlassian`, `JiraToken` |
 | `saas.notion.api_token` | shared | `API_KEY` | `dlp_notion_api_token` | format | on | gitleaks: `notion-api-token` |
@@ -547,7 +548,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `kubernetes-secret-yaml` |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | detect-secrets: `Base64HighEntropyString`, `HexHighEntropyString` |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `pkcs12-file` |
-| `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | – | – | – | – |
 | `document.hr` | baseline_only | `dlp.document.hr` | – | – | – | – |
 | `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – | – |
 | `action.sensitive_material` | out_of_scope | – | `dlp_sensitive_material` | – | on | – |
@@ -562,7 +562,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 86 shared, 39 ARK only, 78 baseline only, 11 out of scope.
+Entities: 87 shared, 39 ARK only, 77 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -648,6 +648,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.source_code` | shared | `dlp.content.source_code` | 214 documents | ARK 99.1 (opt-in profile) | ARK 99.5 (opt-in profile) |
 | `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
 | `content.system_log` | shared | `dlp.content.system_log` | 456 documents | ARK 0.0 (opt-in profile) | ARK 0.0 (opt-in profile) |
+| `document.legal_privileged` | shared | `dlp.document.legal_privileged` | – | – | – |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `saas.atlassian.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `saas.notion.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
@@ -770,7 +771,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
-| `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | planned / not implemented | planned / not implemented | planned / not implemented |
 | `document.hr` | baseline_only | `dlp.document.hr` | planned / not implemented | planned / not implemented | planned / not implemented |
 | `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | planned / not implemented | planned / not implemented | planned / not implemented |
 

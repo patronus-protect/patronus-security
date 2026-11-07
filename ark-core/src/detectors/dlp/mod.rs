@@ -2,6 +2,7 @@
 mod aws_context;
 mod boundary;
 mod config_keys;
+mod content_class;
 pub mod context;
 pub mod destructive_operation;
 #[allow(clippy::module_inception)]

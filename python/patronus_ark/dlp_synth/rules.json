@@ -721,7 +721,8 @@
     "dlp_sql_multiline_statement": "content class, E04 carrier templates",
     "dlp_database_dump_header": "content class, E04 carrier templates",
     "dlp_stacktrace_block": "content class, E04 carrier templates",
-    "dlp_structured_system_log": "content class, E04 carrier templates"
+    "dlp_structured_system_log": "content class, E04 carrier templates",
+    "dlp_document_legal_privileged": "document class (M01), marker phrase, no secret value"
   },
   "baseline_entities": {
     "comm.webhook_url": {"generators": ["slack_webhook_url", "teams_webhook_url"], "lookalike": ["slack_webhook_url_short"]},

@@ -558,6 +558,12 @@ Review-Pausen.
 - **Defaults**: Neue Secret-Regeln (Gruppen `API_KEY` … `SECRET_TOKEN`) sind sofort aktiv. Neue
   Content- und Dokumentklassen sind standardmäßig aus. Sie werden erst über eine eigene Aufgabe mit
   `needs_decision` eingeschaltet.
+- **Dokumentklassen (M01)** laufen auf der Content-Class-Engine
+  (`ark-core/src/detectors/dlp/content_class.rs`): Die Regex der Klasse trifft einen starken Anker
+  (Marker), der Treffer ist Evidenzspan und Dokumentlabel. Das Label gilt nur, wenn die Anker im
+  Fenster um den Marker die Mindestdichte erreichen (stark 3, je mittlerer Anker 2, je struktureller
+  Anker 1, je Gegenkontext −3; mindestens ein mittlerer Anker). Neue Klassen (M-MARK, M-LEGAL,
+  M-CORP, M-HRSEC) definieren nur Marker-Regex, Ankerlisten und `Density`.
 - Montags läuft `TRIAGE` wie bei PII.
 
 ## Abgrenzung

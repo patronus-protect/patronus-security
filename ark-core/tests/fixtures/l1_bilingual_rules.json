@@ -6091,6 +6091,13 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_document_legal_privileged",
+    "de": "Betreff: Klageentwurf\n\nVertrauliche Anwaltskorrespondenz\n\nSehr geehrte Frau Weber, anbei der Schriftsatz an das Landgericht.",
+    "en": "Subject: Draft complaint\n\nPRIVILEGED AND CONFIDENTIAL\n\nDear Ms. Weber, attached is our counsel's brief for the court.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_azure_storage_account_key",
     "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
     "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",
