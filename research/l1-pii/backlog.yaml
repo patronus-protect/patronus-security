@@ -1063,6 +1063,7 @@ tasks:
       Presidio variants in the raw view. README milestone section, snapshot schema and
       docs/reference/l1-capabilities.md generator updated; tests
   - id: Q-RAW
+    status: done
     title: "Close the raw-view gaps to Presidio default and tuned on neutral and presidio_favored (EN structured ids and DE/EU rows)"
     type: recall-fix
     deps: [M-RAW]

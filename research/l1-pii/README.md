@@ -38,7 +38,8 @@ nicht meldet; blanke Formen sind seit D-BARE als Opt-in-Regeln schaltbar statt w
   `run_ark.py --pii-mode balanced --gates …`). Ein Meilenstein ist erfüllt, wenn `balanced` **oder**
   `balanced-bare` gegen beide Profile hält; `strict` und `recall` werden berichtet. Der Bericht nennt,
   welche Engine trägt (`holding`), damit eine Aussage „mit Bare-Profil“ als solche erkennbar bleibt.
-- **Gate:** Die Zeile `milestones <split> …` rechnet `balanced` auf rohem Gold gegen beide Profile;
+- **Gate:** Die Zeilen `milestones <split> (balanced, …)` und `milestones <split> (balanced-bare, …)`
+  rechnen je Engine auf rohem Gold gegen beide Profile;
   Regressionen, Hard-Negative-Regel und „keine Entität verliert > 0,5 pp“ rechnen wie bisher roh.
 - **Snapshot** (`research/scoreboard/*.json`, Schema 1.2): `pii.milestone_view` (`raw`, bei älteren
   Messungen `attainable`) und `pii.baselines` (die Presidio-Engines des Urteils) ersetzen
@@ -88,6 +89,43 @@ unerreichbar.
 - **Validatoren werden nicht gelockert**, die Korpora nicht bearbeitet. Nicht erfasst werden FP auf
   nicht annotierten echten Werten (neutrale E-Mail, 259 Adressen): sie bleiben im Gold-Lücken-Bericht
   (T16) und in der Untergrenze sichtbar.
+
+## Rohsicht nach M-RAW: Stand und verbleibende Lücken (Q-RAW)
+
+Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `default` und `tuned`).
+
+- **Familien-F1:** `neutral` ARK `balanced` 70,0 (mit Bare-Profil 67,8) gegen Presidio default 18,0
+  und tuned 40,5; `presidio_favored` 78,7 (mit Bare-Profil 82,7) gegen 63,6 und 77,6. HN-FP von ARK 0.
+- **M2 auf Dev erfüllt** (roh, `balanced-bare`; `scoreboard.py m2`, Macro-F1 auf deutschen Zeilen über
+  die `shared`- und `ark_only`-IDs, 11 in `presidio_favored`, 14 in `neutral`): `presidio_favored`
+  86,8 → **89,9** gegen tuned 87,0 und default 6,6, `neutral` 62,5 gegen Ziel 36,2 bzw. 39,2. Für den
+  Holdout gilt die Aussage erst, wenn die Gate-Zeile `milestones holdout (balanced-bare, …)` sie
+  belegt; das Gate druckt `balanced-bare` seit der Review-Runde von Q-RAW neben `balanced`. Den Rückstand machte ein FP der Opt-in-Regel
+  `pii_steuer_id_de_bare` aus: `11112345678` hat eine gültige Prüfziffer, aber eine Ziffer viermal,
+  was keine vergebene Steuer-ID hat. Die Regel prüft jetzt `validators::steuer_id_bare` (Prüfziffer,
+  keine Ziffer öfter als dreimal, keine dreimal hintereinander); `98765432106` (zehn verschiedene
+  Ziffern) bleibt Treffer. Steuer-ID 66,7 → 100. `balanced` ohne Profil hält M2 nur gegen default
+  (63,2 gegen tuned 87,0). Standard-Ausgabe (`strict`, `balanced`) bitgleich.
+- **M1 nicht erfüllt.** Verbleibende rohe Lücken je ID (`presidio_favored`, EN; ARK gegen Presidio):
+  - gegen default (`balanced` und `balanced-bare` gleich): Pass 40,0 gegen 71,4 (blanke Nummern
+    ohne Begriff, `B3097651`, `A12803456`); Kontonummer 57,1 gegen 66,7 (blanke ABA-Routingnummern
+    `121000358`, `121042882`, blankes `945456787654`); IP 86,1 gegen 100 (D-IP, T28); US-SSN 75,0
+    bzw. 80,0 gegen 100 (B-SSN: `987-65-4322`, `219-09-9999`, `078-051121`).
+  - gegen tuned, `balanced`: ACN 0 gegen 100, CA SIN 57,1 gegen 88,9, Aadhaar 85,7 gegen 100, GSTIN
+    0 gegen 100, IN-PAN 50,0 gegen 80,0, Voter-ID 0 gegen 50,0, IP 86,1 gegen 96,2, Kennzeichen 47,6
+    gegen 81,5, NRIC/FIN 50,0 gegen 80,0, NINO 66,7 gegen 100, NPI 88,9 gegen 100, US-SSN 75,0
+    gegen 88,9. Mit Bare-Profil bleiben GSTIN (Prüfziffer ungültig), IP, Kennzeichen 72,0 (UK-Präfix-
+    und Kurzformen `A123 BCD`, `K1 ABC`, IN `KA53ME3456`), NRIC/FIN (Prüfziffer ungültig), NINO
+    (Gold-Span mit Leerzeichen, T27) und US-SSN 80,0 gegen 88,9; auf `neutral` kippt US-SSN durch
+    `pii_ssn_us_bare` auf 46,9 gegen 79,3 (blanke Neunziffern in Gretel).
+  - Jede dieser Lücken liegt unter einer festgehaltenen Entscheidung (`known_gaps`) oder an Gold
+    mit ungültiger Prüfziffer; schließen ließe sie sich nur durch gelockerte Validatoren oder
+    revidierte Entscheidungen, die nicht Teil von Q-RAW sind.
+- **Abnahme von Q-RAW offen.** Die Abnahme verlangt M1 und M2 in der Rohsicht; M1 hält mit keiner
+  Engine, M2 nur auf Dev mit `balanced-bare`. Q-RAW ist erst erfüllt, wenn das Gate auf dem Head
+  `MET` für M1 und M2 druckt (je Split eine Zeile `milestones <split> (balanced, …)` und
+  `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
+  (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
 
 ## Untergrenze `presidio_favored` für die Länder-IDs seit W44 (T33)
 

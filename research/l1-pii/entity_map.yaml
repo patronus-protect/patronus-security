@@ -734,6 +734,7 @@ checksums:
     iban: {algorithm: ISO 7064 MOD 97-10}       # plus country and exact length from the SWIFT IBAN registry (B-IBAN)
     steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
     steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)
+    steuer_id_bare: {algorithm: "ISO 7064 MOD 11,10"}   # plus Grenzen der BZSt-Ziffernverteilung (Q-RAW, blanke Opt-in-Regel)
     ip_address: null
     email_domain: null                  # B-EMAIL, Top-Level-Domain laut IANA oder Platzhalter (T01)
     unanchored_phone: null

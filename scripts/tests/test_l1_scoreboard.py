@@ -708,7 +708,7 @@ def test_gold_checks_cover_every_checksum_validator():
     validators = MODULE.gold_checks(EMAP).validators
     assert validators["pii.iban"] == ("iban",)
     assert validators["pii.credit_card.pan"] == ("payment_card",)
-    assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
+    assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_bare", "steuer_id_issued")
     assert validators["pii.de.vat_id"] == ("de_vat_id",)
     assert validators["pii.it.vat_code"] == ("it_vat_id",)
     assert validators["pii.kr.rrn"] == ("kr_rrn",)
@@ -759,6 +759,9 @@ def test_gold_checks_leave_out_ids_with_a_rule_without_checksum(monkeypatch):
      ["86095742718", "06095742719", "8609574271", "860957427190"]),
     ("steuer_id_issued", ["86095742719", "86 095 742 719"],
      ["86095742718", "12345678903", "47110815008", "86555742194", "11111111111"]),
+    # Q-RAW: the bare rule bounds the distribution only; ten distinct digits pass.
+    ("steuer_id_bare", ["86095742719", "98765432106", "12345678903"],
+     ["86095742718", "11112345678", "86555742194", "11111111111"]),
     # B01: VAT IDs per country (rust/tests/pii_vat_id.rs).
     ("de_vat_id", ["DE136695976", "DE 136 695 976", "DE.136.695.976", "DE123456788"],
      ["DE136695977", "DE987654321", "DE100000001", "DE036695976", "DE13669597", "ATU13585627"]),
@@ -1063,13 +1066,15 @@ def test_discover_without_frozen_data_fails(tmp_path):
 FAKE_RUN_ARK = """\
 import argparse, json
 # Fake run_ark.py: predicts every gold entity except those whose id is in DROP (a list for every
-# PII mode or a mapping mode -> list) and records the mode like run_ark.py.
+# PII mode or a mapping engine -> list, balanced with --gates being balanced-bare) and records the
+# mode and the gates' rules like run_ark.py.
 DROP = {drop!r}
 p = argparse.ArgumentParser()
 p.add_argument("--input"); p.add_argument("--output"); p.add_argument("--meta")
-p.add_argument("--pii-mode", default="strict")
+p.add_argument("--pii-mode", default="strict"); p.add_argument("--gates")
 a = p.parse_args()
-drop = DROP.get(a.pii_mode, []) if isinstance(DROP, dict) else DROP
+engine_name = a.pii_mode + "-bare" if a.gates else a.pii_mode
+drop = DROP.get(engine_name, []) if isinstance(DROP, dict) else DROP
 with open(a.input) as src, open(a.output, "w") as out:
     for line in src:
         row = json.loads(line)
@@ -1079,6 +1084,8 @@ with open(a.input) as src, open(a.output, "w") as out:
         ]
         out.write(json.dumps({{"id": row["id"], "language": row["language"], "evidence_spans": spans}}) + "\\n")
 engine = {{}} if a.pii_mode == "strict" else {{"pii_mode": a.pii_mode}}
+if a.gates:
+    engine["rules"] = json.load(open(a.gates))["rules"]
 open(a.meta, "w").write(json.dumps({{"engine": engine}}))
 """
 
@@ -1287,10 +1294,19 @@ def test_run_predictions_passes_the_pii_mode(tmp_path):
     script.write_text(FAKE_RUN_ARK.format(drop={"balanced": ["a"]}))
     write_jsonl(tmp_path / "g.jsonl", [gold("a", [("pii.email", 0, 10)])])
     build = MODULE.ArkBuild(sys.executable, script, {}, None)
-    for mode, spans in (("strict", 1), ("balanced", 0)):
+    for mode, spans in (("strict", 1), ("balanced", 0), ("balanced-bare", 1)):
         output = tmp_path / f"{mode}.jsonl"
         MODULE.run_predictions(build, tmp_path / "g.jsonl", output, mode)
         assert len(MODULE.read_jsonl(output)[0]["evidence_spans"]) == spans
+
+
+def test_run_predictions_rejects_a_bare_run_without_the_rules(tmp_path):
+    script = tmp_path / "run_ark.py"
+    script.write_text(FAKE_RUN_ARK.format(drop=[]).replace("if a.gates:", "if False:"))
+    write_jsonl(tmp_path / "g.jsonl", [gold("a", [("pii.email", 0, 10)])])
+    build = MODULE.ArkBuild(sys.executable, script, {}, None)
+    with pytest.raises(MODULE.ScoreboardError, match="balanced-bare"):
+        MODULE.run_predictions(build, tmp_path / "g.jsonl", tmp_path / "out.jsonl", "balanced-bare")
 
 
 def test_gate_improvement_passes_and_base_is_cached_per_source(repo, data, tmp_path):
@@ -1346,13 +1362,16 @@ def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_pat
     lines, regressed, _ = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", presidio)
     assert not regressed and lines[-1] == "RESULT: PASS"
     assert presidio.runs == [("dev", "default"), ("dev", "tuned"), ("holdout", "default"), ("holdout", "tuned")]
-    prefix = "milestones {} (balanced, raw gold, vs Presidio default and tuned): "
+    prefix = "milestones {} ({}, raw gold, vs Presidio default and tuned): "
     # Holdout: the neutral e-mail beats both profiles (100 vs 88.9); no presidio_favored gold, so M1 is not met.
-    assert lines[-2] == prefix.format("holdout") + (
-        "M1 NOT MET (vs default: neutral 1/1, presidio_favored 0/0; vs tuned: neutral 1/1, presidio_favored 0/0 "
-        "shared ids) | M2 NOT MET (macro-F1 vs default: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0; "
-        "vs tuned: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
-    assert lines[-3].startswith(prefix.format("dev") + "M1 NOT MET (vs default: neutral 0/0, presidio_favored 0/0;")
+    # One line per milestone engine (M-RAW): balanced and balanced-bare (balanced with the bare profile).
+    for line, engine in ((lines[-3], "balanced"), (lines[-2], "balanced-bare")):
+        assert line == prefix.format("holdout", engine) + (
+            "M1 NOT MET (vs default: neutral 1/1, presidio_favored 0/0; vs tuned: neutral 1/1, presidio_favored 0/0 "
+            "shared ids) | M2 NOT MET (macro-F1 vs default: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0; "
+            "vs tuned: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
+    for line, engine in ((lines[-5], "balanced"), (lines[-4], "balanced-bare")):
+        assert line.startswith(prefix.format("dev", engine) + "M1 NOT MET (vs default: neutral 0/0, presidio_favored 0/0;")
     # Aggregates only: no holdout row id reaches stdout.
     assert not any("h0" in line or "h1" in line for line in lines)
     # Presidio predictions are cached per runner, profile and input; a second gate does not run Presidio.
@@ -1360,8 +1379,27 @@ def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_pat
         cached = tmp_path / "cache" / "scoreboard" / "predictions" / MODULE.presidio_key(profile) / profile
         assert len(list(cached.glob("*.jsonl"))) == 2
     again = FakePresidio(drop=["h0", "h1"])
-    assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-2] == lines[-2]
+    assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-5:] == lines[-5:]
     assert again.runs == []
+
+
+def test_gate_milestones_judge_each_engine_on_its_own(repo, data, tmp_path):
+    # The head drops the holdout e-mails in balanced only: balanced loses to both profiles, balanced-bare holds.
+    commit_files(repo, {"scripts/l1_presidio/run_ark.py": FAKE_RUN_ARK.format(drop={"balanced": ["h0", "h1"]})},
+                 "balanced drops")
+    base = run_git(repo, "rev-parse", "HEAD")
+    frozen_split(data["holdout"], {"c.jsonl": [gold(f"h{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en")
+                                               for i in range(10)]})
+    builds = Builds(repo, tmp_path)
+    lines, _, _ = builds.gate(base, data, tmp_path / "cache", FakePresidio())
+    balanced, bare = lines[-3], lines[-2]
+    assert balanced.startswith("milestones holdout (balanced, raw gold") and "neutral 0/1" in balanced
+    assert bare.startswith("milestones holdout (balanced-bare, raw gold") and "neutral 1/1" in bare
+    # The bare predictions are cached next to balanced, keyed by the profile's content.
+    head = MODULE.source_key(repo, "HEAD")
+    directories = sorted(p.name for p in (tmp_path / "cache" / "scoreboard" / "predictions" / head).iterdir()
+                         if p.is_dir())
+    assert directories == ["balanced", "balanced-bare-" + MODULE.sha256_file(MODULE.BARE_GATES)[:16]]
 
 
 def test_gate_milestone_failure_names_only_the_error_and_passes(repo, data, tmp_path):

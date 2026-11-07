@@ -42,7 +42,7 @@ def test_bare_pii_rules_inherit_their_base_and_are_catalogued_opt_in():
         base["entity_group"], base["validator"], base["strength"],
     )
     assert (bare["base_score"], bare["requires_context"], base["requires_context"]) == (15, False, True)
-    assert rules["pii_steuer_id_de_bare"]["validator"] == "steuer_id"
+    assert rules["pii_steuer_id_de_bare"]["validator"] == "steuer_id_bare"
 
     page = GENERATE_DOCS.generate_l1_rule_catalog_doc()
     assert "| `pii_sin_ca_bare` | `CA_SIN` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |" in page
