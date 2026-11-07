@@ -168,8 +168,7 @@ enum Segment {
     SeedWords(SeedWords),
 }
 
-const BIP39_ENGLISH: &str =
-    include_str!("../../ark-core/src/detectors/dlp/rules/data/bip39_english.txt");
+const BIP39_ENGLISH: &str = include_str!("../../ark-core/src/detectors/dlp/bip39/english.txt");
 const MONERO_ENGLISH: &str =
     include_str!("../../ark-core/src/detectors/dlp/rules/data/monero_english.txt");
 
