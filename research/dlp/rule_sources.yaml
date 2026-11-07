@@ -142,6 +142,35 @@ rules:
     provider: ibm
     source_ref: https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/ibm_cloud_iam.py
     format: "IBM Cloud IAM API key: 44 characters [A-Za-z0-9_-] with both letter cases under a key with ibm and a credential noun right before the separator (detect-secrets IbmCloudIamDetector, tightened to an IBM key; P03)"
+  dlp_jwk_private_key:
+    source_ref: https://datatracker.ietf.org/doc/html/rfc7517
+    format: "JSON Web Key with private key material: a flat JSON object with kty RSA, EC or OKP and the private member d, or kty oct and the symmetric key k, as base64url of at least 16 bytes (RFC 7517, RFC 7518 section 6, RFC 8037); public JWKs and the RFC 7517/8037 example keys are no match (C-KEYS)"
+  dlp_wireguard_private_key:
+    provider: wireguard
+    source_ref: https://www.wireguard.com/quickstart/
+    format: "WireGuard PrivateKey or PresharedKey (wg genkey, wg genpsk): standard base64 of 32 bytes with padding (44 characters) under a private or preshared key name; PublicKey is no match (C-KEYS)"
+  dlp_openvpn_static_key:
+    provider: openvpn
+    source_ref: https://openvpn.net/community-resources/reference-manual-for-openvpn-2-6/
+    format: "OpenVPN static key (openvpn --genkey secret; inline in <tls-auth>, <tls-crypt> or <secret>): the V1 header, 16 lines of 32 hex digits (2048 bits) and the footer (C-KEYS)"
+  dlp_ipsec_psk:
+    source_ref: https://docs.strongswan.org/docs/latest/config/ipsecSecrets.html
+    format: "Pre-shared key of an ipsec.secrets entry: `selectors : PSK \"secret\"`, a quoted string of 8 to 256 characters without whitespace or template characters (context rule; C-KEYS)"
+  dlp_symmetric_key:
+    source_ref: https://docs.openssl.org/master/man1/openssl-rand/
+    format: "Symmetric key in config or code: 16, 24 or 32 bytes as hex (openssl rand -hex), base64 or URL-safe base64 (Fernet) or a 0x byte array under an AES, HMAC, encryption, cipher, crypto, signing or Fernet key name; NIST SP 800-38A and counting (FIPS-197) test keys are no match (context rule; C-KEYS)"
+  dlp_laravel_app_key:
+    provider: laravel
+    source_ref: https://laravel.com/docs/encryption
+    format: "Laravel APP_KEY (php artisan key:generate): base64: and the standard base64 of a 16- or 32-byte AES key (C-KEYS)"
+  dlp_django_secret_key:
+    provider: django
+    source_ref: https://docs.djangoproject.com/en/stable/ref/settings/#secret-key
+    format: "Django SECRET_KEY (get_random_secret_key): 50 characters of a-z, 0-9 and !@#$%^&*(-_=+) with a letter, a digit and a symbol under SECRET_KEY or DJANGO_SECRET_KEY; startproject's django-insecure- keys have severity test (C-KEYS)"
+  dlp_rails_secret_key_base:
+    provider: rails
+    source_ref: https://guides.rubyonrails.org/security.html#custom-credentials
+    format: "Rails secret_key_base (bin/rails secret): 128 lower-case hex digits (64 bytes) under secret_key_base or SECRET_KEY_BASE (C-KEYS)"
   dlp_atlassian_api_token:
     provider: atlassian
     source_ref: gitleaks:atlassian-api-token

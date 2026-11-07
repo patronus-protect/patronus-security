@@ -476,6 +476,38 @@ def uuid_upper(value):
     return uuid_shaped(value.lower())
 
 
+def jwk(kty, members):
+    """C-KEYS: a JWK object with `kty` and the base64url members of the given byte lengths."""
+
+    def check(value):
+        try:
+            key = json.loads(value)
+        except ValueError:
+            return False
+        return (
+            isinstance(key, dict)
+            and key.get("kty") == kty
+            and all(
+                isinstance(key.get(name), str) and (raw := checks.b64url_decode(key[name])) is not None
+                and len(raw) == length
+                for name, length in members.items()
+            )
+        )
+
+    return check
+
+
+def openvpn_static_key(value):
+    """C-KEYS: the V1 header, 16 lines of 32 hex digits (2048 bits) and the footer."""
+    lines = value.split("\n")
+    return (
+        len(lines) == 18
+        and lines[0] == "-----BEGIN " + "OpenVPN Static key V1-----"
+        and lines[-1] == "-----END " + "OpenVPN Static key V1-----"
+        and all(prefixed("", HEX, 32)(line) for line in lines[1:-1])
+    )
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
@@ -832,6 +864,15 @@ CHECKS = {
     "laravel_app_key": base64_bytes("base64:", 32),
     "fernet_key": lambda v: v.endswith("=") and base64url_bytes(32)(v[:-1]),
     "aes256_hex_key": prefixed("", HEX, 64),
+    # C-KEYS
+    "jwk_okp_private_key": jwk("OKP", {"d": 32, "x": 32}),
+    "jwk_ec_private_key": jwk("EC", {"x": 32, "y": 32, "d": 32}),
+    "jwk_rsa_private_key": jwk("RSA", {"n": 256, "d": 256, "p": 128, "q": 128, "dp": 128, "dq": 128, "qi": 128}),
+    "wireguard_private_key": base64_bytes("", 32),
+    "openvpn_static_key": openvpn_static_key,
+    "ipsec_psk": prefixed("", ALNUM, 32),
+    "django_secret_key": prefixed("", LOWER + DIGITS + "!@#$%^&*(-_=+)", 50),
+    "rails_secret_key_base": prefixed("", HEX, 128),
     # GOLD-D1 baseline entities (saas)
     "atlassian_api_token": lambda v: prefixed("ATATT3", B64URL, 177, "=")(v[:-8]) and prefixed("", HEX_UPPER, 8)(v[-8:]),
     "atlassian_api_token_legacy": lambda v: prefixed("", BASE36, 20)(v[:20]) and prefixed("", HEX, 4)(v[20:]),
@@ -1098,6 +1139,10 @@ LOOKALIKE_FAILURES = {
     "age_public_key": lambda v: CHECKS["age_secret_key"](v) or checks.bech32_decode(v)[0] != "age",
     "x509_certificate": CHECKS["pkcs12_keystore"],
     "sha1_hex_digest": lambda v: any(CHECKS[name](v) for name in ("laravel_app_key", "fernet_key", "aes256_hex_key")),
+    # C-KEYS: a public JWK without d, a 31-byte WireGuard key, an OpenVPN block with 15 lines
+    "jwk_okp_public_key": CHECKS["jwk_okp_private_key"],
+    "wireguard_private_key_short": CHECKS["wireguard_private_key"],
+    "openvpn_static_key_short": CHECKS["openvpn_static_key"],
     # GOLD-D1
     "atlassian_api_token_short": any_check("atlassian_api_token", "atlassian_api_token_legacy"),
     "notion_api_token_short": CHECKS["notion_api_token"],

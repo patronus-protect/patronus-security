@@ -709,6 +709,26 @@ entities:
     subtype: password
     ark: [dlp_docker_config_auth]
     backlog: G04
+  - id: key.jwk_private_key
+    scope: ark_only
+    group: PRIVATE_KEY
+    ark: [dlp_jwk_private_key]
+    backlog: C-KEYS
+  - id: key.wireguard_private_key
+    scope: ark_only
+    group: PRIVATE_KEY
+    ark: [dlp_wireguard_private_key]
+    backlog: C-KEYS
+  - id: key.openvpn_static_key
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_openvpn_static_key]
+    backlog: C-KEYS
+  - id: key.ipsec_psk
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_ipsec_psk]
+    backlog: C-KEYS
   - id: payment.stripe.webhook_secret
     scope: ark_only
     group: PAYMENT_KEY
@@ -1011,7 +1031,9 @@ entities:
      detect_secrets: [Base64HighEntropyString, HexHighEntropyString], backlog: G12}
   # C: Schlüsselmaterial
   - {id: key.pkcs12_file, scope: baseline_only, group: PRIVATE_KEY, gitleaks: [pkcs12-file], backlog: C05}
-  - {id: key.symmetric_key, scope: baseline_only, group: CRYPTO_KEY, google_dlp: [ENCRYPTION_KEY], backlog: C08}
+  - {id: key.symmetric_key, scope: shared, group: CRYPTO_KEY,
+     ark: [dlp_symmetric_key, dlp_laravel_app_key, dlp_django_secret_key, dlp_rails_secret_key_base],
+     google_dlp: [ENCRYPTION_KEY], backlog: C-KEYS}
   # M: Dokumentklassen
   - {id: document.legal_privileged, scope: baseline_only, group: dlp.document.legal_privileged,
      google_dlp: [DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING],
