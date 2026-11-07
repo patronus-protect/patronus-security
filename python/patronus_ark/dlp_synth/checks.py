@@ -11,9 +11,11 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 import re
 import zlib
+from pathlib import Path
 
 
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -119,6 +121,33 @@ def is_valid_solana_keypair(value: str) -> bool:
         return False
     numbers = [int(number) for number in value.strip("[]").split(",")]
     return all(number < 256 for number in numbers) and len(set(numbers)) >= 24
+
+
+SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp" / "rules" / "data"
+
+
+def _word_list(name: str) -> frozenset[str]:
+    return frozenset((SEED_WORD_LISTS / name).read_text(encoding="ascii").split())
+
+
+def is_valid_electrum_seed(value: str) -> bool:
+    """Electrum seed v2+: 12 BIP39 English words, HMAC-SHA512 under 'Seed version' with the
+    hex prefix of a seed type (01, 100, 101, 102)."""
+    words = value.split(" ")
+    if len(words) != 12 or not set(words) <= _word_list("bip39_english.txt"):
+        return False
+    version = hmac.new(b"Seed version", value.encode("ascii"), hashlib.sha512).hexdigest()
+    return version.startswith(("01", "100", "101", "102"))
+
+
+def is_valid_monero_seed(value: str) -> bool:
+    """Monero mnemonic: 25 words of the English list, the last the checksum word at CRC-32
+    of the 3-letter prefixes of the first 24 modulo 24."""
+    words = value.split(" ")
+    if len(words) != 25 or not set(words) <= _word_list("monero_english.txt"):
+        return False
+    index = zlib.crc32("".join(word[:3] for word in words[:24]).encode("ascii")) % 24
+    return words[24][:3] == words[index][:3]
 
 
 def is_valid_cardano_signing_key(value: str) -> bool:

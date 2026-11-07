@@ -5223,6 +5223,8 @@ DLP_LOOKALIKE_GENERATORS = (
     "bedrock_api_key_short", "ibm_cloud_iam_api_key_short",
     # C-WALLET: extended public keys and an xprv shape without Base58Check
     "bip32_xpub", "bip32_tpub", "bip32_xprv_shape",
+    # C-WALLET review: a Cardano verification key is public
+    "cardano_addr_vk",
     # P10: wrong length of the Atlassian, Notion, Linear, Airtable and Postman formats; public Mapbox pk. tokens
     "atlassian_api_token_short", "notion_api_token_short", "linear_api_key_short",
     "airtable_personal_access_token_short", "postman_api_token_short", "mapbox_access_token",
@@ -15100,6 +15102,87 @@ DLP_C_WALLET_CASES = {
     ],
 }
 for _label, _rows in DLP_C_WALLET_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# C-WALLET review: Electrum seeds (12 BIP39 words with an Electrum version prefix), Monero seeds
+# (25 words with the CRC-32 checksum word), both after a seed term, and Cardano CIP-5 signing keys.
+# Hard negatives are a BIP39 mnemonic without an Electrum prefix, a Cardano verification key,
+# placeholders and format prose.
+DLP_C_WALLET_SEED_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_electrum_seed",
+            "Electrum wallet backup, keep offline.\nseed: <<secret:0>>\n",
+            "electrum_seed_standard", 22017, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_electrum_seed",
+            '{"keystore": {"type": "bip32", "seed": "<<secret:0>>", "seed_type": "segwit"}, "wallet_type": "standard"}\n',
+            "electrum_seed_segwit", 22018, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_monero_seed",
+            "[wallet 44AFFq]: seed\nNOTE: the following 25 words can be used to recover access to your wallet.\n<<secret:0>>\n",
+            "monero_seed", 22019, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_cardano_signing_key",
+            "# stake pool payment key\nCARDANO_PAYMENT_SKEY=<<secret:0>>\n",
+            "cardano_ed25519_sk", 22020, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_electrum_seed",
+            "Hallo Support,\n\nmein Electrum-Seed lautet: <<secret:0>>\nKönnt ihr die Wallet wiederherstellen?\n",
+            "electrum_seed_standard", 22021, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_electrum_seed",
+            "# Wiederherstellung der Electrum-Wallet\nELECTRUM_SEED=\"<<secret:0>>\"\n",
+            "electrum_seed_segwit", 22022, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_monero_seed",
+            "Wiederherstellungsphrase der Monero-Wallet:\n<<secret:0>>\nBitte nicht weitergeben.\n",
+            "monero_seed", 22023, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_cardano_signing_key",
+            "cardano:\n  # Signierschlüssel der Stake-Pool-Wallet\n  addr_xsk: \"<<secret:0>>\"\n",
+            "cardano_addr_xsk", 22024, carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_electrum_seed",
+            "Electrum seed: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\n",
+            "BIP39 test mnemonic without an Electrum version prefix", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_monero_seed",
+            "monero:\n  # 25 words, written down at wallet creation\n  seed: \"<your 25 seed words>\"\n",
+            "placeholder", carrier="yaml",
+        ),
+        dl(
+            "CRYPTO_KEY", "en", "dlp_cardano_signing_key",
+            "# verification key, safe to publish\nCARDANO_PAYMENT_VKEY=<<secret:0>>\n",
+            "cardano_addr_vk", 22025, "Cardano verification key", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_electrum_seed",
+            "Electrum zeigt beim Anlegen der Wallet einen Seed aus zwölf Wörtern an; schreib ihn auf Papier.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_monero_seed",
+            "Die Monero-Wallet zeigt den Seed aus 25 Wörtern nur einmal an.\n",
+            "format description without a value", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_cardano_signing_key",
+            "Cardano-Signierschlüssel beginnen mit addr_xsk1 oder ed25519_sk1, Verifikationsschlüssel mit addr_vk1.\n",
+            "format description without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_C_WALLET_SEED_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

@@ -29,7 +29,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   segwit, `101` 2FA, `102` 2FA segwit). `dlp_monero_seed` (subtype `seed_phrase`) reports the
   Monero mnemonic of the private spend key: 24 words of the Monero English word list and the CRC-32
   checksum word, also over the line breaks of `monero-wallet-cli`. Both report only a whole run of
-  words after a seed term (`electrum`, `monero`, `seed`, `mnemonic`, `recovery`,
+  words after a seed term (`electrum`, `monero`, `seed`, `mnemonic`, `recover`,
   `Wiederherstellung`) on the line or the line before; BIP39 mnemonics without the Electrum
   prefix, wrong checksum words, shorter or longer runs and words outside the list stay silent.
   `dlp_cardano_signing_key` (subtype `private_key`) reports CIP-5 Bech32 signing keys

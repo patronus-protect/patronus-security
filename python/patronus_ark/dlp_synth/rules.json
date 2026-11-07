@@ -501,6 +501,14 @@
       "generators": ["solana_keypair_array"],
       "probes": ["SOLANA_KEYPAIR=<<secret:0>>", "const signer = Keypair.fromSecretKey(Uint8Array.from(<<secret:0>>));"]
     },
+    "dlp_electrum_seed": {
+      "generators": ["electrum_seed_standard", "electrum_seed_segwit"],
+      "probes": ["ELECTRUM_SEED=\"<<secret:0>>\"", "Mein Electrum-Seed lautet: <<secret:0>>"]
+    },
+    "dlp_monero_seed": {
+      "generators": ["monero_seed"],
+      "probes": ["Monero seed: <<secret:0>>", "Wiederherstellungsphrase der Monero-Wallet:\n<<secret:0>>"]
+    },
     "dlp_cardano_signing_key": {
       "generators": ["cardano_ed25519_sk", "cardano_addr_xsk"],
       "lookalike": ["cardano_addr_vk"],

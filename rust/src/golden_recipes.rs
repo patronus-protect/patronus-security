@@ -13,7 +13,8 @@
 //! last literal as little-endian hex), and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
-//! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
+//! Base58Check; seed word segments draw wallet seed phrases (Electrum, Monero)
+//! from the words of one length of a word list. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
 //! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
 //! v2). A recipe with `fill` yields the documented example/test variant of the
 //! generator's shape for hard negatives (T06). A generator with `entropy_above`
@@ -148,12 +149,69 @@ enum BytePart {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SeedWords {
+    seed_words: String,
+    word_len: usize,
+}
+
+#[derive(Deserialize)]
 #[serde(untagged)]
 enum Segment {
     Literal(Literal),
     Random(Random),
     Checksum(Checksum),
     Encoded(Encoded),
+    SeedWords(SeedWords),
+}
+
+const BIP39_ENGLISH: &str =
+    include_str!("../../ark-core/src/detectors/dlp/rules/data/bip39_english.txt");
+const MONERO_ENGLISH: &str =
+    include_str!("../../ark-core/src/detectors/dlp/rules/data/monero_english.txt");
+
+/// A seed word kind: word list, words drawn, words in the value and the
+/// Electrum version prefix (none for Monero, which appends a checksum word).
+fn seed_kind(kind: &str) -> Option<(&'static str, usize, usize, Option<&'static str>)> {
+    match kind {
+        "electrum_standard" => Some((BIP39_ENGLISH, 12, 12, Some("01"))),
+        "electrum_segwit" => Some((BIP39_ENGLISH, 12, 12, Some("100"))),
+        "monero" => Some((MONERO_ENGLISH, 24, 25, None)),
+        _ => None,
+    }
+}
+
+fn seed_word_list(list: &'static str, word_len: usize) -> Vec<&'static str> {
+    list.lines().filter(|word| word.len() == word_len).collect()
+}
+
+/// Draw a seed phrase of `kind` from the words of `word_len` letters: 12
+/// BIP39 words until the HMAC-SHA512 under `Seed version` starts with the
+/// Electrum prefix, or 24 Monero words and the word at CRC-32 of their
+/// 3-letter prefixes modulo 24.
+fn seed_words(kind: &str, word_len: usize, rng: &mut SplitMix64) -> String {
+    let (list, drawn_count, _, prefix) = seed_kind(kind).expect("validated seed kind");
+    let words = seed_word_list(list, word_len);
+    let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA512, b"Seed version");
+    loop {
+        let mut drawn: Vec<&str> = (0..drawn_count)
+            .map(|_| words[(rng.next_u64() % words.len() as u64) as usize])
+            .collect();
+        let Some(prefix) = prefix else {
+            let prefixes: String = drawn.iter().map(|word| &word[..3]).collect();
+            drawn.push(drawn[crc32(prefixes.as_bytes()) as usize % 24]);
+            return drawn.join(" ");
+        };
+        let phrase = drawn.join(" ");
+        let tag: String = ring::hmac::sign(&key, phrase.as_bytes())
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        if tag.starts_with(prefix) {
+            return phrase;
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -470,6 +528,11 @@ impl GeneratorSet {
                     }
                     Segment::Checksum(Checksum { checksum }) => checksum_length(checksum).is_some(),
                     Segment::Encoded(encoded) => Self::valid_encoded(encoded, &alphabets),
+                    Segment::SeedWords(SeedWords {
+                        seed_words,
+                        word_len,
+                    }) => seed_kind(seed_words)
+                        .is_some_and(|(list, ..)| !seed_word_list(list, *word_len).is_empty()),
                 };
                 if !valid {
                     return Err(RecipeError::Spec(format!("{name}: invalid segment")));
@@ -529,7 +592,7 @@ impl GeneratorSet {
 
     fn draws_randomly(generator: &Generator) -> bool {
         generator.segments.iter().any(|segment| match segment {
-            Segment::Random(_) => true,
+            Segment::Random(_) | Segment::SeedWords(_) => true,
             Segment::Encoded(encoded) => encoded
                 .bytes
                 .iter()
@@ -548,6 +611,13 @@ impl GeneratorSet {
                     checksum_length(checksum).expect("validated checksum kind")
                 }
                 Segment::Encoded(encoded) => encoded.length(),
+                Segment::SeedWords(SeedWords {
+                    seed_words,
+                    word_len,
+                }) => {
+                    let count = seed_kind(seed_words).expect("validated seed kind").2;
+                    count * word_len + count - 1
+                }
             })
             .sum()
     }
@@ -752,6 +822,10 @@ impl GeneratorSet {
                         };
                     }
                 }
+                Segment::SeedWords(SeedWords {
+                    seed_words: kind,
+                    word_len,
+                }) => part = seed_words(kind, *word_len, rng),
                 Segment::Encoded(encoded) => match fill {
                     Some(word) => {
                         let (encoded, filled_segment) = self.encode_filled(encoded, rng, word)?;

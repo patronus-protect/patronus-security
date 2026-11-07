@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 23 |
-| Regex rules | 199 | 149 (+5 relationship rules) |
+| Regex rules | 199 | 152 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 130 | 19 |
+| Rules with a `checksum` or `structure` check | 130 | 22 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -319,7 +319,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `CREDENTIAL` | generic_credential | on | 17 | 14 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
-| `CRYPTO_KEY` | key_material | on | 5 | 5 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
+| `CRYPTO_KEY` | key_material | on | 8 | 8 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `dlp.de.vat_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
 | `dlp.de.commercial_register_number` | business_identifier | off | 1 | 1 | 32 | ARK 50.0 (opt-in profile) |
 | `dlp.de.facility_number_bsnr` | business_identifier | off | 1 | 1 | 32 | ARK 28.6 (opt-in profile) |
@@ -447,6 +447,9 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `crypto.bitcoin.extended_private_key` | ark_only | `CRYPTO_KEY` | `dlp_bip32_extended_private_key` | checksum | on | – |
 | `crypto.ethereum.keystore` | ark_only | `CRYPTO_KEY` | `dlp_eth_keystore_ciphertext` | format | on | – |
 | `crypto.solana.keypair` | ark_only | `CRYPTO_KEY` | `dlp_solana_keypair` | format | on | – |
+| `crypto.bitcoin.electrum_seed` | ark_only | `CRYPTO_KEY` | `dlp_electrum_seed` | checksum | on | – |
+| `crypto.monero.seed` | ark_only | `CRYPTO_KEY` | `dlp_monero_seed` | checksum | on | – |
+| `crypto.cardano.signing_key` | ark_only | `CRYPTO_KEY` | `dlp_cardano_signing_key` | checksum | on | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | `dlp_credential_in_url` | none | on | – |
 | `credential.auth_url` | ark_only | `CREDENTIAL` | `dlp_auth_url_token` | none | on | – |
@@ -555,7 +558,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 85 shared, 32 ARK only, 79 baseline only, 11 out of scope.
+Entities: 85 shared, 35 ARK only, 79 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -663,6 +666,9 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `crypto.bitcoin.extended_private_key` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `crypto.ethereum.keystore` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `crypto.solana.keypair` | ark_only | `CRYPTO_KEY` | – | – | – |
+| `crypto.bitcoin.electrum_seed` | ark_only | `CRYPTO_KEY` | – | – | – |
+| `crypto.monero.seed` | ark_only | `CRYPTO_KEY` | – | – | – |
+| `crypto.cardano.signing_key` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
 | `credential.auth_url` | ark_only | `CREDENTIAL` | – | – | – |

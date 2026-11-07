@@ -169,11 +169,11 @@ fn is_monero_seed(value: &str) -> bool {
     words[24][..3] == words[index][..3]
 }
 
-/// A seed term (`electrum`, `monero`, `seed`, `mnemonic`, recovery phrase,
+/// A seed term (`electrum`, `monero`, `seed`, `mnemonic`, recover/recovery,
 /// Wiederherstellungsphrase) on the line of the seed or the line before.
 fn has_seed_context(text: &str, range: Range<usize>) -> bool {
     static SEED_TERM: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)electrum|monero|seed|mnemonic|recovery|wiederherstellung")
+        Regex::new(r"(?i)electrum|monero|seed|mnemonic|recover|wiederherstellung")
             .expect("valid regex")
     });
     let line_start = text[..range.start].rfind('\n').map_or(0, |index| index + 1);
@@ -321,7 +321,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Checksum,
             "https://electrum.readthedocs.io/en/latest/seedphrase.html",
-            &["electrum", "seed", "mnemonic", "recovery", "wiederherstellung"],
+            &["electrum", "seed", "mnemonic", "recover", "wiederherstellung"],
         )
         .with_provider("bitcoin")
         .with_context_gate(has_seed_context)
@@ -339,7 +339,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Checksum,
             "https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp",
-            &["monero", "seed", "mnemonic", "recovery", "wiederherstellung"],
+            &["monero", "seed", "mnemonic", "recover", "wiederherstellung"],
         )
         .with_provider("monero")
         .with_context_gate(has_seed_context)
