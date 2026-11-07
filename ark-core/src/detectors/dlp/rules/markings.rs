@@ -201,14 +201,14 @@ fn is_marking(text: &str, marking: Range<usize>, family: &Regex) -> bool {
     if !stands_as_marking(text, &marking) || !COUNTER.holds(text, marking.clone()) {
         return false;
     }
-    let level = normalized(&text[marking.clone()]);
+    let level = &text[marking.clone()];
     let start = text.floor_char_boundary(marking.start.saturating_sub(WINDOW));
     let end = text.ceil_char_boundary(marking.end.saturating_add(WINDOW));
     !family.find_iter(&text[start..end]).any(|other| {
         let range = start + other.start()..start + other.end();
         range != marking
-            && normalized(other.as_str()) != level
             && (stands_as_marking(text, &range) || is_list_item(text, &range))
+            && !same_level(other.as_str(), level)
     })
 }
 
@@ -266,7 +266,7 @@ fn is_key_value(before: &str, after: &str) -> bool {
     else {
         return false;
     };
-    let key = key.trim_end().trim_end_matches(quotes).to_ascii_lowercase();
+    let key = key.trim_end().trim_end_matches(quotes);
     let ends_value = after
         .trim_start()
         .chars()
@@ -274,27 +274,42 @@ fn is_key_value(before: &str, after: &str) -> bool {
         .is_none_or(|c| matches!(c, '"' | '\'' | ',' | ';' | '}' | ']' | ')' | '\r'));
     ends_value
         && LABEL_KEYS.iter().any(|label| {
-            key.strip_suffix(label)
-                .is_some_and(|lead| !lead.chars().next_back().is_some_and(char::is_alphanumeric))
+            key.len().checked_sub(label.len()).is_some_and(|lead| {
+                key.get(lead..)
+                    .is_some_and(|tail| tail.eq_ignore_ascii_case(label))
+                    && !key[..lead]
+                        .chars()
+                        .next_back()
+                        .is_some_and(char::is_alphanumeric)
+            })
         })
 }
 
-/// A level in upper case with single spaces, so `TLP: AMBER` and `TLP:AMBER`
-/// are one level.
-fn normalized(level: &str) -> String {
+/// Whether two levels are one level in upper case with single spaces, so
+/// `TLP: AMBER` and `tlp:amber` are one level; compared without allocating.
+fn same_level(a: &str, b: &str) -> bool {
+    level_chars(a).eq(level_chars(b))
+}
+
+/// The chars of a level in upper case, its words joined by single spaces.
+fn level_chars(level: &str) -> impl Iterator<Item = char> + '_ {
     level
         .split(|c: char| c.is_whitespace() || c == ':')
         .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_uppercase()
+        .enumerate()
+        .flat_map(|(at, part)| {
+            (at > 0)
+                .then_some(' ')
+                .into_iter()
+                .chain(part.chars().flat_map(char::to_uppercase))
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         is_de_corporate_marking, is_de_government_marking, is_en_corporate_marking,
-        is_nato_eu_marking, is_tlp_marking,
+        is_nato_eu_marking, is_tlp_marking, same_level,
     };
     use std::ops::Range;
 
@@ -441,5 +456,46 @@ mod tests {
         assert!(gate(is_tlp_marking, both, "TLP:AMBER"));
         let prose = "RESTRICTED\nInternal pricing engine, keep it in the team.";
         assert!(gate(is_en_corporate_marking, prose, "RESTRICTED"));
+    }
+
+    #[test]
+    fn levels_compare_in_upper_case_with_single_spaces() {
+        assert!(same_level("TLP:AMBER", "TLP: AMBER"));
+        assert!(same_level("tlp:amber", "TLP:AMBER"));
+        assert!(same_level("Streng  Geheim", "STRENG GEHEIM"));
+        assert!(same_level(
+            "vs-nur für den dienstgebrauch",
+            "VS-NUR FÜR DEN DIENSTGEBRAUCH"
+        ));
+        assert!(!same_level("TLP:AMBER", "TLP:AMBER+STRICT"));
+        assert!(!same_level("STRENGGEHEIM", "STRENG GEHEIM"));
+        assert!(!same_level("GEHEIM", "STRENG GEHEIM"));
+    }
+
+    #[test]
+    fn label_keys_match_their_tail_in_any_case() {
+        assert!(gate(
+            is_en_corporate_marking,
+            "Data_CLASSIFICATION: Internal Only\n",
+            "Internal Only"
+        ));
+        assert!(gate(
+            is_de_corporate_marking,
+            "Dokument-Vertraulichkeit: intern\n",
+            "intern"
+        ));
+        // A multi-byte char right before the label's length stays no key and
+        // no panic; a shorter key than any label is no key.
+        assert!(!gate(
+            is_de_corporate_marking,
+            "Überprüfungsstufe: intern\n",
+            "intern"
+        ));
+        assert!(!gate(
+            is_de_corporate_marking,
+            "Größenmarking: intern\n",
+            "intern"
+        ));
+        assert!(!gate(is_de_corporate_marking, "ä: intern\n", "intern"));
     }
 }
