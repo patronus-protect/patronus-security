@@ -136,6 +136,12 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   und zufällige druckbare Secrets bleiben Funde. Dekodiert wird nur ein Wert, der alle übrigen
   Prüfungen der Regel bestanden hat; `credentials::is_example_payload` auf den Bytes ist für
   PEM-Körper (T14) gedacht.
+  Seit D01 sucht die DLP-Pipeline zusätzlich in einer dekodierten Sicht (`dlp::decoder`):
+  kanonische Base64- und Base64url-Läufe von 24 bis 65 536 Zeichen, deren Bytes druckbares UTF-8
+  sind, werden dekodiert, Läufe im dekodierten Text noch einmal (Tiefe 2), höchstens 128 KiB je
+  Text. Die Regeln scannen die Sicht einmal; ein Fund zeigt auf die kodierten Zeichen, die seine
+  Bytes tragen (3 Bytes ↔ 4 Zeichen), und trägt `decoded` in `matched_rules`. Ein Fund im Text
+  selbst auf demselben Bereich behält seinen Span (Basic-Auth, JWT, generische Zuweisungen).
   Seit T09 beginnen `dlp_password_assignment`, `dlp_generic_credential_assignment`,
   `dlp_csrf_token` und `dlp_password_hash` am Credential-Nomen ohne `\b`: zusammengesetzte
   (`db_password`, `service_secret`) und camelCase-Schlüssel (`dbPassword`, `ClientSecret`,

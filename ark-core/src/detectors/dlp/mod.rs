@@ -3,6 +3,7 @@ mod aws_context;
 mod boundary;
 mod config_keys;
 pub mod context;
+mod decoder;
 pub mod destructive_operation;
 #[allow(clippy::module_inception)]
 pub mod dlp;
