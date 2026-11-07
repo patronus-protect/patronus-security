@@ -515,8 +515,9 @@
       "probes": ["CARDANO_SIGNING_KEY=<<secret:0>>", "Signierschlüssel der Cardano-Wallet: <<secret:0>>"]
     },
     "dlp_private_key_block": {
-      "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key"],
+      "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key", "pem_pkcs8_encrypted_private_key", "pem_openssh_ed25519_encrypted", "pgp_private_key_block", "putty_ppk_ed25519"],
       "shape_only": ["pem_pkcs8_private_key", "pem_rsa_private_key"],
+      "lookalike": ["pem_pkcs1_rsa_bad_der", "pem_rsa_armor_ellipsis", "pem_openssh_armor_placeholder"],
       "probes": ["key.pem:\n<<secret:0>>\n", "deploy_key: |\n<<secret:0>>"]
     },
     "dlp_private_key_header": {
@@ -560,8 +561,9 @@
       "probes": ["production:\n  secret_key_base: <<secret:0>>\n", "SECRET_KEY_BASE=<<secret:0>>"]
     },
     "dlp_jwt_token": {
-      "generators": ["jwt_signed_hs256", "jwt_signed_rs256"],
+      "generators": ["jwt_signed_hs256", "jwt_signed_rs256", "jwt_unsecured_none", "jwt_supabase_service_role", "jwt_firebase_custom_token"],
       "shape_only": ["jwt_hs256"],
+      "lookalike": ["jwt_header_no_alg", "jwt_claims_not_json", "jwt_empty_signature"],
       "probes": ["id_token=<<secret:0>>", "{\"session\": \"<<secret:0>>\"}"]
     },
     "dlp_credential_in_url": {
