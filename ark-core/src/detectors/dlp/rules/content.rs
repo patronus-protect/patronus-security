@@ -182,7 +182,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     // settlement negotiations (WITHOUT PREJUDICE, ohne Präjudiz).
     DlpPattern {
         name: "dlp_document_legal_privileged",
-        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz|ohne\s+anerkennung\s+einer\s+rechtspflicht)\b",
+        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz)\b",
         entity_group: "dlp.document.legal_privileged",
         validator: None,
         span_group: None,
@@ -200,7 +200,6 @@ pub(super) const RULES: &[DlpPattern] = &[
                 "prejudice",
                 "settlement",
                 "judiz",
-                "rechtspflicht",
             ],
         )
         .with_context_gate(is_legal_privileged_document),

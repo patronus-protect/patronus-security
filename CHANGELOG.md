@@ -109,8 +109,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Agreement, Rahmen-, Liefer-, Dienstleistungs-, Lizenzvertrag …) only when at least four contract
   terms (parties, remuneration, term, termination, confidentiality, liability) stand within 3,000
   bytes of the title. `dlp_document_legal_privileged` (M05) also reports settlement negotiation
-  markers (WITHOUT PREJUDICE, for settlement purposes only, ohne Präjudiz, ohne Anerkennung einer
-  Rechtspflicht) under the same legal-anchor gate. Published laws, court decisions (Leitsatz,
+  markers (WITHOUT PREJUDICE, for settlement purposes only, ohne Präjudiz) under the same
+  legal-anchor gate; "ohne Anerkennung einer Rechtspflicht" is no marker, since press and
+  encyclopedic reports of settlements use it. Published laws, court decisions (Leitsatz,
   Urteil, the court held), contract templates (Muster, Vorlage, [Party A]) and explanations are
   counter-context. Latency (`scripts/l1_dlp/latency.py`, release, same machine as M01): 100 KiB p50
   9.53 ms, p95 13.66 ms (M01: 9.48 / 15.38 ms), 4 KiB p95 1.98 ms; no measurable change.
