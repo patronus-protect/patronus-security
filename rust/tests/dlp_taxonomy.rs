@@ -411,3 +411,25 @@ fn spans_keep_the_group_label() {
         .iter()
         .all(|span| span.label == "SECRET_TOKEN"));
 }
+
+#[test]
+fn reported_out_of_court_settlements_are_no_privileged_correspondence() {
+    // M-LEGAL: encyclopedic and press reports of settlements "ohne
+    // Anerkennung einer Rechtspflicht" carry legal terms but no privilege.
+    let text = "Bis 2005 reichten rund 9.000 Kläger eine Klage ein; 4.000 Verfahren waren noch anhängig. \
+                Ohne Anerkennung einer Rechtspflicht schloss der Konzern einen Vergleich über 800 Millionen \
+                Euro, zwei Prozesse endeten vor dem Gericht mit Freisprüchen.";
+    let result = scan_with(Some(ScanGateMatrix::all_enabled()), text);
+    let rules = result.layers[0]
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        rules
+            .iter()
+            .all(|rule| rule["rule_id"] != "dlp_document_legal_privileged"),
+        "{rules:?}"
+    );
+}

@@ -7255,8 +7255,8 @@ DLP_CASES = {
         ),
         dp(
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
-            "Betreff: Ihr Schreiben vom 2. Oktober\n\nSehr geehrte Frau Lenz,\n\n", "ohne Anerkennung einer Rechtspflicht",
-            " bietet unsere Mandantin einen Vergleich an, um das Verfahren zu beenden.\n\nMit freundlichen "
+            "Betreff: Ihr Schreiben vom 2. Oktober\n\nSehr geehrte Frau Lenz,\n\nvertrauliche ", "Anwaltskorrespondenz",
+            ": unsere Mandantin bietet einen Vergleich an, um das Verfahren zu beenden.\n\nMit freundlichen "
             "Grüßen\nKanzlei Hartmann\n",
             carrier="prose",
         ),
@@ -7280,6 +7280,13 @@ DLP_CASES = {
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
             "Kulanz: Wir erstatten die Versandkosten ohne Anerkennung einer Rechtspflicht. Viele Grüße, Ihr Shop-Team",
             "customer service note without legal context", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Bis 2005 reichten rund 9.000 Kläger eine Klage ein; 4.000 Verfahren waren noch anhängig. Ohne "
+            "Anerkennung einer Rechtspflicht schloss der Konzern einen Vergleich über 800 Millionen Euro, zwei "
+            "Prozesse endeten vor dem Gericht mit Freisprüchen.",
+            "encyclopedic report of out-of-court settlements", carrier="prose",
         ),
     ],
     # M-LEGAL (M04): non-disclosure agreements, trade secret notices and embargo periods. The
