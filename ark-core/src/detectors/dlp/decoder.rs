@@ -207,6 +207,14 @@ fn decode_text(run: &str, encoding: Encoding) -> Option<String> {
         .then_some(text)
 }
 
+/// A finding of the decoded view added to the detection.
+struct Added {
+    view: Range<usize>,
+    original: Range<usize>,
+    label: String,
+    encodings: Vec<Encoding>,
+}
+
 /// Adds the findings of the decoded view to `detection`, on the encoded range
 /// of their value. A finding whose encoded range overlaps a finding of the
 /// original text, or an earlier decoded one, yields: the encoded value is
@@ -220,8 +228,7 @@ pub(crate) fn merge(
     view: &Decoded,
     label_of: impl Fn(&str) -> Option<&'static str>,
 ) -> NativeDetection {
-    // (view range, original range, label, encodings)
-    let mut added: Vec<(Range<usize>, Range<usize>, String, Vec<Encoding>)> = Vec::new();
+    let mut added: Vec<Added> = Vec::new();
     for span in decoded.evidence_spans {
         let Some((range, encodings)) = view.original(span.start_byte..span.end_byte) else {
             continue;
@@ -233,20 +240,20 @@ pub(crate) fn merge(
             .any(|other| overlaps(other.start_byte, other.end_byte))
             || added
                 .iter()
-                .any(|(_, other, ..)| overlaps(other.start, other.end))
+                .any(|other| overlaps(other.original.start, other.original.end))
         {
             continue;
         }
-        added.push((
-            span.start_byte..span.end_byte,
-            range,
-            span.label.clone(),
+        added.push(Added {
+            view: span.start_byte..span.end_byte,
+            original: range.clone(),
+            label: span.label.clone(),
             encodings,
-        ));
+        });
         detection.evidence_spans.push(EvidenceSpan {
-            text: text[added.last().unwrap().1.clone()].to_string(),
-            start_byte: added.last().unwrap().1.start,
-            end_byte: added.last().unwrap().1.end,
+            text: text[range.clone()].to_string(),
+            start_byte: range.start,
+            end_byte: range.end,
             start_char: 0,
             end_char: 0,
             ..span
@@ -266,9 +273,13 @@ pub(crate) fn merge(
             let start = rule["start_byte"].as_u64()? as usize;
             let end = rule["end_byte"].as_u64()? as usize;
             let label = label_of(rule["rule_id"].as_str()?)?;
-            let (_, original, _, encodings) = added.iter().find(|(range, _, added_label, _)| {
-                *range == (start..end) && added_label == label
-            })?;
+            let Added {
+                original,
+                encodings,
+                ..
+            } = added
+                .iter()
+                .find(|added| added.view == (start..end) && added.label == label)?;
             let mut rule = rule.clone();
             rule["start_byte"] = original.start.into();
             rule["end_byte"] = original.end.into();
