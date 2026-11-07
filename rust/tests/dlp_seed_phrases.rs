@@ -246,7 +246,7 @@ fn reports_phrases_on_their_own_lines_in_a_longer_run() {
     let text = format!("seed phrases:\n{}\n", short.join("\n"));
     assert_eq!(reported(&text), short);
     let text = format!("{first}\nkeep this safe never share\n");
-    assert_eq!(reported(&text), [first.clone()]);
+    assert_eq!(reported(&text), std::slice::from_ref(&first));
     let text = format!("Wiederherstellungsphrase:\n{first}\nnie teilen, sicher aufbewahren\n");
     assert_eq!(reported(&text), [first]);
     // A one-word-per-line dump of more than 27 words stays no phrase.
