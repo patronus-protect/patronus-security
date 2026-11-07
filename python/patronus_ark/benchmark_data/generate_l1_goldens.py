@@ -17,6 +17,7 @@ generator's ``fill`` variant the same way (T06).
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from pathlib import Path
@@ -15723,6 +15724,128 @@ DLP_CKEYS_CASES = {
     ],
 }
 for _label, _rows in DLP_CKEYS_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+def _b64(text: str) -> str:
+    """Padded standard base64 of a non-secret text, for decoder hard negatives (D01)."""
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+# D01: base64/base64url decoder pipeline. A provider token that only appears base64-encoded
+# (CI variables, proxy headers, JSON payloads, `echo … | base64 -d`) is found in the decoded
+# view and reported on its encoded range. Hard negatives encode environment references,
+# placeholders, plain prose, JSON headers, binary digests and EXAMPLE/TEST fills: decoding
+# must not report what the plain text would not.
+DLP_D01_CASES = {
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "# Base64 verpackt für das CI-System\nLLM_ZUGANG_B64=<<secret:0|base64>>\nREGION=eu-central-1\n",
+            "anthropic_api_key", 11001, carrier="env",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_openai_key",
+            "{\"auftrag\": \"bericht\", \"nutzlast\": \"<<secret:0|base64>>\", \"kodierung\": \"base64\"}",
+            "openai_project_api_key", 11002, carrier="json",
+        ),
+        ds(
+            "API_KEY", "de", "dlp_huggingface",
+            "Im Ticket stand der Wert <<secret:0|base64>> (Base64), bitte prüfen und widerrufen.",
+            "huggingface_token", 11003, carrier="prose",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_xai_key",
+            "job:\n  image: python:3.12\n  env_blob: <<secret:0|base64>>\n",
+            "xai_api_key", 11004, carrier="yaml",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_anthropic_key",
+            "$ echo <<secret:0|base64>> | base64 -d > ~/.config/llm/key\n",
+            "anthropic_api_key", 11005, carrier="cli",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_openai_key",
+            "BUILD_BLOB=<<secret:0|base64>>\nBUILD_NUMBER=412\n",
+            "openai_project_api_key", 11006, carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_openai_key",
+            f"# Vorlage, Wert kommt aus der Umgebung\nLLM_ZUGANG_B64={_b64('OPENAI_API_KEY=${OPENAI_API_KEY}')}\n",
+            "base64 of an environment reference", carrier="env",
+        ),
+        dn(
+            "API_KEY", "de", "dlp_anthropic_key",
+            f"Nachricht (Base64): {_b64('Hallo Welt, dies ist nur eine Testnachricht ohne Zugangsdaten.')}",
+            "base64 of plain prose", carrier="prose",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "# Beispiel aus der README\nLLM_ZUGANG_B64=<<secret:0|base64>>\n",
+            "anthropic_api_key", "EXAMPLEKEY", "base64 of a documented example value", carrier="env",
+        ),
+        dn(
+            "API_KEY", "en", "dlp_openai_key",
+            f"const header = \"{_b64('{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"edge-1\"}')}\";\n",
+            "base64 of a JSON header without a secret", carrier="code",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_openai_key",
+            "BUILD_BLOB=<<secret:0|base64>>\n",
+            "openai_project_api_key", "TESTKEY", "base64 of a test key (TESTKEY fill)", carrier="env",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            "2026-11-02 09:12:44 DEBUG upstream header x-goog-blob: <<secret:0|base64>>\n",
+            "google_api_key", 11011, carrier="log",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            "{\"maps\": {\"blob\": \"<<secret:0|base64>>\"}}",
+            "google_api_key", 11012, carrier="json",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            f"apiVersion: v1\nkind: ConfigMap\ndata:\n  einstellungen: {_b64('api_key: BITTE_AENDERN')}\n",
+            "base64 of a placeholder", carrier="yaml",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            f"2026-11-02 09:12:44 INFO request id {_b64('550e8400-e29b-41d4-a716-446655440000')}\n",
+            "base64 of a UUID", carrier="log",
+        ),
+    ],
+    "PAYMENT_KEY": [
+        ds(
+            "PAYMENT_KEY", "de", "dlp_stripe_webhook",
+            "const geheim = Buffer.from(\"<<secret:0|base64>>\", \"base64\").toString();\n",
+            "stripe_webhook_secret", 11021, carrier="code",
+        ),
+        ds(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "The support log contained <<secret:0|base64>>, which decodes to the live key.",
+            "stripe_secret_live", 11022, carrier="prose",
+        ),
+        dn(
+            "PAYMENT_KEY", "de", "dlp_stripe_webhook",
+            f"$ echo {_b64('STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}')} | base64 -d >> .env\n",
+            "base64 of an environment reference", carrier="cli",
+        ),
+        dn(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            f"$ echo {_b64('token: YOUR_TOKEN_HERE')} | base64 -d\n",
+            "base64 of a placeholder", carrier="cli",
+        ),
+        dn(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "{\"integrity\": \"sha256-" + base64.b64encode(bytes(range(7, 230, 7))).decode() + "\"}",
+            "base64 of binary digest bytes", carrier="json",
+        ),
+    ],
+}
+for _label, _rows in DLP_D01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

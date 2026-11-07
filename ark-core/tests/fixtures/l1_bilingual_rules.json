@@ -3332,10 +3332,12 @@
     ],
     "hard_negatives": {
       "de": [
-        "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+        "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
+        "LLM_ZUGANG_B64=QU5USFJPUElDX0FQSV9LRVk9JHtBTlRIUk9QSUNfQVBJX0tFWX0="
       ],
       "en": [
-        "Keys look like sk-ant-api03-<93 characters>AA."
+        "Keys look like sk-ant-api03-<93 characters>AA.",
+        "const blob = \"SGVsbG8gd29ybGQsIHRoaXMgaXMgYSBwbGFpbiBtZXNzYWdlIHdpdGhvdXQgY3JlZGVudGlhbHMu\";"
       ]
     },
     "language_neutral": true
@@ -5080,10 +5082,12 @@
     ],
     "hard_negatives": {
       "de": [
-        "Signatur-Secret (whsec_...) aus dem Dashboard kopieren."
+        "Signatur-Secret (whsec_...) aus dem Dashboard kopieren.",
+        "$ echo U1RSSVBFX1dFQkhPT0tfU0VDUkVUPSR7U1RSSVBFX1dFQkhPT0tfU0VDUkVUfQ== | base64 -d >> .env"
       ],
       "en": [
-        "STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}"
+        "STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}",
+        "webhook_blob: c2lnbmluZyBzZWNyZXQ6IFlPVVJfU0VDUkVUX0hFUkU="
       ]
     },
     "language_neutral": true
