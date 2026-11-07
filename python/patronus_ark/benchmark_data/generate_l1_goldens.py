@@ -5379,7 +5379,7 @@ DLP_CASES = {
         ds(
             "API_KEY", "en", "dlp_groq_key",
             "Authorization header (base64 by the proxy): <<secret:0|base64>>",
-            "groq_key", 1017, gap=True,
+            "groq_key", 1017,
         ),
         ds(
             "API_KEY", "en", "dlp_openai_key",
@@ -6029,7 +6029,7 @@ DLP_CASES = {
         ds(
             "PRIVATE_KEY", "de", "dlp_private_key_block",
             "apiVersion: v1\nkind: Secret\ntype: kubernetes.io/tls\ndata:\n  tls.key: <<secret:0|base64>>\n",
-            "pem_pkcs1_rsa_private_key", 7006, carrier="yaml", gap=True,
+            "pem_pkcs1_rsa_private_key", 7006, carrier="yaml",
         ),
         ds(
             "PRIVATE_KEY", "en", "dlp_private_key_block",
@@ -6059,7 +6059,7 @@ DLP_CASES = {
         ds(
             "PRIVATE_KEY", "en", "dlp_private_key_block",
             "apiVersion: v1\nkind: Secret\ntype: kubernetes.io/tls\ndata:\n  tls.key: <<secret:0|base64>>\n",
-            "pem_sec1_ec_private_key", 7012, carrier="yaml", gap=True,
+            "pem_sec1_ec_private_key", 7012, carrier="yaml",
         ),
         dn(
             "PRIVATE_KEY", "de", "dlp_private_key_header",
