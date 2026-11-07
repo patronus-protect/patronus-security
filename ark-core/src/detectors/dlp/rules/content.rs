@@ -199,7 +199,7 @@ pub(super) const RULES: &[DlpPattern] = &[
                 "verteidigerpost",
                 "prejudice",
                 "settlement",
-                "präjudiz",
+                "judiz",
                 "rechtspflicht",
             ],
         )
@@ -290,9 +290,9 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &[
                 "disclosure",
-                "confidentiality agreement",
+                "confidentiality",
                 "nda",
-                "trade secret",
+                "secret",
                 "embargo",
                 "vereinbarung",
                 "geheimnis",
