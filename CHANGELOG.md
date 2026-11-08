@@ -115,6 +115,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Urteil, the court held), contract templates (Muster, Vorlage, [Party A]) and explanations are
   counter-context. Latency (`scripts/l1_dlp/latency.py`, release, same machine as M01): 100 KiB p50
   9.53 ms, p95 13.66 ms (M01: 9.48 / 15.38 ms), 4 KiB p95 1.98 ms; no measurable change.
+- Detection change (opt-in NDA/trade secret and contract classes, all modes): both classes also need
+  document form (`min_structural`): a letter or chat (Subject:, Betreff:, Dear, Hallo, please,
+  bitte), agreement wording (this agreement, Effective date, § 1, hereinafter, nachfolgend), a
+  handling instruction (do not forward, nicht weiterleiten) or a record label. The engine counts a
+  marker or medium anchor used as a field label (`Sperrfrist:`, `Term:`, `"fees":`) as record
+  structure. Encyclopedia articles on NDAs and on mergers have the domain terms in prose but no
+  such form; with all gates enabled the dev benign-document corpus went from 34 legal-class hits in
+  2 documents (NDA article 32, M&A article 2) to 0. Typically, commonly, also known as and their
+  German counterparts are NDA counter-context; between, zwischen, EUR, USD, Datum and signed are no
+  contract anchors any more, since they stand in any prose about deals.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

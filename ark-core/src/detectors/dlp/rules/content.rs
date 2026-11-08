@@ -437,6 +437,7 @@ const CORPORATE_DENSITY: Density = Density {
     window: 1500,
     min_score: 8,
     min_medium: 2,
+    min_structural: 0,
 };
 
 /// M01: the anchors of attorney-client privileged correspondence around its
@@ -503,6 +504,7 @@ static LEGAL_PRIVILEGED: LazyLock<ContentClass> = LazyLock::new(|| {
             window: 1500,
             min_score: 8,
             min_medium: 1,
+            min_structural: 0,
         },
     )
 });
@@ -772,7 +774,10 @@ fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
 }
 
 /// M-LEGAL (M04): the anchors of a non-disclosure agreement, trade secret
-/// notice or embargo around its marker.
+/// notice or embargo around its marker. Articles and commentary on NDAs carry
+/// the same terms (disclosing party, confidential information), so the class
+/// also needs document form: a letter or chat, agreement wording, a handling
+/// instruction or a record label.
 static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
     ContentClass::new(
         &[
@@ -781,8 +786,6 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("recipient", Tier::Medium),
             ("confidential information", Tier::Medium),
             ("proprietary", Tier::Medium),
-            ("do not distribute", Tier::Medium),
-            ("do not forward", Tier::Medium),
             ("need-to-know", Tier::Medium),
             ("need to know", Tier::Medium),
             ("non-public", Tier::Medium),
@@ -805,8 +808,6 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("geheimhaltung", Tier::Medium),
             ("geheimhaltungspflicht", Tier::Medium),
             ("geheimhaltungsmaßnahmen", Tier::Medium),
-            ("nicht weitergeben", Tier::Medium),
-            ("nicht weiterleiten", Tier::Medium),
             ("nicht öffentlich", Tier::Medium),
             ("pressemitteilung", Tier::Medium),
             ("veröffentlichung", Tier::Medium),
@@ -822,18 +823,35 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("from:", Tier::Structural),
             ("to:", Tier::Structural),
             ("dear", Tier::Structural),
+            ("hi", Tier::Structural),
             ("kind regards", Tier::Structural),
             ("best regards", Tier::Structural),
-            ("between", Tier::Structural),
+            ("please", Tier::Structural),
+            ("reminder", Tier::Structural),
+            ("this agreement", Tier::Structural),
             ("effective date", Tier::Structural),
+            ("in witness whereof", Tier::Structural),
+            ("do not distribute", Tier::Structural),
+            ("do not forward", Tier::Structural),
+            ("classification:", Tier::Structural),
+            ("access:", Tier::Structural),
             ("betreff:", Tier::Structural),
             ("von:", Tier::Structural),
             ("an:", Tier::Structural),
+            ("hallo", Tier::Structural),
             ("sehr geehrte", Tier::Structural),
             ("sehr geehrter", Tier::Structural),
             ("mit freundlichen grüßen", Tier::Structural),
             ("viele grüße", Tier::Structural),
-            ("zwischen", Tier::Structural),
+            ("bitte", Tier::Structural),
+            ("euch", Tier::Structural),
+            ("dürft", Tier::Structural),
+            ("diese vereinbarung", Tier::Structural),
+            ("§ 1", Tier::Structural),
+            ("nicht weitergeben", Tier::Structural),
+            ("nicht weiterleiten", Tier::Structural),
+            ("einstufung:", Tier::Structural),
+            ("zugriff:", Tier::Structural),
             ("example", Tier::Counter),
             ("for example", Tier::Counter),
             ("sample", Tier::Counter),
@@ -843,6 +861,9 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("wikipedia", Tier::Counter),
             ("definition", Tier::Counter),
             ("means", Tier::Counter),
+            ("also known as", Tier::Counter),
+            ("typically", Tier::Counter),
+            ("commonly", Tier::Counter),
             ("refers to", Tier::Counter),
             ("tutorial", Tier::Counter),
             ("lecture", Tier::Counter),
@@ -859,6 +880,9 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("vorlage", Tier::Counter),
             ("platzhalter", Tier::Counter),
             ("bezeichnet", Tier::Counter),
+            ("auch bekannt als", Tier::Counter),
+            ("üblicherweise", Tier::Counter),
+            ("typischerweise", Tier::Counter),
             ("im sinne dieses gesetzes", Tier::Counter),
             ("richtlinie", Tier::Counter),
             ("urteil", Tier::Counter),
@@ -868,8 +892,9 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
         ],
         Density {
             window: 1500,
-            min_score: 8,
+            min_score: 7,
             min_medium: 1,
+            min_structural: 1,
         },
     )
 });
@@ -880,7 +905,9 @@ fn is_nda_trade_secret_document(text: &str, marker: Range<usize>) -> bool {
 
 /// M-LEGAL (M22): the anchors of a customer or supplier contract around its
 /// title: contracting parties, remuneration, term and confidentiality. A
-/// contract needs several of them, hence the higher minimum.
+/// contract needs several of them, hence the higher minimum, and the form of
+/// a contract, letter or record (`Term:`, `"fees":`, Effective date, Betreff:):
+/// an article on mergers names customers, fees and liability in prose.
 static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
     ContentClass::new(
         &[
@@ -889,7 +916,6 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
             ("contractor", Tier::Medium),
             ("licensee", Tier::Medium),
             ("licensor", Tier::Medium),
-            ("hereinafter", Tier::Medium),
             ("fees", Tier::Medium),
             ("remuneration", Tier::Medium),
             ("compensation", Tier::Medium),
@@ -908,7 +934,6 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
             ("käufer", Tier::Medium),
             ("verkäufer", Tier::Medium),
             ("lizenznehmer", Tier::Medium),
-            ("nachfolgend", Tier::Medium),
             ("vergütung", Tier::Medium),
             ("kaufpreis", Tier::Medium),
             ("zahlungsbedingungen", Tier::Medium),
@@ -918,17 +943,22 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
             ("vertraulichkeit", Tier::Medium),
             ("geheimhaltung", Tier::Medium),
             ("haftung", Tier::Medium),
-            ("between", Tier::Structural),
+            ("hereinafter", Tier::Structural),
             ("effective date", Tier::Structural),
             ("signature", Tier::Structural),
-            ("signed", Tier::Structural),
-            ("eur", Tier::Structural),
-            ("usd", Tier::Structural),
-            ("zwischen", Tier::Structural),
+            ("subject:", Tier::Structural),
+            ("dear", Tier::Structural),
+            ("kind regards", Tier::Structural),
+            ("best regards", Tier::Structural),
+            ("nachfolgend", Tier::Structural),
             ("vertragsgegenstand", Tier::Structural),
             ("unterschrift", Tier::Structural),
-            ("datum", Tier::Structural),
             ("§ 1", Tier::Structural),
+            ("betreff:", Tier::Structural),
+            ("sehr geehrte", Tier::Structural),
+            ("sehr geehrter", Tier::Structural),
+            ("mit freundlichen grüßen", Tier::Structural),
+            ("viele grüße", Tier::Structural),
             ("example", Tier::Counter),
             ("sample", Tier::Counter),
             ("template", Tier::Counter),
@@ -962,6 +992,7 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
             window: 3000,
             min_score: 14,
             min_medium: 4,
+            min_structural: 1,
         },
     )
 });
@@ -1294,6 +1325,47 @@ mod tests {
             "## Muster Umlaufbeschluss\n\nDer Aufsichtsrat beschließt einstimmig: [Text]. Platzhalter.",
             "Umlaufbeschluss",
         ));
+    }
+
+    #[test]
+    fn articles_on_ndas_are_no_nda_document() {
+        // Encyclopedic prose has the parties, confidential information and
+        // signatures of an NDA but no letter, agreement or record form.
+        let en = "A non-disclosure agreement sets out which information the parties keep secret and for \
+                  how long. In a one-way arrangement only the disclosing party shares material; the \
+                  receiving party promises to protect the confidential information and to use it for the \
+                  stated purpose alone. Mutual agreements are signed when both sides exchange plans, as in \
+                  joint ventures and research partnerships.\n\nCourts enforce such clauses but will not \
+                  uphold an NDA that hides a crime. Because proving what a recipient learned is hard, firms \
+                  also mark files as proprietary and limit access to staff with a need to know.";
+        assert!(!nda(en, "non-disclosure agreement"));
+        assert!(!nda(en, "NDA"));
+        let de = "Eine Geheimhaltungsvereinbarung legt fest, welche Informationen die Parteien vertraulich \
+                  behandeln. Bei einseitigen Verträgen gibt nur die offenlegende Partei Unterlagen heraus, die \
+                  empfangende Partei verpflichtet sich zur Geheimhaltung. Gegenseitige Verträge werden \
+                  unterzeichnet, wenn beide Seiten Pläne austauschen.\n\nVerstöße sichert oft eine \
+                  Vertragsstrafe ab. Gerichte erkennen Informationen nur an, wenn ihr Inhaber angemessene \
+                  Geheimhaltungsmaßnahmen nachweist.";
+        assert!(!nda(de, "Geheimhaltungsvereinbarung"));
+    }
+
+    #[test]
+    fn articles_on_supply_contracts_are_no_contract_document() {
+        // Long prose names customer, supplier, fees, term and liability
+        // without the form of a contract, letter or record.
+        let en = "Manufacturers buy parts under a supply agreement that runs for several years. The \
+                  customer commits to minimum volumes and the supplier accepts price caps for late delivery. \
+                  Fees are indexed to raw material costs.\n\nSuch contracts also allocate liability for \
+                  defective goods, while safety laws keep some claims open whatever term was agreed. \
+                  Termination rights apply on insolvency, and confidentiality clauses protect drawings. \
+                  Carmakers held thousands of these contracts, worth over USD 500 billion, between them.";
+        assert!(!contract(en, "supply agreement"));
+        let de = "Hersteller beziehen Bauteile über einen Liefervertrag mit mehrjähriger Laufzeit. Der Kunde \
+                  sagt Mindestmengen zu, der Lieferant akzeptiert Preisobergrenzen. Die Vergütung folgt den \
+                  Rohstoffpreisen.\n\nDie Haftung für fehlerhafte Teile ist oft begrenzt. Ein Recht zur \
+                  Kündigung besteht vor allem bei Insolvenz, Klauseln zur Vertraulichkeit schützen \
+                  Zeichnungen. Zwischen Herstellern und Zulieferern bestehen Verträge über Milliarden EUR.";
+        assert!(!contract(de, "Liefervertrag"));
     }
 
     #[test]
