@@ -94,7 +94,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   definition/template/course counters subtract; encyclopedic hedges (typically, usually, such as,
   in der Regel, üblicherweise) are counter-context of all three corporate classes, so the dev
   benign-document corpus (Wikipedia articles on M&A and insider trading, Wikimedia board
-  policies) flags no document. The content class engine takes up to 256 anchors per class (was 128). The legal
+  policies) flags no document. The content class engine takes up to 256 anchors per class (was 128).
+  Latency (`scripts/l1_dlp/latency.py`, release, default profile, same machine as M01): 100 KiB
+  p50 9.74 ms, p95 14.24 ms (M01 head 9.48 / 15.38 ms), 4 KiB p95 1.94 ms; no measurable change,
+  the classes are opt-in and their anchors are searched only where a marker matched. The legal
   class shares its letter-structure and generic counter lists with them (same anchors as before).
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
