@@ -325,6 +325,29 @@ const GENERIC_COUNTER: &[&str] = &[
     "seminar",
 ];
 
+/// Counter-context of the corporate (M-CORP) classes: encyclopedia articles
+/// and guides describe deals, filings and boards in general terms.
+const ENCYCLOPEDIC_COUNTER: &[&str] = &[
+    "typically",
+    "usually",
+    "generally",
+    "commonly",
+    "often",
+    "such as",
+    "for instance",
+    "in general",
+    "in practice",
+    "historically",
+    "typischerweise",
+    "üblicherweise",
+    "in der regel",
+    "häufig",
+    "meist",
+    "meistens",
+    "beispielsweise",
+    "versteht man",
+];
+
 /// Internal markings and salutations of corporate (M-CORP) documents.
 const CORPORATE_STRUCTURE: &[&str] = &[
     "hi",
@@ -451,46 +474,32 @@ static UNPUBLISHED_FINANCIALS: LazyLock<ContentClass> = LazyLock::new(|| {
             "ebitda",
             "net income",
             "earnings",
-            "eps",
             "guidance",
             "outlook",
             "forecast",
             "consensus",
             "quarter",
             "quarterly",
-            "q1",
-            "q2",
-            "q3",
-            "q4",
             "fiscal year",
             "margin",
             "free cash flow",
             "profit warning",
             "impairment",
             "dividend",
-            "cfo",
-            "investor relations",
             "ad hoc",
             "mar",
-            "art. 7",
             "art. 17",
             "art. 18",
-            "article 7",
             "article 17",
-            "article 18",
             "market abuse regulation",
             "insider",
             "trading ban",
-            "trading window",
-            "date of birth",
             "umsatz",
             "umsatzerlöse",
             "konzernergebnis",
-            "ergebnis je aktie",
             "prognose",
             "ausblick",
             "konsens",
-            "analystenkonsens",
             "quartal",
             "geschäftsjahr",
             "marge",
@@ -501,11 +510,11 @@ static UNPUBLISHED_FINANCIALS: LazyLock<ContentClass> = LazyLock::new(|| {
             "ad-hoc-mitteilung",
             "marktmissbrauchsverordnung",
             "handelsverbot",
-            "geburtsdatum",
         ],
         &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
         &[
             GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
             &[
                 "published",
                 "veröffentlicht",
@@ -522,10 +531,7 @@ static UNPUBLISHED_FINANCIALS: LazyLock<ContentClass> = LazyLock::new(|| {
                 "annual report",
                 "geschäftsbericht",
                 "corporate governance",
-                "management report",
                 "lagebericht",
-                "training",
-                "schulung",
             ],
         ],
         CORPORATE_DENSITY,
@@ -604,6 +610,7 @@ static M_AND_A: LazyLock<ContentClass> = LazyLock::new(|| {
         ],
         &[
             GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
             &[
                 "press release",
                 "pressemitteilung",
@@ -612,6 +619,9 @@ static M_AND_A: LazyLock<ContentClass> = LazyLock::new(|| {
                 "gab bekannt",
                 "encyclopedia",
                 "lexikon",
+                "companies",
+                "firms",
+                "acquirer",
             ],
         ],
         CORPORATE_DENSITY,
@@ -627,7 +637,6 @@ fn is_m_and_a_document(text: &str, marker: Range<usize>) -> bool {
 static BOARD_MINUTES: LazyLock<ContentClass> = LazyLock::new(|| {
     document_class(
         &[
-            "board",
             "board of directors",
             "supervisory board",
             "management board",
@@ -649,7 +658,6 @@ static BOARD_MINUTES: LazyLock<ContentClass> = LazyLock::new(|| {
             "motion",
             "abstained",
             "approved",
-            "approval",
             "agenda item",
             "company secretary",
             "vorstand",
@@ -690,6 +698,7 @@ static BOARD_MINUTES: LazyLock<ContentClass> = LazyLock::new(|| {
         ],
         &[
             GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
             &[
                 "job",
                 "your tasks",
@@ -699,6 +708,10 @@ static BOARD_MINUTES: LazyLock<ContentClass> = LazyLock::new(|| {
                 "wir suchen",
                 "encyclopedia",
                 "lexikon",
+                "policy",
+                "richtlinie",
+                "shall",
+                "bylaws",
             ],
         ],
         CORPORATE_DENSITY,
@@ -931,6 +944,13 @@ mod tests {
             "Wir ziehen um, der Datenraum im Keller bleibt zu.",
             "Datenraum"
         ));
+        // Encyclopedia prose is dense with deal terms; its hedges are counter-context.
+        assert!(!holds(
+            class,
+            "In a merger the buyer usually signs a share purchase agreement; closing often \
+             follows merger control, and warranties such as tax indemnities typically survive.",
+            "share purchase agreement",
+        ));
     }
 
     #[test]
@@ -953,6 +973,13 @@ mod tests {
             "Job: Board Secretary. Your tasks: draft board minutes and support the chair of the \
              supervisory board. We are looking for a lawyer.",
             "board minutes",
+        ));
+        // A governance policy names minutes and resolutions without being one.
+        assert!(!holds(
+            class,
+            "The discussion shall be documented in Board minutes. A majority vote of the \
+             directors is required, and approved transactions follow this policy.",
+            "Board minutes",
         ));
         assert!(!holds(
             class,

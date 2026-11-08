@@ -90,7 +90,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to quorum, vote, chair, Aufsichtsrat, einstimmig). The corporate classes need two distinct
   domain terms near the marker (minimum score 8). Distribution footers of published ad hoc
   releases (EQS/DGAP, "end of announcement"), annual report and governance headings, press
-  releases, job ads and the shared definition/template/course counters subtract. The legal
+  releases, job ads, governance policies ("shall", policy, bylaws) and the shared
+  definition/template/course counters subtract; encyclopedic hedges (typically, usually, such as,
+  in der Regel, üblicherweise) are counter-context of all three corporate classes, so the dev
+  benign-document corpus (Wikipedia articles on M&A and insider trading, Wikimedia board
+  policies) flags no document. The legal
   class shares its letter-structure and generic counter lists with them (same anchors as before).
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
