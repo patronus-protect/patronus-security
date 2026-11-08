@@ -54,22 +54,41 @@ LOG="$ROOT/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 find "$ROOT/logs" -name '*.log' -mtime +30 -delete
 # A full disk kills the gate halfway (the linker dies with a Bus error) and costs a round; the
-# debug caches rebuild on demand. One agent round can fill 40 GB, so the check runs before every
-# agent round and every gate, not only at the start of the run. The agent cache goes first; the
-# gate cache only when that is not enough (a cold gate build is slow but cannot fail on space).
-MIN_FREE_GB=20
+# debug and release build caches rebuild on demand (release: latency runs, wheels). The check runs
+# before every agent round and every gate, not only at the start of the run. Each step needs room
+# for its own cache to grow to its peak (a cold agent round filled 33 GB of target/, a cold gate
+# 29 GB of target-gate/), less what that cache already holds. A flat 20 GB minimum let a cold agent
+# round fill the disk (DLP 20261108T021844Z, round 2). Both caches at their peak do not fit on the
+# disk: the other step's cache goes first, the step's own cache only when that is not enough (a
+# cold build is slow but cannot fail on space).
+MIN_FREE_GB=10
+AGENT_CACHE_GB=40
+GATE_CACHE_GB=35
 free_gb() { df -P -BG "$SHARED" | awk 'NR==2 { sub("G", "", $4); print $4 }'; }
-ensure_free_space() {  # $1: what comes next
-  [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && return 0
-  echo "== only $(free_gb) GB free before $1; removing the agent debug build caches"
-  rm -rf "$SHARED/target/debug" "$DLP_ROOT"/target/debug
-  if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
-    echo "== only $(free_gb) GB free; removing the gate debug build caches too"
-    rm -rf "$SHARED"/target*/debug "$DLP_ROOT"/target*/debug
+cache_gb() { du -s -BG "$@" 2>/dev/null | awk '{ sub("G", "", $1); s += $1 } END { print s + 0 }'; }
+ensure_free_space() {  # $1: what comes next, $2: agent | gate
+  local own other peak need
+  if [ "$2" = gate ]; then
+    own=("$SHARED"/target-gate/{debug,release} "$DLP_ROOT"/target-gate/{debug,release})
+    other=("$SHARED"/target/{debug,release,maturin} "$DLP_ROOT"/target/{debug,release,maturin})
+    peak=$GATE_CACHE_GB
+  else
+    own=("$SHARED"/target/{debug,release,maturin} "$DLP_ROOT"/target/{debug,release,maturin})
+    other=("$SHARED"/target-gate/{debug,release} "$DLP_ROOT"/target-gate/{debug,release})
+    peak=$AGENT_CACHE_GB
+  fi
+  need=$((peak - $(cache_gb "${own[@]}")))
+  [ "$need" -lt "$MIN_FREE_GB" ] && need=$MIN_FREE_GB
+  [ "$(free_gb)" -ge "$need" ] && return 0
+  echo "== only $(free_gb) GB free before $1 (needs $need GB); removing the other build caches"
+  rm -rf "${other[@]}"
+  if [ "$(free_gb)" -lt "$need" ]; then
+    echo "== only $(free_gb) GB free; removing the build caches of $1 too"
+    rm -rf "${own[@]}"
   fi
   echo "== $(free_gb) GB free"
 }
-ensure_free_space "the run"
+ensure_free_space "the run" agent
 
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
 "${L1[@]}" next
@@ -102,7 +121,7 @@ fi
 feedback=""
 for round in $(seq 1 "$MAX_ROUNDS"); do
   echo "== round $round/$MAX_ROUNDS: $TASK_ID on $BRANCH (base $BASE)"
-  ensure_free_space "agent round $round"
+  ensure_free_space "agent round $round" agent
   # The sandbox kills the agent at AGENT_MAX_SEC; work that is not committed by then is lost
   # and the run is aborted. Tell the agent the clock time so it commits in time.
   deadline="$(date -u -d "+$AGENT_MAX_SEC seconds" +%H:%M)"
@@ -159,7 +178,7 @@ $feedback"
     exit 1
   fi
 
-  ensure_free_space "the gate"
+  ensure_free_space "the gate" gate
   if "${L1[@]}" gate; then
     # A PR only for green GitHub CI: red CI goes back to the agent like a red gate.
     unlock
