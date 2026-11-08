@@ -2170,16 +2170,18 @@ def gate_milestones(
     head: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, presidio: Predictor
 ) -> list[str]:
     """M1 and M2 of the head per split on raw gold, each milestone engine (balanced, balanced-bare) vs
-    Presidio default and tuned (H05, M-RAW).
+    Presidio default and tuned (H05, M-RAW), with the family F1 of every engine and the M1 gaps (H05-2).
 
-    One aggregate line per split and engine, so the final milestone numbers on the holdout reach the
-    gate report (the runner keeps the tail of a passing scoreboard) without a row id or value. A line's
+    Aggregate lines per split, so the final milestone numbers on the holdout reach the gate report (the
+    runner keeps the tail of a passing scoreboard) without a row id or value: the exact F1 per source
+    family and the HN-FP count of strict, balanced, balanced-bare and both Presidio profiles, one line
+    per milestone engine, and the shared ids where an engine stays below a profile. A milestone line's
     MET means that engine holds against both profiles; a milestone is met if one engine's line says so.
     A failure to measure names only the error type and never fails the gate."""
     lines = []
     for split in dict.fromkeys(d.split for d in datasets):
         try:
-            ark_parts: dict[str, list[dict[str, Any]]] = {engine: [] for engine in MILESTONE_ENGINES}
+            ark_parts: dict[str, list[dict[str, Any]]] = {engine: [] for engine in ("strict", *MILESTONE_ENGINES)}
             presidio_parts: dict[str, list[dict[str, Any]]] = {profile: [] for profile in PRESIDIO_PROFILES}
             for dataset in (d for d in datasets if d.split == split):
                 rows = read_jsonl(dataset.path)
@@ -2195,6 +2197,23 @@ def gate_milestones(
         except (ScoreboardError, OSError, ValueError, KeyError) as error:
             lines.append(f"milestones {split}: not measured ({type(error).__name__})")
             continue
+        results = {**ark_result, **presidio_results}
+        scores = [f"{family}: " + ", ".join(f"{engine} {pct(metrics(result['buckets'][f'family/{family}'])['exact']['f1']).strip()}"
+                                            for engine, result in results.items())
+                  for family in entity_map_module.FAMILIES
+                  if any(f"family/{family}" in result["buckets"] for result in results.values())]
+        lines.append(f"scores {split} ({MILESTONE_VIEW} gold, exact F1 in % on L1 ids per family; HN-FP): "
+                     + " | ".join([*scores, "HN-FP: " + ", ".join(f"{engine} {len(result['hard_negative_fp'])}"
+                                                                   for engine, result in results.items())]))
+        gaps = []
+        for engine in MILESTONE_ENGINES:
+            by_profile = []
+            for profile in PRESIDIO_PROFILES:
+                below = [f"{family} {entity_id} {pct(item['ark_f1']).strip()} < {pct(item['presidio_f1']).strip()}"
+                         for family, result in m1["modes"][engine][presidio_engine(profile)]["families"].items()
+                         if result["decides"] for entity_id, item in result["entities"].items() if not item["holds"]]
+                by_profile.append(f"vs {profile} " + (", ".join(below) or "none"))
+            gaps.append(f"{engine} " + ", ".join(by_profile))
         for engine in MILESTONE_ENGINES:
             m1_parts, m2_parts = [], []
             for profile in PRESIDIO_PROFILES:
@@ -2211,6 +2230,8 @@ def gate_milestones(
                 f"M1 {'MET' if engine in m1['holding'] else 'NOT MET'} ({'; '.join(m1_parts)} shared ids) | "
                 f"M2 {'MET' if engine in m2['holding'] else 'NOT MET'} (macro-F1 {'; '.join(m2_parts)})"
             )
+        lines.append(f"M1 gaps {split} (shared ids with Ark below Presidio, exact F1 in %): "
+                     + "; ".join(gaps))
     return lines
 
 
