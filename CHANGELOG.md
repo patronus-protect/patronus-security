@@ -11,6 +11,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: HR, security, export-control and R&D document classes on the M01 content class
+  engine (M-HRSEC), all opt-in (off by default; the default profile is unchanged). New
+  `dlp_document_hr` (`dlp.document.hr`, M06): employment references (Arbeitszeugnis), warning
+  letters (Abmahnung, written warning), terminations and termination/separation agreements
+  (Kündigungsschreiben, Aufhebungsvertrag), payslips (Entgelt-/Lohn-/Gehaltsabrechnung) and
+  performance reviews (Leistungsbeurteilung). New `dlp_document_security_report`
+  (`dlp.document.security_report`, M13): pentest, security audit, vulnerability assessment and
+  incident reports (Pentest-Bericht, Sicherheitsvorfall, Vorfallsbericht), which must name an
+  affected system (host, server, domain controller, VPN, Zielsystem …). New
+  `dlp_document_export_control` (`dlp.document.export_control`, M16): only labelled identifiers
+  (ECCN, AL-Nummer, Ausfuhrlistennummer or dual-use followed by an Annex I code such as 5A002 or an
+  export list number 0001–0022, EAR99, ITAR-controlled, subject to the ITAR, USML Category). New
+  `dlp_document_rnd_ip` (`dlp.document.rnd_ip`, M17): invention disclosures (Erfindungsmeldung),
+  patent drafts and draft claims before filing (Patententwurf, Anspruchsentwürfe). Each class needs
+  two distinct domain terms and the form of a letter, chat or record within 1,500 bytes of the
+  title. Job ads, law and regulation texts (this Act, im Sinne dieses Gesetzes, Annex I), public
+  advisories (affected versions, fixed in, Sicherheitshinweis), published patents
+  (Offenlegungsschrift, Date of publication) and explanations are counter-context, and two
+  bracketed placeholders (`[Name]`, `[yes/no]`) near the title mark a form. With all four classes
+  enabled the dev benign-document and benign-code corpora flag no document. Latency
+  (`scripts/l1_dlp/latency.py`, release, default profile, same machine): base 100 KiB p50
+  11.23 ms, p95 16.23 ms, head p50 11.05 ms, p95 15.29 ms; 4 KiB p95 2.50 → 1.62 ms; no
+  measurable change, the classes are opt-in and their anchors are searched only where a marker
+  matched.
 - Detection change: wallet keys and wallet files (C-WALLET, C02 + C03), all `CRYPTO_KEY` with
   subtype `private_key`, on by default. `dlp_bip32_extended_private_key` reports BIP 32 / SLIP-0132
   extended private keys (`xprv`, `yprv`, `zprv`, testnet `tprv`, `uprv`, `vprv` with severity

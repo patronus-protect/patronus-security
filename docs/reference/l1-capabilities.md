@@ -11,8 +11,8 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 107 | 30 |
-| Regex rules | 199 | 172 (+5 relationship rules) |
+| Result labels (entity groups) | 107 | 34 |
+| Regex rules | 199 | 176 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 130 | 28 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
@@ -342,8 +342,10 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `dlp.document.board_minutes` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.nda_trade_secret` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.contract` | document_class | off | 1 | 1 | – | – |
-| `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
-| `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
+| `dlp.document.hr` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.security_report` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.export_control` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.rnd_ip` | document_class | off | 1 | 1 | – | – |
 
 ### Entities
 
@@ -446,6 +448,10 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | `dlp_document_board_minutes` | format | off | – |
 | `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | `dlp_document_nda_trade_secret` | format | off | – |
 | `document.contract` | ark_only | `dlp.document.contract` | `dlp_document_contract` | format | off | – |
+| `document.hr` | ark_only | `dlp.document.hr` | `dlp_document_hr` | format | off | – |
+| `document.security_report` | ark_only | `dlp.document.security_report` | `dlp_document_security_report` | format | off | – |
+| `document.export_control` | ark_only | `dlp.document.export_control` | `dlp_document_export_control` | format | off | – |
+| `document.rnd_ip` | ark_only | `dlp.document.rnd_ip` | `dlp_document_rnd_ip` | format | off | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |
@@ -575,7 +581,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 87 shared, 46 ARK only, 77 baseline only, 11 out of scope.
+Entities: 87 shared, 50 ARK only, 77 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -676,6 +682,10 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | – | – | – |
 | `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | – | – | – |
 | `document.contract` | ark_only | `dlp.document.contract` | – | – | – |
+| `document.hr` | ark_only | `dlp.document.hr` | – | – | – |
+| `document.security_report` | ark_only | `dlp.document.security_report` | – | – | – |
+| `document.export_control` | ark_only | `dlp.document.export_control` | – | – | – |
+| `document.rnd_ip` | ark_only | `dlp.document.rnd_ip` | – | – | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |
@@ -791,8 +801,8 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
-| `document.hr` | baseline_only | `dlp.document.hr` | planned / not implemented | planned / not implemented | planned / not implemented |
-| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | planned / not implemented | planned / not implemented | planned / not implemented |
+| `document.hr` | baseline_only | `dlp.document.hr` | – | – | – |
+| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – |
 
 Measured entities: 176, 46 with gold, 130 without gold.
 
