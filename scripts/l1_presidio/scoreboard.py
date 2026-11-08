@@ -119,6 +119,7 @@ MODES = ("strict", "balanced")
 MILESTONE_MODE = "balanced"
 # Balanced with the opt-in bare rules (D-BARE, docs/how-to/pii-bare-formats.gates.json).
 BARE_PROFILE = "balanced-bare"
+BARE_GATES = HERE.parents[1] / "docs" / "how-to" / "pii-bare-formats.gates.json"
 ARK_ENGINES = ("strict", MILESTONE_MODE, BARE_PROFILE, "recall")  # accepted by m1, m2 and report
 # M-RAW: a milestone is met if one of these holds against every Presidio profile in PRESIDIO_PROFILES.
 MILESTONE_ENGINES = (MILESTONE_MODE, BARE_PROFILE)
@@ -559,6 +560,15 @@ def steuer_id_issued(value: str) -> bool:
     repeated = [n for n in (digits.count(d) for d in set(digits)) if n > 1]
     runs = any(digits[i] == digits[i + 1] == digits[i + 2] for i in range(len(digits) - 2))
     return len(repeated) == 1 and repeated[0] in (2, 3) and not runs
+
+
+def steuer_id_bare(value: str) -> bool:
+    """Port of ``validators::steuer_id_bare``: checksum, no digit more than three times, none three in a row."""
+    if not steuer_id(value):
+        return False
+    digits = _digits(value)[:10]
+    runs = any(digits[i] == digits[i + 1] == digits[i + 2] for i in range(len(digits) - 2))
+    return max(digits.count(d) for d in set(digits)) <= 3 and not runs
 
 
 def _vat_body(value: str, prefix: str) -> str:
@@ -1669,6 +1679,7 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "iban": iban_registry,
     "steuer_id": steuer_id,
     "steuer_id_issued": steuer_id_issued,
+    "steuer_id_bare": steuer_id_bare,
     "de_vat_id": de_vat_id,
     "at_vat_id": at_vat_id,
     "ch_vat_id": ch_vat_id,
@@ -2036,10 +2047,13 @@ def build_base(
 
 
 def run_predictions(build: ArkBuild, input_path: Path, output_path: Path, mode: str = "strict") -> None:
+    """run_ark.py in PII mode ``mode``; BARE_PROFILE runs balanced with the rules of BARE_GATES."""
     meta = output_path.with_name(output_path.name + ".meta.json")
+    bare = mode == BARE_PROFILE
+    pii_mode = MILESTONE_MODE if bare else mode
     proc = subprocess.run(
         [build.python, str(build.run_ark), "--input", str(input_path), "--output", str(output_path), "--meta", str(meta),
-         "--pii-mode", mode],
+         "--pii-mode", pii_mode, *(["--gates", str(BARE_GATES)] if bare else [])],
         cwd="/", env={**os.environ, **build.env}, text=True, capture_output=True,
     )
     if proc.returncode != 0:
@@ -2053,8 +2067,10 @@ def run_predictions(build: ArkBuild, input_path: Path, output_path: Path, mode: 
         info = json.loads(meta.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         raise ScoreboardError(f"run_ark.py wrote no readable metadata {meta}") from None
-    # run_ark.py records a non-default mode as engine.pii_mode; a runner that ignored the flag scored strict.
-    if (info.get("engine") or {}).get("pii_mode", "strict") != mode:
+    # run_ark.py records a non-default mode as engine.pii_mode and applied gates as engine.rules; a
+    # runner that ignored a flag scored strict or balanced without the bare rules.
+    engine = info.get("engine") or {}
+    if engine.get("pii_mode", "strict") != pii_mode or (bare and not engine.get("rules")):
         raise ScoreboardError(f"run_ark.py {build.run_ark} did not run in PII mode {mode}")
     if build.native is not None:
         native = info.get("build", {}).get("native_sha256")
@@ -2073,7 +2089,10 @@ class PredictionCache:
         self.scratch = root / "scratch"
 
     def path(self, key: str, dataset: Dataset, mode: str = "strict") -> Path:
-        # strict keeps the layout from before T15, so its cached predictions stay valid.
+        # strict keeps the layout from before T15, so its cached predictions stay valid. The bare
+        # profile is not part of the source key: its content keys the directory.
+        if mode == BARE_PROFILE:
+            mode = f"{mode}-{sha256_file(BARE_GATES)[:16]}"
         directory = self.root / key if mode == "strict" else self.root / key / mode
         return directory / f"{dataset.sha256}.jsonl"
 
@@ -2150,45 +2169,48 @@ def presidio_engine(profile: str) -> str:
 def gate_milestones(
     head: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, presidio: Predictor
 ) -> list[str]:
-    """M1 and M2 of the head per split on raw gold, balanced vs Presidio default and tuned (H05, M-RAW).
+    """M1 and M2 of the head per split on raw gold, each milestone engine (balanced, balanced-bare) vs
+    Presidio default and tuned (H05, M-RAW).
 
-    One aggregate line per split, so the final milestone numbers on the holdout reach the gate report
-    (the runner keeps the tail of a passing scoreboard) without a row id or value. A failure to
-    measure names only the error type and never fails the gate."""
+    One aggregate line per split and engine, so the final milestone numbers on the holdout reach the
+    gate report (the runner keeps the tail of a passing scoreboard) without a row id or value. A line's
+    MET means that engine holds against both profiles; a milestone is met if one engine's line says so.
+    A failure to measure names only the error type and never fails the gate."""
     lines = []
     for split in dict.fromkeys(d.split for d in datasets):
         try:
-            ark_parts: list[dict[str, Any]] = []
+            ark_parts: dict[str, list[dict[str, Any]]] = {engine: [] for engine in MILESTONE_ENGINES}
             presidio_parts: dict[str, list[dict[str, Any]]] = {profile: [] for profile in PRESIDIO_PROFILES}
             for dataset in (d for d in datasets if d.split == split):
                 rows = read_jsonl(dataset.path)
-                ark = cache.get(head.key, dataset, MILESTONE_MODE, head.predict)
-                ark_parts.append(score_rows(rows, ark, emap, dataset.name))
+                for engine, parts in ark_parts.items():
+                    parts.append(score_rows(rows, cache.get(head.key, dataset, engine, head.predict), emap, dataset.name))
                 for profile, parts in presidio_parts.items():
                     predictions = cache.get(presidio_key(profile), dataset, profile, lambda: presidio)
                     parts.append(score_rows(rows, predictions, emap, dataset.name))
-            ark_result = {MILESTONE_MODE: merge(ark_parts)}
+            ark_result = {engine: merge(parts) for engine, parts in ark_parts.items()}
             presidio_results = {presidio_engine(profile): merge(parts) for profile, parts in presidio_parts.items()}
             m1 = milestone_by_mode(m1_report, ark_result, presidio_results, emap)
             m2 = milestone_by_mode(m2_report, ark_result, presidio_results, emap)
         except (ScoreboardError, OSError, ValueError, KeyError) as error:
             lines.append(f"milestones {split}: not measured ({type(error).__name__})")
             continue
-        m1_parts, m2_parts = [], []
-        for profile in PRESIDIO_PROFILES:
-            item = m1["modes"][MILESTONE_MODE][presidio_engine(profile)]
-            m1_parts.append(f"vs {profile}: " + ", ".join(
-                f"{family} {sum(e['holds'] for e in result['entities'].values())}/{len(result['entities'])}"
-                for family, result in item["families"].items() if result["decides"]))
-            item = m2["modes"][MILESTONE_MODE][presidio_engine(profile)]
-            m2_parts.append(f"vs {profile}: " + ", ".join(
-                f"{family} {pct(result['ark_macro_f1']).strip()} {'>=' if result['holds'] else '<'} "
-                f"{pct(result['target']).strip()}" for family, result in item["families"].items() if result["decides"]))
-        lines.append(
-            f"milestones {split} ({MILESTONE_MODE}, {MILESTONE_VIEW} gold, vs Presidio {' and '.join(PRESIDIO_PROFILES)}): "
-            f"M1 {'MET' if m1['met'] else 'NOT MET'} ({'; '.join(m1_parts)} shared ids) | "
-            f"M2 {'MET' if m2['met'] else 'NOT MET'} (macro-F1 {'; '.join(m2_parts)})"
-        )
+        for engine in MILESTONE_ENGINES:
+            m1_parts, m2_parts = [], []
+            for profile in PRESIDIO_PROFILES:
+                item = m1["modes"][engine][presidio_engine(profile)]
+                m1_parts.append(f"vs {profile}: " + ", ".join(
+                    f"{family} {sum(e['holds'] for e in result['entities'].values())}/{len(result['entities'])}"
+                    for family, result in item["families"].items() if result["decides"]))
+                item = m2["modes"][engine][presidio_engine(profile)]
+                m2_parts.append(f"vs {profile}: " + ", ".join(
+                    f"{family} {pct(result['ark_macro_f1']).strip()} {'>=' if result['holds'] else '<'} "
+                    f"{pct(result['target']).strip()}" for family, result in item["families"].items() if result["decides"]))
+            lines.append(
+                f"milestones {split} ({engine}, {MILESTONE_VIEW} gold, vs Presidio {' and '.join(PRESIDIO_PROFILES)}): "
+                f"M1 {'MET' if engine in m1['holding'] else 'NOT MET'} ({'; '.join(m1_parts)} shared ids) | "
+                f"M2 {'MET' if engine in m2['holding'] else 'NOT MET'} (macro-F1 {'; '.join(m2_parts)})"
+            )
     return lines
 
 
