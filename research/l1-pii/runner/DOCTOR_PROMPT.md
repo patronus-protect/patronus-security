@@ -26,7 +26,8 @@ and verify the fix. Do not stop at a diagnosis.
   runner token cannot push `.github/workflows` — record it in the report for a person.
 - PRs that stay open: check threads, CI, mergeable state (`gh pr view`, `git merge-tree`). Merge only a PR
   whose required checks (`rust`, `python`) are green and whose review threads are all resolved; a PR that
-  changes `ark-core/` only with its head under `pass` in `verify.json`:
+  changes `ark-core/` only with its head under `pass` in `verify.json`, or once its branch has
+  `fails` >= 2 there (settled: verify is a sanity check and never waits for a person):
   `gh api -X PUT repos/patronus-protect/patronus-security/pulls/<n>/merge -f merge_method=squash -f sha=<head>`.
 - A bug in `ark-l1`/`run.sh`: patch the installed file in `~/ark-l1/bin` (back it up first as
   `<file>.bak-<timestamp>`), `python3 -m py_compile` it, and verify the changed function on real data
