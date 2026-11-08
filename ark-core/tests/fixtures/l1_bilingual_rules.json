@@ -5352,6 +5352,39 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_bip39_seed_phrase",
+    "de": "Seed-Phrase der Wallet: <<secret:0>>",
+    "en": "Recovery phrase: <<secret:0>>",
+    "secrets": [
+      {
+        "gen": "bip39_en_12",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Wiederherstellungsphrase: <deine 12 Wörter hier eintragen>",
+        "Seed-Phrase im Format wort1 wort2 wort3 wort4 wort5 wort6 wort7 wort8 wort9 wort10 wort11 wort12 notieren",
+        "Die Seed-Phrase kommt aus ${MNEMONIC}, nie aus dem Repository.",
+        "Öffentlicher BIP39-Testvektor der Seed-Phrase: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        "Seed-Phrase mit Tippfehler: river clock motion tunnel bright garden lemon fossil empty pilot salad wagon",
+        "Nur 11 Wörter notiert: river clock motion tunnel bright garden lemon fossil empty pilot salad",
+        "Bitte die Wiederherstellungswörter der Wallet niemals in den Chat kopieren, sondern offline auf Papier notieren."
+      ],
+      "en": [
+        "mnemonic: <your 12 word mnemonic>",
+        "seed phrase: word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+        "const wallet = ethers.Wallet.fromPhrase(process.env.MNEMONIC);",
+        "BIP39 test vector (public): abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        "recovery phrase with a typo: river clock motion tunnel bright garden lemon fossil empty pilot salad wagon",
+        "only 11 words written down: river clock motion tunnel bright garden lemon fossil empty pilot salad",
+        "Please back up your wallet before the update; the recovery phrase stays on paper in the office safe."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_private_key_block",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",

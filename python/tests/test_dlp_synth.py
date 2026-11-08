@@ -605,6 +605,15 @@ def gitlab_routable(value, prefix, length):
 
 # One independent check per format-valid generator (shape_only generators excluded).
 CHECKS = {
+    "bip39_en_12": lambda v: checks.is_valid_bip39_mnemonic(v, "english") and len(v.split(" ")) == 12,
+    "bip39_en_15": lambda v: checks.is_valid_bip39_mnemonic(v, "english") and len(v.split(" ")) == 15,
+    "bip39_en_18": lambda v: checks.is_valid_bip39_mnemonic(v, "english") and len(v.split(" ")) == 18,
+    "bip39_en_24": lambda v: checks.is_valid_bip39_mnemonic(v, "english") and len(v.split(" ")) == 24,
+    "bip39_it_12": lambda v: checks.is_valid_bip39_mnemonic(v, "italian") and len(v.split(" ")) == 12,
+    "bip39_pt_15": lambda v: checks.is_valid_bip39_mnemonic(v, "portuguese") and len(v.split(" ")) == 15,
+    "bip39_cs_21": lambda v: checks.is_valid_bip39_mnemonic(v, "czech") and len(v.split(" ")) == 21,
+    "bip39_es_12": lambda v: checks.is_valid_bip39_mnemonic(v, "spanish") and len(v.split(" ")) == 12,
+    "bip39_fr_18": lambda v: checks.is_valid_bip39_mnemonic(v, "french") and len(v.split(" ")) == 18,
     "anthropic_api_key": prefixed("sk-ant-api03-", B64URL, 93, "AA"),
     "anthropic_admin_key": prefixed("sk-ant-admin01-", B64URL, 93, "AA"),
     "openai_project_api_key": lambda v: prefixed("sk-proj-", B64URL, 156)(v) and v[82:90] == "T3BlbkFJ",
@@ -1330,6 +1339,9 @@ class GeneratorSpecTests(unittest.TestCase):
             {"encode": "base64url", "bytes": [{"random": 4}], "wrap": 64},
             {"encode": "base58check", "bytes": [{"random": 32}]},
             {"encode": "base58check", "bytes": [{"hex": "00"}, {"random": 32}]},
+            {"encode": "bip39_english", "bytes": [{"random": 17}]},
+            {"encode": "bip39_klingon", "bytes": [{"random": 16}]},
+            {"encode": "bip39_czech", "bytes": [{"random": 16}], "wrap": 64},
             {"alphabet": "no_such_alphabet", "len": 4},
             {"lit": ""},
         ):
@@ -1337,12 +1349,30 @@ class GeneratorSpecTests(unittest.TestCase):
 
 
 class StructureTests(unittest.TestCase):
+    def test_bip39_mnemonics_match_the_published_vectors_and_checksum(self):
+        # Trezor python-mnemonic vectors.json (English).
+        for entropy, mnemonic in (
+            ("7f" * 16, "legal winner thank year wave sausage worth useful legal winner thank yellow"),
+            ("9e885d952ad362caeb4efe34a8e91bd2", "ozone drill grab fiber curtain grace pudding thank cruise elder eight picnic"),
+            ("00" * 32, "abandon " * 23 + "art"),
+        ):
+            self.assertEqual(recipes.bip39_mnemonic("english", bytes.fromhex(entropy)), mnemonic)
+            self.assertTrue(checks.is_valid_bip39_mnemonic(mnemonic, "english"))
+        self.assertFalse(checks.is_valid_bip39_mnemonic("abandon " * 11 + "abandon", "english"))
+        for name, language, words in (("bip39_it_12", "italian", 12), ("bip39_pt_15", "portuguese", 15), ("bip39_cs_21", "czech", 21), ("bip39_es_12", "spanish", 12), ("bip39_fr_18", "french", 18)):
+            wordlist = set(recipes.bip39_wordlist(language))
+            for seed in SEEDS:
+                value = recipes.generate(name, seed).split(" ")
+                self.assertEqual(len(value), words, name)
+                self.assertTrue(set(value) <= wordlist, name)
+
     def test_generated_values_pass_their_format_structure_and_checksum_check(self):
         for name, check in CHECKS.items():
             for seed in SEEDS:
                 value = recipes.generate(name, seed)
                 self.assertTrue(check(value), f"{name} seed={seed}")
-                self.assertEqual(len(value), recipes.generator_length(name), name)
+                if not name.startswith("bip39_"):
+                    self.assertEqual(len(value), recipes.generator_length(name), name)
 
     def test_high_entropy_generators_stay_above_the_detect_secrets_limit(self):
         # Review of #205: base64 of 33 random bytes fell to 4.49887 bits at seed 896 (305 of

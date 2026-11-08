@@ -196,6 +196,7 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_electrum_seed", "seed_phrase"),
     ("dlp_monero_seed", "seed_phrase"),
     ("dlp_cardano_signing_key", "private_key"),
+    ("dlp_bip39_seed_phrase", "seed_phrase"),
     ("dlp_private_key_block", "private_key"),
     ("dlp_private_key_header", "private_key"),
     ("dlp_jwk_private_key", "private_key"),
