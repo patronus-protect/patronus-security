@@ -221,7 +221,15 @@ Rauschen. Die Schleife endet mit H06-6; H05 berichtet nativ und Python getrennt.
 Für M1 und M2 zählt seit M-RAW nur die rohe Sicht gegen Presidio `default` und `tuned`, mit ARK
 `balanced` oder `balanced-bare` (Abschnitt oben); die folgenden Zahlen aus H05 sind auf erreichbarem
 Gold gegen tuned gemessen und belegen die Meilensteine nicht mehr (Abschlussbericht in der rohen Sicht:
-H05-2).
+H05-2, unten).
+
+**Abschlussbericht in der Rohsicht (H05-2):** [`scoreboard/final-raw.md`](scoreboard/final-raw.md). Auf
+Dev (2026-11-08, rohes Gold, gegen Presidio default und tuned) ist M1 mit keiner Engine erreicht
+(`presidio_favored`: `balanced` 21/25 gegen default und 13/25 gegen tuned, `balanced-bare` 21/25 und
+19/25; `neutral` hält mit `balanced`), M2 nur mit dem Bare-Profil (`balanced-bare`: neutral 62,5 ≥ 39,2
+bzw. 36,2, presidio_favored 89,9 ≥ 6,6 bzw. 87,0), M3 (83 ≥ 70) und M4 nativ (9,774 ms) wie in H05.
+Für den Holdout druckt `scoreboard.py gate` je Split die Zeilen `scores`, `milestones` (je
+Meilenstein-Engine) und `M1 gaps` in den Gate-Bericht.
 
 **Abschlussbericht (H05):** [`scoreboard/final.md`](scoreboard/final.md). Auf Dev (2026-11-05) sind M1
 (neutral 9/9, presidio_favored 22/22), M2 (66,1 ≥ 36,2 und 100,0 ≥ 100,0), M3 (83 ≥ 70) und M4 nativ
