@@ -6157,6 +6157,27 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_document_unpublished_financials",
+    "de": "Betreff: Vorläufige Zahlen Q3\n\nStreng vertraulich – Insiderinformation\n\nSehr geehrte Damen und Herren, der Umsatz im Quartal liegt unter dem Analystenkonsens, die Prognose ist nicht zu halten.",
+    "en": "Subject: Q3 preliminary figures\n\nSTRICTLY CONFIDENTIAL - INSIDE INFORMATION\n\nDear all, Q3 revenue is below the analyst consensus and the full-year guidance will be lowered.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_m_and_a",
+    "de": "Betreff: Projekt Falke – Absichtserklärung\n\nSehr geehrte Damen und Herren, der Kaufpreis für die Zielgesellschaft liegt bei 410 Mio., dazu sechs Wochen Exklusivität für den Käufer.",
+    "en": "Subject: Project Falcon - term sheet\n\nDear all, the purchase price for the target company is 410m, with six weeks of exclusivity for the buyer.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_board_minutes",
+    "de": "Protokoll der Aufsichtsratssitzung\nDatum: 14.10.2026\nDer Aufsichtsrat ist beschlussfähig und stimmt dem Verkauf einstimmig zu.",
+    "en": "Minutes of the Meeting of the Supervisory Board\nDate: 14 October 2026\nQuorum confirmed; the board unanimously approved the sale.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_azure_storage_account_key",
     "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
     "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",
