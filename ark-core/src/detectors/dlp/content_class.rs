@@ -10,9 +10,17 @@
 //! - medium: domain terms (counsel, Kanzlei, Rechtsstreit), [`MEDIUM_WEIGHT`]
 //!   points each, at least `min_medium` of them;
 //! - structural: document structure (Subject:, Betreff:, Dear, Mit
-//!   freundlichen Grüßen), [`STRUCTURAL_WEIGHT`] point each;
+//!   freundlichen Grüßen), [`STRUCTURAL_WEIGHT`] point each, at least
+//!   `min_structural` of them. A strong or medium anchor used as a field
+//!   label (`Sperrfrist:`, `Term:`, `"fees":`) is record structure and counts
+//!   as one more structural anchor;
 //! - counter: counter-context (example, template, Vorlage, Seminar), minus
 //!   [`COUNTER_WEIGHT`] points each.
+//!
+//! A class may also require elements ([`ContentClass::requiring`]): groups of
+//! its anchors of which each needs at least one near the marker (a contract
+//! names parties, remuneration, term and confidentiality; four party roles
+//! are no contract).
 //!
 //! Each distinct anchor counts once, and anchors inside the marker do not
 //! count. Anchors are lower-case ASCII-case-insensitive literals matched as
@@ -45,13 +53,20 @@ pub(crate) struct Density {
     pub min_score: i32,
     /// Minimum number of distinct medium anchors.
     pub min_medium: usize,
+    /// Minimum number of distinct structural anchors and field labels:
+    /// prose about a document type (an encyclopedia article on NDAs) has the
+    /// domain terms but not the form of a letter, agreement or record.
+    pub min_structural: usize,
 }
 
 /// A compiled content class: its anchors and thresholds.
 pub(crate) struct ContentClass {
+    terms: Vec<String>,
     tiers: Vec<Tier>,
     automaton: AhoCorasick,
     density: Density,
+    /// One bit set of anchor ids per required element.
+    elements: Vec<[u128; MAX_ANCHORS / 128]>,
 }
 
 impl ContentClass {
@@ -62,6 +77,7 @@ impl ContentClass {
             "a content class has at most {MAX_ANCHORS} anchors"
         );
         Self {
+            terms: anchors.iter().map(|(term, _)| term.to_string()).collect(),
             tiers: anchors.iter().map(|(_, tier)| *tier).collect(),
             automaton: AhoCorasickBuilder::new()
                 .ascii_case_insensitive(true)
@@ -69,11 +85,35 @@ impl ContentClass {
                 .build(anchors.iter().map(|(term, _)| term))
                 .expect("content class anchors compile"),
             density,
+            elements: Vec::new(),
         }
     }
 
+    /// Requires one anchor of each group (anchor terms of this class) near
+    /// the marker.
+    pub(crate) fn requiring(mut self, elements: &[&[&str]]) -> Self {
+        self.elements = elements
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .fold([0u128; MAX_ANCHORS / 128], |mut mask, term| {
+                        let id = self
+                            .terms
+                            .iter()
+                            .position(|anchor| anchor == term)
+                            .unwrap_or_else(|| panic!("element {term} is an anchor of the class"));
+                        mask[id / 128] |= 1 << (id % 128);
+                        mask
+                    })
+            })
+            .collect();
+        self
+    }
+
     /// The score of the anchors around the strong anchor at `evidence`, or
-    /// `None` when fewer than `min_medium` medium anchors are near it.
+    /// `None` when fewer than `min_medium` medium or `min_structural`
+    /// structural anchors or no anchor of a required element are near it.
     pub(crate) fn score(&self, text: &str, evidence: Range<usize>) -> Option<i32> {
         let bytes = text.as_bytes();
         let start = evidence.start.saturating_sub(self.density.window);
@@ -82,7 +122,11 @@ impl ContentClass {
             .saturating_add(self.density.window)
             .min(bytes.len());
         let mut seen = [0u128; MAX_ANCHORS / 128];
-        let (mut score, mut medium) = (STRONG_WEIGHT, 0);
+        let (mut score, mut medium, mut structural) = (STRONG_WEIGHT, 0, 0);
+        if is_field_label(bytes, evidence.end) {
+            score += STRUCTURAL_WEIGHT;
+            structural += 1;
+        }
         for hit in self.automaton.find_overlapping_iter(&bytes[start..end]) {
             let range = start + hit.start()..start + hit.end();
             let id = hit.pattern().as_usize();
@@ -95,21 +139,46 @@ impl ContentClass {
             }
             seen[word] |= bit;
             score += match self.tiers[id] {
+                Tier::Medium if is_field_label(bytes, range.end) => {
+                    medium += 1;
+                    structural += 1;
+                    MEDIUM_WEIGHT + STRUCTURAL_WEIGHT
+                }
                 Tier::Medium => {
                     medium += 1;
                     MEDIUM_WEIGHT
                 }
-                Tier::Structural => STRUCTURAL_WEIGHT,
+                Tier::Structural => {
+                    structural += 1;
+                    STRUCTURAL_WEIGHT
+                }
                 Tier::Counter => -COUNTER_WEIGHT,
             };
         }
-        (medium >= self.density.min_medium).then_some(score)
+        (medium >= self.density.min_medium
+            && structural >= self.density.min_structural
+            && self.elements.iter().all(|element| {
+                seen.iter()
+                    .zip(element)
+                    .any(|(seen, element)| seen & element != 0)
+            }))
+        .then_some(score)
     }
 
     /// Whether the strong anchor at `evidence` labels the document.
     pub(crate) fn holds(&self, text: &str, evidence: Range<usize>) -> bool {
         self.score(text, evidence)
             .is_some_and(|score| score >= self.density.min_score)
+    }
+}
+
+/// Whether a colon follows the anchor ending at `end`, directly or after the
+/// closing quote of a JSON key: `Term:`, `"fees":`.
+fn is_field_label(bytes: &[u8], end: usize) -> bool {
+    match bytes.get(end) {
+        Some(b':') => true,
+        Some(b'"' | b'\'') => bytes.get(end + 1) == Some(&b':'),
+        _ => false,
     }
 }
 
@@ -150,6 +219,7 @@ mod tests {
                 window: 40,
                 min_score: 6,
                 min_medium: 1,
+                min_structural: 0,
             },
         )
     }
@@ -220,6 +290,7 @@ mod tests {
                 window: 100,
                 min_score: 0,
                 min_medium: 1,
+                min_structural: 0,
             },
         );
         let text = "MARK counsel term150 term150 term199";
@@ -240,6 +311,7 @@ mod tests {
                 window: 100,
                 min_score: 0,
                 min_medium: 1,
+                min_structural: 0,
             },
         );
         let text = "MARK counsel counsel term254";
@@ -260,8 +332,82 @@ mod tests {
                 window: 100,
                 min_score: 0,
                 min_medium: 0,
+                min_structural: 0,
             },
         );
+    }
+
+    #[test]
+    fn a_medium_anchor_used_as_field_label_is_structure() {
+        // `counsel:` and the JSON key `"kanzlei":` are labels; `counsel` in
+        // prose and a quoted value are not.
+        let text = "MARK counsel: Lee";
+        assert_eq!(class().score(text, evidence(text)), Some(3 + 2 + 1));
+        let text = r#"{"doc": "MARK", "kanzlei": "Lee"}"#;
+        assert_eq!(class().score(text, evidence(text)), Some(3 + 2 + 1));
+        let text = r#"MARK from counsel, "kanzlei" and more"#;
+        assert_eq!(class().score(text, evidence(text)), Some(3 + 2 + 2));
+    }
+
+    #[test]
+    fn a_strong_anchor_used_as_field_label_is_structure() {
+        let text = "MARK: Monday, counsel";
+        assert_eq!(class().score(text, evidence(text)), Some(3 + 1 + 2));
+    }
+
+    #[test]
+    fn a_class_with_a_structure_minimum_needs_document_form() {
+        let class = ContentClass::new(
+            &[("counsel", Tier::Medium), ("subject:", Tier::Structural)],
+            Density {
+                window: 40,
+                min_score: 5,
+                min_medium: 1,
+                min_structural: 1,
+            },
+        );
+        let text = "MARK from counsel";
+        assert_eq!(class.score(text, evidence(text)), None);
+        let text = "Subject: MARK from counsel";
+        assert!(class.holds(text, evidence(text)));
+        let text = "MARK\ncounsel: Lee";
+        assert!(class.holds(text, evidence(text)));
+    }
+
+    #[test]
+    fn a_class_with_elements_needs_an_anchor_of_each() {
+        let class = class().requiring(&[&["counsel", "kanzlei"], &["mandat"]]);
+        let text = "MARK counsel, Kanzlei";
+        assert_eq!(class.score(text, evidence(text)), None);
+        let text = "MARK Kanzlei, Mandat";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 2));
+        // A counter-context hit of no element does not fill one.
+        let text = "MARK counsel, for example";
+        assert_eq!(class.score(text, evidence(text)), None);
+    }
+
+    #[test]
+    fn an_element_anchor_beyond_the_first_128_counts() {
+        let terms: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
+        let mut anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Medium))
+            .collect();
+        anchors.push(("counsel", Tier::Medium));
+        let class = ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 1,
+                min_structural: 0,
+            },
+        )
+        .requiring(&[&["term150", "term199"]]);
+        let text = "MARK counsel";
+        assert_eq!(class.score(text, evidence(text)), None);
+        let text = "MARK counsel term199";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 2));
     }
 
     #[test]

@@ -7149,9 +7149,9 @@ DLP_CASES = {
         ),
         dp(
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
-            "Von: Dr. Katrin Vogel\nAn: Geschäftsführung Nordlicht GmbH\nBetreff: Klageentwurf gegen Lieferant\n\n"
+            "Von: Dr. Katrin Vogel\nAn: Geschäftsführung Nordlicht GmbH\nBetreff: Klage gegen Lieferant\n\n"
             "Vertrauliche ", "Anwaltskorrespondenz",
-            "\n\nSehr geehrte Damen und Herren,\nanbei der Klageentwurf zum Rechtsstreit mit der Gegenseite. Bitte "
+            "\n\nSehr geehrte Damen und Herren,\nanbei die Klagebegründung zum Rechtsstreit mit der Gegenseite. Bitte "
             "prüfen Sie den Stand der Vergleichsverhandlung vor dem Termin am Landgericht.\n\nMit freundlichen "
             "Grüßen\nDr. Katrin Vogel, Rechtsanwältin\n",
             carrier="prose",
@@ -7231,6 +7231,539 @@ DLP_CASES = {
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
             "Der Begriff Verteidigerpost ist mir neu, kannst du ihn erklären?",
             "marker without legal context", carrier="prose",
+        ),
+        # M-LEGAL (M05): settlement negotiation markers of the legal-privileged class.
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "", "WITHOUT PREJUDICE",
+            "\n\nDear Mr. Grant,\nwe write on behalf of our client to propose a settlement of the claim before the "
+            "hearing.\n\nYours sincerely,\nHarper and Lowe LLP\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Subject: Offer\n\n", "FOR SETTLEMENT PURPOSES ONLY",
+            "\n\nCounsel,\nthe defendant offers to resolve the lawsuit if the claim is withdrawn by Friday.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Sehr geehrter Herr Kollege,\n\nnamens unserer Mandantin unterbreiten wir ", "ohne Präjudiz",
+            " folgenden Vorschlag zur Beilegung des Rechtsstreits: Zahlung von 8.000 EUR gegen Rücknahme der "
+            "Klage.\n\nMit freundlichen Grüßen\nRechtsanwältin Vogel\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Betreff: Ihr Schreiben vom 2. Oktober\n\nSehr geehrte Frau Lenz,\n\nvertrauliche ", "Anwaltskorrespondenz",
+            ": unsere Mandantin bietet einen Vergleich an, um das Verfahren zu beenden.\n\nMit freundlichen "
+            "Grüßen\nKanzlei Hartmann\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "This Regulation applies without prejudice to the rules on judicial cooperation in civil matters.",
+            "published law text with lower-case phrase", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Glossary: WITHOUT PREJUDICE refers to a settlement offer that a court may not see. For example, "
+            "a letter between lawyers.",
+            "glossary entry", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Die Formel ohne Präjudiz bezeichnet ein Angebot, das zum Beispiel im Vergleich keine Bindung entfaltet.",
+            "explanation of the phrase", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Kulanz: Wir erstatten die Versandkosten ohne Anerkennung einer Rechtspflicht. Viele Grüße, Ihr Shop-Team",
+            "customer service note without legal context", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Wegen undichter Heizkessel verklagten bis 2019 rund 1.200 Käufer den Hersteller, mehrere Verfahren "
+            "lagen beim Landgericht. Im Frühjahr 2021 zahlte das Unternehmen ohne Anerkennung einer Rechtspflicht "
+            "45 Millionen Euro in einen Fonds; danach nahm fast jeder Kläger die Klage zurück.",
+            "encyclopedic report of out-of-court settlements", carrier="prose",
+        ),
+        # M-LEGAL (M05): draft pleadings of the legal-privileged class.
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "", "DRAFT - Statement of Claim",
+            " (privileged draft for client review)\n\nIN THE HIGH COURT OF JUSTICE\nClaimant: Northwind Ltd.\n"
+            "Defendant: Fabrikam GmbH\n\n1. The Defendant failed to deliver the ordered turbines.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Subject: Lee v. Contoso\n\nDear Ms. Chen,\nplease find attached our ", "draft complaint",
+            " for your review before we file it with the court. The plaintiff seeks damages for breach of "
+            "warranty.\n\nKind regards,\nHarper and Lowe LLP\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# ", "Draft Motion",
+            " to Dismiss\n\nPrepared by counsel for the defendant. Not yet filed with the court; do not share "
+            "outside the litigation team.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            '{"doc": "', "draft pleading",
+            '", "matter": "Lee v. Northwind", "counsel": "Harper LLP", "court": "District Court of Delaware"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "[14:02] omar: the ", "draft statement of defence",
+            " is in the shared folder; our client wants the lawsuit settled before trial.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Here is my draft complaint to the airline about the lost suitcase. Dear customer service, my bag "
+            "never arrived in Lisbon.",
+            "consumer complaint without legal context", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Tutorial: how to write a draft complaint for small claims court, for example against a landlord.",
+            "tutorial", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "## Template: Draft Statement of Claim\n\nDefendant: [Name]\nThe claim is for [Amount].",
+            "pleading template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# render the draft pleading preview as PDF before export",
+            "code comment", carrier="code",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Lecture 4 covers the draft petition, e.g. how a court reads the relief sought.",
+            "course notes", carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "", "ENTWURF Klageschrift",
+            " - vertraulich, nur für die Mandantin\n\nAn das Landgericht München I\n\nKlage der Nordlicht GmbH "
+            "gegen die Brandt AG - Beklagte - wegen Zahlung\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Betreff: Brandt ./. Nordlicht\n\nSehr geehrte Frau Lenz,\nanbei unser ", "Entwurf der Klageerwiderung",
+            " im Verfahren Az. 3 O 112/26 zur Durchsicht.\n\nMit freundlichen Grüßen\nKanzlei Hartmann\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "# ", "Klageentwurf",
+            "\n\nRechtsanwältin Vogel für die Mandantin Jana Kurz gegen die Nordlicht GmbH, Arbeitsgericht Köln.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "dokument:\n  titel: ", "Entwurf Schriftsatz",
+            "\n  kanzlei: Hartmann und Partner\n  aktenzeichen: 3 O 112/26\n  gericht: Landgericht Köln\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "[11:20] lea: der ", "Klageentwurf",
+            " gegen die Brandt AG ist fertig, bitte vor Freitag mit dem Mandanten abstimmen; das Gericht ist das "
+            "Landgericht Köln.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Mein Klageentwurf gegen den Vermieter wegen der Nebenkosten liegt bereit, ich schicke ihn dir später.",
+            "private draft without legal anchors", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Seminar Zivilprozess: Übung Klageentwurf, zum Beispiel für das Landgericht.",
+            "course exercise", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Vorlage: Entwurf Klageschrift an das Amtsgericht [Ort], Kläger: [Name]",
+            "pleading template", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Ein Klageentwurf bezeichnet die vorläufige Fassung einer Klage, z. B. vor der Einreichung beim Gericht.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "// TODO: Entwurf Schriftsatz als PDF exportieren",
+            "code comment", carrier="code",
+        ),
+    ],
+    # M-LEGAL (M04): non-disclosure agreements, trade secret notices and embargo periods. The
+    # agreement title, trade secret marker or embargo phrase is the evidence span; law texts, court
+    # decisions, templates and explanations are hard negatives.
+    "dlp.document.nda_trade_secret": [
+        dp(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "# Agreement\n\nThis ", "Mutual Non-Disclosure Agreement",
+            " is entered into between Northwind Ltd. and Contoso Inc. (the parties). The receiving party shall "
+            "not disclose any confidential information to third parties.\n\nSigned: Lea Brandt, Omar Haddad\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Subject: Drawings for review\n\nHi Sam,\nthe drawings below are covered by our ", "NDA",
+            " with Fabrikam. Do not forward them outside the project; the prototype is non-public until launch."
+            "\n\nBest regards,\nLea\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            '{"title": "Q4 product launch", "status": "', "embargoed until",
+            ' 20 November, 09:00 CET", "note": "press release draft, do not distribute before the announcement"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "document:\n  title: Coating process line 4\n  classification: ", "Trade Secret",
+            "\n  contains: proprietary formula\n  access: need-to-know\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "[10:42] lea: reminder, the scheduler source code is a ", "trade secret",
+            " of Contoso and so is the customer list. Every recipient signed the confidentiality terms.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "As used in this chapter, the term trade secret means all forms and types of financial, business, "
+            "scientific, technical, economic or engineering information, including formulas, designs and prototypes.",
+            "published law text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "The court held that the customer list was not a trade secret because the plaintiff took no reasonable "
+            "measures to keep it secret.",
+            "court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "## NDA template\n\nThis Non-Disclosure Agreement is made between [Party A] and [Party B].",
+            "contract template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "A non-disclosure agreement (NDA) is a legal contract between at least two parties that outlines "
+            "confidential material. Source: Wikipedia",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "const EMBARGO_DAYS = 30; // embargo period for vulnerability reports",
+            "code comment without document context", carrier="code",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "# ", "Geheimhaltungsvereinbarung",
+            "\n\nzwischen der Nordlicht GmbH und der Brandt AG (die Parteien)\n\n§ 1 Die empfangende Partei behandelt "
+            "alle Unterlagen vertraulich. Bei Verstoß fällt eine Vertragsstrafe an.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Betreff: Projekt Kiefer\n\nHallo Jana,\nanbei die Rezeptur. Sie ist ein ", "Geschäftsgeheimnis",
+            " unseres Hauses, bitte nicht weiterleiten.\n\nViele Grüße\nTim\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "PRESSEMITTEILUNG\n", "Sperrfrist",
+            ": 12. November 2026, 10:00 Uhr\n\nDie Nordlicht AG übernimmt die Brandt Logistik GmbH. Bis zur "
+            "Veröffentlichung ist die Meldung nicht öffentlich.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "dokument:\n  titel: Fertigungsverfahren Linie 4\n  schutz: ", "Betriebsgeheimnis",
+            "\n  zugriff: nur Empfänger mit Geheimhaltungspflicht\n  anhang: Quellcode der Steuerung\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "[09:12] tim: die ", "Vertraulichkeitsvereinbarung",
+            " mit der Brandt AG ist unterzeichnet, ihr dürft den Prototyp zeigen, aber die Kundenliste bleibt intern.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "§ 2 Begriffsbestimmungen\nIm Sinne dieses Gesetzes ist Geschäftsgeheimnis eine Information, die nicht "
+            "allgemein bekannt ist und Gegenstand von angemessenen Geheimhaltungsmaßnahmen ist.",
+            "published law text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Leitsatz: Eine Kundenliste ist nur dann ein Betriebsgeheimnis, wenn angemessene "
+            "Geheimhaltungsmaßnahmen bestehen (Urteil des Bundesarbeitsgerichts).",
+            "court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "## Muster Geheimhaltungsvereinbarung\n\nzwischen [Firma] und [Partner], nachfolgend die Parteien",
+            "contract template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Eine Vertraulichkeitsvereinbarung bezeichnet einen Vertrag, z. B. vor Gesprächen mit Investoren.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "RUECKGABE_TAGE = 14  # Sperrfrist für Rücksendungen im Shop",
+            "code comment without document context", carrier="code",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "A non-disclosure agreement sets out which information the parties keep secret and for how long. In a "
+            "one-way arrangement only the disclosing party shares material; the receiving party promises to protect "
+            "the confidential information and to use it for the stated purpose alone. Mutual agreements are signed "
+            "when both sides exchange plans, as in joint ventures and research partnerships.\n\nCourts enforce such "
+            "clauses but will not uphold an NDA that hides a crime. Because proving what a recipient learned is hard, "
+            "firms also mark files as proprietary and limit access to staff with a need to know.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Eine Geheimhaltungsvereinbarung legt fest, welche Informationen die Parteien vertraulich behandeln. Bei "
+            "einseitigen Verträgen gibt nur die offenlegende Partei Unterlagen heraus, die empfangende Partei "
+            "verpflichtet sich zur Geheimhaltung. Gegenseitige Verträge werden unterzeichnet, wenn beide Seiten Pläne "
+            "austauschen.\n\nVerstöße sichert oft eine Vertragsstrafe ab. Gerichte erkennen Informationen nur an, "
+            "wenn ihr Inhaber angemessene Geheimhaltungsmaßnahmen nachweist.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Subject: Weekly news digest\n\nDear readers,\na court in Delaware ruled in a trade secret case that a "
+            "former engineer may not reuse proprietary source code. Please share this issue with colleagues.",
+            "newsletter reporting a court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "# Security Policy\n\nPlease report vulnerabilities by mail. Reports stay under embargo until a fix is "
+            "released and the announcement is published.",
+            "SECURITY.md with an embargo", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Hi! We are hiring a backend engineer. Candidates sign an NDA before the take-home task; the offer is "
+            "signed after two interviews.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Betreff: Newsletter Arbeitsrecht\n\nHallo zusammen,\ndie Reform des GeschGehG tritt nach der "
+            "Veröffentlichung im Bundesgesetzblatt in Kraft.\n\nViele Grüße",
+            "newsletter on a law reform", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Hallo, bitte beachten Sie die Sperrfrist für Rücksendungen: Der Empfänger erhält die Erstattung nach "
+            "14 Tagen. Viele Grüße, Ihr Shop-Team",
+            "shop return note", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Subject: Access policy\n\nPlease note: volunteers with access to user data sign the NDA. "
+            "Confidentiality of user data is a core value; the recipient of a request reviews it.",
+            "access policy naming confidentiality as a value", carrier="prose",
+        ),
+    ],
+    # M-LEGAL (M22): customer and supplier contracts. The contract title is the evidence span;
+    # parties, remuneration, term and confidentiality around it make the document. Law texts,
+    # court decisions, templates and explanations are hard negatives.
+    "dlp.document.contract": [
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "# ", "Master Services Agreement",
+            "\n\nEffective date: 1 March 2026\nBetween Contoso Ltd. (the Customer) and Fabrikam GmbH (the "
+            "Supplier).\n\n1. Fees: the Customer pays EUR 18,400 per month.\n2. Term: 24 months; termination with "
+            "a notice period of three months.\n3. Confidentiality: both sides protect each other's data.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Subject: Northwind contract\n\nDear Ana,\nattached is the signed ", "supply agreement",
+            " with Northwind. The supplier delivers 4,000 units per quarter, payment terms are 30 days net, the "
+            "term ends on 31 December 2028, liability is capped at the annual fees and the confidentiality clause "
+            "covers our pricing.\n\nKind regards,\nOmar\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            '{"document": "', "license agreement",
+            '", "licensor": "Contoso Ltd.", "licensee": "Fabrikam Inc.", "fees": "USD 120,000 per year", '
+            '"term": "36 months", "termination": "90 days notice", "confidentiality": true}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "contract:\n  type: ", "consulting agreement",
+            "\n  contractor: Jane Doe Consulting\n  customer: Northwind Ltd.\n  remuneration: EUR 950 per day\n"
+            "  term: 2026-01-01 to 2026-12-31\n  confidentiality: five years after termination\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "", "DISTRIBUTION AGREEMENT",
+            "\nbetween Contoso Ltd. (hereinafter the Supplier) and Brightway Retail (the Distributor)\n"
+            "Compensation: commission on net sales. Term: three years. Liability limited to direct damages. "
+            "Confidentiality survives termination.\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "# Master Services Agreement template\n\nBetween [Party A] and [Party B]. Fees: [Amount]. Term: "
+            "[Duration]. Confidentiality: standard clause.",
+            "contract template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "The court held that the supply agreement was terminated validly because the supplier missed the "
+            "delivery term.",
+            "court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "A license agreement is a legal contract between a licensor and a licensee. Source: Wikipedia",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "# Builds the PDF for a purchase agreement; customer and fees come from the order form.",
+            "code comment", carrier="code",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "We are still negotiating the framework agreement with Northwind; let's discuss the term and the fees "
+            "on Monday.",
+            "chat about a contract under negotiation", carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "# ", "Rahmenvertrag",
+            "\n\nzwischen der Nordlicht GmbH (nachfolgend Auftraggeber) und der Brandt IT AG (nachfolgend "
+            "Auftragnehmer)\n\n§ 1 Vertragsgegenstand: Wartung der Kassensysteme.\n§ 2 Vergütung: 7.800 EUR "
+            "monatlich.\n§ 3 Laufzeit: 1. April 2026 bis 31. März 2029; Kündigungsfrist sechs Monate.\n"
+            "§ 4 Vertraulichkeit: Beide Seiten wahren Stillschweigen.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Betreff: Unterlagen Nordlicht\n\nHallo Frau Brandt,\nanbei der unterschriebene ", "Liefervertrag",
+            ". Lieferant ist die Brandt AG, der Kaufpreis liegt bei 42.000 EUR je Quartal, die Laufzeit endet "
+            "2028, die Haftung ist begrenzt und die Geheimhaltung gilt auch nach Kündigung.\n\nViele Grüße\nTim\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            '{"vertrag": "', "Dienstleistungsvertrag",
+            '", "auftraggeber": "Stadtwerke Nordheim", "auftragnehmer": "Brandt IT AG", "vergütung": "95 EUR pro '
+            'Stunde", "laufzeit": "12 Monate", "kündigungsfrist": "3 Monate", "vertraulichkeit": true}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "vertrag:\n  art: ", "Lizenzvertrag",
+            "\n  lizenznehmer: Brandt AG\n  vergütung: 30.000 EUR jährlich\n  laufzeit: 5 Jahre\n"
+            "  haftung: begrenzt\n  geheimhaltung: 3 Jahre nach Kündigung\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "", "WARTUNGSVERTRAG",
+            "\nzwischen Stadtwerke Nordheim (Kunde) und Brandt Technik GmbH (Auftragnehmer)\nVergütung: pauschal "
+            "2.400 EUR pro Quartal. Laufzeit: 24 Monate. Vertraulichkeit: Alle Betriebsdaten bleiben intern.\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "§ 433 Vertragstypische Pflichten beim Kaufvertrag\n(1) Durch den Kaufvertrag wird der Verkäufer einer "
+            "Sache verpflichtet, dem Käufer die Sache zu übergeben. (2) Der Käufer ist verpflichtet, dem Verkäufer "
+            "den vereinbarten Kaufpreis zu zahlen.",
+            "published law text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Leitsatz: Ein Werkvertrag liegt vor, wenn der Auftragnehmer einen Erfolg schuldet (Urteil des "
+            "Bundesgerichtshofs).",
+            "court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "## Mustervertrag Rahmenvertrag\n\nzwischen [Firma] (nachfolgend Auftraggeber) und [Partner] "
+            "(nachfolgend Auftragnehmer). Vergütung: [Betrag] EUR. Laufzeit: [Monate].",
+            "contract template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Ein Kaufvertrag bezeichnet zum Beispiel den Kauf eines Autos zwischen Käufer und Verkäufer.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Den Rahmenvertrag mit Brandt verlängern wir wohl, über die Laufzeit sprechen wir am Montag.",
+            "chat about a contract under negotiation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Manufacturers buy parts under a supply agreement that runs for several years. The customer commits to "
+            "minimum volumes and the supplier accepts price caps for late delivery. Fees are indexed to raw material "
+            "costs.\n\nSuch contracts also allocate liability for defective goods, while safety laws keep some claims "
+            "open whatever term was agreed. Termination rights apply on insolvency, and confidentiality clauses "
+            "protect drawings. Carmakers held thousands of these contracts, worth over USD 500 billion, between them.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Hersteller beziehen Bauteile über einen Liefervertrag mit mehrjähriger Laufzeit. Der Kunde sagt "
+            "Mindestmengen zu, der Lieferant akzeptiert Preisobergrenzen. Die Vergütung folgt den Rohstoffpreisen."
+            "\n\nDie Haftung für fehlerhafte Teile ist oft begrenzt. Ein Recht zur Kündigung besteht vor allem bei "
+            "Insolvenz, Klauseln zur Vertraulichkeit schützen Zeichnungen. Zwischen Herstellern und Zulieferern "
+            "bestehen Verträge über Milliarden EUR.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Dear Sir or Madam,\nattached is the signed ", "framework agreement",
+            ". Northwind is the customer, remuneration EUR 5,000 per month, the term is two years and "
+            "confidentiality is agreed.\n\nKind regards\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Sehr geehrte Damen und Herren,\nanbei der unterschriebene ", "Rahmenvertrag",
+            ". Auftraggeber ist die Nordlicht GmbH, die Vergütung beträgt 5.000 EUR monatlich, die Laufzeit zwei "
+            "Jahre, Vertraulichkeit ist vereinbart.\n\nMit freundlichen Grüßen\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Subject: Kickoff notes\n\nWe walked through the framework agreement: customer, supplier, contractor "
+            "and licensee roles, plus liability.",
+            "meeting note with party roles only", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Betreff: Protokoll\n\nZum Rahmenvertrag: Rollen von Auftraggeber, Auftragnehmer, Lieferant und Kunde, "
+            "dazu die Haftung.",
+            "meeting note with party roles only", carrier="prose",
         ),
     ],
     # M-MARK: classification markings (M02 + M03), on by default (M23). The marking is the evidence
