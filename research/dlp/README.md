@@ -564,6 +564,11 @@ Review-Pausen.
   Fenster um den Marker die Mindestdichte erreichen (stark 3, je mittlerer Anker 2, je struktureller
   Anker 1, je Gegenkontext −3; mindestens ein mittlerer Anker). Neue Klassen (M-MARK, M-LEGAL,
   M-CORP, M-HRSEC) definieren nur Marker-Regex, Ankerlisten und `Density`.
+  Seit M-CORP teilen die Klassen Briefstruktur (`LETTER_STRUCTURE`) und generischen Gegenkontext
+  (`GENERIC_COUNTER`); die Unternehmensklassen (unveröffentlichte Finanzzahlen/Insiderinformation,
+  M&A, Vorstands-/Aufsichtsratsprotokolle und Beschlussentwürfe) verlangen zwei verschiedene
+  mittlere Anker. Veröffentlichte Ad-hoc-Mitteilungen, Geschäftsberichte, Pressemitteilungen und
+  Stellenanzeigen ziehen über eigene Gegenanker ab.
 - **Standardprofil (M23, umgesetzt in M-MARK)**: Einstufungsvermerke
   (`dlp.document.classification_marking`, Regeln `dlp_marking_*`) sind standardmäßig an
   (`DEFAULT_ON_DOCUMENT_GROUPS` in `dlp.rs`), alle anderen Content- und Dokumentklassen opt-in. Ein
