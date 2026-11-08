@@ -2173,8 +2173,8 @@ def gate_milestones(
     Presidio default and tuned (H05, M-RAW), with the family F1 of every engine and the M1 gaps (H05-2).
 
     Aggregate lines per split, so the final milestone numbers on the holdout reach the gate report (the
-    runner keeps the tail of a passing scoreboard) without a row id or value: the exact F1 per source
-    family and the HN-FP count of strict, balanced, balanced-bare and both Presidio profiles, one line
+    runner keeps the tail of a passing scoreboard) without a row id or value: the exact F1 and HN-FP
+    count per source family of strict, balanced, balanced-bare and both Presidio profiles, one line
     per milestone engine, and the shared ids where an engine stays below a profile. A milestone line's
     MET means that engine holds against both profiles; a milestone is met if one engine's line says so.
     A failure to measure names only the error type and never fails the gate."""
@@ -2183,8 +2183,10 @@ def gate_milestones(
         try:
             ark_parts: dict[str, list[dict[str, Any]]] = {engine: [] for engine in ("strict", *MILESTONE_ENGINES)}
             presidio_parts: dict[str, list[dict[str, Any]]] = {profile: [] for profile in PRESIDIO_PROFILES}
+            row_family: dict[tuple[str, str], str] = {}
             for dataset in (d for d in datasets if d.split == split):
                 rows = read_jsonl(dataset.path)
+                row_family |= {(dataset.name, row["id"]): emap.family(str(row.get("corpus", ""))) for row in rows}
                 for engine, parts in ark_parts.items():
                     parts.append(score_rows(rows, cache.get(head.key, dataset, engine, head.predict), emap, dataset.name))
                 for profile, parts in presidio_parts.items():
@@ -2198,13 +2200,14 @@ def gate_milestones(
             lines.append(f"milestones {split}: not measured ({type(error).__name__})")
             continue
         results = {**ark_result, **presidio_results}
-        scores = [f"{family}: " + ", ".join(f"{engine} {pct(metrics(result['buckets'][f'family/{family}'])['exact']['f1']).strip()}"
-                                            for engine, result in results.items())
-                  for family in entity_map_module.FAMILIES
-                  if any(f"family/{family}" in result["buckets"] for result in results.values())]
-        lines.append(f"scores {split} ({MILESTONE_VIEW} gold, exact F1 in % on L1 ids per family; HN-FP): "
-                     + " | ".join([*scores, "HN-FP: " + ", ".join(f"{engine} {len(result['hard_negative_fp'])}"
-                                                                   for engine, result in results.items())]))
+        hn_fp = {engine: hard_negative_fp_by_family(result, row_family) for engine, result in results.items()}
+        scores = [f"{family}: " + ", ".join(
+            f"{engine} {pct(metrics(result['buckets'][f'family/{family}'])['exact']['f1']).strip()}/"
+            f"{hn_fp[engine].get(family, 0)}" for engine, result in results.items())
+            for family in entity_map_module.FAMILIES
+            if any(f"family/{family}" in result["buckets"] for result in results.values())]
+        lines.append(f"scores {split} ({MILESTONE_VIEW} gold, exact F1 in % on L1 ids/HN-FP per family): "
+                     + " | ".join(scores))
         gaps = []
         for engine in MILESTONE_ENGINES:
             by_profile = []
@@ -2660,6 +2663,14 @@ def merge_gaps(parts: Iterable[dict[str, dict[str, dict[str, int | None]]]]) -> 
     return {corpus: dict(sorted(entities.items())) for corpus, entities in sorted(merged.items())}
 
 
+def hard_negative_fp_by_family(result: dict[str, Any], row_family: dict[tuple[str, str], str]) -> dict[str, int]:
+    """Hard-negative FP of a merged result per source family; ``row_family`` maps (dataset, row id)."""
+    per_family: dict[str, int] = defaultdict(int)
+    for name, row_id, *_ in result["hard_negative_fp"]:
+        per_family[row_family[(name, row_id)]] += 1
+    return dict(sorted(per_family.items()))
+
+
 def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, Path], emap: Any) -> dict[str, Any]:
     """Every engine's merged result on every frozen gold file, hard-negative FP per family, M1, gold gaps.
 
@@ -2693,10 +2704,7 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
         results[engine] = merge(parts)
         attainable[engine] = merge(attainable_parts)
         gaps[engine] = merge_gaps(gap_parts)
-        per_family: dict[str, int] = defaultdict(int)
-        for name, row_id, *_ in results[engine]["hard_negative_fp"]:
-            per_family[row_family[(name, row_id)]] += 1
-        hard_negative_fp[engine] = dict(sorted(per_family.items()))
+        hard_negative_fp[engine] = hard_negative_fp_by_family(results[engine], row_family)
     corpus_rows: dict[str, int] = defaultdict(int)
     for rows in gold.values():
         for row in rows:

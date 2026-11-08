@@ -1368,10 +1368,9 @@ def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_pat
     assert [line.split(" ")[0] for line in lines[-9:-1]] == ["scores", "milestones", "milestones", "M1",
                                                              "scores", "milestones", "milestones", "M1"]
     # Holdout: the neutral e-mail beats both profiles (100 vs 88.9); no presidio_favored gold, so M1 is not met.
-    assert lines[-5] == ("scores holdout (raw gold, exact F1 in % on L1 ids per family; HN-FP): "
-                         "neutral: strict 100.0, balanced 100.0, balanced-bare 100.0, presidio-default 88.9, "
-                         "presidio-tuned 88.9 | HN-FP: strict 0, balanced 0, balanced-bare 0, presidio-default 0, "
-                         "presidio-tuned 0")
+    assert lines[-5] == ("scores holdout (raw gold, exact F1 in % on L1 ids/HN-FP per family): "
+                         "neutral: strict 100.0/0, balanced 100.0/0, balanced-bare 100.0/0, presidio-default 88.9/0, "
+                         "presidio-tuned 88.9/0")
     for line, engine in ((lines[-4], "balanced"), (lines[-3], "balanced-bare")):
         assert line == prefix.format("holdout", engine) + (
             "M1 NOT MET (vs default: neutral 1/1, presidio_favored 0/0; vs tuned: neutral 1/1, presidio_favored 0/0 "
@@ -1398,13 +1397,17 @@ def test_gate_milestones_judge_each_engine_on_its_own(repo, data, tmp_path):
                  "balanced drops")
     base = run_git(repo, "rev-parse", "HEAD")
     frozen_split(data["holdout"], {"c.jsonl": [gold(f"h{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en")
-                                               for i in range(10)]})
+                                               for i in range(10)],
+                                   # Every engine reports the e-mail on this hard negative: one HN-FP in ark_authored.
+                                   "s.jsonl": [gold("x0", [("pii.email", 20, 30)], hard_negatives=[(20, 30)])]})
     builds = Builds(repo, tmp_path)
     lines, _, _ = builds.gate(base, data, tmp_path / "cache", FakePresidio())
+    assert "ark_authored: strict 100.0/1, balanced 100.0/1, balanced-bare 100.0/1, presidio-default 100.0/1, " \
+           "presidio-tuned 100.0/1 | neutral: " in lines[-5]
     balanced, bare = lines[-4], lines[-3]
     assert balanced.startswith("milestones holdout (balanced, raw gold") and "neutral 0/1" in balanced
     assert bare.startswith("milestones holdout (balanced-bare, raw gold") and "neutral 1/1" in bare
-    assert "neutral: strict 100.0, balanced 88.9, balanced-bare 100.0," in lines[-5]
+    assert "neutral: strict 100.0/0, balanced 88.9/0, balanced-bare 100.0/0," in lines[-5]
     # The gap line names the shared id and both F1 values, never a row.
     assert lines[-2] == ("M1 gaps holdout (shared ids with Ark below Presidio, exact F1 in %): "
                          "balanced vs default neutral pii.email 88.9 < 100.0, vs tuned neutral pii.email 88.9 < 100.0; "

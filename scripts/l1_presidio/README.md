@@ -345,6 +345,11 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   Profile hält, der Meilenstein ist erfüllt, wenn eine der beiden Zeilen `MET` zeigt. `balanced-bare`
   läuft als `run_ark.py --pii-mode balanced --gates docs/how-to/pii-bare-formats.gates.json` (die
   Metadaten müssen `engine.rules` tragen) und wird zusätzlich nach dem Inhalt des Profils gecacht.
+  Für den Abschlussbericht in der Rohsicht (H05-2) stehen je Split davor eine Zeile `scores <split>
+  (raw gold, …)` mit exaktem F1 (alle L1-IDs) und HN-FP-Zahl je Quellfamilie von `strict`,
+  `balanced`, `balanced-bare`, `presidio-default` und `presidio-tuned`, danach eine Zeile `M1 gaps
+  <split> (…)` mit den gemeinsamen IDs, bei denen eine Meilenstein-Engine unter einem Profil liegt
+  (Familie, ID, F1 ARK `<` F1 Presidio; `none`, wenn keine).
   Presidio default und tuned laufen mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
   Runner, Profil und Eingabe-SHA-256 gecacht. So erreichen die Holdout-Meilensteine den Gate-Bericht
   (der Runner übernimmt das Ende einer grünen Scoreboard-Ausgabe), nur als Aggregat. Scheitert die
