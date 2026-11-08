@@ -125,6 +125,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   2 documents (NDA article 32, M&A article 2) to 0. Typically, commonly, also known as and their
   German counterparts are NDA counter-context; between, zwischen, EUR, USD, Datum and signed are no
   contract anchors any more, since they stand in any prose about deals.
+- Detection change (opt-in contract, NDA/trade secret and legal-privileged classes, all modes): the
+  content class engine can require elements (`ContentClass::requiring`), groups of anchors of which
+  each needs one hit near the marker. `dlp_document_contract` needs contracting parties,
+  remuneration, term and confidentiality (minimum score 14 → 12), so a signed cover letter with
+  exactly these four holds and a meeting note listing customer, supplier, contractor and licensee
+  roles does not. `dlp_document_nda_trade_secret` needs a secrecy duty (confidential information,
+  receiving/disclosing party, non-public, need-to-know, do not forward, nicht öffentlich,
+  Geheimhaltung, bleibt intern); newsletters on trade secret rulings or GeschGehG reforms,
+  SECURITY.md embargo notes, job ads ("Candidates sign an NDA") and shop return notes (Sperrfrist
+  für Rücksendungen) no longer pass on letter words and a generic term; newsletter is NDA
+  counter-context. `dlp_document_legal_privileged` also reports draft pleadings (draft complaint,
+  draft statement of claim/defence, draft pleading/petition/motion, Klageentwurf, Entwurf
+  Klageschrift/Klageerwiderung/Schriftsatz) under the same legal-anchor gate.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

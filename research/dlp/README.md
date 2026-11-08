@@ -586,9 +586,12 @@ Review-Pausen.
   Stufen derselben Familie im Umkreis von 160 Byte (Artikel, Enums) heben ihn auf.
 - **Rechtsdokumente (M-LEGAL)**: `dlp_document_nda_trade_secret` (NDA, Geschäftsgeheimnis,
   GeschGehG, Sperrfrist/Embargo), `dlp_document_contract` (Kunden-/Lieferantenverträge; Fenster
-  3.000 Byte, mindestens vier Vertragsanker: Parteien, Vergütung, Laufzeit, Vertraulichkeit) und
-  Vergleichsmarker (WITHOUT PREJUDICE, ohne Präjudiz) in `dlp_document_legal_privileged`. Gesetze,
-  Urteile und Vertragsmuster sind Gegenkontext.
+  3.000 Byte, je ein Anker aus jedem Pflichtelement: Parteien, Vergütung, Laufzeit, Vertraulichkeit)
+  sowie Vergleichsmarker (WITHOUT PREJUDICE, ohne Präjudiz) und Schriftsatzentwürfe (draft
+  complaint, Klageentwurf, Entwurf Klageschrift) in `dlp_document_legal_privileged`. Die NDA-Klasse
+  verlangt zusätzlich eine Geheimhaltungspflicht (confidential information, non-public, nicht
+  weiterleiten). Pflichtelemente setzt `ContentClass::requiring`. Gesetze, Urteile, Newsletter und
+  Vertragsmuster sind Gegenkontext.
 - Montags läuft `TRIAGE` wie bei PII.
 
 ## Abgrenzung
