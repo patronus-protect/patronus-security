@@ -227,6 +227,44 @@ mod tests {
     }
 
     #[test]
+    fn the_last_of_256_anchors_counts() {
+        let terms: Vec<String> = (0..255).map(|i| format!("term{i}")).collect();
+        let mut anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Structural))
+            .collect();
+        anchors.push(("counsel", Tier::Medium));
+        let class = ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 1,
+            },
+        );
+        let text = "MARK counsel counsel term254";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "a content class has at most 256 anchors")]
+    fn more_than_256_anchors_are_rejected() {
+        let terms: Vec<String> = (0..257).map(|i| format!("term{i}")).collect();
+        let anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Structural))
+            .collect();
+        ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 0,
+            },
+        );
+    }
+
+    #[test]
     fn anchors_inside_the_strong_anchor_do_not_count() {
         let text = "Re: counsel-MARK";
         let start = text.find("counsel").unwrap();
