@@ -736,7 +736,11 @@
     "dlp_document_m_and_a": "document class (M-CORP), marker phrase, no secret value",
     "dlp_document_board_minutes": "document class (M-CORP), marker phrase, no secret value",
     "dlp_document_nda_trade_secret": "document class (M-LEGAL), marker phrase, no secret value",
-    "dlp_document_contract": "document class (M-LEGAL), contract title, no secret value"
+    "dlp_document_contract": "document class (M-LEGAL), contract title, no secret value",
+    "dlp_document_hr": "document class (M-HRSEC), document title, no secret value",
+    "dlp_document_security_report": "document class (M-HRSEC), report title, no secret value",
+    "dlp_document_export_control": "document class (M-HRSEC), labelled export classification, no secret value",
+    "dlp_document_rnd_ip": "document class (M-HRSEC), document title, no secret value"
   },
   "baseline_entities": {
     "comm.webhook_url": {"generators": ["slack_webhook_url", "teams_webhook_url"], "lookalike": ["slack_webhook_url_short"]},

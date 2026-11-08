@@ -145,8 +145,10 @@ taxonomy:
   dlp.document.board_minutes: {family: document_class}
   dlp.document.nda_trade_secret: {family: document_class}
   dlp.document.contract: {family: document_class}
-  dlp.document.hr: {family: document_class, planned: true}
-  dlp.document.rnd_ip: {family: document_class, planned: true}
+  dlp.document.hr: {family: document_class}
+  dlp.document.security_report: {family: document_class}
+  dlp.document.export_control: {family: document_class}
+  dlp.document.rnd_ip: {family: document_class}
 
 # Taxonomie v2 (K09): Untertypen der Secret-Gruppen. Neue Arten (Connection-String, Webhook-URL,
 # Auth-URL, OTP-Secret, Seed-Phrase) sind keine eigenen Gruppen, sondern Untertypen bestehender
@@ -739,6 +741,26 @@ entities:
     group: dlp.document.contract
     ark: [dlp_document_contract]
     backlog: M-LEGAL
+  - id: document.hr
+    scope: ark_only
+    group: dlp.document.hr
+    ark: [dlp_document_hr]
+    backlog: M-HRSEC
+  - id: document.security_report
+    scope: ark_only
+    group: dlp.document.security_report
+    ark: [dlp_document_security_report]
+    backlog: M-HRSEC
+  - id: document.export_control
+    scope: ark_only
+    group: dlp.document.export_control
+    ark: [dlp_document_export_control]
+    backlog: M-HRSEC
+  - id: document.rnd_ip
+    scope: ark_only
+    group: dlp.document.rnd_ip
+    ark: [dlp_document_rnd_ip]
+    backlog: M-HRSEC
   - id: credential.file.netrc
     scope: ark_only
     group: CREDENTIAL
