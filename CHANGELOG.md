@@ -94,7 +94,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   definition/template/course counters subtract; encyclopedic hedges (typically, usually, such as,
   in der Regel, üblicherweise) are counter-context of all three corporate classes, so the dev
   benign-document corpus (Wikipedia articles on M&A and insider trading, Wikimedia board
-  policies) flags no document. The legal
+  policies) flags no document. The content class engine takes up to 256 anchors per class (was 128). The legal
   class shares its letter-structure and generic counter lists with them (same anchors as before).
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
