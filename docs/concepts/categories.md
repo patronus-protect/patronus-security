@@ -40,7 +40,7 @@ SQL, dumps, logs, and risky operations. Credential/secret findings keep their en
 `evidence_spans` with original-text offsets; native DLP operation and MCP rules also retain
 source-bound components and finding spans.
 Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only
-credential/secret DLP rules by default; other DLP families are opt-in through rule gates. See
+credential/secret DLP rules and the classification markings by default; other DLP families are opt-in through rule gates. See
 [Native detectors](detectors.md).
 
 ### Model-backed L1 (`shell_command`)

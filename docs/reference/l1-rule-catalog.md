@@ -337,9 +337,9 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
 | `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
-## DLP regex rules (161) { #dlp-regex-rules }
+## DLP regex rules (166) { #dlp-regex-rules }
 
-Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
+Rust, Python, and the Ark API enable only credential/secret entity groups and the classification markings (`dlp.document.classification_marking`, M23: VS/GEHEIM, corporate levels, Confidential/Restricted/Internal Only, TLP 2.0, NATO/EU) by default; every other content and document class is opt-in. A marking counts where it stands as a banner (upper case, alone on its line apart from markdown or comment decoration) or as the value of a classification key (`Classification:`, `Einstufung:`, `sensitivity`), with no template/example context and no other level of its family within 160 bytes. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.
 
 Every credential/secret rule drops documented example and test values: a marker word (`EXAMPLE`, `SAMPLE`, `BEISPIEL` or `MUSTER` at the start or end of a word, not inside one such as `resampler`; `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word; any marker repeated). Values mostly made of repeated chunks or same-character runs are dropped for fixed-format provider, key, hash, JWT, signed-URL and session-ID rules, also when a generic rule captures such a provider-shaped value. Values that need a single sequential run (`AKIA1234567890ABCDEF`) to count as low-variety, and low-variety values of generic credential assignments, are dropped only when the same or one of the three lines above calls the value an example, sample, dummy, fixture or documentation value (DE/EN).
 
@@ -546,6 +546,11 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_stacktrace_block` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_structured_system_log` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 | `dlp_document_legal_privileged` | `dlp.document.legal_privileged` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_marking_de_government` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
+| `dlp_marking_de_corporate` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
+| `dlp_marking_en_corporate` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
+| `dlp_marking_tlp` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
+| `dlp_marking_nato_eu` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
 
 ## DLP relationship rules (5)
 

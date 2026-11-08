@@ -1827,8 +1827,8 @@ pub fn default_rule_enabled(rule_id: &str) -> bool;
 
 Default of a rule without an explicit gate, shared by every host: all
 non-DLP rules (Cat's shell policies included) except the bare PII forms
-(D-BARE) and the DLP credential/secret rules are on, the other DLP content
-rules are opt-in.
+(D-BARE), the DLP credential/secret rules and the classification markings
+(M23) are on, the other DLP content rules are opt-in.
 
 ```rust
 pub struct NativeGates {

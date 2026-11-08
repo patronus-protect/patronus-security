@@ -427,6 +427,9 @@ DLP_CREDENTIAL_GROUPS = {
     "API_KEY", "CLOUD_KEY", "CREDENTIAL", "CRYPTO_KEY", "PASSWORD_HASH",
     "PAYMENT_KEY", "PRIVATE_KEY", "SECRET_TOKEN",
 }
+# Groups on by default: credential/secret groups and the classification markings (M23,
+# `DEFAULT_ON_DOCUMENT_GROUPS` in `dlp.rs`).
+DLP_DEFAULT_ON_GROUPS = DLP_CREDENTIAL_GROUPS | {"dlp.document.classification_marking"}
 
 # (rule ID, model gate, default on) of the DLP relationship rules.
 DLP_RELATIONSHIP_RULES = [
@@ -574,7 +577,7 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         f"## DLP regex rules ({len(dlp)}) {{ #dlp-regex-rules }}",
         "",
-        "Rust, Python, and the Ark API enable only credential/secret entity groups by default. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.",
+        "Rust, Python, and the Ark API enable only credential/secret entity groups and the classification markings (`dlp.document.classification_marking`, M23: VS/GEHEIM, corporate levels, Confidential/Restricted/Internal Only, TLP 2.0, NATO/EU) by default; every other content and document class is opt-in. A marking counts where it stands as a banner (upper case, alone on its line apart from markdown or comment decoration) or as the value of a classification key (`Classification:`, `Einstufung:`, `sensitivity`), with no template/example context and no other level of its family within 160 bytes. Set a rule to `true` to opt into a broader family. Low-level detector `evaluate()` calls bypass gateway execution gates and evaluate the full detector inventory.",
         "",
         "Every credential/secret rule drops documented example and test values: a marker word (`EXAMPLE`, `SAMPLE`, `BEISPIEL` or `MUSTER` at the start or end of a word, not inside one such as `resampler`; `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word; any marker repeated). Values mostly made of repeated chunks or same-character runs are dropped for fixed-format provider, key, hash, JWT, signed-URL and session-ID rules, also when a generic rule captures such a provider-shaped value. Values that need a single sequential run (`AKIA1234567890ABCDEF`) to count as low-variety, and low-variety values of generic credential assignments, are dropped only when the same or one of the three lines above calls the value an example, sample, dummy, fixture or documentation value (DE/EN).",
         "",
@@ -637,7 +640,7 @@ def generate_l1_rule_catalog_doc() -> str:
         context = dlp_rule_context(rule, credential_groups)
         score_range = dlp_rule_score_range(rule, context, dlp_points, context_points)
         lines.append(
-            f"| `{rule['id']}` | `{rule['entity_group']}` | {subtype} | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} | {rule['base_score']} | {context} | {score_range} |"
+            f"| `{rule['id']}` | `{rule['entity_group']}` | {subtype} | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in DLP_DEFAULT_ON_GROUPS else 'off'} | {rule['base_score']} | {context} | {score_range} |"
         )
 
     lines.extend([
@@ -1073,7 +1076,7 @@ def generate_l1_capabilities_doc() -> str:
     return l1_capabilities_doc.generate(
         parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern"),
         parse_dlp_patterns(),
-        DLP_CREDENTIAL_GROUPS,
+        DLP_DEFAULT_ON_GROUPS,
         DLP_RELATIONSHIP_RULES,
     )
 

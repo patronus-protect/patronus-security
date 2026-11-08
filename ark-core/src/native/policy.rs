@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use crate::detectors::dlp::dlp::{DLP_PATTERNS, SECRET_GROUPS};
+use crate::detectors::dlp::dlp::{DEFAULT_ON_DOCUMENT_GROUPS, DLP_PATTERNS, SECRET_GROUPS};
 use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, str::FromStr};
@@ -67,8 +67,8 @@ const OPT_IN_RULES: [&str; 3] = [
 
 /// Default of a rule without an explicit gate, shared by every host: all
 /// non-DLP rules (Cat's shell policies included) except the bare PII forms
-/// (D-BARE) and the DLP credential/secret rules are on, the other DLP content
-/// rules are opt-in.
+/// (D-BARE), the DLP credential/secret rules and the classification markings
+/// (M23) are on, the other DLP content rules are opt-in.
 pub fn default_rule_enabled(rule_id: &str) -> bool {
     if is_bare_rule(rule_id) {
         return false;
@@ -82,7 +82,10 @@ pub fn default_rule_enabled(rule_id: &str) -> bool {
     DLP_PATTERNS
         .iter()
         .find(|pattern| pattern.name == rule_id)
-        .is_none_or(|pattern| SECRET_GROUPS.contains(&pattern.entity_group))
+        .is_none_or(|pattern| {
+            SECRET_GROUPS.contains(&pattern.entity_group)
+                || DEFAULT_ON_DOCUMENT_GROUPS.contains(&pattern.entity_group)
+        })
 }
 
 /// Per-call native policy: rule, model, mode and diagnostics gates, shared by
@@ -152,6 +155,10 @@ mod tests {
         assert!(!gates.allows_rule("dlp_mcp_policy"));
         assert!(NativeGates::all_enabled().allows_rule("dlp_mcp_policy"));
         assert!(!gates.allows_rule("pii_ssn_us_bare"));
+        // M23: classification markings are the only document class on by default.
+        assert!(gates.allows_rule("dlp_marking_tlp"));
+        assert!(gates.allows_rule("dlp_marking_de_government"));
+        assert!(!gates.allows_rule("dlp_document_legal_privileged"));
         assert!(NativeGates::all_enabled().allows_rule("pii_ssn_us_bare"));
         // Cat's shell policies are rules too, enabled unless gated off.
         for id in ["core.remote_to_exec", "CMD-PIPE-CURL", "user.ask_terraform"] {

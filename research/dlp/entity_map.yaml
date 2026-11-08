@@ -139,6 +139,7 @@ taxonomy:
   dlp.content.database_dump: {family: content_class}
   dlp.content.system_log: {family: content_class}
   dlp.document.legal_privileged: {family: document_class}
+  dlp.document.classification_marking: {family: document_class}
   dlp.document.hr: {family: document_class, planned: true}
   dlp.document.rnd_ip: {family: document_class, planned: true}
 
@@ -703,6 +704,11 @@ entities:
     backlog: M-LEGAL
 
   # ── ark_only ────────────────────────────────────────────────────────────
+  - id: document.classification_marking
+    scope: ark_only
+    group: dlp.document.classification_marking
+    ark: [dlp_marking_de_government, dlp_marking_de_corporate, dlp_marking_en_corporate, dlp_marking_tlp, dlp_marking_nato_eu]
+    backlog: M-MARK
   - id: credential.file.netrc
     scope: ark_only
     group: CREDENTIAL
