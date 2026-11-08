@@ -137,7 +137,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   für Rücksendungen) no longer pass on letter words and a generic term; newsletter is NDA
   counter-context. `dlp_document_legal_privileged` also reports draft pleadings (draft complaint,
   draft statement of claim/defence, draft pleading/petition/motion, Klageentwurf, Entwurf
-  Klageschrift/Klageerwiderung/Schriftsatz) under the same legal-anchor gate.
+  Klageschrift/Klageerwiderung/Schriftsatz) under the same legal-anchor gate. All three classes stay
+  opt-in, so the default profile and its latency are unchanged; the element check is one bit test
+  per element on the anchors the gate already collects.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum
