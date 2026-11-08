@@ -319,6 +319,111 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["agreement", "vertrag"])
             .with_context_gate(is_contract_document),
     },
+    // M-HRSEC (M06): HR documents: employment references, warning letters,
+    // terminations and termination agreements, payslips and performance
+    // reviews. The document title is the evidence span; employee, pay and
+    // rating terms around it make the document (`HR`). Job ads and law
+    // texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_hr",
+        pattern: r"(?i)\b(?:(?:employment|job)\s+reference(?:\s+letter)?|(?:written|final)\s+warning|warning\s+letter|(?:notice|letter)\s+of\s+(?:termination|dismissal)|termination\s+(?:letter|of\s+employment)|(?:separation|severance|termination)\s+agreement|pay\s?slips?|pay\s+stubs?|salary\s+statement|performance\s+(?:review|appraisal|improvement\s+plan)|arbeitszeugnis(?:ses|se)?|zwischenzeugnis(?:ses|se)?|abmahnung(?:en)?|(?:fristlose|ordentliche|außerordentliche)\s+kündigung|kündigung\s+(?:des|ihres)\s+arbeitsverhältnisses|kündigungsschreiben|aufhebungsvertrag(?:es|s)?|abwicklungsvertrag(?:es|s)?|(?:gehalts|lohn|entgelt|bezüge)abrechnung(?:en)?|(?:leistungs|mitarbeiter)beurteilung(?:en)?)\b",
+        entity_group: "dlp.document.hr",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "reference",
+                "warning",
+                "termination",
+                "dismissal",
+                "agreement",
+                "slip",
+                "stub",
+                "salary",
+                "performance",
+                "zeugnis",
+                "abmahnung",
+                "ndigung",
+                "vertrag",
+                "abrechnung",
+                "beurteilung",
+            ],
+        )
+        .with_context_gate(is_hr_document),
+    },
+    // M-HRSEC (M13): pentest, audit and incident reports. The report title
+    // is the evidence span; findings, severity and attacker terms plus an
+    // affected system around it make the document (`SECURITY_REPORT`).
+    // Public advisories, job ads and regulation texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_security_report",
+        pattern: r"(?i)\b(?:(?:penetration|pen)[- ]?test(?:ing)?\s+(?:report|results|findings)|pentest[- ]?(?:report|results|findings|bericht|berichte|ergebnisse)|penetrationstest[- ]?(?:bericht|berichte|ergebnisse)|security\s+audit\s+(?:report|findings)|vulnerability\s+assessment(?:\s+report)?|(?:security\s+)?incident\s+report|post[- ]incident\s+(?:review|report)|security\s+incident|sicherheitsaudit(?:s|bericht)?|schwachstellen(?:analyse|bericht|berichte)|sicherheitsvorfall(?:s|es)?|sicherheitsvorfälle|vorfallsbericht(?:e|s)?|incident-bericht)\b",
+        entity_group: "dlp.document.security_report",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "test",
+                "audit",
+                "assessment",
+                "incident",
+                "schwachstellen",
+                "sicherheitsvorf",
+                "vorfallsbericht",
+            ],
+        )
+        .with_context_gate(is_security_report_document),
+    },
+    // M-HRSEC (M16): export control. A labelled export list (AL), ECCN or
+    // dual-use number, EAR99 or an ITAR/USML reference is the evidence span;
+    // licence, consignee and shipment terms around it make the document
+    // (`EXPORT_CONTROL`). Regulation texts and job ads are counter-context.
+    DlpPattern {
+        name: "dlp_document_export_control",
+        pattern: r"(?i)\b(?:(?:eccn|export\s+control\s+classification(?:\s+number)?|al[- ]?(?:nummer|position)|ausfuhrlisten?[- ]?(?:nummer|position)|dual[- ]use(?:[- ](?:item|code|gut|güter|nummer|position))?|güterlisten?[- ]?(?:nummer|position))(?:\s*[:#]\s*|\s+)(?-i:[0-9][A-E][0-9]{3}(?:\.[a-z0-9]{1,3}){0,4}|EAR99|00(?:0[1-9]|1[0-9]|2[0-2])[a-z]?)|(?-i:EAR99)|itar[- ]controlled|subject\s+to\s+(?:the\s+)?itar|usml\s+category\s+(?-i:[IVX]{1,5}))\b",
+        entity_group: "dlp.document.export_control",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "eccn", "export", "nummer", "position", "dual", "ear99", "itar", "usml",
+            ],
+        )
+        .with_context_gate(is_export_control_document),
+    },
+    // M-HRSEC (M17): R&D and IP: invention disclosures, patent drafts and
+    // draft claims before filing. The document title is the evidence span;
+    // inventor, claims and filing terms around it make the document
+    // (`RND_IP`). Published patents and law texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_rnd_ip",
+        pattern: r"(?i)\b(?:invention\s+disclosures?(?:\s+form)?|draft\s+patent(?:\s+application)?|patent\s+(?:application\s+)?drafts?|draft\s+(?:patent\s+)?claims|erfindungsmeldung(?:en)?|erfindungsanzeige|patententw(?:u|ü)rfe?s?|entwurf\s+(?:der\s+|einer\s+)?patentanmeldung|patentanmeldungsentwurf|anspruchsentw(?:u|ü)rfe?)\b",
+        entity_group: "dlp.document.rnd_ip",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "invention",
+                "patent",
+                "claims",
+                "erfindungs",
+                "anspruchsentw",
+            ],
+        )
+        .with_context_gate(is_rnd_ip_document),
+    },
 ];
 
 /// Letter and mail structure shared by the document classes.
@@ -1075,6 +1180,438 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
 
 fn is_contract_document(text: &str, marker: Range<usize>) -> bool {
     CONTRACT.holds(text, marker)
+}
+
+/// Counter-context of the M-HRSEC classes: job ads name the documents a
+/// role writes.
+const JOB_AD_COUNTER: &[&str] = &[
+    "job:",
+    "your tasks",
+    "your profile",
+    "we are looking for",
+    "we offer",
+    "apply now",
+    "m/f/d",
+    "stellenanzeige",
+    "stellenangebot",
+    "ihre aufgaben",
+    "ihr profil",
+    "wir suchen",
+    "wir bieten",
+    "bewerben",
+    "m/w/d",
+];
+
+/// Counter-context of the M-HRSEC classes: laws, directives and
+/// regulations name the documents they govern.
+const LAW_COUNTER: &[&str] = &[
+    "this act",
+    "this directive",
+    "this regulation",
+    "this part",
+    "member state",
+    "within the meaning",
+    "annex i",
+    "federal register",
+    "im sinne",
+    "dieses gesetzes",
+    "dieser verordnung",
+    "rechtsverordnung",
+    "anhang i",
+    "bundesgesetzblatt",
+    "amtsblatt",
+];
+
+/// Whether two or more bracketed placeholders (`[Name]`, `[yes/no]`) stand
+/// within [`HRSEC_DENSITY`]'s window of the marker: a form or template to
+/// fill in, whose field labels look like a record. Markdown links
+/// (`[text](url)`), log levels (`[INFO]`), timestamps and lists are no
+/// placeholders.
+fn is_filled_in_form(text: &str, marker: &Range<usize>) -> bool {
+    let bytes = text.as_bytes();
+    let start = marker.start.saturating_sub(HRSEC_DENSITY.window);
+    let end = marker
+        .end
+        .saturating_add(HRSEC_DENSITY.window)
+        .min(bytes.len());
+    let mut placeholders = 0;
+    let mut position = start;
+    while let Some(offset) = bytes[position..end].iter().position(|&byte| byte == b'[') {
+        let open = position + offset;
+        let inner = bytes[open + 1..end]
+            .iter()
+            .take(41)
+            .take_while(|&&byte| byte.is_ascii_alphabetic() || matches!(byte, b' ' | b'/' | b'-'))
+            .count();
+        let close = open + 1 + inner;
+        if (3..=40).contains(&inner)
+            && bytes.get(close) == Some(&b']')
+            && !matches!(bytes.get(close + 1), Some(b'(' | b':'))
+            && bytes[open + 1..close].iter().any(u8::is_ascii_lowercase)
+        {
+            placeholders += 1;
+            if placeholders == 2 {
+                return true;
+            }
+        }
+        position = open + 1;
+    }
+    false
+}
+
+/// The density of the M-HRSEC classes: two distinct domain terms and the
+/// form of a letter, chat or record near the title.
+const HRSEC_DENSITY: Density = Density {
+    window: 1500,
+    min_score: 8,
+    min_medium: 2,
+    min_structural: 1,
+};
+
+/// M-HRSEC (M06): the anchors of an HR document around its title.
+static HR: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "employee",
+            "employees",
+            "employer",
+            "employment contract",
+            "manager",
+            "line manager",
+            "human resources",
+            "hr department",
+            "personnel file",
+            "employee no.",
+            "employee id",
+            "salary",
+            "gross pay",
+            "net pay",
+            "income tax",
+            "national insurance",
+            "social security",
+            "tax code",
+            "severance",
+            "garden leave",
+            "notice period",
+            "last working day",
+            "dismissal",
+            "misconduct",
+            "overall rating",
+            "below expectations",
+            "exceeds expectations",
+            "goals",
+            "objectives",
+            "performance",
+            "works council",
+            "probation",
+            "mitarbeiter",
+            "mitarbeiterin",
+            "arbeitnehmer",
+            "arbeitnehmerin",
+            "arbeitgeber",
+            "arbeitsvertrag",
+            "arbeitsverhältnis",
+            "arbeitsverhältnisses",
+            "personalabteilung",
+            "personalakte",
+            "personalnummer",
+            "führungskraft",
+            "vorgesetzte",
+            "vorgesetzter",
+            "gehalt",
+            "brutto",
+            "netto",
+            "lohnsteuer",
+            "sozialversicherung",
+            "steuerklasse",
+            "abfindung",
+            "freistellung",
+            "kündigungsfrist",
+            "letzter arbeitstag",
+            "pflichtverletzung",
+            "arbeitsrechtlichen konsequenzen",
+            "gesamtbewertung",
+            "leistungsbewertung",
+            "unter den erwartungen",
+            "ziele",
+            "zielerreichung",
+            "betriebsrat",
+            "probezeit",
+        ],
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_hr_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && HR.holds(text, marker)
+}
+
+/// The affected-system anchors of a security report: a report without a
+/// system reference is general advice.
+const SECURITY_SYSTEMS: &[&str] = &[
+    "host",
+    "hosts",
+    "hostname",
+    "server",
+    "servers",
+    "system",
+    "systems",
+    "target",
+    "domain controller",
+    "file server",
+    "vpn",
+    "gateway",
+    "firewall",
+    "database",
+    "subnet",
+    "internal network",
+    "production",
+    "zielsystem",
+    "domänencontroller",
+    "fileserver",
+    "datenbank",
+    "internes netz",
+    "produktivsystem",
+];
+
+/// M-HRSEC (M13): the anchors of a pentest, audit or incident report around
+/// its title. The report needs an affected system; public advisories name
+/// affected versions and fixes instead.
+static SECURITY_REPORT: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            SECURITY_SYSTEMS,
+            &[
+                "finding",
+                "findings",
+                "severity",
+                "critical",
+                "cvss",
+                "exploit",
+                "exploitable",
+                "exploited",
+                "attacker",
+                "attackers",
+                "compromised",
+                "credentials",
+                "privilege escalation",
+                "lateral movement",
+                "laterally",
+                "remediation",
+                "mitigation",
+                "root cause",
+                "containment",
+                "contained",
+                "indicators of compromise",
+                "ransomware",
+                "phishing",
+                "malware",
+                "unauthorized access",
+                "sql injection",
+                "remote code execution",
+                "scope",
+                "befund",
+                "befunde",
+                "schweregrad",
+                "kritisch",
+                "ausnutzbar",
+                "angreifer",
+                "kompromittiert",
+                "zugangsdaten",
+                "rechteausweitung",
+                "maßnahme",
+                "maßnahmen",
+                "behebung",
+                "ursache",
+                "ursachenanalyse",
+                "eindämmung",
+                "umfang",
+                "schadsoftware",
+                "zugriff",
+            ],
+        ]
+        .concat(),
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &[
+                "advisory",
+                "security advisory",
+                "affected versions",
+                "patched versions",
+                "fixed in",
+                "upgrade to",
+                "credit",
+                "sicherheitshinweis",
+                "betroffene versionen",
+                "behoben in",
+            ],
+        ],
+        HRSEC_DENSITY,
+    )
+    .requiring(&[SECURITY_SYSTEMS])
+});
+
+fn is_security_report_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && SECURITY_REPORT.holds(text, marker)
+}
+
+/// M-HRSEC (M16): the anchors of an export control document around its
+/// labelled classification.
+static EXPORT_CONTROL: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "export",
+            "exports",
+            "exporter",
+            "export licence",
+            "export license",
+            "licence",
+            "license",
+            "end user",
+            "end-user",
+            "end-user statement",
+            "end use",
+            "end-use",
+            "consignee",
+            "destination country",
+            "re-export",
+            "shipment",
+            "shipments",
+            "customer",
+            "customers",
+            "order",
+            "purchase order",
+            "customs",
+            "sanctions",
+            "ddtc",
+            "bafa",
+            "classification",
+            "part number",
+            "ausfuhr",
+            "ausfuhrgenehmigung",
+            "ausfuhrgenehmigungen",
+            "genehmigung",
+            "genehmigungspflichtig",
+            "exportkontrolle",
+            "endverbleib",
+            "endverbleibserklärung",
+            "empfänger",
+            "bestimmungsland",
+            "lieferung",
+            "auftrag",
+            "kunde",
+            "kunden",
+            "zoll",
+            "materialnummer",
+            "artikel",
+        ],
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE, &["please", "bitte"]],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &["15 cfr", "22 cfr", "commerce control list"],
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_export_control_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && EXPORT_CONTROL.holds(text, marker)
+}
+
+/// M-HRSEC (M17): the anchors of an invention disclosure or unfiled patent
+/// draft around its title. Published applications and patents carry the
+/// same inventor and claim terms; their publication data is counter-context.
+static RND_IP: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "inventor",
+            "inventors",
+            "invention",
+            "prior art",
+            "claims",
+            "claim 1",
+            "patent attorney",
+            "patent department",
+            "patent counsel",
+            "filing",
+            "filed",
+            "not yet filed",
+            "not filed",
+            "before filing",
+            "priority date",
+            "embodiment",
+            "embodiments",
+            "novelty",
+            "r&d",
+            "lab notebook",
+            "confidential",
+            "internal",
+            "erfinder",
+            "erfinderin",
+            "erfindung",
+            "stand der technik",
+            "ansprüche",
+            "anspruch 1",
+            "patentanwalt",
+            "patentanwältin",
+            "patentabteilung",
+            "anmeldung",
+            "noch nicht angemeldet",
+            "noch nicht eingereicht",
+            "vor der anmeldung",
+            "prioritätstag",
+            "ausführungsform",
+            "neuheit",
+            "diensterfindung",
+            "f&e",
+            "laborbuch",
+            "vertraulich",
+            "intern",
+        ],
+        &[
+            LETTER_STRUCTURE,
+            CORPORATE_STRUCTURE,
+            &["please", "bitte", "title:", "titel:", "status:"],
+        ],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &[
+                "patent application publication",
+                "date of publication",
+                "publication date",
+                "patent no",
+                "granted patent",
+                "espacenet",
+                "google patents",
+                "offenlegungsschrift",
+                "patentschrift",
+                "veröffentlichungstag",
+                "veröffentlichungsnummer",
+            ],
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_rnd_ip_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && RND_IP.holds(text, marker)
 }
 
 fn is_non_placeholder_source_assignment(candidate: &str) -> bool {
