@@ -1723,8 +1723,10 @@ fn is_structured_sql_statement(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_board_minutes_document, is_contract_document, is_legal_privileged_document,
-        is_m_and_a_document, is_nda_trade_secret_document, is_unpublished_financials_document,
+        is_board_minutes_document, is_contract_document, is_export_control_document,
+        is_filled_in_form, is_hr_document, is_legal_privileged_document, is_m_and_a_document,
+        is_nda_trade_secret_document, is_rnd_ip_document, is_security_report_document,
+        is_unpublished_financials_document, RULES,
     };
     use std::ops::Range;
 
@@ -2104,5 +2106,151 @@ mod tests {
              (2) Der Käufer zahlt dem Verkäufer den vereinbarten Kaufpreis; die Haftung regelt das Gesetz.",
             "Kaufvertrag",
         ));
+    }
+
+    fn marker_matches(rule: &str, text: &str) -> Vec<String> {
+        let pattern = RULES
+            .iter()
+            .find(|pattern| pattern.name == rule)
+            .unwrap()
+            .pattern;
+        regex::Regex::new(pattern)
+            .unwrap()
+            .find_iter(text)
+            .map(|found| found.as_str().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn hr_documents_hold_in_de_and_en() {
+        assert!(holds(
+            is_hr_document,
+            "Betreff: Abmahnung\n\nSehr geehrte Frau Novak,\nSie haben unentschuldigt gefehlt; das ist eine \
+             Pflichtverletzung aus Ihrem Arbeitsvertrag.\n\nMit freundlichen Grüßen\nPersonalabteilung",
+            "Abmahnung",
+        ));
+        assert!(holds(
+            is_hr_document,
+            r#"{"document": "Payslip", "employee": "Ravi Patel", "gross pay": 4820.00, "net pay": 3506.48}"#,
+            "Payslip",
+        ));
+    }
+
+    #[test]
+    fn job_ads_and_law_texts_are_no_hr_document() {
+        assert!(!holds(
+            is_hr_document,
+            "Stellenanzeige: HR Generalist (m/w/d). Ihre Aufgaben: Entgeltabrechnung und Abmahnungen für die \
+             Personalabteilung vorbereiten, Gespräche mit jeder Führungskraft. Wir suchen Sie!\nViele Grüße",
+            "Abmahnungen",
+        ));
+        assert!(!holds(
+            is_hr_document,
+            "Betreff: Gesetzestext\n\n(1) Der Arbeitgeber hat dem Arbeitnehmer eine Entgeltabrechnung zu erteilen. \
+             (2) Arbeitnehmer im Sinne dieses Gesetzes sind auch Auszubildende.",
+            "Entgeltabrechnung",
+        ));
+        // Competition law warnings (Abmahnung) name no employee.
+        assert!(!holds(
+            is_hr_document,
+            "Betreff: Abmahnung wegen Markenverletzung\n\nSehr geehrte Damen und Herren,\nSie verwenden unsere \
+             Marke ohne Lizenz.\n\nMit freundlichen Grüßen",
+            "Abmahnung",
+        ));
+    }
+
+    #[test]
+    fn security_reports_need_an_affected_system() {
+        let text = "Subject: Incident Report INC-2291\n\nDear Anna,\nan attacker used stolen VPN credentials \
+                    and reached the file server fs03. Containment is ongoing.\n\nKind regards";
+        assert!(holds(is_security_report_document, text, "Incident Report"));
+        let text = "Subject: Incident Report INC-2291\n\nDear Anna,\nan attacker sent phishing mails; the \
+                    root cause analysis and containment are ongoing.\n\nKind regards";
+        assert!(!holds(is_security_report_document, text, "Incident Report"));
+    }
+
+    #[test]
+    fn public_advisories_are_no_security_report() {
+        assert!(!holds(
+            is_security_report_document,
+            "Security Advisory for CVE-2026-31337\n\nA vulnerability assessment found a SQL injection that lets \
+             an attacker read data on the server. Severity: high. Affected versions: < 2.4.1. Fixed in 2.4.1.",
+            "vulnerability assessment",
+        ));
+        assert!(holds(
+            is_security_report_document,
+            "# Pentest-Bericht\n\nUmfang: Host dc01\nBefund 1 (kritisch): ein Angreifer kann Zugangsdaten \
+             weiterleiten.\nMaßnahme: NTLMv1 deaktivieren.",
+            "Pentest-Bericht",
+        ));
+    }
+
+    #[test]
+    fn export_markers_need_a_labelled_classification() {
+        let rule = "dlp_document_export_control";
+        assert_eq!(
+            marker_matches(rule, "ECCN 5A002, eccn: 3A001.a.2, AL-Nummer 2B001, EAR99"),
+            ["ECCN 5A002", "eccn: 3A001.a.2", "AL-Nummer 2B001", "EAR99"]
+        );
+        assert_eq!(
+            marker_matches(
+                rule,
+                "Ausfuhrlistennummer 0005, Dual-Use-Gut 3A001, ITAR-controlled"
+            ),
+            [
+                "Ausfuhrlistennummer 0005",
+                "Dual-Use-Gut 3A001",
+                "ITAR-controlled"
+            ]
+        );
+        // A code without its label, a lower-case category letter, an export
+        // list number out of range and a bare "dual use" are no markers.
+        assert!(marker_matches(
+            rule,
+            "item 5A002, ECCN 5a002, AL-Nummer 0099, dual use, ear99, AL 2B001"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn export_control_documents_hold_and_regulation_texts_do_not() {
+        assert!(holds(
+            is_export_control_document,
+            "Subject: Shipment 4471\n\nDear Wei,\nthe converter is classified as ECCN 3A225; we need the end-user \
+             statement before the export licence application.\n\nBest regards",
+            "ECCN 3A225",
+        ));
+        assert!(!holds(
+            is_export_control_document,
+            "Anhang I, Kategorie 5: Unter die Ausfuhrlistennummer 5A002 fallen Systeme, deren Ausfuhr \
+             genehmigungspflichtig ist. Empfänger im Sinne dieser Verordnung ist jeder Käufer.\nBitte beachten.",
+            "Ausfuhrlistennummer 5A002",
+        ));
+    }
+
+    #[test]
+    fn invention_disclosures_hold_and_published_patents_do_not() {
+        assert!(holds(
+            is_rnd_ip_document,
+            "Betreff: Erfindungsmeldung\n\nSehr geehrte Damen und Herren,\nErfinder sind Lea Brandt und Omar \
+             Haddad. Der Stand der Technik nutzt Rückspülventile.\n\nMit freundlichen Grüßen",
+            "Erfindungsmeldung",
+        ));
+        assert!(!holds(
+            is_rnd_ip_document,
+            "US 2023/0123456 A1 - Patent Application Publication\nDate of publication: Apr. 20, 2023\n\
+             Inventors: L. Brandt\nClaims: 1. A filter. The draft claims of the priority application were amended.",
+            "draft claims",
+        ));
+    }
+
+    #[test]
+    fn forms_with_bracketed_placeholders_are_templates() {
+        let text = "## Incident report\n\nAffected system: [hostname]\nSeverity: [low/medium/high]";
+        assert!(is_filled_in_form(text, &(3..18)));
+        assert!(!holds(is_security_report_document, text, "Incident report"));
+        // Links, log levels, timestamps and lists are no placeholders.
+        let text = "Incident report: see [the runbook](https://wiki) [INFO] [09:12] [a, b] [x]";
+        assert!(!is_filled_in_form(text, &(0..15)));
     }
 }
