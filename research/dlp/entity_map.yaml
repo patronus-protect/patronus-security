@@ -145,8 +145,10 @@ taxonomy:
   dlp.document.board_minutes: {family: document_class}
   dlp.document.nda_trade_secret: {family: document_class}
   dlp.document.contract: {family: document_class}
-  dlp.document.hr: {family: document_class, planned: true}
-  dlp.document.rnd_ip: {family: document_class, planned: true}
+  dlp.document.hr: {family: document_class}
+  dlp.document.security_report: {family: document_class}
+  dlp.document.export_control: {family: document_class}
+  dlp.document.rnd_ip: {family: document_class}
 
 # Taxonomie v2 (K09): Untertypen der Secret-Gruppen. Neue Arten (Connection-String, Webhook-URL,
 # Auth-URL, OTP-Secret, Seed-Phrase) sind keine eigenen Gruppen, sondern Untertypen bestehender
@@ -707,6 +709,18 @@ entities:
     ark: [dlp_document_legal_privileged]
     google_dlp: [DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING]
     backlog: M-LEGAL
+  - id: document.hr
+    scope: shared
+    group: dlp.document.hr
+    ark: [dlp_document_hr]
+    google_dlp: [DOCUMENT_TYPE/HR/RESUME]
+    backlog: M-HRSEC
+  - id: document.rnd_ip
+    scope: shared
+    group: dlp.document.rnd_ip
+    ark: [dlp_document_rnd_ip]
+    google_dlp: [DOCUMENT_TYPE/R&D/PATENT]
+    backlog: M-HRSEC
 
   # ── ark_only ────────────────────────────────────────────────────────────
   - id: document.classification_marking
@@ -739,6 +753,16 @@ entities:
     group: dlp.document.contract
     ark: [dlp_document_contract]
     backlog: M-LEGAL
+  - id: document.security_report
+    scope: ark_only
+    group: dlp.document.security_report
+    ark: [dlp_document_security_report]
+    backlog: M-HRSEC
+  - id: document.export_control
+    scope: ark_only
+    group: dlp.document.export_control
+    ark: [dlp_document_export_control]
+    backlog: M-HRSEC
   - id: credential.file.netrc
     scope: ark_only
     group: CREDENTIAL
@@ -1083,8 +1107,6 @@ entities:
      ark: [dlp_symmetric_key, dlp_laravel_app_key, dlp_django_secret_key, dlp_rails_secret_key_base],
      google_dlp: [ENCRYPTION_KEY], backlog: C-KEYS}
   # M: Dokumentklassen
-  - {id: document.hr, scope: baseline_only, group: dlp.document.hr, google_dlp: [DOCUMENT_TYPE/HR/RESUME], backlog: M06}
-  - {id: document.rnd_ip, scope: baseline_only, group: dlp.document.rnd_ip, google_dlp: [DOCUMENT_TYPE/R&D/PATENT], backlog: M17}
 
   # ── out_of_scope ────────────────────────────────────────────────────────
   - id: action.sensitive_material

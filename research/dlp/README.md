@@ -592,6 +592,17 @@ Review-Pausen.
   verlangt zusätzlich eine Geheimhaltungspflicht (confidential information, non-public, nicht
   weiterleiten). Pflichtelemente setzt `ContentClass::requiring`. Gesetze, Urteile, Newsletter und
   Vertragsmuster sind Gegenkontext.
+- **HR-, Sicherheits-, Exportkontroll- und F&E-Dokumente (M-HRSEC)**: `dlp_document_hr`
+  (Arbeitszeugnis, Abmahnung, Kündigung, Aufhebungsvertrag, Entgeltabrechnung,
+  Leistungsbeurteilung), `dlp_document_security_report` (Pentest-/Audit-/Vorfallsbericht,
+  Schwachstellenanalyse; Pflichtelement betroffenes System: Host, Server, Domänencontroller …),
+  `dlp_document_export_control` (nur benannte Kennungen: ECCN/AL-Nummer/Ausfuhrlistennummer/Dual-Use
+  mit Code wie 5A002 oder 0005, EAR99, ITAR-controlled, USML Category) und `dlp_document_rnd_ip`
+  (Erfindungsmeldung, Patententwurf, Anspruchsentwürfe vor der Anmeldung). Alle verlangen zwei
+  mittlere Anker und Dokumentform; Stellenanzeigen, Gesetzes-/Verordnungstexte, öffentliche
+  Advisories (affected versions, fixed in) und veröffentlichte Patente (Offenlegungsschrift, Date of
+  publication) sind Gegenkontext, zwei Platzhalter in eckigen Klammern (`[Name]`) machen ein
+  Formular.
 - Montags läuft `TRIAGE` wie bei PII.
 
 ## Abgrenzung

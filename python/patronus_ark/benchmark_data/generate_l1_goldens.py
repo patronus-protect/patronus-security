@@ -8354,6 +8354,552 @@ DLP_CASES = {
             "minutes without corporate context", carrier="prose",
         ),
     ],
+    # M-HRSEC (M06): HR documents: employment references, warning letters, terminations and
+    # termination agreements, payslips and performance reviews. The document title is the evidence
+    # span; employee, pay and rating terms around it make the document. Job ads, explanations,
+    # templates and law texts are hard negatives.
+    "dlp.document.hr": [
+        dp(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "From: HR Department\nTo: Ravi Patel\nSubject: ", "Written warning",
+            " - unauthorised absence\n\nDear Mr Patel,\non 3 and 4 November you did not attend work without "
+            "notice to your manager. This breaches your employment contract; if it happens again, your employer "
+            "will consider dismissal.\n\nKind regards,\nHuman Resources\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            '{"document": "', "Payslip",
+            '", "period": "2026-10", "employee": "Ravi Patel", "gross pay": 4820.00, "income tax": 912.40, '
+            '"national insurance": 401.12, "net pay": 3506.48}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "# ", "Performance Review",
+            " 2026 - Jana Novak\n\nManager: Tom Fischer\nOverall rating: 2 of 5 (below expectations)\n\nGoals "
+            "missed: warehouse rollout. From 1 December monthly check-ins with her manager apply.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "case:\n  type: ", "Separation Agreement",
+            "\n  employee: Jana Novak\n  severance: EUR 38,000\n  garden leave: until 2026-12-31\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "Hi Lea,\nattached is the draft ", "employment reference",
+            " for Omar Haddad (employee no. 3391). He leaves us on 31 March; please check the wording on his "
+            "performance with his manager before human resources signs it.\nBest regards,\nTom\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "Job: HR Generalist (m/f/d). Your tasks: prepare payslips, draft employment references and written "
+            "warnings, support performance reviews with every manager. We are looking for you - apply now.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "A payslip is a document an employer issues to an employee. It typically lists gross pay, deductions "
+            "such as income tax, and net pay.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "## Written warning template\n\nDear [Employee Name],\nthis written warning concerns [reason]. Your "
+            "manager: [Name]. Placeholder: [Date].",
+            "letter template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "Section 8: An employee has the right to be given by the employer, at or before the time of payment, "
+            "a written itemised payslip. This Act applies to every employee within the meaning of section 230.",
+            "published law text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "en", "dlp_document_hr",
+            "2026-10-02 08:14:00 INFO payroll job exported 412 payslip PDFs to the archive bucket",
+            "log line without document context", carrier="log",
+        ),
+        dp(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "Von: Personalabteilung\nAn: Jana Novak\nBetreff: ", "Abmahnung",
+            "\n\nSehr geehrte Frau Novak,\nam 3. und 4. November sind Sie unentschuldigt nicht zur Arbeit "
+            "erschienen. Darin liegt eine Pflichtverletzung aus Ihrem Arbeitsvertrag. Im Wiederholungsfall müssen "
+            "Sie mit arbeitsrechtlichen Konsequenzen rechnen.\n\nMit freundlichen Grüßen\nPersonalabteilung\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            '{"dokument": "', "Entgeltabrechnung",
+            '", "monat": "2026-10", "personalnummer": "48213", "brutto": 4820.00, "lohnsteuer": 912.40, '
+            '"sozialversicherung": 981.12, "netto": 2926.48}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "# ", "Leistungsbeurteilung",
+            " 2026 - Omar Haddad\n\nFührungskraft: Tom Fischer\nGesamtbewertung: 2 von 5 (unter den Erwartungen)"
+            "\n\nZiele verfehlt: Rollout Lager Nord. Ab 1. Dezember gibt es monatliche Gespräche mit der "
+            "Führungskraft.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "vorgang:\n  art: ", "Aufhebungsvertrag",
+            "\n  mitarbeiter: Jana Novak\n  abfindung: 38.000 EUR\n  freistellung: bis 31.12.2026\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "Hallo Lea,\nanbei der Entwurf des ", "Arbeitszeugnisses",
+            " für Omar Haddad (Personalnummer 3391). Er verlässt uns zum 31. März; bitte die Leistungsbewertung "
+            "mit seiner Führungskraft abstimmen, bevor die Personalabteilung unterschreibt.\nViele Grüße\nTom\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "Stellenanzeige: HR Generalist (m/w/d). Ihre Aufgaben: Entgeltabrechnung, Arbeitszeugnisse und "
+            "Abmahnungen für die Personalabteilung vorbereiten. Wir suchen Sie ab sofort - jetzt bewerben!",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "Ein Arbeitszeugnis ist eine Bescheinigung des Arbeitgebers über das Arbeitsverhältnis. "
+            "Üblicherweise enthält es auch eine Beurteilung der Leistung und des Verhaltens des Mitarbeiters.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "## Muster Abmahnung\n\nSehr geehrte/r [Name],\nhiermit erteilen wir Ihnen eine Abmahnung wegen "
+            "[Grund]. Personalnummer: [Nummer]. Platzhalter: [Datum].",
+            "letter template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "(1) Der Arbeitgeber hat dem Arbeitnehmer bei Zahlung des Arbeitsentgelts eine Entgeltabrechnung in "
+            "Textform zu erteilen. (2) Arbeitnehmer im Sinne dieses Gesetzes sind auch die Auszubildenden.",
+            "published law text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.hr", "de", "dlp_document_hr",
+            "// TODO: PDF der Lohnabrechnung im Export-Job erzeugen",
+            "code comment", carrier="code",
+        ),
+    ],
+    # M-HRSEC (M13): security documents: pentest and audit reports, vulnerability assessments and
+    # incident reports with a system reference. The report title is the evidence span; findings,
+    # severity and attacker terms plus an affected system around it make the document. Public CVE
+    # advisories, job ads, templates and regulation texts are hard negatives.
+    "dlp.document.security_report": [
+        dp(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "# ", "Penetration Test Report",
+            " - Internal Network\n\nScope: 10.20.0.0/16, host dc01.corp.northwind\nFinding 1 (critical, CVSS 9.8): "
+            "the domain controller accepts NTLMv1; an attacker can relay credentials.\nRemediation: disable "
+            "NTLMv1 by 30 November.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "From: SOC\nTo: CISO\nSubject: ", "Incident Report",
+            " INC-2291\n\nDear Anna,\nat 02:14 an attacker used stolen VPN credentials to log into vpn-gw02 and "
+            "moved laterally to the file server fs03. Containment: account disabled, host isolated. The root "
+            "cause analysis is ongoing.\n\nKind regards,\nSOC on call\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            '{"report": "', "Vulnerability Assessment",
+            '", "target": "erp-prod-01", "findings": [{"id": "F-03", "severity": "high", '
+            '"title": "SQL injection in /api/orders", "status": "open"}]}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "report:\n  kind: ", "pentest report",
+            "\n  system: payroll-db01\n  finding: weak TLS ciphers\n  severity: medium\n  remediation: 2026-12-15\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "[09:12] anna: hi team, the ", "security incident",
+            " on host jump01 is contained; the attacker had access to the backup server for 40 minutes, "
+            "credentials are rotated\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "Security Advisory for CVE-2026-31337\n\nA vulnerability assessment by an external researcher found a "
+            "SQL injection in the orders API that lets a remote attacker read data on the server. Severity: high "
+            "(CVSS 8.1). Affected versions: < 2.4.1. Fixed in 2.4.1; upgrade to the patched release.",
+            "public CVE advisory", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "Job: Security Analyst (m/f/d). Your tasks: write penetration test reports and incident reports on "
+            "client systems, rate findings by severity. We are looking for you - apply now.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "A penetration test report typically lists the findings, their severity, the affected systems and "
+            "remediation advice for each host.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "## Incident report template\n\nAffected system: [hostname]\nSeverity: [low/medium/high]\nAttacker: "
+            "[text]\nRoot cause: [text]",
+            "report template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.security_report", "en", "dlp_document_security_report",
+            "Article 23: Each Member State shall ensure that essential entities notify their CSIRT without undue "
+            "delay of any significant security incident that affects their network and information systems. This "
+            "Directive applies to the entities referred to in Annex I.",
+            "regulation text", carrier="prose",
+        ),
+        dp(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "# ", "Pentest-Bericht",
+            " - Internes Netz\n\nUmfang: 10.20.0.0/16, Host dc01.corp.nordlicht\nBefund 1 (kritisch, CVSS 9,8): "
+            "Der Domänencontroller akzeptiert NTLMv1; ein Angreifer kann Zugangsdaten weiterleiten.\nMaßnahme: "
+            "NTLMv1 bis 30. November deaktivieren.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "Von: SOC\nAn: CISO\nBetreff: ", "Sicherheitsvorfall",
+            " INC-2291\n\nHallo Anna,\num 02:14 Uhr hat sich ein Angreifer mit gestohlenen VPN-Zugangsdaten am "
+            "Gateway vpn-gw02 angemeldet und ist auf den Fileserver fs03 weitergezogen. Eindämmung: Konto gesperrt, "
+            "Host isoliert. Die Ursachenanalyse läuft.\n\nViele Grüße\nSOC-Bereitschaft\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            '{"bericht": "', "Schwachstellenanalyse",
+            '", "zielsystem": "erp-prod-01", "befunde": [{"id": "F-03", "schweregrad": "hoch", '
+            '"titel": "SQL-Injection in /api/orders", "status": "offen"}]}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "bericht:\n  art: ", "Sicherheitsaudit",
+            "\n  system: lohn-db01\n  befund: schwache TLS-Cipher\n  schweregrad: mittel\n  behebung: 2026-12-15\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "[09:12] anna: hallo zusammen, der ", "Vorfallsbericht",
+            " zu jump01 ist fertig: der Angreifer hatte 40 Minuten Zugriff auf den Backup-Server, die Eindämmung "
+            "ist abgeschlossen\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "Sicherheitshinweis zu CVE-2026-31337\n\nBei einer Schwachstellenanalyse fand ein Forscher eine "
+            "SQL-Injection in der Bestell-API, über die ein Angreifer Daten auf dem Server lesen kann. "
+            "Schweregrad: hoch (CVSS 8,1). Betroffene Versionen: < 2.4.1. Behoben in 2.4.1.",
+            "public CVE advisory", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "Stellenanzeige: Security Analyst (m/w/d). Ihre Aufgaben: Pentest-Berichte und Vorfallsberichte zu "
+            "Kundensystemen schreiben, Befunde nach Schweregrad bewerten. Wir suchen Sie!",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "Ein Sicherheitsaudit bezeichnet die systematische Prüfung der IT-Sicherheit. Üblicherweise listet "
+            "der Bericht Befunde, Schweregrad und Maßnahmen je Server.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "## Vorlage Vorfallsbericht\n\nBetroffenes System: [Hostname]\nSchweregrad: [niedrig/mittel/hoch]\n"
+            "Angreifer: [Text]\nUrsache: [Text]",
+            "report template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.security_report", "de", "dlp_document_security_report",
+            "(4) Betreiber Kritischer Infrastrukturen haben jeden erheblichen Sicherheitsvorfall, der ihre "
+            "informationstechnischen Systeme betrifft, unverzüglich an das Bundesamt zu melden. Betreiber im Sinne "
+            "dieses Gesetzes sind die nach der Rechtsverordnung bestimmten Einrichtungen.",
+            "law text", carrier="prose",
+        ),
+    ],
+    # M-HRSEC (M16): export control: export list (AL) numbers, ECCN, ITAR/EAR and dual-use
+    # identifiers. The labelled identifier is the evidence span; licence, consignee and shipment terms
+    # around it make the document. Regulation texts, job ads and explanations are hard negatives.
+    "dlp.document.export_control": [
+        dp(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "Subject: Shipment 4471 to Shenzhen\n\nDear Wei,\nthe frequency converter is classified as ",
+            "ECCN 3A225",
+            "; we need the end-user statement before the export licence application goes out.\n\nBest regards,\n"
+            "Export Control\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            '{"order": "PO-88412", "item": "thermal imaging camera", "export": "', "ITAR-controlled",
+            '", "consignee": "Helios Trading FZE", "licence": "pending DDTC approval"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "# Export classification - Project Falcon\n\nThe FPGA board FB-7 falls under ", "dual-use 3A001.a.2",
+            "; shipments to customers outside the EU need an export licence. Please hold order 7731 until the "
+            "licence is granted.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "item:\n  part: MX-220 encryption module\n  ", "eccn: 5A002",
+            "\n  licence: required\n  consignee: Helios Trading FZE\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "[14:02] lea: hi team, the night vision module is ", "subject to the ITAR",
+            ", so please no re-export to the Hamburg customer without DDTC approval\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "ECCN 5A002 controls information security items designed to use cryptography for data "
+            "confidentiality. This part of the EAR (15 CFR 774) lists the licence requirements per destination.",
+            "regulation text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "Job: Export Control Specialist (m/f/d). Your tasks: classify parts (ECCN 5A002, EAR99), apply for "
+            "export licences and screen every consignee. We are looking for you - apply now.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "EAR99 is a classification for items subject to the EAR that are not on the Commerce Control List. "
+            "Most consumer products shipped abroad are typically EAR99 and need no export licence.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            "## Export classification template\n\nItem: [part name]\nExample: ECCN 5A992\nLicence: [yes/no]\n"
+            "Consignee: [name]",
+            "classification template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.export_control", "en", "dlp_document_export_control",
+            'ECCN_RE = re.compile(r"[0-9][A-E][0-9]{3}")  # matches e.g. ECCN 5A002',
+            "code comment", carrier="code",
+        ),
+        dp(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "Betreff: Lieferung 4471 nach Shenzhen\n\nSehr geehrter Herr Wei,\nder Frequenzumrichter fällt unter ",
+            "Ausfuhrlistennummer 3A225",
+            "; vor dem Antrag auf Ausfuhrgenehmigung brauchen wir die Endverbleibserklärung.\n\nMit freundlichen "
+            "Grüßen\nExportkontrolle\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "artikel:\n  materialnummer: MX-220\n  bezeichnung: Verschlüsselungsmodul\n  ", "ausfuhrlistennummer: 5A002",
+            "\n  genehmigungspflichtig: ja\n  empfänger: Helios Trading FZE\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            '{"auftrag": "PO-88412", "artikel": "Wärmebildkamera", "exportkontrolle": "', "ITAR-controlled",
+            '", "empfänger": "Helios Trading FZE", "genehmigung": "BAFA-Antrag offen"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "2026-11-02 09:14:22 WARN exportpruefung: Auftrag 7731 gesperrt, ", "AL-Nummer 2B001",
+            " genehmigungspflichtig, Empfänger Helios Trading FZE, Bestimmungsland: IR\n",
+            carrier="log",
+        ),
+        dp(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "[14:02] lea: hallo zusammen, die Platine FB-7 ist ein ", "Dual-Use-Gut 3A001.a.2",
+            ", also bitte keine Lieferung an den Kunden in Hamburg ohne Ausfuhrgenehmigung\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "Anhang I, Kategorie 5, Teil 2: Unter die Ausfuhrlistennummer 5A002 fallen Systeme der "
+            "Informationssicherheit, die Kryptotechnik verwenden. Die Genehmigungspflicht gilt im Sinne dieser "
+            "Verordnung für jede Ausfuhr.",
+            "regulation text", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "Stellenanzeige: Exportkontrolle (m/w/d). Ihre Aufgaben: Güter einstufen (AL-Nummer 5A002, EAR99), "
+            "Ausfuhrgenehmigungen beantragen und Empfänger prüfen. Wir suchen Sie!",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "EAR99 bezeichnet Güter, die dem US-Exportrecht unterliegen, aber nicht auf der Commerce Control "
+            "List stehen. Üblicherweise brauchen sie keine Ausfuhrgenehmigung.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "## Vorlage Exporteinstufung\n\nArtikel: [Bezeichnung]\nBeispiel: AL-Nummer 5A992\nGenehmigungspflichtig: "
+            "[ja/nein]\nEmpfänger: [Name]",
+            "classification template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.export_control", "de", "dlp_document_export_control",
+            "// prüft das Format der Ausfuhrliste, z. B. AL-Nummer 5A002",
+            "code comment", carrier="code",
+        ),
+    ],
+    # M-HRSEC (M17): R&D and IP: invention disclosures, patent drafts and draft claims before filing.
+    # The document title is the evidence span; inventor, claims and filing terms around it make the
+    # document. Published patents and applications, job ads and law texts are hard negatives.
+    "dlp.document.rnd_ip": [
+        dp(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "From: Lea Brandt\nTo: Patent Department\nSubject: ", "Invention disclosure",
+            " - self-cleaning filter\n\nDear colleagues,\nthe inventors are Lea Brandt and Omar Haddad. The prior "
+            "art we know uses backflush valves; our solution needs none. Nothing has been filed yet.\n\nKind "
+            "regards,\nLea\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "# ", "Draft Patent Application",
+            "\n\nTitle: Self-cleaning filter cartridge\nInventors: L. Brandt, O. Haddad\n\nClaims\n1. A filter "
+            "cartridge comprising a rotating sleeve.\n\nStatus: not yet filed, review by our patent attorney on "
+            "20 November.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            '{"doc_type": "', "invention disclosure",
+            '", "inventors": ["L. Brandt", "O. Haddad"], "prior art": "backflush valves", "status": "not yet filed"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "rnd:\n  project: Falcon\n  document: ", "patent draft",
+            "\n  inventor: Omar Haddad\n  claims: 14\n  filing: planned for Q1 2027\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "[16:40] omar: hi, the ", "draft claims",
+            " for the coating invention are on the R&D share; please keep them internal until our patent attorney "
+            "files the application\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "US 2023/0123456 A1 - Patent Application Publication\nDate of publication: Apr. 20, 2023\nInventors: "
+            "L. Brandt, O. Haddad\nClaims: 1. A filter cartridge comprising a rotating sleeve. The draft claims of "
+            "the priority application were amended during examination.",
+            "published patent application", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "Job: Patent Engineer (m/f/d). Your tasks: review invention disclosures and write patent drafts with "
+            "our inventors and the patent attorney. We are looking for you - apply now.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "An invention disclosure is a document an inventor writes for the patent department. It typically "
+            "describes the invention, the prior art and all inventors before filing.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "## Invention disclosure form template\n\nTitle: [title]\nInventors: [names]\nPrior art: [text]\n"
+            "Filing status: [text]",
+            "form template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "en", "dlp_document_rnd_ip",
+            "Section 5: An employee who has made a service invention shall submit an invention disclosure to the "
+            "employer in writing without delay. The inventor shall describe the prior art. This Act applies to all "
+            "inventions within the meaning of section 2.",
+            "law text", carrier="prose",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "Von: Lea Brandt\nAn: Patentabteilung\nBetreff: ", "Erfindungsmeldung",
+            " - selbstreinigender Filter\n\nSehr geehrte Damen und Herren,\nErfinder sind Lea Brandt und Omar "
+            "Haddad. Der uns bekannte Stand der Technik nutzt Rückspülventile; unsere Lösung braucht keine. Die "
+            "Erfindung ist noch nicht angemeldet.\n\nMit freundlichen Grüßen\nLea Brandt\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "# ", "Entwurf Patentanmeldung",
+            "\n\nTitel: Selbstreinigende Filterkartusche\nErfinder: L. Brandt, O. Haddad\n\nAnsprüche\n1. "
+            "Filterkartusche, umfassend eine drehbare Hülse.\n\nStatus: noch nicht eingereicht, Abstimmung mit dem "
+            "Patentanwalt am 20. November.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            '{"dokumenttyp": "', "Erfindungsmeldung",
+            '", "erfinder": ["L. Brandt", "O. Haddad"], "diensterfindung": true, "status": "noch nicht angemeldet"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "fue:\n  projekt: Falke\n  dokument: ", "Patententwurf",
+            "\n  erfinder: Omar Haddad\n  ansprüche: 14\n  anmeldung: geplant für Q1 2027\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "[16:40] omar: hallo zusammen, die ", "Anspruchsentwürfe",
+            " zur Beschichtung liegen im F&E-Share; bitte intern lassen, bis unser Patentanwalt die Anmeldung "
+            "einreicht\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "DE 10 2023 123 456 A1 - Offenlegungsschrift\nVeröffentlichungstag: 20.04.2023\nErfinder: L. Brandt, "
+            "O. Haddad\nAnsprüche: 1. Filterkartusche, umfassend eine drehbare Hülse. Der Patententwurf der "
+            "Prioritätsanmeldung wurde im Prüfungsverfahren geändert.",
+            "published patent application", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "Stellenanzeige: Patentingenieur (m/w/d). Ihre Aufgaben: Erfindungsmeldungen prüfen und "
+            "Patententwürfe mit unseren Erfindern und dem Patentanwalt schreiben. Wir suchen Sie!",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "Eine Erfindungsmeldung bezeichnet die Mitteilung einer Diensterfindung an den Arbeitgeber. "
+            "Üblicherweise beschreibt sie die Erfindung, den Stand der Technik und die Erfinder.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "## Vorlage Erfindungsmeldung\n\nTitel: [Titel]\nErfinder: [Namen]\nStand der Technik: [Text]\n"
+            "Anmeldung: [Text]",
+            "form template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.rnd_ip", "de", "dlp_document_rnd_ip",
+            "(1) Der Arbeitnehmer, der eine Diensterfindung gemacht hat, ist verpflichtet, sie unverzüglich dem "
+            "Arbeitgeber gesondert in Textform zu melden (Erfindungsmeldung). (2) In der Meldung hat der Erfinder "
+            "den Stand der Technik zu beschreiben. Erfindungen im Sinne dieses Gesetzes sind nur patentfähige "
+            "Erfindungen.",
+            "law text", carrier="prose",
+        ),
+    ],
 }
 
 
