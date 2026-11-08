@@ -154,6 +154,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   snapshot schema 1.2: `pii.milestone_view` and `pii.baselines` replace `pii.baseline`, and
   `docs/reference/l1-capabilities.md` shows Ark against each baseline and names the view. Detection
   change: none; evaluation tooling and docs only, no effect on L1 latency.
+- The scoreboard gate prints, per split and source family, the exact F1 and the hard-negative FP
+  count of `strict`, `balanced`, `balanced-bare`, Presidio default and Presidio tuned
+  (`scores <split> (raw gold, …)`), and the shared ids where `balanced` or `balanced-bare` stays
+  below a Presidio profile (`M1 gaps <split> (…)`, entity id and both F1 values, no row id or value).
+  With the `milestones` lines this gives the holdout numbers of the final M1–M4 report in the raw
+  view (H05-2, `research/l1-pii/scoreboard/final-raw.md`). Detection change: none; evaluation
+  tooling and docs only, no effect on L1 latency.
 - Detection change: opt-in bare-format PII rules (D-BARE). Every value that the default rules
   report only with a term of its label or after its field name (`known_gaps` with `bare: true`)
   has its own rule `<rule>_bare`: `pii_steuer_id_de_bare`, `pii_steuernummer_de_bare` (13-digit

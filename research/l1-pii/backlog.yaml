@@ -1073,7 +1073,7 @@ tasks:
       tuned on neutral and presidio_favored, M1 and M2 hold; the PR lists every remaining raw gap per id.
       Validators are never loosened for the default rules; strict default output unchanged unless a gold
       fix; no new hard-negative FP in the default profile
-  - {id: H05-2, title: "Final report M1–M4 on holdout in the raw view (Presidio default and tuned, Ark with and without the bare profile)", type: report, deps: [Q-RAW]}
+  - {id: H05-2, title: "Final report M1–M4 on holdout in the raw view (Presidio default and tuned, Ark with and without the bare profile)", type: report, deps: [Q-RAW], status: done}
 
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}

@@ -1363,14 +1363,22 @@ def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_pat
     assert not regressed and lines[-1] == "RESULT: PASS"
     assert presidio.runs == [("dev", "default"), ("dev", "tuned"), ("holdout", "default"), ("holdout", "tuned")]
     prefix = "milestones {} ({}, raw gold, vs Presidio default and tuned): "
+    # Per split: family F1 of every engine, one milestone line per milestone engine (M-RAW: balanced and
+    # balanced-bare, balanced with the bare profile), then the shared ids that keep M1 open (H05-2).
+    assert [line.split(" ")[0] for line in lines[-9:-1]] == ["scores", "milestones", "milestones", "M1",
+                                                             "scores", "milestones", "milestones", "M1"]
     # Holdout: the neutral e-mail beats both profiles (100 vs 88.9); no presidio_favored gold, so M1 is not met.
-    # One line per milestone engine (M-RAW): balanced and balanced-bare (balanced with the bare profile).
-    for line, engine in ((lines[-3], "balanced"), (lines[-2], "balanced-bare")):
+    assert lines[-5] == ("scores holdout (raw gold, exact F1 in % on L1 ids/HN-FP per family): "
+                         "neutral: strict 100.0/0, balanced 100.0/0, balanced-bare 100.0/0, presidio-default 88.9/0, "
+                         "presidio-tuned 88.9/0")
+    for line, engine in ((lines[-4], "balanced"), (lines[-3], "balanced-bare")):
         assert line == prefix.format("holdout", engine) + (
             "M1 NOT MET (vs default: neutral 1/1, presidio_favored 0/0; vs tuned: neutral 1/1, presidio_favored 0/0 "
             "shared ids) | M2 NOT MET (macro-F1 vs default: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0; "
             "vs tuned: neutral 0.0 < 15.0, presidio_favored 0.0 < 0.0)")
-    for line, engine in ((lines[-5], "balanced"), (lines[-4], "balanced-bare")):
+    assert lines[-2] == ("M1 gaps holdout (shared ids with Ark below Presidio, exact F1 in %): "
+                         "balanced vs default none, vs tuned none; balanced-bare vs default none, vs tuned none")
+    for line, engine in ((lines[-8], "balanced"), (lines[-7], "balanced-bare")):
         assert line.startswith(prefix.format("dev", engine) + "M1 NOT MET (vs default: neutral 0/0, presidio_favored 0/0;")
     # Aggregates only: no holdout row id reaches stdout.
     assert not any("h0" in line or "h1" in line for line in lines)
@@ -1379,7 +1387,7 @@ def test_gate_prints_milestones_per_split_before_the_verdict(repo, data, tmp_pat
         cached = tmp_path / "cache" / "scoreboard" / "predictions" / MODULE.presidio_key(profile) / profile
         assert len(list(cached.glob("*.jsonl"))) == 2
     again = FakePresidio(drop=["h0", "h1"])
-    assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-5:] == lines[-5:]
+    assert Builds(repo, tmp_path).gate(base, data, tmp_path / "cache", again)[0][-9:] == lines[-9:]
     assert again.runs == []
 
 
@@ -1389,12 +1397,21 @@ def test_gate_milestones_judge_each_engine_on_its_own(repo, data, tmp_path):
                  "balanced drops")
     base = run_git(repo, "rev-parse", "HEAD")
     frozen_split(data["holdout"], {"c.jsonl": [gold(f"h{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en")
-                                               for i in range(10)]})
+                                               for i in range(10)],
+                                   # Every engine reports the e-mail on this hard negative: one HN-FP in ark_authored.
+                                   "s.jsonl": [gold("x0", [("pii.email", 20, 30)], hard_negatives=[(20, 30)])]})
     builds = Builds(repo, tmp_path)
     lines, _, _ = builds.gate(base, data, tmp_path / "cache", FakePresidio())
-    balanced, bare = lines[-3], lines[-2]
+    assert "ark_authored: strict 100.0/1, balanced 100.0/1, balanced-bare 100.0/1, presidio-default 100.0/1, " \
+           "presidio-tuned 100.0/1 | neutral: " in lines[-5]
+    balanced, bare = lines[-4], lines[-3]
     assert balanced.startswith("milestones holdout (balanced, raw gold") and "neutral 0/1" in balanced
     assert bare.startswith("milestones holdout (balanced-bare, raw gold") and "neutral 1/1" in bare
+    assert "neutral: strict 100.0/0, balanced 88.9/0, balanced-bare 100.0/0," in lines[-5]
+    # The gap line names the shared id and both F1 values, never a row.
+    assert lines[-2] == ("M1 gaps holdout (shared ids with Ark below Presidio, exact F1 in %): "
+                         "balanced vs default neutral pii.email 88.9 < 100.0, vs tuned neutral pii.email 88.9 < 100.0; "
+                         "balanced-bare vs default none, vs tuned none")
     # The bare predictions are cached next to balanced, keyed by the profile's content.
     head = MODULE.source_key(repo, "HEAD")
     directories = sorted(p.name for p in (tmp_path / "cache" / "scoreboard" / "predictions" / head).iterdir()
