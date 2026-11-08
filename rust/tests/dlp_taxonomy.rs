@@ -416,9 +416,10 @@ fn spans_keep_the_group_label() {
 fn reported_out_of_court_settlements_are_no_privileged_correspondence() {
     // M-LEGAL: encyclopedic and press reports of settlements "ohne
     // Anerkennung einer Rechtspflicht" carry legal terms but no privilege.
-    let text = "Bis 2005 reichten rund 9.000 Kläger eine Klage ein; 4.000 Verfahren waren noch anhängig. \
-                Ohne Anerkennung einer Rechtspflicht schloss der Konzern einen Vergleich über 800 Millionen \
-                Euro, zwei Prozesse endeten vor dem Gericht mit Freisprüchen.";
+    let text = "Wegen undichter Heizkessel verklagten bis 2019 rund 1.200 Käufer den Hersteller, mehrere \
+                Verfahren lagen beim Landgericht. Im Frühjahr 2021 zahlte das Unternehmen ohne Anerkennung \
+                einer Rechtspflicht 45 Millionen Euro in einen Fonds; danach nahm fast jeder Kläger die Klage \
+                zurück.";
     let result = scan_with(Some(ScanGateMatrix::all_enabled()), text);
     let rules = result.layers[0]
         .details

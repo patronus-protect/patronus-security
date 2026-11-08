@@ -7283,9 +7283,9 @@ DLP_CASES = {
         ),
         dn(
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
-            "Bis 2005 reichten rund 9.000 Kläger eine Klage ein; 4.000 Verfahren waren noch anhängig. Ohne "
-            "Anerkennung einer Rechtspflicht schloss der Konzern einen Vergleich über 800 Millionen Euro, zwei "
-            "Prozesse endeten vor dem Gericht mit Freisprüchen.",
+            "Wegen undichter Heizkessel verklagten bis 2019 rund 1.200 Käufer den Hersteller, mehrere Verfahren "
+            "lagen beim Landgericht. Im Frühjahr 2021 zahlte das Unternehmen ohne Anerkennung einer Rechtspflicht "
+            "45 Millionen Euro in einen Fonds; danach nahm fast jeder Kläger die Klage zurück.",
             "encyclopedic report of out-of-court settlements", carrier="prose",
         ),
     ],
@@ -7411,6 +7411,25 @@ DLP_CASES = {
             "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
             "RUECKGABE_TAGE = 14  # Sperrfrist für Rücksendungen im Shop",
             "code comment without document context", carrier="code",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "A non-disclosure agreement sets out which information the parties keep secret and for how long. In a "
+            "one-way arrangement only the disclosing party shares material; the receiving party promises to protect "
+            "the confidential information and to use it for the stated purpose alone. Mutual agreements are signed "
+            "when both sides exchange plans, as in joint ventures and research partnerships.\n\nCourts enforce such "
+            "clauses but will not uphold an NDA that hides a crime. Because proving what a recipient learned is hard, "
+            "firms also mark files as proprietary and limit access to staff with a need to know.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Eine Geheimhaltungsvereinbarung legt fest, welche Informationen die Parteien vertraulich behandeln. Bei "
+            "einseitigen Verträgen gibt nur die offenlegende Partei Unterlagen heraus, die empfangende Partei "
+            "verpflichtet sich zur Geheimhaltung. Gegenseitige Verträge werden unterzeichnet, wenn beide Seiten Pläne "
+            "austauschen.\n\nVerstöße sichert oft eine Vertragsstrafe ab. Gerichte erkennen Informationen nur an, "
+            "wenn ihr Inhaber angemessene Geheimhaltungsmaßnahmen nachweist.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
         ),
     ],
     # M-LEGAL (M22): customer and supplier contracts. The contract title is the evidence span;
@@ -7548,6 +7567,24 @@ DLP_CASES = {
             "dlp.document.contract", "de", "dlp_document_contract",
             "Den Rahmenvertrag mit Brandt verlängern wir wohl, über die Laufzeit sprechen wir am Montag.",
             "chat about a contract under negotiation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Manufacturers buy parts under a supply agreement that runs for several years. The customer commits to "
+            "minimum volumes and the supplier accepts price caps for late delivery. Fees are indexed to raw material "
+            "costs.\n\nSuch contracts also allocate liability for defective goods, while safety laws keep some claims "
+            "open whatever term was agreed. Termination rights apply on insolvency, and confidentiality clauses "
+            "protect drawings. Carmakers held thousands of these contracts, worth over USD 500 billion, between them.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Hersteller beziehen Bauteile über einen Liefervertrag mit mehrjähriger Laufzeit. Der Kunde sagt "
+            "Mindestmengen zu, der Lieferant akzeptiert Preisobergrenzen. Die Vergütung folgt den Rohstoffpreisen."
+            "\n\nDie Haftung für fehlerhafte Teile ist oft begrenzt. Ein Recht zur Kündigung besteht vor allem bei "
+            "Insolvenz, Klauseln zur Vertraulichkeit schützen Zeichnungen. Zwischen Herstellern und Zulieferern "
+            "bestehen Verträge über Milliarden EUR.",
+            "multi-paragraph encyclopedic article without counter terms", carrier="prose",
         ),
     ],
     # M-MARK: classification markings (M02 + M03), on by default (M23). The marking is the evidence
