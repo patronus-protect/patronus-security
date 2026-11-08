@@ -783,7 +783,9 @@ fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
 /// instruction or a record label. Newsletters, job ads and security policies
 /// name an NDA or embargo with letter words and a generic term (publication,
 /// signed), so the class also needs a secrecy duty: confidential information,
-/// a receiving party, non-public or a handling instruction.
+/// a receiving party, non-public or a handling instruction. Bare
+/// confidentiality is none: policies name it as a value next to the NDA their
+/// volunteers sign.
 static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
     ContentClass::new(
         &[
@@ -791,7 +793,7 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("receiving party", Tier::Medium),
             ("recipient", Tier::Medium),
             ("confidential information", Tier::Medium),
-            ("confidentiality", Tier::Medium),
+            ("confidentiality terms", Tier::Medium),
             ("proprietary", Tier::Medium),
             ("need-to-know", Tier::Medium),
             ("need to know", Tier::Medium),
@@ -911,7 +913,7 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
         "disclosing party",
         "receiving party",
         "confidential information",
-        "confidentiality",
+        "confidentiality terms",
         "need-to-know",
         "need to know",
         "non-public",
@@ -1452,6 +1454,22 @@ mod tests {
             "Hallo, bitte beachten Sie die Sperrfrist für Rücksendungen: Der Empfänger erhält die Erstattung \
              nach 14 Tagen. Viele Grüße, Ihr Shop-Team",
             "Sperrfrist",
+        ));
+    }
+
+    #[test]
+    fn policies_on_confidentiality_are_no_nda_document() {
+        // A policy names the NDA its volunteers sign and the confidentiality
+        // of user data; bare confidentiality is no secrecy duty of a document.
+        assert!(!nda(
+            "Subject: Access policy\n\nPlease note: volunteers with access to user data sign the NDA. \
+             Confidentiality of user data is a core value; the recipient of a request reviews it.",
+            "NDA",
+        ));
+        assert!(!nda(
+            "Re: Data access\n\nDear volunteers, before access you sign the NDA. We take confidentiality \
+             seriously and publish the announcement of every policy change.",
+            "NDA",
         ));
     }
 

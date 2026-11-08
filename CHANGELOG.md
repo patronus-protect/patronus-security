@@ -140,6 +140,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Klageschrift/Klageerwiderung/Schriftsatz) under the same legal-anchor gate. All three classes stay
   opt-in, so the default profile and its latency are unchanged; the element check is one bit test
   per element on the anchors the gate already collects.
+- Detection change (opt-in NDA/trade secret class, all modes): bare confidentiality is no NDA
+  anchor and no secrecy duty, only "confidentiality terms" is; access and data policies that name
+  the NDA their volunteers sign next to confidentiality as a value no longer pass.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

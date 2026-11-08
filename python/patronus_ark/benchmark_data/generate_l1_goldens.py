@@ -7578,6 +7578,12 @@ DLP_CASES = {
             "14 Tagen. Viele Grüße, Ihr Shop-Team",
             "shop return note", carrier="prose",
         ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Subject: Access policy\n\nPlease note: volunteers with access to user data sign the NDA. "
+            "Confidentiality of user data is a core value; the recipient of a request reviews it.",
+            "access policy naming confidentiality as a value", carrier="prose",
+        ),
     ],
     # M-LEGAL (M22): customer and supplier contracts. The contract title is the evidence span;
     # parties, remuneration, term and confidentiality around it make the document. Law texts,
