@@ -434,6 +434,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
 | `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
 | `document.legal_privileged` | shared | `dlp.document.legal_privileged` | `dlp_document_legal_privileged` | format | off | – |
+| `document.hr` | shared | `dlp.document.hr` | `dlp_document_hr` | format | off | – |
+| `document.rnd_ip` | shared | `dlp.document.rnd_ip` | `dlp_document_rnd_ip` | format | off | – |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | `dlp_slack_app_token` | format | on | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
 | `saas.atlassian.api_token` | shared | `API_KEY` | `dlp_atlassian_api_token`, `dlp_atlassian_legacy_api_token` | format | on | gitleaks: `atlassian-api-token`; TruffleHog: `Atlassian`, `JiraToken` |
 | `saas.notion.api_token` | shared | `API_KEY` | `dlp_notion_api_token` | format | on | gitleaks: `notion-api-token` |
@@ -448,10 +450,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | `dlp_document_board_minutes` | format | off | – |
 | `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | `dlp_document_nda_trade_secret` | format | off | – |
 | `document.contract` | ark_only | `dlp.document.contract` | `dlp_document_contract` | format | off | – |
-| `document.hr` | ark_only | `dlp.document.hr` | `dlp_document_hr` | format | off | – |
 | `document.security_report` | ark_only | `dlp.document.security_report` | `dlp_document_security_report` | format | off | – |
 | `document.export_control` | ark_only | `dlp.document.export_control` | `dlp_document_export_control` | format | off | – |
-| `document.rnd_ip` | ark_only | `dlp.document.rnd_ip` | `dlp_document_rnd_ip` | format | off | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |
@@ -567,8 +567,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `kubernetes-secret-yaml` |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | detect-secrets: `Base64HighEntropyString`, `HexHighEntropyString` |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `pkcs12-file` |
-| `document.hr` | baseline_only | `dlp.document.hr` | – | – | – | – |
-| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – | – |
 | `action.sensitive_material` | out_of_scope | – | `dlp_sensitive_material` | – | on | – |
 | `action.secret_transfer` | out_of_scope | – | `dlp_secret_transfer` | – | on | – |
 | `action.destructive_operation` | out_of_scope | – | `dlp_destructive_operation` | – | off | – |
@@ -581,7 +579,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 87 shared, 50 ARK only, 77 baseline only, 11 out of scope.
+Entities: 89 shared, 48 ARK only, 75 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -668,6 +666,8 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
 | `content.system_log` | shared | `dlp.content.system_log` | 456 documents | ARK 0.0 (opt-in profile) | ARK 0.0 (opt-in profile) |
 | `document.legal_privileged` | shared | `dlp.document.legal_privileged` | – | – | – |
+| `document.hr` | shared | `dlp.document.hr` | – | – | – |
+| `document.rnd_ip` | shared | `dlp.document.rnd_ip` | – | – | – |
 | `comm.slack.app_config_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `saas.atlassian.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `saas.notion.api_token` | shared | `API_KEY` | 0 | no gold | no gold |
@@ -682,10 +682,8 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `document.board_minutes` | ark_only | `dlp.document.board_minutes` | – | – | – |
 | `document.nda_trade_secret` | ark_only | `dlp.document.nda_trade_secret` | – | – | – |
 | `document.contract` | ark_only | `dlp.document.contract` | – | – | – |
-| `document.hr` | ark_only | `dlp.document.hr` | – | – | – |
 | `document.security_report` | ark_only | `dlp.document.security_report` | – | – | – |
 | `document.export_control` | ark_only | `dlp.document.export_control` | – | – | – |
-| `document.rnd_ip` | ark_only | `dlp.document.rnd_ip` | – | – | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |
@@ -801,8 +799,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
 | `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
-| `document.hr` | baseline_only | `dlp.document.hr` | – | – | – |
-| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – |
 
 Measured entities: 176, 46 with gold, 130 without gold.
 
