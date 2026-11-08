@@ -15,7 +15,7 @@ use std::ops::Range;
 
 use serde_json::Value;
 
-use crate::detectors::validators::{base64_decode, Base64Kind};
+use crate::detectors::validators::{base64_decode, base64_digit, Base64Kind};
 use crate::detectors::NativeDetection;
 use crate::EvidenceSpan;
 
@@ -129,8 +129,28 @@ impl Decoded {
     }
 }
 
-const fn is_run_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'-' | b'_')
+/// Byte classes of a run: alphanumeric, the standard (`+`, `/`) and the
+/// base64url (`-`, `_`) extra characters; 0 for every other byte.
+const ALNUM: u8 = 1;
+const STANDARD: u8 = 2;
+const URL: u8 = 4;
+static RUN_CLASS: [u8; 256] = {
+    let mut table = [0; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        table[byte] = match byte as u8 {
+            b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' => ALNUM,
+            b'+' | b'/' => STANDARD,
+            b'-' | b'_' => URL,
+            _ => 0,
+        };
+        byte += 1;
+    }
+    table
+};
+
+fn is_run_byte(byte: u8) -> bool {
+    RUN_CLASS[usize::from(byte)] != 0
 }
 
 /// The candidate runs of `text`: maximal runs of base64/base64url characters
@@ -141,17 +161,35 @@ fn runs(text: &str) -> impl Iterator<Item = (Range<usize>, Encoding)> + '_ {
     let mut index = 0;
     std::iter::from_fn(move || {
         while index < bytes.len() {
-            if !is_run_byte(bytes[index]) {
-                index += 1;
-                continue;
+            // A run needs `MIN_RUN` run characters in a row: test the window
+            // from its end and jump past the last byte that breaks it, so most
+            // bytes of code and prose are never read. `index..verified` holds
+            // run characters only.
+            let mut verified = index;
+            loop {
+                if bytes.len() - index < MIN_RUN {
+                    index = bytes.len();
+                    return None;
+                }
+                let window_end = index + MIN_RUN;
+                let from = verified.max(index);
+                match bytes[from..window_end]
+                    .iter()
+                    .rposition(|&byte| !is_run_byte(byte))
+                {
+                    Some(offset) => index = from + offset + 1,
+                    None => break,
+                }
+                verified = window_end;
             }
-            let start = index;
-            let (mut standard, mut url) = (false, false);
+            index += MIN_RUN;
+            let start = index - MIN_RUN;
             while index < bytes.len() && is_run_byte(bytes[index]) {
-                standard |= matches!(bytes[index], b'+' | b'/');
-                url |= matches!(bytes[index], b'-' | b'_');
                 index += 1;
             }
+            let classes = bytes[start..index]
+                .iter()
+                .fold(0, |classes, &byte| classes | RUN_CLASS[usize::from(byte)]);
             let mut end = index;
             while end < bytes.len() && end - index < 2 && bytes[end] == b'=' {
                 end += 1;
@@ -161,10 +199,10 @@ fn runs(text: &str) -> impl Iterator<Item = (Range<usize>, Encoding)> + '_ {
                 end = index;
             }
             index = end;
-            if (standard && url) || !(MIN_RUN..=MAX_RUN).contains(&(end - start)) {
+            if classes & (STANDARD | URL) == STANDARD | URL || end - start > MAX_RUN {
                 continue;
             }
-            let encoding = if url {
+            let encoding = if classes & URL != 0 {
                 Encoding::Base64Url
             } else {
                 Encoding::Base64
@@ -182,17 +220,23 @@ const fn is_text_byte(byte: u8) -> bool {
 
 /// The decoded text of a canonical run, if it is printable UTF-8.
 fn decode_text(run: &str, encoding: Encoding) -> Option<String> {
-    // Most runs (identifiers, paths, hashes) decode to binary: their first
-    // eight characters already reject them.
-    let head = match encoding {
+    // Most runs (identifiers, paths, hashes) decode to binary: a few
+    // characters already reject them, before anything is allocated.
+    let kind = match encoding {
         Encoding::Base64 => Base64Kind::StandardUnpadded,
         Encoding::Base64Url => Base64Kind::UrlSafe,
     };
-    if !base64_decode(&run[..8], head)?
-        .into_iter()
-        .all(is_text_byte)
-    {
-        return None;
+    let (mut accumulator, mut bits) = (0u32, 0u32);
+    for byte in run.trim_end_matches('=').bytes() {
+        accumulator = (accumulator << 6) | u32::from(base64_digit(byte, kind)?);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            if !is_text_byte((accumulator >> bits) as u8) {
+                return None;
+            }
+            accumulator &= (1 << bits) - 1;
+        }
     }
     let bytes = match encoding {
         Encoding::Base64 if run.ends_with('=') || run.len().is_multiple_of(4) => {

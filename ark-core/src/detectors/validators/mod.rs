@@ -22,7 +22,7 @@ mod keccak;
 mod macaroon;
 
 pub use base58::{base58_decode, base58check_decode};
-pub use base64::{base64_decode, Base64Kind};
+pub use base64::{base64_decode, base64_digit, Base64Kind};
 pub use bech32::{
     bech32_decode, bech32_decode_with_limit, convert_bits, Bech32, Bech32Variant, BECH32_MAX_LENGTH,
 };

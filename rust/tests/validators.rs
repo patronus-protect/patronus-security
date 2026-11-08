@@ -9,10 +9,11 @@ use std::path::{Path, PathBuf};
 
 use patronus_ark::{
     detectors::validators::{
-        base58_decode, base58check_decode, base64_decode, bech32_decode, bech32_decode_with_limit,
-        convert_bits, crc32, crc32_base62, crc32_base62_valid, der_integer_ok, der_parse,
-        der_sequence, in_alphabet, jwt_header, jwt_parse, shannon_entropy, Base64Kind,
-        Bech32Variant, CharClasses, BASE32, BASE58, BASE62, BASE64, BASE64URL, BECH32, HEX_LOWER,
+        base58_decode, base58check_decode, base64_decode, base64_digit, bech32_decode,
+        bech32_decode_with_limit, convert_bits, crc32, crc32_base62, crc32_base62_valid,
+        der_integer_ok, der_parse, der_sequence, in_alphabet, jwt_header, jwt_parse,
+        shannon_entropy, Base64Kind, Bech32Variant, CharClasses, BASE32, BASE58, BASE62, BASE64,
+        BASE64URL, BECH32, HEX_LOWER,
     },
     golden_recipes::GeneratorSet,
 };
@@ -252,6 +253,26 @@ fn base64_decodes_rfc4648_vectors_canonically() {
     ] {
         assert_eq!(base64_decode(invalid, kind), None, "{invalid:?} {kind:?}");
     }
+}
+
+#[test]
+fn base64_digits_follow_the_alphabet_of_the_kind() {
+    for (alphabet, kind) in [
+        (BASE64, Base64Kind::Standard),
+        (BASE64, Base64Kind::StandardUnpadded),
+        (BASE64URL, Base64Kind::UrlSafe),
+    ] {
+        for (value, byte) in alphabet.bytes().enumerate() {
+            assert_eq!(base64_digit(byte, kind), Some(value as u8), "{kind:?}");
+        }
+        let digits = (0..=u8::MAX)
+            .filter(|&byte| base64_digit(byte, kind).is_some())
+            .count();
+        assert_eq!(digits, 64, "{kind:?}");
+    }
+    assert_eq!(base64_digit(b'-', Base64Kind::Standard), None);
+    assert_eq!(base64_digit(b'/', Base64Kind::UrlSafe), None);
+    assert_eq!(base64_digit(b'=', Base64Kind::Standard), None);
 }
 
 // ── DER ──────────────────────────────────────────────────────────────────
