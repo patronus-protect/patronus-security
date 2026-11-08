@@ -199,114 +199,257 @@ pub(super) const RULES: &[DlpPattern] = &[
             ],
         )
         .with_context_gate(is_legal_privileged_document),
+    }, // M-CORP (M07): unpublished financials, inside information (MAR Art. 7),
+    // insider lists and guidance before publication (`UNPUBLISHED_FINANCIALS`).
+    DlpPattern {
+        name: "dlp_document_unpublished_financials",
+        pattern: r"(?i)\b(?:inside\s+information|insider\s+lists?|material\s+non-public\s+information|mnpi|unpublished\s+(?:financial\s+)?(?:results|figures|financials|numbers|earnings|guidance)|(?:prior\s+to|before)\s+publication|insiderinformation(?:en)?|insiderlisten?|insiderverzeichnis(?:se)?|unveröffentlichte[nr]?\s+(?:quartals|jahres|finanz|geschäfts)?(?:zahlen|ergebnisse|prognose)|vor\s+(?:der\s+)?veröffentlichung|nicht\s+öffentliche[nr]?\s+(?:quartals|jahres|finanz)?(?:zahlen|ergebnisse))\b",
+        entity_group: "dlp.document.unpublished_financials",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "inside",
+                "non-public",
+                "mnpi",
+                "unpublished",
+                "publication",
+                "ffentlich",
+            ],
+        )
+        .with_context_gate(is_unpublished_financials_document),
+    },
+    // M-CORP (M08): M&A and transaction documents: term sheet, letter of
+    // intent, due diligence, data room, purchase agreements, cap table
+    // (`M_AND_A`).
+    DlpPattern {
+        name: "dlp_document_m_and_a",
+        pattern: r"(?i)\b(?:term[ -]sheets?|letters?\s+of\s+intent|absichtserklärung(?:en)?|due[ -]diligence|data[ -]rooms?|datenr(?:a|ä)ume?|(?:share|stock|asset)\s+purchase\s+agreements?|(?:unternehmens|anteils)kaufvertr(?:a|ä)ge?s?|cap[ -]tables?|kapitalisierungstabellen?|information\s+memorandum)\b",
+        entity_group: "dlp.document.m_and_a",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "sheet",
+                "intent",
+                "absichtserkl",
+                "diligence",
+                "room",
+                "datenr",
+                "purchase",
+                "kaufvertr",
+                "table",
+                "kapitalisierungstabelle",
+                "memorandum",
+            ],
+        )
+        .with_context_gate(is_m_and_a_document),
+    },
+    // M-CORP (M09): management and supervisory board minutes and resolution
+    // drafts (`BOARD_MINUTES`).
+    DlpPattern {
+        name: "dlp_document_board_minutes",
+        pattern: r"(?i)\b(?:(?:supervisory\s+|management\s+)?board\s+minutes|minutes\s+of\s+the\s+(?:meeting\s+of\s+the\s+)?(?:supervisory\s+board|management\s+board|executive\s+board|board(?:\s+of\s+directors)?)|(?:draft|written)\s+(?:board\s+)?resolutions?|board\s+resolutions?|resolutions?\s+of\s+the\s+(?:supervisory\s+|management\s+)?board|(?:vorstands|aufsichtsrats|beirats)(?:sitzungs)?protokoll|protokoll\s+der\s+(?:vorstandssitzung|aufsichtsratssitzung|beiratssitzung|sitzung\s+des\s+(?:vorstands|aufsichtsrats|beirats))|beschlussvorlagen?|beschlussentw(?:u|ü)rfe?|umlaufbeschl(?:u|ü)ss(?:es|e)?|(?:vorstands|aufsichtsrats)beschl(?:u|ü)ss(?:es|e)?)\b",
+        entity_group: "dlp.document.board_minutes",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["minutes", "resolution", "protokoll", "beschl"],
+        )
+        .with_context_gate(is_board_minutes_document),
     },
 ];
+
+/// Letter and mail structure shared by the document classes.
+const LETTER_STRUCTURE: &[&str] = &[
+    "subject:",
+    "re:",
+    "from:",
+    "to:",
+    "cc:",
+    "date:",
+    "dear",
+    "kind regards",
+    "best regards",
+    "sincerely",
+    "betreff:",
+    "von:",
+    "an:",
+    "datum:",
+    "sehr geehrte",
+    "sehr geehrter",
+    "mit freundlichen grüßen",
+    "freundliche grüße",
+    "viele grüße",
+    "beste grüße",
+    "unser zeichen",
+    "ihr zeichen",
+];
+
+/// Counter-context shared by the document classes: definitions, templates,
+/// examples and courses quote a marker without being the document.
+const GENERIC_COUNTER: &[&str] = &[
+    "example",
+    "for example",
+    "sample",
+    "template",
+    "placeholder",
+    "e.g.",
+    "wikipedia",
+    "definition",
+    "is defined as",
+    "refers to",
+    "glossary",
+    "tutorial",
+    "lecture",
+    "lorem ipsum",
+    "beispiel",
+    "zum beispiel",
+    "z. b.",
+    "z.b.",
+    "muster",
+    "vorlage",
+    "platzhalter",
+    "bezeichnet",
+    "glossar",
+    "vorlesung",
+    "seminar",
+];
+
+/// Counter-context of the corporate (M-CORP) classes: encyclopedia articles
+/// and guides describe deals, filings and boards in general terms.
+const ENCYCLOPEDIC_COUNTER: &[&str] = &[
+    "typically",
+    "usually",
+    "generally",
+    "commonly",
+    "often",
+    "such as",
+    "for instance",
+    "in general",
+    "in practice",
+    "historically",
+    "typischerweise",
+    "üblicherweise",
+    "in der regel",
+    "häufig",
+    "meist",
+    "meistens",
+    "beispielsweise",
+    "versteht man",
+];
+
+/// Internal markings and salutations of corporate (M-CORP) documents.
+const CORPORATE_STRUCTURE: &[&str] = &[
+    "hi",
+    "hallo",
+    "strictly confidential",
+    "streng vertraulich",
+    "draft",
+    "entwurf",
+];
+
+/// A document class from its medium, structural and counter anchors.
+fn document_class(
+    medium: &[&str],
+    structural: &[&[&str]],
+    counter: &[&[&str]],
+    density: Density,
+) -> ContentClass {
+    let anchors: Vec<(&str, Tier)> = medium
+        .iter()
+        .map(|term| (*term, Tier::Medium))
+        .chain(
+            structural
+                .iter()
+                .flat_map(|terms| terms.iter().map(|term| (*term, Tier::Structural))),
+        )
+        .chain(
+            counter
+                .iter()
+                .flat_map(|terms| terms.iter().map(|term| (*term, Tier::Counter))),
+        )
+        .collect();
+    ContentClass::new(&anchors, density)
+}
+
+/// The density of the M-CORP classes: their domain terms are common in
+/// public reports, so two distinct ones must stand near the marker.
+const CORPORATE_DENSITY: Density = Density {
+    window: 1500,
+    min_score: 8,
+    min_medium: 2,
+};
 
 /// M01: the anchors of attorney-client privileged correspondence around its
 /// privilege marker.
 static LEGAL_PRIVILEGED: LazyLock<ContentClass> = LazyLock::new(|| {
-    ContentClass::new(
+    document_class(
         &[
-            ("counsel", Tier::Medium),
-            ("opposing counsel", Tier::Medium),
-            ("attorney", Tier::Medium),
-            ("attorneys", Tier::Medium),
-            ("lawyer", Tier::Medium),
-            ("lawyers", Tier::Medium),
-            ("law firm", Tier::Medium),
-            ("legal advice", Tier::Medium),
-            ("litigation", Tier::Medium),
-            ("lawsuit", Tier::Medium),
-            ("settlement", Tier::Medium),
-            ("our client", Tier::Medium),
-            ("your client", Tier::Medium),
-            ("plaintiff", Tier::Medium),
-            ("defendant", Tier::Medium),
-            ("deposition", Tier::Medium),
-            ("court", Tier::Medium),
-            ("claim", Tier::Medium),
-            ("trial", Tier::Medium),
-            ("complaint", Tier::Medium),
-            ("pleading", Tier::Medium),
-            ("subpoena", Tier::Medium),
-            ("rechtsanwalt", Tier::Medium),
-            ("rechtsanwältin", Tier::Medium),
-            ("rechtsanwälte", Tier::Medium),
-            ("anwalt", Tier::Medium),
-            ("anwältin", Tier::Medium),
-            ("kanzlei", Tier::Medium),
-            ("mandant", Tier::Medium),
-            ("mandantin", Tier::Medium),
-            ("mandanten", Tier::Medium),
-            ("mandat", Tier::Medium),
-            ("rechtsberatung", Tier::Medium),
-            ("rechtsstreit", Tier::Medium),
-            ("klage", Tier::Medium),
-            ("klageentwurf", Tier::Medium),
-            ("klageschrift", Tier::Medium),
-            ("vergleich", Tier::Medium),
-            ("vergleichsverhandlung", Tier::Medium),
-            ("gericht", Tier::Medium),
-            ("amtsgericht", Tier::Medium),
-            ("landgericht", Tier::Medium),
-            ("arbeitsgericht", Tier::Medium),
-            ("aktenzeichen", Tier::Medium),
-            ("az.", Tier::Medium),
-            ("schriftsatz", Tier::Medium),
-            ("gegenseite", Tier::Medium),
-            ("beklagte", Tier::Medium),
-            ("beklagten", Tier::Medium),
-            ("kläger", Tier::Medium),
-            ("klägerin", Tier::Medium),
-            ("verfahren", Tier::Medium),
-            ("subject:", Tier::Structural),
-            ("re:", Tier::Structural),
-            ("from:", Tier::Structural),
-            ("to:", Tier::Structural),
-            ("cc:", Tier::Structural),
-            ("date:", Tier::Structural),
-            ("dear", Tier::Structural),
-            ("kind regards", Tier::Structural),
-            ("best regards", Tier::Structural),
-            ("sincerely", Tier::Structural),
-            ("betreff:", Tier::Structural),
-            ("von:", Tier::Structural),
-            ("an:", Tier::Structural),
-            ("datum:", Tier::Structural),
-            ("sehr geehrte", Tier::Structural),
-            ("sehr geehrter", Tier::Structural),
-            ("mit freundlichen grüßen", Tier::Structural),
-            ("freundliche grüße", Tier::Structural),
-            ("viele grüße", Tier::Structural),
-            ("beste grüße", Tier::Structural),
-            ("unser zeichen", Tier::Structural),
-            ("ihr zeichen", Tier::Structural),
-            ("example", Tier::Counter),
-            ("for example", Tier::Counter),
-            ("sample", Tier::Counter),
-            ("template", Tier::Counter),
-            ("placeholder", Tier::Counter),
-            ("e.g.", Tier::Counter),
-            ("wikipedia", Tier::Counter),
-            ("definition", Tier::Counter),
-            ("is defined as", Tier::Counter),
-            ("refers to", Tier::Counter),
-            ("glossary", Tier::Counter),
-            ("tutorial", Tier::Counter),
-            ("lecture", Tier::Counter),
-            ("lorem ipsum", Tier::Counter),
-            ("beispiel", Tier::Counter),
-            ("zum beispiel", Tier::Counter),
-            ("z. b.", Tier::Counter),
-            ("z.b.", Tier::Counter),
-            ("muster", Tier::Counter),
-            ("vorlage", Tier::Counter),
-            ("platzhalter", Tier::Counter),
-            ("bezeichnet", Tier::Counter),
-            ("glossar", Tier::Counter),
-            ("vorlesung", Tier::Counter),
-            ("seminar", Tier::Counter),
+            "counsel",
+            "opposing counsel",
+            "attorney",
+            "attorneys",
+            "lawyer",
+            "lawyers",
+            "law firm",
+            "legal advice",
+            "litigation",
+            "lawsuit",
+            "settlement",
+            "our client",
+            "your client",
+            "plaintiff",
+            "defendant",
+            "deposition",
+            "court",
+            "claim",
+            "trial",
+            "complaint",
+            "pleading",
+            "subpoena",
+            "rechtsanwalt",
+            "rechtsanwältin",
+            "rechtsanwälte",
+            "anwalt",
+            "anwältin",
+            "kanzlei",
+            "mandant",
+            "mandantin",
+            "mandanten",
+            "mandat",
+            "rechtsberatung",
+            "rechtsstreit",
+            "klage",
+            "klageentwurf",
+            "klageschrift",
+            "vergleich",
+            "vergleichsverhandlung",
+            "gericht",
+            "amtsgericht",
+            "landgericht",
+            "arbeitsgericht",
+            "aktenzeichen",
+            "az.",
+            "schriftsatz",
+            "gegenseite",
+            "beklagte",
+            "beklagten",
+            "kläger",
+            "klägerin",
+            "verfahren",
         ],
+        &[LETTER_STRUCTURE],
+        &[GENERIC_COUNTER],
         Density {
             window: 1500,
             min_score: 8,
@@ -317,6 +460,266 @@ static LEGAL_PRIVILEGED: LazyLock<ContentClass> = LazyLock::new(|| {
 
 fn is_legal_privileged_document(text: &str, marker: Range<usize>) -> bool {
     LEGAL_PRIVILEGED.holds(text, marker)
+}
+
+/// M-CORP (M07): the anchors of unpublished financials, inside information,
+/// insider lists and guidance drafts around their marker. Published ad hoc
+/// releases, annual reports and press releases carry the same terms; their
+/// distribution footers and report headings are counter-context.
+static UNPUBLISHED_FINANCIALS: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "revenue",
+            "ebit",
+            "ebitda",
+            "net income",
+            "earnings",
+            "guidance",
+            "outlook",
+            "forecast",
+            "consensus",
+            "quarter",
+            "quarterly",
+            "fiscal year",
+            "margin",
+            "free cash flow",
+            "profit warning",
+            "impairment",
+            "dividend",
+            "ad hoc",
+            "mar",
+            "art. 17",
+            "art. 18",
+            "article 17",
+            "market abuse regulation",
+            "insider",
+            "trading ban",
+            "umsatz",
+            "umsatzerlöse",
+            "konzernergebnis",
+            "prognose",
+            "ausblick",
+            "konsens",
+            "quartal",
+            "geschäftsjahr",
+            "marge",
+            "gewinnwarnung",
+            "wertminderung",
+            "dividende",
+            "finanzvorstand",
+            "ad-hoc-mitteilung",
+            "marktmissbrauchsverordnung",
+            "handelsverbot",
+        ],
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            &[
+                "published",
+                "veröffentlicht",
+                "press release",
+                "pressemitteilung",
+                "for immediate release",
+                "end of announcement",
+                "ende der mitteilung",
+                "eqs news",
+                "eqs group",
+                "dgap",
+                "a service of",
+                "ein service der",
+                "annual report",
+                "geschäftsbericht",
+                "corporate governance",
+                "lagebericht",
+            ],
+        ],
+        CORPORATE_DENSITY,
+    )
+});
+
+fn is_unpublished_financials_document(text: &str, marker: Range<usize>) -> bool {
+    UNPUBLISHED_FINANCIALS.holds(text, marker)
+}
+
+/// M-CORP (M08): the anchors of M&A and transaction documents around their
+/// deal document marker.
+static M_AND_A: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "acquisition",
+            "merger",
+            "takeover",
+            "target company",
+            "buyer",
+            "seller",
+            "bidder",
+            "purchase price",
+            "enterprise value",
+            "equity value",
+            "valuation",
+            "pre-money",
+            "post-money",
+            "closing",
+            "signing",
+            "exclusivity",
+            "transaction",
+            "earn-out",
+            "escrow",
+            "locked box",
+            "warranties",
+            "merger control",
+            "investor",
+            "series a",
+            "series b",
+            "series c",
+            "funding round",
+            "founders",
+            "project",
+            "übernahme",
+            "fusion",
+            "zielgesellschaft",
+            "zielunternehmen",
+            "käufer",
+            "verkäufer",
+            "bieter",
+            "kaufpreis",
+            "unternehmenswert",
+            "bewertung",
+            "exklusivität",
+            "vollzug",
+            "treuhand",
+            "garantien",
+            "gewährleistung",
+            "fusionskontrolle",
+            "transaktion",
+            "anteile",
+            "geschäftsanteile",
+            "finanzierungsrunde",
+            "projekt",
+        ],
+        &[
+            LETTER_STRUCTURE,
+            CORPORATE_STRUCTURE,
+            &[
+                "non-binding",
+                "unverbindlich",
+                "subject to contract",
+                "status:",
+            ],
+        ],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            &[
+                "press release",
+                "pressemitteilung",
+                "for immediate release",
+                "announced",
+                "gab bekannt",
+                "encyclopedia",
+                "lexikon",
+                "companies",
+                "firms",
+                "acquirer",
+            ],
+        ],
+        CORPORATE_DENSITY,
+    )
+});
+
+fn is_m_and_a_document(text: &str, marker: Range<usize>) -> bool {
+    M_AND_A.holds(text, marker)
+}
+
+/// M-CORP (M09): the anchors of management and supervisory board minutes
+/// and resolution drafts around their marker.
+static BOARD_MINUTES: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "board of directors",
+            "supervisory board",
+            "management board",
+            "director",
+            "directors",
+            "chair",
+            "chairman",
+            "chairwoman",
+            "chairperson",
+            "ceo",
+            "cfo",
+            "quorum",
+            "resolved",
+            "resolves",
+            "unanimously",
+            "vote",
+            "voted",
+            "votes",
+            "motion",
+            "abstained",
+            "approved",
+            "agenda item",
+            "company secretary",
+            "vorstand",
+            "vorstands",
+            "aufsichtsrat",
+            "aufsichtsrats",
+            "vorsitzende",
+            "vorsitzender",
+            "finanzvorstand",
+            "beschlussfähig",
+            "beschlussfähigkeit",
+            "beschlossen",
+            "beschließt",
+            "einstimmig",
+            "abstimmung",
+            "enthaltung",
+            "zustimmung",
+            "stimmte",
+            "sitzung",
+            "tagesordnungspunkt",
+            "top 1",
+            "top 2",
+            "top 3",
+        ],
+        &[
+            LETTER_STRUCTURE,
+            CORPORATE_STRUCTURE,
+            &[
+                "agenda",
+                "tagesordnung",
+                "present:",
+                "attendees:",
+                "anwesend:",
+                "teilnehmer:",
+                "location:",
+                "ort:",
+            ],
+        ],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            &[
+                "job",
+                "your tasks",
+                "we are looking for",
+                "stellenanzeige",
+                "ihre aufgaben",
+                "wir suchen",
+                "encyclopedia",
+                "lexikon",
+                "policy",
+                "richtlinie",
+                "shall",
+                "bylaws",
+            ],
+        ],
+        CORPORATE_DENSITY,
+    )
+});
+
+fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
+    BOARD_MINUTES.holds(text, marker)
 }
 
 fn is_non_placeholder_source_assignment(candidate: &str) -> bool {
@@ -427,11 +830,19 @@ fn is_structured_sql_statement(candidate: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_legal_privileged_document;
+    use super::{
+        is_board_minutes_document, is_legal_privileged_document, is_m_and_a_document,
+        is_unpublished_financials_document,
+    };
+    use std::ops::Range;
+
+    fn holds(class: fn(&str, Range<usize>) -> bool, text: &str, marker: &str) -> bool {
+        let start = text.find(marker).unwrap();
+        class(text, start..start + marker.len())
+    }
 
     fn gate(text: &str, marker: &str) -> bool {
-        let start = text.find(marker).unwrap();
-        is_legal_privileged_document(text, start..start + marker.len())
+        holds(is_legal_privileged_document, text, marker)
     }
 
     #[test]
@@ -468,6 +879,112 @@ mod tests {
         assert!(!gate(
             "Email template: add PRIVILEGED AND CONFIDENTIAL and the name of your law firm.",
             "PRIVILEGED AND CONFIDENTIAL",
+        ));
+    }
+
+    #[test]
+    fn unpublished_financials_hold_before_publication_in_de_and_en() {
+        let class = is_unpublished_financials_document;
+        assert!(holds(
+            class,
+            "Subject: Q3 figures\n\nINSIDE INFORMATION\n\nDear all, Q3 revenue is below consensus.",
+            "INSIDE INFORMATION",
+        ));
+        assert!(holds(
+            class,
+            "Betreff: Q3\n\nInsiderinformation\n\nder Umsatz im Quartal verfehlt die Prognose.",
+            "Insiderinformation",
+        ));
+        // One financial term is not enough for a corporate class.
+        assert!(!holds(
+            class,
+            "Subject: Figures\n\nINSIDE INFORMATION\n\nDear all, revenue is fine.",
+            "INSIDE INFORMATION",
+        ));
+    }
+
+    #[test]
+    fn published_releases_and_reports_are_counter_context() {
+        let class = is_unpublished_financials_document;
+        assert!(!holds(
+            class,
+            "Ad hoc announcement - disclosure of inside information according to Article 17 MAR\n\n\
+             Northwind lowers its revenue guidance for the fiscal year after a weak third quarter.\n\n\
+             End of announcement. EQS News - a service of EQS Group.",
+            "inside information",
+        ));
+        assert!(!holds(
+            class,
+            "Geschäftsbericht 2025 – Corporate Governance\n\nDie Gesellschaft führt eine Insiderliste \
+             nach Art. 18 MAR. Umsatzerlöse und Ergebnis erläutert der Lagebericht.",
+            "Insiderliste",
+        ));
+    }
+
+    #[test]
+    fn m_and_a_documents_hold_and_explanations_do_not() {
+        let class = is_m_and_a_document;
+        assert!(holds(
+            class,
+            "Subject: Project Falcon - term sheet\n\nDear all, purchase price 410m, exclusivity for the buyer.",
+            "term sheet",
+        ));
+        assert!(holds(
+            class,
+            "Betreff: Projekt Falke\n\nAbsichtserklärung: Kaufpreis für die Zielgesellschaft 410 Mio.",
+            "Absichtserklärung",
+        ));
+        assert!(!holds(
+            class,
+            "Due diligence refers to the review a buyer does before an acquisition, for example in a data room.",
+            "Due diligence",
+        ));
+        assert!(!holds(
+            class,
+            "Wir ziehen um, der Datenraum im Keller bleibt zu.",
+            "Datenraum"
+        ));
+        // Encyclopedia prose is dense with deal terms; its hedges are counter-context.
+        assert!(!holds(
+            class,
+            "In a merger the buyer usually signs a share purchase agreement; closing often \
+             follows merger control, and warranties such as tax indemnities typically survive.",
+            "share purchase agreement",
+        ));
+    }
+
+    #[test]
+    fn board_minutes_hold_and_job_ads_do_not() {
+        let class = is_board_minutes_document;
+        assert!(holds(
+            class,
+            "Minutes of the Meeting of the Supervisory Board\nDate: 14 October\nQuorum confirmed; \
+             the board unanimously approved the sale.",
+            "Minutes of the Meeting of the Supervisory Board",
+        ));
+        assert!(holds(
+            class,
+            "Protokoll der Aufsichtsratssitzung\nDatum: 14.10.\nDer Aufsichtsrat ist beschlussfähig \
+             und stimmt einstimmig zu.",
+            "Protokoll der Aufsichtsratssitzung",
+        ));
+        assert!(!holds(
+            class,
+            "Job: Board Secretary. Your tasks: draft board minutes and support the chair of the \
+             supervisory board. We are looking for a lawyer.",
+            "board minutes",
+        ));
+        // A governance policy names minutes and resolutions without being one.
+        assert!(!holds(
+            class,
+            "The discussion shall be documented in Board minutes. A majority vote of the \
+             directors is required, and approved transactions follow this policy.",
+            "Board minutes",
+        ));
+        assert!(!holds(
+            class,
+            "## Muster Umlaufbeschluss\n\nDer Aufsichtsrat beschließt einstimmig: [Text]. Platzhalter.",
+            "Umlaufbeschluss",
         ));
     }
 }

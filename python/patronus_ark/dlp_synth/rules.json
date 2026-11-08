@@ -727,7 +727,10 @@
     "dlp_marking_de_corporate": "classification marking (M-MARK), marker phrase, no secret value",
     "dlp_marking_en_corporate": "classification marking (M-MARK), marker phrase, no secret value",
     "dlp_marking_tlp": "classification marking (M-MARK), marker phrase, no secret value",
-    "dlp_marking_nato_eu": "classification marking (M-MARK), marker phrase, no secret value"
+    "dlp_marking_nato_eu": "classification marking (M-MARK), marker phrase, no secret value",
+    "dlp_document_unpublished_financials": "document class (M-CORP), marker phrase, no secret value",
+    "dlp_document_m_and_a": "document class (M-CORP), marker phrase, no secret value",
+    "dlp_document_board_minutes": "document class (M-CORP), marker phrase, no secret value"
   },
   "baseline_entities": {
     "comm.webhook_url": {"generators": ["slack_webhook_url", "teams_webhook_url"], "lookalike": ["slack_webhook_url_short"]},
