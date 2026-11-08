@@ -408,7 +408,7 @@ def test_cli_count_json_and_check(tmp_path):
         "country": "de",
         "sources": [
             "pii_steuer_id_de: steuer_id",
-            "pii_steuer_id_de_bare: steuer_id",
+            "pii_steuer_id_de_bare: steuer_id_bare",
             "pii_steuer_id_de_context_free: steuer_id_issued",
         ],
     } in payload["ark"]["units"]

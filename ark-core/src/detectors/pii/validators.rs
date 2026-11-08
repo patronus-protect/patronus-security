@@ -2177,20 +2177,38 @@ pub fn steuer_id(s: &str) -> bool {
 /// of the first ten digits. Exactly one digit occurs twice or three times, never
 /// three times in a row; every other digit occurs at most once.
 pub fn steuer_id_issued(s: &str) -> bool {
-    if !steuer_id(s) {
+    let Some((counts, run)) = steuer_id_distribution(s) else {
         return false;
+    };
+    let repeated: Vec<_> = counts.iter().filter(|&&count| count > 1).collect();
+    repeated.len() == 1 && matches!(repeated[0], 2 | 3) && !run
+}
+
+/// A Steuer-ID for the opt-in bare rule (D-BARE, Q-RAW): [`steuer_id`] plus the
+/// bounds of the BZSt digit distribution that every issued ID meets, old and new
+/// scheme alike: no digit occurs more than three times in the first ten digits
+/// and none three times in a row. Unlike [`steuer_id_issued`] ten distinct
+/// digits pass (`98765432106`); `11112345678` fails despite its check digit.
+pub fn steuer_id_bare(s: &str) -> bool {
+    steuer_id_distribution(s)
+        .is_some_and(|(counts, run)| counts.iter().all(|&count| count <= 3) && !run)
+}
+
+/// Digit counts of the first ten digits of a Steuer-ID with a valid check digit,
+/// and whether a digit occurs three times in a row.
+fn steuer_id_distribution(s: &str) -> Option<([u8; 10], bool)> {
+    if !steuer_id(s) {
+        return None;
     }
     let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_digit).take(10).collect();
     let mut counts = [0u8; 10];
     for digit in &digits {
         counts[usize::from(digit - b'0')] += 1;
     }
-    let repeated: Vec<_> = counts.iter().filter(|&&count| count > 1).collect();
-    repeated.len() == 1
-        && matches!(repeated[0], 2 | 3)
-        && !digits
-            .windows(3)
-            .any(|run| run[0] == run[1] && run[1] == run[2])
+    let run = digits
+        .windows(3)
+        .any(|run| run[0] == run[1] && run[1] == run[2]);
+    Some((counts, run))
 }
 
 // ── VAT identification numbers (B01) ──────────────────────────────────────

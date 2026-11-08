@@ -38,7 +38,7 @@ const SECRET_GROUPS: &[&str] = &[
 /// Rules whose regex has no literal every match must contain; they declare a
 /// structural prefilter instead (`RuleMeta::value_run`, K07,
 /// `dlp_rule_prefilter.rs`). New rules must declare keywords.
-const KEYWORDLESS_RULES: &[&str] = &["dlp_btc_wif", "dlp_discord_token"];
+const KEYWORDLESS_RULES: &[&str] = &["dlp_btc_wif", "dlp_discord_token", "dlp_bip39_seed_phrase"];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")

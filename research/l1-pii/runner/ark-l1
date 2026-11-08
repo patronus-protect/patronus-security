@@ -428,6 +428,35 @@ def move_stale_base(pr: dict, onto_name: str, onto_sha: str, open_heads: set[str
     print(f"MOVED_BASE={base} → {onto_name} for #{pr['number']}")
 
 
+def workflow_refusal(err: Exception, base: str, head: str) -> bool:
+    """True when GitHub refused a push for `.github/workflows` while the commits between base and
+    head touch no workflow file: the difference comes from main."""
+    return "workflow" in str(err) and not git("diff", "--name-only", base, head, "--", ".github/workflows")
+
+
+def with_main_workflows(head: str) -> str:
+    """head plus a commit that takes `.github/workflows` from origin/main; head when they already match.
+
+    The runner token has no `workflow` scope, and GitHub refuses a push whose head has other
+    `.github/workflows` files than the default branch, also when only main changed them after the
+    branch's base (probed on 2026-11-06: once the head carries main's workflow files, both new and
+    existing branches accept the push; the refs and merges APIs refuse like git push). The commit
+    only repeats changes that are on main, so a squash merge adds nothing for it and the next
+    rebase onto main drops it."""
+    main_workflows = git("rev-parse", "origin/main:.github/workflows")
+    if git("rev-parse", "--verify", "--quiet", f"{head}:.github/workflows", check=False) == main_workflows:
+        return head
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        git_raw("read-tree", head, env=env)
+        git_raw("rm", "-r", "-q", "-f", "--cached", "--ignore-unmatch", ".github/workflows", env=env)
+        git_raw("read-tree", "--prefix=.github/workflows/", "origin/main:.github/workflows", env=env)
+        tree = git_raw("write-tree", env=env).strip()
+    return git_raw("commit-tree", tree, "-p", head, "-m",
+                   f"ci: take .github/workflows from main ({sha('origin/main')[:12]})\n\n"
+                   "The runner token may not push a branch whose workflow files differ from main's.").strip()
+
+
 def start_restack(conflict: dict) -> int:
     """Hand a conflicting rebase to the agent: same sandbox, gate and rounds as a backlog task."""
     branch = conflict["branch"]
@@ -467,9 +496,38 @@ INFRA_FAILURES = ("failed to install component", "No space left on device",
                   "Connection reset by peer",
                   # A hosted runner never picked the job up (macos-latest capacity, T18 2026-10-28): no
                   # log at all, only a check-run annotation, and the job ends "cancelled".
-                  "was not acquired by Runner")
+                  "was not acquired by Runner",
+                  # native-throughput on hosted runners: L3 requests time out in the queue (0.2-0.34
+                  # MiB/s vs 0.30 minimum). Push runs fail where the PR run on the same SHA passes
+                  # (0fc0fa6d, 50c62094, a8b514ad on 2026-11-07); a restack head has no PR run to
+                  # compare with. A real slowdown stays red after CI_RESTART_LIMIT restarts.
+                  "expired_before_inference")
 BAD_CONCLUSIONS = ("failure", "cancelled", "timed_out", "startup_failure")
 NO_RESTART = "no-restart"  # rerun_infra_failures: runner failure, but CI could not be restarted
+
+# The native-throughput job (scripts/ark_api_throughput_benchmark.py) fails on hosted runners now and
+# then with nothing but L3 `expired_before_inference` timeouts of unified-v3-threat at normal MiB/s and
+# RPS; it did so on main and on unrelated branches. P08 and P09 were blocked on it after 3 rounds
+# (2026-11-06) although agents cannot change the L3 model. Only that exact report is a flake.
+THROUGHPUT_JOB = "native-throughput"
+GH_LOG_PREFIX = re.compile(r"^[^\t]*\t[^\t]*\t\S+Z ?")
+
+
+def throughput_timeout_flake(log: str) -> bool:
+    """The benchmark JSON in a failed native-throughput log reports only pipeline failures, and every
+    one is an L3 timeout that expired before inference (no throughput, RPS or coverage error)."""
+    lines = [GH_LOG_PREFIX.sub("", line) for line in log.splitlines()]
+    try:
+        start = lines.index("{")
+        end = lines.index("}", start)
+        report = json.loads("\n".join(lines[start:end + 1]))
+    except ValueError:
+        return False
+    errors, failures = report.get("errors") or [], report.get("failures") or []
+    return (bool(failures) and len(errors) == 1
+            and re.fullmatch(r"received \d+ pipeline failures", str(errors[0])) is not None
+            and all(f.get("kind") == "timeout" and f.get("level") == "L3"
+                    and f.get("message") == "expired_before_inference" for f in failures))
 
 
 CI_RESTART_LIMIT = 2  # CI restarts per head; macos capacity + a Windows flake needed two (H06, 2026-11-03)
@@ -495,6 +553,8 @@ def run_is_infra_failure(run_id: int, passed_elsewhere: frozenset[str] = frozens
                     "--log-failed"], check=False) + run(
             ["gh", "api", f"repos/{GH_REPO}/check-runs/{job['databaseId']}/annotations", "--jq", ".[].message"],
             check=False)
+        if job.get("name") == THROUGHPUT_JOB and throughput_timeout_flake(text):
+            continue
         if not any(marker in text for marker in INFRA_FAILURES):
             return False
     return bool(bad)
@@ -505,6 +565,21 @@ def restart_count(entry: str | dict | None) -> int:
     if entry is None:
         return 0
     return entry.get("count", 1) if isinstance(entry, dict) else 1
+
+
+def same_tree_ancestors(head: str, limit: int = CI_RESTART_LIMIT + 1) -> list[str]:
+    """First-parent ancestors of head with head's tree (the commits under retrigger commits)."""
+    found, commit = [], head
+    try:
+        tree = git_raw("rev-parse", f"{head}^{{tree}}").strip()
+        for _ in range(limit):
+            parent = git_raw("rev-parse", "--verify", "--quiet", f"{commit}^1").strip()
+            if not parent or git_raw("rev-parse", f"{parent}^{{tree}}").strip() != tree:
+                break
+            found.append(commit := parent)
+    except RuntimeError:
+        pass
+    return found
 
 
 def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None = None) -> str | None:
@@ -528,6 +603,11 @@ def rerun_infra_failures(head: str, branch: str | None = None, push: dict | None
     failed = [r["databaseId"] for r in runs if r.get("conclusion") in BAD_CONCLUSIONS]
     if not failed:
         return None
+    # A retrigger commit has its parent's tree: jobs that passed there passed on the same code
+    # (native-throughput L3 timeouts on #286, 2026-11-06: green on bb6ee7e, red on its retrigger).
+    for commit in same_tree_ancestors(head):
+        runs += json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", commit, "--json",
+                                "databaseId,conclusion"], check=False) or "[]")
     passed = {r["databaseId"]: {j.get("name") for j in run_jobs(r["databaseId"]) if j.get("conclusion") == "success"}
               for r in runs}
     if not all(run_is_infra_failure(r, frozenset().union(*(v for k, v in passed.items() if k != r)))
@@ -615,7 +695,7 @@ def public_text(text: str) -> str:
 
 VERIFY_PATH = "ark-core/"     # a PR that changes the detector crate merges only after a passing verify
 VERIFIED = STATE / "verify.json"  # {"pass": {head sha: time}, "fails": {branch: count}}
-VERIFY_FAIL_LIMIT = 2         # failed verifies of one PR before VERIFY:<branch> is blocked for a person
+VERIFY_FAIL_LIMIT = 2         # failed verifies of one PR; after that its review fixes merge without another verify
 VERIFY_LATENCY_ATTEMPTS = 4   # latency A/B attempts (the gate takes 2); a slowdown must show in every one
 VERIFY_MAX_FINDINGS = 20
 VERDICT_PATH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,255}")
@@ -630,9 +710,22 @@ def touches_core(head: str) -> bool:
     return bool(git("diff", "--name-only", diff_base(head), head, "--", VERIFY_PATH))
 
 
-def needs_verify(head: str) -> bool:
-    """True for a head that changes ark-core/ and has no passing verify verdict of its own."""
-    return head not in load(VERIFIED, {}).get("pass", {}) and touches_core(head)
+def needs_verify(head: str, branch: str = "") -> bool:
+    """True for a head that changes ark-core/ and has no passing verify verdict of its own. Verify is a
+    sanity check, never a gate a person must clear: once a PR failed VERIFY_FAIL_LIMIT verifies, the
+    review flow fixes those findings and the PR merges on green CI without a further verify."""
+    state = load(VERIFIED, {})
+    if branch and state.get("fails", {}).get(branch, 0) >= VERIFY_FAIL_LIMIT:
+        return False
+    return head not in state.get("pass", {}) and touches_core(head)
+
+
+def verify_held(head: str, branch: str) -> bool:
+    """needs_verify for auto_merge's scan; an unreadable head counts as held (skipped this run)."""
+    try:
+        return needs_verify(head, branch)
+    except (RuntimeError, ValueError):
+        return True
 
 
 def start_verify(pr: dict) -> int:
@@ -1066,6 +1159,7 @@ def auto_merge(open_prs: list[dict]) -> int | dict | None:  # PR number, MERGE_P
     if not AUTO_MERGE or not open_prs:
         return None
     bottom = None
+    blocked = load(BLOCKED, {})
     for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
         label = f"#{pr['number']} {pr['headRefName']}"
         if pr["baseRefName"] != "main" or pr.get("isDraft"):
@@ -1074,6 +1168,10 @@ def auto_merge(open_prs: list[dict]) -> int | dict | None:  # PR number, MERGE_P
             print(f"AUTO_MERGE_WAIT={label} mergeable={pr.get('mergeable')}")
         elif (state := ci_state(pr["headRefOid"])) != "green":
             print(f"AUTO_MERGE_WAIT={label} CI {state}")
+        elif f"VERIFY:{pr['headRefName']}" in blocked and verify_held(pr["headRefOid"], pr["headRefName"]):
+            # A verify block waits for a person; it must not hold back the green PRs after it
+            # (#291 kept #292-#294 unmerged for 5 h on 2026-11-07, while `landable` saw #292).
+            print(f"AUTO_MERGE_WAIT={label} verify blocked; it stays unmerged until unblocked")
         else:
             bottom = pr
             break
@@ -1085,7 +1183,7 @@ def auto_merge(open_prs: list[dict]) -> int | dict | None:  # PR number, MERGE_P
         if threads:
             print(f"AUTO_MERGE_WAIT={label} {threads} unresolved review thread(s)")
             return None
-        if needs_verify(bottom["headRefOid"]):
+        if needs_verify(bottom["headRefOid"], bottom["headRefName"]):
             if f"VERIFY:{bottom['headRefName']}" in load(BLOCKED, {}):
                 print(f"AUTO_MERGE_WAIT={label} verify blocked; it stays unmerged until unblocked")
                 return None
@@ -1226,7 +1324,16 @@ def cmd_env() -> int:
     return 0
 
 
-GATE_TEST_MAX_SEC = 3 * 3600  # cargo test step; other gate steps keep the 1 h sandbox default
+GATE_TEST_MAX_SEC = 4 * 3600  # cargo test step; other gate steps keep the 1 h sandbox default.
+# With the shared PII/DLP pipeline on main (#268) the step takes ~2 h including the cold build
+# (RESTACK:dlp/098-t23, 2026-11-05: 2 h 05 min), but under heavy CPU steal the cold build alone
+# ran past 3 h (same run, round 1, no test started). The gate cache rarely survives a round
+# (26 GB, under MIN_FREE_GB in run.sh), so every gate pays the cold build.
+GATE_BUILD_MAX_SEC = 3 * 3600  # clippy, golden eval and the other steps that can start a cold build.
+# Clippy (check profile) and the golden eval (dev profile, the test profile differs by opt-level)
+# each build the dependency tree from scratch after a cache wipe. Under CPU steal both passed the
+# 1 h sandbox default on 2026-11-06 (F-STRUCT rounds 2 and 3), so a correct branch was blocked on
+# time alone.
 
 
 def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
@@ -1241,7 +1348,8 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
                                "--base", load(CURRENT, {}).get("base_sha", ""), "--head", "HEAD",
                                "--gitleaks", str(gitleaks)], {"rw": [wt], "network": False}),
         ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], build),
-        ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
+        ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+         {**build, "max_sec": GATE_BUILD_MAX_SEC}),
         # The following steps mirror .github/workflows/ci.yml (rust and python jobs); GitHub CI on
         # the pushed branch is checked again before a PR is opened (`ark-l1 ci`).
         # The suite grows with every task (26 min on 2026-10-25, 57 min on 2026-10-29 under the
@@ -1250,14 +1358,15 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         ("test", [str(CARGO), "test", "-p", "patronus-ark", "-p", "ark-api", "-p", "ark-coordinator",
                   "-p", "ark-distributed-protocol"], {**build, "max_sec": GATE_TEST_MAX_SEC}),
         ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --locked --example 13_l1_golden_eval -- all"],
-         build),
+         {**build, "max_sec": GATE_BUILD_MAX_SEC}),
         ("python-ext", [gpy, "-m", "maturin", "develop", "--quiet", "--manifest-path", "python/Cargo.toml"],
-         build),
+         {**build, "max_sec": GATE_BUILD_MAX_SEC}),
         ("python-tests", [gpy, "-m", "unittest", "discover", "-s", "python/tests"], build),
         # scripts/tests/entrypoint_peers.py expects the binary in the checkout's target/debug.
         ("ark-api-entrypoint", ["sh", "-c", f"{CARGO} build --locked -p ark-api --bin ark-api-entrypoint && "
                                 "mkdir -p target/debug && ln -sf \"$CARGO_TARGET_DIR/debug/ark-api-entrypoint\" "
-                                "target/debug/ark-api-entrypoint"], build),
+                                "target/debug/ark-api-entrypoint"],
+         {**build, "max_sec": GATE_BUILD_MAX_SEC}),
         ("scripts-tests", [gpy, "-m", "pytest", "scripts/tests", "-q"], build),
         ("docs", ["python3", "scripts/generate_docs.py", "--check"], build),
     ]
@@ -1299,10 +1408,14 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     if scoreboard.exists():
         cur = load(CURRENT, {})
         # The only step that reads the holdout: no network, writes only to the private cache.
+        # It builds the release module of head and base and predicts every split uncached for a new
+        # base; under CPU steal that passed the 1 h sandbox default (RESTACK:dlp/114-d01 round 1,
+        # 2026-11-07: builds 6 + 21 min, predictions 24 min, stopped at 3604 s), usually 2-14 min.
         steps.append(("scoreboard", [py, str(scoreboard), "gate", "--head", str(wt),
                                      "--base-sha", cur.get("base_sha", ""), "--dev", str(DEV_DATA),
                                      "--holdout", str(HOLDOUT), "--cache", str(CACHE)],
-                      {"rw": [CACHE], "readable": (HOLDOUT, wt), "network": False}))
+                      {"rw": [CACHE], "readable": (HOLDOUT, wt), "network": False,
+                       "max_sec": GATE_BUILD_MAX_SEC}))
     return steps
 
 
@@ -1562,6 +1675,7 @@ CI_REQUIRED = {"rust", "python"}     # jobs of .github/workflows/ci.yml that mus
 CI_TIMEOUT = 150 * 60                # the rust job took 102-103 min on 2026-11-03 (#246); 75 min
                                      # timed out every task and left its run to a resume
 CI_POLL = 60
+CI_CONFLICT_POLLS = 10               # polls between conflict checks while required checks are missing
 OK_CONCLUSIONS = {"success", "skipped", "neutral"}
 # The ARK API image job: main's ruleset does not require it and it flakes on toolchain installs.
 # Agents cannot fix it either (workflow files are outside the runner token's scope).
@@ -1668,6 +1782,18 @@ def rebase_onto_main(cur: dict) -> int:
     return cmd_ci()
 
 
+def pr_conflicts_with_main(cur: dict, head: str) -> bool:
+    """True for a review/restack run on a main-based PR whose head no longer merges into origin/main."""
+    if cur["task"].get("type") not in ("review", "restack") or cur.get("base", "main") != "main":
+        return False
+    try:
+        git("fetch", "--quiet", "origin", "main")
+        return conflicts_with(sha("origin/main"), head)
+    except RuntimeError as err:
+        print(f"WARN=conflict check failed: {str(err).strip()[-300:]}")
+        return False
+
+
 def cmd_ci() -> int:
     """Push the would-be PR head to the branch (no PR yet) and wait for GitHub CI on it.
 
@@ -1705,42 +1831,69 @@ def cmd_ci() -> int:
                 print(f"STALE_RUN={cur['task_id']}: {cur['branch']} is now {remote[:12]}; run dropped")
                 drop_worktree(cur)
                 return 3
-        if "workflow" in str(err) and cur["task"].get("type") not in ("review", "restack"):
-            if not git("diff", "--name-only", cur["base_sha"], cur["gated_commit"], "--",
-                       ".github/workflows"):
-                # GitHub checks a new branch against main: a branch cut before a workflow change
-                # landed on main "reverts" it and is refused, although the task never touched one.
-                return rebase_onto_main(cur)
-            # The token may not push .github/workflows changes; retrying the same task loops forever.
-            print(f"PUBLISH_ERROR=push touches .github/workflows, which the runner token cannot push")
-            cmd_block(cur["task_id"], "fix changes .github/workflows; needs a person")
+        if cur["task"].get("type") in ("review", "restack") and workflow_refusal(err, cur["base_sha"], head) \
+                and (synced := with_main_workflows(head)) != head:
+            # Main changed a workflow after the run's base (RESTACK:dlp/098-t23, 2026-11-06): push the
+            # gated commit with main's workflow files on top; the gated code is unchanged.
+            try:
+                git("push", "--quiet", f"--force-with-lease=refs/heads/{cur['branch']}:{lease}",
+                    "origin", f"{synced}:refs/heads/{cur['branch']}")
+            except RuntimeError as sync_err:
+                print(f"PUBLISH_ERROR=push with main's .github/workflows failed: {push_error_reason(sync_err)}")
+                return 3
+            print(f"WORKFLOW_SYNC={cur['branch']} {head[:12]} → {synced[:12]} (main's .github/workflows on top)")
+            cur["gated_commit_before_workflow_sync"] = cur["gated_commit"]
+            cur["gated_commit"] = cur["publish_commit"] = cur["publish_of"] = cur["review_pushed"] = synced
+            save(CURRENT, cur)
+            head = synced
+        else:
+            if "workflow" in str(err) and cur["task"].get("type") not in ("review", "restack"):
+                if not git("diff", "--name-only", cur["base_sha"], cur["gated_commit"], "--",
+                           ".github/workflows"):
+                    # GitHub checks a new branch against main: a branch cut before a workflow change
+                    # landed on main "reverts" it and is refused, although the task never touched one.
+                    return rebase_onto_main(cur)
+                # The token may not push .github/workflows changes; retrying the same task loops forever.
+                print(f"PUBLISH_ERROR=push touches .github/workflows, which the runner token cannot push")
+                cmd_block(cur["task_id"], "fix changes .github/workflows; needs a person")
+                return 3
+            if hits := push_protection_hits(err):
+                # The same commits are rejected on every retry; only a new agent round can remove the
+                # literal, so this counts as red (T18 resumed 3 times on the same GH013, 2026-10-28).
+                (STATE / "gate-report.md").write_text(
+                    f"# GitHub push protection {cur['task_id']} ({cur['branch']} @ {head[:12]})\n\n"
+                    f"- ❌ GitHub rejected the push: plaintext secrets in commits of the branch. The local\n"
+                    f"  plaintext-secrets step did not know these formats. Remove the literal from every commit\n"
+                    f"  of the branch (rewrite the commits; goldens as generator recipes, test values assembled\n"
+                    f"  at test time):\n" + "".join(f"  - {h}\n" for h in hits))
+                print((STATE / "gate-report.md").read_text())
+                print(f"PUBLISH_ERROR=push protection: {'; '.join(hits)[:500]}")
+                return 1
+            print(f"PUBLISH_ERROR={push_error_reason(err)}")
             return 3
-        if hits := push_protection_hits(err):
-            # The same commits are rejected on every retry; only a new agent round can remove the
-            # literal, so this counts as red (T18 resumed 3 times on the same GH013, 2026-10-28).
-            (STATE / "gate-report.md").write_text(
-                f"# GitHub push protection {cur['task_id']} ({cur['branch']} @ {head[:12]})\n\n"
-                f"- ❌ GitHub rejected the push: plaintext secrets in commits of the branch. The local\n"
-                f"  plaintext-secrets step did not know these formats. Remove the literal from every commit\n"
-                f"  of the branch (rewrite the commits; goldens as generator recipes, test values assembled\n"
-                f"  at test time):\n" + "".join(f"  - {h}\n" for h in hits))
-            print((STATE / "gate-report.md").read_text())
-            print(f"PUBLISH_ERROR=push protection: {'; '.join(hits)[:500]}")
-            return 1
-        print(f"PUBLISH_ERROR={push_error_reason(err)}")
-        return 3
     print(f"== waiting for GitHub CI on {cur['branch']} @ {head[:12]}")
     deadline = dt.datetime.now() + dt.timedelta(seconds=CI_TIMEOUT)
     checks: list[dict] = []
     rerun_at = ""  # UTC timestamp of a CI restart, in GitHub's format
+    polls = 0
     while dt.datetime.now() < deadline:
         subprocess.run(["sleep", str(CI_POLL)])
+        polls += 1
         try:
             checks = check_runs(head)
         except (RuntimeError, ValueError, KeyError) as err:
             print(f"WARN=check-runs not readable: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
             continue
         names = {c["name"] for c in checks}
+        if not CI_REQUIRED <= names and polls % CI_CONFLICT_POLLS == 1 and pr_conflicts_with_main(cur, head):
+            # GitHub starts no pull_request runs for a PR that conflicts with its base, so this wait
+            # can never end (#287: its CI retrigger landed 4 min after #284 made it conflict, two
+            # 150-min waits on CodeQL only, 2026-11-06). Drop the run: the branch already holds
+            # the pushed fix, and the next `next` restacks it onto main.
+            print(f"CI=conflict {head[:12]}: {cur['branch']} conflicts with main, GitHub runs no PR CI; "
+                  f"run dropped, the next run restacks it")
+            drop_worktree(cur)
+            return 3
         if not CI_REQUIRED <= names or any(c["status"] != "completed" for c in checks):
             continue
         failed = [c["name"] for c in checks
@@ -1962,7 +2115,8 @@ def cmd_latency() -> int:
 def cmd_verdict() -> int:
     """Verify runs: act on the agent's verdict. Pass records the head, and the next auto-merge merges
     it; fail posts the findings as review threads for the review flow, whose new head needs a fresh
-    verify. The VERIFY_FAIL_LIMIT-th failed verify of a PR blocks VERIFY:<branch> for a person."""
+    verify. After VERIFY_FAIL_LIMIT failed verifies the PR is settled: the review flow fixes the findings and
+    it merges on green CI without another verify (needs_verify)."""
     cur = load(CURRENT, None)
     if cur is None or cur["task"].get("type") != "verify":
         print("no verify run")
@@ -1995,9 +2149,8 @@ def cmd_verdict() -> int:
     print(f"VERIFIED={branch} fail {task['head'][:12]}: {len(findings)} finding(s), {unposted} not posted "
           f"(failed verify {fails[branch]}/{VERIFY_FAIL_LIMIT})\nPR={task['pr']}")
     if fails[branch] >= VERIFY_FAIL_LIMIT:
-        cmd_block(task["id"], f"verify failed {fails[branch]} times; see the findings on {task['pr']}; needs a person")
-    else:
-        drop_worktree(cur)
+        print(f"VERIFY_SETTLED={branch}: the review flow fixes these findings, then it merges without another verify")
+    drop_worktree(cur)
     return 0
 
 
@@ -2079,7 +2232,7 @@ def landable(open_prs: list[dict]) -> str | None:
             continue
         if (AUTO_MERGE and pr["baseRefName"] == "main" and ci == "green"
                 and pr_mergeable(pr) == "MERGEABLE"):
-            if not needs_verify(head):
+            if not needs_verify(head, name):
                 return f"merge {label}"
             if f"VERIFY:{name}" not in blocked:
                 return f"verify {label}"

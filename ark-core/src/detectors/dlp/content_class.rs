@@ -25,6 +25,8 @@ pub(crate) const STRONG_WEIGHT: i32 = 3;
 pub(crate) const MEDIUM_WEIGHT: i32 = 2;
 pub(crate) const STRUCTURAL_WEIGHT: i32 = 1;
 pub(crate) const COUNTER_WEIGHT: i32 = 3;
+/// The anchors a class may have: one bit each in the per-scan `seen` set.
+const MAX_ANCHORS: usize = 256;
 
 /// The tier of a non-strong anchor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,11 +55,11 @@ pub(crate) struct ContentClass {
 }
 
 impl ContentClass {
-    /// Compiles the anchors (lower-case literals, at most 128) of a class.
+    /// Compiles the anchors (lower-case literals, at most [`MAX_ANCHORS`]) of a class.
     pub(crate) fn new(anchors: &[(&str, Tier)], density: Density) -> Self {
         assert!(
-            anchors.len() <= 128,
-            "a content class has at most 128 anchors"
+            anchors.len() <= MAX_ANCHORS,
+            "a content class has at most {MAX_ANCHORS} anchors"
         );
         Self {
             tiers: anchors.iter().map(|(_, tier)| *tier).collect(),
@@ -79,18 +81,19 @@ impl ContentClass {
             .end
             .saturating_add(self.density.window)
             .min(bytes.len());
-        let mut seen = 0u128;
+        let mut seen = [0u128; MAX_ANCHORS / 128];
         let (mut score, mut medium) = (STRONG_WEIGHT, 0);
         for hit in self.automaton.find_overlapping_iter(&bytes[start..end]) {
             let range = start + hit.start()..start + hit.end();
             let id = hit.pattern().as_usize();
-            if seen & (1 << id) != 0
+            let (word, bit) = (id / 128, 1u128 << (id % 128));
+            if seen[word] & bit != 0
                 || (range.start < evidence.end && evidence.start < range.end)
                 || !is_whole_word(bytes, &range)
             {
                 continue;
             }
-            seen |= 1 << id;
+            seen[word] |= bit;
             score += match self.tiers[id] {
                 Tier::Medium => {
                     medium += 1;
@@ -201,6 +204,64 @@ mod tests {
         assert_eq!(class().score(&text, evidence(&text)), Some(5));
         let text = format!("Subject: MARK counsel{far}for example");
         assert!(class().holds(&text, evidence(&text)));
+    }
+
+    #[test]
+    fn anchors_beyond_the_first_128_count_once_each() {
+        let terms: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
+        let mut anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Structural))
+            .collect();
+        anchors.push(("counsel", Tier::Medium));
+        let class = ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 1,
+            },
+        );
+        let text = "MARK counsel term150 term150 term199";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 1 + 1));
+    }
+
+    #[test]
+    fn the_last_of_256_anchors_counts() {
+        let terms: Vec<String> = (0..255).map(|i| format!("term{i}")).collect();
+        let mut anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Structural))
+            .collect();
+        anchors.push(("counsel", Tier::Medium));
+        let class = ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 1,
+            },
+        );
+        let text = "MARK counsel counsel term254";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "a content class has at most 256 anchors")]
+    fn more_than_256_anchors_are_rejected() {
+        let terms: Vec<String> = (0..257).map(|i| format!("term{i}")).collect();
+        let anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Structural))
+            .collect();
+        ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 0,
+            },
+        );
     }
 
     #[test]

@@ -75,6 +75,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Detection change (all modes, default profile): a bare level of the same family on a list-shaped
   line (`    CONFIDENTIAL,` / `INTERN;`) also vetoes a marking within 160 bytes, so the last member of
   a code enum without a trailing separator is no banner.
+- Detection change: corporate document classes on the M01 content class engine (M-CORP), opt-in
+  like every content class; the default profile is unchanged.
+  `dlp_document_unpublished_financials` (`dlp.document.unpublished_financials`, M07: "inside
+  information", "insider list", "MNPI", "unpublished results", "before publication",
+  "Insiderinformation", "Insiderliste", "unveröffentlichte Quartalszahlen", "vor der
+  Veröffentlichung" next to revenue, guidance, consensus, quarter, MAR, Umsatz, Prognose),
+  `dlp_document_m_and_a` (`dlp.document.m_and_a`, M08: term sheet, letter of intent,
+  Absichtserklärung, due diligence, data room, Datenraum, share/asset purchase agreement,
+  Anteilskaufvertrag, cap table next to purchase price, buyer, exclusivity, valuation, Kaufpreis,
+  Zielgesellschaft) and `dlp_document_board_minutes` (`dlp.document.board_minutes`, M09: board
+  minutes, minutes of the supervisory board meeting, draft/written/board resolution,
+  Aufsichtsratsprotokoll, Protokoll der Vorstandssitzung, Beschlussvorlage, Umlaufbeschluss next
+  to quorum, vote, chair, Aufsichtsrat, einstimmig). The corporate classes need two distinct
+  domain terms near the marker (minimum score 8). Distribution footers of published ad hoc
+  releases (EQS/DGAP, "end of announcement"), annual report and governance headings, press
+  releases, job ads, governance policies ("shall", policy, bylaws) and the shared
+  definition/template/course counters subtract; encyclopedic hedges (typically, usually, such as,
+  in der Regel, üblicherweise) are counter-context of all three corporate classes, so the dev
+  benign-document corpus (Wikipedia articles on M&A and insider trading, Wikimedia board
+  policies) flags no document. The content class engine takes up to 256 anchors per class (was 128).
+  Latency (`scripts/l1_dlp/latency.py`, release, default profile, same machine as M01): 100 KiB
+  p50 9.74 ms, p95 14.24 ms (M01 head 9.48 / 15.38 ms), 4 KiB p95 1.94 ms; no measurable change,
+  the classes are opt-in and their anchors are searched only where a marker matched. The legal
+  class shares its letter-structure and generic counter lists with them (same anchors as before).
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum
@@ -100,6 +124,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `Encryption`). `dlp_private_key_header` keeps a bare header line but drops armor around a body
   that is no key (`...`, placeholders, broken DER). authorized_keys/known_hosts lines and public
   keys stay negative. L1 latency: the checks run only on JWT/PEM matches.
+- Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
+  (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
+  official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
+  first ENT/32 bits of SHA-256 of the entropy) holds, written in a line, comma-separated, as a quoted
+  array, numbered (`1. word`) or one word per line. Spanish and French words count with or without
+  their accents, in NFC or NFD (the unaccented words stay unique per list, as the BIP39 word list
+  notes state). The span runs from the first to the last word. The rule has no literal to search
+  for: one pass over the lowercase words of a text finds runs of list words of one language and
+  checks the windows of a phrase length; when a word shares no language with the run before it, the
+  new run keeps the trailing words that share a language with it, so a phrase whose first word is
+  also on the list of the word before it (`seed: ` before a French phrase) is not cut. A run of more
+  than 27 list words (a word list) is checked only line by line: its lines of 12 to 27 list words
+  may hold phrases (two phrases on consecutive lines, three 12-word phrases one per line, a phrase
+  before a line of list words), a one-word-per-line word list holds none. The published test
+  vectors (trezor/python-mnemonic `vectors.json`, e.g. the all-zero `abandon … about`), phrases that
+  repeat more than two words, uppercase words and runs of 11 words are no phrases; 12- and 15-word
+  phrases (4- and 5-bit checksum) also need numbered words or a context term (seed, mnemonic,
+  recovery, phrase, wallet, backup, passphrase, Wiederherstellung …) in the 200 bytes before
+  them; this length gate counts an accented word once. The checksum check does not allocate per
+  candidate window (stack arrays; the test vectors are decoded once). The CJK lists (Chinese simplified and traditional, Japanese, Korean) are not
+  covered yet. The golden generator gains the `bip39_<language>` encodings and `dlp_l1.jsonl` the
+  Spanish and French positives (`bip39_es_12`, `bip39_fr_18`). `RuleMeta::with_finder` lets a rule
+  match its regex only at the ranges a scanner finds; the catalog names the rule's structural
+  prefilter (an ASCII letter or digit).
 - L1 PII milestones in the raw view against Presidio default and tuned (M-RAW, owner decision
   2026-11-05, supersedes T27 for public claims). `scoreboard.py m1`, `m2` and `report` judge M1, M2
   and the F1 >= 80 floor on raw gold (no `known_gaps` or validator exclusion); the attainable view
@@ -111,11 +159,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `--presidio PROFILE=DIR` with `default` and `tuned` required (`report --engine` is gone), and the
   JSON of `m1`/`m2`/`report` nests results per Ark engine and Presidio engine
   (`modes.<engine>.presidio-<profile>`) with the attainable view under `attainable`. The gate's
-  `milestones <split>` line scores balanced on raw gold against both profiles. `run_ark.py --gates
+  `milestones <split> (<engine>, …)` lines score balanced and balanced-bare on raw gold against both
+  profiles, one line per engine. `run_ark.py --gates
   PATH` applies the `rules` of an execution-gates file and records them as `engine.rules`. Milestone
   snapshot schema 1.2: `pii.milestone_view` and `pii.baselines` replace `pii.baseline`, and
   `docs/reference/l1-capabilities.md` shows Ark against each baseline and names the view. Detection
   change: none; evaluation tooling and docs only, no effect on L1 latency.
+- The scoreboard gate prints, per split and source family, the exact F1 and the hard-negative FP
+  count of `strict`, `balanced`, `balanced-bare`, Presidio default and Presidio tuned
+  (`scores <split> (raw gold, …)`), and the shared ids where `balanced` or `balanced-bare` stays
+  below a Presidio profile (`M1 gaps <split> (…)`, entity id and both F1 values, no row id or value).
+  With the `milestones` lines this gives the holdout numbers of the final M1–M4 report in the raw
+  view (H05-2, `research/l1-pii/scoreboard/final-raw.md`). Detection change: none; evaluation
+  tooling and docs only, no effect on L1 latency.
 - Detection change: opt-in bare-format PII rules (D-BARE). Every value that the default rules
   report only with a term of its label or after its field name (`known_gaps` with `bare: true`)
   has its own rule `<rule>_bare`: `pii_steuer_id_de_bare`, `pii_steuernummer_de_bare` (13-digit
@@ -142,6 +198,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Per-rule table and commands: `research/l1-pii/scoreboard/d-bare.md`.
 
 ### Fixed
+
+- Detection change (opt-in bare profile only): `pii_steuer_id_de_bare` no longer reports an
+  11-digit value whose check digit is valid but whose digit distribution no issued Steuer-ID has
+  (Q-RAW). The new `validators::steuer_id_bare` adds the bounds every issued ID meets, old and new
+  BZSt scheme alike (no digit more than three times in the first ten, none three times in a row),
+  without the exact distribution of `steuer_id_issued`, so ten distinct digits (`98765432106`) still
+  pass and `11112345678` no longer does. Default output (all modes, default gates) is unchanged and
+  no validator of a default rule changes. On the dev split only (raw gold, `scoreboard.py m2`), M2
+  holds with the bare profile (`balanced-bare`): M2 macro-F1 (German rows, shared and Ark-only ids)
+  on `presidio_favored` 86.8 → 89.9 against Presidio tuned 87.0 (Steuer-ID 66.7 → 100), `neutral`
+  62.5 against target 36.2; `balanced` alone stays at 63.2. Holdout evidence comes from the gate's
+  `milestones holdout (balanced-bare, …)` line. M1 stays unmet; the remaining raw gaps per id are
+  listed in `research/l1-pii/README.md` (Q-RAW). No effect on default-gate latency: the bare rule is
+  off by default, and when enabled the extra check runs only on a value whose check digit passed.
+- The scoreboard gate printed the raw-gold milestone line only for `balanced`, so an M1/M2 claim
+  with the bare profile had no gate evidence (Q-RAW review). It now prints one `milestones <split>`
+  line per milestone engine (`balanced`, `balanced-bare`) on dev and holdout; `balanced-bare` runs
+  `run_ark.py --gates docs/how-to/pii-bare-formats.gates.json` on the head only, and its predictions
+  are cached by the profile's content. Gate only, no detection or latency change.
 
 - The Linux x86-64 wheel segfaulted in `warmup()` for every ONNX model (crash in
   `std::regex_traits<char>::transform` inside ONNX Runtime). It is now built on

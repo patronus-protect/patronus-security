@@ -514,6 +514,10 @@
       "lookalike": ["cardano_addr_vk"],
       "probes": ["CARDANO_SIGNING_KEY=<<secret:0>>", "Signierschlüssel der Cardano-Wallet: <<secret:0>>"]
     },
+    "dlp_bip39_seed_phrase": {
+      "generators": ["bip39_en_12", "bip39_en_15", "bip39_en_18", "bip39_en_24", "bip39_it_12", "bip39_pt_15", "bip39_cs_21", "bip39_es_12", "bip39_fr_18"],
+      "probes": ["Seed phrase of the wallet: <<secret:0>>", "MNEMONIC=\"<<secret:0>>\"", "Wiederherstellungsphrase (Backup der Wallet):\n<<secret:0>>\n"]
+    },
     "dlp_private_key_block": {
       "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key", "pem_pkcs8_encrypted_private_key", "pem_openssh_ed25519_encrypted", "pgp_private_key_block", "putty_ppk_ed25519"],
       "shape_only": ["pem_pkcs8_private_key", "pem_rsa_private_key"],
@@ -729,7 +733,10 @@
     "dlp_marking_de_corporate": "classification marking (M-MARK), marker phrase, no secret value",
     "dlp_marking_en_corporate": "classification marking (M-MARK), marker phrase, no secret value",
     "dlp_marking_tlp": "classification marking (M-MARK), marker phrase, no secret value",
-    "dlp_marking_nato_eu": "classification marking (M-MARK), marker phrase, no secret value"
+    "dlp_marking_nato_eu": "classification marking (M-MARK), marker phrase, no secret value",
+    "dlp_document_unpublished_financials": "document class (M-CORP), marker phrase, no secret value",
+    "dlp_document_m_and_a": "document class (M-CORP), marker phrase, no secret value",
+    "dlp_document_board_minutes": "document class (M-CORP), marker phrase, no secret value"
   },
   "baseline_entities": {
     "comm.webhook_url": {"generators": ["slack_webhook_url", "teams_webhook_url"], "lookalike": ["slack_webhook_url_short"]},

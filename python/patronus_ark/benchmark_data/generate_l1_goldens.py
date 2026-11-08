@@ -7427,6 +7427,404 @@ DLP_CASES = {
             "prose listing levels", carrier="prose",
         ),
     ],
+    # M-CORP (M07): unpublished financials, inside information (MAR Art. 7), insider lists and guidance
+    # before publication. The evidence span is the marker; financial and MAR terms around it make the
+    # document. Published ad hoc releases, annual reports, press releases and explanations are hard
+    # negatives.
+    "dlp.document.unpublished_financials": [
+        dp(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "From: Group Controlling\nTo: Executive Board\nSubject: Q3 preliminary figures\n\nSTRICTLY CONFIDENTIAL - ",
+            "INSIDE INFORMATION",
+            "\n\nDear all,\nQ3 revenue came in well below the analyst consensus and the EBIT margin halved. "
+            "The CFO proposes to lower the full-year guidance before the trading window opens.\n\nBest regards,\nControlling\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "# Art. 18 MAR register\n\nProject: Falcon\n\n", "Insider List",
+            " for the profit warning. Each person below must confirm the trading ban until the ad hoc "
+            "disclosure.\n\n| Name | Date of birth | Function |\n| J. Miller | 1980-04-12 | Treasury |\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "Hi Sarah,\nplease keep the attached deck to yourself - it contains ", "unpublished financial results",
+            " for the fiscal year. Net income and free cash flow both beat the forecast.\nKind regards,\nTom\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            '{"subject": "Draft guidance update", "classification": "', "material non-public information",
+            '", "body": "Revised outlook: earnings per share below consensus, quarter closed with an impairment."}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "2026-10-21 09:12:44 WARN ir-portal upload blocked: file q3_results.xlsx is flagged ",
+            "MNPI", " (quarterly results, guidance, EPS) - release to the market only via the ad hoc process\n",
+            carrier="log",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Von: Konzerncontrolling\nAn: Vorstand\nBetreff: Vorläufige Zahlen Q3\n\nStreng vertraulich – ",
+            "Insiderinformation",
+            "\n\nSehr geehrte Damen und Herren,\nder Umsatz im dritten Quartal liegt deutlich unter dem "
+            "Analystenkonsens, die Prognose für das Geschäftsjahr ist nicht zu halten.\n\nMit freundlichen Grüßen\nControlling\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "# Verzeichnis nach Art. 18 MAR\n\nProjekt Falke – ", "Insiderliste",
+            " zur geplanten Gewinnwarnung. Für alle Personen gilt ein Handelsverbot bis zur Ad-hoc-Mitteilung.\n\n"
+            "| Name | Geburtsdatum | Funktion |\n| A. Becker | 12.04.1980 | Treasury |\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Hallo Jana,\nbitte die Präsentation nicht weiterleiten, sie enthält ", "unveröffentlichte Quartalszahlen",
+            ". Konzernergebnis und Free Cash Flow liegen über der Prognose.\nViele Grüße\nTobias\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "dokument:\n  titel: Entwurf Prognoseanpassung\n  einstufung: ", "Insiderinformationen",
+            "\n  inhalt: Ausblick gesenkt, Ergebnis je Aktie unter Konsens, Wertminderung im Quartal\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Kurze Info an den Finanzvorstand: die Zahlen zum Halbjahr bleiben ", "vor der Veröffentlichung",
+            " im engen Kreis. Umsatzerlöse und Marge liegen unter Plan, die Dividende steht zur Diskussion.\n"
+            "Beste Grüße\nInvestor Relations\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "Inside information is defined in Article 7 of the Market Abuse Regulation (MAR). For example, a "
+            "profit warning or a guidance change can be inside information until it is published.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "Ad hoc announcement - disclosure of inside information according to Article 17 MAR\n\n"
+            "Northwind AG lowers its revenue guidance for the fiscal year after a weak third quarter.\n\n"
+            "End of announcement. EQS News - a service of EQS Group.",
+            "published ad hoc release", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "Annual Report 2025 - Corporate Governance\n\nThe company maintains an insider list in accordance with "
+            "Art. 18 MAR and informs all insiders of their duties. Revenue and earnings are explained in the "
+            "management report.",
+            "published annual report", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "FOR IMMEDIATE RELEASE\n\nPress release: Northwind reports record quarterly revenue and confirms its "
+            "outlook. The figures were embargoed prior to publication at 07:00 CET and are now published on the "
+            "investor relations website.",
+            "press release", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "en", "dlp_document_unpublished_financials",
+            "# Compliance training, module 4\nTemplate: how to keep an insider list - fill in [Name] and [Date of birth].",
+            "training template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Eine Insiderinformation bezeichnet nach Art. 7 MAR eine nicht öffentlich bekannte präzise Information. "
+            "Zum Beispiel kann eine Prognoseanpassung eine Insiderinformation sein.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Ad-hoc-Mitteilung – Veröffentlichung einer Insiderinformation nach Art. 17 MAR\n\n"
+            "Die Nordlicht AG senkt die Prognose für das Geschäftsjahr nach einem schwachen dritten Quartal.\n\n"
+            "Ende der Mitteilung. DGAP – ein Service der EQS Group.",
+            "published ad hoc release", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Geschäftsbericht 2025 – Corporate Governance\n\nDie Gesellschaft führt eine Insiderliste nach Art. 18 MAR "
+            "und belehrt alle Insider über ihre Pflichten. Umsatzerlöse und Ergebnis erläutert der Lagebericht.",
+            "published annual report", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            "Pressemitteilung\n\nNordlicht meldet Rekordumsatz im Quartal und bestätigt den Ausblick. Die "
+            "Ergebnisse sind auf der Investor-Relations-Seite veröffentlicht. Vor der Veröffentlichung um 7 Uhr galt "
+            "eine Sperrfrist.",
+            "press release", carrier="prose",
+        ),
+        dn(
+            "dlp.document.unpublished_financials", "de", "dlp_document_unpublished_financials",
+            'vorlage_titel: "Insiderliste"', "marker without financial context", carrier="yaml",
+        ),
+    ],
+    # M-CORP (M08): M&A and transaction documents. The evidence span is the deal document marker (term
+    # sheet, LOI, due diligence, data room, SPA, cap table); deal terms around it make the document.
+    # Encyclopedia articles, press releases on closed deals and templates are hard negatives.
+    "dlp.document.m_and_a": [
+        dp(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "From: Corporate Development\nTo: Steering Committee\nSubject: Project Falcon - revised ",
+            "term sheet",
+            "\n\nDear all,\nattached is the revised offer: purchase price of 410m on a cash-free/debt-free basis, "
+            "an earn-out over two years and six weeks of exclusivity for the buyer.\n\nKind regards,\nM&A team\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "# Project Falcon\n\nStatus of the ", "due diligence",
+            " on the target company: tax and IP findings are open; the seller asks for signing before the "
+            "end of the quarter.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "2026-10-21 08:01:13 INFO access granted to the virtual ", "data room",
+            " for bidder group B (project Orion): folders 2.1 financials, 4.3 warranties, 7.2 escrow\n",
+            carrier="log",
+        ),
+        dp(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            '{"document": "', "Share Purchase Agreement",
+            '", "status": "draft", "parties": {"seller": "Holdco GmbH", "buyer": "Orion Bidco"}, '
+            '"closing": "subject to merger control clearance", "purchase_price": "equity value plus locked box"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "Hi Lisa,\nhere is the updated ", "cap table",
+            " after the Series B: pre-money valuation 80m, the new investor takes 18 % and the founders keep "
+            "a blocking minority.\nBest regards,\nFinance\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Von: Konzernentwicklung\nAn: Lenkungskreis\nBetreff: Projekt Falke – überarbeitete ",
+            "Absichtserklärung",
+            "\n\nSehr geehrte Damen und Herren,\nder Kaufpreis für die Zielgesellschaft liegt bei 410 Mio., dazu "
+            "kommen ein Earn-out und sechs Wochen Exklusivität für den Käufer.\n\nMit freundlichen Grüßen\nM&A-Team\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "# Projekt Falke\n\nStand der ", "Due Diligence",
+            " bei der Zielgesellschaft: Steuer- und IP-Themen sind offen, der Verkäufer drängt auf Signing "
+            "vor Quartalsende.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "2026-10-21 08:01:13 INFO Zugang zum ", "Datenraum",
+            " für Bieter B (Projekt Orion) freigeschaltet: Ordner 2.1 Finanzen, 4.3 Garantien, 7.2 Treuhand\n",
+            carrier="log",
+        ),
+        dp(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "vertrag:\n  typ: ", "Anteilskaufvertrag",
+            "\n  status: Entwurf\n  verkäufer: Holdco GmbH\n  käufer: Orion Bidco\n  vollzug: nach "
+            "Fusionskontrollfreigabe\n  kaufpreis: Unternehmenswert abzüglich Nettofinanzverbindlichkeiten\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Hallo Lisa,\nanbei die aktualisierte ", "Kapitalisierungstabelle",
+            " nach der Finanzierungsrunde: Bewertung pre-money 80 Mio., der neue Investor übernimmt 18 % der "
+            "Anteile.\nViele Grüße\nFinance\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "Due diligence refers to the investigation a buyer carries out before an acquisition. For example, "
+            "the buyer reviews the financial statements of the target in a data room.",
+            "encyclopedia article on M&A", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "Press release\n\nNorthwind today announced that it has completed the acquisition of Contoso after "
+            "regulatory approval. The transaction was signed under a share purchase agreement in May.",
+            "press release on a closed deal", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "## Term sheet template\n\nInvestor: [Name]\nPre-money valuation: [Amount]\nPlaceholder fields "
+            "are replaced before sending.",
+            "term sheet template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "Lecture 5: the letter of intent in venture capital deals and the role of exclusivity.",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "en", "dlp_document_m_and_a",
+            "spreadsheet_tab = \"cap table\"  # sheet name in the export", "marker without deal context",
+            carrier="code",
+        ),
+        dn(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Die Due Diligence bezeichnet die sorgfältige Prüfung eines Unternehmens vor einer Übernahme. Zum "
+            "Beispiel prüft der Käufer die Bilanzen der Zielgesellschaft im Datenraum.",
+            "encyclopedia article on M&A", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Pressemitteilung\n\nNordlicht hat die Übernahme der Contoso nach der Freigabe abgeschlossen. Der "
+            "Anteilskaufvertrag war im Mai unterzeichnet worden; die Transaktion ist damit vollzogen.",
+            "press release on a closed deal", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "## Muster Absichtserklärung\n\nKäufer: [Name]\nKaufpreis: [Betrag]\nPlatzhalter vor dem Versand "
+            "ersetzen.",
+            "letter of intent template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Seminar Unternehmenskauf, Termin 2: Datenraum, Gewährleistung und Kaufpreisanpassung",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.m_and_a", "de", "dlp_document_m_and_a",
+            "Wir ziehen am Montag um, der Datenraum im Keller bleibt bis dahin abgeschlossen.",
+            "marker without deal context", carrier="prose",
+        ),
+    ],
+    # M-CORP (M09): management and supervisory board minutes and resolution drafts. The evidence span is
+    # the minutes or resolution marker; board, vote and agenda terms around it make the document.
+    # Governance guides, job ads and templates are hard negatives.
+    "dlp.document.board_minutes": [
+        dp(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "STRICTLY CONFIDENTIAL\n\n", "Minutes of the Meeting of the Supervisory Board",
+            "\nDate: 14 October 2026\nPresent: all members, quorum confirmed\n\nAgenda item 3: the board "
+            "unanimously approved the sale of the logistics unit. The chairman closed the meeting at 17:40.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "# ", "Draft Resolution",
+            " - Management Board\n\nThe management board resolves to close the Leeds plant. Vote: 4 in favour, "
+            "1 abstained. Approval of the supervisory board is pending.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "From: Company Secretary\nTo: Directors\nSubject: ", "Board minutes",
+            " 2 October\n\nDear all,\nplease review before the chair signs: the board approved the CEO's "
+            "proposal on the bond issue; one director voted against.\n\nKind regards,\nSecretary\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            '{"type": "', "written resolution",
+            '", "body": "board of directors", "text": "The directors unanimously resolved to appoint a new CFO.", '
+            '"votes": {"for": 5, "against": 0}}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "Hi Mark,\nthe ", "board resolution",
+            " on the dividend is still a draft: the chairwoman wants the quorum checked before the vote on "
+            "Thursday.\nBest regards,\nOffice of the CEO\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "STRENG VERTRAULICH\n\n", "Protokoll der Aufsichtsratssitzung",
+            "\nDatum: 14.10.2026\nAnwesend: alle Mitglieder, der Aufsichtsrat ist beschlussfähig\n\n"
+            "TOP 3: Der Aufsichtsrat stimmt dem Verkauf der Logistiksparte einstimmig zu. Der Vorsitzende "
+            "schließt die Sitzung um 17:40 Uhr.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "# ", "Beschlussvorlage",
+            " für den Vorstand\n\nDer Vorstand beschließt die Schließung des Werks Leipzig. Abstimmung: 4 dafür, "
+            "1 Enthaltung. Die Zustimmung des Aufsichtsrats steht aus.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Von: Vorstandsbüro\nAn: Vorstand\nBetreff: ", "Vorstandsprotokoll",
+            " vom 2. Oktober\n\nSehr geehrte Damen und Herren,\nbitte vor der Unterschrift prüfen: der Vorstand hat "
+            "die Anleihe beschlossen, ein Mitglied stimmte dagegen.\n\nMit freundlichen Grüßen\nVorstandsbüro\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "beschluss:\n  art: ", "Umlaufbeschluss",
+            "\n  gremium: Aufsichtsrat\n  inhalt: Bestellung eines neuen Finanzvorstands\n  abstimmung: "
+            "einstimmig\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Hallo Markus,\nder ", "Aufsichtsratsbeschluss",
+            " zur Dividende ist noch ein Entwurf: die Vorsitzende will vor der Abstimmung am Donnerstag die "
+            "Beschlussfähigkeit klären.\nViele Grüße\nVorstandsbüro\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "Board minutes are the official record of a board meeting. For example, they list the directors "
+            "present, the quorum and every vote.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "Job: Board Secretary (m/f/d). Your tasks: prepare the agenda, draft board minutes and support the "
+            "chair of the supervisory board. We are looking for a lawyer with governance experience.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "## Written resolution template\n\nThe directors of [Company] resolve that [text]. Placeholder: "
+            "[Date], [Signature].",
+            "resolution template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "Lecture 9: how a board resolution is passed, quorum rules and the role of the chairman.",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "en", "dlp_document_board_minutes",
+            "2026-10-02 08:14:00 INFO exported meeting minutes of the hiking club board to minutes.pdf",
+            "minutes without corporate context", carrier="log",
+        ),
+        dn(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Ein Umlaufbeschluss bezeichnet einen Beschluss außerhalb einer Sitzung. Zum Beispiel stimmen die "
+            "Mitglieder des Aufsichtsrats schriftlich ab.",
+            "encyclopedia-style explanation with an example", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Stellenanzeige: Referent Vorstandsbüro (m/w/d). Ihre Aufgaben: Beschlussvorlagen erstellen, "
+            "Sitzungen des Vorstands vorbereiten. Wir suchen Sie ab sofort.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "## Muster Umlaufbeschluss\n\nDer Aufsichtsrat der [Gesellschaft] beschließt: [Text]. Platzhalter: "
+            "[Datum], [Unterschrift].",
+            "resolution template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Seminar Gesellschaftsrecht: Vorstandsbeschluss, Beschlussfähigkeit und Stimmrecht im Aufsichtsrat",
+            "course description", carrier="prose",
+        ),
+        dn(
+            "dlp.document.board_minutes", "de", "dlp_document_board_minutes",
+            "Das Protokoll der Vereinssitzung liegt im Ordner, die Kasse stimmt.",
+            "minutes without corporate context", carrier="prose",
+        ),
+    ],
 }
 
 
@@ -15916,6 +16314,180 @@ DLP_CKEYS_CASES = {
     ],
 }
 for _label, _rows in DLP_CKEYS_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# C01: BIP 39 seed phrases (`dlp_bip39_seed_phrase`, English, Italian, Portuguese, Czech,
+# Spanish and French word lists, valid checksum). Positives are `bip39_*` recipes; they need
+# 18 words or a seed/wallet/recovery term before the phrase. Hard negatives keep their words in clear: none
+# is a usable mnemonic (wrong checksum, 11 words, a word list dump, or the published BIP 39
+# test vector of zero entropy).
+_BIP39_TEST_VECTOR = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+DLP_C01_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "# wallet of the deploy bot (sepolia)\nRPC_URL=https://rpc.example.org\nMNEMONIC=\"<<secret:0>>\"\n",
+            "bip39_en_12", 10701, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "{\n  \"network\": \"sepolia\",\n  \"mnemonic\": \"<<secret:0>>\",\n  \"accounts\": 5\n}\n",
+            "bip39_en_24", 10702, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "const signer = ethers.Wallet.fromPhrase(\"<<secret:0>>\", provider);\n",
+            "bip39_en_15", 10703, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "$ cast wallet import deployer --mnemonic \"<<secret:0>>\"\n",
+            "bip39_it_12", 10704, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "2026-03-02T10:14:07Z WARN keystore: restoring wallet from mnemonic <<secret:0>> (account 0)\n",
+            "bip39_en_18", 10705, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Grandma's note from the drawer, copied as is:\n<<secret:0>>\n",
+            "bip39_en_24", 10706, carrier="prose", tags=("no_context",),
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "from mnemonic import Mnemonic\n\nwords = \"<<secret:0>>\"\nseed_bytes = Mnemonic(\"portuguese\").to_seed(words)\n",
+            "bip39_pt_15", 10707, carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "# wallet of the deploy bot\nMNEMONIC=\"<your 12 word mnemonic>\"\n",
+            "template placeholder", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "const signer = ethers.Wallet.fromPhrase(process.env.MNEMONIC, provider);\n",
+            "environment reference", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "// BIP39 test vector (all-zero entropy), never fund it\nconst mnemonic = \"" + _BIP39_TEST_VECTOR + "\";\n",
+            "published BIP 39 test vector", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "wallet:\n  mnemonic: lawsuit super warfare owner educate sun disorder length nuclear balcony moon parrot\n",
+            "list words with a wrong BIP 39 checksum", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Never type your recovery words into a website. Write them down on paper and keep the "
+            "sheet in a safe place, away from your phone.",
+            "ordinary prose about seed phrases", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "BIP39 English word list, entries 601-640: enrich enroll ensure enter entire entry envelope "
+            "episode equal equip era erase erode erosion error erupt escape essay essence estate eternal "
+            "ethics evidence evil evoke evolve exact example excess exchange excite exclude excuse execute "
+            "exercise exhaust exhibit exile exist exit\n",
+            "word list dump, no phrase", carrier="markdown",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "Recovery words I still remember (one is missing): owner smoke next occur bless silent ocean fee jeans icon core",
+            "eleven words are no mnemonic", carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Hier meine Seed-Phrase, bitte gut aufbewahren: <<secret:0>>",
+            "bip39_en_12", 10711, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "wallet:\n  # Wiederherstellungsphrase des Cold Wallets\n  mnemonic: <<secret:0>>\n",
+            "bip39_it_12", 10712, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Testnetz-Deployer, nicht einchecken\nMNEMONIC=\"<<secret:0>>\"\nCHAIN_ID=11155111\n",
+            "bip39_pt_15", 10713, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Die Wörter für die Wiederherstellung lauten <<secret:0>>. Bitte danach löschen.",
+            "bip39_cs_21", 10714, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "{\"kasse\": \"Filiale 3\", \"seed_phrase\": \"<<secret:0>>\"}\n",
+            "bip39_en_24", 10715, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "2026-05-11 08:12:44 INFO wallet-sync: Wiederherstellung mit <<secret:0>> gestartet\n",
+            "bip39_en_18", 10716, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Backup-Wallet der Buchhaltung\nwallet = Wallet.from_mnemonic(\"<<secret:0>>\")\n",
+            "bip39_it_12", 10717, carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Bitte trage hier deine Seed-Phrase ein: word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+            "template placeholder", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "wallet:\n  # Wiederherstellungsphrase kommt aus dem Tresor\n  mnemonic: ${MNEMONIC}\n",
+            "environment reference", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "# Testvektor aus der BIP39-Spezifikation, kein echtes Wallet\nMNEMONIC=\"" + _BIP39_TEST_VECTOR + "\"\n",
+            "published BIP 39 test vector", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Seed (italienisch): grattare gobba gufo farinoso equatore merenda sabbiare derapata cartolina fiore brevetto vivido",
+            "list words with a wrong BIP 39 checksum",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Die Wiederherstellungsphrase besteht aus 12 bis 24 Wörtern der BIP39-Liste und gehört "
+            "niemals in ein Ticket oder eine E-Mail.",
+            "ordinary prose about seed phrases", carrier="prose",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Auszug aus der portugiesischen BIP39-Wortliste: abacate abaixo abalar abater abduzir abelha "
+            "aberto abismo abotoar abranger abreviar abrigar abrupto absinto absoluto absurdo abutre acabado "
+            "acalmar acampar acanhar acaso aceitar acelerar acenar acervo acessar acetona achatar acidez "
+            "acima acionado acirrar aclamar aclive acolhida acomodar acoplar acordar acumular\n",
+            "word list dump, no phrase", carrier="markdown",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Wiederherstellungswörter (unvollständig, eins fehlt): listopad komora vydat opice fronta "
+            "nutrie orlice tuzemsko utkat nerost drogerie",
+            "eleven words are no mnemonic", carrier="prose",
+        ),
+        # Spanish and French lists (C01 review); the values keep the NFD accents of the lists.
+        ds(
+            "CRYPTO_KEY", "en", "dlp_bip39_seed_phrase",
+            "wallet_restore: {\"lang\": \"fr\", \"words\": \"<<secret:0>>\"}\n",
+            "bip39_fr_18", 10719, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_bip39_seed_phrase",
+            "Notiz aus Madrid, Seed-Phrase der Hardware-Wallet: <<secret:0>>\n",
+            "bip39_es_12", 10718, carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_C01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

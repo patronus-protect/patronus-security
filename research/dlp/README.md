@@ -64,6 +64,15 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Kompressionsflag `0x01`. Testnet-Schlüssel haben Severity `test`. Die Regel wertet mit
   Prüfsummen-Stärke: Im Modus `balanced` bleibt ein WIF-Schlüssel ohne Kontext (0,65), ein
   näherer Prüfsummen-/Hash-Begriff verwirft ihn.
+  Seit C01 meldet `dlp_bip39_seed_phrase` BIP39-Seed-Phrasen: 12/15/18/21/24 kleingeschriebene
+  Wörter einer offiziellen Wortliste (Englisch, Italienisch, Portugiesisch, Tschechisch, Spanisch,
+  Französisch; spanische und französische Wörter mit oder ohne Akzente, NFC oder NFD) mit
+  gültiger Prüfsumme, in einer Zeile, mit Kommas, als Array, nummeriert oder Zeile für Zeile. Die
+  Regel hat kein Literal; `seed_phrase::phrases` (`RuleMeta::finder`) findet die Kandidaten in einem
+  Durchlauf über die Wörter, die Regex läuft nur dort. In Läufen über 27 Listenwörter (Wortlisten)
+  zählen nur Zeilen mit 12 bis 27 Listenwörtern; veröffentlichte Testvektoren und Phrasen mit mehr
+  als zwei Wiederholungen zählen nicht; 12- und 15-Wort-Phrasen brauchen Nummerierung oder einen
+  Kontextbegriff davor. Offen: die CJK-Listen (chinesisch, japanisch, koreanisch).
   Seit F03 prüft `dlp_github_token` die CRC32 der GitHub-Tokens: `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`
   und genau 36 Base62-Zeichen, die letzten sechs sind die CRC32 der ersten 30. `dlp_github_pat`
   nimmt `github_pat_` und genau 82 Zeichen. Die Regel wertet mit Prüfsummen-Stärke (0,90 ohne
@@ -564,6 +573,11 @@ Review-Pausen.
   Fenster um den Marker die Mindestdichte erreichen (stark 3, je mittlerer Anker 2, je struktureller
   Anker 1, je Gegenkontext −3; mindestens ein mittlerer Anker). Neue Klassen (M-MARK, M-LEGAL,
   M-CORP, M-HRSEC) definieren nur Marker-Regex, Ankerlisten und `Density`.
+  Seit M-CORP teilen die Klassen Briefstruktur (`LETTER_STRUCTURE`) und generischen Gegenkontext
+  (`GENERIC_COUNTER`); die Unternehmensklassen (unveröffentlichte Finanzzahlen/Insiderinformation,
+  M&A, Vorstands-/Aufsichtsratsprotokolle und Beschlussentwürfe) verlangen zwei verschiedene
+  mittlere Anker. Veröffentlichte Ad-hoc-Mitteilungen, Geschäftsberichte, Pressemitteilungen und
+  Stellenanzeigen ziehen über eigene Gegenanker ab.
 - **Standardprofil (M23, umgesetzt in M-MARK)**: Einstufungsvermerke
   (`dlp.document.classification_marking`, Regeln `dlp_marking_*`) sind standardmäßig an
   (`DEFAULT_ON_DOCUMENT_GROUPS` in `dlp.rs`), alle anderen Content- und Dokumentklassen opt-in. Ein
