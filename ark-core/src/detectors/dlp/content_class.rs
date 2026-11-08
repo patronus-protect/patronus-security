@@ -17,6 +17,11 @@
 //! - counter: counter-context (example, template, Vorlage, Seminar), minus
 //!   [`COUNTER_WEIGHT`] points each.
 //!
+//! A class may also require elements ([`ContentClass::requiring`]): groups of
+//! its anchors of which each needs at least one near the marker (a contract
+//! names parties, remuneration, term and confidentiality; four party roles
+//! are no contract).
+//!
 //! Each distinct anchor counts once, and anchors inside the marker do not
 //! count. Anchors are lower-case ASCII-case-insensitive literals matched as
 //! whole words, on one Aho-Corasick automaton per class built once; the gate
@@ -56,9 +61,12 @@ pub(crate) struct Density {
 
 /// A compiled content class: its anchors and thresholds.
 pub(crate) struct ContentClass {
+    terms: Vec<String>,
     tiers: Vec<Tier>,
     automaton: AhoCorasick,
     density: Density,
+    /// One bit set of anchor ids per required element.
+    elements: Vec<[u128; MAX_ANCHORS / 128]>,
 }
 
 impl ContentClass {
@@ -69,6 +77,7 @@ impl ContentClass {
             "a content class has at most {MAX_ANCHORS} anchors"
         );
         Self {
+            terms: anchors.iter().map(|(term, _)| term.to_string()).collect(),
             tiers: anchors.iter().map(|(_, tier)| *tier).collect(),
             automaton: AhoCorasickBuilder::new()
                 .ascii_case_insensitive(true)
@@ -76,12 +85,35 @@ impl ContentClass {
                 .build(anchors.iter().map(|(term, _)| term))
                 .expect("content class anchors compile"),
             density,
+            elements: Vec::new(),
         }
+    }
+
+    /// Requires one anchor of each group (anchor terms of this class) near
+    /// the marker.
+    pub(crate) fn requiring(mut self, elements: &[&[&str]]) -> Self {
+        self.elements = elements
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .fold([0u128; MAX_ANCHORS / 128], |mut mask, term| {
+                        let id = self
+                            .terms
+                            .iter()
+                            .position(|anchor| anchor == term)
+                            .unwrap_or_else(|| panic!("element {term} is an anchor of the class"));
+                        mask[id / 128] |= 1 << (id % 128);
+                        mask
+                    })
+            })
+            .collect();
+        self
     }
 
     /// The score of the anchors around the strong anchor at `evidence`, or
     /// `None` when fewer than `min_medium` medium or `min_structural`
-    /// structural anchors are near it.
+    /// structural anchors or no anchor of a required element are near it.
     pub(crate) fn score(&self, text: &str, evidence: Range<usize>) -> Option<i32> {
         let bytes = text.as_bytes();
         let start = evidence.start.saturating_sub(self.density.window);
@@ -123,8 +155,14 @@ impl ContentClass {
                 Tier::Counter => -COUNTER_WEIGHT,
             };
         }
-        (medium >= self.density.min_medium && structural >= self.density.min_structural)
-            .then_some(score)
+        (medium >= self.density.min_medium
+            && structural >= self.density.min_structural
+            && self.elements.iter().all(|element| {
+                seen.iter()
+                    .zip(element)
+                    .any(|(seen, element)| seen & element != 0)
+            }))
+        .then_some(score)
     }
 
     /// Whether the strong anchor at `evidence` labels the document.
@@ -334,6 +372,42 @@ mod tests {
         assert!(class.holds(text, evidence(text)));
         let text = "MARK\ncounsel: Lee";
         assert!(class.holds(text, evidence(text)));
+    }
+
+    #[test]
+    fn a_class_with_elements_needs_an_anchor_of_each() {
+        let class = class().requiring(&[&["counsel", "kanzlei"], &["mandat"]]);
+        let text = "MARK counsel, Kanzlei";
+        assert_eq!(class.score(text, evidence(text)), None);
+        let text = "MARK Kanzlei, Mandat";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 2));
+        // A counter-context hit of no element does not fill one.
+        let text = "MARK counsel, for example";
+        assert_eq!(class.score(text, evidence(text)), None);
+    }
+
+    #[test]
+    fn an_element_anchor_beyond_the_first_128_counts() {
+        let terms: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
+        let mut anchors: Vec<(&str, Tier)> = terms
+            .iter()
+            .map(|term| (term.as_str(), Tier::Medium))
+            .collect();
+        anchors.push(("counsel", Tier::Medium));
+        let class = ContentClass::new(
+            &anchors,
+            Density {
+                window: 100,
+                min_score: 0,
+                min_medium: 1,
+                min_structural: 0,
+            },
+        )
+        .requiring(&[&["term150", "term199"]]);
+        let text = "MARK counsel";
+        assert_eq!(class.score(text, evidence(text)), None);
+        let text = "MARK counsel term199";
+        assert_eq!(class.score(text, evidence(text)), Some(3 + 2 + 2));
     }
 
     #[test]

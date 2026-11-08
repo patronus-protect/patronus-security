@@ -7149,9 +7149,9 @@ DLP_CASES = {
         ),
         dp(
             "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
-            "Von: Dr. Katrin Vogel\nAn: Geschäftsführung Nordlicht GmbH\nBetreff: Klageentwurf gegen Lieferant\n\n"
+            "Von: Dr. Katrin Vogel\nAn: Geschäftsführung Nordlicht GmbH\nBetreff: Klage gegen Lieferant\n\n"
             "Vertrauliche ", "Anwaltskorrespondenz",
-            "\n\nSehr geehrte Damen und Herren,\nanbei der Klageentwurf zum Rechtsstreit mit der Gegenseite. Bitte "
+            "\n\nSehr geehrte Damen und Herren,\nanbei die Klagebegründung zum Rechtsstreit mit der Gegenseite. Bitte "
             "prüfen Sie den Stand der Vergleichsverhandlung vor dem Termin am Landgericht.\n\nMit freundlichen "
             "Grüßen\nDr. Katrin Vogel, Rechtsanwältin\n",
             carrier="prose",
@@ -7287,6 +7287,123 @@ DLP_CASES = {
             "lagen beim Landgericht. Im Frühjahr 2021 zahlte das Unternehmen ohne Anerkennung einer Rechtspflicht "
             "45 Millionen Euro in einen Fonds; danach nahm fast jeder Kläger die Klage zurück.",
             "encyclopedic report of out-of-court settlements", carrier="prose",
+        ),
+        # M-LEGAL (M05): draft pleadings of the legal-privileged class.
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "", "DRAFT - Statement of Claim",
+            " (privileged draft for client review)\n\nIN THE HIGH COURT OF JUSTICE\nClaimant: Northwind Ltd.\n"
+            "Defendant: Fabrikam GmbH\n\n1. The Defendant failed to deliver the ordered turbines.\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Subject: Lee v. Contoso\n\nDear Ms. Chen,\nplease find attached our ", "draft complaint",
+            " for your review before we file it with the court. The plaintiff seeks damages for breach of "
+            "warranty.\n\nKind regards,\nHarper and Lowe LLP\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# ", "Draft Motion",
+            " to Dismiss\n\nPrepared by counsel for the defendant. Not yet filed with the court; do not share "
+            "outside the litigation team.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            '{"doc": "', "draft pleading",
+            '", "matter": "Lee v. Northwind", "counsel": "Harper LLP", "court": "District Court of Delaware"}',
+            carrier="json",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "[14:02] omar: the ", "draft statement of defence",
+            " is in the shared folder; our client wants the lawsuit settled before trial.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Here is my draft complaint to the airline about the lost suitcase. Dear customer service, my bag "
+            "never arrived in Lisbon.",
+            "consumer complaint without legal context", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Tutorial: how to write a draft complaint for small claims court, for example against a landlord.",
+            "tutorial", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "## Template: Draft Statement of Claim\n\nDefendant: [Name]\nThe claim is for [Amount].",
+            "pleading template", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "# render the draft pleading preview as PDF before export",
+            "code comment", carrier="code",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "en", "dlp_document_legal_privileged",
+            "Lecture 4 covers the draft petition, e.g. how a court reads the relief sought.",
+            "course notes", carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "", "ENTWURF Klageschrift",
+            " - vertraulich, nur für die Mandantin\n\nAn das Landgericht München I\n\nKlage der Nordlicht GmbH "
+            "gegen die Brandt AG - Beklagte - wegen Zahlung\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Betreff: Brandt ./. Nordlicht\n\nSehr geehrte Frau Lenz,\nanbei unser ", "Entwurf der Klageerwiderung",
+            " im Verfahren Az. 3 O 112/26 zur Durchsicht.\n\nMit freundlichen Grüßen\nKanzlei Hartmann\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "# ", "Klageentwurf",
+            "\n\nRechtsanwältin Vogel für die Mandantin Jana Kurz gegen die Nordlicht GmbH, Arbeitsgericht Köln.\n",
+            carrier="markdown",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "dokument:\n  titel: ", "Entwurf Schriftsatz",
+            "\n  kanzlei: Hartmann und Partner\n  aktenzeichen: 3 O 112/26\n  gericht: Landgericht Köln\n",
+            carrier="yaml",
+        ),
+        dp(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "[11:20] lea: der ", "Klageentwurf",
+            " gegen die Brandt AG ist fertig, bitte vor Freitag mit dem Mandanten abstimmen; das Gericht ist das "
+            "Landgericht Köln.\n",
+            carrier="log",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Mein Klageentwurf gegen den Vermieter wegen der Nebenkosten liegt bereit, ich schicke ihn dir später.",
+            "private draft without legal anchors", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Seminar Zivilprozess: Übung Klageentwurf, zum Beispiel für das Landgericht.",
+            "course exercise", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Vorlage: Entwurf Klageschrift an das Amtsgericht [Ort], Kläger: [Name]",
+            "pleading template", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "Ein Klageentwurf bezeichnet die vorläufige Fassung einer Klage, z. B. vor der Einreichung beim Gericht.",
+            "encyclopedia-style explanation", carrier="prose",
+        ),
+        dn(
+            "dlp.document.legal_privileged", "de", "dlp_document_legal_privileged",
+            "// TODO: Entwurf Schriftsatz als PDF exportieren",
+            "code comment", carrier="code",
         ),
     ],
     # M-LEGAL (M04): non-disclosure agreements, trade secret notices and embargo periods. The
@@ -7430,6 +7547,36 @@ DLP_CASES = {
             "austauschen.\n\nVerstöße sichert oft eine Vertragsstrafe ab. Gerichte erkennen Informationen nur an, "
             "wenn ihr Inhaber angemessene Geheimhaltungsmaßnahmen nachweist.",
             "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Subject: Weekly news digest\n\nDear readers,\na court in Delaware ruled in a trade secret case that a "
+            "former engineer may not reuse proprietary source code. Please share this issue with colleagues.",
+            "newsletter reporting a court decision", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "# Security Policy\n\nPlease report vulnerabilities by mail. Reports stay under embargo until a fix is "
+            "released and the announcement is published.",
+            "SECURITY.md with an embargo", carrier="markdown",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "en", "dlp_document_nda_trade_secret",
+            "Hi! We are hiring a backend engineer. Candidates sign an NDA before the take-home task; the offer is "
+            "signed after two interviews.",
+            "job ad", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Betreff: Newsletter Arbeitsrecht\n\nHallo zusammen,\ndie Reform des GeschGehG tritt nach der "
+            "Veröffentlichung im Bundesgesetzblatt in Kraft.\n\nViele Grüße",
+            "newsletter on a law reform", carrier="prose",
+        ),
+        dn(
+            "dlp.document.nda_trade_secret", "de", "dlp_document_nda_trade_secret",
+            "Hallo, bitte beachten Sie die Sperrfrist für Rücksendungen: Der Empfänger erhält die Erstattung nach "
+            "14 Tagen. Viele Grüße, Ihr Shop-Team",
+            "shop return note", carrier="prose",
         ),
     ],
     # M-LEGAL (M22): customer and supplier contracts. The contract title is the evidence span;
@@ -7585,6 +7732,32 @@ DLP_CASES = {
             "Insolvenz, Klauseln zur Vertraulichkeit schützen Zeichnungen. Zwischen Herstellern und Zulieferern "
             "bestehen Verträge über Milliarden EUR.",
             "multi-paragraph encyclopedic article without counter terms", carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Dear Sir or Madam,\nattached is the signed ", "framework agreement",
+            ". Northwind is the customer, remuneration EUR 5,000 per month, the term is two years and "
+            "confidentiality is agreed.\n\nKind regards\n",
+            carrier="prose",
+        ),
+        dp(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Sehr geehrte Damen und Herren,\nanbei der unterschriebene ", "Rahmenvertrag",
+            ". Auftraggeber ist die Nordlicht GmbH, die Vergütung beträgt 5.000 EUR monatlich, die Laufzeit zwei "
+            "Jahre, Vertraulichkeit ist vereinbart.\n\nMit freundlichen Grüßen\n",
+            carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "en", "dlp_document_contract",
+            "Subject: Kickoff notes\n\nWe walked through the framework agreement: customer, supplier, contractor "
+            "and licensee roles, plus liability.",
+            "meeting note with party roles only", carrier="prose",
+        ),
+        dn(
+            "dlp.document.contract", "de", "dlp_document_contract",
+            "Betreff: Protokoll\n\nZum Rahmenvertrag: Rollen von Auftraggeber, Auftragnehmer, Lieferant und Kunde, "
+            "dazu die Haftung.",
+            "meeting note with party roles only", carrier="prose",
         ),
     ],
     # M-MARK: classification markings (M02 + M03), on by default (M23). The marking is the evidence

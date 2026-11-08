@@ -179,10 +179,11 @@ pub(super) const RULES: &[DlpPattern] = &[
     // M01: attorney-client privileged correspondence. The privilege marker is
     // the evidence span; legal terms and letter structure around it make the
     // document (`LEGAL_PRIVILEGED`). M-LEGAL (M05) adds the markers of
-    // settlement negotiations (WITHOUT PREJUDICE, ohne Präjudiz).
+    // settlement negotiations (WITHOUT PREJUDICE, ohne Präjudiz) and of draft
+    // pleadings (draft complaint, Entwurf Klageschrift, Klageentwurf).
     DlpPattern {
         name: "dlp_document_legal_privileged",
-        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz)\b",
+        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz|draft(?:\s*[-–:]\s*|\s+)(?:complaint|statement\s+of\s+(?:claim|defen[cs]e)|pleadings?|petition|motion)|klageentwurf|entwurf(?:\s*[-–:]\s*|\s+)(?:(?:der|des|einer|eines)\s+)?(?:klageschrift|klageerwiderung|klage|schriftsatz(?:es)?|berufungsbegründung))\b",
         entity_group: "dlp.document.legal_privileged",
         validator: None,
         span_group: None,
@@ -200,6 +201,8 @@ pub(super) const RULES: &[DlpPattern] = &[
                 "prejudice",
                 "settlement",
                 "judiz",
+                "draft",
+                "entwurf",
             ],
         )
         .with_context_gate(is_legal_privileged_document),
@@ -777,7 +780,10 @@ fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
 /// notice or embargo around its marker. Articles and commentary on NDAs carry
 /// the same terms (disclosing party, confidential information), so the class
 /// also needs document form: a letter or chat, agreement wording, a handling
-/// instruction or a record label.
+/// instruction or a record label. Newsletters, job ads and security policies
+/// name an NDA or embargo with letter words and a generic term (publication,
+/// signed), so the class also needs a secrecy duty: confidential information,
+/// a receiving party, non-public or a handling instruction.
 static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
     ContentClass::new(
         &[
@@ -785,6 +791,7 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("receiving party", Tier::Medium),
             ("recipient", Tier::Medium),
             ("confidential information", Tier::Medium),
+            ("confidentiality", Tier::Medium),
             ("proprietary", Tier::Medium),
             ("need-to-know", Tier::Medium),
             ("need to know", Tier::Medium),
@@ -818,6 +825,8 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("unterzeichnet", Tier::Medium),
             ("parteien", Tier::Medium),
             ("vertragsstrafe", Tier::Medium),
+            ("bleibt intern", Tier::Medium),
+            ("bleiben intern", Tier::Medium),
             ("subject:", Tier::Structural),
             ("re:", Tier::Structural),
             ("from:", Tier::Structural),
@@ -867,6 +876,7 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             ("refers to", Tier::Counter),
             ("tutorial", Tier::Counter),
             ("lecture", Tier::Counter),
+            ("newsletter", Tier::Counter),
             ("directive", Tier::Counter),
             ("the court held", Tier::Counter),
             ("held that", Tier::Counter),
@@ -897,6 +907,29 @@ static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
             min_structural: 1,
         },
     )
+    .requiring(&[&[
+        "disclosing party",
+        "receiving party",
+        "confidential information",
+        "confidentiality",
+        "need-to-know",
+        "need to know",
+        "non-public",
+        "not be disclosed",
+        "shall not disclose",
+        "do not distribute",
+        "do not forward",
+        "offenlegende partei",
+        "empfangende partei",
+        "vertrauliche informationen",
+        "geheimhaltung",
+        "geheimhaltungspflicht",
+        "nicht öffentlich",
+        "nicht weitergeben",
+        "nicht weiterleiten",
+        "bleibt intern",
+        "bleiben intern",
+    ]])
 });
 
 fn is_nda_trade_secret_document(text: &str, marker: Range<usize>) -> bool {
@@ -904,10 +937,11 @@ fn is_nda_trade_secret_document(text: &str, marker: Range<usize>) -> bool {
 }
 
 /// M-LEGAL (M22): the anchors of a customer or supplier contract around its
-/// title: contracting parties, remuneration, term and confidentiality. A
-/// contract needs several of them, hence the higher minimum, and the form of
-/// a contract, letter or record (`Term:`, `"fees":`, Effective date, Betreff:):
-/// an article on mergers names customers, fees and liability in prose.
+/// title. A contract needs one anchor of each element: contracting parties,
+/// remuneration, term and confidentiality (four party roles are a meeting
+/// note), and the form of a contract, letter or record (`Term:`, `"fees":`,
+/// Effective date, Betreff:): an article on mergers names customers, fees and
+/// liability in prose.
 static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
     ContentClass::new(
         &[
@@ -990,11 +1024,51 @@ static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
         ],
         Density {
             window: 3000,
-            min_score: 14,
+            min_score: 12,
             min_medium: 4,
             min_structural: 1,
         },
     )
+    .requiring(&[
+        &[
+            "customer",
+            "supplier",
+            "contractor",
+            "licensee",
+            "licensor",
+            "auftraggeber",
+            "auftragnehmer",
+            "lieferant",
+            "kunde",
+            "käufer",
+            "verkäufer",
+            "lizenznehmer",
+        ],
+        &[
+            "fees",
+            "remuneration",
+            "compensation",
+            "purchase price",
+            "payment terms",
+            "vergütung",
+            "kaufpreis",
+            "zahlungsbedingungen",
+        ],
+        &[
+            "term",
+            "termination",
+            "notice period",
+            "laufzeit",
+            "kündigung",
+            "kündigungsfrist",
+        ],
+        &[
+            "confidentiality",
+            "confidential information",
+            "vertraulichkeit",
+            "geheimhaltung",
+        ],
+    ])
 });
 
 fn is_contract_document(text: &str, marker: Range<usize>) -> bool {
@@ -1225,6 +1299,29 @@ mod tests {
     }
 
     #[test]
+    fn draft_pleadings_hold_with_legal_anchors() {
+        let en = "DRAFT - Statement of Claim (privileged draft for client review)\n\nIN THE HIGH COURT OF \
+                  JUSTICE\nClaimant: Northwind Ltd.\nDefendant: Fabrikam GmbH";
+        assert!(gate(en, "DRAFT - Statement of Claim"));
+        let de = "ENTWURF Klageschrift - vertraulich, nur für die Mandantin\n\nAn das Landgericht München I\n\n\
+                  Klage der Nordlicht GmbH gegen die Brandt AG - Beklagte -";
+        assert!(gate(de, "ENTWURF Klageschrift"));
+        assert!(gate(
+            "Betreff: Brandt\n\nanbei unser Klageentwurf für die Kanzlei, Verfahren vor dem Arbeitsgericht.",
+            "Klageentwurf",
+        ));
+        // A consumer's draft complaint or a seminar exercise is no pleading.
+        assert!(!gate(
+            "Here is my draft complaint to the airline about the lost suitcase. Dear customer service, my bag never arrived.",
+            "draft complaint",
+        ));
+        assert!(!gate(
+            "Seminar Zivilprozess: Übung Klageentwurf, zum Beispiel für das Landgericht.",
+            "Klageentwurf",
+        ));
+    }
+
+    #[test]
     fn nda_and_trade_secret_documents_hold_in_de_and_en() {
         assert!(nda(
             "Subject: Drawings\n\nThe drawings are covered by our NDA. Do not forward them; the prototype is non-public.",
@@ -1328,6 +1425,37 @@ mod tests {
     }
 
     #[test]
+    fn newsletters_policies_job_ads_and_shop_notes_are_no_nda_document() {
+        // Letter words and a generic term (publication, signed) without a
+        // secrecy duty name an NDA or embargo but are none.
+        assert!(!nda(
+            "Subject: Weekly news digest\n\nDear readers, a court in Delaware ruled in a trade secret case \
+             that the former engineer may not reuse proprietary source code. Please share this issue.",
+            "trade secret",
+        ));
+        assert!(!nda(
+            "Betreff: Wochenüberblick\n\nHallo zusammen, die Reform des GeschGehG tritt nach der \
+             Veröffentlichung im Bundesgesetzblatt in Kraft. Viele Grüße",
+            "GeschGehG",
+        ));
+        assert!(!nda(
+            "# Security Policy\n\nPlease report vulnerabilities by mail. Reports stay under embargo until a fix \
+             is released and the announcement is published.",
+            "embargo until",
+        ));
+        assert!(!nda(
+            "Hi! We are hiring a backend engineer. Candidates sign an NDA before the take-home task; the offer \
+             is signed after two interviews.",
+            "NDA",
+        ));
+        assert!(!nda(
+            "Hallo, bitte beachten Sie die Sperrfrist für Rücksendungen: Der Empfänger erhält die Erstattung \
+             nach 14 Tagen. Viele Grüße, Ihr Shop-Team",
+            "Sperrfrist",
+        ));
+    }
+
+    #[test]
     fn articles_on_ndas_are_no_nda_document() {
         // Encyclopedic prose has the parties, confidential information and
         // signatures of an NDA but no letter, agreement or record form.
@@ -1380,6 +1508,32 @@ mod tests {
         assert!(!contract(
             "We negotiate the framework agreement; let's discuss the term and the fees on Monday.",
             "framework agreement",
+        ));
+    }
+
+    #[test]
+    fn a_signed_contract_cover_letter_with_the_four_elements_holds() {
+        let en = "Dear Sir or Madam,\nattached is the signed framework agreement. Northwind is the customer, \
+                  remuneration EUR 5,000 per month, the term is two years and confidentiality is agreed.\n\n\
+                  Kind regards";
+        assert!(contract(en, "framework agreement"));
+        let de = "Sehr geehrte Damen und Herren,\nanbei der unterschriebene Rahmenvertrag. Auftraggeber ist die \
+                  Nordlicht GmbH, die Vergütung beträgt 5.000 EUR monatlich, die Laufzeit zwei Jahre, \
+                  Vertraulichkeit ist vereinbart.\n\nMit freundlichen Grüßen";
+        assert!(contract(de, "Rahmenvertrag"));
+    }
+
+    #[test]
+    fn contract_roles_without_the_other_elements_are_no_contract_document() {
+        assert!(!contract(
+            "Subject: Kickoff notes\n\nWe walked through the framework agreement: customer, supplier, contractor \
+             and licensee roles, plus liability.",
+            "framework agreement",
+        ));
+        assert!(!contract(
+            "Betreff: Protokoll\n\nZum Rahmenvertrag: Rollen von Auftraggeber, Auftragnehmer, Lieferant und \
+             Kunde, dazu die Haftung.",
+            "Rahmenvertrag",
         ));
     }
 
