@@ -20,24 +20,23 @@ Der Klon steht auf dem Head des PRs (`head`); die Änderung ist `git diff <diff_
 In der Aufgabe stehen außerdem der Backlog-Eintrag (`backlog_task`, mit `accept`), der PR-Text mit dem
 Gate-Bericht und der Scoreboard-Zusammenfassung (`pr_body`) und das Latenz-A/B (`latency`).
 
-Prüfe, jeweils mit Belegen aus Diff, Tests und Gate-Bericht:
+Das ist ein **Sanity-Check, kein Review**. Gate und CI sind schon grün. Suche nicht nach etwas, das
+man noch verbessern könnte; die Erwartung ist `pass`. `fail` gibt es nur für einen dieser groben Fehler,
+jeweils mit Beleg aus Diff, Tests oder Gate-Bericht:
 
-1. **Akzeptanzkriterien:** Ist jedes `accept`-Kriterium der Aufgabe tatsächlich erfüllt (nicht nur
-   behauptet)? Fehlt etwas, das die Aufgabe verlangt?
-2. **Code-Regeln aus `CLAUDE.md`** auf dem Diff:
-   - neues Verhalten mit mindestens Unit-Tests; ein Bugfix mit Regressionstest, der ohne Fix fehlschlägt;
-   - kein toter, obsoleter oder duplizierter Code (ungenutzte Funktionen, Parameter, Felder, Varianten,
-     Fixtures, Doku; nur weiterleitende Wrapper; eine zweite Kopie vorhandener Logik);
-   - L1-Hot-Path: Regexe/Automaten einmal kompiliert (`OnceLock`/`LazyLock`), jede neue Regel mit
-     Literal-/Struktur-Prefilter, Regexe linear und begrenzt, keine Allokation/kein Klonen/kein erneuter
-     Scan des ganzen Texts pro Match, kein I/O, Netz oder Lock auf L1.
-3. **Overfitting und Öffentlichkeit:** keine aus Dev-Gold kopierten Literale (konkrete Werte, Namen,
-   Sätze aus den Korpora unter `$ARK_L1_DEV_DATA`) in Regeln, Lexika oder Code; keine Infrastruktur-Details
-   (Hosts, IPs, Pfade der VPS), Tokens oder Secrets im öffentlichen Repo.
-4. **Zahlen:** Stimmen die Zahlen in PR-Text, `backlog.yaml`, README/Doku und CHANGELOG mit dem
-   Gate-Bericht überein?
-5. **Latenz:** Meldet `latency` eine Regression, ist das ein Finding (der Runner trägt es ohnehin ein);
-   suche im Diff die wahrscheinliche Ursache und nenne sie. Ein `error` dort heißt: nicht gemessen.
+1. **Aufgabe nicht erledigt:** Ein zentraler Teil der Aufgabe fehlt ganz (nicht: ein Detail ließe sich
+   vollständiger machen).
+2. **Falsches Ergebnis:** Eine Regel meldet offensichtlich Falsches oder gar nichts, ein Test prüft nicht,
+   was er behauptet, oder Zahlen im PR-Text widersprechen dem Gate-Bericht.
+3. **Grobe Verletzung der Code-Regeln aus `CLAUDE.md`:** neues Verhalten ganz ohne Test, eine zweite Kopie
+   vorhandener Logik, oder auf L1 ein Regex/Automat pro Aufruf kompiliert, I/O oder Lock im Scan.
+4. **Leck im öffentlichen Repo:** aus Dev-Gold kopierte Literale, Infrastruktur-Details, Tokens oder
+   Secrets.
+5. **Latenz:** `latency` meldet eine Regression in jedem Versuch (der Runner trägt sie ohnehin ein).
+
+Alles andere (Stil, Benennung, Doku-Feinheiten, zusätzliche Tests, Randfälle, Ideen) ist kein `fail`;
+schreib es nicht als Finding. Ist das ein erneutes Verify nach einem Review-Lauf, prüfe nur, ob die
+vorherigen Findings behoben sind und ob dabei ein grober Fehler entstanden ist.
 
 Du darfst bauen und gezielt einzelne Tests ausführen (`cargo test -p <crate> <filter>`, ein einzelnes
 Python-Testmodul), aber nicht die ganze Suite. Suche oder lies keine Holdout-Daten, ändere nichts
@@ -52,8 +51,8 @@ Das Verdict steht in `.git/ark-verify.json` (nicht im Arbeitsbaum):
  "findings": [{"path": "ark-core/src/…", "line": 123, "reason": "1–3 Sätze auf Englisch: was falsch ist und was zu tun ist"}]}
 ```
 
-- `fail` nur mit konkreten, belegten Findings, die vor dem Merge behoben werden müssen; `path` relativ
-  zum Repo, `line` die Zeile im Head (oder `null`). Höchstens 20, die wichtigsten zuerst.
+- `fail` nur für die groben Fehler oben, mit konkretem Beleg; `path` relativ
+  zum Repo, `line` die Zeile im Head (oder `null`). Höchstens 5, die schwersten zuerst.
 - Stilfragen, Geschmack und Verbesserungen außerhalb der Aufgabe sind kein `fail`.
 - Die Findings werden als Review-Kommentare im öffentlichen PR gepostet und vom nächsten Review-Lauf
   behoben: keine Holdout-Inhalte, keine Secrets, keine Infrastruktur-Details hineinschreiben.

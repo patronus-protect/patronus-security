@@ -3102,10 +3102,12 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang 86095742719 wurde abgeschlossen."
+        "Vorgang 86095742719 wurde abgeschlossen.",
+        "Bitte 11112345678 im Formular eintragen."
       ],
       "en": [
-        "Reference 86095742719 was archived."
+        "Reference 86095742719 was archived.",
+        "Please copy 11112345678 into the form."
       ]
     }
   },
@@ -5354,6 +5356,39 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_bip39_seed_phrase",
+    "de": "Seed-Phrase der Wallet: <<secret:0>>",
+    "en": "Recovery phrase: <<secret:0>>",
+    "secrets": [
+      {
+        "gen": "bip39_en_12",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Wiederherstellungsphrase: <deine 12 Wörter hier eintragen>",
+        "Seed-Phrase im Format wort1 wort2 wort3 wort4 wort5 wort6 wort7 wort8 wort9 wort10 wort11 wort12 notieren",
+        "Die Seed-Phrase kommt aus ${MNEMONIC}, nie aus dem Repository.",
+        "Öffentlicher BIP39-Testvektor der Seed-Phrase: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        "Seed-Phrase mit Tippfehler: river clock motion tunnel bright garden lemon fossil empty pilot salad wagon",
+        "Nur 11 Wörter notiert: river clock motion tunnel bright garden lemon fossil empty pilot salad",
+        "Bitte die Wiederherstellungswörter der Wallet niemals in den Chat kopieren, sondern offline auf Papier notieren."
+      ],
+      "en": [
+        "mnemonic: <your 12 word mnemonic>",
+        "seed phrase: word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+        "const wallet = ethers.Wallet.fromPhrase(process.env.MNEMONIC);",
+        "BIP39 test vector (public): abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        "recovery phrase with a typo: river clock motion tunnel bright garden lemon fossil empty pilot salad wagon",
+        "only 11 words written down: river clock motion tunnel bright garden lemon fossil empty pilot salad",
+        "Please back up your wallet before the update; the recovery phrase stays on paper in the office safe."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_private_key_block",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
@@ -6157,6 +6192,27 @@
     "rule_id": "dlp_marking_nato_eu",
     "de": "NATO CONFIDENTIAL\n\nÜbungsplan Nordtor, Phase zwei: Marschwege und Sammelräume.",
     "en": "SECRET UE/EU SECRET\n\nDraft negotiation mandate for the working party.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_unpublished_financials",
+    "de": "Betreff: Vorläufige Zahlen Q3\n\nStreng vertraulich – Insiderinformation\n\nSehr geehrte Damen und Herren, der Umsatz im Quartal liegt unter dem Analystenkonsens, die Prognose ist nicht zu halten.",
+    "en": "Subject: Q3 preliminary figures\n\nSTRICTLY CONFIDENTIAL - INSIDE INFORMATION\n\nDear all, Q3 revenue is below the analyst consensus and the full-year guidance will be lowered.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_m_and_a",
+    "de": "Betreff: Projekt Falke – Absichtserklärung\n\nSehr geehrte Damen und Herren, der Kaufpreis für die Zielgesellschaft liegt bei 410 Mio., dazu sechs Wochen Exklusivität für den Käufer.",
+    "en": "Subject: Project Falcon - term sheet\n\nDear all, the purchase price for the target company is 410m, with six weeks of exclusivity for the buyer.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_board_minutes",
+    "de": "Protokoll der Aufsichtsratssitzung\nDatum: 14.10.2026\nDer Aufsichtsrat ist beschlussfähig und stimmt dem Verkauf einstimmig zu.",
+    "en": "Minutes of the Meeting of the Supervisory Board\nDate: 14 October 2026\nQuorum confirmed; the board unanimously approved the sale.",
     "language_neutral": false
   },
   {

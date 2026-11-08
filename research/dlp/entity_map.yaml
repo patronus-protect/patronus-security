@@ -140,6 +140,9 @@ taxonomy:
   dlp.content.system_log: {family: content_class}
   dlp.document.legal_privileged: {family: document_class}
   dlp.document.classification_marking: {family: document_class}
+  dlp.document.unpublished_financials: {family: document_class}
+  dlp.document.m_and_a: {family: document_class}
+  dlp.document.board_minutes: {family: document_class}
   dlp.document.hr: {family: document_class, planned: true}
   dlp.document.rnd_ip: {family: document_class, planned: true}
 
@@ -709,6 +712,21 @@ entities:
     group: dlp.document.classification_marking
     ark: [dlp_marking_de_government, dlp_marking_de_corporate, dlp_marking_en_corporate, dlp_marking_tlp, dlp_marking_nato_eu]
     backlog: M-MARK
+  - id: document.unpublished_financials
+    scope: ark_only
+    group: dlp.document.unpublished_financials
+    ark: [dlp_document_unpublished_financials]
+    backlog: M-CORP
+  - id: document.m_and_a
+    scope: ark_only
+    group: dlp.document.m_and_a
+    ark: [dlp_document_m_and_a]
+    backlog: M-CORP
+  - id: document.board_minutes
+    scope: ark_only
+    group: dlp.document.board_minutes
+    ark: [dlp_document_board_minutes]
+    backlog: M-CORP
   - id: credential.file.netrc
     scope: ark_only
     group: CREDENTIAL
@@ -823,6 +841,12 @@ entities:
     group: CRYPTO_KEY
     ark: [dlp_cardano_signing_key]
     backlog: C-WALLET
+  - id: crypto.bip39.seed_phrase
+    scope: ark_only
+    group: CRYPTO_KEY
+    subtype: seed_phrase
+    ark: [dlp_bip39_seed_phrase]
+    backlog: C01
   - id: credential.url_userinfo_token
     scope: ark_only
     group: SECRET_TOKEN

@@ -324,7 +324,7 @@ fn number_arrays_that_are_no_keypair_are_no_key() {
 // ── Electrum seeds ───────────────────────────────────────────────────────────
 
 fn bip39_words() -> Vec<&'static str> {
-    include_str!("../../ark-core/src/detectors/dlp/rules/data/bip39_english.txt")
+    include_str!("../../ark-core/src/detectors/dlp/bip39/english.txt")
         .lines()
         .collect()
 }

@@ -199,7 +199,7 @@ in every mode until the `rules` gate enables it:
 
 | Rule ID | Value | Validator |
 | --- | --- | --- |
-| `pii_steuer_id_de_bare` | Steuer-ID, 11 digits or 2-3-3-3 | check digit |
+| `pii_steuer_id_de_bare` | Steuer-ID, 11 digits or 2-3-3-3 | check digit, no digit more than three times or three in a row |
 | `pii_steuernummer_de_bare` | Steuernummer, 13-digit ELSTER form | Land and office prefix |
 | `pii_physician_number_lanr_de_bare` | LANR, 9 digits | check digit |
 | `pii_facility_number_bsnr_de_bare` | BSNR, 9 digits | format |

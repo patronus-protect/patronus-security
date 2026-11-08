@@ -338,11 +338,19 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   bedient beide Modi. `run_ark.py` muss den Modus in den Metadaten bestätigen (`engine.pii_mode`, bei
   `strict` fehlend), sonst Exit 2: ein Runner, der `--pii-mode` ignoriert, würde `strict` als
   `balanced` ausgeben. Meilensteine liest `m1`/`report` aus `balanced`.
-- **Meilensteine im Gate (H05, M-RAW):** Vor der Zeile `RESULT` steht je Split eine Zeile
-  `milestones <split> (balanced, raw gold, vs Presidio default and tuned): M1 … | M2 …` mit M1 (gehaltene
-  gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel) des Heads, je Profil
-  (`vs default: …; vs tuned: …`); erfüllt nur, wenn `balanced` gegen beide hält. Presidio default und
-  tuned laufen mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
+- **Meilensteine im Gate (H05, M-RAW):** Vor der Zeile `RESULT` steht je Split und Meilenstein-Engine
+  eine Zeile `milestones <split> (balanced|balanced-bare, raw gold, vs Presidio default and tuned): M1 … |
+  M2 …` mit M1 (gehaltene gemeinsame IDs je entscheidender Familie, EN) und M2 (DE-Macro-F1 gegen Ziel)
+  des Heads, je Profil (`vs default: …; vs tuned: …`); `MET` heißt, dass diese Engine gegen beide
+  Profile hält, der Meilenstein ist erfüllt, wenn eine der beiden Zeilen `MET` zeigt. `balanced-bare`
+  läuft als `run_ark.py --pii-mode balanced --gates docs/how-to/pii-bare-formats.gates.json` (die
+  Metadaten müssen `engine.rules` tragen) und wird zusätzlich nach dem Inhalt des Profils gecacht.
+  Für den Abschlussbericht in der Rohsicht (H05-2) stehen je Split davor eine Zeile `scores <split>
+  (raw gold, …)` mit exaktem F1 (alle L1-IDs) und HN-FP-Zahl je Quellfamilie von `strict`,
+  `balanced`, `balanced-bare`, `presidio-default` und `presidio-tuned`, danach eine Zeile `M1 gaps
+  <split> (…)` mit den gemeinsamen IDs, bei denen eine Meilenstein-Engine unter einem Profil liegt
+  (Familie, ID, F1 ARK `<` F1 Presidio; `none`, wenn keine).
+  Presidio default und tuned laufen mit dem Interpreter des Gates (`run_presidio.py`, im Gate das Presidio-Venv) und wird je
   Runner, Profil und Eingabe-SHA-256 gecacht. So erreichen die Holdout-Meilensteine den Gate-Bericht
   (der Runner übernimmt das Ende einer grünen Scoreboard-Ausgabe), nur als Aggregat. Scheitert die
   Messung (lokal ohne Presidio im Interpreter), steht `not measured (<Fehlertyp>)` da; der Exit-Code

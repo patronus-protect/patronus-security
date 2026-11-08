@@ -167,6 +167,9 @@ impl SecretSubtype {
     }
 }
 
+/// C01: candidate finder of a rule, see [`RuleMeta::finder`].
+pub type Finder = fn(&str) -> Vec<Range<usize>>;
+
 /// T09: key gate of a key-anchored rule, see [`RuleMeta::key_gate`].
 pub type KeyGate = fn(&str, usize, Range<usize>) -> bool;
 
@@ -217,6 +220,11 @@ pub struct RuleMeta {
     /// value's byte range; reads a compound or camelCase prefix before the
     /// noun. `None` for rules whose key is matched in full.
     pub key_gate: Option<KeyGate>,
+    /// C01: finds the candidate matches of a rule whose regex has no literal
+    /// to search for (seed phrases): the byte ranges at which the rule's
+    /// regex is matched, each in full. `None` for rules searched by their
+    /// regex.
+    pub finder: Option<Finder>,
 }
 
 /// F03: the fixed body length of a prefix rule.
@@ -260,6 +268,15 @@ impl RuleMeta {
             value_gate: None,
             body_len: None,
             key_gate: None,
+            finder: None,
+        }
+    }
+
+    /// C01: the rule's regex is matched only at the ranges `finder` returns.
+    pub const fn with_finder(self, finder: Finder) -> Self {
+        Self {
+            finder: Some(finder),
+            ..self
         }
     }
 
@@ -999,6 +1016,15 @@ impl NativeRegexDetector for DlpPipeline {
         text: &'t str,
         scan: Option<&super::prefilter::RuleScan>,
     ) -> Vec<regex::Captures<'t>> {
+        if let Some(finder) = self.metas[index].finder {
+            return finder(text)
+                .into_iter()
+                .filter_map(|range| {
+                    let captures = regex.captures_at(&text[..range.end], range.start)?;
+                    (captures.get(0)?.range() == range).then_some(captures)
+                })
+                .collect();
+        }
         match scan {
             Some(scan) => self.prefilter.captures(index, regex, text, scan),
             None => regex.captures_iter(text).collect(),

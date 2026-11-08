@@ -2,6 +2,7 @@
 //! Key material: wallet keys, wallet seeds, PEM private keys, JWKs, VPN keys (C-KEYS) and
 //! symmetric keys of frameworks and code.
 use crate::detectors::dlp::key_context::has_key_context;
+use crate::detectors::dlp::seed_phrase::{has_seed_context, is_seed_phrase, phrases};
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
@@ -124,7 +125,7 @@ fn is_solana_keypair(value: &str) -> bool {
 /// The BIP39 English word list (2048 sorted words), also Electrum's default
 /// word list for new seeds.
 static BIP39_ENGLISH: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| include_str!("data/bip39_english.txt").lines().collect());
+    LazyLock::new(|| include_str!("../bip39/english.txt").lines().collect());
 
 /// C-WALLET: an Electrum seed (version 2.0 and later): 12 words of the
 /// English word list whose HMAC-SHA512 under the key `Seed version` starts
@@ -488,6 +489,30 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("cardano")
         .with_boundary("")
         .with_subtype(SecretSubtype::PrivateKey),
+    },
+    DlpPattern {
+        name: "dlp_bip39_seed_phrase",
+        // C01: the words and their separators; `seed_phrase::phrases` finds
+        // the phrases, the validator checks word lists and checksum.
+        // A word has an ASCII letter among its letters, accented ones in NFC
+        // or NFD (`año`, `a\u{303}o`); the finder checks the word lengths.
+        pattern: r#"[\x{e0}-\x{ff}\x{300}-\x{36f}]{0,2}[a-z][a-z\x{e0}-\x{ff}\x{300}-\x{36f}]{1,17}(?:[\s0-9.):,"'-]{1,24}[\x{e0}-\x{ff}\x{300}-\x{36f}]{0,2}[a-z][a-z\x{e0}-\x{ff}\x{300}-\x{36f}]{1,17}){11,23}"#,
+        entity_group: "CRYPTO_KEY",
+        validator: Some(is_seed_phrase),
+        span_group: None,
+        base_score: 30,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki",
+            &[],
+        )
+        // Every word has an ASCII letter (`año` in NFC no more than one);
+        // the finder is the actual prefilter.
+        .with_value_run(ValueClass::Alphanumeric, 1)
+        .with_finder(phrases)
+        // 12- and 15-word phrases carry a 4- or 5-bit checksum.
+        .with_context_gate(has_seed_context)
+        .with_subtype(SecretSubtype::SeedPhrase),
     },
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {

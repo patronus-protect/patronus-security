@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 107 | 25 |
-| Regex rules | 199 | 166 (+5 relationship rules) |
+| Result labels (entity groups) | 107 | 28 |
+| Regex rules | 199 | 170 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 130 | 27 |
+| Rules with a `checksum` or `structure` check | 130 | 28 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -319,7 +319,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `CREDENTIAL` | generic_credential | on | 17 | 14 | 320 | ARK 98.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 4 | 3 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
-| `CRYPTO_KEY` | key_material | on | 14 | 11 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
+| `CRYPTO_KEY` | key_material | on | 15 | 12 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `dlp.de.vat_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
 | `dlp.de.commercial_register_number` | business_identifier | off | 1 | 1 | 32 | ARK 50.0 (opt-in profile) |
 | `dlp.de.facility_number_bsnr` | business_identifier | off | 1 | 1 | 32 | ARK 28.6 (opt-in profile) |
@@ -337,6 +337,9 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `dlp.content.system_log` | content_class | off | 2 | 1 | 456 documents | ARK 0.0 (opt-in profile) |
 | `dlp.document.legal_privileged` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.classification_marking` | document_class | on | 5 | 1 | – | – |
+| `dlp.document.unpublished_financials` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.m_and_a` | document_class | off | 1 | 1 | – | – |
+| `dlp.document.board_minutes` | document_class | off | 1 | 1 | – | – |
 | `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 | `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 
@@ -436,6 +439,9 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `saas.mapbox.secret_token` | shared | `API_KEY` | `dlp_mapbox_secret_token` | format | on | gitleaks: `mapbox-api-token`; TruffleHog: `Mapbox` |
 | `key.symmetric_key` | shared | `CRYPTO_KEY` | `dlp_symmetric_key`, `dlp_laravel_app_key`, `dlp_django_secret_key`, `dlp_rails_secret_key_base` | structure | on | – |
 | `document.classification_marking` | ark_only | `dlp.document.classification_marking` | `dlp_marking_de_government`, `dlp_marking_de_corporate`, `dlp_marking_en_corporate`, `dlp_marking_tlp`, `dlp_marking_nato_eu` | format | on | – |
+| `document.unpublished_financials` | ark_only | `dlp.document.unpublished_financials` | `dlp_document_unpublished_financials` | format | off | – |
+| `document.m_and_a` | ark_only | `dlp.document.m_and_a` | `dlp_document_m_and_a` | format | off | – |
+| `document.board_minutes` | ark_only | `dlp.document.board_minutes` | `dlp_document_board_minutes` | format | off | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | `dlp_netrc_password` | format | on | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | `dlp_docker_config_auth` | structure | on | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | `dlp_jwk_private_key` | structure | on | – |
@@ -458,6 +464,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `crypto.bitcoin.electrum_seed` | ark_only | `CRYPTO_KEY` | `dlp_electrum_seed` | checksum | on | – |
 | `crypto.monero.seed` | ark_only | `CRYPTO_KEY` | `dlp_monero_seed` | checksum | on | – |
 | `crypto.cardano.signing_key` | ark_only | `CRYPTO_KEY` | `dlp_cardano_signing_key` | checksum | on | – |
+| `crypto.bip39.seed_phrase` | ark_only | `CRYPTO_KEY` | `dlp_bip39_seed_phrase` | checksum | on | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | `dlp_credential_in_url` | none | on | – |
 | `credential.auth_url` | ark_only | `CREDENTIAL` | `dlp_auth_url_token` | none | on | – |
@@ -564,7 +571,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 87 shared, 40 ARK only, 77 baseline only, 11 out of scope.
+Entities: 87 shared, 44 ARK only, 77 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -660,6 +667,9 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `saas.mapbox.secret_token` | shared | `API_KEY` | 0 | no gold | no gold |
 | `key.symmetric_key` | shared | `CRYPTO_KEY` | 0 | no gold | no gold |
 | `document.classification_marking` | ark_only | `dlp.document.classification_marking` | – | – | – |
+| `document.unpublished_financials` | ark_only | `dlp.document.unpublished_financials` | – | – | – |
+| `document.m_and_a` | ark_only | `dlp.document.m_and_a` | – | – | – |
+| `document.board_minutes` | ark_only | `dlp.document.board_minutes` | – | – | – |
 | `credential.file.netrc` | ark_only | `CREDENTIAL` | – | – | – |
 | `credential.file.docker_config` | ark_only | `CREDENTIAL` | – | – | – |
 | `key.jwk_private_key` | ark_only | `PRIVATE_KEY` | – | – | – |
@@ -682,6 +692,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-11-02; same cells
 | `crypto.bitcoin.electrum_seed` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `crypto.monero.seed` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `crypto.cardano.signing_key` | ark_only | `CRYPTO_KEY` | – | – | – |
+| `crypto.bip39.seed_phrase` | ark_only | `CRYPTO_KEY` | – | – | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `credential.url_query_secret` | ark_only | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
 | `credential.auth_url` | ark_only | `CREDENTIAL` | – | – | – |
