@@ -16559,62 +16559,6 @@ DLP_T22_CASES["CREDENTIAL"] += [
 for _label, _rows in DLP_T22_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
-# T14: PEM private key blocks whose decoded key octets hold the example/test fill (EXAMPLEKEY,
-# TESTKEY, deadbeef, 1234567890 bytes inside the DER or openssh-key-v1 structure). The base64 text
-# shows no marker, so dlp_private_key_block checks the decoded body (T22 payload helper); random
-# key octets stay findings.
-_T14_CARRIERS = {
-    "yaml": "server:\n  tls:\n    private_key: \"<<secret:0|json>>\"\n",
-    "json": "{\n  \"credentials\": {\n    \"tls_private_key\": \"<<secret:0|json>>\"\n  }\n}\n",
-    "toml": "[tls]\nprivate_key = \"\"\"\n<<secret:0>>\n\"\"\"\n",
-    "hcl": "resource \"tls_cert\" \"app\" {\n  private_key_pem = <<EOT\n<<secret:0>>\nEOT\n}\n",
-    "code": "SIGNING_KEY = \"\"\"<<secret:0>>\"\"\"\n",
-    "mail_de": "Hallo Team,\n\nanbei der private Schlüssel für den Server:\n\n<<secret:0>>\n\nViele Grüße\n",
-    "mail_en": "Hi team,\n\nhere is the private key for the server:\n\n<<secret:0>>\n\nBest regards\n",
-}
-_T14_POSITIVES = [
-    ("de", "yaml", "pem_pkcs1_rsa_private_key", 14101),
-    ("de", "json", "pem_sec1_ec_private_key", 14102),
-    ("de", "toml", "pem_dsa_private_key", 14103),
-    ("de", "hcl", "pem_openssh_ed25519_private_key", 14104),
-    ("de", "mail_de", "pem_pkcs8_ed25519_private_key", 14105),
-    ("en", "yaml", "pem_openssh_ed25519_private_key", 14106),
-    ("en", "json", "pem_pkcs8_encrypted_private_key", 14107),
-    ("en", "toml", "pem_pkcs8_ed25519_private_key", 14108),
-    ("en", "code", "pem_pkcs1_rsa_private_key", 14109),
-    ("en", "mail_en", "pem_sec1_ec_private_key", 14110),
-]
-_T14_NEGATIVES = [
-    ("de", "yaml", "pem_pkcs8_ed25519_private_key", "EXAMPLEKEY"),
-    ("de", "json", "pem_dsa_private_key", "TESTKEY"),
-    ("de", "toml", "pem_pkcs1_rsa_private_key", "deadbeef"),
-    ("de", "hcl", "pem_sec1_ec_private_key", "1234567890"),
-    ("de", "code", "pem_openssh_ed25519_private_key", "EXAMPLEKEY"),
-    ("de", "mail_de", "pem_pkcs8_encrypted_private_key", "TESTKEY"),
-    ("de", "json", "pem_openssh_ed25519_encrypted", "0123456789"),
-    ("en", "yaml", "pem_sec1_ec_private_key", "TESTKEY"),
-    ("en", "json", "pem_pkcs1_rsa_private_key", "EXAMPLEKEY"),
-    ("en", "toml", "pem_openssh_ed25519_private_key", "deadbeef"),
-    ("en", "hcl", "pem_dsa_private_key", "EXAMPLEKEY"),
-    ("en", "code", "pem_pkcs8_ed25519_private_key", "1234567890"),
-    ("en", "mail_en", "pem_pkcs8_encrypted_private_key", "EXAMPLEKEY"),
-    ("en", "yaml", "pem_openssh_ed25519_encrypted", "TESTKEY"),
-]
-_T14_CARRIER_KIND = {"mail_de": "prose", "mail_en": "prose"}
-DLP_CASES["PRIVATE_KEY"] += [
-    ds(
-        "PRIVATE_KEY", language, "dlp_private_key_block", _T14_CARRIERS[carrier], generator, seed,
-        carrier=_T14_CARRIER_KIND.get(carrier, carrier),
-    )
-    for language, carrier, generator, seed in _T14_POSITIVES
-] + [
-    dx(
-        "PRIVATE_KEY", language, "dlp_private_key_block", _T14_CARRIERS[carrier], generator, fill,
-        f"test key (DER key octets of a {fill} fill)", carrier=_T14_CARRIER_KIND.get(carrier, carrier),
-    )
-    for language, carrier, generator, fill in _T14_NEGATIVES
-]
-
 # P03: hyperscaler credentials. Azure Storage account keys (base64 of 64 bytes after AccountKey=,
 # detect-secrets AzureStorageKeyDetector), Entra ID client secrets (3 characters, a digit, Q~ and 31 to
 # 34 characters, gitleaks azure-ad-client-secret), Alibaba AccessKey ID (LTAI + 20) and secret (30
@@ -17847,7 +17791,6 @@ DLP_D01_CASES = {
 for _label, _rows in DLP_D01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
-
 # H01: documentation examples of OpenSSH keys. The generator's EXAMPLEKEY/TESTKEY fill sits in
 # the key octets, so only the decoded body shows it; generated keys stay positives.
 _H01_PEM = "pem_openssh_ed25519_private_key"
@@ -17996,6 +17939,62 @@ def h01_negative(snippet: dict) -> dict:
 for _snippet in technical_negatives.snippets():
     _row = h01_negative(_snippet)
     DLP_CASES[_row["target_label"]].append(_row)
+
+# T14: PEM private key blocks whose decoded key octets hold the example/test fill (EXAMPLEKEY,
+# TESTKEY, deadbeef, 1234567890 bytes inside the DER or openssh-key-v1 structure). The base64 text
+# shows no marker, so dlp_private_key_block checks the decoded body (H01 repeated fill); random
+# key octets stay findings.
+_T14_CARRIERS = {
+    "yaml": "server:\n  tls:\n    private_key: \"<<secret:0|json>>\"\n",
+    "json": "{\n  \"credentials\": {\n    \"tls_private_key\": \"<<secret:0|json>>\"\n  }\n}\n",
+    "toml": "[tls]\nprivate_key = \"\"\"\n<<secret:0>>\n\"\"\"\n",
+    "hcl": "resource \"tls_cert\" \"app\" {\n  private_key_pem = <<EOT\n<<secret:0>>\nEOT\n}\n",
+    "code": "SIGNING_KEY = \"\"\"<<secret:0>>\"\"\"\n",
+    "mail_de": "Hallo Team,\n\nanbei der private Schlüssel für den Server:\n\n<<secret:0>>\n\nViele Grüße\n",
+    "mail_en": "Hi team,\n\nhere is the private key for the server:\n\n<<secret:0>>\n\nBest regards\n",
+}
+_T14_POSITIVES = [
+    ("de", "yaml", "pem_pkcs1_rsa_private_key", 14101),
+    ("de", "json", "pem_sec1_ec_private_key", 14102),
+    ("de", "toml", "pem_dsa_private_key", 14103),
+    ("de", "hcl", "pem_openssh_ed25519_private_key", 14104),
+    ("de", "mail_de", "pem_pkcs8_ed25519_private_key", 14105),
+    ("en", "yaml", "pem_openssh_ed25519_private_key", 14106),
+    ("en", "json", "pem_pkcs8_encrypted_private_key", 14107),
+    ("en", "toml", "pem_pkcs8_ed25519_private_key", 14108),
+    ("en", "code", "pem_pkcs1_rsa_private_key", 14109),
+    ("en", "mail_en", "pem_sec1_ec_private_key", 14110),
+]
+_T14_NEGATIVES = [
+    ("de", "yaml", "pem_pkcs8_ed25519_private_key", "EXAMPLEKEY"),
+    ("de", "json", "pem_dsa_private_key", "TESTKEY"),
+    ("de", "toml", "pem_pkcs1_rsa_private_key", "deadbeef"),
+    ("de", "hcl", "pem_sec1_ec_private_key", "1234567890"),
+    ("de", "code", "pem_openssh_ed25519_private_key", "EXAMPLEKEY"),
+    ("de", "mail_de", "pem_pkcs8_encrypted_private_key", "TESTKEY"),
+    ("de", "json", "pem_openssh_ed25519_encrypted", "0123456789"),
+    ("en", "yaml", "pem_sec1_ec_private_key", "TESTKEY"),
+    ("en", "json", "pem_pkcs1_rsa_private_key", "EXAMPLEKEY"),
+    ("en", "toml", "pem_openssh_ed25519_private_key", "deadbeef"),
+    ("en", "hcl", "pem_dsa_private_key", "EXAMPLEKEY"),
+    ("en", "code", "pem_pkcs8_ed25519_private_key", "1234567890"),
+    ("en", "mail_en", "pem_pkcs8_encrypted_private_key", "EXAMPLEKEY"),
+    ("en", "yaml", "pem_openssh_ed25519_encrypted", "TESTKEY"),
+]
+_T14_CARRIER_KIND = {"mail_de": "prose", "mail_en": "prose"}
+DLP_CASES["PRIVATE_KEY"] += [
+    ds(
+        "PRIVATE_KEY", language, "dlp_private_key_block", _T14_CARRIERS[carrier], generator, seed,
+        carrier=_T14_CARRIER_KIND.get(carrier, carrier),
+    )
+    for language, carrier, generator, seed in _T14_POSITIVES
+] + [
+    dx(
+        "PRIVATE_KEY", language, "dlp_private_key_block", _T14_CARRIERS[carrier], generator, fill,
+        f"test key (DER key octets of a {fill} fill)", carrier=_T14_CARRIER_KIND.get(carrier, carrier),
+    )
+    for language, carrier, generator, fill in _T14_NEGATIVES
+]
 
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
