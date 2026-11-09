@@ -206,6 +206,9 @@ in every mode until the `rules` gate enables it:
 | `pii_driver_license_number_de_bare` | German card licence, 11 letters and digits | format, no BIC shape |
 | `pii_ssn_us_bare` | US SSN, 9 digits or grouped | SSA ranges, no placeholder |
 | `pii_aba_routing_number_us_bare` | US ABA routing number, 9 digits or 4-4-1 | routing symbol, 3-7-1 check digit |
+| `pii_passport_number_us_bare` | US passport, letter form `A12803456` | format, no placeholder, no German document form |
+| `pii_passport_number_two_letters_bare` | passport, two letters and seven digits, `XY9876543` | format, no placeholder |
+| `pii_passport_number_in_bare` | Indian passport, `B3097651` | format, no `0` after the letter or at the end, no placeholder |
 | `pii_sin_ca_bare` | Canadian SIN | Luhn |
 | `pii_aadhaar_in_bare` | Aadhaar number, plain or grouped | Verhoeff |
 | `pii_npi_us_bare` | US NPI | Luhn |
@@ -231,8 +234,10 @@ text; for the bare routing number such a term is its own support, and the defaul
 value). A bare finding yields to a finding of another label that a default rule reports on the
 same characters; bare findings of different labels on the same digits (nine digits that are a
 routing number, a BSNR and an SSN) stay side by side. Placeholders (a counting sequence such as `234567890`, two alternating digits
-such as `878787878`, one repeated digit) are no bare SSN or BSNR, and an 11-character value in
-BIC shape (`CLABUS33NYC`) is no bare German licence. Its base
+such as `878787878`, one repeated digit) are no bare SSN or BSNR, one repeated digit or seven
+ascending digits (`AB1234567`) no bare passport number, and an 11-character value in
+BIC shape (`CLABUS33NYC`) is no bare German licence. Nine bare digits get no bare passport rule:
+they are the bare SSN, SIN, ACN, ABA and BSNR forms (decision T37, `known_gaps`). Its base
 score is the `balanced` threshold `0.50` (base `15` with a checksum, `35` with a format-only
 validator), so it reports in `balanced` and `recall` as in `strict`; a labelled hit of the same
 value scores at least as high and wins the overlap. The example profile

@@ -82,6 +82,16 @@ known_gaps:
     span: '\d{9}'
     bare: true
     rows: 'test_aba_routing_recognizer:'
+  - id: entity.passport_number
+    decision: T37
+    reason: >-
+      blanke neun Ziffern (US- und UK-Passform ohne Buchstaben, keine Prüfziffer) bleiben ohne Passbegriff
+      negativ, auch im Bare-Profil: sie kollidieren mit den blanken SSN-, SIN-, ACN-, ABA- und BSNR-Regeln;
+      die Formen mit Buchstabenpräfix sind opt-in seit T37 (pii_passport_number_us_bare,
+      pii_passport_number_two_letters_bare, pii_passport_number_in_bare)
+    span: '\d{9}'
+    bare: true
+    rows: 'test_u[sk]_passport_recognizer:'
   - id: pii.us.social_security_number
     decision: T27
     reason: Gretels ssn-Gold enthält nationale Kennungen anderer Länder (SE, IT, UK, NL), keine US-SSN

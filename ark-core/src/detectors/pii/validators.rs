@@ -832,6 +832,12 @@ pub fn passport_number_two_letters(s: &str) -> bool {
         && bytes[2..].iter().all(u8::is_ascii_digit)
 }
 
+/// Bare passport number of two letters and seven digits (T37): the form of
+/// [`passport_number_two_letters`] whose digits are no placeholder ([`issued_digits`]).
+pub fn passport_number_two_letters_bare(s: &str) -> bool {
+    passport_number_two_letters(s) && issued_digits(s)
+}
+
 /// Whether `s` is left to the German document rules (B-PASS): a value in the
 /// form of a German passport number, a passport series letter and characters of
 /// the ICAO alphabet ending in a digit (`C01X00T41`, `C01X00T42`, valid or not),
@@ -912,6 +918,12 @@ pub fn letter_seven_digits(s: &str) -> bool {
         && bytes[0].is_ascii_uppercase()
         && bytes[1..].iter().all(u8::is_ascii_digit)
         && issued_digits(s)
+}
+
+/// Indian passport number (T37): one letter and seven digits, neither the first
+/// nor the last digit `0` (`B3097651`). Format only.
+pub fn in_passport_number(s: &str) -> bool {
+    letter_seven_digits(s) && s.as_bytes()[1] != b'0' && s.as_bytes()[7] != b'0'
 }
 
 /// Italian carta d'identità (T10, B-PASS): the electronic CIE, two letters, five
