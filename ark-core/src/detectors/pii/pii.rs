@@ -426,6 +426,7 @@ impl PiiPipeline {
         } else {
             overlap::resolve(prepared.text(), &mut detection);
         }
+        overlap::drop_overlapped_bare(&mut detection);
         detection
     }
 
@@ -780,18 +781,25 @@ impl NativeRegexDetector for PiiPipeline {
     ) -> bool {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
-        // An opt-in bare form (D-BARE) stands alone, outside a field that names
-        // another value and without a nearer counter-context term.
+        // An opt-in bare form (D-BARE) stands alone as a word of prose, outside a
+        // field that names another value and without a nearer counter-context or
+        // foreign number term (T34).
         if is_bare_rule(self.rule_ids[index]) {
             let value = captures.get(0).unwrap().range();
-            return context::stands_alone(text, value.clone())
-                && !context::foreign_field(
+            if !context::stands_alone(text, value.clone())
+                || !context::delimited_as_prose(text, value.clone())
+                || context::foreign_field(
                     prepared.structure(),
                     text,
-                    value,
+                    value.clone(),
                     pattern.entity_group,
                 )
-                && self.context(index, prepared, captures).context != score::Context::Counter;
+            {
+                return false;
+            }
+            let own = self.context(index, prepared, captures);
+            return own.context != score::Context::Counter
+                && !context::foreign_number_term(text, value, &own);
         }
         // The bare NIP checks this after its structural key (below).
         if pattern.scored_only

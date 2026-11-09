@@ -184,6 +184,17 @@ pub static COUNTER_LEXICON: &[&str] = &[
     "pii.product_number",
 ];
 
+/// Lexicon IDs of the numbers a bare value (D-BARE) next to them is not besides
+/// [`COUNTER_LEXICON`]: account, routing, customer and contract numbers (T34).
+const BARE_FOREIGN_LEXICON: &[&str] = &[
+    "pii.bank_identifier",
+    "pii.bank_routing_number",
+    "pii.bank_account",
+    "pii.brokerage_account",
+    "pii.customer_identifier",
+    "dlp.contract_identifier",
+];
+
 /// Characters between a term and the value: before it (field names, "erreichbar
 /// unter") and after it ("(Handy)", "erreichbar").
 pub const BEFORE_WINDOW: usize = 48;
@@ -728,6 +739,41 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next.is_some_and(joins) && digit(next2))
         || (numeric && prev == Some(' ') && digit(prev2))
         || (next == Some(' ') && digit(next2)))
+}
+
+/// Whether a term of [`BARE_FOREIGN_LEXICON`] stands nearer the bare value at
+/// `value` (byte range) than the support term of `own`, its own context (T34):
+/// `bank routing number of 531858435`, `policy number is 153225324`.
+pub(super) fn foreign_number_term(text: &str, value: Range<usize>, own: &Evidence) -> bool {
+    static FOREIGN: LazyLock<(Regex, usize)> = LazyLock::new(|| {
+        let longest = lexicon_words(BARE_FOREIGN_LEXICON)
+            .into_iter()
+            .map(|word| word.chars().count())
+            .max()
+            .unwrap_or(0);
+        (lexicon_regex(BARE_FOREIGN_LEXICON), longest)
+    });
+    let (regex, longest) = &*FOREIGN;
+    let value = (value.start, value.end);
+    nearest(text, regex, region(text, value, *longest), value).is_some_and(|term| {
+        !(own.context.supports() && own.distance.is_some_and(|gap| gap <= term.gap))
+    })
+}
+
+/// Whether the bare value at `value` (byte range) stands as a word of prose
+/// (T34): after a space, a bracket or a quote, not after a code prefix
+/// (`BOL-`, `NL.`), a CSV key (`ACCTID,`) or a field separator of a SWIFT, X12
+/// or EDIFACT message (`:61:`, `/USD/`, `*`, `+`, `·`), and with no such
+/// separator right after it.
+pub(super) fn delimited_as_prose(text: &str, value: Range<usize>) -> bool {
+    let opens = text[..value.start].chars().next_back().is_none_or(|ch| {
+        ch.is_whitespace() || matches!(ch, '(' | '[' | '"' | '\'' | '‘' | '“' | '„' | '«')
+    });
+    let closes = text[value.end..]
+        .chars()
+        .next()
+        .is_none_or(|ch| !matches!(ch, ':' | '+' | '*' | '~' | '/' | '-' | '_' | '<' | '|'));
+    opens && closes
 }
 
 /// Start of the list of Nigerian plates that ends right before `start`

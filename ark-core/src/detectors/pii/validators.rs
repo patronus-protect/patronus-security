@@ -742,10 +742,12 @@ pub fn de_driver_license_number(s: &str) -> bool {
 
 /// A bare German card licence (D-BARE): the licence form with letters and digits,
 /// so that an upper-case word (`INFORMATION`) or eleven digits are none.
+/// A value in BIC shape (`CLABUS33NYC`) is a bank, not a licence (T34).
 pub fn de_driver_license_number_bare(s: &str) -> bool {
     de_driver_license_number(s)
         && s.bytes().any(|byte| byte.is_ascii_digit())
         && s.bytes().any(|byte| byte.is_ascii_uppercase())
+        && !bic(s)
 }
 
 /// The US state formats of a driver's licence number (F15), without the hyphens
@@ -1030,6 +1032,30 @@ pub fn us_ssn(s: &str) -> bool {
 pub fn us_ssn_context_free(s: &str) -> bool {
     let digits = s.bytes().filter(u8::is_ascii_digit).collect::<Vec<_>>();
     us_ssn(s) && digits.iter().any(|&digit| digit != digits[0]) && digits != b"123456789"
+}
+
+/// A bare SSN, grouped or not (D-BARE): [`us_ssn_context_free`] without a
+/// counting sequence from any digit (`234567890`) or two alternating digits
+/// (`878787878`), the placeholders of forms and test data (T34).
+pub fn us_ssn_bare(s: &str) -> bool {
+    let digits = s.bytes().filter(u8::is_ascii_digit).collect::<Vec<_>>();
+    us_ssn_context_free(s) && !placeholder_digits(&digits)
+}
+
+/// A bare BSNR (D-BARE): [`nine_digits`] without the placeholders of
+/// [`us_ssn_bare`] (T34), as it has no check digit.
+pub fn bsnr_bare(s: &str) -> bool {
+    nine_digits(s) && !placeholder_digits(s.as_bytes())
+}
+
+/// Whether the digits count up by one (`234567890`, wrapping after 9) or
+/// alternate between two digits (`878787878`).
+fn placeholder_digits(digits: &[u8]) -> bool {
+    let counting = digits
+        .windows(2)
+        .all(|pair| pair[1] == if pair[0] == b'9' { b'0' } else { pair[0] + 1 });
+    let alternating = digits.windows(3).all(|triple| triple[0] == triple[2]);
+    counting || alternating
 }
 
 /// ABA routing transit number (B-ACCT): nine digits, also printed 4-4-1 with

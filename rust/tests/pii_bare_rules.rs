@@ -621,7 +621,13 @@ fn an_enabled_bare_rule_drops_placeholders_and_structured_non_pii() {
 /// keep accepting them.
 #[test]
 fn the_bare_validators_drop_placeholders_and_bic_shapes() {
-    for placeholder in ["123456789", "234567890", "012345678", "878787878", "111111111"] {
+    for placeholder in [
+        "123456789",
+        "234567890",
+        "012345678",
+        "878787878",
+        "111111111",
+    ] {
         assert!(!validators::us_ssn_bare(placeholder), "{placeholder}");
         assert!(!validators::bsnr_bare(placeholder), "{placeholder}");
     }
@@ -636,4 +642,26 @@ fn the_bare_validators_drop_placeholders_and_bic_shapes() {
         assert!(!validators::de_driver_license_number_bare(bic), "{bic}");
     }
     assert!(validators::de_driver_license_number_bare("B072RRE2A57"));
+}
+
+/// T34: a bare value yields to the finding of another label that a default rule
+/// reports on it, in every mode: nine digits after `BSNR` are no bare SSN. A
+/// bare finding alone stays.
+#[test]
+fn an_enabled_bare_rule_yields_to_a_default_finding_of_another_label() {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let scanner = scanner(gates(Some("pii_ssn_us_bare"), mode));
+        let result = scan(&scanner, "BSNR 711234567 der Praxis.");
+        let labels: Vec<_> = result
+            .evidence_spans
+            .iter()
+            .map(|span| span.label.as_str())
+            .collect();
+        assert_eq!(labels, ["FACILITY_NUMBER_BSNR"], "{mode}");
+        let result = scan(&scanner, "Please put 711234567 there.");
+        assert!(
+            result.evidence_spans.iter().any(|span| span.label == "SSN"),
+            "{mode}"
+        );
+    }
 }
