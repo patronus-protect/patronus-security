@@ -104,10 +104,12 @@ pub(super) const NG: PiiPattern = PiiPattern {
 
 /// UK prefix form 1983–2001 (`A123 BCD`, `K1 ABC`) with a plate term near the
 /// value, in `balanced` and `recall` only (T36); the letter sets of
-/// `validators::uk_vehicle_registration_prefix` stand in for a check digit.
+/// `validators::uk_vehicle_registration_prefix` stand in for a check digit. Both
+/// older UK forms need the space as printed: unspaced they match hex and
+/// base64 runs (`C1DEA`, `GAC1D`).
 pub(super) const UK_PREFIX: PiiPattern = PiiPattern {
     name: "pii_vehicle_registration_uk_prefix",
-    pattern: r"(?-u:\b)[A-Z][1-9][0-9]{0,2} ?[A-Z]{3}(?-u:\b)",
+    pattern: r"(?-u:\b)[A-Z][1-9][0-9]{0,2} [A-Z]{3}(?-u:\b)",
     validator: Some(validators::uk_vehicle_registration_prefix),
     ..NG
 };
@@ -116,7 +118,7 @@ pub(super) const UK_PREFIX: PiiPattern = PiiPattern {
 /// `balanced` and `recall` only (T36, `validators::uk_vehicle_registration_suffix`).
 pub(super) const UK_SUFFIX: PiiPattern = PiiPattern {
     name: "pii_vehicle_registration_uk_suffix",
-    pattern: r"(?-u:\b)[A-Z]{3} ?[1-9][0-9]{0,2}[A-Z](?-u:\b)",
+    pattern: r"(?-u:\b)[A-Z]{3} [1-9][0-9]{0,2}[A-Z](?-u:\b)",
     validator: Some(validators::uk_vehicle_registration_suffix),
     ..NG
 };

@@ -481,7 +481,12 @@ fn the_bare_plate_rules_report_the_presidio_forms_and_skip_lookalikes() {
         "AB53ME3456",
         "KA00ME3456",
         "app-000cv",
-        // UK postcodes, a paper size, version and product codes, ordinals
+        // unspaced UK forms: hex and base64 runs of benign code
+        "GAC1D",
+        "C1DEA",
+        "B48EAD",
+        "A123BCD",
+        // UK postcodes, version and product codes, ordinals
         "SW1A 1AA",
         "M1 1AE",
         "CR2 6XH",

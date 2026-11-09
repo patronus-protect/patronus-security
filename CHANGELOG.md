@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: licence plates in the older UK forms, the Indian form and lower-case Nigerian
+  plates (T36). `pii_vehicle_registration_uk_prefix` (prefix form 1983–2001, `A123 BCD`, `K1 ABC`:
+  age letter without I, O, Q, U, Z, serial 1–999, three letters without I, Q, Z),
+  `pii_vehicle_registration_uk_suffix` (suffix form 1963–1983, `ABC 1D`, same letter sets, year
+  letter last) and `pii_vehicle_registration_in` (Indian plate without separators, `KA53ME3456`:
+  state or union-territory code, district 1–99, one to three series letters without I and O, number
+  other than 0000) report with a plate term near the value in `balanced` and `recall`, as the
+  Nigerian plate does; `strict` output is unchanged. Their bare forms and the lower-case Nigerian
+  plate (`app-456cv`, hyphen only) are opt-in rules `pii_vehicle_registration_uk_prefix_bare`,
+  `pii_vehicle_registration_uk_suffix_bare`, `pii_vehicle_registration_in_bare` and
+  `pii_vehicle_registration_ng_lowercase_bare` (off in every mode, base `35`, in the bare profile
+  `docs/how-to/pii-bare-formats.gates.json`). The dateless UK form gets no rule (it matches product
+  and version codes); `known_gaps` records it. MEASUREMENTS
 - Detection change: HR, security, export-control and R&D document classes on the M01 content class
   engine (M-HRSEC), all opt-in (off by default; the default profile is unchanged). New
   `dlp_document_hr` (`dlp.document.hr`, M06): employment references (Arbeitszeugnis), warning

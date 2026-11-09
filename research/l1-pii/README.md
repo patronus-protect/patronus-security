@@ -127,6 +127,23 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
   `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
   (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
 
+## Kennzeichen: UK-Präfix/Suffix, IN, NG in Kleinschrift (T36)
+
+Rohe M1-Lücke gegen tuned auf `presidio_favored` (EN): Kennzeichen `balanced-bare` 72,0 gegen 81,5
+(`balanced` 47,6). Ohne Kennzeichen-Begriff fehlten `A123 BCD`, `K1 ABC` (UK-Präfixform 1983–2001),
+`ABC 1D` (Suffixform 1963–1983), `KA53ME3456` (IN ohne Trenner) und `app-456cv` (NG in Kleinschrift).
+
+- **Regeln:** `pii_vehicle_registration_uk_prefix`, `_uk_suffix` und `_in` melden mit
+  Kennzeichen-Begriff in der Nähe in `balanced`/`recall` (wie die NG-Regel), `strict` bleibt gleich.
+  Statt einer Prüfziffer prüfen die Validatoren Buchstabenmengen (Alters-/Jahresbuchstabe ohne I, O,
+  Q, U, Z; übrige ohne I, Q, Z; Seriennummer 1–999) bzw. den Staatscode (40 Codes, Bezirk 1–99,
+  Serie ohne I/O, Nummer ≠ 0000). Die blanken Formen und NG in Kleinschrift (nur mit Bindestrich)
+  sind Opt-in-Regeln (`*_bare`, Basis 35) im Bare-Profil.
+- **Ohne Regel:** die datumslose UK-Form (1–3 Buchstaben und 1–4 Ziffern) gleicht Produkt- und
+  Versionscodes (`ISO 9001`); TR-Kennzeichen (B-LUHN) und die kurzen IN-Formen (`MN2412`, `I15432`).
+  `known_gaps`: Eintrag T30 (TR/IN/NG) nennt die Opt-in-Regeln, neuer Eintrag T36 die blanken UK-Formen.
+- **Messung (Dev):** MEASUREMENTS
+
 ## Untergrenze `presidio_favored` für die Länder-IDs seit W44 (T33)
 
 TRIAGE 2026-W45, Bucket 3. Unter `tuned` (T32) lagen zehn Länder-IDs auf `presidio_favored` unter
