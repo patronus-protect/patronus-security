@@ -1042,8 +1042,10 @@ pub fn is_example_payload(decoded: &[u8]) -> bool {
 
 /// H01: whether decoded key octets carry a fill of repeated chunks
 /// (`EXAMPLEKEYEXAMPLEKEY…`, `TESTKEYTESTKEY…`) instead of key material.
-/// Marker words alone do not count here: the comment of a real OpenSSH or
-/// PGP key (`ci@test-runner`, `<dev@example.com>`) may hold one.
+/// Marker words alone do not count here: a real key's free text
+/// (`ci@test-runner`, `<dev@example.com>`) may hold one, and the caller drops
+/// only the OpenSSH comment and PGP User IDs
+/// (`structure::private_key_material`), not every text field.
 pub fn has_repeated_fill(decoded: &[u8]) -> bool {
     printable_runs(decoded).any(is_repeated_fill)
 }

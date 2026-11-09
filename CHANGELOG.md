@@ -20,6 +20,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   check runs only on a matched key block. `dlp_l1.jsonl` gains 1,000 technical hard negatives
   (hashes, UUIDs, digests, lockfile integrity, commit SHAs, test vectors, docs example keys;
   `patronus_ark.dlp_synth.technical_negatives`) and 20 OpenSSH goldens.
+- Detection change: the H01 fill check reads key octets only (all modes). The comment of an
+  unencrypted OpenSSH key and the User ID and User Attribute packets of a PGP key are dropped
+  before the check, so a real key with a repetitive comment (`abcabcabcabcabcabc`) stays a
+  finding.
 - Detection change: opt-in rule `pii_aba_routing_number_us_bare` for the bare ABA routing number
   (T35). Nine digits (or the printed 4-4-1 form) with a Federal Reserve routing symbol and a valid
   3-7-1 check digit (`validators::aba_routing_number`, unchanged) are reported without a routing or

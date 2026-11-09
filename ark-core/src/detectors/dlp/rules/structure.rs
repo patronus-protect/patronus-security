@@ -107,14 +107,29 @@ pub(super) fn private_key(block: &str) -> Option<KeyFacts> {
     }
 }
 
-/// H01: the decoded body of a PEM private key block (DER, OpenSSH or PGP
-/// packets) given without its armor lines, for the example check on the key
-/// octets.
-pub(super) fn private_key_payload(body: &str) -> Option<Vec<u8>> {
+/// H01: the key octets of a PEM private key block (DER, OpenSSH or PGP
+/// packets) given without its armor lines, for the example check: the
+/// decoded body without the free text a real key carries, the comment of an
+/// unencrypted OpenSSH key ([`openssh_free_text`]) and the User ID and User
+/// Attribute packets of a PGP key ([`pgp_free_text`]). A zero byte stands
+/// in for each dropped field.
+pub(super) fn private_key_material(body: &str) -> Option<Vec<u8>> {
     if body.len() > MAX_BLOCK {
         return None;
     }
-    base64_decode(&body_data(body, true).0, Base64Kind::Standard)
+    let raw = base64_decode(&body_data(body, true).0, Base64Kind::Standard)?;
+    let free_text = openssh_free_text(&raw)
+        .or_else(|| pgp_free_text(&raw))
+        .unwrap_or_default();
+    let mut material = Vec::with_capacity(raw.len());
+    let mut start = 0;
+    for range in free_text {
+        material.extend_from_slice(&raw[start..range.start]);
+        material.push(0);
+        start = range.end;
+    }
+    material.extend_from_slice(&raw[start..]);
+    Some(material)
 }
 
 /// The base64 data of a PEM body with real or escaped line breaks and
@@ -245,6 +260,65 @@ fn openssh_key(raw: &[u8]) -> Option<KeyFacts> {
     }
 }
 
+/// Byte ranges of the comments in an unencrypted `openssh-key-v1` blob
+/// (OpenSSH PROTOCOL.key): each private key is its type, the fields of that
+/// type ([`openssh_private_fields`]) and a comment. The rest of the private
+/// section from a key type without known fields on counts as free text too;
+/// an encrypted section has no readable comment.
+fn openssh_free_text(raw: &[u8]) -> Option<Vec<Range<usize>>> {
+    let offset = |field: &[u8]| field.as_ptr() as usize - raw.as_ptr() as usize;
+    let mut rest = raw.strip_prefix(b"openssh-key-v1\0")?;
+    let cipher = ssh_string(&mut rest)?;
+    ssh_string(&mut rest)?;
+    ssh_string(&mut rest)?;
+    let keys = u32::from_be_bytes(rest.get(..4)?.try_into().ok()?);
+    rest = &rest[4..];
+    let mut free_text = Vec::new();
+    if cipher != b"none" {
+        return Some(free_text);
+    }
+    // The public keys, then the private section after its two check ints.
+    for _ in 0..keys {
+        ssh_string(&mut rest)?;
+    }
+    let mut private = ssh_string(&mut rest)?.get(8..)?;
+    for _ in 0..keys {
+        let fields = ssh_string(&mut private).and_then(openssh_private_fields);
+        let comment = fields.and_then(|fields| {
+            for field in fields.bytes() {
+                if field == b'b' {
+                    private = private.get(1..)?;
+                } else {
+                    ssh_string(&mut private)?;
+                }
+            }
+            ssh_string(&mut private)
+        });
+        let Some(comment) = comment else {
+            let start = offset(private);
+            free_text.push(start..start + private.len());
+            break;
+        };
+        let start = offset(comment);
+        free_text.push(start..start + comment.len());
+    }
+    Some(free_text)
+}
+
+/// The private fields after the key type of an OpenSSH private key
+/// (OpenSSH PROTOCOL.key, PROTOCOL.u2f): `s` a string or mpint, `b` a byte.
+fn openssh_private_fields(key_type: &[u8]) -> Option<&'static str> {
+    match key_type {
+        b"ssh-ed25519" => Some("ss"),
+        b"ssh-rsa" => Some("ssssss"),
+        b"ssh-dss" => Some("sssss"),
+        b"ecdsa-sha2-nistp256" | b"ecdsa-sha2-nistp384" | b"ecdsa-sha2-nistp521" => Some("sss"),
+        b"sk-ssh-ed25519@openssh.com" => Some("ssbss"),
+        b"sk-ecdsa-sha2-nistp256@openssh.com" => Some("sssbss"),
+        _ => None,
+    }
+}
+
 /// An SSH `string`: a big-endian u32 length and that many bytes.
 fn ssh_string<'a>(rest: &mut &'a [u8]) -> Option<&'a [u8]> {
     let length = u32::from_be_bytes(rest.get(..4)?.try_into().ok()?) as usize;
@@ -256,18 +330,51 @@ fn ssh_string<'a>(rest: &mut &'a [u8]) -> Option<&'a [u8]> {
 /// RFC 4880 section 4.2: the first packet is a secret-key packet (tag 5)
 /// whose length fits the data.
 fn pgp_secret_key(raw: &[u8]) -> Option<KeyFacts> {
+    let (tag, _, length) = pgp_packet(raw)?;
+    (tag == 5 && length <= raw.len()).then_some(KeyFacts { encrypted: None })
+}
+
+/// Byte ranges of the User ID (tag 13) and User Attribute (tag 17) packet
+/// bodies of a PGP key that starts with a secret-key packet; a tail that
+/// is no packet counts as free text too.
+fn pgp_free_text(raw: &[u8]) -> Option<Vec<Range<usize>>> {
+    pgp_secret_key(raw)?;
+    let mut free_text = Vec::new();
+    let mut start = 0;
+    while start < raw.len() {
+        let packet =
+            pgp_packet(&raw[start..]).filter(|&(_, _, length)| length <= raw.len() - start);
+        let Some((tag, header, length)) = packet else {
+            free_text.push(start..raw.len());
+            break;
+        };
+        if matches!(tag, 13 | 17) {
+            free_text.push(start + header..start + length);
+        }
+        start += length;
+    }
+    Some(free_text)
+}
+
+/// RFC 4880 section 4.2: tag, header length and total length of the packet
+/// at the start of `raw`.
+fn pgp_packet(raw: &[u8]) -> Option<(u8, usize, usize)> {
     let (&first, rest) = raw.split_first()?;
-    let (tag, length) = if first & 0xc0 == 0xc0 {
+    if first & 0xc0 == 0xc0 {
         // New format: one-, two- or five-octet length.
-        let length = match *rest.first()? {
-            octet @ 0..=191 => usize::from(octet) + 2,
-            octet @ 192..=223 => {
-                ((usize::from(octet) - 192) << 8) + usize::from(*rest.get(1)?) + 192 + 3
-            }
-            255 => u32::from_be_bytes(rest.get(1..5)?.try_into().ok()?) as usize + 6,
+        let (header, body) = match *rest.first()? {
+            octet @ 0..=191 => (2, usize::from(octet)),
+            octet @ 192..=223 => (
+                3,
+                ((usize::from(octet) - 192) << 8) + usize::from(*rest.get(1)?) + 192,
+            ),
+            255 => (
+                6,
+                u32::from_be_bytes(rest.get(1..5)?.try_into().ok()?) as usize,
+            ),
             _ => return None,
         };
-        (first & 0x3f, length)
+        Some((first & 0x3f, header, header + body))
     } else if first & 0x80 != 0 {
         // Old format: the length type in the low two bits.
         let octets = match first & 0x03 {
@@ -276,15 +383,14 @@ fn pgp_secret_key(raw: &[u8]) -> Option<KeyFacts> {
             2 => 4,
             _ => return None,
         };
-        let length = rest
+        let body = rest
             .get(..octets)?
             .iter()
             .fold(0usize, |length, octet| (length << 8) | usize::from(*octet));
-        ((first >> 2) & 0x0f, length + 1 + octets)
+        Some(((first >> 2) & 0x0f, 1 + octets, 1 + octets + body))
     } else {
-        return None;
-    };
-    (tag == 5 && length <= raw.len()).then_some(KeyFacts { encrypted: None })
+        None
+    }
 }
 
 /// PuTTY PPK v2/v3: `Public-Lines` and `Private-Lines` counts of base64
@@ -432,8 +538,92 @@ mod tests {
         assert_eq!(collected, ["AAAA", "BBBB", "CCCC==", "DDDD"]);
     }
 
+    /// `openssh` with one key: the public blob and the private section of
+    /// check ints, `fields` (strings, `[flags]` alone as a byte) and padding.
+    fn openssh_with_key(cipher: &[u8], fields: &[&[u8]]) -> Vec<u8> {
+        let kdf: &[u8] = if cipher == b"none" {
+            b"none"
+        } else {
+            b"bcrypt"
+        };
+        let mut raw = openssh(cipher, kdf, 1);
+        raw.extend(ssh_string(b"public blob"));
+        let mut private = vec![9; 8];
+        for field in fields {
+            match field {
+                [flags] => private.push(*flags),
+                _ => private.extend(ssh_string(field)),
+            }
+        }
+        private.extend([1, 2, 3]);
+        raw.extend(ssh_string(&private));
+        raw
+    }
+
     #[test]
-    fn private_key_payload_decodes_wrapped_and_escaped_bodies() {
+    fn openssh_comments_and_pgp_user_ids_are_free_text() {
+        let at = |raw: &[u8], text: &[u8]| {
+            let start = raw.windows(text.len()).position(|w| w == text).unwrap();
+            start..start + text.len()
+        };
+        let ed25519 = openssh_with_key(b"none", &[b"ssh-ed25519", b"pk", b"sk", b"my comment"]);
+        assert_eq!(
+            openssh_free_text(&ed25519),
+            Some(vec![at(&ed25519, b"my comment")])
+        );
+        // Security keys carry a flags byte before the key handle.
+        let sk = openssh_with_key(
+            b"none",
+            &[
+                b"sk-ssh-ed25519@openssh.com",
+                b"pk",
+                b"ssh:",
+                &[1],
+                b"handle",
+                b"",
+                b"sk comment",
+            ],
+        );
+        assert_eq!(openssh_free_text(&sk), Some(vec![at(&sk, b"sk comment")]));
+        // A key type without known fields leaves the rest of the section out.
+        let unknown = openssh_with_key(b"none", &[b"ssh-new", b"field", b"note"]);
+        let rest = at(&unknown, b"\0\0\0\x05field").start;
+        assert_eq!(openssh_free_text(&unknown), Some(vec![rest..unknown.len()]));
+        // An encrypted section has no readable comment.
+        let encrypted = openssh_with_key(b"aes256-ctr", &[b"ciphertext"]);
+        assert_eq!(openssh_free_text(&encrypted), Some(vec![]));
+        // PGP: secret key, User ID, then a tail that is no packet.
+        let pgp = [&[0xc5, 2, 4, 0][..], &[0xcd, 3], b"uid", &[0x01, 0x02]].concat();
+        assert_eq!(pgp_free_text(&pgp), Some(vec![6..9, 9..11]));
+        assert_eq!(pgp_free_text(&[0xcd, 3, b'u', b'i', b'd']), None);
+        // The material keeps the key octets and marks each dropped field.
+        let pem_body = |raw: &[u8]| {
+            const ALPHABET: &[u8] =
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            let mut out = String::new();
+            for chunk in raw.chunks(3) {
+                let n = chunk
+                    .iter()
+                    .enumerate()
+                    .fold(0u32, |n, (i, &b)| n | u32::from(b) << (16 - 8 * i));
+                for i in 0..4 {
+                    out.push(if i <= chunk.len() {
+                        ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char
+                    } else {
+                        '='
+                    });
+                }
+            }
+            format!("\n{out}\n")
+        };
+        assert_eq!(
+            private_key_material(&pem_body(&pgp)),
+            Some([&[0xc5, 2, 4, 0][..], &[0xcd, 3, 0, 0]].concat())
+        );
+    }
+
+    #[test]
+    fn private_key_material_decodes_wrapped_and_escaped_bodies() {
         let raw = openssh(b"none", b"none", 1);
         // Base64 of `raw`, wrapped after 20 characters below.
         let (head, tail) = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB".split_at(20);
@@ -441,8 +631,8 @@ mod tests {
             format!("\n{head}\n{tail}\n"),
             format!("\\n{head}\\n{tail}\\n"),
         ] {
-            assert_eq!(private_key_payload(&body), Some(raw.clone()), "{body}");
+            assert_eq!(private_key_material(&body), Some(raw.clone()), "{body}");
         }
-        assert_eq!(private_key_payload("\n...\n"), None);
+        assert_eq!(private_key_material("\n...\n"), None);
     }
 }

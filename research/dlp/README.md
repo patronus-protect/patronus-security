@@ -146,10 +146,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Prüfungen der Regel bestanden hat.
   Seit H01 dekodieren `dlp_private_key_block` und `dlp_private_key_header` den PEM-Körper
   (echte oder escapte Zeilenumbrüche, Armor-Header, PGP-CRC-Zeile; derselbe Parser wie F-STRUCT,
-  `structure::private_key_payload`). Ein druckbarer Lauf der Schlüssel-Bytes aus wiederholten
+  `structure::private_key_material`). Ein druckbarer Lauf der Schlüssel-Bytes aus wiederholten
   Blöcken (`EXAMPLEKEY…`, `TESTKEY…`, `credentials::has_repeated_fill`) macht den Schlüssel zum
-  Beispiel; ein Markerwort allein zählt dort nicht, weil der Kommentar eines echten OpenSSH- oder
-  PGP-Schlüssels (`ci@test-runner`, `<dev@example.com>`) eines enthalten kann. Dazu kamen
+  Beispiel; ein Markerwort allein zählt dort nicht. Freitext eines echten Schlüssels zählt nie
+  als Schlüssel-Byte: der Kommentar eines unverschlüsselten OpenSSH-Schlüssels (Felder je
+  Schlüsseltyp nach PROTOCOL.key) und User-ID- und User-Attribute-Pakete eines PGP-Schlüssels
+  fallen vor der Prüfung weg, ein Kommentar `abcabcabcabcabcabc` macht keinen Schlüssel zum
+  Beispiel. Dazu kamen
   1.000 technische Hard Negatives (`dlp_synth.technical_negatives`: Commit-SHAs, Prüfsummen,
   Image-Digests, Lockfile-Integrity, UUIDs, Trace-IDs, SRI, Kubernetes-Metadaten, ETags,
   Terraform-State, Hash-Testvektoren, dokumentierte Beispielschlüssel, Content-IDs, öffentliche
