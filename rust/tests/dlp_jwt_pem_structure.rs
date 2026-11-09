@@ -218,7 +218,7 @@ fn base64(bytes: &[u8]) -> String {
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
         bytes,
     );
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push('=');
     }
     out
@@ -432,7 +432,7 @@ fn openssh_ed25519(public: &[u8], secret: &[u8], comment: &[u8]) -> Vec<u8> {
     private.extend(ssh_string(&[secret, public].concat()));
     private.extend(ssh_string(comment));
     let mut pad = 1;
-    while private.len() % 8 != 0 {
+    while !private.len().is_multiple_of(8) {
         private.push(pad);
         pad += 1;
     }

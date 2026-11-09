@@ -587,8 +587,8 @@ mod tests {
         assert_eq!(openssh_free_text(&sk), Some(vec![at(&sk, b"sk comment")]));
         // A key type without known fields leaves the rest of the section out.
         let unknown = openssh_with_key(b"none", &[b"ssh-new", b"field", b"note"]);
-        let rest = at(&unknown, b"\0\0\0\x05field").start;
-        assert_eq!(openssh_free_text(&unknown), Some(vec![rest..unknown.len()]));
+        let rest = at(&unknown, b"\0\0\0\x05field").start..unknown.len();
+        assert_eq!(openssh_free_text(&unknown), Some(vec![rest]));
         // An encrypted section has no readable comment.
         let encrypted = openssh_with_key(b"aes256-ctr", &[b"ciphertext"]);
         assert_eq!(openssh_free_text(&encrypted), Some(vec![]));
