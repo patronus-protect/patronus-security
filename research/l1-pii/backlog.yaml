@@ -1035,7 +1035,8 @@ tasks:
     title: "M4 headroom: native 100 KiB p95 9.9-10.7 ms over three runs; resume the performance loop (H06-7) or confirm \"M4 met\" on a median over runs?"
     type: perf
     deps: [H06-6]
-    needs_decision: true
+    decision: "2026-11-09: no change. 9.9-10.7 ms is within tolerance of the 10 ms budget; M4 stays met, the performance loop is not resumed."
+    status: done
     source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 4)"
     question: >-
       latency.py on the VPS (main 66fc95d0, release build, PII only): ark-native 100 KiB p95 10.657, 9.903
@@ -1154,7 +1155,7 @@ tasks:
     title: "Bare passport numbers (format only, no check digit): opt-in rule in the bare profile or a recorded gap?"
     type: recall-fix
     deps: [D-BARE]
-    needs_decision: true
+    decision: "2026-11-09: option (c). Opt-in rules in the bare profile only for letter-prefixed passport forms per country (e.g. A12803456, XY9876543); nine bare digits stay negative because they collide with the SSN, SIN, ACN, ABA and BSNR bare rules. Record that remaining gap in known_gaps."
     source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 2)"
     question: >-
       Raw M1 gap against Presidio default on presidio_favored: passport 40.0 vs 71.4 with balanced and
@@ -1173,7 +1174,7 @@ tasks:
     title: "Raw M1 gaps under recorded decisions (IP loopback/unspecified, SSA-invalid SSN, NINO span with whitespace, GSTIN and NRIC/FIN gold with invalid check digits): exception of the raw view, compatibility profile or M1 stays open?"
     type: eval-infra
     deps: [Q-RAW]
-    needs_decision: true
+    decision: "2026-11-09: option (b). An opt-in compatibility profile next to the bare profile reports loopback/unspecified IPs and SSA-unassigned but well-formed SSNs; validators of the default rules stay unchanged. Gold with invalid check digits (GSTIN, NRIC/FIN) and the whitespace span stay open, and public claims say so plainly: no \"raw, except ...\" framing (option (a) rejected)."
     source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 3)"
     question: >-
       After T34-T36 succeed, balanced-bare would hold M1 on neutral and reach presidio_favored 22/25
