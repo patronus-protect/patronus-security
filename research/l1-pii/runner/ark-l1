@@ -81,8 +81,9 @@ PROGRAMS = {
         "prompt": "AGENT_PROMPT.dlp.md", "golden": "dlp", "eval_dir": "scripts/l1_dlp",
         "eval_venv": "baselines-venv",
         # Task id patterns per lane besides "a"; lane "a" owns every other task, TRIAGE included.
-        # M01 goes with the M-* tasks that all depend on it.
-        "lanes": {"b": ("M*", "P*", "C*")},
+        # M01 goes with the M-* tasks that all depend on it. The final stretch (H01, H03, H-FINAL)
+        # runs on lane b since 2026-11-09: that host is idle and quiet, which the performance loop needs.
+        "lanes": {"b": ("M*", "P*", "C*", "H*")},
     },
 }
 
