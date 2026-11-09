@@ -833,9 +833,20 @@ pub fn passport_number_two_letters(s: &str) -> bool {
 }
 
 /// Bare passport number of two letters and seven digits (T37): the form of
-/// [`passport_number_two_letters`] whose digits are no placeholder ([`issued_digits`]).
+/// [`passport_number_two_letters`] whose digits are no placeholder ([`issued_digits`])
+/// and whose letters are no EU VAT country prefix (`CZ3270486`, `HU9088407`: a VAT
+/// ID short of a digit).
 pub fn passport_number_two_letters_bare(s: &str) -> bool {
-    passport_number_two_letters(s) && issued_digits(s)
+    const VAT_PREFIXES: [&[u8; 2]; 27] = [
+        b"AT", b"BE", b"BG", b"CY", b"CZ", b"DE", b"DK", b"EE", b"EL", b"ES", b"FI", b"FR", b"HR",
+        b"HU", b"IE", b"IT", b"LT", b"LU", b"LV", b"MT", b"NL", b"PL", b"PT", b"RO", b"SE", b"SI",
+        b"SK",
+    ];
+    passport_number_two_letters(s)
+        && issued_digits(s)
+        && !VAT_PREFIXES
+            .iter()
+            .any(|prefix| s.as_bytes().starts_with(*prefix))
 }
 
 /// Whether `s` is left to the German document rules (B-PASS): a value in the

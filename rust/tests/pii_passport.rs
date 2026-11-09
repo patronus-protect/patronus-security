@@ -216,6 +216,8 @@ fn document_validators_check_their_country_forms() {
         "ab9876543",
         "X19876543",
         "XY987654",
+        "CZ3270486",
+        "HU9088407",
     ] {
         assert!(
             !validators::passport_number_two_letters_bare(invalid),

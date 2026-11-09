@@ -185,9 +185,9 @@ pub static COUNTER_LEXICON: &[&str] = &[
 ];
 
 /// Lexicon IDs of the numbers a bare value (D-BARE) next to them is not besides
-/// [`COUNTER_LEXICON`]: account, routing, customer and contract numbers (T34)
-/// and VAT IDs, whose country prefix and digits fit a bare passport form
-/// (`USt-IdNr. CZ6383543`, T37).
+/// [`COUNTER_LEXICON`]: account, routing, customer and contract numbers (T34),
+/// VAT IDs, whose country prefix and digits fit a bare passport form
+/// (`USt-IdNr. CZ6383543`, T37), and identity cards (`ID card number JI0201311`).
 const BARE_FOREIGN_LEXICON: &[&str] = &[
     "pii.bank_identifier",
     "pii.bank_routing_number",
@@ -196,6 +196,7 @@ const BARE_FOREIGN_LEXICON: &[&str] = &[
     "pii.customer_identifier",
     "dlp.contract_identifier",
     "pii.vat_identifier",
+    "pii.identity_card",
 ];
 
 /// Characters between a term and the value: before it (field names, "erreichbar

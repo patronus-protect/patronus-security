@@ -904,6 +904,12 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
             "USt-IdNr. CZ6383543",
             "VAT number MT1167911",
             "USt-IdNr. LU1502744",
+            // an EU VAT country prefix short of a digit, a Spanish CIF after `ES `
+            "CZ3270486",
+            "HU9088407",
+            "The number ES A14596707 is registered.",
+            // an identity card term names the value
+            "please submit your ID card number JI0201311",
         ] {
             assert!(
                 passports(text).is_empty(),

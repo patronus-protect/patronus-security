@@ -721,11 +721,12 @@ fn value_run(pattern: &str) -> Option<ValueRun> {
 /// Whether the national number of `rule_id` at `start` is the body of a VAT ID
 /// after its country prefix: a Portuguese NIF after `PT ` (B16), a Spanish NIF
 /// or NIE and a bare CIF after `ES ` or `ES-` (B01), and eight digits and a letter after `CY `
-/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT), and a bare NIP after `PL ` or `PL-`
-/// (B16, A13).
+/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT), a bare NIP after `PL ` or `PL-`
+/// (B16, A13), and a bare passport form after `ES ` or `ES-`, a Spanish CIF (T37).
 fn vat_body(rule_id: &str, text: &str, start: usize) -> bool {
     let prefixes: &[&str] = match rule_id {
         "pii_nif_pt" => &["PT "],
+        "pii_passport_number_us_bare" | "pii_passport_number_in_bare" => &["ES ", "ES-"],
         "pii_nif_es" | "pii_nif_es_context_free" => &["ES ", "ES-", "CY ", "CY-"],
         "pii_nie_es" | "pii_nie_es_context_free" | "pii_vat_id_es_proximity" => &["ES ", "ES-"],
         "pii_vat_id_pl_proximity" => &["PL ", "PL-"],
@@ -797,7 +798,8 @@ impl NativeRegexDetector for PiiPipeline {
         // foreign number term (T34).
         if is_bare_rule(self.rule_ids[index]) {
             let value = captures.get(0).unwrap().range();
-            if !context::stands_alone(text, value.clone())
+            if vat_body(self.rule_ids[index], text, value.start)
+                || !context::stands_alone(text, value.clone())
                 || !context::delimited_as_prose(text, value.clone())
                 || context::foreign_field(
                     prepared.structure(),
