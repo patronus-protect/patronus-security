@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (199)
+## PII rules (206)
 
 All PII rules except the bare forms (`*_bare`) are eligible by default when PII L1 is enabled.
 
@@ -61,6 +61,9 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_vehicle_registration_uk` | `LICENSEPLATE` | yes | format | 25 | field or key | 0.65 |
 | `pii_vehicle_registration_uk_context_free` | `LICENSEPLATE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 | `pii_vehicle_registration_ng` | `LICENSEPLATE` | yes | format | 25 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
+| `pii_vehicle_registration_uk_prefix` | `LICENSEPLATE` | yes | format | 25 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
+| `pii_vehicle_registration_uk_suffix` | `LICENSEPLATE` | yes | format | 25 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
+| `pii_vehicle_registration_in` | `LICENSEPLATE` | yes | format | 25 | key or proximity, `balanced`/`recall` only | 0.55–0.65 |
 | `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
 | `pii_ssn_us_proximity` | `SSN` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_ssn_us_context_free` | `SSN` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
@@ -213,6 +216,10 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_pan_in_bare` | `IN_PAN` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_voter_id_in_bare` | `IN_VOTER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_vehicle_registration_ng_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_vehicle_registration_ng_lowercase_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_vehicle_registration_uk_prefix_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_vehicle_registration_uk_suffix_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_vehicle_registration_in_bare` | `LICENSEPLATE` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 
 ### PII context lexicon
 

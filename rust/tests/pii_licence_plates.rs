@@ -13,6 +13,12 @@
 //! current form is also reported bare at the threshold, and the Nigerian plate
 //! (`APP-456CV`) with a plate term near it, a later plate of a list with the term
 //! of the first.
+//!
+//! T36 adds the older UK prefix (`A123 BCD`, `K1 ABC`) and suffix (`ABC 1D`)
+//! forms and the Indian plate without separators (`KA53ME3456`, a state code
+//! instead of a district list) with a plate term near them in the scored modes;
+//! their bare forms and the lower-case Nigerian plate are opt-in rules
+//! (`rust/tests/pii_bare_rules.rs`).
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -29,6 +35,9 @@ const DE: &str = "pii_kfz_kennzeichen_de";
 const UK: &str = "pii_vehicle_registration_uk";
 const UK_CONTEXT_FREE: &str = "pii_vehicle_registration_uk_context_free";
 const NG: &str = "pii_vehicle_registration_ng";
+const UK_PREFIX: &str = "pii_vehicle_registration_uk_prefix";
+const UK_SUFFIX: &str = "pii_vehicle_registration_uk_suffix";
+const IN: &str = "pii_vehicle_registration_in";
 const SCORED: [ScoreMode; 2] = [ScoreMode::Balanced, ScoreMode::Recall];
 const LABEL: &str = "LICENSEPLATE";
 const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
@@ -227,6 +236,133 @@ fn ng_vehicle_registration_validator_checks_the_form() {
 }
 
 #[test]
+fn ng_vehicle_registration_lowercase_validator_checks_the_form() {
+    for valid in ["app-456cv", "kja-999pz", "abj-001aa"] {
+        assert!(
+            validators::ng_vehicle_registration_lowercase(valid),
+            "{valid} must be valid"
+        );
+    }
+    for invalid in [
+        "APP-456CV",
+        "app-000cv",
+        "app 456cv",
+        "App-456cv",
+        "app-456Cv",
+        "app456cv",
+        "ap-456cv",
+        "app-4567cv",
+        "",
+    ] {
+        assert!(
+            !validators::ng_vehicle_registration_lowercase(invalid),
+            "{invalid} must be invalid"
+        );
+    }
+}
+
+#[test]
+fn uk_prefix_and_suffix_validators_check_the_letter_sets() {
+    // Prefix form 1983–2001: age letter, serial 1–999, three letters.
+    for valid in ["A123 BCD", "K1 ABC", "P999XYW", "Y45 HJK", "R7 ABW"] {
+        assert!(
+            validators::uk_vehicle_registration_prefix(valid),
+            "{valid} must be valid"
+        );
+    }
+    for invalid in [
+        "I123 BCD",
+        "O123 BCD",
+        "Q123 BCD",
+        "U123 BCD",
+        "Z123 BCD",
+        "A0 BCD",
+        "A012 BCD",
+        "A1234 BCD",
+        "A123 BID",
+        "A123 BCQ",
+        "A123 ZCD",
+        "A123  BCD",
+        "A123-BCD",
+        "a123 bcd",
+        "",
+    ] {
+        assert!(
+            !validators::uk_vehicle_registration_prefix(invalid),
+            "{invalid} must be invalid"
+        );
+    }
+    // Suffix form 1963–1983: three letters, serial 1–999, year letter.
+    for valid in ["ABC 1D", "ABC 123D", "XYW999Y", "HJK 45A"] {
+        assert!(
+            validators::uk_vehicle_registration_suffix(valid),
+            "{valid} must be valid"
+        );
+    }
+    for invalid in [
+        "ABC 123I",
+        "ABC 123Z",
+        "ABC 123O",
+        "ABC 123Q",
+        "ABC 123U",
+        "ABC 0D",
+        "ABC 012D",
+        "ABC 1234D",
+        "AIC 123D",
+        "QBC 123D",
+        "ABZ 123D",
+        "ABC 12 3D",
+        "abc 1d",
+        "",
+    ] {
+        assert!(
+            !validators::uk_vehicle_registration_suffix(invalid),
+            "{invalid} must be invalid"
+        );
+    }
+}
+
+#[test]
+fn in_vehicle_registration_validator_checks_the_state_code() {
+    for valid in [
+        "KA53ME3456",
+        "MH12AB1234",
+        "DL3C1234",
+        "TN07BZ9999",
+        "UP16ABC1001",
+        "WB2A0001",
+    ] {
+        assert!(
+            validators::in_vehicle_registration(valid),
+            "{valid} must be valid"
+        );
+    }
+    for invalid in [
+        // no state code
+        "AB53ME3456",
+        "XY12AB1234",
+        // district 0/00, number 0000, series with I or O, lengths
+        "KA00ME3456",
+        "KA0ME3456",
+        "KA53ME0000",
+        "KA53IE3456",
+        "KA53MO3456",
+        "KA53ME34567",
+        "KA53ME345",
+        "KA53ABCD3456",
+        "KA533ME3456",
+        "KA53 ME 3456",
+        "ka53me3456",
+        "",
+    ] {
+        assert!(
+            !validators::in_vehicle_registration(invalid),
+            "{invalid} must be invalid"
+        );
+    }
+}
+
+#[test]
 fn plate_rules_are_field_bound_format_rules_in_every_mode() {
     for rule_id in [DE, UK] {
         let rule = pattern(rule_id);
@@ -404,7 +540,8 @@ fn uk_plate_lookalikes_stay_silent() {
 
 #[test]
 fn bare_plates_of_other_countries_stay_silent() {
-    // presidio_favored TR, IN, NG and UK prefix/suffix values (T27 open: no rule).
+    // presidio_favored TR, IN, NG and UK prefix/suffix values: without a plate
+    // term only the opt-in bare rules report them (T36).
     for text in [
         "34 ABC 1234",
         "34ABC1234",
@@ -565,6 +702,91 @@ fn nigerian_plate_lookalikes_stay_silent() {
         "APP-456CV and KJA-999PZ",
         "Order number: APP-456CV",
         "Plates: app-456cv",
+    ] {
+        assert_silent(text);
+    }
+}
+
+// ── T36: UK prefix and suffix forms, Indian plates with a plate term ─────────
+
+#[test]
+fn t36_plate_rules_need_a_plate_term_in_the_scored_modes() {
+    for rule_id in [UK_PREFIX, UK_SUFFIX, IN] {
+        let rule = pattern(rule_id);
+        assert!(
+            rule.scored_only && rule.requires_context && !rule.captured_value,
+            "{rule_id}"
+        );
+        assert_eq!(rule.entity_group, LABEL);
+        assert_eq!(rule.strength, ValidatorStrength::Format);
+        assert_eq!(score::rule_score(rule), 0.40, "{rule_id}");
+        let bare = pattern(&format!("{rule_id}_bare"));
+        assert_eq!(bare.pattern, rule.pattern, "{rule_id}");
+        assert_eq!(score::rule_score(bare), 0.50, "{rule_id}");
+    }
+}
+
+#[test]
+fn t36_plates_with_a_plate_term_in_the_scored_modes() {
+    for (rule_id, text, value) in [
+        (
+            UK_PREFIX,
+            "My number plate is A123 BCD and it expires.",
+            "A123 BCD",
+        ),
+        (UK_PREFIX, "Number plate K1 ABC", "K1 ABC"),
+        (UK_PREFIX, "Kennzeichen: P999 XYW", "P999 XYW"),
+        (
+            UK_PREFIX,
+            "Das Fahrzeug mit dem Kennzeichen Y45 HJK stand im Halteverbot.",
+            "Y45 HJK",
+        ),
+        (UK_SUFFIX, "Number plate: ABC 1D", "ABC 1D"),
+        (
+            UK_SUFFIX,
+            "The classic car with registration plate HJK 45A was sold.",
+            "HJK 45A",
+        ),
+        (UK_SUFFIX, "Nummernschild XYW 999Y", "XYW 999Y"),
+        (IN, "Vehicle registration KA53ME3456", "KA53ME3456"),
+        (
+            IN,
+            "The car with number plate MH12AB1234 was towed.",
+            "MH12AB1234",
+        ),
+        (IN, "Kennzeichen: DL3C1234", "DL3C1234"),
+    ] {
+        assert_scored(rule_id, text, &[value], 0.65);
+    }
+}
+
+#[test]
+fn t36_plate_lookalikes_stay_silent() {
+    for text in [
+        // bare values with the default gates (opt-in: pii_bare_rules.rs)
+        "A123 BCD",
+        "K1 ABC",
+        "ABC 1D",
+        "KA53ME3456",
+        "app-456cv",
+        // letter sets, serials and state codes that are never issued
+        "Number plate: I123 BCD",
+        "Number plate: O123 BCD",
+        "Number plate: ABC 123I",
+        "Number plate: ABC 123Z",
+        "Number plate: A1234 BCD",
+        "Kennzeichen: AB53ME3456",
+        "Kennzeichen: KA00ME3456",
+        // UK postcodes and product codes near a plate term
+        "Number plate delivery to SW1A 1AA",
+        "Kennzeichen-Versand an M1 1AE",
+        "Number plate: CR2 6XH",
+        "Order number: A123 BCD",
+        "Bestellnummer: KA53ME3456",
+        "Artikelnummer ABC 123D",
+        // part of a longer value
+        "Number plate: XA123 BCD",
+        "Number plate: KA53ME3456-7",
     ] {
         assert_silent(text);
     }

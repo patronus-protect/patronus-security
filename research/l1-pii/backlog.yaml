@@ -1132,6 +1132,7 @@ tasks:
       strict and balanced output with the default gates bit-identical; count_validated.py unchanged (same
       validator); tests (bare valid, bare checksum-invalid, labelled, SSN overlap)
   - id: T36
+    status: done
     title: "Opt-in rules for bare licence plates: UK prefix, suffix and dateless forms, IN without separators, NG in lower case"
     type: recall-fix
     deps: [Q-M1, D-BARE]

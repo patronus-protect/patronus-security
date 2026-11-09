@@ -125,6 +125,34 @@ const CASES: &[(&str, &str, &str, &str, &str)] = &[
         "APP-000CV",
         "Kennzeichen: APP-456CV",
     ),
+    (
+        "pii_vehicle_registration_ng_lowercase_bare",
+        "LICENSEPLATE",
+        "app-456cv",
+        "app-000cv",
+        "Kennzeichen: APP-456CV",
+    ),
+    (
+        "pii_vehicle_registration_uk_prefix_bare",
+        "LICENSEPLATE",
+        "A123 BCD",
+        "I123 BCD",
+        "Kennzeichen: A123 BCD",
+    ),
+    (
+        "pii_vehicle_registration_uk_suffix_bare",
+        "LICENSEPLATE",
+        "ABC 1D",
+        "ABC 123I",
+        "Number plate: ABC 1D",
+    ),
+    (
+        "pii_vehicle_registration_in_bare",
+        "LICENSEPLATE",
+        "KA53ME3456",
+        "AB53ME3456",
+        "Vehicle registration KA53ME3456",
+    ),
 ];
 
 /// Model score of every bare hit without context: the `balanced` threshold.
@@ -413,6 +441,65 @@ fn the_example_profile_enables_exactly_the_bare_rules() {
                 "{rule}: {text}"
             );
         }
+    }
+}
+
+/// T36: the opt-in plate rules report the presidio-analyzer forms that the
+/// default rules keep negative, and stay silent on postcodes, product codes and
+/// lookalikes that fail their letter sets or state codes.
+#[test]
+fn the_bare_plate_rules_report_the_presidio_forms_and_skip_lookalikes() {
+    let profile: ScanGateMatrix = serde_json::from_str(include_str!(
+        "../../docs/how-to/pii-bare-formats.gates.json"
+    ))
+    .unwrap();
+    let scanner = scanner(profile);
+    let plates = |text: &str| -> Vec<String> {
+        scan(&scanner, text)
+            .evidence_spans
+            .into_iter()
+            .filter(|span| span.label == "LICENSEPLATE")
+            .map(|span| span.text)
+            .collect()
+    };
+    for value in [
+        "A123 BCD",
+        "K1 ABC",
+        "ABC 1D",
+        "KA53ME3456",
+        "app-456cv",
+        "APP-456CV",
+        "AB51 ABC",
+    ] {
+        assert_eq!(plates(value), [value], "{value}");
+    }
+    for text in [
+        "I123 BCD",
+        "O123 BCD",
+        "ABC 123I",
+        "ABC 123Z",
+        "AB53ME3456",
+        "KA00ME3456",
+        "app-000cv",
+        // unspaced UK forms: hex and base64 runs of benign code
+        "GAC1D",
+        "C1DEA",
+        "B48EAD",
+        "A123BCD",
+        // UK postcodes, version and product codes, ordinals
+        "SW1A 1AA",
+        "M1 1AE",
+        "CR2 6XH",
+        "EC1A 1BB",
+        "ISO 9001",
+        "RFC 7231",
+        "Version 1.2.3",
+        "the 123rd item",
+        "Bestellnummer: A123 BCD",
+        "Order number ABC 1D",
+        "Rechnungsnummer: KA53ME3456",
+    ] {
+        assert!(plates(text).is_empty(), "{text}: {:?}", plates(text));
     }
 }
 

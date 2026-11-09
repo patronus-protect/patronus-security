@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Licence plates (T30, Q-M1): the German plate, the UK current form and the
-//! Nigerian plate.
+//! Licence plates (T30, Q-M1, T36): the German plate, the UK current, prefix and
+//! suffix forms, the Indian plate without separators and the Nigerian plate.
 //!
 //! The two rules share one field part, so a plate field name binds either form: a
 //! German form may name a UK plate (`Kennzeichen: LW02 ULF`), an English one a
@@ -13,7 +13,10 @@
 //! plate field name is no finding. In `balanced` and `recall` (Q-M1) the UK current
 //! form is also reported bare, as its issued age identifier stands in for a check,
 //! and the Nigerian plate with a plate term near it (`Plates: APP-456CV and
-//! KJA-999PZ`). Values are uppercase as printed on the plate.
+//! KJA-999PZ`), the UK prefix (`A123 BCD`) and suffix (`ABC 1D`) forms and the
+//! Indian plate (`KA53ME3456`) likewise (T36). Values are uppercase as printed on
+//! the plate. The bare forms without a plate term, and the lower-case Nigerian
+//! plate, are opt-in rules (D-BARE, T36).
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// Pattern of a field-bound plate rule with the value regex `$value`. The word
@@ -99,6 +102,37 @@ pub(super) const NG: PiiPattern = PiiPattern {
     scored_only: true,
 };
 
+/// UK prefix form 1983–2001 (`A123 BCD`, `K1 ABC`) with a plate term near the
+/// value, in `balanced` and `recall` only (T36); the letter sets of
+/// `validators::uk_vehicle_registration_prefix` stand in for a check digit. Both
+/// older UK forms need the space as printed: unspaced they match hex and
+/// base64 runs (`C1DEA`, `GAC1D`).
+pub(super) const UK_PREFIX: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_uk_prefix",
+    pattern: r"(?-u:\b)[A-Z][1-9][0-9]{0,2} [A-Z]{3}(?-u:\b)",
+    validator: Some(validators::uk_vehicle_registration_prefix),
+    ..NG
+};
+
+/// UK suffix form 1963–1983 (`ABC 1D`) with a plate term near the value, in
+/// `balanced` and `recall` only (T36, `validators::uk_vehicle_registration_suffix`).
+pub(super) const UK_SUFFIX: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_uk_suffix",
+    pattern: r"(?-u:\b)[A-Z]{3} [1-9][0-9]{0,2}[A-Z](?-u:\b)",
+    validator: Some(validators::uk_vehicle_registration_suffix),
+    ..NG
+};
+
+/// Indian plate without separators (`KA53ME3456`) with a plate term near the value,
+/// in `balanced` and `recall` only (T36); the state code of
+/// `validators::in_vehicle_registration` stands in for a check digit.
+pub(super) const IN: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_in",
+    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}(?-u:\b)",
+    validator: Some(validators::in_vehicle_registration),
+    ..NG
+};
+
 /// A bare Nigerian plate, format only (T30). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
 pub(super) const NG_BARE: PiiPattern = PiiPattern {
     name: "pii_vehicle_registration_ng_bare",
@@ -107,4 +141,42 @@ pub(super) const NG_BARE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: false,
     ..NG
+};
+
+/// A bare Nigerian plate in lower case as typed (`app-456cv`), joined by a hyphen (T36). Opt-in.
+pub(super) const NG_LOWERCASE_BARE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_ng_lowercase_bare",
+    pattern: r"(?-u:\b)[a-z]{3}-[0-9]{3}[a-z]{2}(?-u:\b)",
+    validator: Some(validators::ng_vehicle_registration_lowercase),
+    ..NG_BARE
+};
+
+/// A bare UK plate in the prefix form (T36). Opt-in.
+pub(super) const UK_PREFIX_BARE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_uk_prefix_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..UK_PREFIX
+};
+
+/// A bare UK plate in the suffix form (T36). Opt-in.
+pub(super) const UK_SUFFIX_BARE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_uk_suffix_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..UK_SUFFIX
+};
+
+/// A bare Indian plate without separators (T36). Opt-in.
+pub(super) const IN_BARE: PiiPattern = PiiPattern {
+    name: "pii_vehicle_registration_in_bare",
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: false,
+    ..IN
 };

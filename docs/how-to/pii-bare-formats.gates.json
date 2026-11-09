@@ -15,6 +15,10 @@
     "pii_brn_kr_bare": true,
     "pii_pan_in_bare": true,
     "pii_voter_id_in_bare": true,
-    "pii_vehicle_registration_ng_bare": true
+    "pii_vehicle_registration_ng_bare": true,
+    "pii_vehicle_registration_ng_lowercase_bare": true,
+    "pii_vehicle_registration_uk_prefix_bare": true,
+    "pii_vehicle_registration_uk_suffix_bare": true,
+    "pii_vehicle_registration_in_bare": true
   }
 }

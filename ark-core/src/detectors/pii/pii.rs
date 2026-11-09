@@ -110,6 +110,9 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     licence_plate::UK,
     licence_plate::UK_CONTEXT_FREE,
     licence_plate::NG,
+    licence_plate::UK_PREFIX,
+    licence_plate::UK_SUFFIX,
+    licence_plate::IN,
     us::SSN,
     us::SSN_PROXIMITY,
     us::SSN_CONTEXT_FREE,
@@ -263,6 +266,10 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     india::PAN_BARE,
     india::VOTER_ID_BARE,
     licence_plate::NG_BARE,
+    licence_plate::NG_LOWERCASE_BARE,
+    licence_plate::UK_PREFIX_BARE,
+    licence_plate::UK_SUFFIX_BARE,
+    licence_plate::IN_BARE,
 ];
 
 /// Whether `rule_id` is an opt-in bare form (D-BARE): off unless the `rules`

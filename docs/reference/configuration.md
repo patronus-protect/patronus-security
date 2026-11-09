@@ -214,6 +214,10 @@ in every mode until the `rules` gate enables it:
 | `pii_pan_in_bare` | Indian PAN | format |
 | `pii_voter_id_in_bare` | Indian voter ID (EPIC) | format |
 | `pii_vehicle_registration_ng_bare` | Nigerian plate | format |
+| `pii_vehicle_registration_ng_lowercase_bare` | Nigerian plate in lower case, `app-456cv` | format |
+| `pii_vehicle_registration_uk_prefix_bare` | UK plate, prefix form 1983–2001, `A123 BCD` (with the space) | age and area letter sets |
+| `pii_vehicle_registration_uk_suffix_bare` | UK plate, suffix form 1963–1983, `ABC 1D` (with the space) | area and year letter sets |
+| `pii_vehicle_registration_in_bare` | Indian plate without separators, `KA53ME3456` | state code |
 
 An enabled bare rule reports in every mode with the validator of its id. The value must stand
 alone (not inside a longer number) as a word of prose: after a space, a bracket or a quote, not
