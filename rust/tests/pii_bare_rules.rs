@@ -535,3 +535,105 @@ fn bare_rule_false_positive_report() {
         );
     }
 }
+
+/// T34: structured non-PII of the neutral dev rows that the bare SSN, BSNR and
+/// German card-licence rules reported. `(rule, valid bare value, negatives)`:
+/// a placeholder (the counting sequence or two alternating digits), a nearer
+/// account, routing or contract term, a code prefix (`BOL-`, `NL.`), a field of a
+/// SWIFT, X12 or EDIFACT message, a CSV key, and for the licence a value in BIC
+/// shape.
+const STRUCTURED_NEGATIVES: &[(&str, &str, &[&str])] = &[
+    (
+        "pii_ssn_us_bare",
+        "422687360",
+        &[
+            "Customer: Sure, it's 123456789.",
+            "Please put 234567890 there.",
+            "Please put 878787878 there.",
+            "with a bank routing number of 422687360 (\"Lender\").",
+            "Per our records, your policy number is 422687360, and your account",
+            "Wire transfer to account number 422687360, Royal Bank",
+            "Bill of Lading No.: BOL-422687360",
+            "Insurance Policy Number: DCI-422687360",
+            "UNH+SHPMI+422687360:93:VRP01:UN:EAN008'",
+            "GS*HP*8372541*422687360*20220222*1234~",
+            ":60F:CUST/USD/422687360\n:61:422687360\n:86:4566543210USD",
+            "ACCTID,422687360\nCUSTNAM,Kimberley",
+            "ORIGINATING·INSTITUTION·ID·422687360",
+        ],
+    ),
+    (
+        "pii_facility_number_bsnr_de_bare",
+        "711234567",
+        &[
+            "Bitte 123456789 eintragen.",
+            "Bitte 878787878 eintragen.",
+            "<tradeId>TRADE-711234567</tradeId>",
+            "<ID scheme=\"0088\">NL.711234567</ID>",
+            "Kontonummer 711234567 der Praxis.",
+            "PID+IS+711234567+1+EA'",
+        ],
+    ),
+    (
+        "pii_driver_license_number_de_bare",
+        "B072RRE2A57",
+        &[
+            "This agreement is made by and between CLABUS33NYC, a company organized",
+            "I am pleased to confirm that JNLRDEKW991 (Swift BIC Code) has",
+            "Wir bei BKGFUSCN633 sind stets darum bemüht.",
+            ":58A:CLABUS33NYC\n:59:/B072RRE2A57/\n/B072RRE2A57\n",
+            ":72:/US123456789\n:72:/US987654321\n",
+            "ISA*00*          *Z9*B072RRE2A57*01*123456789*20220101~",
+        ],
+    ),
+];
+
+#[test]
+fn an_enabled_bare_rule_drops_placeholders_and_structured_non_pii() {
+    let mut reported = Vec::new();
+    for &(rule, value, negatives) in STRUCTURED_NEGATIVES {
+        for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+            let scanner = scanner(gates(Some(rule), mode));
+            // The value itself stays reported in prose, in quotes and in brackets.
+            for text in [
+                format!("Please put {value} there."),
+                format!("It's \"{value}\"."),
+                format!("Die Nummer ({value}) fehlt."),
+            ] {
+                if rule_score(&scan(&scanner, &text), rule).is_none() {
+                    reported.push(format!("{rule} {mode}: missed {text}"));
+                }
+            }
+            for text in negatives {
+                if rule_score(&scan(&scanner, text), rule).is_some() {
+                    reported.push(format!("{rule} {mode}: {text}"));
+                }
+            }
+        }
+    }
+    assert!(reported.is_empty(), "{reported:#?}");
+}
+
+/// T34: the bare SSN keeps the placeholder filter of the grouped SSN without a
+/// term ([`validators::us_ssn_context_free`]) and adds every counting sequence and
+/// two alternating digits; the BSNR without check digit drops the same
+/// placeholders; the licence drops a value in BIC shape. The default validators
+/// keep accepting them.
+#[test]
+fn the_bare_validators_drop_placeholders_and_bic_shapes() {
+    for placeholder in ["123456789", "234567890", "012345678", "878787878", "111111111"] {
+        assert!(!validators::us_ssn_bare(placeholder), "{placeholder}");
+        assert!(!validators::bsnr_bare(placeholder), "{placeholder}");
+    }
+    for valid in ["422687360", "078051123", "123456788"] {
+        assert!(validators::us_ssn_bare(valid), "{valid}");
+    }
+    assert!(validators::bsnr_bare("711234567"));
+    assert!(validators::us_ssn("234567890") && validators::us_ssn("878787878"));
+    assert!(validators::nine_digits("123456789") && validators::nine_digits("878787878"));
+    for bic in ["CLABUS33NYC", "JNLRDEKW991", "BKGFUSCN633"] {
+        assert!(validators::de_driver_license_number(bic), "{bic}");
+        assert!(!validators::de_driver_license_number_bare(bic), "{bic}");
+    }
+    assert!(validators::de_driver_license_number_bare("B072RRE2A57"));
+}

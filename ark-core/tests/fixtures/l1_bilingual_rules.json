@@ -3149,10 +3149,14 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang 711234567 wurde abgeschlossen."
+        "Vorgang 711234567 wurde abgeschlossen.",
+        "<tradeId>TRADE-711234567</tradeId>",
+        "Bitte 123456789 eintragen."
       ],
       "en": [
-        "Reference 711234567 was archived."
+        "Reference 711234567 was archived.",
+        "Bill of Lading No.: BOL-711234567",
+        "PID+IS+711234567+1+EA'"
       ]
     }
   },
@@ -3164,10 +3168,13 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang B072RRE2A57 wurde abgeschlossen."
+        "Vorgang B072RRE2A57 wurde abgeschlossen.",
+        "Wir bei BKGFUSCN633 sind stets darum bemüht."
       ],
       "en": [
-        "Reference B072RRE2A57 was archived."
+        "Reference B072RRE2A57 was archived.",
+        "This agreement is made by and between CLABUS33NYC, a company organized",
+        ":72:/US123456789"
       ]
     }
   },
@@ -3179,10 +3186,14 @@
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang 422687360 wurde abgeschlossen."
+        "Vorgang 422687360 wurde abgeschlossen.",
+        "Bitte 878787878 eintragen."
       ],
       "en": [
-        "Reference 422687360 was archived."
+        "Reference 422687360 was archived.",
+        "with a bank routing number of 422687360 (\"Lender\").",
+        "GS*HP*8372541*422687360*20220222*1234~",
+        "Customer: Sure, it's 123456789."
       ]
     }
   },
