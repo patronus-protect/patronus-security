@@ -18,6 +18,8 @@ Subcommands:
                   by the agent, gated like any task and force-pushed with a lease by `publish`
   env             print the current run as shell assignments
   ahead           print the number of commits in the agent clone (sandboxed)
+  stale           review/restack runs: exit 0 and drop the run when its PR branch moved or was
+                  deleted on GitHub since the run started (a person pushed or merged); else 1
   gate            import the agent commits and run the independent checks (sandboxed)
   ci              push the would-be PR head to the branch and wait for GitHub CI on it
                   (0 = green, 1 = red with the failed logs in gate-report.md, 3 = no verdict)
@@ -494,6 +496,9 @@ INFRA_FAILURES = ("failed to install component", "No space left on device",
                   # Downloads in build scripts (ort-sys fetches ONNX Runtime from cdn.pyke.io).
                   "prebuilt binaries downloaded from", "Peer disconnected", "timeout: global",
                   "Connection reset by peer",
+                  # GitHub release downloads during an outage (RESTACK:dlp/116-f-struct, 2026-11-08):
+                  # maturin-action got 50x three times, cargo-deny-action untarred an error page.
+                  "Unexpected HTTP response: 50", "gzip: invalid magic",
                   # A hosted runner never picked the job up (macos-latest capacity, T18 2026-10-28): no
                   # log at all, only a check-run annotation, and the job ends "cancelled".
                   "was not acquired by Runner",
@@ -1326,11 +1331,13 @@ def cmd_env() -> int:
     return 0
 
 
-GATE_TEST_MAX_SEC = 4 * 3600  # cargo test step; other gate steps keep the 1 h sandbox default.
+GATE_TEST_MAX_SEC = 6 * 3600  # cargo test step; other gate steps keep the 1 h sandbox default.
 # With the shared PII/DLP pipeline on main (#268) the step takes ~2 h including the cold build
 # (RESTACK:dlp/098-t23, 2026-11-05: 2 h 05 min), but under heavy CPU steal the cold build alone
 # ran past 3 h (same run, round 1, no test started). The gate cache rarely survives a round
 # (26 GB, under MIN_FREE_GB in run.sh), so every gate pays the cold build.
+# 2026-11-08 (REVIEW:dlp/114-d01 round 2, 30-55 % steal): the cold build alone took 217 min of the
+# 4 h, so 6 h; ACTIVE_QUIET_HOURS in ark-doctor-check.py follows this limit.
 GATE_BUILD_MAX_SEC = 3 * 3600  # clippy, golden eval and the other steps that can start a cold build.
 # Clippy (check profile) and the golden eval (dev profile, the test profile differs by opt-level)
 # each build the dependency tree from scratch after a cache wipe. Under CPU steal both passed the
@@ -1357,8 +1364,10 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         # The suite grows with every task (26 min on 2026-10-25, 57 min on 2026-10-29 under the
         # 5-CPU quota, over 120 min unoptimised on 2026-11-01); the default 1 h cap would turn every
         # gate red on time alone. A cold gate build plus the full test run also passed 60 minutes.
-        ("test", [str(CARGO), "test", "-p", "patronus-ark", "-p", "ark-api", "-p", "ark-coordinator",
-                  "-p", "ark-distributed-protocol"], {**build, "max_sec": GATE_TEST_MAX_SEC}),
+        # --no-fail-fast: one flaky binary must not hide the rest of the suite (retry_flaky_tests).
+        ("test", [str(CARGO), "test", "--no-fail-fast", "-p", "patronus-ark", "-p", "ark-api",
+                  "-p", "ark-coordinator", "-p", "ark-distributed-protocol"],
+         {**build, "max_sec": GATE_TEST_MAX_SEC}),
         ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --locked --example 13_l1_golden_eval -- all"],
          {**build, "max_sec": GATE_BUILD_MAX_SEC}),
         ("python-ext", [gpy, "-m", "maturin", "develop", "--quiet", "--manifest-path", "python/Cargo.toml"],
@@ -1435,6 +1444,63 @@ def failure_output(proc: subprocess.CompletedProcess, timed_out: bool, elapsed: 
     return "\n".join(parts)
 
 
+# The ark-coordinator orchestrator tests assert wall-clock deadlines (150-500 ms) and fail now and then
+# on this host under CPU steal (REVIEW:dlp/114-d01, 2026-11-08: two gates red on them while CI was green
+# on the same code). Without --no-fail-fast that also skipped every patronus-ark binary. A failed test
+# gets one rerun of exactly the failed tests; a test that fails twice, a crashed binary or a target
+# without a FAILED test line stays red.
+FAILED_TEST = re.compile(r"^test (\S+) \.\.\. FAILED$", re.M)
+FAILED_TARGET = re.compile(r"`(-p [\w-]+ (?:--lib|--doc|--bins?(?: [\w-]+)?|--test [\w-]+))`")
+TEST_RESULT = re.compile(r"^test result: (\w+)\. (\d+) passed; (\d+) failed", re.M)
+
+
+def failed_tests(proc: subprocess.CompletedProcess) -> tuple[list[str], list[str]]:
+    """(failed test names, failed cargo targets as rerun arguments) of a `cargo test` run."""
+    names = sorted(set(FAILED_TEST.findall(proc.stdout)))
+    targets = list(dict.fromkeys(FAILED_TARGET.findall(proc.stderr)))
+    return names, targets
+
+
+FAILURE_BLOCK = re.compile(r"^failures:\n\n(.*?)^failures:$", re.M | re.S)
+
+
+def test_failure_summary(proc: subprocess.CompletedProcess) -> str:
+    """Failed tests, targets and panic messages first: with --no-fail-fast the output tail usually
+    shows only the binaries that ran after the failure."""
+    names, targets = failed_tests(proc)
+    if not names and not targets:
+        return ""
+    blocks = "\n".join(b.strip() for b in FAILURE_BLOCK.findall(proc.stdout))
+    return (f"--- failed tests: {', '.join(names) or '?'}\n--- failed targets: {', '.join(targets) or '?'}\n"
+            + (blocks[:4000] + "\n" if blocks else ""))
+
+
+def retry_flaky_tests(cmd: list[str], tree: Path, opts: dict, max_sec: int,
+                      proc: subprocess.CompletedProcess) -> tuple[bool, str]:
+    """Rerun the failed tests of a red `cargo test` step once, target by target with --exact.
+    (True, summary) when every failed test passed on its rerun; (False, summary) otherwise."""
+    names, targets = failed_tests(proc)
+    if not names or not targets:
+        return False, "no rerun: no failed test names or targets in the output"
+    passed: set[str] = set()
+    notes = []
+    for target in targets:
+        rerun = [cmd[0], "test", *shlex.split(target), "--", "--exact", *names]
+        retry = sandbox(rerun, tree, opts["rw"], gate_env(), network=opts.get("network", True),
+                        readable=opts.get("readable", ()), max_sec=max_sec)
+        results = TEST_RESULT.findall(retry.stdout)
+        ran = sum(int(p) + int(f) for _, p, f in results)
+        ok = retry.returncode == 0 and ran > 0 and all(r == "ok" for r, _, _ in results)
+        notes.append(f"`{target}`: exit {retry.returncode}, {ran} test(s) rerun")
+        if not ok:
+            return False, "rerun failed: " + "; ".join(notes)
+        passed.update(re.findall(r"^test (\S+) \.\.\. ok$", retry.stdout, re.M))
+    missing = [n for n in names if n not in passed]
+    if missing:
+        return False, "rerun did not pass " + ", ".join(missing) + ": " + "; ".join(notes)
+    return True, "passed on rerun: " + ", ".join(names) + " (" + "; ".join(notes) + ")"
+
+
 def gate_env() -> dict[str, str]:
     # Test binaries at opt-level 1 (debug assertions and overflow checks stay on): the unoptimised
     # suite grew from ~22 to over 120 minutes (2026-11-01); opt-level 1 runs the slow regex-heavy
@@ -1468,6 +1534,30 @@ def cmd_ahead() -> int:
         return 1
     proc = agent_git(Path(cur["worktree"]), "rev-list", "--count", f"{cur['base_sha']}..HEAD")
     print(proc.stdout.strip() if proc.returncode == 0 else 0)
+    return 0
+
+
+def cmd_stale() -> int:
+    """Drop a review/restack run whose PR branch changed on GitHub under it.
+
+    `ci` only noticed this at the final push, after every agent round and gate: twice on
+    2026-11-08 a person merged main into dlp/114-d01 (and then merged the PR) during a run, which
+    then spent its three rounds (about 5 h each) on a stale head. run.sh asks before each agent
+    round and each gate. A lookup error is not stale: the run goes on and `ci` decides."""
+    cur = load(CURRENT, None)
+    if cur is None or cur["task"].get("type") not in ("review", "restack"):
+        return 1
+    expected = {h for h in (cur["task"].get("old_head"), cur.get("review_pushed")) if h}
+    try:
+        remote = git("ls-remote", "origin", f"refs/heads/{cur['branch']}").split("\t")[0].strip()
+    except RuntimeError as err:
+        print(f"WARN=stale check failed: {str(err).strip()[-300:]}")
+        return 1
+    if remote in expected:
+        return 1
+    now = f"now {remote[:12]}" if remote else "deleted (PR merged or closed)"
+    print(f"STALE_RUN={cur['task_id']}: {cur['branch']} is {now}; run dropped")
+    drop_worktree(cur)
     return 0
 
 
@@ -1507,6 +1597,12 @@ def cmd_gate() -> int:
                 proc = sandbox(cmd, tree, opts["rw"], gate_env(), network=opts.get("network", True),
                                readable=opts.get("readable", ()), max_sec=max_sec)
                 elapsed = time.monotonic() - started
+                if proc.returncode != 0 and name == "test" and elapsed < max_sec - 5:
+                    flaky, summary = retry_flaky_tests(cmd, tree, opts, max_sec, proc)
+                    print(f"GATE_TEST_RERUN={'pass' if flaky else 'fail'} {summary}")
+                    if flaky:
+                        lines.append(f"- ✅ {name} (flaky, {summary})")
+                        continue
                 if proc.returncode == 0:
                     tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
                     lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
@@ -1516,6 +1612,8 @@ def cmd_gate() -> int:
                     timed_out = elapsed >= max_sec - 5
                     out = scoreboard_regressions(commit, cur["base_sha"]) if name == "scoreboard" \
                         else failure_output(proc, timed_out, elapsed, max_sec)
+                    if name == "test" and not timed_out:
+                        out = test_failure_summary(proc) + out
                     result = f"timeout {int(elapsed)} s" if timed_out else f"exit {proc.returncode}"
                     lines.append(f"- ❌ {name} ({result}): `{shlex.join(cmd)}`\n```\n{out}\n```")
                     ok = False
@@ -2264,7 +2362,7 @@ def main(argv: list[str]) -> int:
     cmd, args = argv[0], argv[1:]
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
-        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci, "idle": cmd_idle,
+        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "stale": cmd_stale, "ci": cmd_ci, "idle": cmd_idle,
         "landable": cmd_landable,
         "latency": cmd_latency, "verdict": cmd_verdict,
     }

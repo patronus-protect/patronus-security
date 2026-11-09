@@ -121,6 +121,9 @@ fi
 feedback=""
 for round in $(seq 1 "$MAX_ROUNDS"); do
   echo "== round $round/$MAX_ROUNDS: $TASK_ID on $BRANCH (base $BASE)"
+  # A person may push to or merge the PR branch of a review/restack run meanwhile; stop at once
+  # instead of spending the remaining rounds and gates on a stale head (dlp/114-d01, 2026-11-08).
+  "${L1[@]}" stale && exit 1
   ensure_free_space "agent round $round" agent
   # The sandbox kills the agent at AGENT_MAX_SEC; work that is not committed by then is lost
   # and the run is aborted. Tell the agent the clock time so it commits in time.
@@ -178,6 +181,7 @@ $feedback"
     exit 1
   fi
 
+  "${L1[@]}" stale && exit 1
   ensure_free_space "the gate" gate
   if "${L1[@]}" gate; then
     # A PR only for green GitHub CI: red CI goes back to the agent like a red gate.
