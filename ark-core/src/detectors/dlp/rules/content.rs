@@ -178,10 +178,12 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Document classes (M01 content class engine) ─────────────────────────
     // M01: attorney-client privileged correspondence. The privilege marker is
     // the evidence span; legal terms and letter structure around it make the
-    // document (`LEGAL_PRIVILEGED`).
+    // document (`LEGAL_PRIVILEGED`). M-LEGAL (M05) adds the markers of
+    // settlement negotiations (WITHOUT PREJUDICE, ohne Präjudiz) and of draft
+    // pleadings (draft complaint, Entwurf Klageschrift, Klageentwurf).
     DlpPattern {
         name: "dlp_document_legal_privileged",
-        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost)\b",
+        pattern: r"(?i)\b(?:attorney[- ]client[- ]privileged?|privileged\s+(?:and|&)\s+confidential|attorney\s+work[- ]product|legally\s+privileged|anwalts(?:korrespondenz|geheimnis)|mandats?geheimnis|mandantengeheimnis|anwaltliche[nrs]?\s+(?:berufsgeheimnis|schweigepflicht|korrespondenz)|verteidigerpost|(?-i:WITHOUT PREJUDICE)|without\s+prejudice\s+save\s+as\s+to\s+costs|for\s+settlement\s+purposes\s+only|ohne\s+präjudiz|draft(?:\s*[-–:]\s*|\s+)(?:complaint|statement\s+of\s+(?:claim|defen[cs]e)|pleadings?|petition|motion)|klageentwurf|entwurf(?:\s*[-–:]\s*|\s+)(?:(?:der|des|einer|eines)\s+)?(?:klageschrift|klageerwiderung|klage|schriftsatz(?:es)?|berufungsbegründung))\b",
         entity_group: "dlp.document.legal_privileged",
         validator: None,
         span_group: None,
@@ -196,6 +198,11 @@ pub(super) const RULES: &[DlpPattern] = &[
                 "mandat",
                 "mandant",
                 "verteidigerpost",
+                "prejudice",
+                "settlement",
+                "judiz",
+                "draft",
+                "entwurf",
             ],
         )
         .with_context_gate(is_legal_privileged_document),
@@ -266,6 +273,156 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["minutes", "resolution", "protokoll", "beschl"],
         )
         .with_context_gate(is_board_minutes_document),
+    },
+    // M-LEGAL (M04): non-disclosure agreements, trade secret (GeschGehG)
+    // notices and embargo periods. The agreement title, trade secret marker
+    // or embargo phrase is the evidence span; parties, confidential
+    // information and disclosure duties around it make the document
+    // (`NDA_TRADE_SECRET`). Law texts and court decisions on trade secrets
+    // are counter-context.
+    DlpPattern {
+        name: "dlp_document_nda_trade_secret",
+        pattern: r"(?i)\b(?:(?:mutual\s+)?non[- ]disclosure\s+agreement|confidentiality\s+agreement|(?-i:NDA)|trade\s+secrets?|(?:under\s+)?embargo(?:ed)?\s+(?:until|bis)|embargo\s+period|geheimhaltungsvereinbarung|vertraulichkeitsvereinbarung|verschwiegenheitsvereinbarung|geschäftsgeheimnis(?:se[ns]?)?|betriebsgeheimnis(?:se[ns]?)?|geschgehg|sperrfrist)\b",
+        entity_group: "dlp.document.nda_trade_secret",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "disclosure",
+                "confidentiality",
+                "nda",
+                "secret",
+                "embargo",
+                "vereinbarung",
+                "geheimnis",
+                "geschgehg",
+                "sperrfrist",
+            ],
+        )
+        .with_context_gate(is_nda_trade_secret_document),
+    },
+    // M-LEGAL (M22): customer and supplier contracts. The contract title is
+    // the evidence span; the document holds when contracting parties,
+    // remuneration, term and confidentiality clauses stand around it
+    // (`CONTRACT`). Contract templates, law texts and court decisions are
+    // counter-context.
+    DlpPattern {
+        name: "dlp_document_contract",
+        pattern: r"(?i)\b(?:(?:master\s+)?(?:services?|supply|purchase|license|licence|distribution|consulting|framework|reseller)\s+agreement|rahmenvertrag|liefervertrag|dienstleistungsvertrag|werkvertrag|lizenzvertrag|kaufvertrag|vertriebsvertrag|beratungsvertrag|wartungsvertrag)\b",
+        entity_group: "dlp.document.contract",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["agreement", "vertrag"])
+            .with_context_gate(is_contract_document),
+    },
+    // M-HRSEC (M06): HR documents: employment references, warning letters,
+    // terminations and termination agreements, payslips and performance
+    // reviews. The document title is the evidence span; employee, pay and
+    // rating terms around it make the document (`HR`). Job ads and law
+    // texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_hr",
+        pattern: r"(?i)\b(?:(?:employment|job)\s+reference(?:\s+letter)?|(?:written|final)\s+warning|warning\s+letter|(?:notice|letter)\s+of\s+(?:termination|dismissal)|termination\s+(?:letter|of\s+employment)|(?:separation|severance|termination)\s+agreement|pay\s?slips?|pay\s+stubs?|salary\s+statement|performance\s+(?:review|appraisal|improvement\s+plan)|arbeitszeugnis(?:ses|se)?|zwischenzeugnis(?:ses|se)?|abmahnung(?:en)?|(?:fristlose|ordentliche|außerordentliche)\s+kündigung|kündigung\s+(?:des|ihres)\s+arbeitsverhältnisses|kündigungsschreiben|aufhebungsvertrag(?:es|s)?|abwicklungsvertrag(?:es|s)?|(?:gehalts|lohn|entgelt|bezüge)abrechnung(?:en)?|(?:leistungs|mitarbeiter)beurteilung(?:en)?)\b",
+        entity_group: "dlp.document.hr",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "reference",
+                "warning",
+                "termination",
+                "dismissal",
+                "agreement",
+                "slip",
+                "stub",
+                "salary",
+                "performance",
+                "zeugnis",
+                "abmahnung",
+                "ndigung",
+                "vertrag",
+                "abrechnung",
+                "beurteilung",
+            ],
+        )
+        .with_context_gate(is_hr_document),
+    },
+    // M-HRSEC (M13): pentest, audit and incident reports. The report title
+    // is the evidence span; findings, severity and attacker terms plus an
+    // affected system around it make the document (`SECURITY_REPORT`).
+    // Public advisories, job ads and regulation texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_security_report",
+        pattern: r"(?i)\b(?:(?:penetration|pen)[- ]?test(?:ing)?\s+(?:report|results|findings)|pentest[- ]?(?:report|results|findings|bericht|berichte|ergebnisse)|penetrationstest[- ]?(?:bericht|berichte|ergebnisse)|security\s+audit\s+(?:report|findings)|vulnerability\s+assessment(?:\s+report)?|(?:security\s+)?incident\s+report|post[- ]incident\s+(?:review|report)|security\s+incident|sicherheitsaudit(?:s|bericht)?|schwachstellen(?:analyse|bericht|berichte)|sicherheitsvorfall(?:s|es)?|sicherheitsvorfälle|vorfallsbericht(?:e|s)?|incident-bericht)\b",
+        entity_group: "dlp.document.security_report",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "test",
+                "audit",
+                "assessment",
+                "incident",
+                "schwachstellen",
+                "sicherheitsvorf",
+                "vorfallsbericht",
+            ],
+        )
+        .with_context_gate(is_security_report_document),
+    },
+    // M-HRSEC (M16): export control. A labelled export list (AL), ECCN or
+    // dual-use number, EAR99 or an ITAR/USML reference is the evidence span;
+    // licence, consignee and shipment terms around it make the document
+    // (`EXPORT_CONTROL`). Regulation texts and job ads are counter-context.
+    DlpPattern {
+        name: "dlp_document_export_control",
+        pattern: r"(?i)\b(?:(?:eccn|export\s+control\s+classification(?:\s+number)?|al[- ]?(?:nummer|position)|ausfuhrlisten?[- ]?(?:nummer|position)|dual[- ]use(?:[- ](?:item|code|gut|güter|nummer|position))?|güterlisten?[- ]?(?:nummer|position))(?:\s*[:#]\s*|\s+)(?-i:[0-9][A-E][0-9]{3}(?:\.[a-z0-9]{1,3}){0,4}|EAR99|00(?:0[1-9]|1[0-9]|2[0-2])[a-z]?)|(?-i:EAR99)|itar[- ]controlled|subject\s+to\s+(?:the\s+)?itar|usml\s+category\s+(?-i:[IVX]{1,5}))\b",
+        entity_group: "dlp.document.export_control",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "eccn", "export", "nummer", "position", "dual", "ear99", "itar", "usml",
+            ],
+        )
+        .with_context_gate(is_export_control_document),
+    },
+    // M-HRSEC (M17): R&D and IP: invention disclosures, patent drafts and
+    // draft claims before filing. The document title is the evidence span;
+    // inventor, claims and filing terms around it make the document
+    // (`RND_IP`). Published patents and law texts are counter-context.
+    DlpPattern {
+        name: "dlp_document_rnd_ip",
+        pattern: r"(?i)\b(?:invention\s+disclosures?(?:\s+form)?|draft\s+patent(?:\s+application)?|patent\s+(?:application\s+)?drafts?|draft\s+(?:patent\s+)?claims|erfindungsmeldung(?:en)?|erfindungsanzeige|patententw(?:u|ü)rfe?s?|entwurf\s+(?:der\s+|einer\s+)?patentanmeldung|patentanmeldungsentwurf|anspruchsentw(?:u|ü)rfe?)\b",
+        entity_group: "dlp.document.rnd_ip",
+        validator: None,
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "invention",
+                "patent",
+                "claims",
+                "erfindungs",
+                "anspruchsentw",
+            ],
+        )
+        .with_context_gate(is_rnd_ip_document),
     },
 ];
 
@@ -388,6 +545,7 @@ const CORPORATE_DENSITY: Density = Density {
     window: 1500,
     min_score: 8,
     min_medium: 2,
+    min_structural: 0,
 };
 
 /// M01: the anchors of attorney-client privileged correspondence around its
@@ -454,6 +612,7 @@ static LEGAL_PRIVILEGED: LazyLock<ContentClass> = LazyLock::new(|| {
             window: 1500,
             min_score: 8,
             min_medium: 1,
+            min_structural: 0,
         },
     )
 });
@@ -722,6 +881,739 @@ fn is_board_minutes_document(text: &str, marker: Range<usize>) -> bool {
     BOARD_MINUTES.holds(text, marker)
 }
 
+/// M-LEGAL (M04): the anchors of a non-disclosure agreement, trade secret
+/// notice or embargo around its marker. Articles and commentary on NDAs carry
+/// the same terms (disclosing party, confidential information), so the class
+/// also needs document form: a letter or chat, agreement wording, a handling
+/// instruction or a record label. Newsletters, job ads and security policies
+/// name an NDA or embargo with letter words and a generic term (publication,
+/// signed), so the class also needs a secrecy duty: confidential information,
+/// a receiving party, non-public or a handling instruction. Bare
+/// confidentiality is none: policies name it as a value next to the NDA their
+/// volunteers sign.
+static NDA_TRADE_SECRET: LazyLock<ContentClass> = LazyLock::new(|| {
+    ContentClass::new(
+        &[
+            ("disclosing party", Tier::Medium),
+            ("receiving party", Tier::Medium),
+            ("recipient", Tier::Medium),
+            ("confidential information", Tier::Medium),
+            ("confidentiality terms", Tier::Medium),
+            ("proprietary", Tier::Medium),
+            ("need-to-know", Tier::Medium),
+            ("need to know", Tier::Medium),
+            ("non-public", Tier::Medium),
+            ("not be disclosed", Tier::Medium),
+            ("shall not disclose", Tier::Medium),
+            ("press release", Tier::Medium),
+            ("announcement", Tier::Medium),
+            ("publication", Tier::Medium),
+            ("formula", Tier::Medium),
+            ("source code", Tier::Medium),
+            ("customer list", Tier::Medium),
+            ("prototype", Tier::Medium),
+            ("signed", Tier::Medium),
+            ("parties", Tier::Medium),
+            ("penalty", Tier::Medium),
+            ("offenlegende partei", Tier::Medium),
+            ("empfangende partei", Tier::Medium),
+            ("empfänger", Tier::Medium),
+            ("vertrauliche informationen", Tier::Medium),
+            ("geheimhaltung", Tier::Medium),
+            ("geheimhaltungspflicht", Tier::Medium),
+            ("geheimhaltungsmaßnahmen", Tier::Medium),
+            ("nicht öffentlich", Tier::Medium),
+            ("pressemitteilung", Tier::Medium),
+            ("veröffentlichung", Tier::Medium),
+            ("rezeptur", Tier::Medium),
+            ("quellcode", Tier::Medium),
+            ("kundenliste", Tier::Medium),
+            ("prototyp", Tier::Medium),
+            ("unterzeichnet", Tier::Medium),
+            ("parteien", Tier::Medium),
+            ("vertragsstrafe", Tier::Medium),
+            ("bleibt intern", Tier::Medium),
+            ("bleiben intern", Tier::Medium),
+            ("subject:", Tier::Structural),
+            ("re:", Tier::Structural),
+            ("from:", Tier::Structural),
+            ("to:", Tier::Structural),
+            ("dear", Tier::Structural),
+            ("hi", Tier::Structural),
+            ("kind regards", Tier::Structural),
+            ("best regards", Tier::Structural),
+            ("please", Tier::Structural),
+            ("reminder", Tier::Structural),
+            ("this agreement", Tier::Structural),
+            ("effective date", Tier::Structural),
+            ("in witness whereof", Tier::Structural),
+            ("do not distribute", Tier::Structural),
+            ("do not forward", Tier::Structural),
+            ("classification:", Tier::Structural),
+            ("access:", Tier::Structural),
+            ("betreff:", Tier::Structural),
+            ("von:", Tier::Structural),
+            ("an:", Tier::Structural),
+            ("hallo", Tier::Structural),
+            ("sehr geehrte", Tier::Structural),
+            ("sehr geehrter", Tier::Structural),
+            ("mit freundlichen grüßen", Tier::Structural),
+            ("viele grüße", Tier::Structural),
+            ("bitte", Tier::Structural),
+            ("euch", Tier::Structural),
+            ("dürft", Tier::Structural),
+            ("diese vereinbarung", Tier::Structural),
+            ("§ 1", Tier::Structural),
+            ("nicht weitergeben", Tier::Structural),
+            ("nicht weiterleiten", Tier::Structural),
+            ("einstufung:", Tier::Structural),
+            ("zugriff:", Tier::Structural),
+            ("example", Tier::Counter),
+            ("for example", Tier::Counter),
+            ("sample", Tier::Counter),
+            ("template", Tier::Counter),
+            ("placeholder", Tier::Counter),
+            ("e.g.", Tier::Counter),
+            ("wikipedia", Tier::Counter),
+            ("definition", Tier::Counter),
+            ("means", Tier::Counter),
+            ("also known as", Tier::Counter),
+            ("typically", Tier::Counter),
+            ("commonly", Tier::Counter),
+            ("refers to", Tier::Counter),
+            ("tutorial", Tier::Counter),
+            ("lecture", Tier::Counter),
+            ("newsletter", Tier::Counter),
+            ("directive", Tier::Counter),
+            ("the court held", Tier::Counter),
+            ("held that", Tier::Counter),
+            ("judgment", Tier::Counter),
+            ("[party a]", Tier::Counter),
+            ("[company name]", Tier::Counter),
+            ("beispiel", Tier::Counter),
+            ("zum beispiel", Tier::Counter),
+            ("z. b.", Tier::Counter),
+            ("muster", Tier::Counter),
+            ("vorlage", Tier::Counter),
+            ("platzhalter", Tier::Counter),
+            ("bezeichnet", Tier::Counter),
+            ("auch bekannt als", Tier::Counter),
+            ("üblicherweise", Tier::Counter),
+            ("typischerweise", Tier::Counter),
+            ("im sinne dieses gesetzes", Tier::Counter),
+            ("richtlinie", Tier::Counter),
+            ("urteil", Tier::Counter),
+            ("leitsatz", Tier::Counter),
+            ("seminar", Tier::Counter),
+            ("[firma]", Tier::Counter),
+        ],
+        Density {
+            window: 1500,
+            min_score: 7,
+            min_medium: 1,
+            min_structural: 1,
+        },
+    )
+    .requiring(&[&[
+        "disclosing party",
+        "receiving party",
+        "confidential information",
+        "confidentiality terms",
+        "need-to-know",
+        "need to know",
+        "non-public",
+        "not be disclosed",
+        "shall not disclose",
+        "do not distribute",
+        "do not forward",
+        "offenlegende partei",
+        "empfangende partei",
+        "vertrauliche informationen",
+        "geheimhaltung",
+        "geheimhaltungspflicht",
+        "nicht öffentlich",
+        "nicht weitergeben",
+        "nicht weiterleiten",
+        "bleibt intern",
+        "bleiben intern",
+    ]])
+});
+
+fn is_nda_trade_secret_document(text: &str, marker: Range<usize>) -> bool {
+    NDA_TRADE_SECRET.holds(text, marker)
+}
+
+/// M-LEGAL (M22): the anchors of a customer or supplier contract around its
+/// title. A contract needs one anchor of each element: contracting parties,
+/// remuneration, term and confidentiality (four party roles are a meeting
+/// note), and the form of a contract, letter or record (`Term:`, `"fees":`,
+/// Effective date, Betreff:): an article on mergers names customers, fees and
+/// liability in prose.
+static CONTRACT: LazyLock<ContentClass> = LazyLock::new(|| {
+    ContentClass::new(
+        &[
+            ("customer", Tier::Medium),
+            ("supplier", Tier::Medium),
+            ("contractor", Tier::Medium),
+            ("licensee", Tier::Medium),
+            ("licensor", Tier::Medium),
+            ("fees", Tier::Medium),
+            ("remuneration", Tier::Medium),
+            ("compensation", Tier::Medium),
+            ("purchase price", Tier::Medium),
+            ("payment terms", Tier::Medium),
+            ("term", Tier::Medium),
+            ("termination", Tier::Medium),
+            ("notice period", Tier::Medium),
+            ("confidentiality", Tier::Medium),
+            ("confidential information", Tier::Medium),
+            ("liability", Tier::Medium),
+            ("auftraggeber", Tier::Medium),
+            ("auftragnehmer", Tier::Medium),
+            ("lieferant", Tier::Medium),
+            ("kunde", Tier::Medium),
+            ("käufer", Tier::Medium),
+            ("verkäufer", Tier::Medium),
+            ("lizenznehmer", Tier::Medium),
+            ("vergütung", Tier::Medium),
+            ("kaufpreis", Tier::Medium),
+            ("zahlungsbedingungen", Tier::Medium),
+            ("laufzeit", Tier::Medium),
+            ("kündigung", Tier::Medium),
+            ("kündigungsfrist", Tier::Medium),
+            ("vertraulichkeit", Tier::Medium),
+            ("geheimhaltung", Tier::Medium),
+            ("haftung", Tier::Medium),
+            ("hereinafter", Tier::Structural),
+            ("effective date", Tier::Structural),
+            ("signature", Tier::Structural),
+            ("subject:", Tier::Structural),
+            ("dear", Tier::Structural),
+            ("kind regards", Tier::Structural),
+            ("best regards", Tier::Structural),
+            ("nachfolgend", Tier::Structural),
+            ("vertragsgegenstand", Tier::Structural),
+            ("unterschrift", Tier::Structural),
+            ("§ 1", Tier::Structural),
+            ("betreff:", Tier::Structural),
+            ("sehr geehrte", Tier::Structural),
+            ("sehr geehrter", Tier::Structural),
+            ("mit freundlichen grüßen", Tier::Structural),
+            ("viele grüße", Tier::Structural),
+            ("example", Tier::Counter),
+            ("sample", Tier::Counter),
+            ("template", Tier::Counter),
+            ("placeholder", Tier::Counter),
+            ("e.g.", Tier::Counter),
+            ("wikipedia", Tier::Counter),
+            ("definition", Tier::Counter),
+            ("refers to", Tier::Counter),
+            ("tutorial", Tier::Counter),
+            ("the court held", Tier::Counter),
+            ("held that", Tier::Counter),
+            ("judgment", Tier::Counter),
+            ("[party a]", Tier::Counter),
+            ("[company name]", Tier::Counter),
+            ("[amount]", Tier::Counter),
+            ("beispiel", Tier::Counter),
+            ("muster", Tier::Counter),
+            ("mustervertrag", Tier::Counter),
+            ("vorlage", Tier::Counter),
+            ("vertragsvorlage", Tier::Counter),
+            ("platzhalter", Tier::Counter),
+            ("bezeichnet", Tier::Counter),
+            ("durch den", Tier::Counter),
+            ("bgb", Tier::Counter),
+            ("urteil", Tier::Counter),
+            ("leitsatz", Tier::Counter),
+            ("[firma]", Tier::Counter),
+            ("[betrag]", Tier::Counter),
+        ],
+        Density {
+            window: 3000,
+            min_score: 12,
+            min_medium: 4,
+            min_structural: 1,
+        },
+    )
+    .requiring(&[
+        &[
+            "customer",
+            "supplier",
+            "contractor",
+            "licensee",
+            "licensor",
+            "auftraggeber",
+            "auftragnehmer",
+            "lieferant",
+            "kunde",
+            "käufer",
+            "verkäufer",
+            "lizenznehmer",
+        ],
+        &[
+            "fees",
+            "remuneration",
+            "compensation",
+            "purchase price",
+            "payment terms",
+            "vergütung",
+            "kaufpreis",
+            "zahlungsbedingungen",
+        ],
+        &[
+            "term",
+            "termination",
+            "notice period",
+            "laufzeit",
+            "kündigung",
+            "kündigungsfrist",
+        ],
+        &[
+            "confidentiality",
+            "confidential information",
+            "vertraulichkeit",
+            "geheimhaltung",
+        ],
+    ])
+});
+
+fn is_contract_document(text: &str, marker: Range<usize>) -> bool {
+    CONTRACT.holds(text, marker)
+}
+
+/// Counter-context of the M-HRSEC classes: job ads name the documents a
+/// role writes.
+const JOB_AD_COUNTER: &[&str] = &[
+    "job:",
+    "your tasks",
+    "your profile",
+    "we are looking for",
+    "we offer",
+    "apply now",
+    "m/f/d",
+    "stellenanzeige",
+    "stellenangebot",
+    "ihre aufgaben",
+    "ihr profil",
+    "wir suchen",
+    "wir bieten",
+    "bewerben",
+    "m/w/d",
+];
+
+/// Counter-context of the M-HRSEC classes: laws, directives and
+/// regulations name the documents they govern.
+const LAW_COUNTER: &[&str] = &[
+    "this act",
+    "this directive",
+    "this regulation",
+    "this part",
+    "member state",
+    "within the meaning",
+    "annex i",
+    "federal register",
+    "im sinne",
+    "dieses gesetzes",
+    "dieser verordnung",
+    "rechtsverordnung",
+    "anhang i",
+    "bundesgesetzblatt",
+    "amtsblatt",
+];
+
+/// Whether two or more bracketed placeholders (`[Name]`, `[yes/no]`) stand
+/// within [`HRSEC_DENSITY`]'s window of the marker: a form or template to
+/// fill in, whose field labels look like a record. Markdown links
+/// (`[text](url)`), log levels (`[INFO]`), timestamps and lists are no
+/// placeholders.
+fn is_filled_in_form(text: &str, marker: &Range<usize>) -> bool {
+    let bytes = text.as_bytes();
+    let start = marker.start.saturating_sub(HRSEC_DENSITY.window);
+    let end = marker
+        .end
+        .saturating_add(HRSEC_DENSITY.window)
+        .min(bytes.len());
+    let mut placeholders = 0;
+    let mut position = start;
+    while let Some(offset) = bytes[position..end].iter().position(|&byte| byte == b'[') {
+        let open = position + offset;
+        let inner = bytes[open + 1..end]
+            .iter()
+            .take(41)
+            .take_while(|&&byte| byte.is_ascii_alphabetic() || matches!(byte, b' ' | b'/' | b'-'))
+            .count();
+        let close = open + 1 + inner;
+        if (3..=40).contains(&inner)
+            && bytes.get(close) == Some(&b']')
+            && !matches!(bytes.get(close + 1), Some(b'(' | b':'))
+            && bytes[open + 1..close].iter().any(u8::is_ascii_lowercase)
+        {
+            placeholders += 1;
+            if placeholders == 2 {
+                return true;
+            }
+        }
+        position = open + 1;
+    }
+    false
+}
+
+/// The density of the M-HRSEC classes: two distinct domain terms and the
+/// form of a letter, chat or record near the title.
+const HRSEC_DENSITY: Density = Density {
+    window: 1500,
+    min_score: 8,
+    min_medium: 2,
+    min_structural: 1,
+};
+
+/// M-HRSEC (M06): the anchors of an HR document around its title.
+static HR: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "employee",
+            "employees",
+            "employer",
+            "employment contract",
+            "manager",
+            "line manager",
+            "human resources",
+            "hr department",
+            "personnel file",
+            "employee no.",
+            "employee id",
+            "salary",
+            "gross pay",
+            "net pay",
+            "income tax",
+            "national insurance",
+            "social security",
+            "tax code",
+            "severance",
+            "garden leave",
+            "notice period",
+            "last working day",
+            "dismissal",
+            "misconduct",
+            "overall rating",
+            "below expectations",
+            "exceeds expectations",
+            "goals",
+            "objectives",
+            "performance",
+            "works council",
+            "probation",
+            "mitarbeiter",
+            "mitarbeiterin",
+            "arbeitnehmer",
+            "arbeitnehmerin",
+            "arbeitgeber",
+            "arbeitsvertrag",
+            "arbeitsverhältnis",
+            "arbeitsverhältnisses",
+            "personalabteilung",
+            "personalakte",
+            "personalnummer",
+            "führungskraft",
+            "vorgesetzte",
+            "vorgesetzter",
+            "gehalt",
+            "brutto",
+            "netto",
+            "lohnsteuer",
+            "sozialversicherung",
+            "steuerklasse",
+            "abfindung",
+            "freistellung",
+            "kündigungsfrist",
+            "letzter arbeitstag",
+            "pflichtverletzung",
+            "arbeitsrechtlichen konsequenzen",
+            "gesamtbewertung",
+            "leistungsbewertung",
+            "unter den erwartungen",
+            "ziele",
+            "zielerreichung",
+            "betriebsrat",
+            "probezeit",
+        ],
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_hr_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && HR.holds(text, marker)
+}
+
+/// The affected-system anchors of a security report: a report without a
+/// system reference is general advice.
+const SECURITY_SYSTEMS: &[&str] = &[
+    "host",
+    "hosts",
+    "hostname",
+    "server",
+    "servers",
+    "system",
+    "systems",
+    "target",
+    "domain controller",
+    "file server",
+    "vpn",
+    "gateway",
+    "firewall",
+    "database",
+    "subnet",
+    "internal network",
+    "production",
+    "zielsystem",
+    "domänencontroller",
+    "fileserver",
+    "datenbank",
+    "internes netz",
+    "produktivsystem",
+];
+
+/// M-HRSEC (M13): the anchors of a pentest, audit or incident report around
+/// its title. The report needs an affected system; public advisories name
+/// affected versions and fixes instead.
+static SECURITY_REPORT: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            SECURITY_SYSTEMS,
+            &[
+                "finding",
+                "findings",
+                "severity",
+                "critical",
+                "cvss",
+                "exploit",
+                "exploitable",
+                "exploited",
+                "attacker",
+                "attackers",
+                "compromised",
+                "credentials",
+                "privilege escalation",
+                "lateral movement",
+                "laterally",
+                "remediation",
+                "mitigation",
+                "root cause",
+                "containment",
+                "contained",
+                "indicators of compromise",
+                "ransomware",
+                "phishing",
+                "malware",
+                "unauthorized access",
+                "sql injection",
+                "remote code execution",
+                "scope",
+                "befund",
+                "befunde",
+                "schweregrad",
+                "kritisch",
+                "ausnutzbar",
+                "angreifer",
+                "kompromittiert",
+                "zugangsdaten",
+                "rechteausweitung",
+                "maßnahme",
+                "maßnahmen",
+                "behebung",
+                "ursache",
+                "ursachenanalyse",
+                "eindämmung",
+                "umfang",
+                "schadsoftware",
+                "zugriff",
+            ],
+        ]
+        .concat(),
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &[
+                "advisory",
+                "security advisory",
+                "affected versions",
+                "patched versions",
+                "fixed in",
+                "upgrade to",
+                "credit",
+                "sicherheitshinweis",
+                "betroffene versionen",
+                "behoben in",
+            ],
+        ],
+        HRSEC_DENSITY,
+    )
+    .requiring(&[SECURITY_SYSTEMS])
+});
+
+fn is_security_report_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && SECURITY_REPORT.holds(text, marker)
+}
+
+/// M-HRSEC (M16): the anchors of an export control document around its
+/// labelled classification.
+static EXPORT_CONTROL: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "export",
+            "exports",
+            "exporter",
+            "export licence",
+            "export license",
+            "licence",
+            "license",
+            "end user",
+            "end-user",
+            "end-user statement",
+            "end use",
+            "end-use",
+            "consignee",
+            "destination country",
+            "re-export",
+            "shipment",
+            "shipments",
+            "customer",
+            "customers",
+            "order",
+            "purchase order",
+            "customs",
+            "sanctions",
+            "ddtc",
+            "bafa",
+            "classification",
+            "part number",
+            "ausfuhr",
+            "ausfuhrgenehmigung",
+            "ausfuhrgenehmigungen",
+            "genehmigung",
+            "genehmigungspflichtig",
+            "exportkontrolle",
+            "endverbleib",
+            "endverbleibserklärung",
+            "empfänger",
+            "bestimmungsland",
+            "lieferung",
+            "auftrag",
+            "kunde",
+            "kunden",
+            "zoll",
+            "materialnummer",
+            "artikel",
+        ],
+        &[LETTER_STRUCTURE, CORPORATE_STRUCTURE, &["please", "bitte"]],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &["15 cfr", "22 cfr", "commerce control list"],
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_export_control_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && EXPORT_CONTROL.holds(text, marker)
+}
+
+/// M-HRSEC (M17): the anchors of an invention disclosure or unfiled patent
+/// draft around its title. Published applications and patents carry the
+/// same inventor and claim terms; their publication data is counter-context.
+static RND_IP: LazyLock<ContentClass> = LazyLock::new(|| {
+    document_class(
+        &[
+            "inventor",
+            "inventors",
+            "invention",
+            "prior art",
+            "claims",
+            "claim 1",
+            "patent attorney",
+            "patent department",
+            "patent counsel",
+            "filing",
+            "filed",
+            "not yet filed",
+            "not filed",
+            "before filing",
+            "priority date",
+            "embodiment",
+            "embodiments",
+            "novelty",
+            "r&d",
+            "lab notebook",
+            "confidential",
+            "internal",
+            "erfinder",
+            "erfinderin",
+            "erfindung",
+            "stand der technik",
+            "ansprüche",
+            "anspruch 1",
+            "patentanwalt",
+            "patentanwältin",
+            "patentabteilung",
+            "anmeldung",
+            "noch nicht angemeldet",
+            "noch nicht eingereicht",
+            "vor der anmeldung",
+            "prioritätstag",
+            "ausführungsform",
+            "neuheit",
+            "diensterfindung",
+            "f&e",
+            "laborbuch",
+            "vertraulich",
+            "intern",
+        ],
+        &[
+            LETTER_STRUCTURE,
+            CORPORATE_STRUCTURE,
+            &["please", "bitte", "title:", "titel:", "status:"],
+        ],
+        &[
+            GENERIC_COUNTER,
+            ENCYCLOPEDIC_COUNTER,
+            JOB_AD_COUNTER,
+            LAW_COUNTER,
+            &[
+                "patent application publication",
+                "date of publication",
+                "publication date",
+                "patent no",
+                "granted patent",
+                "espacenet",
+                "google patents",
+                "offenlegungsschrift",
+                "patentschrift",
+                "veröffentlichungstag",
+                "veröffentlichungsnummer",
+            ],
+        ],
+        HRSEC_DENSITY,
+    )
+});
+
+fn is_rnd_ip_document(text: &str, marker: Range<usize>) -> bool {
+    !is_filled_in_form(text, &marker) && RND_IP.holds(text, marker)
+}
+
 fn is_non_placeholder_source_assignment(candidate: &str) -> bool {
     let Some((_, value)) = candidate.split_once('=') else {
         return true;
@@ -831,8 +1723,10 @@ fn is_structured_sql_statement(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_board_minutes_document, is_legal_privileged_document, is_m_and_a_document,
-        is_unpublished_financials_document,
+        is_board_minutes_document, is_contract_document, is_export_control_document,
+        is_filled_in_form, is_hr_document, is_legal_privileged_document, is_m_and_a_document,
+        is_nda_trade_secret_document, is_rnd_ip_document, is_security_report_document,
+        is_unpublished_financials_document, RULES,
     };
     use std::ops::Range;
 
@@ -843,6 +1737,14 @@ mod tests {
 
     fn gate(text: &str, marker: &str) -> bool {
         holds(is_legal_privileged_document, text, marker)
+    }
+
+    fn nda(text: &str, marker: &str) -> bool {
+        holds(is_nda_trade_secret_document, text, marker)
+    }
+
+    fn contract(text: &str, marker: &str) -> bool {
+        holds(is_contract_document, text, marker)
     }
 
     #[test]
@@ -904,6 +1806,22 @@ mod tests {
     }
 
     #[test]
+    fn settlement_negotiation_markers_hold_with_legal_anchors() {
+        assert!(gate(
+            "WITHOUT PREJUDICE\n\nDear Mr. Grant, on behalf of our client we propose a settlement of the claim.",
+            "WITHOUT PREJUDICE",
+        ));
+        assert!(gate(
+            "Sehr geehrter Herr Kollege, namens unserer Mandantin bieten wir ohne Präjudiz einen Vergleich an.",
+            "ohne Präjudiz",
+        ));
+        assert!(!gate(
+            "Glossary: WITHOUT PREJUDICE refers to a settlement offer, for example between lawyers.",
+            "WITHOUT PREJUDICE",
+        ));
+    }
+
+    #[test]
     fn published_releases_and_reports_are_counter_context() {
         let class = is_unpublished_financials_document;
         assert!(!holds(
@@ -918,6 +1836,45 @@ mod tests {
             "Geschäftsbericht 2025 – Corporate Governance\n\nDie Gesellschaft führt eine Insiderliste \
              nach Art. 18 MAR. Umsatzerlöse und Ergebnis erläutert der Lagebericht.",
             "Insiderliste",
+        ));
+    }
+
+    #[test]
+    fn draft_pleadings_hold_with_legal_anchors() {
+        let en = "DRAFT - Statement of Claim (privileged draft for client review)\n\nIN THE HIGH COURT OF \
+                  JUSTICE\nClaimant: Northwind Ltd.\nDefendant: Fabrikam GmbH";
+        assert!(gate(en, "DRAFT - Statement of Claim"));
+        let de = "ENTWURF Klageschrift - vertraulich, nur für die Mandantin\n\nAn das Landgericht München I\n\n\
+                  Klage der Nordlicht GmbH gegen die Brandt AG - Beklagte -";
+        assert!(gate(de, "ENTWURF Klageschrift"));
+        assert!(gate(
+            "Betreff: Brandt\n\nanbei unser Klageentwurf für die Kanzlei, Verfahren vor dem Arbeitsgericht.",
+            "Klageentwurf",
+        ));
+        // A consumer's draft complaint or a seminar exercise is no pleading.
+        assert!(!gate(
+            "Here is my draft complaint to the airline about the lost suitcase. Dear customer service, my bag never arrived.",
+            "draft complaint",
+        ));
+        assert!(!gate(
+            "Seminar Zivilprozess: Übung Klageentwurf, zum Beispiel für das Landgericht.",
+            "Klageentwurf",
+        ));
+    }
+
+    #[test]
+    fn nda_and_trade_secret_documents_hold_in_de_and_en() {
+        assert!(nda(
+            "Subject: Drawings\n\nThe drawings are covered by our NDA. Do not forward them; the prototype is non-public.",
+            "NDA",
+        ));
+        assert!(nda(
+            "Betreff: Kiefer\n\nDie Rezeptur ist ein Geschäftsgeheimnis, bitte nicht weiterleiten.\n\nViele Grüße",
+            "Geschäftsgeheimnis",
+        ));
+        assert!(nda(
+            "PRESSEMITTEILUNG\nSperrfrist: 12. November 2026\nBis zur Veröffentlichung nicht öffentlich.",
+            "Sperrfrist",
         ));
     }
 
@@ -954,6 +1911,26 @@ mod tests {
     }
 
     #[test]
+    fn law_texts_court_decisions_and_templates_are_no_nda_document() {
+        assert!(!nda(
+            "Im Sinne dieses Gesetzes ist Geschäftsgeheimnis eine Information mit angemessenen Geheimhaltungsmaßnahmen.",
+            "Geschäftsgeheimnis",
+        ));
+        assert!(!nda(
+            "The court held that the customer list was not a trade secret.",
+            "trade secret",
+        ));
+        assert!(!nda(
+            "## NDA template\n\nThis Non-Disclosure Agreement is made between [Party A] and [Party B].",
+            "Non-Disclosure Agreement",
+        ));
+        assert!(!nda(
+            "// embargo period for vulnerability reports",
+            "embargo period"
+        ));
+    }
+
+    #[test]
     fn board_minutes_hold_and_job_ads_do_not() {
         let class = is_board_minutes_document;
         assert!(holds(
@@ -986,5 +1963,294 @@ mod tests {
             "## Muster Umlaufbeschluss\n\nDer Aufsichtsrat beschließt einstimmig: [Text]. Platzhalter.",
             "Umlaufbeschluss",
         ));
+    }
+
+    #[test]
+    fn newsletters_policies_job_ads_and_shop_notes_are_no_nda_document() {
+        // Letter words and a generic term (publication, signed) without a
+        // secrecy duty name an NDA or embargo but are none.
+        assert!(!nda(
+            "Subject: Weekly news digest\n\nDear readers, a court in Delaware ruled in a trade secret case \
+             that the former engineer may not reuse proprietary source code. Please share this issue.",
+            "trade secret",
+        ));
+        assert!(!nda(
+            "Betreff: Wochenüberblick\n\nHallo zusammen, die Reform des GeschGehG tritt nach der \
+             Veröffentlichung im Bundesgesetzblatt in Kraft. Viele Grüße",
+            "GeschGehG",
+        ));
+        assert!(!nda(
+            "# Security Policy\n\nPlease report vulnerabilities by mail. Reports stay under embargo until a fix \
+             is released and the announcement is published.",
+            "embargo until",
+        ));
+        assert!(!nda(
+            "Hi! We are hiring a backend engineer. Candidates sign an NDA before the take-home task; the offer \
+             is signed after two interviews.",
+            "NDA",
+        ));
+        assert!(!nda(
+            "Hallo, bitte beachten Sie die Sperrfrist für Rücksendungen: Der Empfänger erhält die Erstattung \
+             nach 14 Tagen. Viele Grüße, Ihr Shop-Team",
+            "Sperrfrist",
+        ));
+    }
+
+    #[test]
+    fn policies_on_confidentiality_are_no_nda_document() {
+        // A policy names the NDA its volunteers sign and the confidentiality
+        // of user data; bare confidentiality is no secrecy duty of a document.
+        assert!(!nda(
+            "Subject: Access policy\n\nPlease note: volunteers with access to user data sign the NDA. \
+             Confidentiality of user data is a core value; the recipient of a request reviews it.",
+            "NDA",
+        ));
+        assert!(!nda(
+            "Re: Data access\n\nDear volunteers, before access you sign the NDA. We take confidentiality \
+             seriously and publish the announcement of every policy change.",
+            "NDA",
+        ));
+    }
+
+    #[test]
+    fn articles_on_ndas_are_no_nda_document() {
+        // Encyclopedic prose has the parties, confidential information and
+        // signatures of an NDA but no letter, agreement or record form.
+        let en = "A non-disclosure agreement sets out which information the parties keep secret and for \
+                  how long. In a one-way arrangement only the disclosing party shares material; the \
+                  receiving party promises to protect the confidential information and to use it for the \
+                  stated purpose alone. Mutual agreements are signed when both sides exchange plans, as in \
+                  joint ventures and research partnerships.\n\nCourts enforce such clauses but will not \
+                  uphold an NDA that hides a crime. Because proving what a recipient learned is hard, firms \
+                  also mark files as proprietary and limit access to staff with a need to know.";
+        assert!(!nda(en, "non-disclosure agreement"));
+        assert!(!nda(en, "NDA"));
+        let de = "Eine Geheimhaltungsvereinbarung legt fest, welche Informationen die Parteien vertraulich \
+                  behandeln. Bei einseitigen Verträgen gibt nur die offenlegende Partei Unterlagen heraus, die \
+                  empfangende Partei verpflichtet sich zur Geheimhaltung. Gegenseitige Verträge werden \
+                  unterzeichnet, wenn beide Seiten Pläne austauschen.\n\nVerstöße sichert oft eine \
+                  Vertragsstrafe ab. Gerichte erkennen Informationen nur an, wenn ihr Inhaber angemessene \
+                  Geheimhaltungsmaßnahmen nachweist.";
+        assert!(!nda(de, "Geheimhaltungsvereinbarung"));
+    }
+
+    #[test]
+    fn articles_on_supply_contracts_are_no_contract_document() {
+        // Long prose names customer, supplier, fees, term and liability
+        // without the form of a contract, letter or record.
+        let en = "Manufacturers buy parts under a supply agreement that runs for several years. The \
+                  customer commits to minimum volumes and the supplier accepts price caps for late delivery. \
+                  Fees are indexed to raw material costs.\n\nSuch contracts also allocate liability for \
+                  defective goods, while safety laws keep some claims open whatever term was agreed. \
+                  Termination rights apply on insolvency, and confidentiality clauses protect drawings. \
+                  Carmakers held thousands of these contracts, worth over USD 500 billion, between them.";
+        assert!(!contract(en, "supply agreement"));
+        let de = "Hersteller beziehen Bauteile über einen Liefervertrag mit mehrjähriger Laufzeit. Der Kunde \
+                  sagt Mindestmengen zu, der Lieferant akzeptiert Preisobergrenzen. Die Vergütung folgt den \
+                  Rohstoffpreisen.\n\nDie Haftung für fehlerhafte Teile ist oft begrenzt. Ein Recht zur \
+                  Kündigung besteht vor allem bei Insolvenz, Klauseln zur Vertraulichkeit schützen \
+                  Zeichnungen. Zwischen Herstellern und Zulieferern bestehen Verträge über Milliarden EUR.";
+        assert!(!contract(de, "Liefervertrag"));
+    }
+
+    #[test]
+    fn a_contract_needs_parties_remuneration_term_and_confidentiality() {
+        let en = "Master Services Agreement between Contoso (the Customer) and Fabrikam (the Supplier). \
+                  Fees: EUR 18,400 per month. Term: 24 months. Confidentiality applies.";
+        assert!(contract(en, "Master Services Agreement"));
+        let de = "Rahmenvertrag zwischen Nordlicht (Auftraggeber) und Brandt (Auftragnehmer). \
+                  Vergütung: 7.800 EUR monatlich. Laufzeit: 36 Monate. Vertraulichkeit gilt.";
+        assert!(contract(de, "Rahmenvertrag"));
+        // A title with only two contract terms is a mention, not a contract.
+        assert!(!contract(
+            "We negotiate the framework agreement; let's discuss the term and the fees on Monday.",
+            "framework agreement",
+        ));
+    }
+
+    #[test]
+    fn a_signed_contract_cover_letter_with_the_four_elements_holds() {
+        let en = "Dear Sir or Madam,\nattached is the signed framework agreement. Northwind is the customer, \
+                  remuneration EUR 5,000 per month, the term is two years and confidentiality is agreed.\n\n\
+                  Kind regards";
+        assert!(contract(en, "framework agreement"));
+        let de = "Sehr geehrte Damen und Herren,\nanbei der unterschriebene Rahmenvertrag. Auftraggeber ist die \
+                  Nordlicht GmbH, die Vergütung beträgt 5.000 EUR monatlich, die Laufzeit zwei Jahre, \
+                  Vertraulichkeit ist vereinbart.\n\nMit freundlichen Grüßen";
+        assert!(contract(de, "Rahmenvertrag"));
+    }
+
+    #[test]
+    fn contract_roles_without_the_other_elements_are_no_contract_document() {
+        assert!(!contract(
+            "Subject: Kickoff notes\n\nWe walked through the framework agreement: customer, supplier, contractor \
+             and licensee roles, plus liability.",
+            "framework agreement",
+        ));
+        assert!(!contract(
+            "Betreff: Protokoll\n\nZum Rahmenvertrag: Rollen von Auftraggeber, Auftragnehmer, Lieferant und \
+             Kunde, dazu die Haftung.",
+            "Rahmenvertrag",
+        ));
+    }
+
+    #[test]
+    fn contract_templates_and_law_texts_are_no_contract_document() {
+        assert!(!contract(
+            "## Mustervertrag Rahmenvertrag\n\nzwischen [Firma] (nachfolgend Auftraggeber) und [Partner] \
+             (nachfolgend Auftragnehmer). Vergütung: [Betrag] EUR. Laufzeit: [Monate].",
+            "Rahmenvertrag",
+        ));
+        assert!(!contract(
+            "(1) Durch den Kaufvertrag wird der Verkäufer verpflichtet, dem Käufer die Sache zu übergeben. \
+             (2) Der Käufer zahlt dem Verkäufer den vereinbarten Kaufpreis; die Haftung regelt das Gesetz.",
+            "Kaufvertrag",
+        ));
+    }
+
+    fn marker_matches(rule: &str, text: &str) -> Vec<String> {
+        let pattern = RULES
+            .iter()
+            .find(|pattern| pattern.name == rule)
+            .unwrap()
+            .pattern;
+        regex::Regex::new(pattern)
+            .unwrap()
+            .find_iter(text)
+            .map(|found| found.as_str().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn hr_documents_hold_in_de_and_en() {
+        assert!(holds(
+            is_hr_document,
+            "Betreff: Abmahnung\n\nSehr geehrte Frau Novak,\nSie haben unentschuldigt gefehlt; das ist eine \
+             Pflichtverletzung aus Ihrem Arbeitsvertrag.\n\nMit freundlichen Grüßen\nPersonalabteilung",
+            "Abmahnung",
+        ));
+        assert!(holds(
+            is_hr_document,
+            r#"{"document": "Payslip", "employee": "Ravi Patel", "gross pay": 4820.00, "net pay": 3506.48}"#,
+            "Payslip",
+        ));
+    }
+
+    #[test]
+    fn job_ads_and_law_texts_are_no_hr_document() {
+        assert!(!holds(
+            is_hr_document,
+            "Stellenanzeige: HR Generalist (m/w/d). Ihre Aufgaben: Entgeltabrechnung und Abmahnungen für die \
+             Personalabteilung vorbereiten, Gespräche mit jeder Führungskraft. Wir suchen Sie!\nViele Grüße",
+            "Abmahnungen",
+        ));
+        assert!(!holds(
+            is_hr_document,
+            "Betreff: Gesetzestext\n\n(1) Der Arbeitgeber hat dem Arbeitnehmer eine Entgeltabrechnung zu erteilen. \
+             (2) Arbeitnehmer im Sinne dieses Gesetzes sind auch Auszubildende.",
+            "Entgeltabrechnung",
+        ));
+        // Competition law warnings (Abmahnung) name no employee.
+        assert!(!holds(
+            is_hr_document,
+            "Betreff: Abmahnung wegen Markenverletzung\n\nSehr geehrte Damen und Herren,\nSie verwenden unsere \
+             Marke ohne Lizenz.\n\nMit freundlichen Grüßen",
+            "Abmahnung",
+        ));
+    }
+
+    #[test]
+    fn security_reports_need_an_affected_system() {
+        let text = "Subject: Incident Report INC-2291\n\nDear Anna,\nan attacker used stolen VPN credentials \
+                    and reached the file server fs03. Containment is ongoing.\n\nKind regards";
+        assert!(holds(is_security_report_document, text, "Incident Report"));
+        let text = "Subject: Incident Report INC-2291\n\nDear Anna,\nan attacker sent phishing mails; the \
+                    root cause analysis and containment are ongoing.\n\nKind regards";
+        assert!(!holds(is_security_report_document, text, "Incident Report"));
+    }
+
+    #[test]
+    fn public_advisories_are_no_security_report() {
+        assert!(!holds(
+            is_security_report_document,
+            "Security Advisory for CVE-2026-31337\n\nA vulnerability assessment found a SQL injection that lets \
+             an attacker read data on the server. Severity: high. Affected versions: < 2.4.1. Fixed in 2.4.1.",
+            "vulnerability assessment",
+        ));
+        assert!(holds(
+            is_security_report_document,
+            "# Pentest-Bericht\n\nUmfang: Host dc01\nBefund 1 (kritisch): ein Angreifer kann Zugangsdaten \
+             weiterleiten.\nMaßnahme: NTLMv1 deaktivieren.",
+            "Pentest-Bericht",
+        ));
+    }
+
+    #[test]
+    fn export_markers_need_a_labelled_classification() {
+        let rule = "dlp_document_export_control";
+        assert_eq!(
+            marker_matches(rule, "ECCN 5A002, eccn: 3A001.a.2, AL-Nummer 2B001, EAR99"),
+            ["ECCN 5A002", "eccn: 3A001.a.2", "AL-Nummer 2B001", "EAR99"]
+        );
+        assert_eq!(
+            marker_matches(
+                rule,
+                "Ausfuhrlistennummer 0005, Dual-Use-Gut 3A001, ITAR-controlled"
+            ),
+            [
+                "Ausfuhrlistennummer 0005",
+                "Dual-Use-Gut 3A001",
+                "ITAR-controlled"
+            ]
+        );
+        // A code without its label, a lower-case category letter, an export
+        // list number out of range and a bare "dual use" are no markers.
+        assert!(marker_matches(
+            rule,
+            "item 5A002, ECCN 5a002, AL-Nummer 0099, dual use, ear99, AL 2B001"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn export_control_documents_hold_and_regulation_texts_do_not() {
+        assert!(holds(
+            is_export_control_document,
+            "Subject: Shipment 4471\n\nDear Wei,\nthe converter is classified as ECCN 3A225; we need the end-user \
+             statement before the export licence application.\n\nBest regards",
+            "ECCN 3A225",
+        ));
+        assert!(!holds(
+            is_export_control_document,
+            "Anhang I, Kategorie 5: Unter die Ausfuhrlistennummer 5A002 fallen Systeme, deren Ausfuhr \
+             genehmigungspflichtig ist. Empfänger im Sinne dieser Verordnung ist jeder Käufer.\nBitte beachten.",
+            "Ausfuhrlistennummer 5A002",
+        ));
+    }
+
+    #[test]
+    fn invention_disclosures_hold_and_published_patents_do_not() {
+        assert!(holds(
+            is_rnd_ip_document,
+            "Betreff: Erfindungsmeldung\n\nSehr geehrte Damen und Herren,\nErfinder sind Lea Brandt und Omar \
+             Haddad. Der Stand der Technik nutzt Rückspülventile.\n\nMit freundlichen Grüßen",
+            "Erfindungsmeldung",
+        ));
+        assert!(!holds(
+            is_rnd_ip_document,
+            "US 2023/0123456 A1 - Patent Application Publication\nDate of publication: Apr. 20, 2023\n\
+             Inventors: L. Brandt\nClaims: 1. A filter. The draft claims of the priority application were amended.",
+            "draft claims",
+        ));
+    }
+
+    #[test]
+    fn forms_with_bracketed_placeholders_are_templates() {
+        let text = "## Incident report\n\nAffected system: [hostname]\nSeverity: [low/medium/high]";
+        assert!(is_filled_in_form(text, &(3..18)));
+        assert!(!holds(is_security_report_document, text, "Incident report"));
+        // Links, log levels, timestamps and lists are no placeholders.
+        let text = "Incident report: see [the runbook](https://wiki) [INFO] [09:12] [a, b] [x]";
+        assert!(!is_filled_in_form(text, &(0..15)));
     }
 }

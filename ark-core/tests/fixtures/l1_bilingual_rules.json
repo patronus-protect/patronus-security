@@ -6230,6 +6230,48 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_document_nda_trade_secret",
+    "de": "Betreff: Projekt Kiefer\n\nAnbei die Rezeptur. Sie ist ein Geschäftsgeheimnis unseres Hauses, bitte nicht weiterleiten.\n\nViele Grüße",
+    "en": "Subject: Drawings\n\nThe drawings are covered by our NDA with Fabrikam. Do not forward them; the prototype is non-public.\n\nBest regards",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_contract",
+    "de": "Rahmenvertrag zwischen der Nordlicht GmbH (Auftraggeber) und der Brandt AG (Auftragnehmer). Vergütung: 7.800 EUR monatlich. Laufzeit: 36 Monate. Vertraulichkeit gilt.",
+    "en": "Master Services Agreement between Contoso (the Customer) and Fabrikam (the Supplier). Fees: EUR 18,400 per month. Term: 24 months. Confidentiality applies.",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_hr",
+    "de": "Betreff: Abmahnung\n\nSehr geehrte Frau Novak,\nSie haben unentschuldigt gefehlt. Das ist eine Pflichtverletzung aus Ihrem Arbeitsvertrag.\n\nMit freundlichen Grüßen\nPersonalabteilung",
+    "en": "Subject: Written warning\n\nDear Mr Patel,\nyou missed work without notice to your manager. This breaches your employment contract.\n\nKind regards,\nHuman Resources",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_security_report",
+    "de": "Betreff: Sicherheitsvorfall INC-2291\n\nHallo Anna,\nein Angreifer hat VPN-Zugangsdaten genutzt und den Fileserver fs03 erreicht. Eindämmung läuft.\n\nViele Grüße",
+    "en": "Subject: Incident Report INC-2291\n\nDear Anna,\nan attacker used stolen VPN credentials and reached the file server fs03. Containment is ongoing.\n\nKind regards",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_export_control",
+    "de": "Betreff: Lieferung 4471\n\nSehr geehrter Herr Wei,\nder Umrichter fällt unter Ausfuhrlistennummer 3A225; wir brauchen die Endverbleibserklärung vor der Ausfuhrgenehmigung.\n\nMit freundlichen Grüßen",
+    "en": "Subject: Shipment 4471\n\nDear Wei,\nthe converter is classified as ECCN 3A225; we need the end-user statement before the export licence application.\n\nBest regards",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_document_rnd_ip",
+    "de": "Betreff: Erfindungsmeldung\n\nSehr geehrte Damen und Herren,\nErfinder sind Lea Brandt und Omar Haddad. Der Stand der Technik nutzt Rückspülventile. Die Erfindung ist noch nicht angemeldet.\n\nMit freundlichen Grüßen",
+    "en": "Subject: Invention disclosure\n\nDear colleagues,\nthe inventors are Lea Brandt and Omar Haddad. The prior art uses backflush valves. Nothing has been filed yet.\n\nKind regards",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_azure_storage_account_key",
     "de": "SPEICHER=DefaultEndpointsProtocol=https;AccountName=stacmedaten;AccountKey=<<secret\u003a0>>;EndpointSuffix=core.windows.net",
     "en": "{\"ConnectionStrings\": {\"Storage\": \"AccountName=stacmeuploads;AccountKey=<<secret\u003a0>>\"}}",

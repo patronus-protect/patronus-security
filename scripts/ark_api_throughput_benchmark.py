@@ -157,6 +157,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-mib-per-second", type=float, default=0.0)
     parser.add_argument("--min-rps", type=float, default=0.0)
     parser.add_argument(
+        "--max-l3-queue-timeout-share", type=float, default=0.0,
+        help="Tolerated share of requests whose L3 job expired in the queue (retryable "
+        "`expired_before_inference`); any other failure always fails the run.",
+    )
+    parser.add_argument(
         "--ntdb-operating-point", default="best_promote",
         choices=("best_promote", "best_fpr_in_f1", "best_f1"),
     )
@@ -282,6 +287,18 @@ def l3_run_timing(result: dict) -> tuple[float, float, int] | None:
                 int(details.get("chunk_count", 0)),
             )
     return None
+
+
+def blocking_failures(failures: list[dict], requests: int, max_queue_timeout_share: float) -> list[dict]:
+    """The failures that fail the run: all of them, unless every one is a retryable L3 queue
+    timeout and their count stays within the tolerated share of the requests."""
+    queue_timeouts = [
+        failure for failure in failures
+        if failure.get("retryable") and failure.get("message") == "expired_before_inference"
+    ]
+    if len(queue_timeouts) == len(failures) and len(failures) <= max_queue_timeout_share * requests:
+        return []
+    return failures
 
 
 def timing_summary(values: list[float]) -> dict:
@@ -440,7 +457,7 @@ def main() -> int:
     ]
     if len(finished) != len(submitted):
         errors.append(f"completed {len(finished)}/{len(submitted)} requests")
-    if failures:
+    if blocking_failures(failures, len(submitted), args.max_l3_queue_timeout_share):
         errors.append(f"received {len(failures)} pipeline failures")
     if UNIFIED_MODEL not in l3_models:
         errors.append(f"unified L3 model {UNIFIED_MODEL!r} was not observed")
