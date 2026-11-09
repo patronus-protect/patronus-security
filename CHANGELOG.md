@@ -22,8 +22,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   plate (`app-456cv`, hyphen only) are opt-in rules `pii_vehicle_registration_uk_prefix_bare`,
   `pii_vehicle_registration_uk_suffix_bare`, `pii_vehicle_registration_in_bare` and
   `pii_vehicle_registration_ng_lowercase_bare` (off in every mode, base `35`, in the bare profile
-  `docs/how-to/pii-bare-formats.gates.json`). The dateless UK form gets no rule (it matches product
-  and version codes); `known_gaps` records it. MEASUREMENTS
+  `docs/how-to/pii-bare-formats.gates.json`). Both older UK forms need the space as printed;
+  unspaced, the suffix form matched 2,474 hex and base64 runs on the dev benign code corpus. The
+  dateless UK form gets no rule (it matches product and version codes); `known_gaps` records it.
+  Dev, presidio_favored (EN, raw): licence plate `balanced-bare` 72.0 → 93.3 exact F1 (Presidio
+  tuned 81.5), `balanced` unchanged at 47.6; all languages 80.0 with the profile (TR plates and the
+  short IN forms `MN2412`, `I15432` stay without a rule). With the bare profile the new rules add
+  no span on the dev benign code corpus (37.8 MB) and one on benign docs (7.5 MB, `GSA 18F`); on the
+  PII hard negatives they match only the planted plate values that are negative with the default
+  gates. `strict` output with the default gates is unchanged; the three context-bound rules run
+  in `balanced`/`recall` only, the bare rules only when enabled.
 - Detection change: HR, security, export-control and R&D document classes on the M01 content class
   engine (M-HRSEC), all opt-in (off by default; the default profile is unchanged). New
   `dlp_document_hr` (`dlp.document.hr`, M06): employment references (Arbeitszeugnis), warning

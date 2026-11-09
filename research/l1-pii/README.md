@@ -142,7 +142,17 @@ Rohe M1-Lücke gegen tuned auf `presidio_favored` (EN): Kennzeichen `balanced-ba
 - **Ohne Regel:** die datumslose UK-Form (1–3 Buchstaben und 1–4 Ziffern) gleicht Produkt- und
   Versionscodes (`ISO 9001`); TR-Kennzeichen (B-LUHN) und die kurzen IN-Formen (`MN2412`, `I15432`).
   `known_gaps`: Eintrag T30 (TR/IN/NG) nennt die Opt-in-Regeln, neuer Eintrag T36 die blanken UK-Formen.
-- **Messung (Dev):** MEASUREMENTS
+- **Leerzeichen Pflicht:** Beide alten UK-Formen brauchen das Leerzeichen wie auf dem Schild; ohne
+  trafen die Suffixform 2.474 und die Präfixform 8 Hex-/Base64-Läufe im Dev-Benign-Code (`GAC1D`, `C1DEA`).
+- **Messung (Dev, roh, EN):** Kennzeichen auf `presidio_favored` `balanced-bare` 72,0 → 93,3 (tuned
+  81,5, default 0,0), `balanced` unverändert 47,6. Alle Presidio-Hard-Negatives (`I123 BCD`, `O123 BCD`,
+  `ABC 123I`, `ABC 123Z`) bleiben leer.
+- **Untergrenze:** Über alle Sprachen der Familie 80,0 mit Profil (14 von 21 Gold-Werten, 0 FP).
+  Festgehaltene Ausnahme: TR-Kennzeichen (5, B-LUHN: aus dem Programm genommen) und die kurzen IN-Formen
+  `MN2412`, `I15432` (2, ohne Staatscode-Struktur) bleiben ohne Regel.
+- **FP mit Bare-Profil:** Dev-Benign-Code (37,8 MB) 0 neue Spans, Benign-Docs (7,5 MB) 1 (`GSA 18F`,
+  Suffixform); auf den PII-Hard-Negatives nur die absichtlich blanken Kennzeichenwerte, die mit den
+  Standard-Gates negativ sind. `strict` mit Standard-Gates bitgleich (Goldens grün).
 
 ## Untergrenze `presidio_favored` für die Länder-IDs seit W44 (T33)
 
