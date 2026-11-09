@@ -962,6 +962,60 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk_prefix",
+    "de": "Kennzeichen: A123 BCD",
+    "en": "My car reg is K1 ABC and it expires.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer: A123 BCD",
+        "Kennzeichen: I123 BCD"
+      ],
+      "en": [
+        "A123 BCD",
+        "Number plate delivery to SW1A 1AA"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk_suffix",
+    "de": "Nummernschild ABC 1D",
+    "en": "Number plate: HJK 45A",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "Artikelnummer ABC 123D",
+        "Nummernschild ABC 123I"
+      ],
+      "en": [
+        "ABC 1D",
+        "Number plate: ABC 123Z"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_in",
+    "de": "Kennzeichen: KA53ME3456",
+    "en": "Vehicle registration MH12AB1234",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer: KA53ME3456",
+        "Kennzeichen: AB53ME3456"
+      ],
+      "en": [
+        "KA53ME3456",
+        "Number plate: KA00ME3456"
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_ssn_us",
     "de": "US-Sozialversicherungsnummer: 123-45-6789",
     "en": "Social security number: 123-45-6789",
@@ -3329,6 +3383,66 @@
       ],
       "en": [
         "Reference APP-456CV was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_ng_lowercase_bare",
+    "de": "Bitte app-456cv im Formular eintragen.",
+    "en": "Please copy app-456cv into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang app-456cv wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference app-456cv was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk_prefix_bare",
+    "de": "Bitte A123 BCD im Formular eintragen.",
+    "en": "Please copy K1 ABC into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang A123 BCD wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference A123 BCD was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk_suffix_bare",
+    "de": "Bitte ABC 1D im Formular eintragen.",
+    "en": "Please copy ABC 1D into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang ABC 1D wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference ABC 1D was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_in_bare",
+    "de": "Bitte KA53ME3456 im Formular eintragen.",
+    "en": "Please copy KA53ME3456 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang KA53ME3456 wurde abgeschlossen."
+      ],
+      "en": [
+        "Reference KA53ME3456 was archived."
       ]
     }
   },

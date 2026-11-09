@@ -5012,6 +5012,45 @@ Q_M1_CASES = [
 for _row in Q_M1_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T36: the older UK prefix (`A123 BCD`, `K1 ABC`: age letter, serial 1–999, three letters) and
+# suffix forms (`ABC 1D`: three letters, serial, year letter) and the Indian plate without
+# separators (`KA53ME3456`: state code, district, series, number) are reported with a plate term
+# near them in balanced and recall; strict is unchanged. Their bare forms and the lower-case
+# Nigerian plate are opt-in rules (rust/tests/pii_bare_rules.rs), so a bare value stays negative
+# with the default gates. Appended so existing ids stay stable.
+T36_CASES = [
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "My car reg is ", "A123 BCD", " and it expires in May.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "Number plate ", "K1 ABC", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "Number plate: ", "ABC 1D", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "The classic car with registration plate ", "HJK 45A", " was sold.", carrier="prose", mode="recall"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_in", "Vehicle registration ", "KA53ME3456", "", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_in", "The car with number plate ", "MH12AB1234", " was towed.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen: ", "P999 XYZ", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Das Fahrzeug mit dem Kennzeichen ", "Y45 HJK", " stand im Halteverbot.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_suffix", "Nummernschild ", "XYZ 999Y", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Kennzeichen: ", "DL3C1234", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Der Wagen mit dem Kennzeichen ", "TN07BZ9999", " wurde abgeschleppt.", carrier="prose", mode="recall"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "A123 BCD", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "Number plate: I123 BCD", "I is never an age letter", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "Number plate delivery to SW1A 1AA", "UK postcode near a plate term", mode="recall"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "Number plate: ABC 123Z", "Z is never a year letter", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "Order number ABC 1D", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_in", "KA53ME3456", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_in", "Number plate: AB53ME3456", "AB is no state code", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_in", "Number plate: KA53ME3456", "strict reports no Indian plate"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_ng", "app-456cv", "lower-case bare value (opt-in rule only)", mode="recall"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Bestellnummer: A123 BCD", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen: A1234 BCD", "four-digit serial", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen-Versand an M1 1AE", "UK postcode near a plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_suffix", "Artikelnummer ABC 123D", "part number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_suffix", "ABC 1D", "bare value without a plate term", mode="recall"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Kennzeichen: KA00ME3456", "district 00 is never issued", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Rechnungsnummer: KA53ME3456", "invoice number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen: A123 BCD", "strict reports no UK prefix plate"),
+]
+for _row in T36_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

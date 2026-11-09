@@ -57,6 +57,9 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_vehicle_registration_uk", "LICENSEPLATE"),
     ("pii_vehicle_registration_uk_context_free", "LICENSEPLATE"),
     ("pii_vehicle_registration_ng", "LICENSEPLATE"),
+    ("pii_vehicle_registration_uk_prefix", "LICENSEPLATE"),
+    ("pii_vehicle_registration_uk_suffix", "LICENSEPLATE"),
+    ("pii_vehicle_registration_in", "LICENSEPLATE"),
     ("pii_ssn_us", "SSN"),
     ("pii_ssn_us_proximity", "SSN"),
     ("pii_ssn_us_context_free", "SSN"),
@@ -230,6 +233,10 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_pan_in_bare", "IN_PAN"),
     ("pii_voter_id_in_bare", "IN_VOTER"),
     ("pii_vehicle_registration_ng_bare", "LICENSEPLATE"),
+    ("pii_vehicle_registration_ng_lowercase_bare", "LICENSEPLATE"),
+    ("pii_vehicle_registration_uk_prefix_bare", "LICENSEPLATE"),
+    ("pii_vehicle_registration_uk_suffix_bare", "LICENSEPLATE"),
+    ("pii_vehicle_registration_in_bare", "LICENSEPLATE"),
 ];
 
 #[test]
