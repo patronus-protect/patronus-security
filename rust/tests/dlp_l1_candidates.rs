@@ -364,7 +364,8 @@ fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
 fn private_key_finding_covers_the_complete_block() {
     let key = concat!(
         concat!("-----BEGIN ", "PRIVATE KEY-----", "\n"),
-        "cHJpdmF0ZS1rZXktbWF0ZXJpYWw=\n",
+        // PKCS#8 Ed25519 structure (F-STRUCT) around 32 bytes of key material.
+        "MC4CAQAwBQYDK2VwBCIEIHNwYW5uZWQta2V5LW1hdGVyaWFsLTAxMjM0NTY3ODlh\n",
         "-----END PRIVATE KEY-----"
     );
     let result = scan(&format!("prefix\n{key}\nsuffix"));

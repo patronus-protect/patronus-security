@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::{auth_url, connection, http_auth, likeness, ConfigKey, ProviderKey};
+use super::{auth_url, connection, http_auth, likeness, structure, ConfigKey, ProviderKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 use crate::detectors::validators::{base64_decode, Base64Kind};
 
@@ -112,12 +112,13 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Generische Credential-Patterns ───────────────────────────────────────
     DlpPattern {
         name: "dlp_jwt_token",
-        pattern: r"(?P<anchor_1>ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
+        // F07: the signature may be empty for an unsecured token (alg none).
+        pattern: r"(?P<anchor_1>ey[a-zA-Z0-9_\-=]{10,}\.){2}(?:[a-zA-Z0-9_\-=]{10,})?",
         entity_group: "SECRET_TOKEN",
-        validator: None,
+        validator: Some(structure::is_jwt_token),
         span_group: None,
         base_score: 45,
-        meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:jwt", &["ey"])
+        meta: RuleMeta::new(ValidatorStrength::Structure, "gitleaks:jwt", &["ey"])
             .with_min_entropy(3.0)
             .with_boundary("-")
             .with_subtype(SecretSubtype::AccessToken),

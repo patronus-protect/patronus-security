@@ -193,6 +193,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   each 24-character window from its end and skipping past the byte that breaks it, so most bytes of
   prose and code are never read; a run is dropped at its first decoded byte that is not text, and
   the second rule pass covers only the decoded view.
+- Detection change: JWT and PEM structure (F-STRUCT, F07 + F08 + C07). `dlp_jwt_token` reports a
+  token only when its header decodes to a JSON object with a string `alg` and its claims to a JSON
+  object (validator strength `structure`); unsecured tokens (`alg` `none`) with an empty signature
+  are now reported and carry `jwt_alg` in `matched_rules`, Supabase and Firebase service tokens
+  carry `provider`. `dlp_private_key_block` covers `ENCRYPTED PRIVATE KEY`, `PGP PRIVATE KEY
+  BLOCK` and PuTTY PPK files besides PKCS#1/PKCS#8/EC/DSA/OpenSSH, checks the body structurally
+  (DER, `openssh-key-v1`, secret-key packet, PPK key lines; validator strength `structure`) and
+  reports `key_encrypted` (OpenSSH bcrypt KDF, encrypted PKCS#8, OpenSSL `Proc-Type`, PPK
+  `Encryption`). `dlp_private_key_header` keeps a bare header line but drops armor around a body
+  that is no key (`...`, placeholders, broken DER). authorized_keys/known_hosts lines and public
+  keys stay negative. L1 latency: the checks run only on JWT/PEM matches.
 - Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
   (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
   official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
