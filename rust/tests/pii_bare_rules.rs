@@ -63,6 +63,13 @@ const CASES: &[(&str, &str, &str, &str, &str)] = &[
         "SSN: 422-68-7360",
     ),
     (
+        "pii_aba_routing_number_us_bare",
+        "FINANCIAL_ACCOUNT_NUMBER",
+        "121042882",
+        "121042883",
+        "Routing number: 121042882",
+    ),
+    (
         "pii_sin_ca_bare",
         "CA_SIN",
         "435418165",
@@ -653,6 +660,18 @@ const STRUCTURED_NEGATIVES: &[(&str, &str, &[&str])] = &[
         ],
     ),
     (
+        "pii_aba_routing_number_us_bare",
+        "121042882",
+        &[
+            "Customer: Sure, it's 123456789.",
+            "Per our records, your policy number is 121042882, and your account",
+            "Bill of Lading No.: BOL-121042882",
+            "GS*HP*8372541*121042882*20220222*1234~",
+            "ACCTID,121042882\nCUSTNAM,Kimberley",
+            "/52A\n\nBANK OF AMERICA\n\n/71A\n\n121042882\n\n/11A",
+        ],
+    ),
+    (
         "pii_facility_number_bsnr_de_bare",
         "711234567",
         &[
@@ -753,5 +772,57 @@ fn an_enabled_bare_rule_yields_to_a_default_finding_of_another_label() {
             result.evidence_spans.iter().any(|span| span.label == "SSN"),
             "{mode}"
         );
+    }
+}
+
+/// T35: the bare ABA routing number shares nine digits with the bare SSN and
+/// the bare BSNR. The existing order decides (D-BARE, T34): a default finding of
+/// another label wins, an SSN term makes the value an SSN and a routing term an
+/// account number; bare findings keep their labels among themselves. The
+/// presidio-analyzer values pass with the bare profile, twelve digits and a
+/// failed check digit stay out.
+#[test]
+fn the_bare_routing_number_overlaps_by_the_existing_order() {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let mut gates: ScanGateMatrix = serde_json::from_str(include_str!(
+            "../../docs/how-to/pii-bare-formats.gates.json"
+        ))
+        .unwrap();
+        gates.native.pii_mode = mode;
+        let scanner = scanner(gates);
+        let labels = |text: &str| -> Vec<String> {
+            let mut labels: Vec<_> = scan(&scanner, text)
+                .evidence_spans
+                .into_iter()
+                .map(|span| span.label)
+                .collect();
+            labels.sort_unstable();
+            labels
+        };
+        let account = "FINANCIAL_ACCOUNT_NUMBER";
+        // Bare, the nine digits are also a bare BSNR and, in the SSA ranges, a bare SSN.
+        assert_eq!(
+            labels("121000358"),
+            ["FACILITY_NUMBER_BSNR", account],
+            "{mode}"
+        );
+        assert_eq!(
+            labels("121042882"),
+            ["FACILITY_NUMBER_BSNR", account, "SSN"],
+            "{mode}"
+        );
+        assert_eq!(labels("SSN: 121042882"), ["SSN"], "{mode}");
+        assert_eq!(labels("Routing number: 121042882"), [account], "{mode}");
+        assert_eq!(
+            labels("BSNR 121042882 der Praxis."),
+            ["FACILITY_NUMBER_BSNR"],
+            "{mode}"
+        );
+        for text in ["945456787654", "121042883", "121000359", "931042881"] {
+            assert!(
+                labels(text).iter().all(|label| label != account),
+                "{mode}: {text}"
+            );
+        }
     }
 }
