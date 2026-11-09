@@ -538,10 +538,10 @@ fn bare_rule_false_positive_report() {
 
 /// T34: structured non-PII of the neutral dev rows that the bare SSN, BSNR and
 /// German card-licence rules reported. `(rule, valid bare value, negatives)`:
-/// a placeholder (the counting sequence or two alternating digits), a nearer
-/// account, routing or contract term, a code prefix (`BOL-`, `NL.`), a field of a
-/// SWIFT, X12 or EDIFACT message, a CSV key, and for the licence a value in BIC
-/// shape.
+/// a placeholder (the counting sequence or two alternating digits), an account,
+/// routing or contract term nearer the value, on the line before or next to the
+/// same value elsewhere, a code prefix (`BOL-`, `NL.`), a field of a SWIFT, X12 or
+/// EDIFACT message, a CSV key, and for the licence a value in BIC shape.
 const STRUCTURED_NEGATIVES: &[(&str, &str, &[&str])] = &[
     (
         "pii_ssn_us_bare",
@@ -560,6 +560,9 @@ const STRUCTURED_NEGATIVES: &[(&str, &str, &[&str])] = &[
             ":60F:CUST/USD/422687360\n:61:422687360\n:86:4566543210USD",
             "ACCTID,422687360\nCUSTNAM,Kimberley",
             "ORIGINATING·INSTITUTION·ID·422687360",
+            "Agent: May I have your bank routing number?\nCustomer: Sure, it's 422687360.",
+            "We collect bank routing numbers, such as 422687360.\n\nRouting (ABA) 4226873 - 422687360",
+            "/52A\n\nBANK OF AMERICA\n\n/71A\n\n422687360\n\n/11A",
         ],
     ),
     (
