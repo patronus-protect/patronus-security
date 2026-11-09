@@ -22,7 +22,7 @@ import json
 import re
 from pathlib import Path
 
-from patronus_ark.dlp_synth import recipes
+from patronus_ark.dlp_synth import recipes, technical_negatives
 
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -17759,6 +17759,49 @@ DLP_D01_CASES = {
 }
 for _label, _rows in DLP_D01_CASES.items():
     DLP_CASES[_label].extend(_rows)
+
+
+# H01: hard-negative mining. 1,000 technical benign snippets (content hashes, UUIDs, image
+# digests, lockfile integrity, commit SHAs, published test vectors, documented example keys)
+# from `dlp_synth.technical_negatives`, 25 DE + 25 EN per family. Each family names the label
+# and rule its values look like; no DLP rule may report any of them.
+DLP_H01_FAMILIES = {
+    "commit_sha": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "sha256_sums": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "md5_sha1": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "sha512_hex": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "docker_digest": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "npm_integrity": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "yarn_integrity": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "cargo_lock": ("CRYPTO_KEY", "dlp_btc_wif"),
+    "go_sum": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "pip_hashes": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "uuids": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "trace_ids": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "sri_hashes": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "kubernetes_meta": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "etags": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "tfstate": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "hash_test_vectors": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "docs_example_keys": ("CLOUD_KEY", "dlp_aws_access_key"),
+    "content_ids": ("CRYPTO_KEY", "dlp_btc_wif"),
+    "public_keys": ("PRIVATE_KEY", "dlp_private_key_block"),
+}
+
+
+def h01_negative(snippet: dict) -> dict:
+    label, rule = DLP_H01_FAMILIES[snippet["family"]]
+    row = negative(label, snippet["language"], snippet["text"], f"H01 {snippet['family']}: {snippet['reason']}")
+    row["provenance"] = {
+        "origin": "synthetic",
+        "source": "Ark L1 hard-negative mining H01 (patronus_ark.dlp_synth.technical_negatives)",
+    }
+    return dlp_row(row, rule, snippet["carrier"], (), False)
+
+
+for _snippet in technical_negatives.snippets():
+    _row = h01_negative(_snippet)
+    DLP_CASES[_row["target_label"]].append(_row)
 
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
