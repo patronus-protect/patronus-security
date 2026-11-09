@@ -964,7 +964,7 @@
     "category": "pii",
     "rule_id": "pii_vehicle_registration_uk_prefix",
     "de": "Kennzeichen: A123 BCD",
-    "en": "My car reg is K1 ABC and it expires.",
+    "en": "Number plate: K1 ABC",
     "language_neutral": false,
     "pii_mode": "balanced",
     "hard_negatives": {

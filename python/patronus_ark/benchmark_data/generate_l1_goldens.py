@@ -5019,15 +5019,15 @@ for _row in Q_M1_CASES:
 # Nigerian plate are opt-in rules (rust/tests/pii_bare_rules.rs), so a bare value stays negative
 # with the default gates. Appended so existing ids stay stable.
 T36_CASES = [
-    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "My car reg is ", "A123 BCD", " and it expires in May.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "My number plate is ", "A123 BCD", " and it expires in May.", carrier="prose", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "Number plate ", "K1 ABC", "", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "Number plate: ", "ABC 1D", "", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_uk_suffix", "The classic car with registration plate ", "HJK 45A", " was sold.", carrier="prose", mode="recall"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_in", "Vehicle registration ", "KA53ME3456", "", mode="balanced"),
     p("LICENSEPLATE", "en", "pii_vehicle_registration_in", "The car with number plate ", "MH12AB1234", " was towed.", carrier="prose", mode="balanced"),
-    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen: ", "P999 XYZ", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Kennzeichen: ", "P999 XYW", "", mode="balanced"),
     p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_prefix", "Das Fahrzeug mit dem Kennzeichen ", "Y45 HJK", " stand im Halteverbot.", carrier="prose", mode="balanced"),
-    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_suffix", "Nummernschild ", "XYZ 999Y", "", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk_suffix", "Nummernschild ", "XYW 999Y", "", mode="balanced"),
     p("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Kennzeichen: ", "DL3C1234", "", mode="balanced"),
     p("LICENSEPLATE", "de", "pii_vehicle_registration_in", "Der Wagen mit dem Kennzeichen ", "TN07BZ9999", " wurde abgeschleppt.", carrier="prose", mode="recall"),
     n("LICENSEPLATE", "en", "pii_vehicle_registration_uk_prefix", "A123 BCD", "bare value without a plate term", mode="balanced"),

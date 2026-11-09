@@ -100,9 +100,24 @@ known_gaps:
     rows: 'test_de_fuehrerschein_recognizer:'
   - id: pii.license_plate
     decision: T30
-    reason: blanke TR-, IN- und NG-Kennzeichen ohne Kennzeichen-Begriff bleiben negativ (Format ohne Prüfziffer, B-LUHN)
+    reason: >-
+      blanke TR-, IN- und NG-Kennzeichen ohne Kennzeichen-Begriff bleiben in den Standardregeln negativ
+      (Format ohne Prüfziffer, B-LUHN); opt-in seit T36: IN ohne Trenner (KA53ME3456,
+      pii_vehicle_registration_in_bare), NG (APP-456CV, pii_vehicle_registration_ng_bare) und NG in
+      Kleinschrift (app-456cv, pii_vehicle_registration_ng_lowercase_bare); ohne Regel bleiben TR und die
+      kurzen IN-Formen (MN2412, I15432)
     bare: true
     rows: 'test_(?:tr_license_plate|in_vehicle_registration|ng_vehicle_registration)_recognizer:'
+  - id: pii.license_plate
+    decision: T36
+    reason: >-
+      blanke UK-Kennzeichen der Präfix- (A123 BCD, K1 ABC) und Suffix-Form (ABC 1D) ohne Kennzeichen-Begriff
+      bleiben in den Standardregeln negativ (Buchstabenmengen statt Prüfziffer); opt-in über
+      pii_vehicle_registration_uk_prefix_bare und pii_vehicle_registration_uk_suffix_bare; die datumslose
+      Form (1–3 Buchstaben und 1–4 Ziffern) bekommt keine Regel, sie gleicht Produkt- und Versionscodes
+    span: '[A-Z]\d{1,3} ?[A-Z]{3}|[A-Z]{3} ?\d{1,3}[A-Z]'
+    bare: true
+    rows: 'test_uk_vehicle_registration_recognizer:'
   - id: pii.au.acn
     decision: B-APAC
     reason: blanke neun Ziffern ohne ACN-Begriff bleiben negativ, auch mit gültiger Prüfziffer

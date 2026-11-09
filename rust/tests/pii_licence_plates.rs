@@ -264,15 +264,27 @@ fn ng_vehicle_registration_lowercase_validator_checks_the_form() {
 #[test]
 fn uk_prefix_and_suffix_validators_check_the_letter_sets() {
     // Prefix form 1983–2001: age letter, serial 1–999, three letters.
-    for valid in ["A123 BCD", "K1 ABC", "P999XYZ", "Y45 HJK", "R7 ABW"] {
+    for valid in ["A123 BCD", "K1 ABC", "P999XYW", "Y45 HJK", "R7 ABW"] {
         assert!(
             validators::uk_vehicle_registration_prefix(valid),
             "{valid} must be valid"
         );
     }
     for invalid in [
-        "I123 BCD", "O123 BCD", "Q123 BCD", "U123 BCD", "Z123 BCD", "A0 BCD", "A012 BCD",
-        "A1234 BCD", "A123 BID", "A123 BCQ", "A123 ZCD", "A123  BCD", "A123-BCD", "a123 bcd",
+        "I123 BCD",
+        "O123 BCD",
+        "Q123 BCD",
+        "U123 BCD",
+        "Z123 BCD",
+        "A0 BCD",
+        "A012 BCD",
+        "A1234 BCD",
+        "A123 BID",
+        "A123 BCQ",
+        "A123 ZCD",
+        "A123  BCD",
+        "A123-BCD",
+        "a123 bcd",
         "",
     ] {
         assert!(
@@ -281,15 +293,27 @@ fn uk_prefix_and_suffix_validators_check_the_letter_sets() {
         );
     }
     // Suffix form 1963–1983: three letters, serial 1–999, year letter.
-    for valid in ["ABC 1D", "ABC 123D", "XYZ999Y", "HJK 45A"] {
+    for valid in ["ABC 1D", "ABC 123D", "XYW999Y", "HJK 45A"] {
         assert!(
             validators::uk_vehicle_registration_suffix(valid),
             "{valid} must be valid"
         );
     }
     for invalid in [
-        "ABC 123I", "ABC 123Z", "ABC 123O", "ABC 123Q", "ABC 123U", "ABC 0D", "ABC 012D",
-        "ABC 1234D", "AIC 123D", "QBC 123D", "ABZ 123D", "ABC 12 3D", "abc 1d", "",
+        "ABC 123I",
+        "ABC 123Z",
+        "ABC 123O",
+        "ABC 123Q",
+        "ABC 123U",
+        "ABC 0D",
+        "ABC 012D",
+        "ABC 1234D",
+        "AIC 123D",
+        "QBC 123D",
+        "ABZ 123D",
+        "ABC 12 3D",
+        "abc 1d",
+        "",
     ] {
         assert!(
             !validators::uk_vehicle_registration_suffix(invalid),
@@ -705,15 +729,31 @@ fn t36_plate_rules_need_a_plate_term_in_the_scored_modes() {
 #[test]
 fn t36_plates_with_a_plate_term_in_the_scored_modes() {
     for (rule_id, text, value) in [
-        (UK_PREFIX, "My car reg is A123 BCD and it expires.", "A123 BCD"),
+        (
+            UK_PREFIX,
+            "My number plate is A123 BCD and it expires.",
+            "A123 BCD",
+        ),
         (UK_PREFIX, "Number plate K1 ABC", "K1 ABC"),
-        (UK_PREFIX, "Kennzeichen: P999 XYZ", "P999 XYZ"),
-        (UK_PREFIX, "Das Fahrzeug mit dem Kennzeichen Y45 HJK stand im Halteverbot.", "Y45 HJK"),
+        (UK_PREFIX, "Kennzeichen: P999 XYW", "P999 XYW"),
+        (
+            UK_PREFIX,
+            "Das Fahrzeug mit dem Kennzeichen Y45 HJK stand im Halteverbot.",
+            "Y45 HJK",
+        ),
         (UK_SUFFIX, "Number plate: ABC 1D", "ABC 1D"),
-        (UK_SUFFIX, "The classic car with registration plate HJK 45A was sold.", "HJK 45A"),
-        (UK_SUFFIX, "Nummernschild XYZ 999Y", "XYZ 999Y"),
+        (
+            UK_SUFFIX,
+            "The classic car with registration plate HJK 45A was sold.",
+            "HJK 45A",
+        ),
+        (UK_SUFFIX, "Nummernschild XYW 999Y", "XYW 999Y"),
         (IN, "Vehicle registration KA53ME3456", "KA53ME3456"),
-        (IN, "The car with number plate MH12AB1234 was towed.", "MH12AB1234"),
+        (
+            IN,
+            "The car with number plate MH12AB1234 was towed.",
+            "MH12AB1234",
+        ),
         (IN, "Kennzeichen: DL3C1234", "DL3C1234"),
     ] {
         assert_scored(rule_id, text, &[value], 0.65);

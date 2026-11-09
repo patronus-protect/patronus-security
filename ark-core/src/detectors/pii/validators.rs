@@ -994,16 +994,106 @@ pub fn uk_vehicle_registration(s: &str) -> bool {
         && random.iter().all(letter)
 }
 
+/// UK vehicle registration, prefix form 1983–2001 (T36): the age letter, a serial
+/// 1–999 without a leading zero, an optional space and three letters (`A123 BCD`,
+/// `K1 ABC`). The age letter is never `I`, `O`, `Q`, `U` or `Z`, the letters never
+/// `I`, `Q` or `Z`, as presidio-analyzer accepts them. No check digit: format only.
+pub fn uk_vehicle_registration_prefix(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let Some((&age, rest)) = bytes.split_first() else {
+        return false;
+    };
+    let serial = rest.iter().take_while(|byte| byte.is_ascii_digit()).count();
+    let letters = rest[serial..].strip_prefix(b" ").unwrap_or(&rest[serial..]);
+    uk_age_letter(age)
+        && (1..=3).contains(&serial)
+        && rest[0] != b'0'
+        && letters.len() == 3
+        && letters.iter().all(uk_area_letter)
+}
+
+/// UK vehicle registration, suffix form 1963–1983 (T36): three letters, an optional
+/// space, a serial 1–999 without a leading zero and the year letter (`ABC 1D`), with
+/// the letter sets of [`uk_vehicle_registration_prefix`]. Format only.
+pub fn uk_vehicle_registration_suffix(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 5 || !bytes[..3].iter().all(uk_area_letter) {
+        return false;
+    }
+    let rest = bytes[3..].strip_prefix(b" ").unwrap_or(&bytes[3..]);
+    let Some((&year, serial)) = rest.split_last() else {
+        return false;
+    };
+    uk_age_letter(year)
+        && (1..=3).contains(&serial.len())
+        && serial[0] != b'0'
+        && serial.iter().all(u8::is_ascii_digit)
+}
+
+/// Age (year) letter of the UK prefix and suffix forms: never `I`, `O`, `Q`, `U`, `Z`.
+fn uk_age_letter(byte: u8) -> bool {
+    byte.is_ascii_uppercase() && !matches!(byte, b'I' | b'O' | b'Q' | b'U' | b'Z')
+}
+
+/// Area and random letters of the UK prefix and suffix forms: never `I`, `Q`, `Z`.
+fn uk_area_letter(byte: &u8) -> bool {
+    byte.is_ascii_uppercase() && !matches!(byte, b'I' | b'Q' | b'Z')
+}
+
+/// State and union-territory codes of Indian plates (Motor Vehicles Act; with the
+/// former codes `OR`, `UA` and `DD`/`DN`, which old plates still carry).
+const IN_STATE_CODES: [&[u8; 2]; 40] = [
+    b"AN", b"AP", b"AR", b"AS", b"BR", b"CG", b"CH", b"DD", b"DL", b"DN", b"GA", b"GJ", b"HP",
+    b"HR", b"JH", b"JK", b"KA", b"KL", b"LA", b"LD", b"MH", b"ML", b"MN", b"MP", b"MZ", b"NL",
+    b"OD", b"OR", b"PB", b"PY", b"RJ", b"SK", b"TN", b"TR", b"TS", b"UA", b"UK", b"UP", b"WB",
+    b"CT",
+];
+
+/// Indian plate without separators (T36): a state code, a district number 1–99,
+/// one to three series letters without `I` and `O` and a number other than `0000`
+/// (`KA53ME3456`, `DL3C1234`). The state code stands in for a check digit.
+pub fn in_vehicle_registration(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 8 || !IN_STATE_CODES.iter().any(|code| bytes.starts_with(*code)) {
+        return false;
+    }
+    let rest = &bytes[2..];
+    let district = rest.iter().take_while(|byte| byte.is_ascii_digit()).count();
+    let rest = &rest[district..];
+    let series = rest
+        .iter()
+        .take_while(|byte| byte.is_ascii_uppercase())
+        .count();
+    let (letters, number) = rest.split_at(series);
+    (1..=2).contains(&district)
+        && bytes[2..2 + district].iter().any(|digit| *digit != b'0')
+        && (1..=3).contains(&series)
+        && !letters.iter().any(|letter| matches!(letter, b'I' | b'O'))
+        && number.len() == 4
+        && number.iter().all(u8::is_ascii_digit)
+        && number != b"0000"
+}
+
 /// Nigerian plate (Q-M1): three letters of the local government area, a hyphen or
 /// a space, a serial of three digits other than `000` and two letters.
 pub fn ng_vehicle_registration(s: &str) -> bool {
-    let bytes = s.as_bytes();
+    ng_plate(s.as_bytes(), u8::is_ascii_uppercase) && matches!(s.as_bytes()[3], b'-' | b' ')
+}
+
+/// Nigerian plate in lower case (T36), as typed (`app-456cv`): the form of
+/// [`ng_vehicle_registration`] in lower-case letters, joined by a hyphen only.
+pub fn ng_vehicle_registration_lowercase(s: &str) -> bool {
+    ng_plate(s.as_bytes(), u8::is_ascii_lowercase) && s.as_bytes()[3] == b'-'
+}
+
+/// Shared form of the Nigerian plate with the letter case `letter`; the separator
+/// at index 3 is left to the caller.
+fn ng_plate(bytes: &[u8], letter: fn(&u8) -> bool) -> bool {
     bytes.len() == 9
-        && bytes[..3].iter().all(u8::is_ascii_uppercase)
-        && matches!(bytes[3], b'-' | b' ')
+        && bytes[..3].iter().all(letter)
         && bytes[4..7].iter().all(u8::is_ascii_digit)
         && &bytes[4..7] != b"000"
-        && bytes[7..].iter().all(u8::is_ascii_uppercase)
+        && bytes[7..].iter().all(letter)
 }
 
 pub fn us_ssn(s: &str) -> bool {
