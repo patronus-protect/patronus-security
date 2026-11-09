@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: example check on decoded private key octets (H01). `dlp_private_key_block`
+  and `dlp_private_key_header` decode the PEM body (real or escaped line breaks, armor headers;
+  the F-STRUCT parser) and drop a key whose key octets are a repeated fill (`EXAMPLEKEY…`,
+  `TESTKEY…`), such as OpenSSH documentation examples; marker words alone do not count on key
+  octets, so a real key with a `ci@test-runner` comment stays a finding. Dev: the five remaining
+  default-profile hard-negative FP (OpenSSH `doc_example`) go to 0, no PEM positive lost; the
+  check runs only on a matched key block. `dlp_l1.jsonl` gains 1,000 technical hard negatives
+  (hashes, UUIDs, digests, lockfile integrity, commit SHAs, test vectors, docs example keys;
+  `patronus_ark.dlp_synth.technical_negatives`) and 20 OpenSSH goldens.
 - Detection change: opt-in rule `pii_aba_routing_number_us_bare` for the bare ABA routing number
   (T35). Nine digits (or the printed 4-4-1 form) with a Federal Reserve routing symbol and a valid
   3-7-1 check digit (`validators::aba_routing_number`, unchanged) are reported without a routing or

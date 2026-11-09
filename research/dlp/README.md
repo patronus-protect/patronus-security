@@ -143,8 +143,17 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Wert zum Beispiel (Kubernetes-`data:`, Grafana-Legacy-Key/`glc_`, PyPI-Macaroon, 1Password
   `ops_`, Elastic `id:api_key` mit `EXAMPLEKEY`/`TESTKEY`/`deadbeef`-Füllung). Zufällige Bytes
   und zufällige druckbare Secrets bleiben Funde. Dekodiert wird nur ein Wert, der alle übrigen
-  Prüfungen der Regel bestanden hat; `credentials::is_example_payload` auf den Bytes ist für
-  PEM-Körper (T14) gedacht.
+  Prüfungen der Regel bestanden hat.
+  Seit H01 dekodieren `dlp_private_key_block` und `dlp_private_key_header` den PEM-Körper
+  (echte oder escapte Zeilenumbrüche, Armor-Header, PGP-CRC-Zeile; derselbe Parser wie F-STRUCT,
+  `structure::private_key_payload`). Ein druckbarer Lauf der Schlüssel-Bytes aus wiederholten
+  Blöcken (`EXAMPLEKEY…`, `TESTKEY…`, `credentials::has_repeated_fill`) macht den Schlüssel zum
+  Beispiel; ein Markerwort allein zählt dort nicht, weil der Kommentar eines echten OpenSSH- oder
+  PGP-Schlüssels (`ci@test-runner`, `<dev@example.com>`) eines enthalten kann. Dazu kamen
+  1.000 technische Hard Negatives (`dlp_synth.technical_negatives`: Commit-SHAs, Prüfsummen,
+  Image-Digests, Lockfile-Integrity, UUIDs, Trace-IDs, SRI, Kubernetes-Metadaten, ETags,
+  Terraform-State, Hash-Testvektoren, dokumentierte Beispielschlüssel, Content-IDs, öffentliche
+  SSH-Schlüssel; je Familie 25 DE + 25 EN) in `dlp_l1.jsonl`.
   Seit D01 sucht die DLP-Pipeline zusätzlich in einer dekodierten Sicht (`dlp::decoder`):
   kanonische Base64- und Base64url-Läufe von 24 bis 65 536 Zeichen, deren Bytes druckbares UTF-8
   sind, werden dekodiert, Läufe im dekodierten Text noch einmal (Tiefe 2), höchstens 128 KiB je
