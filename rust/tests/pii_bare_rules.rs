@@ -908,8 +908,10 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
             "CZ3270486",
             "HU9088407",
             "The number ES A14596707 is registered.",
+            "Die Firma ist unter ES-A14596707 eingetragen.",
             // an identity card term names the value
             "please submit your ID card number JI0201311",
+            "Bitte nennen Sie Ihre Ausweisnummer JI0201311",
         ] {
             assert!(
                 passports(text).is_empty(),
