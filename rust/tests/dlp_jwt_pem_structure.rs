@@ -206,7 +206,25 @@ fn structure_rules_declare_validator_strength_structure() {
 
 /// Base64url without padding.
 fn base64url(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    base64_with(
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
+        bytes,
+    )
+}
+
+/// Standard base64 with padding.
+fn base64(bytes: &[u8]) -> String {
+    let mut out = base64_with(
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+        bytes,
+    );
+    while out.len() % 4 != 0 {
+        out.push('=');
+    }
+    out
+}
+
+fn base64_with(alphabet: &[u8; 64], bytes: &[u8]) -> String {
     let mut out = String::new();
     for chunk in bytes.chunks(3) {
         let n = chunk
@@ -214,7 +232,7 @@ fn base64url(bytes: &[u8]) -> String {
             .enumerate()
             .fold(0u32, |n, (i, &b)| n | u32::from(b) << (16 - 8 * i));
         for i in 0..=chunk.len() {
-            out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+            out.push(alphabet[(n >> (18 - 6 * i) & 63) as usize] as char);
         }
     }
     out
@@ -369,4 +387,106 @@ fn key_blocks_in_notebook_strings_with_doubly_escaped_line_breaks() {
         );
         assert!(rule_hit(&text, "dlp_private_key_block"), "{gen}");
     }
+}
+
+/// A PEM block of `label` around `raw`, wrapped at 70 characters.
+fn pem(label: &str, raw: &[u8]) -> String {
+    let encoded = base64(raw);
+    let body: Vec<&str> = encoded
+        .as_bytes()
+        .chunks(70)
+        .map(|line| std::str::from_utf8(line).unwrap())
+        .collect();
+    // Armor built with format! so no committed line holds a private key block.
+    format!(
+        "-----BEGIN {label} {}-----\n{}\n-----END {label} {}-----",
+        "PRIVATE KEY",
+        body.join("\n"),
+        "PRIVATE KEY"
+    )
+}
+
+/// Pseudo-random key octets (xorshift).
+fn key_octets(seed: u64, len: usize) -> Vec<u8> {
+    let mut state = seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
+    (0..len)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 32) as u8
+        })
+        .collect()
+}
+
+fn ssh_string(value: &[u8]) -> Vec<u8> {
+    [&(value.len() as u32).to_be_bytes()[..], value].concat()
+}
+
+/// An unencrypted `openssh-key-v1` ssh-ed25519 key (OpenSSH PROTOCOL.key).
+fn openssh_ed25519(public: &[u8], secret: &[u8], comment: &[u8]) -> Vec<u8> {
+    let key_type = ssh_string(b"ssh-ed25519");
+    let mut private = [7u8, 7, 7, 7, 7, 7, 7, 7].to_vec();
+    private.extend(&key_type);
+    private.extend(ssh_string(public));
+    private.extend(ssh_string(&[secret, public].concat()));
+    private.extend(ssh_string(comment));
+    let mut pad = 1;
+    while private.len() % 8 != 0 {
+        private.push(pad);
+        pad += 1;
+    }
+    let mut raw = b"openssh-key-v1\0".to_vec();
+    for field in [&b"none"[..], b"none", b""] {
+        raw.extend(ssh_string(field));
+    }
+    raw.extend(1u32.to_be_bytes());
+    raw.extend(ssh_string(&[key_type, ssh_string(public)].concat()));
+    raw.extend(ssh_string(&private));
+    raw
+}
+
+#[test]
+fn a_repeated_fill_in_the_key_comment_does_not_make_a_key_an_example() {
+    // H01: the fill check reads key octets only, not the OpenSSH comment or
+    // a PGP User ID.
+    let comment = b"abcabcabcabcabcabc";
+    for seed in 1..=20 {
+        let openssh = pem(
+            "OPENSSH",
+            &openssh_ed25519(&key_octets(seed, 32), &key_octets(!seed, 32), comment),
+        );
+        // Secret-key packet (tag 5) and User ID packet (tag 13), new format.
+        let mut pgp = vec![0xc5, 100, 4];
+        pgp.extend(key_octets(seed, 99));
+        pgp.extend([0xcd, 25]);
+        pgp.extend(b"abcabcabcabc <ab@abc.abc>");
+        let pgp = pem("PGP", &pgp).replace("PRIVATE KEY-----", "PRIVATE KEY BLOCK-----");
+        for key in [openssh, pgp] {
+            for template in [
+                "Schlüssel des Abgleichdienstes:\n{}\n",
+                "here is the key for the handover box:\n{}\n",
+            ] {
+                let text = template.replace("{}", &key);
+                assert!(rule_hit(&text, "dlp_private_key_block"), "seed {seed}");
+            }
+        }
+    }
+    // A fill of the key octets stays a documentation example.
+    let fill = |len| {
+        b"EXAMPLEKEY"
+            .iter()
+            .copied()
+            .cycle()
+            .take(len)
+            .collect::<Vec<_>>()
+    };
+    let example = pem(
+        "OPENSSH",
+        &openssh_ed25519(&fill(32), &fill(32), b"ci@host"),
+    );
+    assert!(!rule_hit(
+        &format!("key:\n{example}\n"),
+        "dlp_private_key_block"
+    ));
 }
