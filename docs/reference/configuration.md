@@ -228,7 +228,7 @@ alone (not inside a longer number) as a word of prose: after a space, a bracket 
 after a code prefix (`BOL-`, `NL.`), a CSV key (`ACCTID,`) or a field separator of a SWIFT, X12 or
 EDIFACT message, and not right after a SWIFT field tag line (`/71A`). It must not stand under a
 key that names another value, no counter-context term (order, reference, invoice …) may be
-nearer than a support term, and no account, routing, customer or contract term may name it
+nearer than a support term, and no account, routing, customer, contract or VAT term may name it
 (nearer than a support term, on the line before, or next to the same value elsewhere in the
 text; for the bare routing number such a term is its own support, and the default rule reports the
 value). A bare finding yields to a finding of another label that a default rule reports on the

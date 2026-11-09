@@ -900,6 +900,10 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
             "Booking reference B3097651 was archived.",
             "Beleg 77-A12803456-3",
             "{\"order_id\": \"XY9876543\"}",
+            // a VAT term names a VAT ID with its country prefix
+            "USt-IdNr. CZ6383543",
+            "VAT number MT1167911",
+            "USt-IdNr. LU1502744",
         ] {
             assert!(
                 passports(text).is_empty(),
