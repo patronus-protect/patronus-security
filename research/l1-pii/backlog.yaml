@@ -1092,6 +1092,7 @@ tasks:
       fix; no new hard-negative FP in the default profile
   - {id: H05-2, title: "Final report M1–M4 on holdout in the raw view (Presidio default and tuned, Ark with and without the bare profile)", type: report, deps: [Q-RAW], status: done}
   - id: T34
+    status: done
     title: "Bare-profile precision: pii_ssn_us_bare, pii_driver_license_number_de_bare and pii_facility_number_bsnr_de_bare with placeholder filter, counter-context and structural boundaries"
     type: precision-fix
     deps: [D-BARE]
