@@ -360,9 +360,10 @@ pub(super) const PHYSICIAN_NUMBER_LANR_BARE: PiiPattern = PiiPattern {
     ..PHYSICIAN_NUMBER_LANR_PROXIMITY
 };
 
-/// A bare BSNR, nine digits without a check digit (B-DE1). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+/// A bare BSNR, nine digits without a check digit and no placeholder (B-DE1, T34). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
 pub(super) const FACILITY_NUMBER_BSNR_BARE: PiiPattern = PiiPattern {
     name: "pii_facility_number_bsnr_de_bare",
+    validator: Some(validators::bsnr_bare),
     base_score: 35,
     captured_value: false,
     requires_context: false,

@@ -756,10 +756,11 @@ checksums:
     lanr: {algorithm: "gewichtet 4-9 mod 10"}  # B-DE1, LANR
     de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
     de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
-    de_driver_license_number_bare: null # D-BARE, 11 Zeichen mit Buchstaben und Ziffern, keine Prüfziffer
+    de_driver_license_number_bare: null # D-BARE, 11 Zeichen mit Buchstaben und Ziffern, nicht in BIC-Form (T34), keine Prüfziffer
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
     nine_digits: null                   # B-UK/B-DE1, neun Ziffern (UK-Pass, BSNR), keine Prüfziffer
+    bsnr_bare: null                     # D-BARE/T34, neun Ziffern ohne Platzhalter (Zählfolge, zwei Ziffern im Wechsel), keine Prüfziffer
     passport_number_two_letters: null   # zwei Buchstaben + sieben Ziffern (Irland, Japan), keine Prüfziffer
     passport_number_field: null         # B-PASS/T24, Pass-Feldname + 6-9 Zeichen, keine Prüfziffer (DE-Form: ICAO)
     us_passport_number: null            # B-PASS/A05, Buchstabe + acht Ziffern, keine Prüfziffer
@@ -770,6 +771,7 @@ checksums:
     us_ssn: null                        # Bereichsprüfung
     aba_routing_number: {algorithm: "ABA 3-7-1 mod 10", country: us}  # B-ACCT, plus Routing-Symbol 00–12/21–32/61–72/80
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
+    us_ssn_bare: null                   # D-BARE/T34, wie us_ssn_context_free, dazu ohne Zählfolge und zwei Ziffern im Wechsel, keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
     uk_nino_context_free: null          # B-UK, wie uk_nino in einer Schreibweise (groß oder klein)
     uk_bban: null                       # T29, GB-BBAN (Bankcode, Sort Code, Konto), keine Prüfziffer

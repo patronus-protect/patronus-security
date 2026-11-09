@@ -279,6 +279,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Detection change (opt-in bare profile only): the bare rules no longer report structured non-PII
+  (T34). `pii_ssn_us_bare` (`validators::us_ssn_bare`) keeps the placeholder filter of
+  `validators::us_ssn_context_free` and drops every counting sequence (`234567890`) and two
+  alternating digits (`878787878`); `pii_facility_number_bsnr_de_bare` (`validators::bsnr_bare`)
+  drops the same placeholders; `pii_driver_license_number_de_bare` drops an 11-character value in
+  BIC shape (`CLABUS33NYC`). Every enabled bare rule now also needs a value that stands as a word
+  of prose (no code prefix such as `BOL-` or `NL.`, no CSV key, no SWIFT, X12 or EDIFACT field
+  separator around it, not right after a SWIFT field tag line), no account, routing, customer or
+  contract term that names it (nearer than its own support term, on the line before, or next to
+  the same value elsewhere in the text), and yields to a finding of another label that a default
+  rule reports on the same characters. On dev, `balanced` with the bare profile now equals
+  `balanced` on neutral US SSN (82.1 exact F1, before 46.9) and driver's licence (43.9) and holds
+  M1 neutral 9/9 against Presidio default and tuned; neutral exact F1 69.9 (`balanced` 70.0,
+  before 67.8); presidio_favored M1 19/25 against tuned and M2 89.9 unchanged; ark_authored
+  HN-FP 80. Default validators and the output with the default gates are unchanged; default L1 latency is
+  unchanged within noise (`latency.py run --engines ark-native`, 100 KiB p95 four runs 8.8–10.8 ms
+  against two runs 9.6 and 10.8 ms without the new overlap step, the only code on the default path).
+
 - Detection change (opt-in bare profile only): `pii_steuer_id_de_bare` no longer reports an
   11-digit value whose check digit is valid but whose digit distribution no issued Steuer-ID has
   (Q-RAW). The new `validators::steuer_id_bare` adds the bounds every issued ID meets, old and new

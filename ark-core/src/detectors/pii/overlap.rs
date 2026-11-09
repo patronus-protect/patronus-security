@@ -21,9 +21,10 @@ use std::{cmp::Ordering, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
-use super::pii::PII_PATTERNS;
+use super::pii::{is_bare_rule, PII_PATTERNS};
 use super::score::ValidatorStrength;
 use crate::detectors::NativeDetection;
+use crate::EvidenceSpan;
 
 /// Labels whose values rules of another label in this set can also match.
 /// Among the VAT IDs the Italian, the French, the Croatian and the Latvian carry
@@ -221,6 +222,94 @@ pub fn resolve(text: &str, detection: &mut NativeDetection) {
             losers.push((finding, None, "iban_form"));
         }
     }
+    let losers: Vec<Loser> = losers
+        .into_iter()
+        .map(|(finding, winner, reason)| Loser {
+            span: finding.span,
+            label: finding.label,
+            range: finding.range,
+            winner,
+            reason,
+        })
+        .collect();
+    remove(detection, &losers);
+}
+
+/// Removes the findings of an opt-in bare rule (D-BARE) that a finding of
+/// another label from a default rule overlaps, in every mode (T34): a BIC that
+/// a SWIFT rule reports is no driver's licence, nine digits that an account rule
+/// reports after `routing number` no SSN. Among themselves bare findings keep
+/// their labels, and with the default gates there is none.
+pub fn drop_overlapped_bare(detection: &mut NativeDetection) {
+    if detection.evidence_spans.len() < 2 {
+        return;
+    }
+    let rules = detection
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    if !rules.iter().any(|rule| is_bare_rule(rule_id(rule))) {
+        return;
+    }
+    // Whether a rule of the span's label, bare or not, reported its range.
+    let reported = |span: &EvidenceSpan, bare: bool| {
+        rules.iter().any(|rule| {
+            rule["start_byte"].as_u64() == Some(span.start_byte as u64)
+                && rule["end_byte"].as_u64() == Some(span.end_byte as u64)
+                && is_bare_rule(rule_id(rule)) == bare
+                && PII_PATTERNS.iter().any(|pattern| {
+                    pattern.name == rule_id(rule) && pattern.entity_group == span.label
+                })
+        })
+    };
+    let spans = &detection.evidence_spans;
+    let bare: Vec<bool> = spans
+        .iter()
+        .map(|span| reported(span, true) && !reported(span, false))
+        .collect();
+    let losers: Vec<Loser> = spans
+        .iter()
+        .zip(&bare)
+        .enumerate()
+        .filter(|(_, (_, &bare))| bare)
+        .filter_map(|(index, (span, _))| {
+            let (winner, _) = spans.iter().zip(&bare).find(|(other, &bare)| {
+                !bare
+                    && other.label != span.label
+                    && other.start_byte < span.end_byte
+                    && span.start_byte < other.end_byte
+            })?;
+            Some(Loser {
+                span: index,
+                label: span.label.clone(),
+                range: span.start_byte..span.end_byte,
+                winner: Some(winner.label.clone()),
+                reason: "bare",
+            })
+        })
+        .collect();
+    remove(detection, &losers);
+}
+
+/// A finding that leaves the evidence, with the label it yields to and why.
+struct Loser {
+    span: usize,
+    label: String,
+    range: Range<usize>,
+    winner: Option<String>,
+    reason: &'static str,
+}
+
+/// Rule ID of a `matched_rules` entry.
+fn rule_id(rule: &serde_json::Value) -> &str {
+    rule["rule_id"].as_str().unwrap_or_default()
+}
+
+/// Removes the `losers` from the evidence, names `overlap` on their
+/// `matched_rules` entries and recomputes class and confidence.
+fn remove(detection: &mut NativeDetection, losers: &[Loser]) {
     if losers.is_empty() {
         return;
     }
@@ -230,7 +319,7 @@ pub fn resolve(text: &str, detection: &mut NativeDetection) {
         .get_mut("matched_rules")
         .and_then(|rules| rules.as_array_mut())
     {
-        for (loser, winner, reason) in &losers {
+        for loser in losers {
             for rule in rules.iter_mut().filter(|rule| {
                 rule["start_byte"].as_u64() == Some(loser.range.start as u64)
                     && rule["end_byte"].as_u64() == Some(loser.range.end as u64)
@@ -238,15 +327,15 @@ pub fn resolve(text: &str, detection: &mut NativeDetection) {
                         rule["rule_id"] == pattern.name && pattern.entity_group == loser.label
                     })
             }) {
-                let mut overlap = serde_json::json!({ "reason": reason });
-                if let Some(winner) = winner {
+                let mut overlap = serde_json::json!({ "reason": loser.reason });
+                if let Some(winner) = &loser.winner {
                     overlap["yields_to"] = winner.as_str().into();
                 }
                 rule["overlap"] = overlap;
             }
         }
     }
-    let removed: Vec<usize> = losers.iter().map(|(loser, ..)| loser.span).collect();
+    let removed: Vec<usize> = losers.iter().map(|loser| loser.span).collect();
     let mut index = 0;
     detection.evidence_spans.retain(|_| {
         index += 1;

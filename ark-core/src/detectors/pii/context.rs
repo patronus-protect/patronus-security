@@ -184,6 +184,17 @@ pub static COUNTER_LEXICON: &[&str] = &[
     "pii.product_number",
 ];
 
+/// Lexicon IDs of the numbers a bare value (D-BARE) next to them is not besides
+/// [`COUNTER_LEXICON`]: account, routing, customer and contract numbers (T34).
+const BARE_FOREIGN_LEXICON: &[&str] = &[
+    "pii.bank_identifier",
+    "pii.bank_routing_number",
+    "pii.bank_account",
+    "pii.brokerage_account",
+    "pii.customer_identifier",
+    "dlp.contract_identifier",
+];
+
 /// Characters between a term and the value: before it (field names, "erreichbar
 /// unter") and after it ("(Handy)", "erreichbar").
 pub const BEFORE_WINDOW: usize = 48;
@@ -728,6 +739,69 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next.is_some_and(joins) && digit(next2))
         || (numeric && prev == Some(' ') && digit(prev2))
         || (next == Some(' ') && digit(next2)))
+}
+
+/// Whether a term of [`BARE_FOREIGN_LEXICON`] names the bare value at `value`
+/// (byte range) rather than `own`, its own context (T34): nearer than its support
+/// term (`bank routing number of 531858435`, `policy number is 153225324`), on
+/// the line before (a dialogue that asks for the routing number and its answer),
+/// or next to another occurrence of the same value in the text.
+pub(super) fn foreign_number_term(text: &str, value: Range<usize>, own: &Evidence) -> bool {
+    static FOREIGN: LazyLock<(Regex, usize)> = LazyLock::new(|| {
+        let longest = lexicon_words(BARE_FOREIGN_LEXICON)
+            .into_iter()
+            .map(|word| word.chars().count())
+            .max()
+            .unwrap_or(0);
+        (lexicon_regex(BARE_FOREIGN_LEXICON), longest)
+    });
+    let (regex, longest) = &*FOREIGN;
+    let nearest_term = |at: (usize, usize)| nearest(text, regex, region(text, at, *longest), at);
+    let line_start = text[..value.start].rfind('\n').unwrap_or(0);
+    let line_before = &text[text[..line_start].rfind('\n').unwrap_or(0)..line_start];
+    let word = |ch: Option<char>| ch.is_some_and(char::is_alphanumeric);
+    nearest_term((value.start, value.end)).is_some_and(|term| {
+        !(own.context.supports() && own.distance.is_some_and(|gap| gap <= term.gap))
+    }) || regex.is_match(line_before)
+        || text
+            .match_indices(&text[value.clone()])
+            .filter(|&(start, found)| {
+                start != value.start
+                    && !word(text[..start].chars().next_back())
+                    && !word(text[start + found.len()..].chars().next())
+            })
+            .any(|(start, found)| nearest_term((start, start + found.len())).is_some())
+}
+
+/// Whether the bare value at `value` (byte range) stands as a word of prose
+/// (T34): after a space, a bracket or a quote, not after a code prefix
+/// (`BOL-`, `NL.`), a CSV key (`ACCTID,`) or a field separator of a SWIFT, X12
+/// or EDIFACT message (`:61:`, `/USD/`, `*`, `+`, `·`), with no such separator
+/// right after it, and not as the value of a SWIFT field tag on the line before
+/// (`/71A`, `:59:`).
+pub(super) fn delimited_as_prose(text: &str, value: Range<usize>) -> bool {
+    let before = &text[..value.start];
+    let opens = before.chars().next_back().is_none_or(|ch| {
+        ch.is_whitespace() || matches!(ch, '(' | '[' | '"' | '\'' | '‘' | '“' | '„' | '«')
+    });
+    let closes = text[value.end..]
+        .chars()
+        .next()
+        .is_none_or(|ch| !matches!(ch, ':' | '+' | '*' | '~' | '/' | '-' | '_' | '<' | '|'));
+    let swift_tag = |line: &str| {
+        let tag = line.trim().as_bytes();
+        let Some((&first, rest)) = tag.split_first() else {
+            return false;
+        };
+        let rest = rest.strip_suffix(b":").unwrap_or(rest);
+        matches!(first, b':' | b'/')
+            && matches!(rest.len(), 2 | 3)
+            && rest[..2].iter().all(u8::is_ascii_digit)
+            && rest[2..].iter().all(u8::is_ascii_uppercase)
+    };
+    let tagged = before.trim_end_matches([' ', '\t']).ends_with('\n')
+        && before.trim_end().rsplit('\n').next().is_some_and(swift_tag);
+    opens && closes && !tagged
 }
 
 /// Start of the list of Nigerian plates that ends right before `start`
