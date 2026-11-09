@@ -241,6 +241,9 @@ pub fn resolve(text: &str, detection: &mut NativeDetection) {
 /// reports after `routing number` no SSN. Among themselves bare findings keep
 /// their labels, and with the default gates there is none.
 pub fn drop_overlapped_bare(detection: &mut NativeDetection) {
+    if detection.evidence_spans.len() < 2 {
+        return;
+    }
     let rules = detection
         .details
         .get("matched_rules")

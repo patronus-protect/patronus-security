@@ -202,9 +202,9 @@ in every mode until the `rules` gate enables it:
 | `pii_steuer_id_de_bare` | Steuer-ID, 11 digits or 2-3-3-3 | check digit, no digit more than three times or three in a row |
 | `pii_steuernummer_de_bare` | Steuernummer, 13-digit ELSTER form | Land and office prefix |
 | `pii_physician_number_lanr_de_bare` | LANR, 9 digits | check digit |
-| `pii_facility_number_bsnr_de_bare` | BSNR, 9 digits | format |
-| `pii_driver_license_number_de_bare` | German card licence, 11 letters and digits | format |
-| `pii_ssn_us_bare` | US SSN, 9 digits or grouped | SSA ranges |
+| `pii_facility_number_bsnr_de_bare` | BSNR, 9 digits | format, no placeholder |
+| `pii_driver_license_number_de_bare` | German card licence, 11 letters and digits | format, no BIC shape |
+| `pii_ssn_us_bare` | US SSN, 9 digits or grouped | SSA ranges, no placeholder |
 | `pii_sin_ca_bare` | Canadian SIN | Luhn |
 | `pii_aadhaar_in_bare` | Aadhaar number, plain or grouped | Verhoeff |
 | `pii_npi_us_bare` | US NPI | Luhn |
@@ -216,8 +216,16 @@ in every mode until the `rules` gate enables it:
 | `pii_vehicle_registration_ng_bare` | Nigerian plate | format |
 
 An enabled bare rule reports in every mode with the validator of its id. The value must stand
-alone (not inside a longer number), not under a key that names another value, and no
-counter-context term (order, reference, invoice …) may be nearer than a support term. Its base
+alone (not inside a longer number) as a word of prose: after a space, a bracket or a quote, not
+after a code prefix (`BOL-`, `NL.`), a CSV key (`ACCTID,`) or a field separator of a SWIFT, X12 or
+EDIFACT message, and not right after a SWIFT field tag line (`/71A`). It must not stand under a
+key that names another value, no counter-context term (order, reference, invoice …) may be
+nearer than a support term, and no account, routing, customer or contract term may name it
+(nearer than a support term, on the line before, or next to the same value elsewhere in the
+text). A bare finding yields to a finding of another label that a default rule reports on the
+same characters. Placeholders (a counting sequence such as `234567890`, two alternating digits
+such as `878787878`, one repeated digit) are no bare SSN or BSNR, and an 11-character value in
+BIC shape (`CLABUS33NYC`) is no bare German licence. Its base
 score is the `balanced` threshold `0.50` (base `15` with a checksum, `35` with a format-only
 validator), so it reports in `balanced` and `recall` as in `strict`; a labelled hit of the same
 value scores at least as high and wins the overlap. The example profile
