@@ -205,6 +205,7 @@ in every mode until the `rules` gate enables it:
 | `pii_facility_number_bsnr_de_bare` | BSNR, 9 digits | format, no placeholder |
 | `pii_driver_license_number_de_bare` | German card licence, 11 letters and digits | format, no BIC shape |
 | `pii_ssn_us_bare` | US SSN, 9 digits or grouped | SSA ranges, no placeholder |
+| `pii_aba_routing_number_us_bare` | US ABA routing number, 9 digits or 4-4-1 | routing symbol, 3-7-1 check digit |
 | `pii_sin_ca_bare` | Canadian SIN | Luhn |
 | `pii_aadhaar_in_bare` | Aadhaar number, plain or grouped | Verhoeff |
 | `pii_npi_us_bare` | US NPI | Luhn |
@@ -226,8 +227,10 @@ EDIFACT message, and not right after a SWIFT field tag line (`/71A`). It must no
 key that names another value, no counter-context term (order, reference, invoice …) may be
 nearer than a support term, and no account, routing, customer or contract term may name it
 (nearer than a support term, on the line before, or next to the same value elsewhere in the
-text). A bare finding yields to a finding of another label that a default rule reports on the
-same characters. Placeholders (a counting sequence such as `234567890`, two alternating digits
+text; for the bare routing number such a term is its own support, and the default rule reports the
+value). A bare finding yields to a finding of another label that a default rule reports on the
+same characters; bare findings of different labels on the same digits (nine digits that are a
+routing number, a BSNR and an SSN) stay side by side. Placeholders (a counting sequence such as `234567890`, two alternating digits
 such as `878787878`, one repeated digit) are no bare SSN or BSNR, and an 11-character value in
 BIC shape (`CLABUS33NYC`) is no bare German licence. Its base
 score is the `balanced` threshold `0.50` (base `15` with a checksum, `35` with a format-only

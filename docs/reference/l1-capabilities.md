@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 107 | 34 |
-| Regex rules | 206 | 176 (+5 relationship rules) |
+| Regex rules | 207 | 176 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 130 | 30 |
+| Rules with a `checksum` or `structure` check | 131 | 30 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -50,7 +50,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` |
 | `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |
 | `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` |
-| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free`, `pii_bban_gb` | checksum | on (1 of 4 rules `balanced`/`recall` only) | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
+| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free`, `pii_bban_gb`, `pii_aba_routing_number_us_bare` | checksum | on (1 of 4 rules `balanced`/`recall` only), bare form opt-in | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
 | `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free`, `pii_ssn_us_bare` | format | on (1 of 3 rules `balanced`/`recall` only), bare form opt-in | `US_SSN` |
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
 | `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free`, `pii_steuer_id_de_bare` | checksum | on (1 of 2 rules `balanced`/`recall` only), bare form opt-in | `DE_TAX_ID` |
