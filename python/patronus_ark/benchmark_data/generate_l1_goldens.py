@@ -5080,6 +5080,37 @@ T35_CASES = [
 for _row in T35_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T37: bare letter-prefixed passport numbers (US letter form, two letters and seven digits, the Indian
+# letter form) stay negative with the default gates; the opt-in rules of the bare profile report them
+# (rust/tests/pii_bare_rules.rs). Nine bare digits get no rule (they collide with the SSN, SIN, ACN, ABA
+# and BSNR bare rules, `known_gaps`). The labelled forms keep their default rules in every mode.
+# Appended so existing ids stay stable.
+T37_CASES = [
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport number: ", "A12803456", ""),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "My passport number is ", "XY9876543", ".", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", '{"passport_no": "', "Z12803456", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport No. ", "B3097651", " was scanned at the gate.", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_field", "passport_number=", "PA4829136", carrier="kv"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Reisepass: ", "A12803456", ""),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Die Reisepassnummer lautet ", "XY9876543", ".", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_field", '{"reisepass_nr": "', "Z12803456", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Reisepass-Nr. ", "B3097651", " liegt in Kopie vor.", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Pass-Nr.: ", "TK4829137", ""),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_us", "A12803456", "bare letter form (opt-in rule only)", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Please put XY9876543 there.", "two letters and seven digits in prose (opt-in rule only)", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "912803456", "nine bare digits (no rule, known_gaps)", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Order number XY9876543 has shipped.", "order number, no passport term", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_at_ch", "B0097650", "presidio-analyzer IN negative: zero after the letter and at the end", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_field", "Passport number: AB123456", "two letters and six digits"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_at_ch", "B3097651", "bare Indian letter form (opt-in rule only)", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Bitte Z12803456 eintragen.", "bare letter form in prose (opt-in rule only)", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Bitte 912803456 eintragen.", "nine bare digits (no rule, known_gaps)", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_us", "Rechnungsnummer A12803456 wurde versandt.", "invoice number, no passport term", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_field", "Reisepass: A123456", "one letter and six digits"),
+]
+for _row in T37_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
