@@ -284,9 +284,16 @@ pub fn is_example_match(
             }) || credentials::is_example_value(&value, false, example_context)
                 || credentials::is_decoded_example(&value)
         }
+        // H01: a private key whose decoded key octets (without the comment
+        // of an OpenSSH key or the User IDs of a PGP key) are a repeated fill
+        // (`EXAMPLEKEY…`) is a documentation example; its body is wrapped,
+        // so `is_decoded_example` cannot decode it.
         ExampleCheck::FixedFormat => {
             credentials::is_example_value(&value, true, example_context)
                 || credentials::is_decoded_example(&value)
+                || (matches!(rule_id, "dlp_private_key_block" | "dlp_private_key_header")
+                    && structure::private_key_material(&value)
+                        .is_some_and(|material| credentials::has_repeated_fill(&material)))
         }
     }
 }

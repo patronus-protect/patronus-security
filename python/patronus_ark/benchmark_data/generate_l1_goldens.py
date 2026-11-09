@@ -22,7 +22,7 @@ import json
 import re
 from pathlib import Path
 
-from patronus_ark.dlp_synth import recipes
+from patronus_ark.dlp_synth import recipes, technical_negatives
 
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -17759,6 +17759,156 @@ DLP_D01_CASES = {
 }
 for _label, _rows in DLP_D01_CASES.items():
     DLP_CASES[_label].extend(_rows)
+
+
+# H01: documentation examples of OpenSSH keys. The generator's EXAMPLEKEY/TESTKEY fill sits in
+# the key octets, so only the decoded body shows it; generated keys stay positives.
+_H01_PEM = "pem_openssh_ed25519_private_key"
+DLP_H01_PEM_CASES = [
+    ds(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "[deploy]\nhost = \"10.0.4.12\"\n# Schlüssel des Abgleichdienstes\nssh_key = \"\"\"\n<<secret:0>>\n\"\"\"\n",
+        _H01_PEM, 12501, carrier="toml",
+    ),
+    ds(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "resource \"tls_private_key\" \"speicher\" {}\n\nlocals {\n  schluessel = <<EOT\n<<secret:0>>\nEOT\n}\n",
+        _H01_PEM, 12502, carrier="hcl",
+    ),
+    ds(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "Hallo Jonas,\n\nanbei der Schlüssel für den Build-Server:\n\n<<secret:0>>\n\nBitte danach löschen.\n",
+        _H01_PEM, 12503, carrier="prose",
+    ),
+    ds(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "{\"dienst\": \"export\", \"ssh_schluessel\": \"<<secret:0|json>>\"}\n",
+        _H01_PEM, 12504, carrier="json",
+    ),
+    ds(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "nightly_export:\n  variables:\n    DEPLOY_KEY: |\n<<secret:0>>\n",
+        _H01_PEM, 12505, carrier="yaml",
+    ),
+    ds(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "const deployKey = `<<secret:0>>`\n\nfunc dial() {}\n",
+        _H01_PEM, 12506, carrier="code",
+    ),
+    ds(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "Hi Sam,\n\nhere is the key for the handover box:\n\n<<secret:0>>\n\nCheers\n",
+        _H01_PEM, 12507, carrier="prose",
+    ),
+    ds(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "{\"name\": \"reconciler\", \"private_key\": \"<<secret:0|json>>\"}\n",
+        _H01_PEM, 12508, carrier="json",
+    ),
+    ds(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "$ cat ~/.ssh/id_ed25519\n<<secret:0>>\n",
+        _H01_PEM, 12509, carrier="cli",
+    ),
+    ds(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "jobs:\n  deploy:\n    env:\n      SSH_KEY: |\n<<secret:0>>\n",
+        _H01_PEM, 12510, carrier="yaml",
+    ),
+    dx(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "[deploy]\n# Beispiel aus der Doku, durch den echten Schlüssel ersetzen\nssh_key = \"\"\"\n<<secret:0>>\n\"\"\"\n",
+        _H01_PEM, "EXAMPLEKEY", "OpenSSH example key with EXAMPLEKEY key octets", carrier="toml",
+    ),
+    dx(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "locals {\n  schluessel = <<EOT\n<<secret:0>>\nEOT\n}\n",
+        _H01_PEM, "TESTKEY", "OpenSSH test key with TESTKEY key octets", carrier="hcl",
+    ),
+    dx(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "So sieht ein unverschlüsselter Ed25519-Schlüssel aus:\n\n<<secret:0>>\n",
+        _H01_PEM, "EXAMPLEKEY", "OpenSSH example key in prose", carrier="prose",
+    ),
+    dx(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "{\"dienst\": \"export\", \"ssh_schluessel\": \"<<secret:0|json>>\"}\n",
+        _H01_PEM, "EXAMPLEKEY", "JSON-escaped OpenSSH example key", carrier="json",
+    ),
+    dx(
+        "PRIVATE_KEY", "de", "dlp_private_key_block",
+        "nightly_export:\n  variables:\n    DEPLOY_KEY: \"<<secret:0|json>>\"\n",
+        _H01_PEM, "TESTKEY", "escaped OpenSSH test key in CI YAML", carrier="yaml",
+    ),
+    dx(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "const deployKey = \"<<secret:0|json>>\"\n",
+        _H01_PEM, "EXAMPLEKEY", "escaped OpenSSH example key in Go code", carrier="code",
+    ),
+    dx(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "Hi Sam,\n\nthe README shows this sample key:\n\n<<secret:0>>\n",
+        _H01_PEM, "EXAMPLEKEY", "OpenSSH example key in a mail", carrier="prose",
+    ),
+    dx(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "{\"name\": \"reconciler\", \"private_key\": \"<<secret:0|json>>\"}\n",
+        _H01_PEM, "TESTKEY", "JSON-escaped OpenSSH test key", carrier="json",
+    ),
+    dx(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "$ cat testdata/id_ed25519\n<<secret:0>>\n",
+        _H01_PEM, "TESTKEY", "OpenSSH test key from testdata", carrier="cli",
+    ),
+    dx(
+        "PRIVATE_KEY", "en", "dlp_private_key_block",
+        "jobs:\n  deploy:\n    env:\n      SSH_KEY: \"<<secret:0|json>>\"\n",
+        _H01_PEM, "EXAMPLEKEY", "escaped OpenSSH example key in CI YAML", carrier="yaml",
+    ),
+]
+DLP_CASES["PRIVATE_KEY"].extend(DLP_H01_PEM_CASES)
+
+# H01: hard-negative mining. 1,000 technical benign snippets (content hashes, UUIDs, image
+# digests, lockfile integrity, commit SHAs, published test vectors, documented example keys)
+# from `dlp_synth.technical_negatives`, 25 DE + 25 EN per family. Each family names the label
+# and rule its values look like; no DLP rule may report any of them.
+DLP_H01_FAMILIES = {
+    "commit_sha": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "sha256_sums": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "md5_sha1": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "sha512_hex": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "docker_digest": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "npm_integrity": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "yarn_integrity": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "cargo_lock": ("CRYPTO_KEY", "dlp_btc_wif"),
+    "go_sum": ("CLOUD_KEY", "dlp_aws_secret_key"),
+    "pip_hashes": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "uuids": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "trace_ids": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "sri_hashes": ("SECRET_TOKEN", "dlp_generic_credential_assignment"),
+    "kubernetes_meta": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "etags": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "tfstate": ("CREDENTIAL", "dlp_generic_credential_assignment"),
+    "hash_test_vectors": ("CRYPTO_KEY", "dlp_eth_private_key"),
+    "docs_example_keys": ("CLOUD_KEY", "dlp_aws_access_key"),
+    "content_ids": ("CRYPTO_KEY", "dlp_btc_wif"),
+    "public_keys": ("PRIVATE_KEY", "dlp_private_key_block"),
+}
+
+
+def h01_negative(snippet: dict) -> dict:
+    label, rule = DLP_H01_FAMILIES[snippet["family"]]
+    row = negative(label, snippet["language"], snippet["text"], f"H01 {snippet['family']}: {snippet['reason']}")
+    row["provenance"] = {
+        "origin": "synthetic",
+        "source": "Ark L1 hard-negative mining H01 (patronus_ark.dlp_synth.technical_negatives)",
+    }
+    return dlp_row(row, rule, snippet["carrier"], (), False)
+
+
+for _snippet in technical_negatives.snippets():
+    _row = h01_negative(_snippet)
+    DLP_CASES[_row["target_label"]].append(_row)
 
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:

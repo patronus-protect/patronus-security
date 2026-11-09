@@ -1036,16 +1036,34 @@ pub fn is_decoded_example(value: &str) -> bool {
 /// alphanumeric characters. Random bytes and random printable secrets have
 /// neither.
 pub fn is_example_payload(decoded: &[u8]) -> bool {
+    printable_runs(decoded)
+        .any(|run| (!is_host_name(run) && has_example_marker(run)) || is_repeated_fill(run))
+}
+
+/// H01: whether decoded key octets carry a fill of repeated chunks
+/// (`EXAMPLEKEYEXAMPLEKEY…`, `TESTKEYTESTKEY…`) instead of key material.
+/// Marker words alone do not count here: a real key's free text
+/// (`ci@test-runner`, `<dev@example.com>`) may hold one, and the caller drops
+/// only the OpenSSH comment and PGP User IDs
+/// (`structure::private_key_material`), not every text field.
+pub fn has_repeated_fill(decoded: &[u8]) -> bool {
+    printable_runs(decoded).any(is_repeated_fill)
+}
+
+/// Printable ASCII runs of at least four bytes in decoded bytes, split at
+/// control and non-ASCII bytes and at JSON quotes (T22).
+fn printable_runs(decoded: &[u8]) -> impl Iterator<Item = &str> {
     decoded
         .split(|byte| !(b' '..=b'~').contains(byte) || *byte == b'"')
         .filter(|run| run.len() >= 4)
         .filter_map(|run| std::str::from_utf8(run).ok())
-        .any(|run| {
-            (!is_host_name(run) && has_example_marker(run))
-                || (run.bytes().filter(u8::is_ascii_alphanumeric).count()
-                    >= DECODED_REPEATED_MIN_LEN
-                    && low_variety(run) == LowVariety::Repeated)
-        })
+}
+
+/// A printable run covered by repeated chunks ([`LowVariety::Repeated`]) over
+/// at least [`DECODED_REPEATED_MIN_LEN`] alphanumeric characters (T22).
+fn is_repeated_fill(run: &str) -> bool {
+    run.bytes().filter(u8::is_ascii_alphanumeric).count() >= DECODED_REPEATED_MIN_LEN
+        && low_variety(run) == LowVariety::Repeated
 }
 
 /// A dotted host name (`test.pypi.org`, `my.1password.com`).
@@ -1134,8 +1152,9 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_example_context, has_example_marker, is_decoded_example, is_example_payload,
-        is_example_value, is_low_variety, low_variety, machine_issued_run, LowVariety,
+        has_example_context, has_example_marker, has_repeated_fill, is_decoded_example,
+        is_example_payload, is_example_value, is_low_variety, low_variety, machine_issued_run,
+        LowVariety,
     };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
@@ -1503,5 +1522,43 @@ mod tests {
                 assert!(!is_decoded_example(&value), "{seed}: {value}");
             }
         }
+    }
+
+    #[test]
+    fn repeated_fill_of_key_octets_is_an_example_but_a_marker_comment_is_not() {
+        // H01: the OpenSSH ed25519 layout with its 32- and 64-byte key halves.
+        let key = |public: &[u8], private: &[u8], comment: &[u8]| {
+            let mut raw = b"openssh-key-v1\0\0\0\0\x04none\0\0\0\x0bssh-ed25519\0\0\0 ".to_vec();
+            raw.extend(public);
+            raw.extend(b"\0\0\0@");
+            raw.extend(private);
+            raw.extend((comment.len() as u32).to_be_bytes());
+            raw.extend(comment);
+            raw
+        };
+        let fill =
+            |word: &[u8], len: usize| word.iter().copied().cycle().take(len).collect::<Vec<_>>();
+        assert!(has_repeated_fill(&key(
+            &fill(b"EXAMPLEKEY", 32),
+            &fill(b"EXAMPLEKEY", 64),
+            b""
+        )));
+        assert!(has_repeated_fill(&key(
+            &fill(b"TESTKEY", 32),
+            &fill(b"TESTKEY", 64),
+            b""
+        )));
+        for seed in 0..2000 {
+            let real = key(
+                &random_bytes(seed, 32),
+                &random_bytes(!seed, 64),
+                b"ci@test-runner",
+            );
+            assert!(!has_repeated_fill(&real), "{seed}");
+            let pgp_uid = [random_bytes(seed, 96), b"Dev <dev@example.com>".to_vec()].concat();
+            assert!(!has_repeated_fill(&pgp_uid), "{seed}");
+        }
+        // The T22 check on token payloads still counts a marker word.
+        assert!(is_example_payload(b"\0\0ci@test-runner\0"));
     }
 }
