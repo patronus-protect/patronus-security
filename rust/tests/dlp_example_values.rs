@@ -980,7 +980,10 @@ fn pem_keys(octets: impl Fn(usize) -> Vec<u8>) -> Vec<(&'static str, Vec<u8>)> {
     pgp.extend(octets(64));
     pgp[1] = (pgp.len() - 2) as u8;
     vec![
-        ("RSA PRIVATE KEY", integers(&[128, 3, 128, 64, 64, 64, 64, 64])),
+        (
+            "RSA PRIVATE KEY",
+            integers(&[128, 3, 128, 64, 64, 64, 64, 64]),
+        ),
         ("DSA PRIVATE KEY", integers(&[128, 20, 128, 128, 20])),
         ("EC PRIVATE KEY", der(0x30, &ec)),
         ("PRIVATE KEY", der(0x30, &pkcs8)),
@@ -993,7 +996,11 @@ fn pem_keys(octets: impl Fn(usize) -> Vec<u8>) -> Vec<(&'static str, Vec<u8>)> {
 /// The PEM block of `label` around the base64 of `body` in lines of 64
 /// characters (70 for OpenSSH); the armor is assembled at test time.
 fn pem_block(label: &str, body: &[u8]) -> String {
-    let width = if label == "OPENSSH PRIVATE KEY" { 70 } else { 64 };
+    let width = if label == "OPENSSH PRIVATE KEY" {
+        70
+    } else {
+        64
+    };
     let encoded = base64(body, false);
     let lines: Vec<&str> = encoded
         .as_bytes()
