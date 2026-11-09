@@ -799,6 +799,8 @@ checksums:
     passport_number_field: null         # B-PASS/T24, Pass-Feldname + 6-9 Zeichen, keine Prüfziffer (DE-Form: ICAO)
     us_passport_number: null            # B-PASS/A05, Buchstabe + acht Ziffern, keine Prüfziffer
     letter_seven_digits: null           # B-PASS/B08, Pass/Ausweis AT/CH, keine Prüfziffer
+    passport_number_two_letters_bare: null  # D-BARE/T37, zwei Buchstaben + sieben Ziffern ohne Platzhalter und EU-USt-Präfix, keine Prüfziffer
+    in_passport_number: null            # D-BARE/T37, Pass IN, Buchstabe + sieben Ziffern ohne 0 vorn und hinten, keine Prüfziffer
     it_identity_card_number: null       # B-PASS/T10, Carta d'identità (CIE/Papier), keine Prüfziffer
     es_passport_number: null            # B-PASS/T10, Pasaporte, drei Buchstaben + sechs Ziffern
     uk_driver_license_number: null      # B-UK, Nachname, Geburtsdatum, Initialen; DVLA-Prüfzeichen unveröffentlicht
