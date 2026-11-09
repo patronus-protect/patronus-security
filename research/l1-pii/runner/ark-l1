@@ -929,8 +929,10 @@ def pick(backlog: dict, blocked: dict, in_flight: set[str] = frozenset()) -> dic
     done = {t["id"] for t in tasks if t.get("status") == "done"}
     today = dt.date.today()
     week = f"{today.isocalendar().year}-W{today.isocalendar().week:02d}"
-    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done and in_lane("TRIAGE"):
-        rec = next(r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE")
+    # A programme in its final stretch defers TRIAGE so no new tasks reach its backlog.
+    rec = next((r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE"), {})
+    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done and in_lane("TRIAGE") \
+            and rec.get("status") != "deferred":
         return {**rec, "type": "triage", "week": week}
     for t in tasks:
         if t.get("status", "todo") != "todo" or t["id"] in blocked or t["id"].lower() in in_flight \

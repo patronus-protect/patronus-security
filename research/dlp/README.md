@@ -610,6 +610,9 @@ Review-Pausen.
   publication) sind Gegenkontext, zwei Platzhalter in eckigen Klammern (`[Name]`) machen ein
   Formular.
 - Montags läuft `TRIAGE` wie bei PII.
+- Schlussphase (entschieden 2026-11-09): DLP endet mit H01 (Hard-Negative-Mining), H03 (Performance-Schleife)
+  und H-FINAL (Doku und Abschlussbericht). Die übrigen Breiten-Aufgaben und `TRIAGE` sind `deferred`; ein
+  `deferred` gesetztes `TRIAGE` legt der Runner nicht mehr an.
 
 ## Abgrenzung
 
