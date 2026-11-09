@@ -490,13 +490,13 @@ rules:
     format: "BIP39 mnemonic: 12/15/18/21/24 words of one official word list (English, Italian, Portuguese, Czech, Spanish, French; bip-0039/*.txt; Spanish and French words compared without diacritics, NFC or NFD), 11 bits per word, checksum = first ENT/32 bits of SHA-256(entropy); words separated by spaces, commas, quotes, list numbers or line breaks (C01). Published test vectors (trezor/python-mnemonic vectors.json) are no phrases; a run of more than 27 list words (a word list) is checked only line by line, its lines of 12 to 27 list words may hold phrases; 12/15-word phrases need numbering or a context term"
   dlp_private_key_block:
     source_ref: gitleaks:private-key
-    format: "PEM armor BEGIN/END … PRIVATE KEY with body"
+    format: "PEM armor BEGIN/END … PRIVATE KEY (RSA, EC, DSA, OPENSSH, ENCRYPTED, PKCS#8), PGP PRIVATE KEY BLOCK and PuTTY PPK v2/v3 files with a body of the type's structure (F-STRUCT): DER of PKCS#1 RSAPrivateKey (https://www.rfc-editor.org/rfc/rfc8017#appendix-A.1.2), DSA, SEC1 ECPrivateKey (https://www.rfc-editor.org/rfc/rfc5915), PKCS#8 OneAsymmetricKey and EncryptedPrivateKeyInfo (https://www.rfc-editor.org/rfc/rfc5958, labels per https://www.rfc-editor.org/rfc/rfc7468), openssh-key-v1 with cipher/KDF (https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key), a secret-key packet (https://www.rfc-editor.org/rfc/rfc4880#section-5.5.3), PPK Public-/Private-Lines (https://the.earth.li/~sgtatham/putty/0.78/htmldoc/AppendixC.html); key_encrypted from the OpenSSH cipher, encrypted PKCS#8, Proc-Type ENCRYPTED and PPK Encryption"
   dlp_private_key_header:
     source_ref: gitleaks:private-key
-    format: "PEM armor BEGIN … PRIVATE KEY"
+    format: "PEM armor BEGIN … PRIVATE KEY (also ENCRYPTED, PGP … BLOCK) as a fragment; armor that an END line closes needs a key body (F-STRUCT)"
   dlp_jwt_token:
     source_ref: gitleaks:jwt
-    format: "three base64url segments, header and payload start with ey"
+    format: "three base64url segments, header and payload start with ey; header a JSON object with a string alg, claims a JSON object, signature base64url (https://www.rfc-editor.org/rfc/rfc7515#section-7.1), empty only with alg none (https://www.rfc-editor.org/rfc/rfc7519#section-6), reported as jwt_alg; Supabase (iss supabase, https://supabase.com/docs/guides/api/api-keys) and Firebase custom/ID tokens (https://firebase.google.com/docs/auth/admin/create-custom-tokens) name their provider (F-STRUCT)"
   dlp_bearer_token:
     source_ref: https://www.rfc-editor.org/rfc/rfc6750#section-2.1
     format: "Bearer followed by a b64token (letters, digits, -._~+/ and trailing =) anywhere: in an Authorization header, under authorization/proxy_authorization keys, in logs and standalone in prose (F-HTTP); the token has at least 16 characters, two character classes, 3 bits of entropy per character, no sequential or repeated runs and is no identifier; a value that parses as a JWT is left to dlp_jwt_token"

@@ -695,6 +695,22 @@ CHECKS = {
     "pem_openssh_private_key_header": lambda v: v == "-----BEGIN " + "OPENSSH PRIVATE KEY-----",
     "jwt_signed_hs256": jwt("HS256", 32, {"sub", "iat"}),
     "jwt_signed_rs256": jwt("RS256", 256, {"iss", "sub", "exp"}),
+    # F-STRUCT: further PEM/OpenSSH/PGP/PPK types and JWT header shapes
+    "pem_pkcs8_encrypted_private_key": pem("ENCRYPTED PRIVATE KEY", checks.is_valid_pkcs8_encrypted),
+    "pem_openssh_ed25519_encrypted": pem(
+        "OPENSSH PRIVATE KEY", lambda raw: checks.openssh_kdf(raw) == (b"aes256-ctr", b"bcrypt")
+    ),
+    "pgp_private_key_block": lambda v: checks.pgp_secret_key_packet(v) is not None,
+    "putty_ppk_ed25519": lambda v: (blob := checks.ppk_private_blob(v)) is not None and len(blob) == 36,
+    "jwt_unsecured_none": lambda v: (parts := checks.jwt_parts(v)) is not None
+    and parts[0]["alg"] == "none"
+    and parts[2] == b"",
+    "jwt_supabase_service_role": lambda v: (parts := checks.jwt_parts(v)) is not None
+    and parts[1].get("iss") == "supabase"
+    and parts[1].get("role") == "service_role",
+    "jwt_firebase_custom_token": lambda v: (parts := checks.jwt_parts(v)) is not None
+    and parts[1].get("aud", "").startswith("https://identitytoolkit.googleapis.com/")
+    and len(parts[2]) == 256,
     "bearer_opaque_token": base64url_bytes(32),
     "csrf_token": base64url_bytes(32),
     "http_basic_auth": basic_auth,
@@ -1027,6 +1043,13 @@ LOOKALIKE_FAILURES = {
     "stripe_restricted_dash": lambda v: v.startswith(("rk_live_", "rk_test_")),
     "stripe_publishable_live": lambda v: v.startswith(("sk_", "rk_")),
     "stripe_webhook_secret_short": lambda v: CHECKS["stripe_webhook_secret"](v) or CHECKS["stripe_webhook_secret_cli"](v),
+    # F-STRUCT: JWT header without alg, claims that are no JSON, empty signature; PEM armor whose body that is no DER SEQUENCE
+    "jwt_header_no_alg": lambda v: checks.jwt_parts(v) is not None,
+    "jwt_claims_not_json": lambda v: checks.jwt_parts(v) is not None,
+    "jwt_empty_signature": lambda v: bool((checks.jwt_parts(v) or ({}, {}, b""))[2]),
+    "pem_pkcs1_rsa_bad_der": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
+    "pem_rsa_armor_ellipsis": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
+    "pem_openssh_armor_placeholder": pem("OPENSSH PRIVATE KEY", checks.is_valid_openssh_ed25519),
     # G-URL: Base32 seed and auth URL token shorter than the rules take
     "totp_base32_secret_short": lambda v: len(v) >= 16,
     "auth_url_token_short": lambda v: len(v) >= 16,

@@ -359,7 +359,10 @@ mod scope_tests {
             .unwrap();
         assert!(scoped.native.iter().all(|r| r.category != "injection"));
         assert_eq!(scoped.input_bytes, attack.len());
-        let text = "Grüße: alice@example.org\n-----BEGIN PRIVATE KEY-----\nQ2ZxN2ZKYzZtM1ZscDlLMnpXNFJ0OGFI\n-----END PRIVATE KEY-----";
+        let text = concat!(
+            "Grüße: alice@example.org\n-----BEGIN ",
+            "PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIHNwYW5uZWQta2V5LW1hdGVyaWFsLTAxMjM0NTY3ODlh\n-----END PRIVATE KEY-----"
+        );
         let scoped = scanner
             .scan_categories(text, &[SecurityCategory::Pii, SecurityCategory::Dlp])
             .unwrap();
@@ -416,7 +419,10 @@ mod selected_checks_tests {
     #[test]
     fn checks_are_independent_and_do_not_enable_unconfigured_categories() {
         let mut scanner = Scanner::new(ScannerConfig::default()).unwrap();
-        let text="alice@example.org\n-----BEGIN PRIVATE KEY-----\nQ2ZxN2ZKYzZtM1ZscDlLMnpXNFJ0OGFI\n-----END PRIVATE KEY-----";
+        let text = concat!(
+            "alice@example.org\n-----BEGIN ",
+            "PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIHNwYW5uZWQta2V5LW1hdGVyaWFsLTAxMjM0NTY3ODlh\n-----END PRIVATE KEY-----"
+        );
         let pii = scanner
             .scan_categories(text, &[SecurityCategory::Pii])
             .unwrap();

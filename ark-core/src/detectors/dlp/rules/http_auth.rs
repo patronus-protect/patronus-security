@@ -15,7 +15,8 @@
 //! - session cookie: a session ID of at least [`MIN_TOKEN_LENGTH`]
 //!   characters that looks machine-issued.
 use super::likeness;
-use crate::detectors::validators::{base64_decode, jwt_parse, Base64Kind};
+use super::structure;
+use crate::detectors::validators::{base64_decode, Base64Kind};
 use std::ops::Range;
 
 /// Shortest opaque bearer token and session ID. Servers issue 128 bits and
@@ -68,20 +69,21 @@ pub(super) fn is_basic_credentials(text: &str, range: Range<usize>) -> bool {
 }
 
 /// `dlp_bearer_token`: whether the value at `range` is an opaque token. A
-/// value that parses as a JWT and has the shape `dlp_jwt_token` matches
-/// belongs to that rule, which checks its entropy and documented examples;
-/// a malformed `ey…` value and a JWT outside that shape (empty claims `e30`,
-/// a short signature) are judged as opaque tokens.
+/// value that `dlp_jwt_token` reports (its shape and structure) belongs to
+/// that rule, which checks its entropy and documented examples; a malformed
+/// `ey…` value and a JWT outside that shape (empty claims `e30`, a short
+/// signature) are judged as opaque tokens.
 pub(super) fn is_bearer_token(text: &str, range: Range<usize>) -> bool {
     let value = &text[range];
-    if jwt_parse(value).is_some() && has_jwt_rule_shape(value) {
+    if has_jwt_rule_shape(value) && structure::is_jwt_token(value) {
         return false;
     }
     is_issued_token(value.trim_end_matches('='))
 }
 
 /// Mirrors the `dlp_jwt_token` pattern: header and claims start with `ey`
-/// followed by at least ten characters, the signature has at least ten.
+/// followed by at least ten characters, the signature has at least ten or
+/// is empty.
 fn has_jwt_rule_shape(value: &str) -> bool {
     let in_class = |segment: &str| {
         segment
@@ -100,7 +102,7 @@ fn has_jwt_rule_shape(value: &str) -> bool {
     [header, claims]
         .iter()
         .all(|segment| segment.starts_with("ey") && segment.len() >= 12 && in_class(segment))
-        && signature.len() >= 10
+        && (signature.is_empty() || signature.len() >= 10)
         && in_class(signature)
 }
 

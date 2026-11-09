@@ -14,7 +14,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | Result labels (entity groups) | 107 | 34 |
 | Regex rules | 199 | 176 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 83 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 130 | 28 |
+| Rules with a `checksum` or `structure` check | 130 | 30 |
 | Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (default and tuned; milestones against Presidio tuned on attainable gold) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-11-02) | `balanced`: neutral 70.0, presidio_favored 78.1 | default profile: 89.4 (P 99.3, R 81.3) |
@@ -416,8 +416,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | gitleaks: `stripe-access-token`; TruffleHog: `Stripe`; detect-secrets: `StripeDetector` |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | gitleaks: `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token`; TruffleHog: `Slack`; detect-secrets: `SlackDetector` |
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | structure | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
-| `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | format | on | gitleaks: `private-key`; TruffleHog: `PrivateKey`; detect-secrets: `PrivateKeyDetector` |
-| `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | format | on | gitleaks: `jwt`, `jwt-base64`; TruffleHog: `JWT`; detect-secrets: `JwtTokenDetector` |
+| `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | structure | on | gitleaks: `private-key`; TruffleHog: `PrivateKey`; detect-secrets: `PrivateKeyDetector` |
+| `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | structure | on | gitleaks: `jwt`, `jwt-base64`; TruffleHog: `JWT`; detect-secrets: `JwtTokenDetector` |
 | `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment`, `dlp_prose_secret` | none | on | gitleaks: `generic-api-key`; detect-secrets: `KeywordDetector` |
 | `credential.password_assignment` | shared | `CREDENTIAL` | `dlp_password_assignment`, `dlp_prose_password` | none | on | detect-secrets: `KeywordDetector` |
 | `credential.http_bearer` | shared | `SECRET_TOKEN` | `dlp_bearer_token` | format | on | gitleaks: `curl-auth-header` |

@@ -493,7 +493,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_monero_seed` | `CRYPTO_KEY` | `seed_phrase` | `monero` | `checksum` | [github.com](https://github.com/monero-project/monero/blob/master/src/mnemonics/electrum-words.cpp) | yes | on | 30 | field | 0.90 |
 | `dlp_cardano_signing_key` | `CRYPTO_KEY` | `private_key` | `cardano` | `checksum` | [cips.cardano.org](https://cips.cardano.org/cip/CIP-0005) | yes | on | 30 | proximity | 0.65–0.90 |
 | `dlp_bip39_seed_phrase` | `CRYPTO_KEY` | `seed_phrase` | – | `checksum` | [github.com](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) | yes | on | 30 | proximity | 0.65–0.90 |
-| `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
+| `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `structure` | `gitleaks:private-key` | yes | on | 70 | proximity | 0.95–1.00 |
 | `dlp_private_key_header` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_jwk_private_key` | `PRIVATE_KEY` | `private_key` | – | `structure` | [datatracker.ietf.org](https://datatracker.ietf.org/doc/html/rfc7517) | yes | on | 70 | proximity | 0.95–1.00 |
 | `dlp_wireguard_private_key` | `PRIVATE_KEY` | `private_key` | `wireguard` | `structure` | [www.wireguard.com](https://www.wireguard.com/quickstart/) | yes | on | 50 | field | 1.00 |
@@ -503,7 +503,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_laravel_app_key` | `CRYPTO_KEY` | `private_key` | `laravel` | `structure` | [laravel.com](https://laravel.com/docs/encryption) | yes | on | 50 | field | 1.00 |
 | `dlp_django_secret_key` | `CRYPTO_KEY` | `private_key` | `django` | `format` | [docs.djangoproject.com](https://docs.djangoproject.com/en/stable/ref/settings/#secret-key) | yes | on | 45 | field | 0.85 |
 | `dlp_rails_secret_key_base` | `CRYPTO_KEY` | `private_key` | `rails` | `format` | [guides.rubyonrails.org](https://guides.rubyonrails.org/security.html#custom-credentials) | yes | on | 50 | field | 0.90 |
-| `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `structure` | `gitleaks:jwt` | yes | on | 45 | proximity | 0.70–0.95 |
 | `dlp_credential_in_url` | `CREDENTIAL` | `auth_url` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
 | `dlp_auth_url_token` | `CREDENTIAL` | `auth_url` | – | `none` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2) | yes | on | 25 | field | 0.50 |
 | `dlp_otp_secret` | `CREDENTIAL` | `otp_secret` | – | `structure` | [github.com](https://github.com/google/google-authenticator/wiki/Key-Uri-Format) | yes | on | 30 | field | 0.80 |

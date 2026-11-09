@@ -63,6 +63,7 @@ mod likeness;
 mod markings;
 mod placeholders;
 mod providers;
+mod structure;
 mod value_shape;
 
 use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength, SECRET_GROUPS};
@@ -295,6 +296,13 @@ pub fn is_example_match(
 pub fn is_documented_example(rule_id: &str, text: &str, range: Range<usize>) -> bool {
     documented::documented_kind(&checked_value(rule_id, text, range))
         == Some(documented::DocumentedKind::Example)
+}
+
+/// F-STRUCT: what the parsed structure of a match tells beyond the rule's
+/// metadata (`jwt_alg` and the provider of a JWT, `key_encrypted` of a
+/// private key block).
+pub fn structure_details(rule_id: &str, value: &str) -> Vec<(&'static str, serde_json::Value)> {
+    structure::details(rule_id, value)
 }
 
 /// K06: whether a matched secret `value` is a publicly known test key
