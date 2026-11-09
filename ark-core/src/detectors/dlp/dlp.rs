@@ -8,6 +8,7 @@ use crate::{
 use regex::Regex;
 use std::ops::Range;
 
+use super::decoder::{self, Decoded};
 use super::overlap::OverlapRules;
 pub use super::overlap::OverlapTier;
 use super::prefilter::{RulePrefilter, ValueClass, ValueRun};
@@ -777,7 +778,41 @@ impl DlpPipeline {
     /// then drops what scores below the mode's threshold. Its spans are thus
     /// always strict spans: a value dropped for its context does not free its
     /// range for a weaker rule (a WIF-shaped run inside a dropped hex hash).
+    ///
+    /// D01: values inside base64/base64url runs are found in the decoded view
+    /// (depth 2, size-limited) and reported on their encoded range, unless a
+    /// finding of the text itself overlaps that range.
     pub fn detect_prepared_with_mode<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        mode: ScoreMode,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        let detection = self.detect_text_with_mode(prepared, &allows_rule, explain, mode);
+        let Some(view) = Decoded::new(prepared.text()) else {
+            return detection;
+        };
+        let decoded = self.detect_text_with_mode(
+            &crate::threat::NativeText::new(&view.text),
+            &allows_rule,
+            false,
+            mode,
+        );
+        if decoded.evidence_spans.is_empty() {
+            return detection;
+        }
+        decoder::merge(prepared.text(), detection, decoded, &view, |rule_id| {
+            let index = self.rule_ids.iter().position(|id| *id == rule_id)?;
+            Some(self.entity_groups[index])
+        })
+    }
+
+    /// [`Self::detect_prepared_with_mode`] on the text alone.
+    fn detect_text_with_mode<F>(
         &self,
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: F,

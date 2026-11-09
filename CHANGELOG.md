@@ -181,6 +181,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Kanzlei, Rechtsstreit). Off by default like every content class; the default profile is unchanged.
   Latency (`scripts/l1_dlp/latency.py`, release, same machine, base → head): 100 KiB p50 9.50 →
   9.48 ms, p95 15.26 → 15.38 ms, 4 KiB p95 1.66 → 1.24 ms; no measurable change.
+- Detection change: DLP decoder pipeline (D01). Canonical base64 and base64url runs (24 to 65 536
+  characters) whose bytes are printable UTF-8 text are decoded, runs inside the decoded text once
+  more (recursion depth 2), into one size-limited view (128 KiB per text) that the DLP rules scan
+  once. A finding of the view is reported on the encoded characters that hold its bytes (every 3
+  decoded bytes map to 4 encoded characters), its `matched_rules` entry carries `decoded` (the
+  encodings undone, outermost first); a finding of the text itself on the same range keeps its
+  span. Provider tokens in Kubernetes `data:` values, CI variables, JSON payloads and
+  `echo … | base64 -d` lines are now reported; environment references, placeholders, prose, example
+  values and binary data stay silent after decoding. Latency: candidate runs are found by testing
+  each 24-character window from its end and skipping past the byte that breaks it, so most bytes of
+  prose and code are never read; a run is dropped at its first decoded byte that is not text, and
+  the second rule pass covers only the decoded view.
 - Detection change: JWT and PEM structure (F-STRUCT, F07 + F08 + C07). `dlp_jwt_token` reports a
   token only when its header decodes to a JSON object with a string `alg` and its claims to a JSON
   object (validator strength `structure`); unsecured tokens (`alg` `none`) with an empty signature
