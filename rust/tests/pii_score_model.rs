@@ -499,6 +499,7 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_crypto_eth",
             "pii_steuer_id_de_bare",
             "pii_physician_number_lanr_de_bare",
+            "pii_aba_routing_number_us_bare",
             "pii_sin_ca_bare",
             "pii_aadhaar_in_bare",
             "pii_npi_us_bare",
