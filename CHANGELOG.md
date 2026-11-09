@@ -189,9 +189,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   encodings undone, outermost first); a finding of the text itself on the same range keeps its
   span. Provider tokens in Kubernetes `data:` values, CI variables, JSON payloads and
   `echo … | base64 -d` lines are now reported; environment references, placeholders, prose, example
-  values and binary data stay silent after decoding. Latency: one byte pass over the text, decoding
-  only runs whose first eight characters decode to text, and a second rule pass only over the
-  decoded view.
+  values and binary data stay silent after decoding. Latency: candidate runs are found by testing
+  each 24-character window from its end and skipping past the byte that breaks it, so most bytes of
+  prose and code are never read; a run is dropped at its first decoded byte that is not text, and
+  the second rule pass covers only the decoded view.
 - Detection change (all DLP modes): BIP39 seed phrases (C01). `dlp_bip39_seed_phrase`
   (`CRYPTO_KEY`, subtype `seed_phrase`, checksum strength) reports 12, 15, 18, 21 and 24 words of one
   official BIP39 word list (English, Italian, Portuguese, Czech, Spanish, French) whose checksum (the
