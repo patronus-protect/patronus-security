@@ -155,6 +155,7 @@ static COUNTER: LazyLock<ContentClass> = LazyLock::new(|| {
             window: WINDOW,
             min_score: crate::detectors::dlp::content_class::STRONG_WEIGHT,
             min_medium: 0,
+            min_structural: 0,
         },
     )
 });

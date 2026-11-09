@@ -11,6 +11,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: HR, security, export-control and R&D document classes on the M01 content class
+  engine (M-HRSEC), all opt-in (off by default; the default profile is unchanged). New
+  `dlp_document_hr` (`dlp.document.hr`, M06): employment references (Arbeitszeugnis), warning
+  letters (Abmahnung, written warning), terminations and termination/separation agreements
+  (Kündigungsschreiben, Aufhebungsvertrag), payslips (Entgelt-/Lohn-/Gehaltsabrechnung) and
+  performance reviews (Leistungsbeurteilung). New `dlp_document_security_report`
+  (`dlp.document.security_report`, M13): pentest, security audit, vulnerability assessment and
+  incident reports (Pentest-Bericht, Sicherheitsvorfall, Vorfallsbericht), which must name an
+  affected system (host, server, domain controller, VPN, Zielsystem …). New
+  `dlp_document_export_control` (`dlp.document.export_control`, M16): only labelled identifiers
+  (ECCN, AL-Nummer, Ausfuhrlistennummer or dual-use followed by an Annex I code such as 5A002 or an
+  export list number 0001–0022, EAR99, ITAR-controlled, subject to the ITAR, USML Category). New
+  `dlp_document_rnd_ip` (`dlp.document.rnd_ip`, M17): invention disclosures (Erfindungsmeldung),
+  patent drafts and draft claims before filing (Patententwurf, Anspruchsentwürfe). Each class needs
+  two distinct domain terms and the form of a letter, chat or record within 1,500 bytes of the
+  title. Job ads, law and regulation texts (this Act, im Sinne dieses Gesetzes, Annex I), public
+  advisories (affected versions, fixed in, Sicherheitshinweis), published patents
+  (Offenlegungsschrift, Date of publication) and explanations are counter-context, and two
+  bracketed placeholders (`[Name]`, `[yes/no]`) near the title mark a form. With all four classes
+  enabled the dev benign-document and benign-code corpora flag no document. Latency
+  (`scripts/l1_dlp/latency.py`, release, default profile, same machine): base 100 KiB p50
+  11.23 ms, p95 16.23 ms, head p50 11.05 ms, p95 15.29 ms; 4 KiB p95 2.50 → 1.62 ms; no
+  measurable change, the classes are opt-in and their anchors are searched only where a marker
+  matched.
 - Detection change: wallet keys and wallet files (C-WALLET, C02 + C03), all `CRYPTO_KEY` with
   subtype `private_key`, on by default. `dlp_bip32_extended_private_key` reports BIP 32 / SLIP-0132
   extended private keys (`xprv`, `yprv`, `zprv`, testnet `tprv`, `uprv`, `vprv` with severity
@@ -99,6 +123,50 @@ result shapes may be breaking for downstream users, and is called out explicitly
   p50 9.74 ms, p95 14.24 ms (M01 head 9.48 / 15.38 ms), 4 KiB p95 1.94 ms; no measurable change,
   the classes are opt-in and their anchors are searched only where a marker matched. The legal
   class shares its letter-structure and generic counter lists with them (same anchors as before).
+- Detection change: legal document classes on the M01 content class engine (M-LEGAL), all opt-in
+  (off by default; the default profile is unchanged). New `dlp_document_nda_trade_secret`
+  (`dlp.document.nda_trade_secret`, M04): non-disclosure/confidentiality agreements, NDA, trade
+  secret markers, Geheimhaltungs-/Vertraulichkeitsvereinbarung, Geschäfts-/Betriebsgeheimnis,
+  GeschGehG and embargo periods (embargoed until, Sperrfrist) next to parties, confidential
+  information, disclosure duties or press-release terms. New `dlp_document_contract`
+  (`dlp.document.contract`, M22): customer and supplier contracts (Master Services/Supply/License
+  Agreement, Rahmen-, Liefer-, Dienstleistungs-, Lizenzvertrag …) only when at least four contract
+  terms (parties, remuneration, term, termination, confidentiality, liability) stand within 3,000
+  bytes of the title. `dlp_document_legal_privileged` (M05) also reports settlement negotiation
+  markers (WITHOUT PREJUDICE, for settlement purposes only, ohne Präjudiz) under the same
+  legal-anchor gate; "ohne Anerkennung einer Rechtspflicht" is no marker, since press and
+  encyclopedic reports of settlements use it. Published laws, court decisions (Leitsatz,
+  Urteil, the court held), contract templates (Muster, Vorlage, [Party A]) and explanations are
+  counter-context. Latency (`scripts/l1_dlp/latency.py`, release, same machine as M01): 100 KiB p50
+  9.53 ms, p95 13.66 ms (M01: 9.48 / 15.38 ms), 4 KiB p95 1.98 ms; no measurable change.
+- Detection change (opt-in NDA/trade secret and contract classes, all modes): both classes also need
+  document form (`min_structural`): a letter or chat (Subject:, Betreff:, Dear, Hallo, please,
+  bitte), agreement wording (this agreement, Effective date, § 1, hereinafter, nachfolgend), a
+  handling instruction (do not forward, nicht weiterleiten) or a record label. The engine counts a
+  marker or medium anchor used as a field label (`Sperrfrist:`, `Term:`, `"fees":`) as record
+  structure. Encyclopedia articles on NDAs and on mergers have the domain terms in prose but no
+  such form; with all gates enabled the dev benign-document corpus went from 34 legal-class hits in
+  2 documents (NDA article 32, M&A article 2) to 0. Typically, commonly, also known as and their
+  German counterparts are NDA counter-context; between, zwischen, EUR, USD, Datum and signed are no
+  contract anchors any more, since they stand in any prose about deals.
+- Detection change (opt-in contract, NDA/trade secret and legal-privileged classes, all modes): the
+  content class engine can require elements (`ContentClass::requiring`), groups of anchors of which
+  each needs one hit near the marker. `dlp_document_contract` needs contracting parties,
+  remuneration, term and confidentiality (minimum score 14 → 12), so a signed cover letter with
+  exactly these four holds and a meeting note listing customer, supplier, contractor and licensee
+  roles does not. `dlp_document_nda_trade_secret` needs a secrecy duty (confidential information,
+  receiving/disclosing party, non-public, need-to-know, do not forward, nicht öffentlich,
+  Geheimhaltung, bleibt intern); newsletters on trade secret rulings or GeschGehG reforms,
+  SECURITY.md embargo notes, job ads ("Candidates sign an NDA") and shop return notes (Sperrfrist
+  für Rücksendungen) no longer pass on letter words and a generic term; newsletter is NDA
+  counter-context. `dlp_document_legal_privileged` also reports draft pleadings (draft complaint,
+  draft statement of claim/defence, draft pleading/petition/motion, Klageentwurf, Entwurf
+  Klageschrift/Klageerwiderung/Schriftsatz) under the same legal-anchor gate. All three classes stay
+  opt-in, so the default profile and its latency are unchanged; the element check is one bit test
+  per element on the anchors the gate already collects.
+- Detection change (opt-in NDA/trade secret class, all modes): bare confidentiality is no NDA
+  anchor and no secrecy duty, only "confidentiality terms" is; access and data policies that name
+  the NDA their volunteers sign next to confidentiality as a value no longer pass.
 - Detection change: content class engine for document classes (M01). A document class is a rule
   whose regex matches a strong anchor (a marker); that match is the evidence span and the document
   label. The label holds only when the anchors within 1,500 bytes around the marker add up (minimum

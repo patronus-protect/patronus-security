@@ -20,6 +20,14 @@ import ark_api_agent_benchmark as agent_benchmark  # noqa: E402
 
 
 class ApiThroughputProfileTests(unittest.TestCase):
+    def test_only_rare_retryable_l3_queue_timeouts_are_tolerated(self):
+        timeout = {"retryable": True, "message": "expired_before_inference", "level": "L3"}
+        other = {"retryable": False, "message": "scanner panicked", "level": "L3"}
+        self.assertEqual(benchmark.blocking_failures([timeout] * 3, 210, 0.02), [])
+        self.assertEqual(len(benchmark.blocking_failures([timeout] * 5, 210, 0.02)), 5)
+        self.assertEqual(len(benchmark.blocking_failures([timeout, other], 210, 0.02)), 2)
+        self.assertEqual(len(benchmark.blocking_failures([timeout], 210, 0.0)), 1)
+
     def test_capacity_profile_has_mode_three_and_bounded_right_tail(self):
         batches = capacity.triangular_batches(10_000)
         counts = __import__("collections").Counter(batches)

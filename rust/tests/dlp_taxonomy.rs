@@ -46,8 +46,14 @@ const DLP_GROUPS: &[&str] = &[
     "dlp.de.commercial_register_number",
     "dlp.document.board_minutes",
     "dlp.document.classification_marking",
+    "dlp.document.contract",
+    "dlp.document.export_control",
+    "dlp.document.hr",
     "dlp.document.legal_privileged",
     "dlp.document.m_and_a",
+    "dlp.document.nda_trade_secret",
+    "dlp.document.rnd_ip",
+    "dlp.document.security_report",
     "dlp.document.unpublished_financials",
     "dlp.de.facility_number_bsnr",
     "dlp.de.vat_id",
@@ -408,4 +414,27 @@ fn spans_keep_the_group_label() {
         .evidence_spans
         .iter()
         .all(|span| span.label == "SECRET_TOKEN"));
+}
+
+#[test]
+fn reported_out_of_court_settlements_are_no_privileged_correspondence() {
+    // M-LEGAL: encyclopedic and press reports of settlements "ohne
+    // Anerkennung einer Rechtspflicht" carry legal terms but no privilege.
+    let text = "Wegen undichter Heizkessel verklagten bis 2019 rund 1.200 Käufer den Hersteller, mehrere \
+                Verfahren lagen beim Landgericht. Im Frühjahr 2021 zahlte das Unternehmen ohne Anerkennung \
+                einer Rechtspflicht 45 Millionen Euro in einen Fonds; danach nahm fast jeder Kläger die Klage \
+                zurück.";
+    let result = scan_with(Some(ScanGateMatrix::all_enabled()), text);
+    let rules = result.layers[0]
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        rules
+            .iter()
+            .all(|rule| rule["rule_id"] != "dlp_document_legal_privileged"),
+        "{rules:?}"
+    );
 }

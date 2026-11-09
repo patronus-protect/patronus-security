@@ -1031,6 +1031,23 @@ tasks:
       pass (H06-2, H06-3, …) with this accept text and deps on the previous pass, before H05; the loop ends
       when the budget holds or no such hotspot remains (remaining hotspots documented).
 
+  - id: T39
+    title: "M4 headroom: native 100 KiB p95 9.9-10.7 ms over three runs; resume the performance loop (H06-7) or confirm \"M4 met\" on a median over runs?"
+    type: perf
+    deps: [H06-6]
+    needs_decision: true
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 4)"
+    question: >-
+      latency.py on the VPS (main 66fc95d0, release build, PII only): ark-native 100 KiB p95 10.657, 9.903
+      and 10.180 ms in three runs (median 10.18; H06 single run 9.774), p50 8.48 ms; Python bindings 14.4 ms.
+      M4 counts as met since 2026-11-05 on one run; two of three runs now exceed the budget without any PII
+      change since H05-2. Options: (a) resume H06-7 (profile, remove the matched_rules serde_json hotspot,
+      zero-match searches) until the median of five runs holds <= 10 ms with margin; (b) keep the decision
+      and make latency.py report the median p95 of N runs, M4 judged on that; (c) both. Which applies?
+    accept: >-
+      As decided: (a) H06-7 accept text with the median of five runs; (b) latency.py --runs N with tests,
+      latency.md and final-raw.md updated
+
   - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-6], status: done}
 
   # Raw parity with Presidio default AND tuned (decided 2026-11-05 after an external re-test on
@@ -1074,6 +1091,102 @@ tasks:
       Validators are never loosened for the default rules; strict default output unchanged unless a gold
       fix; no new hard-negative FP in the default profile
   - {id: H05-2, title: "Final report M1–M4 on holdout in the raw view (Presidio default and tuned, Ark with and without the bare profile)", type: report, deps: [Q-RAW], status: done}
+  - id: T34
+    title: "Bare-profile precision: pii_ssn_us_bare, pii_driver_license_number_de_bare and pii_facility_number_bsnr_de_bare with placeholder filter, counter-context and structural boundaries"
+    type: precision-fix
+    deps: [D-BARE]
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 1)"
+    accept: >-
+      On dev, balanced-bare loses 2.2 pp exact F1 on neutral against balanced (67.8 vs 70.0) and M1 neutral
+      against tuned (8/9: US SSN EN 46.9 vs tuned 79.3, balanced 82.1) because the opt-in rules fire on
+      structured non-PII: pii_ssn_us_bare adds 46 exact FP on neutral EN rows (23 of them the counting
+      sequence 123456789 that pii_ssn_us_context_free already rejects as a placeholder, 878787878, values
+      after counter terms such as "routing number", "policy number", ACCTID, BANKID, after prefixes like
+      DCI- or BOL-, inside EDIFACT/X12/SWIFT fields); pii_driver_license_number_de_bare adds 57 FP (30 in BIC
+      shape, mostly annotated pii.swift_bic, plus promo codes and SWIFT fields); pii_facility_number_bsnr_de_bare
+      adds 107 spans on neutral text (nine digits without a check digit; unscored there, no BSNR gold).
+      The bare rules reuse the existing placeholder filter (validators::us_ssn_context_free or its shared
+      core), the counter-context lexicons and context::stands_alone (no new copy), and drop an 11-character
+      value in BIC shape or a value that another label's finding overlaps. Result on dev: balanced-bare holds
+      M1 neutral against default and tuned (US SSN and driver's licence EN >= balanced - 0.5 pp), neutral
+      family F1 within 0.5 pp of balanced, presidio_favored balanced-bare gains (M1 19/25 vs tuned, M2
+      89.9) kept, ark_authored HN-FP of balanced-bare not higher than 80; validators of the default rules
+      unchanged; strict and balanced output with the default gates bit-identical; tests per rule (bare
+      positive, placeholder, counter-context, BIC-shaped and EDI-field negatives); default L1 latency unchanged
+  - id: T35
+    title: "Opt-in rule for the bare ABA routing number (3-7-1 checksum) in the bare profile, known_gaps entry for the B-ACCT decision"
+    type: recall-fix
+    deps: [B-ACCT, T34]
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 2)"
+    accept: >-
+      Raw M1 gap against Presidio default on presidio_favored: account number 57.1 vs 66.7 (bare
+      121000358 and 121042882 pass validators::aba_routing_number; 945456787654 stays out). B-ACCT keeps bare
+      nine digits negative by default, but neither known_gaps nor the bare profile records it.
+      pii_aba_routing_number_us_bare (D-BARE pattern: own rule id in the existing rules gate, off by default,
+      validators::aba_routing_number, low base score) joins docs/how-to/pii-bare-formats.gates.json; a
+      known_gaps entry (decision B-ACCT) lists the bare form; overlap with pii_ssn_us_bare and
+      pii_facility_number_bsnr_de_bare on the same nine digits is resolved by the existing overlap order, not
+      by a second copy. Dev: balanced-bare account number on presidio_favored >= default, neutral account
+      number and US SSN not lower than after T34, HN-FP measured with the profile and reported in the PR;
+      strict and balanced output with the default gates bit-identical; count_validated.py unchanged (same
+      validator); tests (bare valid, bare checksum-invalid, labelled, SSN overlap)
+  - id: T36
+    title: "Opt-in rules for bare licence plates: UK prefix, suffix and dateless forms, IN without separators, NG in lower case"
+    type: recall-fix
+    deps: [Q-M1, D-BARE]
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 2)"
+    accept: >-
+      Raw M1 gap against Presidio tuned on presidio_favored: licence plate balanced-bare 72.0 vs 81.5
+      (balanced 47.6); FN A123 BCD, K1 ABC, ABC 1D (UK prefix/dateless/suffix forms that Q-M1 left out),
+      KA53ME3456 (IN without separators), app-456cv (NG lower case; tuned finds it). Each form becomes its own
+      opt-in rule id in the rules gate (off by default, structural check such as UK letter sets and IN state
+      codes instead of a checksum, low base score) and joins the bare profile; known_gaps entries (T30 and
+      a new one for the UK forms) list the bare forms the default rules keep negative; with a plate term
+      nearby the same forms may report in balanced/recall if the hard negatives stay clean. Dev:
+      balanced-bare licence plate on presidio_favored >= tuned, plate floor documented (above 80 with the
+      profile or a recorded exception), HN-FP and benign code/docs FP with the profile measured and reported;
+      strict output with the default gates bit-identical; tests per rule (bare, with term, hard negatives
+      such as product codes and postcodes)
+  - id: T37
+    title: "Bare passport numbers (format only, no check digit): opt-in rule in the bare profile or a recorded gap?"
+    type: recall-fix
+    deps: [D-BARE]
+    needs_decision: true
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 2)"
+    question: >-
+      Raw M1 gap against Presidio default on presidio_favored: passport 40.0 vs 71.4 with balanced and
+      balanced-bare. Default reports the bare US forms 912803456, A12803456 and Z12803456 (UsPassportRecognizer,
+      threshold 0); Ark misses them and XY9876543, ab1234567 (UK), B3097651 (IN). None has a check digit,
+      and there is no known_gaps entry for bare passport numbers (README Q-RAW only names the gap).
+      Options: (a) opt-in rules per country form in the bare profile (low score; nine bare digits collide with
+      SSN, SIN, ACN, ABA and BSNR bare rules, so the profile's FP grows; measured before merge); (b) a
+      known_gaps entry with a decision (bare passport numbers stay negative everywhere) and M1 against
+      default stays open for passport; (c) a per-country opt-in only for letter-prefixed forms
+      (A12803456, XY9876543), not for nine bare digits. Which applies?
+    accept: >-
+      As decided: (a)/(c) rules with tests, profile entry and measured HN/benign FP, strict and balanced
+      default output bit-identical; (b) known_gaps entry checked by entity_map.py check and README line
+  - id: T38
+    title: "Raw M1 gaps under recorded decisions (IP loopback/unspecified, SSA-invalid SSN, NINO span with whitespace, GSTIN and NRIC/FIN gold with invalid check digits): exception of the raw view, compatibility profile or M1 stays open?"
+    type: eval-infra
+    deps: [Q-RAW]
+    needs_decision: true
+    source: "TRIAGE 2026-W46 (research/l1-pii/triage/2026-W46.md, bucket 3)"
+    question: >-
+      After T34-T36 succeed, balanced-bare would hold M1 on neutral and reach presidio_favored 22/25
+      against default (open: passport T37, IP 86.1 vs 100, US SSN 80.0 vs 100) and 20/25 against tuned
+      (open: GSTIN 0 vs 100, IP 86.1 vs 96.2, NRIC/FIN 50 vs 80, NINO 66.7 vs 100, US SSN 80.0 vs 88.9).
+      Every open row sits under D-IP/T28, B-SSN, T27 (gold span with leading whitespace) or gold that fails
+      the id's check digit; no_relax forbids closing them in the default rules, and Q-RAW stays unaccepted
+      until the gate prints MET or the owner changes the acceptance. Options: (a) accept these known_gaps
+      decisions as named exceptions of the raw view (M1 claim "raw, except …"; scoreboard prints the
+      exception list next to the verdict); (b) an opt-in compatibility profile next to the bare profile that
+      reports loopback/unspecified IPs and SSA-unassigned but well-formed SSNs (validators of the default
+      rules unchanged; invalid-checksum GSTIN/NRIC and the whitespace span stay open, so M1 against tuned
+      still fails); (c) keep M1 open and say so in public claims. Which applies?
+    accept: >-
+      As decided: README milestone section and final-raw.md wording, scoreboard verdict and tests for (a);
+      rules, profile, docs and measured FP for (b); README note for (c)
 
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}
