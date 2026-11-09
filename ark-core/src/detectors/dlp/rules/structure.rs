@@ -84,18 +84,7 @@ pub(super) fn private_key(block: &str) -> Option<KeyFacts> {
     let (label, rest) = rest.split_once("-----")?;
     let (body, _) = rest.split_once("-----END")?;
     let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut encrypted_headers = false;
-    let mut data = String::with_capacity(body.len());
-    for line in lines(body) {
-        if let Some((name, value)) = line.split_once(':') {
-            // RFC 1421 headers of OpenSSL-encrypted keys, RFC 4880 armor headers.
-            encrypted_headers |= name.trim() == "Proc-Type" && value.contains("ENCRYPTED");
-        } else if label == "PGP PRIVATE KEY BLOCK" && line.starts_with('=') && line.len() == 5 {
-            // RFC 4880 section 6.2: the CRC-24 line closes the armor body.
-        } else {
-            data.push_str(line);
-        }
-    }
+    let (data, encrypted_headers) = body_data(body, label == "PGP PRIVATE KEY BLOCK");
     let der = base64_decode(&data, Base64Kind::Standard)?;
     if encrypted_headers {
         return (matches!(
@@ -116,6 +105,35 @@ pub(super) fn private_key(block: &str) -> Option<KeyFacts> {
         "PGP PRIVATE KEY BLOCK" => pgp_secret_key(&der),
         _ => None,
     }
+}
+
+/// H01: the decoded body of a PEM private key block (DER, OpenSSH or PGP
+/// packets) given without its armor lines, for the example check on the key
+/// octets.
+pub(super) fn private_key_payload(body: &str) -> Option<Vec<u8>> {
+    if body.len() > MAX_BLOCK {
+        return None;
+    }
+    base64_decode(&body_data(body, true).0, Base64Kind::Standard)
+}
+
+/// The base64 data of a PEM body with real or escaped line breaks and
+/// whether RFC 1421 headers mark it as encrypted; `pgp` drops the CRC-24
+/// line of an ASCII armor.
+fn body_data(body: &str, pgp: bool) -> (String, bool) {
+    let mut encrypted_headers = false;
+    let mut data = String::with_capacity(body.len());
+    for line in lines(body) {
+        if let Some((name, value)) = line.split_once(':') {
+            // RFC 1421 headers of OpenSSL-encrypted keys, RFC 4880 armor headers.
+            encrypted_headers |= name.trim() == "Proc-Type" && value.contains("ENCRYPTED");
+        } else if pgp && line.starts_with('=') && line.len() == 5 {
+            // RFC 4880 section 6.2: the CRC-24 line closes the armor body.
+        } else {
+            data.push_str(line);
+        }
+    }
+    (data, encrypted_headers)
 }
 
 /// Lines of a body with real or JSON-escaped line breaks (also doubly
@@ -412,5 +430,19 @@ mod tests {
         let collected: Vec<&str> =
             lines("\\nAAAA\\n  \"BBBB\",\r\n  CCCC==\n\\\\nDDDD\\\\n").collect();
         assert_eq!(collected, ["AAAA", "BBBB", "CCCC==", "DDDD"]);
+    }
+
+    #[test]
+    fn private_key_payload_decodes_wrapped_and_escaped_bodies() {
+        let raw = openssh(b"none", b"none", 1);
+        // Base64 of `raw`, wrapped after 20 characters below.
+        let (head, tail) = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB".split_at(20);
+        for body in [
+            format!("\n{head}\n{tail}\n"),
+            format!("\\n{head}\\n{tail}\\n"),
+        ] {
+            assert_eq!(private_key_payload(&body), Some(raw.clone()), "{body}");
+        }
+        assert_eq!(private_key_payload("\n...\n"), None);
     }
 }
