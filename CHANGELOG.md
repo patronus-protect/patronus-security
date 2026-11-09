@@ -24,6 +24,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
   unencrypted OpenSSH key and the User ID and User Attribute packets of a PGP key are dropped
   before the check, so a real key with a repetitive comment (`abcabcabcabcabcabc`) stays a
   finding.
+- Detection change: opt-in rules for bare letter-prefixed passport numbers (T37, decision option
+  c). `pii_passport_number_us_bare` (US letter form `A12803456`, `validators::us_passport_number`),
+  `pii_passport_number_two_letters_bare` (two letters and seven digits `XY9876543`, new
+  `validators::passport_number_two_letters_bare`: no placeholder run, no EU VAT country prefix) and
+  `pii_passport_number_in_bare` (Indian form `B3097651`, new `validators::in_passport_number`: no `0`
+  after the letter or at the end) report the value without a passport term once the `rules` gate
+  enables them, then in every mode (format only, base `35`, the `balanced` threshold `0.50`); they
+  join the bare profile `docs/how-to/pii-bare-formats.gates.json`. Nine bare digits get no bare
+  passport rule (they collide with the bare SSN, SIN, ACN, ABA and BSNR rules), recorded as a
+  `known_gaps` entry (T37). With any enabled bare rule, a VAT or identity card term that names the
+  value now drops it (`BARE_FOREIGN_LEXICON`), and the US and Indian bare forms skip a Spanish CIF
+  after `ES `. Dev, raw, EN, `balanced-bare`: passport on presidio_favored 40.0 → 85.7 exact F1
+  (Presidio default 71.4, tuned 40.0), neutral passport 77.4 → 80.0, ark_authored passport 95.7 →
+  91.7 (two MRN/patient-ID values), BSNR 76.9 → 80.0 and US SSN 85.7 → 88.2 there. Benign code and
+  docs: no new span. `strict` and `balanced` output with the default gates is unchanged.
 - Detection change: opt-in rule `pii_aba_routing_number_us_bare` for the bare ABA routing number
   (T35). Nine digits (or the printed 4-4-1 form) with a Federal Reserve routing symbol and a valid
   3-7-1 check digit (`validators::aba_routing_number`, unchanged) are reported without a routing or
