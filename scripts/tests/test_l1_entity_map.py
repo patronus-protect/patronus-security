@@ -599,7 +599,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 206
+    assert len(expected) == 207
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
@@ -800,6 +800,13 @@ RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
         ("pii.us.npi", RECOGNIZER_TESTS, "test_us_npi_recognizer:x:3", "1234-567-893", "1234-567-893", None),
         ("pii.us.npi", RECOGNIZER_TESTS, "test_us_npi_recognizer:x:6", "Provider identifier 1245319599",
          "1245319599", None),
+        # T35: bare ABA routing numbers (B-ACCT, opt-in rule); twelve digits and a routing term stay gold.
+        ("pii.financial_account_number", RECOGNIZER_TESTS, "test_aba_routing_recognizer:x:0", "121000358",
+         "121000358", "B-ACCT"),
+        ("pii.financial_account_number", RECOGNIZER_TESTS, "test_aba_routing_recognizer:x:0",
+         "Routing number 121000358", "121000358", None),
+        ("pii.financial_account_number", RECOGNIZER_TESTS, "test_us_bank_recognizer:x:0", "945456787654",
+         "945456787654", None),
         # Q-M1: Nigerian plates with a plate term stay gold.
         ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:6",
          "Plates: APP-456CV and KJA-999PZ", "KJA-999PZ", None),

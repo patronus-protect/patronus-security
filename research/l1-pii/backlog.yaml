@@ -1115,6 +1115,7 @@ tasks:
       unchanged; strict and balanced output with the default gates bit-identical; tests per rule (bare
       positive, placeholder, counter-context, BIC-shaped and EDI-field negatives); default L1 latency unchanged
   - id: T35
+    status: done
     title: "Opt-in rule for the bare ABA routing number (3-7-1 checksum) in the bare profile, known_gaps entry for the B-ACCT decision"
     type: recall-fix
     deps: [B-ACCT, T34]

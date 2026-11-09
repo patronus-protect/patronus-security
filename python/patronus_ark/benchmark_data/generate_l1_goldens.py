@@ -5051,6 +5051,35 @@ T36_CASES = [
 for _row in T36_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T35: nine bare digits that pass the ABA 3-7-1 check stay negative with the default gates (decision
+# B-ACCT, `known_gaps`); the opt-in rule `pii_aba_routing_number_us_bare` of the bare profile reports
+# them (rust/tests/pii_bare_rules.rs). The labelled forms keep their default rule in every mode.
+# Appended so existing ids stay stable.
+T35_CASES = [
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Routing number: ", "121042882", ""),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "The ABA routing number is ", "071000013", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", '{"aba": "', "031000053", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Please wire the deposit via routing number ", "044000037", " today.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "rtn,amount\n", "263191387", ",42", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Routingnummer: ", "122105155", ""),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Überweisung über ABA ", "101000187", " an die Filiale in Denver.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", '{"aba": "', "231372691", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Die ABA-Nummer ", "072000326", " liegt vor.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "rtn;betrag\n", "121042882", ";42,00", carrier="csv"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "121042882", "bare nine digits with a valid check digit (opt-in rule only)", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Please put 121000358 there.", "bare nine digits in prose (opt-in rule only)", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 121042883", "check digit fails"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Order number 071000013 has shipped.", "order number, no routing term", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "945456787654", "twelve bare digits (presidio-analyzer US bank value)", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "121042882", "bare nine digits with a valid check digit (opt-in rule only)", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bitte 044000037 eintragen.", "bare nine digits in prose (opt-in rule only)", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 122105156", "check digit fails"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bestellnummer 263191387 wurde versandt.", "order number, no routing term", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 931042881", "check digit valid, but 93 is no routing symbol", mode="recall"),
+]
+for _row in T35_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

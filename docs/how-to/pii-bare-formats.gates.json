@@ -7,6 +7,7 @@
     "pii_facility_number_bsnr_de_bare": true,
     "pii_driver_license_number_de_bare": true,
     "pii_ssn_us_bare": true,
+    "pii_aba_routing_number_us_bare": true,
     "pii_sin_ca_bare": true,
     "pii_aadhaar_in_bare": true,
     "pii_npi_us_bare": true,

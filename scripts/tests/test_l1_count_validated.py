@@ -479,12 +479,14 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.fi.personal_identity_code": ["pii_hetu_fi: fi_hetu", "pii_hetu_fi_context_free: fi_hetu"],
     }
     # B-ACCT: the ABA routing number is a US unit of the account number ID, shared with Presidio's
-    # ABA_ROUTING_NUMBER; the field-bound account rule checks the form only.
+    # ABA_ROUTING_NUMBER; the field-bound account rule checks the form only. The opt-in bare rule
+    # (T35) shares the validator and adds no unit.
     assert {
         "entity_id": "pii.financial_account_number",
         "country": "us",
         "sources": [
             "pii_aba_routing_number_us: aba_routing_number",
+            "pii_aba_routing_number_us_bare: aba_routing_number",
             "pii_aba_routing_number_us_context_free: aba_routing_number",
         ],
     } in payload["ark"]["units"]

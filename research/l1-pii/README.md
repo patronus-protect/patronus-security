@@ -127,6 +127,30 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
   `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
   (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
 
+## Blanke ABA-Routing-Nummer im Bare-Profil (T35)
+
+TRIAGE 2026-W46, Bucket 2. Rohe M1-Lücke gegen Presidio default auf `presidio_favored`: Kontonummer
+57,1 gegen 66,7. Die blanken Werte `121000358` und `121042882` bestehen `validators::aba_routing_number`,
+blieben aber nach B-ACCT ohne Routing- oder Kontobegriff negativ, ohne Eintrag in `known_gaps` oder im
+Bare-Profil.
+
+- **Regel:** `pii_aba_routing_number_us_bare` (D-BARE: eigene Regel-ID im `rules`-Gate, standardmäßig
+  aus, Basis 15, derselbe Validator) im Profil `docs/how-to/pii-bare-formats.gates.json`.
+  `count_validated.py` bleibt bei 83 (dieselbe Einheit, eine Quelle mehr).
+- **`known_gaps`:** Eintrag B-ACCT für die blanken neun Ziffern (`bare`, Zeilen
+  `test_aba_routing_recognizer:`). Zwölf blanke Ziffern (`945456787654`, US-Konto ohne Prüfziffer)
+  bleiben ohne Regel.
+- **Überlappung:** Auf denselben neun Ziffern entscheidet die bestehende D-BARE-Reihenfolge (T34): ein
+  Standardtreffer eines anderen Labels gewinnt (`SSN: …`, `BSNR …`), ein Routing-Begriff lässt nur das
+  Konto stehen; blanke SSN-, BSNR- und Routing-Treffer bleiben nebeneinander.
+- **Messung (Dev, roh, `balanced-bare`):** Kontonummer auf `presidio_favored` 57,1 → 88,9 (default
+  66,7); neutral Kontonummer 49,2 und US-SSN (Gretel 66,7, `presidio_favored` 61,5 bzw. 100) unverändert.
+  Über alle Dev-Zeilen fügt die Regel genau die zwei Gold-Spans hinzu.
+- **FP mit Profil:** Dev-Benign-Code (37,8 MB) und Benign-Docs (7,5 MB) 0 neue Spans; PII-Hard-Negatives
+  13 (`strict`) / 12 (`balanced`), alle absichtlich blanke Routing-Werte, die mit Standard-Gates negativ
+  sind, oder nach Wörtern ohne Gegenbegriff (`Order`, `Vorgang`, `Reference`), die auch die blanke SSN
+  (46/42) und BSNR (57/57) melden. `strict` und `balanced` mit Standard-Gates bitgleich (Goldens grün).
+
 ## Kennzeichen: UK-Präfix/Suffix, IN, NG in Kleinschrift (T36)
 
 Rohe M1-Lücke gegen tuned auf `presidio_favored` (EN): Kennzeichen `balanced-bare` 72,0 gegen 81,5

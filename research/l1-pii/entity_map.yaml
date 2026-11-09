@@ -73,6 +73,15 @@ known_gaps:
     reason: blanke neun Ziffern ohne SSN-Kontext bleiben negativ
     span: '\d{9}'
     bare: true
+  - id: pii.financial_account_number
+    decision: B-ACCT
+    reason: >-
+      blanke neun Ziffern mit gültiger ABA-Prüfziffer (3-7-1) ohne Routing- oder Kontobegriff bleiben in den
+      Standardregeln negativ (jede zehnte Ziffernfolge besteht die Prüfung); opt-in seit T35:
+      pii_aba_routing_number_us_bare; zwölf blanke Ziffern (US-Kontonummer ohne Prüfziffer) bekommen keine Regel
+    span: '\d{9}'
+    bare: true
+    rows: 'test_aba_routing_recognizer:'
   - id: pii.us.social_security_number
     decision: T27
     reason: Gretels ssn-Gold enthält nationale Kennungen anderer Länder (SE, IT, UK, NL), keine US-SSN

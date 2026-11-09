@@ -10,8 +10,10 @@
 //! The ABA routing number (B-ACCT) carries a 3-7-1 check digit, which nine bare
 //! digits pass one time in ten: `pii_aba_routing_number_us` reports it in every mode
 //! with a routing or account term near the value or as its key; only the printed
-//! 4-4-1 form is reported bare, in `balanced` and `recall`. A routing number under
-//! its field name is also an account value of `pii_financial_account_number`.
+//! 4-4-1 form is reported bare, in `balanced` and `recall`; the opt-in
+//! `pii_aba_routing_number_us_bare` (D-BARE, T35) reports nine bare digits too. A
+//! routing number under its field name is also an account value of
+//! `pii_financial_account_number`.
 //!
 //! Two medical licence numbers carry a check digit (A06). The DEA registration
 //! number (two letters, seven digits, a mod-10 digit) fits one in ten letter-led
@@ -126,6 +128,15 @@ pub(super) const ABA_ROUTING_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
     captured_value: false,
     requires_context: false,
     scored_only: true,
+};
+
+/// A bare ABA routing number, nine digits or 4-4-1, with its 3-7-1 check digit
+/// (B-ACCT, T35). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.
+pub(super) const ABA_ROUTING_NUMBER_BARE: PiiPattern = PiiPattern {
+    name: "pii_aba_routing_number_us_bare",
+    base_score: 15,
+    requires_context: false,
+    ..ABA_ROUTING_NUMBER
 };
 
 // ── Medizinische Zulassungen ─────────────────────────────────────────────────

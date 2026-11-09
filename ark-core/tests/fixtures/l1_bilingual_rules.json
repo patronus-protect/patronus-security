@@ -3253,6 +3253,23 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_aba_routing_number_us_bare",
+    "de": "Bitte 121042882 im Formular eintragen.",
+    "en": "Please copy 121000358 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 121042882 wurde abgeschlossen.",
+        "Bitte 121042883 im Formular eintragen."
+      ],
+      "en": [
+        "Reference 121000358 was archived.",
+        "Please copy 931042881 into the form."
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_sin_ca_bare",
     "de": "Bitte 435418165 im Formular eintragen.",
     "en": "Please copy 435418165 into the form.",

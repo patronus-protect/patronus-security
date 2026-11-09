@@ -224,6 +224,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_facility_number_bsnr_de_bare", "FACILITY_NUMBER_BSNR"),
     ("pii_driver_license_number_de_bare", "DRIVER_LICENSE_NUMBER"),
     ("pii_ssn_us_bare", "SSN"),
+    ("pii_aba_routing_number_us_bare", "FINANCIAL_ACCOUNT_NUMBER"),
     ("pii_sin_ca_bare", "CA_SIN"),
     ("pii_aadhaar_in_bare", "IN_AADHAAR"),
     ("pii_npi_us_bare", "US_NPI"),

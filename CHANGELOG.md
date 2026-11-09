@@ -11,6 +11,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Detection change: opt-in rule `pii_aba_routing_number_us_bare` for the bare ABA routing number
+  (T35). Nine digits (or the printed 4-4-1 form) with a Federal Reserve routing symbol and a valid
+  3-7-1 check digit (`validators::aba_routing_number`, unchanged) are reported without a routing or
+  account term once the `rules` gate enables the rule, then in every mode (base `15`, the `balanced`
+  threshold `0.50`); it joins the bare profile `docs/how-to/pii-bare-formats.gates.json`. With the
+  default gates the bare digits stay negative (decision B-ACCT), now recorded as a `known_gaps`
+  entry. On the same nine digits a default finding of another label wins (`SSN: …`, `BSNR …`) and a
+  routing term keeps the account label alone; bare SSN, BSNR and routing findings keep their labels
+  side by side (existing D-BARE order). Dev, raw: account number on presidio_favored
+  `balanced-bare` 57.1 → 88.9 exact F1 (Presidio default 66.7; `945456787654` stays out), neutral
+  account number 49.2 and US SSN unchanged; with the profile the rule adds no span on any other dev
+  row. `strict` and `balanced` output with the default gates is unchanged.
 - Detection change: licence plates in the older UK forms, the Indian form and lower-case Nigerian
   plates (T36). `pii_vehicle_registration_uk_prefix` (prefix form 1983–2001, `A123 BCD`, `K1 ABC`:
   age letter without I, O, Q, U, Z, serial 1–999, three letters without I, Q, Z),

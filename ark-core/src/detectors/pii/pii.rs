@@ -257,6 +257,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::FACILITY_NUMBER_BSNR_BARE,
     driver_license::DE_BARE,
     us::SSN_BARE,
+    us::ABA_ROUTING_NUMBER_BARE,
     ca::SIN_BARE,
     india::AADHAAR_BARE,
     us::NPI_BARE,
