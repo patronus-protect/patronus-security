@@ -503,6 +503,10 @@ unter `~/ark-dlp/holdout`, ist für die Agent-Sandbox unzugänglich und SHA-gepi
 | M4 Latenz | Durchsatz ≥ gitleaks und 100 KiB p95 ≲ 15 ms (entschieden 2026-10-24; vorher ≤ 10 ms, gemessen 14,0 ms bei 8,18 vs. 4,16 MiB/s gegen gitleaks), gemessen auf der VPS mit `scripts/l1_dlp/latency.py` |
 | Immer | FP/MB auf dem Benign-Code-Korpus ≤ der besten Baseline. Keine Klasse verliert > 0,5 pp F1. Keine echten Secrets in Repo, Logs oder PRs |
 
+Abschlussbericht: [`scoreboard/final.md`](scoreboard/final.md) (H-FINAL). M3 zählt
+`scripts/l1_dlp/milestones.py count` aus `entity_map.yaml` und `RuleMeta`; M1 und M2 je Split druckt
+`scoreboard.py gate` als Zeile `milestones <split>` (Holdout-Zahlen im Gate-Bericht).
+
 Metriken:
 - Secrets: exakte Spans auf den **Wert** (ohne Schlüsselnamen) als P/R/F1 je Entity-Gruppe und je
   Provider. Dazu Overlap-F1, Provider-Attribution (richtige `rule_id`), FP/MB auf echtem Benign-Code

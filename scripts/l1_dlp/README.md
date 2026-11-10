@@ -452,12 +452,39 @@ Entity-Map. Die Latenz-Checks misst `latency.py` nach allen Vorhersagen auf den 
 **Ausgabe.** stdout nennt Head, Basis und Build-Schlüssel, die Dev-Tabelle (F1 je Gruppe und
 Content-Klasse, Attribution, geänderte Provider), die Dev-P/R-Kurve des Heads (exakte P/R/F1 und
 Hard-Negative-FP je Schwelle), Dev-FP und Dev-Regressionen. Für den Holdout
-steht dort nur `holdout: no regression` bzw. `holdout: regression`, und zuletzt
-`scoreboard: PASS|FAIL`. Vor dem Dev-Urteil steht eine Zeile `dev latency: 100 KiB p95 … ms`
+steht dort nur `holdout: no regression` bzw. `holdout: regression`. Danach folgt je Split eine
+Zeile `milestones <split> …` mit M1 und M2 des Heads gegen die gepinnten Baselines (siehe
+[Meilensteine](#meilensteine-m1m3-h-final)), und zuletzt `scoreboard: PASS|FAIL`. Vor dem Dev-Urteil steht eine Zeile `dev latency: 100 KiB p95 … ms`
 mit dem Durchsatz auf dem 10-MiB-Repo. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,
 bei Misserfolg nur den Exit-Code. Die vollständigen Berichte beider Splits (Head, Basis, Checks)
 liegen unter `CACHE/scoreboard/reports/<head>-<basis>/{dev,holdout}.json`, die Latenzmessung in
 `latency.json`. Sie verlassen die Sandbox nicht.
+
+## Meilensteine M1–M3 (H-FINAL)
+
+`milestones.py` rechnet die Meilensteine aus [`research/dlp/README.md`](../../research/dlp/README.md)
+für den Abschlussbericht [`final.md`](../../research/dlp/scoreboard/final.md):
+
+```bash
+python3 scripts/l1_dlp/milestones.py count     # M3-Tabelle + Urteil (--json für die Zahlen)
+python3 scripts/l1_dlp/milestones.py matrix    # Coverage-Matrix je Familie aus entity_map.yaml
+```
+
+**M3** zählt aus `entity_map.yaml` und der `RuleMeta` jeder DLP-Regel (geparst wie für den
+Regelkatalog von `scripts/generate_docs.py`): gitleaks-Default-Regeln, deren Entität eine
+ARK-Regel hat; Secret-Formate (Regeln der Secret-Familien); Offline-Strukturprüfungen
+(Secret-Regeln mit `checksum` oder `structure`); Content-/Dokumentklassen mit ARK-Regel ohne
+gitleaks-, TruffleHog- oder detect-secrets-Eintrag. Eine Regel ohne Entität bricht ab (Exit 1).
+
+**M1/M2** im Gate: `scoreboard.py gate` lässt je Split gitleaks, TruffleHog und detect-secrets
+über die Carrier-Zeilen und gitleaks über den Benign-Code laufen (`run_baselines.py run`, offline),
+cached unter `CACHE/scoreboard/baselines/` je Tool, Pin, `run_baselines.py`/Entity-Map und
+Eingabe-SHA-256, und bewertet sie mit `score_split`. M1: auf jeder gemeinsamen Provider-Entität
+mit Gold (Scope `shared`, nicht `generic_credential`, mit gitleaks- oder TruffleHog-Eintrag)
+exakter Recall von ARK ≥ max(gitleaks, TruffleHog) und Code-FP/MB ≤ gitleaks. M2: exakter F1 der
+Gruppe `CREDENTIAL` ≥ beste Baseline + 20 pp. Die Zeile enthält nur Zählungen und Raten; gelingt
+die Messung nicht, steht dort `milestones <split>: not measured (<Fehlertyp>)`. Die Meilensteine
+werden berichtet, nie gegated.
 
 ## Latenz und Durchsatz
 

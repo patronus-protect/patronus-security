@@ -29,8 +29,11 @@ cache), predicts with ``run_ark.py`` on dev and holdout and fails on a regressio
 F1 per group, untyped, per content class or on the external content goldens, more FP on a benign corpus, a new FP on a
 hard negative, or a slower head (``latency.py``: 100 KiB p95 on the dev workloads more than
 10 % above the base, or above the H03 budget once the base is within it). stdout carries dev
-numbers only; the holdout appears as a verdict, its report stays in the cache. Exit 0 = pass,
-1 = regression, 2 = error.
+numbers only; the holdout appears as a verdict, its report stays in the cache. Before the
+verdict, ``gate`` prints one ``milestones <split>`` line per split (``milestones.py``: M1 and M2
+of the head against gitleaks, TruffleHog and detect-secrets, aggregates only; reported, never
+gated). The baselines scan the carriers, gitleaks also the benign code (FP/MB), cached per tool,
+pin and input. Exit 0 = pass, 1 = regression, 2 = error.
 
     python3 scripts/l1_dlp/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR
     python3 scripts/l1_dlp/scoreboard.py score --split DIR --predictions FILE [--content-predictions FILE]
@@ -78,14 +81,16 @@ BENIGN_CODE = CORPORA.BENIGN_CODE
 BENIGN_DOCS = CORPORA.BENIGN_DOCS
 LATENCY = _load_file("_ark_l1_dlp_latency", HERE / "latency.py")
 EXTERNAL = _load_file("_ark_l1_dlp_external_content", HERE / "external_content.py")
+BASELINES = _load_file("_ark_l1_dlp_run_baselines", HERE / "run_baselines.py")
+MILESTONES = _load_file("_ark_l1_dlp_milestones", HERE / "milestones.py")
 
 REPORT_SCHEMA = "ark-dlp-scoreboard-v1"
 # Bump when prediction inputs change in a way the cache key does not see.
 PREDICTION_VERSION = 1
 TOLERANCE_PP = 0.5
 # Families of the default-on entity groups; every other family is opt-in.
-SECRET_FAMILIES = ("provider_secret", "generic_credential", "key_material")
-CONTENT_FAMILIES = ("content_class", "document_class")
+SECRET_FAMILIES = MILESTONES.SECRET_FAMILIES
+CONTENT_FAMILIES = MILESTONES.CONTENT_FAMILIES
 UNMAPPED = "(unmapped)"
 # Everything that changes the native module, the Python package or the rule-to-entity map.
 BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "ark-core", "python", str(ENTITY_MAP))
@@ -107,6 +112,9 @@ EXTERNAL_DIR = "external"
 NATIVE_LIB = "lib_patronus_ark.so"
 NATIVE_MODULE = "_patronus_ark.abi3.so"
 JOBS = 4
+# Baseline scans for the milestone lines: every tool on the carriers, gitleaks (M1 FP/MB) on benign code.
+BASELINE_TOOLS = BASELINES.TOOLS
+BASELINE_COMPONENTS = {"synthetic": BASELINE_TOOLS, "benign_code": ("gitleaks",)}
 KEEP_BUILDS = 8  # most recently used builds kept in the cache
 KEEP_PREDICTIONS_DAYS = 14  # cached predictions unused for longer are removed
 
@@ -677,6 +685,50 @@ class Job(NamedTuple):
     mode: str = "strict"
 
 
+def predict_baseline(tool: str, source: Path, output: Path) -> None:
+    """Run run_baselines.py (pinned tool, no network) on one JSONL file."""
+    cmd = [sys.executable, str(HERE / "run_baselines.py"), "run", "--tool", tool, "--input", str(source),
+           "--output", str(output)]
+    result = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if result.returncode != 0:
+        raise RuntimeError(f"run_baselines {tool} on {source.name} failed (exit {result.returncode})")
+
+
+def baseline_reports(split: Split, taxonomy: Taxonomy, cache: Path,
+                     input_shas: dict[Path, str]) -> dict[str, dict[str, Any]]:
+    """Score reports of every baseline tool on one split; predictions cached per tool, pin and input."""
+    predictor = sha256_bytes((HERE / "run_baselines.py").read_bytes() + (ROOT / ENTITY_MAP).read_bytes())
+    rows: dict[str, list[dict[str, Any]]] = {tool: [] for tool in BASELINE_TOOLS}
+    for component, tools in BASELINE_COMPONENTS.items():
+        for tool in tools:
+            for source in split.files.get(component, []):
+                key = sha256_bytes(json.dumps([tool, BASELINES.PINS[tool], predictor, input_shas[source]]).encode())
+                path = cache / "baselines" / f"{key}.jsonl"
+                if path.is_file():
+                    path.touch()  # marks the cached prediction as used for prune()
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    tmp = path.with_name(key + ".part.jsonl")
+                    predict_baseline(tool, source, tmp)
+                    tmp.replace(path)
+                    tmp.with_name(tmp.stem + ".meta.json").unlink(missing_ok=True)
+                rows[tool].extend(_read_jsonl(path))
+    return {tool: score_split(split, found, taxonomy) for tool, found in rows.items()}
+
+
+def milestone_line(split_name: str, split: Split, head: dict[str, Any], taxonomy: Taxonomy, entity_map: Path,
+                   cache: Path, input_shas: dict[Path, str]) -> str:
+    """M1/M2 of the head on one split; a failure to measure names only the error type."""
+    try:
+        import yaml
+
+        entities = MILESTONES.m1_entities(yaml.safe_load(entity_map.read_text(encoding="utf-8")))
+        baselines = baseline_reports(split, taxonomy, cache, input_shas)
+        return MILESTONES.milestone_line(split_name, head, baselines, entities)
+    except Exception as exc:  # noqa: BLE001 - never fail the gate, never echo holdout text
+        return f"milestones {split_name}: not measured ({type(exc).__name__})"
+
+
 def latency_check(builds: dict[str, Build], dev: Path, cache: Path) -> dict[str, Any]:
     """Time head against base on the dev workloads (never the holdout)."""
     return LATENCY.gate_check(builds["base"], builds["head"], dev, cache / "latency")
@@ -742,7 +794,7 @@ def prune(cache: Path, keep: Iterable[str], now: float | None = None) -> None:
         if ready.parent.name not in keep:
             shutil.rmtree(ready.parent, ignore_errors=True)
             (cache / "builds" / f"{ready.parent.name}.log").unlink(missing_ok=True)
-    for path in (cache / "predictions").glob("*.jsonl"):
+    for path in [*(cache / "predictions").glob("*.jsonl"), *(cache / "baselines").glob("*.jsonl")]:
         if now - path.stat().st_mtime > KEEP_PREDICTIONS_DAYS * 86400:
             path.unlink(missing_ok=True)
 
@@ -845,8 +897,10 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
     builds = {"base": ensure_build(head_tree, base_commit, cache), "head": ensure_build(head_tree, head_commit, cache)}
     taxonomies = {name: load_taxonomy(build.entity_map) for name, build in builds.items()}
     planned: dict[tuple[str, str], list[Job]] = {}
+    split_shas: dict[str, dict[Path, str]] = {}
     for split_name, split in splits:
-        input_shas = {path: sha256_bytes(path.read_bytes()) for paths in split.files.values() for path in paths}
+        input_shas = split_shas[split_name] = {path: sha256_bytes(path.read_bytes())
+                                               for paths in split.files.values() for path in paths}
         for name, build in builds.items():
             planned[(split_name, name)] = plan_jobs(build, split, taxonomies[name], cache, input_shas)
     run_jobs([job for group in planned.values() for job in group], jobs)
@@ -858,6 +912,7 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
     failed_any = False
     output: list[str] = [f"scoreboard: head {head_commit[:12]} (build {builds['head'].key[:12]}) vs base "
                          f"{base_commit[:12]} (build {builds['base'].key[:12]})"]
+    milestones: list[str] = []
     for split_name, split in splits:
         reports = {}
         for name in builds:
@@ -881,8 +936,11 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
             output += LATENCY.gate_lines(latency)
             output += verdict_lines("dev", reports["base"], reports["head"], checks)
         else:
-            # The holdout leaves the sandbox only as a verdict.
+            # The holdout leaves the sandbox only as a verdict and the milestone aggregates.
             output.append(f"{split_name}: {'regression' if failed else 'no regression'}")
+        milestones.append(milestone_line(split_name, split, reports["head"], taxonomies["head"],
+                                         builds["head"].entity_map, cache, split_shas[split_name]))
+    output += milestones  # last lines before the verdict: the runner keeps the tail of a green run
     output.append(f"scoreboard: {'FAIL' if failed_any else 'PASS'}")
     print("\n".join(output))
     return 1 if failed_any else 0

@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- DLP final report and comparison docs (H-FINAL, no detection change). New page
+  `docs/reference/dlp-comparison.md` (ARK vs. gitleaks, TruffleHog and detect-secrets on the
+  dev split, breadth counts, coverage matrix incl. Google Cloud DLP and a qualitative Microsoft
+  Purview note), a DLP section in "Choose categories & levels" (default-on groups, opt-in rule
+  gates, `dlp_mode`), document groups and `otp_secret` in the DLP taxonomy, and
+  `research/dlp/scoreboard/final.md` (M1–M4). `scripts/l1_dlp/milestones.py` counts M3
+  (gitleaks rules mapped, secret formats, offline structure checks, content classes) from
+  `entity_map.yaml` and the rule metadata and prints the coverage matrix; `scoreboard.py gate`
+  prints one aggregate `milestones <split>` line (M1, M2 against the pinned baselines) per split.
 - Detection change: example check on decoded private key octets (H01). `dlp_private_key_block`
   and `dlp_private_key_header` decode the PEM body (real or escaped line breaks, armor headers;
   the F-STRUCT parser) and drop a key whose key octets are a repeated fill (`EXAMPLEKEY…`,

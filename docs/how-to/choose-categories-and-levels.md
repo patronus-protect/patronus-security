@@ -54,6 +54,36 @@ for what each one classifies and which layers back it.
     scanner.warmup().expect("warmup");
     ```
 
+## Choose DLP rule families
+
+`dlp` runs on L1 only. By default it reports credentials and secrets (groups `API_KEY`,
+`CLOUD_KEY`, `PAYMENT_KEY`, `SECRET_TOKEN`, `CREDENTIAL`, `PASSWORD_HASH`, `PRIVATE_KEY`,
+`CRYPTO_KEY`) and classification markings (`dlp.document.classification_marking`). Business
+identifiers (`dlp.de.*`, `dlp.record.*`, project and organization IDs), content classes
+(`dlp.content.*`, `dlp.internal.business_metric`) and the other document classes
+(`dlp.document.*`: legal, contracts, NDA, M&A, board minutes, unpublished financials, HR,
+security reports, export control, R&D) are off until a `rules` gate turns their rule on:
+
+```python
+scanner = SecurityGateway(categories=["dlp"], max_level="l1")
+scanner.set_execution_gates({
+    "dlp_mode": "balanced",                  # scored findings instead of strict 1.0
+    "rules": {
+        "dlp_document_hr": True,             # opt-in document class
+        "dlp_sql_statement": True,           # opt-in content class
+        "dlp_generic_credential_assignment": False,  # default-on rule switched off
+    },
+})
+```
+
+Every rule ID, its group, provider, validator strength, format source and default state is in
+the [L1 rule catalog](../reference/l1-rule-catalog.md#dlp-regex-rules); what each group means is
+in the [DLP taxonomy](../reference/result-schema.md#dlp-taxonomy). Keep `dlp_mode` at `strict`
+when every match should block; `balanced` and `recall` score findings with the validator strength
+and key context (see [DLP score and modes](../reference/result-schema.md#dlp-score-and-modes)).
+How the default profile compares with gitleaks, TruffleHog and detect-secrets is on
+[DLP coverage and comparison](../reference/dlp-comparison.md).
+
 ## Consider the offline implications
 
 - `pii`, `dlp` → native L1, no assets ever.

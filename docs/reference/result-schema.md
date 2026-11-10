@@ -575,9 +575,10 @@ external L1 detectors remain separate and unchanged.
 DLP findings use the `entity_group` of their rule as the span `label` and the result
 `class_name`. Taxonomy v2 (K09) keeps these groups unchanged: the credential/secret groups
 `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY`, `SECRET_TOKEN`, `CREDENTIAL`, `PASSWORD_HASH`,
-`PRIVATE_KEY` and `CRYPTO_KEY` (on by default), plus the opt-in identifier and content groups
-(`dlp.de.*`, `dlp.record.*`, `dlp.project_id`, `dlp.organization_id`,
-`dlp.internal.business_metric`, `dlp.content.*`). Every `matched_rules` entry of a
+`PRIVATE_KEY` and `CRYPTO_KEY` (on by default), the classification markings
+(`dlp.document.classification_marking`, on by default), plus the opt-in identifier, content and
+document groups (`dlp.de.*`, `dlp.record.*`, `dlp.project_id`, `dlp.organization_id`,
+`dlp.internal.business_metric`, `dlp.content.*` and the other `dlp.document.*` classes). Every `matched_rules` entry of a
 credential/secret rule names what the value is within its group as `subtype`, next to
 `provider` (provider-bound formats only), `validator_strength`, `source_ref` and `severity`;
 identifier and content rules carry no `subtype`.
@@ -597,7 +598,7 @@ identifier and content rules carry no `subtype`.
 | `connection_string` | `CREDENTIAL` | Passwords in database and service connection strings: ADO.NET/ODBC/JDBC key/value strings, libpq keyword/value strings, query passwords of database URLs, Oracle thin URLs. |
 | `auth_url` | `CREDENTIAL` | Credentials carried in a URL: token, password and API key parameters; reset and magic links, OAuth redirects (planned). |
 | `webhook_url` | `SECRET_TOKEN` | Incoming webhook URLs that authorize by themselves (planned). |
-| `otp_secret` | `CREDENTIAL` | TOTP/HOTP seeds, `otpauth://` URIs, recovery codes (planned). |
+| `otp_secret` | `CREDENTIAL` | TOTP/HOTP seeds and `otpauth://` URIs (`dlp_otp_secret`); recovery codes are planned. |
 
 Subtypes marked planned have no rule yet; new rules for them report the listed group, so
 group filters and gates written for the existing groups keep covering them. The

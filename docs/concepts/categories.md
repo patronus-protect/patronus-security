@@ -41,7 +41,8 @@ SQL, dumps, logs, and risky operations. Credential/secret findings keep their en
 source-bound components and finding spans.
 Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only
 credential/secret DLP rules and the classification markings by default; other DLP families are opt-in through rule gates. See
-[Native detectors](detectors.md).
+[Native detectors](detectors.md), [Choose DLP rule families](../how-to/choose-categories-and-levels.md#choose-dlp-rule-families)
+and [DLP coverage and comparison](../reference/dlp-comparison.md) (gitleaks, TruffleHog, detect-secrets).
 
 ### Model-backed L1 (`shell_command`)
 
