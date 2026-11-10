@@ -359,6 +359,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- DLP L1 latency (H03 pass 2, no detection change): a DLP rule that scans the whole text and has
+  a Unicode word boundary searches a text with non-ASCII characters without its word boundaries
+  and probes each start anchored with its own regex (the shared `word_boundary` helpers of the
+  PII H03 pass); the Unicode `\b` had sent the lazy DFA to the NFA at the first non-ASCII byte
+  (`dlp_url_userinfo_password` and `dlp_url_userinfo_token` on minified JS bundles: about 370 →
+  25 ms per 10 MiB repo workload). Config-line values (`structure::key_value_line`) no longer run
+  the capture engine over the whole line; only the short key prefix runs on a regex. Results are
+  identical (`dlp_rule_prefilter`, `key_value_line_matches_the_full_line_regex`). Measurements
+  and the remaining hotspots: `research/dlp/scoreboard/latency.md`.
 - DLP L1 latency (H03 pass 1, no detection change): DLP rule regexes and their keyword-window
   probes get a 16 MiB lazy-DFA cache (`prefilter::RULE_DFA_CACHE_BYTES`, was the `regex` default
   of 2 MiB). The large case-insensitive rules (`dlp_cli_password`, `dlp_prose_secret`,

@@ -92,3 +92,70 @@ The budget is not met, and hotspots worth ≥ 10 % of the 100 KiB p95 remain, so
 - `dlp_env_var_secret` validation and the `dlp_bip39_seed_phrase` finder;
 - `dlp_url_userinfo_password` / `dlp_url_userinfo_token` on non-ASCII bundles (repo throughput);
   candidate fix: the boundary-free DFA search with anchored probes of the PII H03 pass.
+
+## Pass 2 (2026-11-10, H03-2)
+
+### Head vs. gitleaks
+
+`python3 scripts/l1_dlp/latency.py bench --dev $ARK_L1_DEV_DATA --tools ark,gitleaks --rounds 3 --invocations 4`
+
+| tool | workload | docs | MiB | p50 ms | p95 ms | scan MiB/s | end-to-end MiB/s | start ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| ark | short | 256 | 0.07 | 0.374 | 1.196 | 0.49 | 0.05 | 1150.6 |
+| ark | 4 KiB | 64 | 0.25 | 0.670 | 1.284 | 5.08 | 0.21 | 1150.6 |
+| ark | 100 KiB | 32 | 3.12 | 10.380 | 15.295 | 9.94 | 2.13 | 1150.6 |
+| ark | 10 MiB repo | 938 | 10.00 | 0.290 | 1.817 | 9.91 | 4.63 | 1150.6 |
+| gitleaks | short | 256 | 0.07 | 598.511 | 614.116 | 0.07 | 0.04 | 624.4 |
+| gitleaks | 4 KiB | 64 | 0.25 | 621.366 | 655.801 | 0.27 | 0.16 | 624.4 |
+| gitleaks | 100 KiB | 32 | 3.12 | 737.464 | 778.326 | 0.46 | 0.42 | 624.4 |
+| gitleaks | 10 MiB repo | 938 | 10.00 | – | – | 4.07 | 3.24 | 624.4 |
+
+Against pass 1 (same machine and script): 100 KiB p95 16.9 → 15.3 ms (p50 unchanged at about
+10.4 ms), 10 MiB repo scan 6.40 → 9.91 MiB/s and end to end 3.55 → 4.63 MiB/s. Throughput ≥
+gitleaks holds on every workload (repo 9.91 vs. 4.07 MiB/s scan). The 100 KiB p95 budget does
+not hold yet.
+
+### Profile
+
+Per-rule timing of the native DLP pipeline (default profile, strict mode, a temporary example
+that timed `rule_matches`, `structured_values` and `accepted_matches` per rule; ms per workload
+round). The native pipeline alone has a 100 KiB p95 of about 6–8 ms on the same documents.
+
+| rule / step | workload | before | after | note |
+|---|---|---:|---:|---|
+| `dlp_url_userinfo_password` regex | 10 MiB repo | 252.7 | 12.1 | Unicode `\b` on non-ASCII bundles |
+| `dlp_url_userinfo_token` regex | 10 MiB repo | 116.4 | 12.5 | same |
+| all rules | 10 MiB repo | 951 | about 500 | |
+| `dlp_generic_credential_assignment` structured values | 100 KiB | 31.8 | 18.2 | `key_value_line` captures |
+| all rules | 100 KiB | about 320 | about 280 | |
+
+### Change
+
+- A DLP rule that scans the whole text and has a Unicode word boundary searches a text with a
+  non-ASCII character without its word boundaries, on the lazy DFA, and probes each start
+  anchored with its own regex (`prefilter::Relaxed`, the shared `word_boundary` helpers of the
+  PII H03 pass). ASCII texts and the keyword-window rules are searched as before.
+- `structure::key_value_line` (the config-line reader of K05) ran the capture engine over each
+  whole candidate line for its lazy value group (about 35 µs per call); only the short key
+  prefix runs on a regex now, the value is read off the rest of the line.
+
+Results are identical: `rust/tests/dlp_rule_prefilter.rs` (every golden and fixture text, also
+after multi-byte text), `key_value_line_matches_the_full_line_regex`, the DLP goldens unchanged.
+
+Tried and dropped: a DFA for the shared lexical-anchor automaton (6,399 words). The presence
+scan per 100 KiB document went from about 1.2 to 0.7 ms, but the automaton takes 46.6 MB instead
+of 0.8 MB and 135 instead of 19 ms to build, for every process and all four categories.
+
+### Remaining hotspots → H03-3
+
+The budget is not met, and hotspots worth ≥ 10 % of the 100 KiB p95 remain, so H03-3 follows:
+
+- the gateway above the DLP pipeline: 15.3 ms p95 through `SecurityGateway.scan_category` vs.
+  about 6–8 ms for the native pipeline on the same documents (text preparation, the D01 decoded
+  view, the Python binding and result conversion); to be profiled first;
+- the lexical-anchor presence scan (Aho-Corasick NFA over the shared lexicon, about 1.2 ms per
+  100 KiB document, about 8 % of p95), paid by every text that opens an anchor-gated rule;
+- the generic tier: `dlp_generic_credential_assignment` regex (about 1 ms per document) and its
+  config-value binding and validation (about 0.7 ms);
+- the regexes of `dlp_prose_secret`, `dlp_openai_key`, `dlp_anthropic_key`, `dlp_xai_key` and
+  the `dlp_bip39_seed_phrase` finder (0.4–0.8 ms per 100 KiB document each).
