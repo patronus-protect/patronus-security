@@ -937,8 +937,9 @@ def pick(backlog: dict, blocked: dict, in_flight: set[str] = frozenset()) -> dic
     week = f"{today.isocalendar().year}-W{today.isocalendar().week:02d}"
     # A programme in its final stretch defers TRIAGE so no new tasks reach its backlog.
     rec = next((r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE"), {})
-    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done and in_lane("TRIAGE") \
-            and rec.get("status") != "deferred":
+    # `touch state/triage-now` asks for a triage before the next Monday; it is removed when the triage lands.
+    due = (STATE / "triage-now").exists() or (today.weekday() == 0 and not (STATE / f"triage-{week}").exists())
+    if due and done and in_lane("TRIAGE") and rec.get("status") != "deferred":
         return {**rec, "type": "triage", "week": week}
     for t in tasks:
         if t.get("status", "todo") != "todo" or t["id"] in blocked or t["id"].lower() in in_flight \
@@ -2060,6 +2061,7 @@ def cmd_publish() -> int:
         return 1
     if task.get("type") == "triage":
         (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
+        (STATE / "triage-now").unlink(missing_ok=True)
     cur["publish_commit"] = head
     save(CURRENT, cur)
     git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
