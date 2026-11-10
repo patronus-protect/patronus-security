@@ -3515,6 +3515,57 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_ipv4_local_compat",
+    "de": "Der Dienst lauscht auf 127.0.0.1 im Testbetrieb.",
+    "en": "localhost 127.0.0.1",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Multicast 224.0.0.1 im Testbetrieb.",
+        "Version 127.0.0.1.4 wurde verteilt."
+      ],
+      "en": [
+        "Multicast 224.0.0.1",
+        "Release 127.0.0.1.4 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_local_compat",
+    "de": "Der Dienst lauscht auf ::1 im Testbetrieb.",
+    "en": "Loopback ::1",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Multicast ff02::1 im Testbetrieb.",
+        "use std::io::Read;"
+      ],
+      "en": [
+        "Multicast ff02::1",
+        "use std::io::Read;"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us_unassigned_compat",
+    "de": "Bitte 987-65-4322 im Formular eintragen.",
+    "en": "Please copy 219-09-9999 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 987-65-4322 wurde abgeschlossen.",
+        "Bitte 666-12-3456 im Formular eintragen."
+      ],
+      "en": [
+        "Reference 219-09-9999 was archived.",
+        "Please copy 987-65-0000 into the form."
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

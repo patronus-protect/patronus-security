@@ -5111,6 +5111,34 @@ T37_CASES = [
 for _row in T37_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T38: loopback/unspecified IPs and SSA-unassigned but well-formed SSNs stay negative with the default
+# gates (D-IP, B-SSN); only the opt-in compatibility profile reports them (rust/tests/pii_bare_rules.rs).
+# Assigned addresses and SSNs in the same shapes keep their default rules. Appended so existing ids stay stable.
+T38_CASES = [
+    p("IP_ADDRESS", "en", "pii_ipv4", "localhost ", "192.0.2.15", "", carrier="prose", tags=("no_context",)),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "Loopback moved to ", "2001:db8::1", ".", carrier="prose"),
+    p("IP_ADDRESS", "en", "pii_ipv6_loopback", "Connect to ", "::ffff:10.0.0.1", " now", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_context_free", "Applicant ", "078-05-1123", " filed the form.", carrier="prose", mode="balanced"),
+    p("SSN", "en", "pii_ssn_us", "SSN: ", "219-09-9998"),
+    p("IP_ADDRESS", "de", "pii_ipv4", "Lokaler Dienst auf ", "198.51.100.8", " erreichbar.", carrier="prose", tags=("no_context",)),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Adresse: ", "2001:db8::2", ""),
+    p("IP_ADDRESS", "de", "pii_ipv6_loopback", "Verbindung zu ", "::ffff:192.0.2.1", " steht.", carrier="prose"),
+    p("SSN", "de", "pii_ssn_us_context_free", "Antragsteller ", "078-05-1124", " hat unterschrieben.", carrier="prose", mode="balanced"),
+    p("SSN", "de", "pii_ssn_us", "US-SSN: ", "219-09-9997"),
+    n("IP_ADDRESS", "en", "pii_ipv4", "localhost 127.0.0.1", "loopback (compatibility profile only, D-IP)", carrier="prose", mode="recall"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "Loopback ::1", "IPv6 loopback (compatibility profile only, D-IP)", carrier="prose", mode="recall"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "::ffff:0.0.0.0", "IPv4-mapped unspecified address (compatibility profile only, D-IP)", mode="recall"),
+    n("SSN", "en", "pii_ssn_us_context_free", "987-65-4322", "advertising range, SSA-unassigned (compatibility profile only, B-SSN)", mode="recall"),
+    n("SSN", "en", "pii_ssn_us_context_free", "SSN: 219-09-9999", "SSA-voided advertising value (compatibility profile only, B-SSN)", mode="recall"),
+    n("IP_ADDRESS", "de", "pii_ipv4", "Standard 0.0.0.0", "unspecified address (compatibility profile only, D-IP)", carrier="prose", mode="recall"),
+    n("IP_ADDRESS", "de", "pii_ipv6_loopback", "Unspezifiziert ::", "IPv6 unspecified address (compatibility profile only, D-IP)", carrier="prose", mode="recall"),
+    n("IP_ADDRESS", "de", "pii_ipv6_loopback", "Lokal ::ffff:127.0.0.1", "IPv4-mapped loopback (compatibility profile only, D-IP)", carrier="prose", mode="recall"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Bitte 987-65-4329 eintragen.", "advertising range, SSA-unassigned (compatibility profile only, B-SSN)", carrier="prose", mode="recall"),
+    n("SSN", "de", "pii_ssn_us_context_free", "US-SSN: 078-05-1120", "voided wallet value (compatibility profile only, B-SSN)", mode="recall"),
+]
+for _row in T38_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

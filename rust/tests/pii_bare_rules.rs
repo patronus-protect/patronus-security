@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Opt-in bare-format PII rules (D-BARE).
+//! Opt-in bare-format PII rules (D-BARE) and the compatibility rules (T38).
 //!
 //! Every value that the default rules report only with a term of its label or
 //! after its field name (`known_gaps` with `bare: true`) has a `*_bare` rule. It is
@@ -919,5 +919,200 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
                 passports(text)
             );
         }
+    }
+}
+
+/// Opt-in compatibility rules (T38): reported values that the default rules
+/// reject by decision (D-IP, B-SSN), not by form.
+fn compat_rule_ids() -> Vec<&'static str> {
+    PII_PATTERNS
+        .iter()
+        .map(|pattern| pattern.name)
+        .filter(|name| name.ends_with("_compat"))
+        .collect()
+}
+
+fn enabled_rules(profile: &ScanGateMatrix) -> Vec<&str> {
+    let mut enabled: Vec<_> = profile
+        .native
+        .rules
+        .iter()
+        .filter(|(_, on)| **on)
+        .map(|(rule, _)| rule.as_str())
+        .collect();
+    enabled.sort_unstable();
+    enabled
+}
+
+fn compat_profile() -> ScanGateMatrix {
+    serde_json::from_str(include_str!(
+        "../../docs/how-to/pii-presidio-compat.gates.json"
+    ))
+    .unwrap()
+}
+
+/// T38 (decision: option b): the compatibility profile is the bare profile plus
+/// the compatibility rules, which are off by default like the bare forms.
+#[test]
+fn the_compatibility_profile_adds_the_compat_rules_to_the_bare_profile() {
+    let bare: ScanGateMatrix = serde_json::from_str(include_str!(
+        "../../docs/how-to/pii-bare-formats.gates.json"
+    ))
+    .unwrap();
+    let compat = compat_profile();
+    let mut expected: Vec<_> = enabled_rules(&bare)
+        .into_iter()
+        .chain(compat_rule_ids())
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(compat_rule_ids().len(), 3);
+    assert_eq!(enabled_rules(&compat), expected);
+    assert_eq!(compat.native.rules.len(), expected.len());
+    assert_eq!(compat.native.pii_mode, bare.native.pii_mode);
+    for rule in compat_rule_ids() {
+        assert!(!NativeGates::default().allows_rule(rule), "{rule}");
+        assert!(NativeGates::all_enabled().allows_rule(rule), "{rule}");
+    }
+}
+
+/// Loopback and unspecified addresses (D-IP) and SSA-unassigned but well-formed
+/// SSNs (B-SSN) as the presidio-analyzer tests write them.
+const COMPAT_POSITIVES: &[(&str, &str, &str)] = &[
+    ("localhost 127.0.0.1", "IP_ADDRESS", "127.0.0.1"),
+    ("Default 0.0.0.0", "IP_ADDRESS", "0.0.0.0"),
+    ("Unspecified ::", "IP_ADDRESS", "::"),
+    ("Use local ipv6 ::", "IP_ADDRESS", "::"),
+    ("Loopback ::1", "IP_ADDRESS", "::1"),
+    ("::ffff:127.0.0.1", "IP_ADDRESS", "::ffff:127.0.0.1"),
+    ("::ffff:0.0.0.0", "IP_ADDRESS", "::ffff:0.0.0.0"),
+    ("::/0", "IP_ADDRESS", "::/0"),
+    ("::/128", "IP_ADDRESS", "::/128"),
+    ("Route 127.0.0.0/8 stays local.", "IP_ADDRESS", "127.0.0.0/8"),
+    ("Lokaler Dienst auf 127.0.1.1 erreichbar.", "IP_ADDRESS", "127.0.1.1"),
+    ("987-65-4322", "SSN", "987-65-4322"),
+    ("987-65-4329", "SSN", "987-65-4329"),
+    ("219-09-9999", "SSN", "219-09-9999"),
+    ("SSN: 078-05-1120", "SSN", "078-05-1120"),
+    ("ITIN 912 78 3456 is on file.", "SSN", "912 78 3456"),
+    ("Bitte 987.65.4320 eintragen.", "SSN", "987.65.4320"),
+];
+
+/// Values the compatibility rules leave out: multicast, malformed SSNs (area
+/// 000 or 666, group 00, serial 0000, one digit, mixed separators, nine bare
+/// digits), assigned values the default rules already report, values inside a
+/// longer number or after a counter-context term.
+const COMPAT_NEGATIVES: &[(&str, &str)] = &[
+    ("Multicast 224.0.0.1", "IP_ADDRESS"),
+    ("Multicast ff02::1", "IP_ADDRESS"),
+    ("Version 127.0.0.1.4", "IP_ADDRESS"),
+    ("use std::io::Read;", "IP_ADDRESS"),
+    ("666-12-3456", "SSN"),
+    ("000-12-3456", "SSN"),
+    ("987-00-4322", "SSN"),
+    ("987-65-0000", "SSN"),
+    ("999-99-9999", "SSN"),
+    ("987-65.4322", "SSN"),
+    ("987654322", "SSN"),
+    ("Order number 987-65-4322 has shipped.", "SSN"),
+    ("Beleg 77-987-65-4322-3", "SSN"),
+];
+
+#[test]
+fn the_compat_rules_report_loopback_unspecified_and_unassigned_values() {
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let mut profile = compat_profile();
+        profile.native.pii_mode = mode;
+        let scanner = scanner(profile);
+        let spans = |text: &str, label: &str| -> Vec<String> {
+            scan(&scanner, text)
+                .evidence_spans
+                .into_iter()
+                .filter(|span| span.label == label)
+                .map(|span| span.text)
+                .collect()
+        };
+        for &(text, label, value) in COMPAT_POSITIVES {
+            assert_eq!(spans(text, label), [value], "{mode}: {text}");
+        }
+        for &(text, label) in COMPAT_NEGATIVES {
+            assert!(spans(text, label).is_empty(), "{mode}: {text}");
+        }
+    }
+}
+
+#[test]
+fn compat_values_stay_silent_without_the_compatibility_profile() {
+    let bare: ScanGateMatrix = serde_json::from_str(include_str!(
+        "../../docs/how-to/pii-bare-formats.gates.json"
+    ))
+    .unwrap();
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let mut bare = bare.clone();
+        bare.native.pii_mode = mode;
+        for scanner in [scanner(gates(None, mode)), scanner(bare)] {
+            for &(text, label, _) in COMPAT_POSITIVES {
+                let result = scan(&scanner, text);
+                assert!(
+                    result.evidence_spans.iter().all(|span| span.label != label),
+                    "{mode}: {text} -> {:?}",
+                    result.evidence_spans
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn compat_validators_accept_only_the_decided_values() {
+    for value in [
+        "127.0.0.1",
+        "127.255.255.254",
+        "0.0.0.0",
+        "::",
+        "::1",
+        "::ffff:127.0.0.1",
+        "::ffff:0.0.0.0",
+        "::/0",
+        "::/128",
+        "127.0.0.0/8",
+    ] {
+        assert!(validators::ip_address_local(value), "{value}");
+        assert!(!validators::ip_address(value), "{value}");
+    }
+    for value in [
+        "192.0.2.1",
+        "224.0.0.1",
+        "ff02::1",
+        "2001:db8::1",
+        "::ffff:10.0.0.1",
+        "127.0.0.1/33",
+        "::/129",
+        "::1%eth0",
+        "127.0.0.1%eth0",
+        "::ffff:224.0.0.1",
+    ] {
+        assert!(!validators::ip_address_local(value), "{value}");
+    }
+    for value in [
+        "987-65-4320",
+        "987-65-4329",
+        "219-09-9999",
+        "078-05-1120",
+        "900-12-3456",
+        "912 78 3456",
+    ] {
+        assert!(validators::us_ssn_unassigned(value), "{value}");
+        assert!(!validators::us_ssn(value), "{value}");
+    }
+    for value in [
+        "422-68-7360",
+        "666-12-3456",
+        "000-12-3456",
+        "987-00-4322",
+        "987-65-0000",
+        "999-99-9999",
+        "987-65-432",
+    ] {
+        assert!(!validators::us_ssn_unassigned(value), "{value}");
     }
 }
