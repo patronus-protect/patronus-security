@@ -19,10 +19,11 @@ TruffleHog 3.97.9 (`--no-verification`), detect-secrets 1.5.0. Kriterien nach
 - **M1** zählt die Entitäten aus `milestones.m1_entities`: Scope `shared`, Familie
   `provider_secret` oder `key_material` (generische Credentials gehören zu M2) und eine
   gitleaks-Regel oder ein TruffleHog-Detektor in der Entity-Map; bewertet werden die mit Gold im
-  Split. ARK findet auf Dev jede der 20 Entitäten vollständig (Recall 100,0); die knappsten
-  Abstände sind Anthropic, HuggingFace, xAI, Groq, Replicate, npm, GitHub, GitLab und Slack, wo
-  TruffleHog oder gitleaks ebenfalls 100,0 erreicht. Bei Anthropic, OpenAI, HuggingFace, GCP API
-  Key, npm und Stripe liegt gitleaks bei 94,2–95,0, beim PEM-Schlüssel bei 78,4.
+  Split. ARK findet auf Dev jede der 20 Entitäten vollständig (Recall 100,0). Gleichstand mit
+  100,0 erreicht die bessere Baseline bei 12 davon (Anthropic, HuggingFace, xAI, Groq, Replicate,
+  AWS Access Key ID, GitHub-Token und Fine-grained PAT, GitLab PAT, npm, Slack, JWT); bei OpenAI,
+  GCP API Key, GCP OAuth und Stripe liegt sie bei 95,0–98,3, beim PEM-Schlüssel bei 78,4, beim
+  AWS Secret Key, Discord-Bot-Token und HTTP Bearer bei 0,0–2,5.
 - **M2** auf der Gruppe `CREDENTIAL` (Passwörter, Tokens, Connection-Strings, URL-Userinfo,
   CLI- und Prosa-Credentials in Config, CLI und DE/EN-Prosa; 320 Gold-Spans): ARK P/R 100,0/100,0;
   gitleaks 20,2/28,7 (F1 23,7), detect-secrets 7,1/37,8 (11,9), TruffleHog 10,5/12,5 (11,4).
