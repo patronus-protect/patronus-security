@@ -1049,6 +1049,27 @@ tasks:
       As decided: (a) H06-7 accept text with the median of five runs; (b) latency.py --runs N with tests,
       latency.md and final-raw.md updated
 
+  - id: T40
+    title: "M4 tolerance: native 100 KiB p95 median 11.1 ms over ten runs (main f23c5f8b), base 66fc95d0 10.65 ms on the same host; set a numeric tolerance and a measuring rule, or resume the performance loop (H06-7)?"
+    type: perf
+    deps: [T39]
+    needs_decision: true
+    source: "TRIAGE 2026-W46, second run (research/l1-pii/triage/2026-W46-2.md, bucket 2)"
+    question: >-
+      latency.py on the VPS (release build, PII only): ark-native 100 KiB p95 over ten runs of main f23c5f8b
+      10.21-12.48 ms, median 11.06, no run <= 10 ms; Python bindings median 14.41 ms. Four runs alternating
+      with base 66fc95d0 (the W46 state that T39 judged at 9.9-10.7 ms): base 9.60-12.10, median 10.65; head
+      median 10.84 (+0.19 ms, +1.8 %), inside the spread of one build. T34-T38 cost no measurable time (their
+      rules are off by default); the host spread grew. The T39 decision ("9.9-10.7 ms is within tolerance")
+      names no number and does not cover 11 ms. Options: (a) resume H06-7 (matched_rules serde_json entries,
+      about 1.5 ms native; zero-match searches) until the median of five VPS runs holds <= 10 ms; (b) record a
+      numeric tolerance (for example a median of five runs <= 11 ms, in line with the shared acceptance
+      "100 KiB p95 at most +10 %") and add latency.py run --runs N reporting the median p95, M4 judged on it;
+      (c) judge M4 on a quiet host or the CI native-throughput job instead of the shared VPS. Which applies?
+    accept: >-
+      As decided: (a) H06-7 accept text with the median of five runs; (b) latency.py --runs N with tests, the
+      README M4 rule, latency.md and final-raw.md updated; (c) README M4 rule and latency.md updated
+
   - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06-6], status: done}
 
   # Raw parity with Presidio default AND tuned (decided 2026-11-05 after an external re-test on
