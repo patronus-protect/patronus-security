@@ -45,9 +45,61 @@ macro_rules! ipv6_opener {
     };
 }
 
+// The address forms of the IPv6 rules after `ipv6_opener!`: all eight groups or
+// six and an embedded IPv4 address (`ipv6_full!`), groups and `::`
+// (`ipv6_compressed!`), each with `$first` as its first group, and an address
+// that opens with `::` (`ipv6_loopback!`). `ipv6_suffix!` is the optional zone ID
+// and prefix length after any of them.
+macro_rules! ipv6_full {
+    ($first:literal) => {
+        concat!(
+            r"(?:",
+            $first,
+            r":(?:[0-9A-Fa-f]{1,4}:){5}",
+            ipv4_dotted!(),
+            r"|",
+            $first,
+            r"(?::[0-9A-Fa-f]{1,4}){7})"
+        )
+    };
+}
+
+macro_rules! ipv6_compressed {
+    ($first:literal) => {
+        concat!(
+            $first,
+            r"(?::[0-9A-Fa-f]{1,4}){0,6}::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}",
+            ipv4_dotted!(),
+            r"|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?"
+        )
+    };
+}
+
+macro_rules! ipv6_loopback {
+    () => {
+        concat!(
+            r"::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}",
+            ipv4_dotted!(),
+            r"|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?"
+        )
+    };
+}
+
+macro_rules! ipv4_dotted {
+    () => {
+        r"(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+    };
+}
+
+macro_rules! ipv6_suffix {
+    () => {
+        r"(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?"
+    };
+}
+
 pub(super) const IPV4: PiiPattern = PiiPattern {
     name: "pii_ipv4",
-    pattern: r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:/(?:3[0-2]|[12]?\d))?\b",
+    pattern: concat!(r"\b", ipv4_dotted!(), r"(?:/(?:3[0-2]|[12]?\d))?\b"),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
     strength: ValidatorStrength::Format,
@@ -61,7 +113,10 @@ pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
     name: "pii_ipv6_full",
     pattern: concat!(
         ipv6_opener!(),
-        r"(?P<value>(?:(?:[0-9A-Fa-f]{1,4}:){6}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7})(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+        r"(?P<value>",
+        ipv6_full!(r"[0-9A-Fa-f]{1,4}"),
+        ipv6_suffix!(),
+        ")"
     ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
@@ -76,7 +131,10 @@ pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
     name: "pii_ipv6_compressed",
     pattern: concat!(
         ipv6_opener!(),
-        r"(?P<value>[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6}::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+        r"(?P<value>",
+        ipv6_compressed!(r"[0-9A-Fa-f]{1,4}"),
+        ipv6_suffix!(),
+        ")"
     ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
@@ -91,7 +149,10 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     name: "pii_ipv6_loopback",
     pattern: concat!(
         ipv6_opener!(),
-        r"(?P<value>::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+        r"(?P<value>",
+        ipv6_loopback!(),
+        ipv6_suffix!(),
+        ")"
     ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
@@ -100,6 +161,41 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     captured_value: false,
     requires_context: false,
     scored_only: false,
+};
+
+/// A loopback or unspecified IPv4 address (`127.0.0.1`, `0.0.0.0`), which
+/// `pii_ipv4` rejects (D-IP). Opt-in compatibility rule (T38): off until the
+/// `rules` gate enables it (`docs/how-to/pii-presidio-compat.gates.json`), then
+/// in every mode like a bare form (D-BARE).
+pub(super) const IPV4_LOCAL_COMPAT: PiiPattern = PiiPattern {
+    name: "pii_ipv4_local_compat",
+    validator: Some(validators::ip_address_local),
+    base_score: 35,
+    ..IPV4
+};
+
+/// A loopback or unspecified IPv6 address, also IPv4-mapped (`::`, `::1`,
+/// `::ffff:127.0.0.1`, `::/0`, `0::1`, `0:0:0:0:0:0:0:1`), which the default IPv6
+/// rules reject (D-IP). Such an address opens with `::` or a zero group, so the
+/// rule takes the forms of the three of them with a zero group first.
+/// Opt-in compatibility rule (T38), as [`IPV4_LOCAL_COMPAT`].
+pub(super) const IPV6_LOCAL_COMPAT: PiiPattern = PiiPattern {
+    name: "pii_ipv6_local_compat",
+    pattern: concat!(
+        ipv6_opener!(),
+        r"(?P<value>(?:",
+        ipv6_full!(r"0{1,4}"),
+        r"|",
+        ipv6_compressed!(r"0{1,4}"),
+        r"|",
+        ipv6_loopback!(),
+        r")",
+        ipv6_suffix!(),
+        ")"
+    ),
+    validator: Some(validators::ip_address_local),
+    base_score: 35,
+    ..IPV6_LOOPBACK
 };
 
 // ── Telefon ──────────────────────────────────────────────────────────────

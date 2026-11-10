@@ -241,6 +241,9 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_vehicle_registration_uk_prefix_bare", "LICENSEPLATE"),
     ("pii_vehicle_registration_uk_suffix_bare", "LICENSEPLATE"),
     ("pii_vehicle_registration_in_bare", "LICENSEPLATE"),
+    ("pii_ipv4_local_compat", "IP_ADDRESS"),
+    ("pii_ipv6_local_compat", "IP_ADDRESS"),
+    ("pii_ssn_us_unassigned_compat", "SSN"),
 ];
 
 #[test]

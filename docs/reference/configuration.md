@@ -253,6 +253,18 @@ Bare numbers are often order, invoice or record numbers: enable only the forms y
 Rust callers that use `NativeGates::all_enabled()` get the bare rules too; the low-level
 `PiiPipeline::evaluate()` keeps the defaults.
 
+The compatibility rules (`*_compat`, T38) report values that the default rules reject by decision,
+not by form: `pii_ipv4_local_compat` and `pii_ipv6_local_compat` loopback and unspecified addresses
+(`127.0.0.1`, `0.0.0.0`, `::`, `::1`, `::ffff:127.0.0.1`, `::/0`, `0::1`; multicast stays out, decision
+D-IP), `pii_ssn_us_unassigned_compat` grouped SSNs that the SSA never assigned (area 900–999 such
+as the advertising range `987-65-4320` to `4329`, the voided `078-05-1120` and `219-09-9999`; area
+000 or 666, group 00, serial 0000 and one repeated digit stay out, decision B-SSN). They are off by
+default and, once enabled, report like a bare rule (base `35`, the `balanced` threshold `0.50`). The
+profile [`pii-presidio-compat.gates.json`](../how-to/pii-presidio-compat.gates.json) is the bare
+profile plus these rules, for comparisons with presidio-analyzer, which reports such values. Gold
+values with an invalid check digit (GSTIN, NRIC/FIN) and spans with surrounding whitespace stay
+unreported in every profile.
+
 ### L3 worker policy
 
 The optional `l3_policy` tunes the shared L3 worker. Initial costs are

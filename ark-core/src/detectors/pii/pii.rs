@@ -274,12 +274,18 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     licence_plate::UK_PREFIX_BARE,
     licence_plate::UK_SUFFIX_BARE,
     licence_plate::IN_BARE,
+    // Opt-in compatibility forms (T38): values the default rules reject by decision.
+    common::IPV4_LOCAL_COMPAT,
+    common::IPV6_LOCAL_COMPAT,
+    us::SSN_UNASSIGNED_COMPAT,
 ];
 
-/// Whether `rule_id` is an opt-in bare form (D-BARE): off unless the `rules`
-/// gate enables it, see [`crate::native::default_rule_enabled`].
+/// Whether `rule_id` is an opt-in bare form (D-BARE) or compatibility form
+/// (`*_compat`, T38): off unless the `rules` gate enables it, see
+/// [`crate::native::default_rule_enabled`]; enabled, both report a value that
+/// stands alone as a word of prose.
 pub fn is_bare_rule(rule_id: &str) -> bool {
-    rule_id.starts_with("pii_") && rule_id.ends_with("_bare")
+    rule_id.starts_with("pii_") && (rule_id.ends_with("_bare") || rule_id.ends_with("_compat"))
 }
 
 pub struct PiiPipeline {
@@ -795,10 +801,20 @@ impl NativeRegexDetector for PiiPipeline {
         let text = prepared.text();
         // An opt-in bare form (D-BARE) stands alone as a word of prose, outside a
         // field that names another value and without a nearer counter-context or
-        // foreign number term (T34).
+        // foreign number term (T34). A compatibility IPv6 address (T38) is its
+        // `value` group and, like the default IPv6 rules, continues no chain; it is
+        // no subscript in code, and the bare `::` also ends its line.
         if is_bare_rule(self.rule_ids[index]) {
-            let value = captures.get(0).unwrap().range();
+            let value = captures
+                .get(self.capture_groups[index].unwrap_or(0))
+                .unwrap()
+                .range();
             if vat_body(self.rule_ids[index], text, value.start)
+                || (self.rule_ids[index] == "pii_ipv6_local_compat"
+                    && (!context::ipv6_position(text, value.end)
+                        || context::subscript(text, value.clone())
+                        || (&text[value.clone()] == "::"
+                            && !context::unspecified_ends_line(text, value.clone()))))
                 || !context::stands_alone(text, value.clone())
                 || !context::delimited_as_prose(text, value.clone())
                 || context::foreign_field(
@@ -1205,7 +1221,9 @@ impl NativeRegexDetector for PiiPipeline {
                         span.start_byte,
                         &self.regexes[card_index],
                     ));
-            (span.end_byte - span.start_byte >= 4 || coupled_cvv)
+            // Only a coupled CVV and an IP address of the compatibility rules
+            // (`::`, `::1`, T38) are shorter than four bytes.
+            (span.end_byte - span.start_byte >= 4 || coupled_cvv || span.label == "IP_ADDRESS")
                 && (span.label != "CREDITCARD_CVV" || coupled_cvv)
         });
     }

@@ -6,6 +6,8 @@
 //! mode when an SSN term stands near the value or is its structural key (T25);
 //! `pii_ssn_us_context_free` reports the grouped form without a term in `balanced`
 //! and `recall`. The SSA ranges are the only validator; no form carries a check digit.
+//! Values outside them (area 9xx, voided values) are reported only by the opt-in
+//! compatibility rule `pii_ssn_us_unassigned_compat` (T38).
 //!
 //! The ABA routing number (B-ACCT) carries a 3-7-1 check digit, which nine bare
 //! digits pass one time in ten: `pii_aba_routing_number_us` reports it in every mode
@@ -191,6 +193,18 @@ pub(super) const SSN_BARE: PiiPattern = PiiPattern {
     requires_context: false,
     scored_only: false,
     ..SSN_PROXIMITY
+};
+
+/// A grouped SSN that the SSA never assigned (area 900–999, the voided
+/// `078-05-1120` and `219-09-9999`), which every default rule rejects (B-SSN).
+/// Opt-in compatibility rule (T38): off until the `rules` gate enables it
+/// (`docs/how-to/pii-presidio-compat.gates.json`), then in every mode like a bare
+/// form (D-BARE).
+pub(super) const SSN_UNASSIGNED_COMPAT: PiiPattern = PiiPattern {
+    name: "pii_ssn_us_unassigned_compat",
+    validator: Some(validators::us_ssn_unassigned),
+    scored_only: false,
+    ..SSN_CONTEXT_FREE
 };
 
 /// A bare NPI, plain or grouped, with its Luhn check digit (A06). Opt-in (D-BARE): off until the `rules` gate enables it, then in every mode.

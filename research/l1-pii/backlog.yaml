@@ -1172,6 +1172,7 @@ tasks:
       As decided: (a)/(c) rules with tests, profile entry and measured HN/benign FP, strict and balanced
       default output bit-identical; (b) known_gaps entry checked by entity_map.py check and README line
   - id: T38
+    status: done
     title: "Raw M1 gaps under recorded decisions (IP loopback/unspecified, SSA-invalid SSN, NINO span with whitespace, GSTIN and NRIC/FIN gold with invalid check digits): exception of the raw view, compatibility profile or M1 stays open?"
     type: eval-infra
     deps: [Q-RAW]

@@ -367,7 +367,7 @@ def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: 
 
 
 def pii_rule_context(rule: dict) -> str:
-    if rule["id"].endswith("_bare"):
+    if rule["id"].endswith(("_bare", "_compat")):
         return "none, opt-in (off by default)"
     if rule["field_context"]:
         return "field or key"
@@ -526,7 +526,7 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         f"## PII rules ({len(pii)})",
         "",
-        "All PII rules except the bare forms (`*_bare`) are eligible by default when PII L1 is enabled.",
+        "All PII rules except the bare and compatibility forms (`*_bare`, `*_compat`) are eligible by default when PII L1 is enabled.",
         "",
         "In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` "
         "a finding scores the rule base plus the validator strength "
@@ -546,6 +546,8 @@ def generate_l1_rule_catalog_doc() -> str:
         "outside a key that names another value, without a nearer counter-context term or an account, routing, "
         "customer or contract term that names the value, and not on a value that a default rule of another "
         "label reports; they score below the labelled rules. "
+        "Compatibility rules (`*_compat`, T38) are opt-in the same way and report values that the default rules "
+        "reject by decision: loopback and unspecified IP addresses and SSA-unassigned SSNs. "
         "Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV "
         "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
         "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "
