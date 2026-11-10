@@ -333,7 +333,9 @@ impl PiiPipeline {
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
             anchor_gates.push(AnchorGate::regex(p.pattern, false));
-            let relaxed = without_unicode_word_boundaries(p.pattern);
+            let relaxed = without_unicode_word_boundaries(p.pattern).map(|relaxed| {
+                Regex::new(&relaxed).expect("a pattern without assertions stays valid")
+            });
             anchored.push(
                 relaxed
                     .is_some()

@@ -22,8 +22,12 @@ impl BoundarySearch {
     pub fn new(pattern: &str) -> Self {
         Self {
             regex: Regex::new(pattern).unwrap(),
-            relaxed: without_unicode_word_boundaries(pattern)
-                .map(|relaxed| (relaxed, meta::Regex::new(pattern).unwrap())),
+            relaxed: without_unicode_word_boundaries(pattern).map(|relaxed| {
+                (
+                    Regex::new(&relaxed).expect("a pattern without assertions stays valid"),
+                    meta::Regex::new(pattern).unwrap(),
+                )
+            }),
         }
     }
 
@@ -73,8 +77,9 @@ pub(crate) fn leftmost_start(
 
 /// `pattern` without its word boundaries if it has a Unicode one, else `None`:
 /// a necessary condition of the rule that the lazy DFA searches on any text.
-/// The assertions are cut out of the pattern source at their syntax spans.
-pub(crate) fn without_unicode_word_boundaries(pattern: &str) -> Option<Regex> {
+/// The assertions are cut out of the pattern source at their syntax spans;
+/// the result stays a valid pattern.
+pub(crate) fn without_unicode_word_boundaries(pattern: &str) -> Option<String> {
     struct Boundaries(Vec<ast::Span>);
     impl ast::Visitor for Boundaries {
         type Output = Vec<ast::Span>;
@@ -126,7 +131,7 @@ pub(crate) fn without_unicode_word_boundaries(pattern: &str) -> Option<Regex> {
         at = span.end.offset;
     }
     relaxed.push_str(&pattern[at..]);
-    Some(Regex::new(&relaxed).expect("a pattern without assertions stays valid"))
+    Some(relaxed)
 }
 
 /// Asserts that [`BoundarySearch::find_iter`] of `pattern` yields the matches
