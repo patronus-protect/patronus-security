@@ -1017,6 +1017,10 @@ const COMPAT_NEGATIVES: &[(&str, &str)] = &[
     ("fmt.Fprintf(buf, \"::\\n\")", "IP_ADDRESS"),
     ("$name . '::' . $version", "IP_ADDRESS"),
     ("length :: [a] -> Int", "IP_ADDRESS"),
+    (
+        "Examples\n--------\n    ::\n\n      In [1]: x",
+        "IP_ADDRESS",
+    ),
     ("666-12-3456", "SSN"),
     ("000-12-3456", "SSN"),
     ("987-00-4322", "SSN"),

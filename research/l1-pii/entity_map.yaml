@@ -54,7 +54,9 @@ source_families:
 known_gaps:
   - id: pii.ip_address
     decision: D-IP
-    reason: Loopback- und unspezifizierte Adressen (auch IPv4-gemappt und als Präfix) sind keine personenbezogene Adresse
+    reason: >-
+      Loopback- und unspezifizierte Adressen (auch IPv4-gemappt und als Präfix) sind keine personenbezogene
+      Adresse; opt-in seit T38 im Kompatibilitätsprofil (pii_ipv4_local_compat, pii_ipv6_local_compat)
     span: '(?:127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1?|::ffff:(?:127(?:\.\d{1,3}){3}|0\.0\.0\.0))(?:/\d{1,3})?'
   - id: pii.ip_address
     decision: T28
@@ -66,7 +68,9 @@ known_gaps:
     span: '\s.*|.*\s'
   - id: pii.us.social_security_number
     decision: B-SSN
-    reason: Werte, die validators::us_ssn ablehnt (Werbebereich 987-65-4320 bis 4329, Gruppe 219-09-9999)
+    reason: >-
+      Werte, die validators::us_ssn ablehnt (Werbebereich 987-65-4320 bis 4329, Gruppe 219-09-9999); opt-in seit
+      T38 im Kompatibilitätsprofil (pii_ssn_us_unassigned_compat)
     span: '987-65-432\d|219-09-9999'
   - id: pii.us.social_security_number
     decision: B-SSN
@@ -770,6 +774,7 @@ checksums:
     steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)
     steuer_id_bare: {algorithm: "ISO 7064 MOD 11,10"}   # plus Grenzen der BZSt-Ziffernverteilung (Q-RAW, blanke Opt-in-Regel)
     ip_address: null
+    ip_address_local: null              # T38, Loopback/unspezifiziert (Kompatibilitätsprofil, opt-in), keine Prüfziffer
     email_domain: null                  # B-EMAIL, Top-Level-Domain laut IANA oder Platzhalter (T01)
     unanchored_phone: null
     phone: null
@@ -808,6 +813,7 @@ checksums:
     aba_routing_number: {algorithm: "ABA 3-7-1 mod 10", country: us}  # B-ACCT, plus Routing-Symbol 00–12/21–32/61–72/80
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
     us_ssn_bare: null                   # D-BARE/T34, wie us_ssn_context_free, dazu ohne Zählfolge und zwei Ziffern im Wechsel, keine Prüfziffer
+    us_ssn_unassigned: null             # T38, von der SSA nie vergebene SSN (Bereich 9xx ohne ITIN-Gruppen, Werbebereich, gesperrte Werte; Kompatibilitätsprofil, opt-in), keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
     uk_nino_context_free: null          # B-UK, wie uk_nino in einer Schreibweise (groß oder klein)
     uk_bban: null                       # T29, GB-BBAN (Bankcode, Sort Code, Konto), keine Prüfziffer

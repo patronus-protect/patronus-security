@@ -1001,10 +1001,13 @@ pub(super) fn ipv6_position(text: &str, end: usize) -> bool {
 
 /// Whether the bare unspecified IPv6 address `::` at `value` (byte range) is a
 /// word of prose that ends its line (`Unspecified ::`, `Use local ipv6 ::`, T38):
-/// after a space or tab, followed by sentence punctuation at most. Code writes
-/// `::` as a scope or type operator and inside quotes (`'::'`, `x :: Int`).
+/// after a word and a space or tab, followed by sentence punctuation at most.
+/// Code writes `::` as a scope or type operator and inside quotes (`'::'`,
+/// `x :: Int`), reStructuredText alone on a line before a literal block.
 pub(super) fn unspecified_ends_line(text: &str, value: Range<usize>) -> bool {
-    text[..value.start].ends_with([' ', '\t'])
+    let line = &text[text[..value.start].rfind('\n').map_or(0, |at| at + 1)..value.start];
+    line.ends_with([' ', '\t'])
+        && !line.trim().is_empty()
         && text[value.end..].split('\n').next().is_none_or(|rest| {
             rest.trim_end()
                 .trim_end_matches(['.', ',', ';', ')'])
