@@ -185,6 +185,46 @@ fn document_validators_check_their_country_forms() {
     for invalid in ["P436691", "P43669181", "PA366918", "p4366918", "P4444444"] {
         assert!(!validators::letter_seven_digits(invalid), "{invalid}");
     }
+    // T37: the Indian letter form, a letter and seven digits without 0 after the
+    // letter and at the end (`B3097651`); the opt-in bare forms only.
+    for valid in ["B3097651", "J8369854", "Z2491838"] {
+        assert!(validators::in_passport_number(valid), "{valid}");
+    }
+    for invalid in [
+        "B0097651",
+        "B3097650",
+        "b3097651",
+        "B309765",
+        "B30976512",
+        "BB097651",
+        "B4444444",
+        "B1234567",
+    ] {
+        assert!(!validators::in_passport_number(invalid), "{invalid}");
+    }
+    // T37: bare, two letters and seven digits drop one repeated digit and a
+    // placeholder run; the labelled rule keeps its validator.
+    for valid in ["XY9876543", "PA4829136", "TK1234568"] {
+        assert!(
+            validators::passport_number_two_letters_bare(valid),
+            "{valid}"
+        );
+    }
+    for invalid in [
+        "AB1234567",
+        "XY1111111",
+        "ab9876543",
+        "X19876543",
+        "XY987654",
+        "CZ3270486",
+        "HU9088407",
+    ] {
+        assert!(
+            !validators::passport_number_two_letters_bare(invalid),
+            "{invalid}"
+        );
+    }
+    assert!(validators::passport_number_two_letters("AB1234567"));
     for valid in ["CA48213EF", "CB90217KD"] {
         assert!(validators::it_identity_card_number(valid), "{valid}");
     }

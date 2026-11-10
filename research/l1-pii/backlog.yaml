@@ -1152,6 +1152,7 @@ tasks:
       strict output with the default gates bit-identical; tests per rule (bare, with term, hard negatives
       such as product codes and postcodes)
   - id: T37
+    status: done
     title: "Bare passport numbers (format only, no check digit): opt-in rule in the bare profile or a recorded gap?"
     type: recall-fix
     deps: [D-BARE]

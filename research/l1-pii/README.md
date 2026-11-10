@@ -127,6 +127,36 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
   `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
   (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
 
+## Blanke Passnummern im Bare-Profil (T37)
+
+TRIAGE 2026-W46, Bucket 2, Entscheidung 2026-11-09: Option (c). Rohe M1-Lücke gegen Presidio default
+auf `presidio_favored`: Pass 40,0 gegen 71,4 mit `balanced` und `balanced-bare`. Default meldet die
+blanken US-Formen `912803456`, `A12803456`, `Z12803456`; ARK verfehlte sie und `XY9876543`,
+`ab1234567` (UK), `B3097651` (IN). Keine Form hat eine Prüfziffer.
+
+- **Regeln (opt-in, D-BARE, Basis 35, nur Format):** `pii_passport_number_us_bare` (Buchstabe und acht
+  Ziffern, `validators::us_passport_number`), `pii_passport_number_two_letters_bare` (zwei Buchstaben,
+  sieben Ziffern; neu `validators::passport_number_two_letters_bare`: kein Platzhalterlauf, kein
+  EU-USt-Länderpräfix wie `CZ3270486`) und `pii_passport_number_in_bare` (Buchstabe, sieben Ziffern,
+  keine `0` nach dem Buchstaben und am Ende; neu `validators::in_passport_number`), alle im Profil
+  `docs/how-to/pii-bare-formats.gates.json`. `ab1234567` bleibt draußen (Kleinschrift, Platzhalterlauf
+  `1234567`).
+- **`known_gaps`:** Eintrag T37 für blanke neun Ziffern (`bare`, Zeilen `test_u[sk]_passport_recognizer:`):
+  sie kollidieren mit den blanken SSN-, SIN-, ACN-, ABA- und BSNR-Regeln und bekommen keine Passregel.
+- **Fremdbegriffe:** Mit einer aktiven Bare-Regel streicht jetzt auch ein USt- oder Ausweisbegriff den
+  blanken Wert (`BARE_FOREIGN_LEXICON` um `pii.vat_identifier` und `pii.identity_card`); die US- und
+  IN-Form nach `ES ` ist eine spanische CIF (`vat_body`).
+- **Messung (Dev, roh, EN, exakt, `balanced-bare`):** Pass auf `presidio_favored` 40,0 → 85,7 (default
+  71,4, tuned 40,0; M1 gegen default dort 22/25 → 23/25, offen IP und US-SSN); neutral Pass 77,4 → 80,0,
+  übrige neutrale IDs unverändert; `ark_authored` Pass 95,7 → 91,7 (zwei Werte nach `Patienten-ID` und
+  `MRN`), BSNR 76,9 → 80,0 und US-SSN 85,7 → 88,2 (USt-Begriff).
+- **FP mit Profil (je Regel allein, `strict` / `balanced`):** Dev-Benign-Code (37,8 MB) und Benign-Docs
+  (7,5 MB) 0 neue Spans; PII-Hard-Negatives US 12/12, zwei Buchstaben 7/7, IN 16/16, davon die
+  absichtlich blanken Werte (mit Standard-Gates negativ) und Werte nach Wörtern ohne Gegenbegriff
+  (`Order`, `Vorgang`, `Reference`, `Lieferschein`, `licence number`), die auch die übrigen Bare-Regeln
+  melden. Die blanke deutsche Führerscheinregel fällt durch die neuen Fremdbegriffe von 63 auf 24.
+  `strict` und `balanced` mit Standard-Gates bitgleich (Goldens grün).
+
 ## Blanke ABA-Routing-Nummer im Bare-Profil (T35)
 
 TRIAGE 2026-W46, Bucket 2. Rohe M1-Lücke gegen Presidio default auf `presidio_favored`: Kontonummer

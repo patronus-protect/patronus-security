@@ -70,6 +70,27 @@ const CASES: &[(&str, &str, &str, &str, &str)] = &[
         "Routing number: 121042882",
     ),
     (
+        "pii_passport_number_us_bare",
+        "PASSPORT_NUMBER",
+        "A12803456",
+        "A11111111",
+        "Passport number: A12803456",
+    ),
+    (
+        "pii_passport_number_two_letters_bare",
+        "PASSPORT_NUMBER",
+        "XY9876543",
+        "AB1234567",
+        "Passport number: XY9876543",
+    ),
+    (
+        "pii_passport_number_in_bare",
+        "PASSPORT_NUMBER",
+        "B3097651",
+        "B3097650",
+        "Passport number: B3097651",
+    ),
+    (
         "pii_sin_ca_bare",
         "CA_SIN",
         "435418165",
@@ -822,6 +843,80 @@ fn the_bare_routing_number_overlaps_by_the_existing_order() {
             assert!(
                 labels(text).iter().all(|label| label != account),
                 "{mode}: {text}"
+            );
+        }
+    }
+}
+
+/// T37 (decision: option c): the opt-in passport rules report the letter-prefixed
+/// presidio-analyzer forms (US letter form, two letters and seven digits, the
+/// Indian letter form) bare. Nine bare digits stay without a passport rule (they
+/// collide with the SSN, SIN, ACN, ABA and BSNR bare rules, `known_gaps`); the
+/// presidio-analyzer negatives, placeholders and counter-context values stay out.
+#[test]
+fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
+    let profile: ScanGateMatrix = serde_json::from_str(include_str!(
+        "../../docs/how-to/pii-bare-formats.gates.json"
+    ))
+    .unwrap();
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let mut profile = profile.clone();
+        profile.native.pii_mode = mode;
+        let scanner = scanner(profile);
+        let passports = |text: &str| -> Vec<String> {
+            scan(&scanner, text)
+                .evidence_spans
+                .into_iter()
+                .filter(|span| span.label == "PASSPORT_NUMBER")
+                .map(|span| span.text)
+                .collect()
+        };
+        for value in ["A12803456", "Z12803456", "XY9876543", "B3097651"] {
+            assert_eq!(passports(value), [value], "{mode}: {value}");
+        }
+        assert_eq!(
+            passports("my travel document is A12803456"),
+            ["A12803456"],
+            "{mode}"
+        );
+        for text in [
+            // nine bare digits: no passport rule (known_gaps)
+            "912803456",
+            "123456789",
+            // presidio-analyzer negatives
+            "b0097650",
+            "ABC123456",
+            "AB123456",
+            // placeholders, lower case, failed Indian form
+            "A12345678",
+            "A11111111",
+            "AB1234567",
+            "ab1234567",
+            "B1234567",
+            "B3097650",
+            // counter-context terms and codes
+            "Order number A12803456 has shipped.",
+            "Rechnungsnummer: XY9876543",
+            "Booking reference B3097651 was archived.",
+            "Beleg 77-A12803456-3",
+            "{\"order_id\": \"XY9876543\"}",
+            // a VAT term names a VAT ID with its country prefix
+            "USt-IdNr. CZ6383543",
+            "VAT number MT1167911",
+            "USt-IdNr. LU1502744",
+            // an EU VAT country prefix short of a digit, a Spanish CIF after `ES `
+            "CZ3270486",
+            "HU9088407",
+            "The number ES A14596707 is registered.",
+            "Die Firma ist unter ES-A14596707 eingetragen.",
+            // an identity card term names the value
+            "please submit your ID card number JI0201311",
+            "Bitte nennen Sie Ihre Ausweisnummer JI0201311",
+        ] {
+            assert!(
+                passports(text).is_empty(),
+                "{mode}: {text}: {:?}",
+                passports(text)
             );
         }
     }

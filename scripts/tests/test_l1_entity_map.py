@@ -599,7 +599,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 207
+    assert len(expected) == 210
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
@@ -807,6 +807,16 @@ RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
          "Routing number 121000358", "121000358", None),
         ("pii.financial_account_number", RECOGNIZER_TESTS, "test_us_bank_recognizer:x:0", "945456787654",
          "945456787654", None),
+        # T37: nine bare digits get no passport rule; letter-prefixed forms (opt-in rules) and a
+        # passport term stay gold.
+        ("entity.passport_number", RECOGNIZER_TESTS, "test_us_passport_recognizer:x:0", "912803456", "912803456",
+         "T37"),
+        ("entity.passport_number", RECOGNIZER_TESTS, "test_us_passport_recognizer:x:2", "A12803456", "A12803456",
+         None),
+        ("entity.passport_number", RECOGNIZER_TESTS, "test_uk_passport_recognizer:x:1", "XY9876543", "XY9876543",
+         None),
+        ("entity.passport_number", RECOGNIZER_TESTS, "test_us_passport_recognizer:x:0", "Passport 912803456",
+         "912803456", None),
         # Q-M1: Nigerian plates with a plate term stay gold.
         ("pii.license_plate", RECOGNIZER_TESTS, "test_ng_vehicle_registration_recognizer:x:6",
          "Plates: APP-456CV and KJA-999PZ", "KJA-999PZ", None),

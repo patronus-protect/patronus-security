@@ -2,7 +2,8 @@
 //! International payment identifiers: IBAN, payment card number, CVV, card expiry, SWIFT/BIC;
 //! passport and identity card numbers by field name or a document term near the value
 //! (B-PASS): a format rule after an explicit passport field name, the US letter form,
-//! Austrian and Swiss, Italian and Spanish documents, two letters and seven digits.
+//! Austrian and Swiss, Italian and Spanish documents, two letters and seven digits; the
+//! letter-prefixed forms bare as opt-in rules (D-BARE, T37).
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── IBAN ─────────────────────────────────────────────────────────────────
@@ -154,6 +155,36 @@ pub(super) const PASSPORT_NUMBER_AT_CH: PiiPattern = PiiPattern {
     captured_value: false,
     requires_context: true,
     scored_only: false,
+};
+
+/// A bare US passport number in the letter form (T37). Opt-in (D-BARE): off until
+/// the `rules` gate enables it, then in every mode. Nine bare digits get no bare
+/// passport rule: they are the bare SSN, SIN, ACN, ABA and BSNR forms.
+pub(super) const PASSPORT_NUMBER_US_BARE: PiiPattern = PiiPattern {
+    name: "pii_passport_number_us_bare",
+    base_score: 35,
+    requires_context: false,
+    ..PASSPORT_NUMBER_US
+};
+
+/// A bare passport number of two letters and seven digits (`XY9876543`, T37),
+/// without a placeholder run. Opt-in.
+pub(super) const PASSPORT_NUMBER_TWO_LETTERS_BARE: PiiPattern = PiiPattern {
+    name: "pii_passport_number_two_letters_bare",
+    validator: Some(validators::passport_number_two_letters_bare),
+    base_score: 35,
+    requires_context: false,
+    ..PASSPORT_NUMBER_TWO_LETTERS
+};
+
+/// A bare Indian passport number, one letter and seven digits (`B3097651`, T37).
+/// Opt-in.
+pub(super) const PASSPORT_NUMBER_IN_BARE: PiiPattern = PiiPattern {
+    name: "pii_passport_number_in_bare",
+    validator: Some(validators::in_passport_number),
+    base_score: 35,
+    requires_context: false,
+    ..PASSPORT_NUMBER_AT_CH
 };
 
 /// An Austrian Personalausweis or Swiss Identitätskarte number, one letter and

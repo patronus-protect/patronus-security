@@ -3270,6 +3270,57 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_passport_number_us_bare",
+    "de": "Bitte A12803456 im Formular eintragen.",
+    "en": "Please copy Z12803456 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang A12803456 wurde abgeschlossen.",
+        "Bitte A11111111 im Formular eintragen."
+      ],
+      "en": [
+        "Reference Z12803456 was archived.",
+        "Please copy 912803456 into the form."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_two_letters_bare",
+    "de": "Bitte XY9876543 im Formular eintragen.",
+    "en": "Please copy PA4829136 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang XY9876543 wurde abgeschlossen.",
+        "Bitte AB1234567 im Formular eintragen."
+      ],
+      "en": [
+        "Reference PA4829136 was archived.",
+        "Please copy ab1234567 into the form."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_in_bare",
+    "de": "Bitte B3097651 im Formular eintragen.",
+    "en": "Please copy J8369854 into the form.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang B3097651 wurde abgeschlossen.",
+        "Bitte B3097650 im Formular eintragen."
+      ],
+      "en": [
+        "Reference J8369854 was archived.",
+        "Please copy B0097651 into the form."
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_sin_ca_bare",
     "de": "Bitte 435418165 im Formular eintragen.",
     "en": "Please copy 435418165 into the form.",

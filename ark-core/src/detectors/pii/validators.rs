@@ -832,6 +832,23 @@ pub fn passport_number_two_letters(s: &str) -> bool {
         && bytes[2..].iter().all(u8::is_ascii_digit)
 }
 
+/// Bare passport number of two letters and seven digits (T37): the form of
+/// [`passport_number_two_letters`] whose digits are no placeholder ([`issued_digits`])
+/// and whose letters are no EU VAT country prefix (`CZ3270486`, `HU9088407`: a VAT
+/// ID short of a digit).
+pub fn passport_number_two_letters_bare(s: &str) -> bool {
+    const VAT_PREFIXES: [&[u8; 2]; 27] = [
+        b"AT", b"BE", b"BG", b"CY", b"CZ", b"DE", b"DK", b"EE", b"EL", b"ES", b"FI", b"FR", b"HR",
+        b"HU", b"IE", b"IT", b"LT", b"LU", b"LV", b"MT", b"NL", b"PL", b"PT", b"RO", b"SE", b"SI",
+        b"SK",
+    ];
+    passport_number_two_letters(s)
+        && issued_digits(s)
+        && !VAT_PREFIXES
+            .iter()
+            .any(|prefix| s.as_bytes().starts_with(*prefix))
+}
+
 /// Whether `s` is left to the German document rules (B-PASS): a value in the
 /// form of a German passport number, a passport series letter and characters of
 /// the ICAO alphabet ending in a digit (`C01X00T41`, `C01X00T42`, valid or not),
@@ -912,6 +929,12 @@ pub fn letter_seven_digits(s: &str) -> bool {
         && bytes[0].is_ascii_uppercase()
         && bytes[1..].iter().all(u8::is_ascii_digit)
         && issued_digits(s)
+}
+
+/// Indian passport number (T37): one letter and seven digits, neither the first
+/// nor the last digit `0` (`B3097651`). Format only.
+pub fn in_passport_number(s: &str) -> bool {
+    letter_seven_digits(s) && s.as_bytes()[1] != b'0' && s.as_bytes()[7] != b'0'
 }
 
 /// Italian carta d'identità (T10, B-PASS): the electronic CIE, two letters, five

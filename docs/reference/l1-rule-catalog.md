@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (207)
+## PII rules (210)
 
 All PII rules except the bare forms (`*_bare`) are eligible by default when PII L1 is enabled.
 
@@ -208,6 +208,9 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_driver_license_number_de_bare` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_ssn_us_bare` | `SSN` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_aba_routing_number_us_bare` | `FINANCIAL_ACCOUNT_NUMBER` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_passport_number_us_bare` | `PASSPORT_NUMBER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_passport_number_two_letters_bare` | `PASSPORT_NUMBER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
+| `pii_passport_number_in_bare` | `PASSPORT_NUMBER` | yes | format | 35 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_sin_ca_bare` | `CA_SIN` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_aadhaar_in_bare` | `IN_AADHAAR` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
 | `pii_npi_us_bare` | `US_NPI` | yes | checksum | 15 | none, opt-in (off by default) | 0.50–0.75 |
