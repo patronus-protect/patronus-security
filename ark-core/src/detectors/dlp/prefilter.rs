@@ -14,6 +14,11 @@
 //! does not scan the whole text either: its matches are searched only at the
 //! positions up to `lead` bytes before its keyword hits, in text order, with
 //! the same leftmost-first result as `Regex::captures_iter`.
+//!
+//! A rule that scans the whole text and has a Unicode word boundary searches
+//! a text with non-ASCII characters without its word boundaries, which keeps
+//! the lazy DFA off the slow NFA, and probes each start anchored with its own
+//! regex (H03-2, as the PII rules since H03).
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, AhoCorasickKind, MatchKind};
 use regex::{Captures, Regex};
 use regex_automata::{meta, Anchored, Input};
@@ -21,6 +26,7 @@ use regex_syntax::hir::{Class, Hir, HirKind};
 use std::{collections::BTreeSet, sync::OnceLock};
 
 use super::dlp::DlpPattern;
+use crate::detectors::word_boundary::{leftmost_start, without_unicode_word_boundaries};
 
 /// Characters outside ASCII that case-insensitive regexes fold onto an ASCII
 /// letter: `(?i)s` matches LATIN SMALL LETTER LONG S, `(?i)k` the KELVIN SIGN.
@@ -242,12 +248,65 @@ struct Local {
 
 impl Local {
     fn anchored(&self) -> &meta::Regex {
-        self.anchored.get_or_init(|| {
-            meta::Builder::new()
-                .configure(meta::Config::new().hybrid_cache_capacity(RULE_DFA_CACHE_BYTES))
-                .build(self.pattern)
-                .expect("valid DLP rule regex")
+        self.anchored.get_or_init(|| anchored_regex(self.pattern))
+    }
+}
+
+/// The regex of a rule for anchored probes.
+fn anchored_regex(pattern: &str) -> meta::Regex {
+    meta::Builder::new()
+        .configure(meta::Config::new().hybrid_cache_capacity(RULE_DFA_CACHE_BYTES))
+        .build(pattern)
+        .expect("valid DLP rule regex")
+}
+
+/// Searches a rule with a Unicode word boundary on a non-ASCII text: a
+/// Unicode word boundary sends the lazy DFA to the NFA at the first non-ASCII
+/// byte, for the rest of the text (about 0.5 s for the URL userinfo rules on a
+/// 1.5 MiB minified bundle).
+struct Relaxed {
+    pattern: &'static str,
+    /// The rule without its word boundaries and the rule for anchored probes,
+    /// built on first use.
+    regexes: OnceLock<(Regex, meta::Regex)>,
+}
+
+impl Relaxed {
+    fn new(pattern: &'static str) -> Option<Self> {
+        let hir = regex_syntax::parse(pattern).ok()?;
+        (hir.properties().minimum_len().unwrap_or(0) > 0
+            && without_unicode_word_boundaries(pattern).is_some())
+        .then(|| Self {
+            pattern,
+            regexes: OnceLock::new(),
         })
+    }
+
+    /// The matches of the rule's `regex` in `text`, identical to
+    /// `regex.captures_iter(text)` (matches are never empty).
+    fn captures<'t>(&self, regex: &Regex, text: &'t str) -> Vec<Captures<'t>> {
+        let (relaxed, anchored) = self.regexes.get_or_init(|| {
+            let relaxed = without_unicode_word_boundaries(self.pattern)
+                .expect("checked when the rule was set up");
+            (
+                regex::RegexBuilder::new(&relaxed)
+                    .dfa_size_limit(RULE_DFA_CACHE_BYTES)
+                    .build()
+                    .expect("a pattern without assertions stays valid"),
+                anchored_regex(self.pattern),
+            )
+        });
+        let mut matches = Vec::new();
+        let mut at = 0;
+        while let Some(start) = leftmost_start(relaxed, anchored, text, at) {
+            // The match starts here, so the leftmost one from here.
+            let Some(captures) = regex.captures_at(text, start) else {
+                break;
+            };
+            at = captures.get(0).map_or(text.len(), |matched| matched.end());
+            matches.push(captures);
+        }
+        matches
     }
 }
 
@@ -258,6 +317,7 @@ pub struct RulePrefilter {
     keyword_rules: Vec<Vec<usize>>,
     gates: Vec<RuleGate>,
     locals: Vec<Option<Local>>,
+    relaxed: Vec<Option<Relaxed>>,
 }
 
 /// The prefilter result for one text.
@@ -265,13 +325,19 @@ pub struct RuleScan {
     active: Vec<bool>,
     /// Per rule searched near its keywords: the keyword hit offsets, ascending.
     hits: Vec<Option<Vec<usize>>>,
+    /// Whether the text has a non-ASCII character.
+    non_ascii: bool,
 }
 
 impl RuleScan {
     /// A scan that only gates rules: rule `i` may match if `active[i]`.
     pub fn from_active(active: Vec<bool>) -> Self {
         let hits = active.iter().map(|_| None).collect();
-        Self { active, hits }
+        Self {
+            active,
+            hits,
+            non_ascii: false,
+        }
     }
 
     /// Whether rule `index` may match. A rule marked `false` has no match.
@@ -291,6 +357,7 @@ impl RulePrefilter {
         let mut keywords = Vec::<&str>::new();
         let mut keyword_rules = Vec::<Vec<usize>>::new();
         let mut locals = Vec::new();
+        let mut relaxed = Vec::new();
         for (index, rule) in rules.iter().enumerate() {
             let gated = gates[index] == RuleGate::Keywords;
             locals.push(
@@ -302,6 +369,7 @@ impl RulePrefilter {
                         lead,
                     }),
             );
+            relaxed.push(Relaxed::new(rule.pattern));
             if !gated {
                 continue;
             }
@@ -328,12 +396,14 @@ impl RulePrefilter {
             keyword_rules,
             gates,
             locals,
+            relaxed,
         }
     }
 
     /// Which rules may match `text`, and where the local rules' keywords are.
     pub fn scan(&self, text: &str) -> RuleScan {
         let rules = self.gates.len();
+        let non_ascii = !text.is_ascii();
         if FOLDS_TO_ASCII
             .iter()
             .any(|&(folded, _)| text.contains(folded))
@@ -341,6 +411,7 @@ impl RulePrefilter {
             return RuleScan {
                 active: vec![true; rules],
                 hits: (0..rules).map(|_| None).collect(),
+                non_ascii,
             };
         }
         let mut active: Vec<bool> = self
@@ -377,7 +448,11 @@ impl RulePrefilter {
                 found.dedup();
             }
         }
-        RuleScan { active, hits }
+        RuleScan {
+            active,
+            hits,
+            non_ascii,
+        }
     }
 
     /// The matches of rule `index` (`regex`) in `text`, identical to
@@ -393,7 +468,10 @@ impl RulePrefilter {
             return Vec::new();
         }
         let (Some(local), Some(hits)) = (&self.locals[index], &scan.hits[index]) else {
-            return regex.captures_iter(text).collect();
+            return match &self.relaxed[index] {
+                Some(relaxed) if scan.non_ascii => relaxed.captures(regex, text),
+                _ => regex.captures_iter(text).collect(),
+            };
         };
         // Every match starts in a window [hit - lead, hit]. The windows are
         // tried in text order; after a match the search goes on at its end, as
@@ -768,6 +846,64 @@ mod tests {
                 Ok(None) => return false,
                 Ok(Some(found)) => input.set_start(found.offset().max(input.start() + 1)),
             }
+        }
+    }
+
+    #[test]
+    fn word_boundary_rules_stay_on_the_dfa_in_non_ascii_bundles() {
+        // H03-2: in a minified bundle with non-ASCII strings the Unicode `\b`
+        // of the URL userinfo rules made the lazy DFA quit at the first `é`;
+        // the rule without it stays on the DFA and finds the same matches (none
+        // after `ü`, a word character).
+        let rules = crate::detectors::dlp::dlp::DLP_PATTERNS;
+        let prefilter = RulePrefilter::new(rules);
+        let mut text = String::new();
+        for line in 0..2_000 {
+            text.push_str(&format!(
+                "var s{line}=\"Résumé\",u{line}=\"https://cdn.example.org/a/{line}.js\";"
+            ));
+            if line % 500 == 7 {
+                text.push_str(&format!(
+                    "é_x=\"redis://user{line}:Kx9vQ2mLp7{line}@db.internal:6379\";"
+                ));
+                text.push_str(&format!(
+                    "ühttps://Tok{line}abcdefgh:x-oauth-basic@github.com/o/r https://Tok{line}abcdefgh:x-oauth-basic@github.com/o/r "
+                ));
+            }
+        }
+        let scan = prefilter.scan(&text);
+        // The password rule also reads `x-oauth-basic` as a password.
+        for (name, found) in [
+            ("dlp_url_userinfo_password", 8),
+            ("dlp_url_userinfo_token", 4),
+        ] {
+            let index = rules.iter().position(|rule| rule.name == name).unwrap();
+            let pattern = rules[index].pattern;
+            assert!(prefilter.relaxed[index].is_some(), "{name}");
+            let relaxed = without_unicode_word_boundaries(pattern).unwrap();
+            assert!(
+                !dfa_gives_up(&relaxed, &text, RULE_DFA_CACHE_BYTES),
+                "{name}"
+            );
+            let regex = Regex::new(pattern).unwrap();
+            let spans = |matches: Vec<Captures<'_>>| -> Vec<_> {
+                matches
+                    .iter()
+                    .map(|captures| {
+                        captures
+                            .iter()
+                            .map(|group| group.map(|m| m.range()))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
+            };
+            let expected = spans(regex.captures_iter(&text).collect());
+            assert_eq!(expected.len(), found, "{name}");
+            assert_eq!(
+                spans(prefilter.captures(index, &regex, &text, &scan)),
+                expected,
+                "{name}"
+            );
         }
     }
 
