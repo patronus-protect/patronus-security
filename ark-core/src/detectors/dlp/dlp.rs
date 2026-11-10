@@ -11,7 +11,7 @@ use std::ops::Range;
 use super::decoder::{self, Decoded};
 use super::overlap::OverlapRules;
 pub use super::overlap::OverlapTier;
-use super::prefilter::{RulePrefilter, ValueClass, ValueRun};
+use super::prefilter::{RulePrefilter, ValueClass, ValueRun, RULE_DFA_CACHE_BYTES};
 use super::rules::{self, ExampleCheck};
 use super::{context, score};
 use crate::native::ScoreMode;
@@ -687,7 +687,12 @@ impl DlpPipeline {
         let mut bound_keys = Vec::new();
 
         for p in DLP_PATTERNS {
-            regexes.push(Regex::new(p.pattern).unwrap());
+            regexes.push(
+                regex::RegexBuilder::new(p.pattern)
+                    .dfa_size_limit(RULE_DFA_CACHE_BYTES)
+                    .build()
+                    .unwrap(),
+            );
             anchor_gates.push(crate::detectors::anchor_gate::AnchorGate::regex(
                 p.pattern, false,
             ));

@@ -359,6 +359,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- DLP L1 latency (H03 pass 1, no detection change): DLP rule regexes and their keyword-window
+  probes get a 16 MiB lazy-DFA cache (`prefilter::RULE_DFA_CACHE_BYTES`, was the `regex` default
+  of 2 MiB). The large case-insensitive rules (`dlp_cli_password`, `dlp_prose_secret`,
+  `dlp_jwk_private_key`) outgrew the default on 100 KiB texts, the cache was cleared again and
+  again and the search fell back to the NFA (a whole-text `dlp_cli_password` scan 28 ms → 0.26 ms
+  per 100 KiB document). Results are identical (`dlp_rule_prefilter`). Measurements and the
+  remaining hotspots (H03-2): `research/dlp/scoreboard/latency.md`.
 - Detection change (opt-in bare profile only): the bare rules no longer report structured non-PII
   (T34). `pii_ssn_us_bare` (`validators::us_ssn_bare`) keeps the placeholder filter of
   `validators::us_ssn_context_free` and drops every counting sequence (`234567890`) and two
