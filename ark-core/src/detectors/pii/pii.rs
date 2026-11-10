@@ -802,8 +802,8 @@ impl NativeRegexDetector for PiiPipeline {
         // An opt-in bare form (D-BARE) stands alone as a word of prose, outside a
         // field that names another value and without a nearer counter-context or
         // foreign number term (T34). A compatibility IPv6 address (T38) is its
-        // `value` group and, like the default IPv6 rules, continues no chain; the
-        // bare `::` also ends its line.
+        // `value` group and, like the default IPv6 rules, continues no chain; it is
+        // no subscript in code, and the bare `::` also ends its line.
         if is_bare_rule(self.rule_ids[index]) {
             let value = captures
                 .get(self.capture_groups[index].unwrap_or(0))
@@ -812,6 +812,7 @@ impl NativeRegexDetector for PiiPipeline {
             if vat_body(self.rule_ids[index], text, value.start)
                 || (self.rule_ids[index] == "pii_ipv6_local_compat"
                     && (!context::ipv6_position(text, value.end)
+                        || context::subscript(text, value.clone())
                         || (&text[value.clone()] == "::"
                             && !context::unspecified_ends_line(text, value.clone()))))
                 || !context::stands_alone(text, value.clone())

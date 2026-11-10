@@ -1015,6 +1015,19 @@ pub(super) fn unspecified_ends_line(text: &str, value: Range<usize>) -> bool {
         })
 }
 
+/// Whether the value at `value` (byte range) is the subscript of an index or slice
+/// in code (`items[::1]`, `items[0::]`, T38): inside `[` and `]`, with the `[`
+/// right after a word, `)` or `]`. A bracketed host stands after `/` or `@`
+/// or alone (`http://[::1]:8080`, `[::1]`).
+pub(super) fn subscript(text: &str, value: Range<usize>) -> bool {
+    let mut before = text[..value.start].chars().rev();
+    before.next() == Some('[')
+        && before
+            .next()
+            .is_some_and(|ch| ch.is_alphanumeric() || matches!(ch, '_' | ')' | ']'))
+        && text[value.end..].starts_with(']')
+}
+
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also

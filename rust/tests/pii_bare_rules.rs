@@ -987,6 +987,24 @@ const COMPAT_POSITIVES: &[(&str, &str, &str)] = &[
     ("::ffff:0.0.0.0", "IP_ADDRESS", "::ffff:0.0.0.0"),
     ("::/0", "IP_ADDRESS", "::/0"),
     ("::/128", "IP_ADDRESS", "::/128"),
+    ("Loopback 0::1", "IP_ADDRESS", "0::1"),
+    ("Open http://[::1]:8080 locally.", "IP_ADDRESS", "::1"),
+    ("Loopback 0:0:0:0:0:0:0:1", "IP_ADDRESS", "0:0:0:0:0:0:0:1"),
+    (
+        "Unspecified 0:0:0:0:0:0:0:0",
+        "IP_ADDRESS",
+        "0:0:0:0:0:0:0:0",
+    ),
+    (
+        "Der Dienst lauscht auf 0000:0000::0001.",
+        "IP_ADDRESS",
+        "0000:0000::0001",
+    ),
+    (
+        "Mapped 0:0:0:0:0:ffff:127.0.0.1",
+        "IP_ADDRESS",
+        "0:0:0:0:0:ffff:127.0.0.1",
+    ),
     (
         "Route 127.0.0.0/8 stays local.",
         "IP_ADDRESS",
@@ -1017,6 +1035,11 @@ const COMPAT_NEGATIVES: &[(&str, &str)] = &[
     ("fmt.Fprintf(buf, \"::\\n\")", "IP_ADDRESS"),
     ("$name . '::' . $version", "IP_ADDRESS"),
     ("length :: [a] -> Int", "IP_ADDRESS"),
+    ("print(items[0::1])", "IP_ADDRESS"),
+    ("reversed = items[::1]", "IP_ADDRESS"),
+    ("rest = items[0::]", "IP_ADDRESS"),
+    ("Schritt 0::1/129 bleibt leer.", "IP_ADDRESS"),
+    ("Version 0:0:0:0:0:0:0:1.2", "IP_ADDRESS"),
     (
         "Examples\n--------\n    ::\n\n      In [1]: x",
         "IP_ADDRESS",
@@ -1092,6 +1115,9 @@ fn compat_validators_accept_only_the_decided_values() {
         "::/0",
         "::/128",
         "127.0.0.0/8",
+        "0::1",
+        "0:0:0:0:0:0:0:0",
+        "0:0:0:0:0:ffff:127.0.0.1",
     ] {
         assert!(validators::ip_address_local(value), "{value}");
         assert!(!validators::ip_address(value), "{value}");
