@@ -598,7 +598,7 @@ fn new_spans(on: &SecurityGateway, texts: &[String], off: &[Spans]) -> usize {
         .sum()
 }
 
-/// False-positive report per bare rule, each enabled alone, against the default
+/// False-positive report per bare and compatibility rule, each enabled alone, against the default
 /// gates (PR #284): new spans on the PII hard negatives and per MB of the pinned
 /// benign code and docs corpora (dev split).
 ///
@@ -635,7 +635,7 @@ fn bare_rule_false_positive_report() {
                 .collect::<Vec<_>>()
         })
     });
-    for rule in bare_rule_ids() {
+    for rule in bare_rule_ids().into_iter().chain(compat_rule_ids()) {
         let counts = modes.map(|mode| {
             let on = scanner(gates(Some(rule), mode));
             let off = &off[usize::from(mode == ScoreMode::Balanced)];
@@ -987,25 +987,36 @@ const COMPAT_POSITIVES: &[(&str, &str, &str)] = &[
     ("::ffff:0.0.0.0", "IP_ADDRESS", "::ffff:0.0.0.0"),
     ("::/0", "IP_ADDRESS", "::/0"),
     ("::/128", "IP_ADDRESS", "::/128"),
-    ("Route 127.0.0.0/8 stays local.", "IP_ADDRESS", "127.0.0.0/8"),
-    ("Lokaler Dienst auf 127.0.1.1 erreichbar.", "IP_ADDRESS", "127.0.1.1"),
+    (
+        "Route 127.0.0.0/8 stays local.",
+        "IP_ADDRESS",
+        "127.0.0.0/8",
+    ),
+    (
+        "Lokaler Dienst auf 127.0.1.1 erreichbar.",
+        "IP_ADDRESS",
+        "127.0.1.1",
+    ),
     ("987-65-4322", "SSN", "987-65-4322"),
     ("987-65-4329", "SSN", "987-65-4329"),
     ("219-09-9999", "SSN", "219-09-9999"),
     ("SSN: 078-05-1120", "SSN", "078-05-1120"),
-    ("ITIN 912 78 3456 is on file.", "SSN", "912 78 3456"),
+    ("Applicant 912 48 3456 is on file.", "SSN", "912 48 3456"),
     ("Bitte 987.65.4320 eintragen.", "SSN", "987.65.4320"),
 ];
 
 /// Values the compatibility rules leave out: multicast, malformed SSNs (area
 /// 000 or 666, group 00, serial 0000, one digit, mixed separators, nine bare
-/// digits), assigned values the default rules already report, values inside a
+/// digits), ITINs (another id), assigned values the default rules already report, values inside a
 /// longer number or after a counter-context term.
 const COMPAT_NEGATIVES: &[(&str, &str)] = &[
     ("Multicast 224.0.0.1", "IP_ADDRESS"),
     ("Multicast ff02::1", "IP_ADDRESS"),
     ("Version 127.0.0.1.4", "IP_ADDRESS"),
     ("use std::io::Read;", "IP_ADDRESS"),
+    ("fmt.Fprintf(buf, \"::\\n\")", "IP_ADDRESS"),
+    ("$name . '::' . $version", "IP_ADDRESS"),
+    ("length :: [a] -> Int", "IP_ADDRESS"),
     ("666-12-3456", "SSN"),
     ("000-12-3456", "SSN"),
     ("987-00-4322", "SSN"),
@@ -1013,6 +1024,8 @@ const COMPAT_NEGATIVES: &[(&str, &str)] = &[
     ("999-99-9999", "SSN"),
     ("987-65.4322", "SSN"),
     ("987654322", "SSN"),
+    ("911-70-1234", "SSN"),
+    ("my tax id 916-94-0980", "SSN"),
     ("Order number 987-65-4322 has shipped.", "SSN"),
     ("Beleg 77-987-65-4322-3", "SSN"),
 ];
@@ -1099,7 +1112,8 @@ fn compat_validators_accept_only_the_decided_values() {
         "219-09-9999",
         "078-05-1120",
         "900-12-3456",
-        "912 78 3456",
+        "912 48 3456",
+        "911-89-1234",
     ] {
         assert!(validators::us_ssn_unassigned(value), "{value}");
         assert!(!validators::us_ssn(value), "{value}");
@@ -1112,6 +1126,9 @@ fn compat_validators_accept_only_the_decided_values() {
         "987-65-0000",
         "999-99-9999",
         "987-65-432",
+        "911-70-1234",
+        "916-94-0980",
+        "987-65-4330",
     ] {
         assert!(!validators::us_ssn_unassigned(value), "{value}");
     }

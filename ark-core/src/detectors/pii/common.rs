@@ -102,6 +102,27 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+/// A loopback or unspecified IPv4 address (`127.0.0.1`, `0.0.0.0`), which
+/// `pii_ipv4` rejects (D-IP). Opt-in compatibility rule (T38): off until the
+/// `rules` gate enables it (`docs/how-to/pii-presidio-compat.gates.json`), then
+/// in every mode like a bare form (D-BARE).
+pub(super) const IPV4_LOCAL_COMPAT: PiiPattern = PiiPattern {
+    name: "pii_ipv4_local_compat",
+    validator: Some(validators::ip_address_local),
+    base_score: 35,
+    ..IPV4
+};
+
+/// A loopback or unspecified IPv6 address, also IPv4-mapped (`::`, `::1`,
+/// `::ffff:127.0.0.1`, `::/0`), which `pii_ipv6_loopback` rejects (D-IP).
+/// Opt-in compatibility rule (T38), as [`IPV4_LOCAL_COMPAT`].
+pub(super) const IPV6_LOCAL_COMPAT: PiiPattern = PiiPattern {
+    name: "pii_ipv6_local_compat",
+    validator: Some(validators::ip_address_local),
+    base_score: 35,
+    ..IPV6_LOOPBACK
+};
+
 // ── Telefon ──────────────────────────────────────────────────────────────
 pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     name: "pii_phone_international",

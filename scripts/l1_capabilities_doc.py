@@ -100,7 +100,8 @@ def _pii_default(rules: list[dict]) -> str:
     if not rules:
         return "–"
     bare = any(rule["id"].endswith("_bare") for rule in rules)
-    rules = [rule for rule in rules if not rule["id"].endswith("_bare")]
+    compat = any(rule["id"].endswith("_compat") for rule in rules)
+    rules = [rule for rule in rules if not rule["id"].endswith(("_bare", "_compat"))]
     scored = [rule for rule in rules if rule["scored_only"]]
     if len(scored) == len(rules):
         state = "on (`balanced`/`recall` only)"
@@ -108,8 +109,10 @@ def _pii_default(rules: list[dict]) -> str:
         state = f"on ({len(scored)} of {len(rules)} rules `balanced`/`recall` only)"
     else:
         state = "on"
-    # D-BARE: the bare form of an id is off until the `rules` gate enables it.
-    return f"{state}, bare form opt-in" if bare else state
+    # D-BARE: the bare form of an id is off until the `rules` gate enables it,
+    # and so is its compatibility form (T38).
+    state = f"{state}, bare form opt-in" if bare else state
+    return f"{state}, compatibility form opt-in" if compat else state
 
 
 NOT_MEASURED = "–"
@@ -269,7 +272,7 @@ def generate(
         f"| Rules with a `checksum` or `structure` check | "
         f"{sum(rule['strength'] == 'checksum' for rule in pii_rules)} | "
         f"{sum(rule['validator_strength'] in ('checksum', 'structure') for rule in dlp_rules)} |",
-        f"| Default state | all rules on except the opt-in bare forms | credential/secret groups and classification markings on, broader families opt-in |",
+        f"| Default state | all rules on except the opt-in bare and compatibility forms | credential/secret groups and classification markings on, broader families opt-in |",
         f"| Compared with | Presidio {pii_map['presidio_version']} (default and tuned; milestones against "
         f"{_baseline_titles(pii['baselines'])} on {pii['milestone_view']} gold) | "
         + ", ".join(

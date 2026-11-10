@@ -7,28 +7,9 @@ use std::{net::IpAddr, sync::LazyLock};
 /// and multicast addresses are rejected, also as the IPv4 part of an IPv4-mapped
 /// address (`::ffff:127.0.0.1`).
 pub fn ip_address(s: &str) -> bool {
-    let (address, prefix) = match s.split_once('/') {
-        Some((address, prefix)) => (address, Some(prefix)),
-        None => (s, None),
-    };
-    let (address, zone) = match address.split_once('%') {
-        Some((address, zone)) => (address, Some(zone)),
-        None => (address, None),
-    };
-    let Ok(candidate) = address.parse::<IpAddr>() else {
+    let Some((address, candidate)) = ip_candidate(s) else {
         return false;
     };
-    let max_prefix = if candidate.is_ipv4() { 32 } else { 128 };
-    if prefix.is_some_and(|prefix| {
-        prefix.is_empty()
-            || !prefix.bytes().all(|byte| byte.is_ascii_digit())
-            || prefix
-                .parse::<u8>()
-                .map_or(true, |length| length > max_prefix)
-    }) || zone.is_some_and(|zone| candidate.is_ipv4() || zone.is_empty())
-    {
-        return false;
-    }
     let local = |candidate: IpAddr| {
         candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified()
     };
@@ -51,6 +32,45 @@ pub fn ip_address(s: &str) -> bool {
                     || compact.split(':').filter(|part| !part.is_empty()).count() >= 3)
         }
     }
+}
+
+/// A loopback or unspecified address that [`ip_address`] rejects by decision
+/// (D-IP), also IPv4-mapped (`::ffff:127.0.0.1`) and with a prefix length
+/// (`::/0`), but no zone ID: the opt-in compatibility rules (T38). Multicast
+/// stays out.
+pub fn ip_address_local(s: &str) -> bool {
+    let local = |candidate: IpAddr| candidate.is_loopback() || candidate.is_unspecified();
+    ip_candidate(s).is_some_and(|(_, candidate)| {
+        !s.contains('%')
+            && (local(candidate)
+                || matches!(candidate, IpAddr::V6(v6) if v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|mapped| local(IpAddr::V4(mapped)))))
+    })
+}
+
+/// The address of an IP span and its parsed form, if the span is an address with
+/// a CIDR prefix length in range and, for IPv6 only, a non-empty zone ID.
+fn ip_candidate(s: &str) -> Option<(&str, IpAddr)> {
+    let (address, prefix) = match s.split_once('/') {
+        Some((address, prefix)) => (address, Some(prefix)),
+        None => (s, None),
+    };
+    let (address, zone) = match address.split_once('%') {
+        Some((address, zone)) => (address, Some(zone)),
+        None => (address, None),
+    };
+    let candidate = address.parse::<IpAddr>().ok()?;
+    let max_prefix = if candidate.is_ipv4() { 32 } else { 128 };
+    let bad_prefix = prefix.is_some_and(|prefix| {
+        prefix.is_empty()
+            || !prefix.bytes().all(|byte| byte.is_ascii_digit())
+            || prefix
+                .parse::<u8>()
+                .map_or(true, |length| length > max_prefix)
+    });
+    let bad_zone = zone.is_some_and(|zone| candidate.is_ipv4() || zone.is_empty());
+    (!bad_prefix && !bad_zone).then_some((address, candidate))
 }
 
 /// The address of an IP span without its zone ID and CIDR prefix length
@@ -1145,6 +1165,39 @@ pub fn us_ssn(s: &str) -> bool {
 pub fn us_ssn_context_free(s: &str) -> bool {
     let digits = s.bytes().filter(u8::is_ascii_digit).collect::<Vec<_>>();
     us_ssn(s) && digits.iter().any(|&digit| digit != digits[0]) && digits != b"123456789"
+}
+
+/// A grouped SSN that [`us_ssn`] rejects only because the SSA never assigned it
+/// (B-SSN): area 900–999 (the advertising range `987-65-4320` to `4329`), the
+/// voided values `078-05-1120` and `219-09-9999`. An ITIN (area 9, group 50–65,
+/// 70–88, 90–92 or 94–99) is another id, except in the advertising range. One
+/// separator kind, not area 000 or 666, group 00, serial 0000 or one repeated
+/// digit: the opt-in compatibility rule (T38).
+pub fn us_ssn_unassigned(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let well_formed = bytes.len() == 11
+        && matches!(bytes[3], b'-' | b'.' | b' ')
+        && bytes[6] == bytes[3]
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 3 | 6) || byte.is_ascii_digit());
+    if !well_formed || us_ssn(s) {
+        return false;
+    }
+    let digits = bytes
+        .iter()
+        .copied()
+        .filter(u8::is_ascii_digit)
+        .collect::<Vec<_>>();
+    let group = (digits[3] - b'0') * 10 + (digits[4] - b'0');
+    let itin = digits[0] == b'9' && matches!(group, 50..=65 | 70..=88 | 90..=92 | 94..=99);
+    &digits[..3] != b"000"
+        && &digits[..3] != b"666"
+        && group != 0
+        && &digits[5..] != b"0000"
+        && digits.iter().any(|&digit| digit != digits[0])
+        && (!itin || digits.starts_with(b"98765432"))
 }
 
 /// A bare SSN, grouped or not (D-BARE): [`us_ssn_context_free`] without a

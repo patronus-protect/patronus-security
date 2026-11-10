@@ -999,6 +999,19 @@ pub(super) fn ipv6_position(text: &str, end: usize) -> bool {
     }
 }
 
+/// Whether the bare unspecified IPv6 address `::` at `value` (byte range) is a
+/// word of prose that ends its line (`Unspecified ::`, `Use local ipv6 ::`, T38):
+/// after a space or tab, followed by sentence punctuation at most. Code writes
+/// `::` as a scope or type operator and inside quotes (`'::'`, `x :: Int`).
+pub(super) fn unspecified_ends_line(text: &str, value: Range<usize>) -> bool {
+    text[..value.start].ends_with([' ', '\t'])
+        && text[value.end..].split('\n').next().is_none_or(|rest| {
+            rest.trim_end()
+                .trim_end_matches(['.', ',', ';', ')'])
+                .is_empty()
+        })
+}
+
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also
