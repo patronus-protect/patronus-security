@@ -359,6 +359,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- DLP L1 latency (H03 pass 3, no detection change): the native threat regexes (the
+  `sensitive_material` and `secret_transfer` producers of the DLP category, and the injection and
+  threat families) run once without their assertions over the whole lowercase text before their
+  per-line window searches, and skip the windows when that finds no candidate. About 2,500
+  per-line searches per 100 KiB document had cost about 2 ms per producer. Results are identical
+  (`text_gates_hold_wherever_a_window_matches`). Warm DLP gateway 100 KiB p95 on the dev latency
+  workload: 12.1 → 8.0 ms; the `latency.py` p95 (16.6 ms) is still set by the cold first scan of
+  each document (H03-4). Measurements: `research/dlp/scoreboard/latency.md`.
 - DLP L1 latency (H03 pass 2, no detection change): a DLP rule that scans the whole text and has
   a Unicode word boundary searches a text with non-ASCII characters without its word boundaries
   and probes each start anchored with its own regex (the shared `word_boundary` helpers of the

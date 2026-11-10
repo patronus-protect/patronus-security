@@ -159,3 +159,91 @@ The budget is not met, and hotspots worth ≥ 10 % of the 100 KiB p95 remain, so
   config-value binding and validation (about 0.7 ms);
 - the regexes of `dlp_prose_secret`, `dlp_openai_key`, `dlp_anthropic_key`, `dlp_xai_key` and
   the `dlp_bip39_seed_phrase` finder (0.4–0.8 ms per 100 KiB document each).
+
+## Pass 3 (2026-11-10, H03-3)
+
+### Head vs. gitleaks
+
+`python3 scripts/l1_dlp/latency.py bench --dev $ARK_L1_DEV_DATA --tools ark,gitleaks --rounds 3 --invocations 4`
+
+| tool | workload | docs | MiB | p50 ms | p95 ms | scan MiB/s | end-to-end MiB/s | start ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| ark | short | 256 | 0.07 | 0.342 | 0.992 | 0.73 | 0.05 | 1334.1 |
+| ark | 4 KiB | 64 | 0.25 | 0.588 | 1.311 | 5.81 | 0.18 | 1334.1 |
+| ark | 100 KiB | 32 | 3.12 | 8.531 | 16.557 | 11.68 | 1.95 | 1334.1 |
+| ark | 10 MiB repo | 938 | 10.00 | 0.317 | 1.618 | 10.37 | 4.35 | 1334.1 |
+| gitleaks | short | 256 | 0.07 | 730.000 | 834.991 | 0.06 | 0.04 | 704.2 |
+| gitleaks | 4 KiB | 64 | 0.25 | 712.036 | 740.220 | 0.28 | 0.16 | 704.2 |
+| gitleaks | 100 KiB | 32 | 3.12 | 749.777 | 917.860 | 0.55 | 0.49 | 704.2 |
+| gitleaks | 10 MiB repo | 938 | 10.00 | – | – | 5.11 | 3.76 | 704.2 |
+
+Against pass 2: 100 KiB p50 10.4 → 8.5 ms, scan 9.94 → 11.68 MiB/s; repo scan 9.91 → 10.37
+MiB/s. Throughput ≥ gitleaks holds on every workload (repo 10.37 vs. 5.11 MiB/s scan). The
+100 KiB p95 of `latency.py` (16.6 ms; pass 2 15.3 ms) is set by the first scan of each document
+in the process, see below.
+
+### Profile
+
+The gateway path first, as H03-3 asked. Native gateway (`SecurityGateway::scan_category`, Rust,
+same 100 KiB documents, three rounds after one warm round) and the Python binding on the same
+documents gave the same figures (p95 12.2 vs. 12.3 ms before the change): the binding and the
+result conversion cost nothing measurable. The phase metrics (`PATRONUS_PHASE_METRICS=1`) split
+the L1 phase of the DLP category into three producers, ms per document before the change:
+
+| producer | ms |
+|---|---:|
+| `native:dlp` (DLP pipeline incl. text preparation and the D01 decoded view) | about 6.5–7.6 |
+| `native:sensitive_material` | about 1.5–1.8 |
+| `native:secret_transfer` | about 1.3–1.4 |
+
+The two producers next to the DLP pipeline run the native threat regexes (`threat::detection`,
+`native_matches_prepared`) over `text_windows`, which splits on every newline: about 2,500
+searches per 100 KiB document and regex. With the lexical anchors already computed, each family
+took about 2 ms per document, mostly per-search overhead rather than scanning (a boundary-free
+lazy-DFA search on non-ASCII windows, tried first, changed nothing).
+
+### Change
+
+Each gated native threat regex first runs once without any of its assertions (word boundaries,
+line and text anchors; `word_boundary::without_assertions`, which shares the assertion cutter of
+`without_unicode_word_boundaries`) over the whole lowercase text, on the lazy DFA with the rule
+DFA cache. A window match is always a match of that regex in the text, so without one the
+window loop is skipped. Results are identical: `text_gates_hold_wherever_a_window_matches`
+checks the gate on every window match of the bilingual fixture and synthetic requests, the DLP
+goldens are unchanged.
+
+| step | before | after |
+|---|---:|---:|
+| `sensitive_material` regexes, ms per document (p50) | 2.08 | 0.09 |
+| `secret_transfer` regexes, ms per document (p50) | 2.09 | 0.71 |
+| native gateway 100 KiB p50 / p95, ms (warm) | 9.8 / 12.1 | 6.7 / 8.0 |
+| Python `scan_category` 100 KiB p50 / p95, ms (warm) | 9.4 / 12.3 | 7.1 / 8.6 |
+
+The same gate also serves the injection and threat families of the native threat rules.
+
+### Cold first scan
+
+`latency.py` warms each workload with four documents and then times three rounds, so the first
+of the three rounds scans 28 documents for the first time in the process. Per round in one
+process (Python, pinned to one CPU): round 1 p50 9.8 ms, max 22.9 ms (10 of 32 documents above
+11 ms); rounds 2–4 p50 7.1 ms, max 8.6–9.6 ms. A second gateway built in the same process after
+these rounds scans every document within 9.1 ms on its first pass, so the cold cost sits in the
+process-wide regex state (lazy-DFA states built on first sight of new content), not in the
+gateway. Warm, the 100 KiB p95 is within the budget (8.0 ms native, 8.6 ms Python); as
+`latency.py` measures it, it is not.
+
+### Prefilter coverage
+
+100 %, unchanged (`rust/tests/dlp_rule_prefilter.rs`).
+
+### Remaining hotspots → H03-4
+
+The `latency.py` budget does not hold, and hotspots worth ≥ 10 % of p95 remain:
+
+- the cold first scan of a document in a process (about 2–15 ms extra on the first round,
+  lazy-DFA state construction of the rule regexes; to be profiled per regex);
+- the lexical-anchor presence scan (about 1.2 ms per 100 KiB document, about 15 % of the warm
+  p95; the DFA trade-off of pass 2 stands);
+- the DLP pipeline itself (about 6.5 ms per document warm): the generic tier and the
+  `dlp_prose_secret`, provider-key and seed-phrase regexes listed for H03-3 were not reworked in
+  this pass.

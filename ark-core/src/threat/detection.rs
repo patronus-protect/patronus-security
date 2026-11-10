@@ -8,6 +8,9 @@ use regex::Regex;
 
 fn regex_matches(view: &MatchText, regex: &Regex, role: &str) -> Vec<L1Match> {
     let mut found = Vec::new();
+    if regex_text_gate(regex).is_some_and(|gate| !gate.is_match(&view.text)) {
+        return found;
+    }
     for window in text_windows(&view.text, WINDOW_BYTES) {
         let offset = window.as_ptr() as usize - view.text.as_ptr() as usize;
         for captures in regex.captures_iter(window) {

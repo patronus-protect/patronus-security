@@ -80,29 +80,6 @@ pub(crate) fn leftmost_start(
 /// The assertions are cut out of the pattern source at their syntax spans;
 /// the result stays a valid pattern.
 pub(crate) fn without_unicode_word_boundaries(pattern: &str) -> Option<String> {
-    struct Boundaries(Vec<ast::Span>);
-    impl ast::Visitor for Boundaries {
-        type Output = Vec<ast::Span>;
-        type Err = ();
-        fn finish(self) -> Result<Self::Output, ()> {
-            Ok(self.0)
-        }
-        fn visit_pre(&mut self, node: &ast::Ast) -> Result<(), ()> {
-            if let ast::Ast::Assertion(assertion) = node {
-                if !matches!(
-                    assertion.kind,
-                    ast::AssertionKind::StartLine
-                        | ast::AssertionKind::EndLine
-                        | ast::AssertionKind::StartText
-                        | ast::AssertionKind::EndText
-                        | ast::AssertionKind::NotWordBoundary
-                ) {
-                    self.0.push(assertion.span);
-                }
-            }
-            Ok(())
-        }
-    }
     fn unicode_boundary(hir: &Hir) -> bool {
         match hir.kind() {
             HirKind::Look(look) => matches!(
@@ -122,8 +99,45 @@ pub(crate) fn without_unicode_word_boundaries(pattern: &str) -> Option<String> {
     if !unicode_boundary(&regex_syntax::parse(pattern).ok()?) {
         return None;
     }
+    cut_assertions(pattern, |kind| {
+        !matches!(
+            kind,
+            ast::AssertionKind::StartLine
+                | ast::AssertionKind::EndLine
+                | ast::AssertionKind::StartText
+                | ast::AssertionKind::EndText
+                | ast::AssertionKind::NotWordBoundary
+        )
+    })
+}
+
+/// `pattern` without any assertion: it matches wherever `pattern` matches,
+/// in any context.
+pub(crate) fn without_assertions(pattern: &str) -> String {
+    cut_assertions(pattern, |_| true).expect("a valid pattern")
+}
+
+/// `pattern` with the assertions that `cut` selects cut out at their syntax
+/// spans; the result stays a valid pattern.
+fn cut_assertions(pattern: &str, cut: fn(&ast::AssertionKind) -> bool) -> Option<String> {
+    struct Boundaries(Vec<ast::Span>, fn(&ast::AssertionKind) -> bool);
+    impl ast::Visitor for Boundaries {
+        type Output = Vec<ast::Span>;
+        type Err = ();
+        fn finish(self) -> Result<Self::Output, ()> {
+            Ok(self.0)
+        }
+        fn visit_pre(&mut self, node: &ast::Ast) -> Result<(), ()> {
+            if let ast::Ast::Assertion(assertion) = node {
+                if (self.1)(&assertion.kind) {
+                    self.0.push(assertion.span);
+                }
+            }
+            Ok(())
+        }
+    }
     let syntax = ast::parse::Parser::new().parse(pattern).ok()?;
-    let boundaries = ast::visit(&syntax, Boundaries(Vec::new())).ok()?;
+    let boundaries = ast::visit(&syntax, Boundaries(Vec::new(), cut)).ok()?;
     let mut relaxed = String::with_capacity(pattern.len());
     let mut at = 0;
     for span in boundaries {
@@ -178,6 +192,15 @@ mod tests {
             .relaxed
             .is_none());
         assert!(BoundarySearch::new(r"name").relaxed.is_none());
+    }
+
+    #[test]
+    fn without_assertions_cuts_every_assertion() {
+        assert_eq!(
+            without_assertions(r"(?:^|[.;]\s*)\bsend\B(?-u:\b)\s+keys$"),
+            r"(?:|[.;]\s*)send(?-u:)\s+keys"
+        );
+        assert_eq!(without_assertions(r"(?m)^a\Ab\z"), "(?m)ab");
     }
 
     #[test]
