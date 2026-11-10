@@ -15,10 +15,13 @@
   TruffleHog or detect-secrets counterpart (>= 20).
 
 M1 and M2 read scoreboard reports (``scoreboard.score_split``); ``scoreboard.py gate`` prints
-one ``milestone_line`` per split. M4 (latency) comes from ``latency.py``.
+one ``milestone_line`` per split. M4 (latency) comes from ``latency.py``. ``matrix`` prints the
+static coverage matrix of the comparison page: entities per family that each tool maps
+(gitleaks, TruffleHog, detect-secrets, Google Cloud DLP infotypes), from ``entity_map.yaml``.
 
     python3 scripts/l1_dlp/milestones.py count            # M3 table + verdict line
     python3 scripts/l1_dlp/milestones.py count --json
+    python3 scripts/l1_dlp/milestones.py matrix           # coverage matrix (Markdown)
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ M1_TOOLS = ("gitleaks", "trufflehog")
 M2_GROUP = "CREDENTIAL"
 M2_MARGIN = 0.20
 OFFLINE_STRENGTHS = ("checksum", "structure")
+MATRIX_TOOLS = {"ARK": "ark", "gitleaks": "gitleaks", "TruffleHog": "trufflehog", "detect-secrets": "detect_secrets",
+                "Google DLP": "google_dlp"}
 M3_TARGETS = {"gitleaks": 0.90, "secret_formats": 150, "offline_checks": 30, "content_classes": 20}
 
 
@@ -167,13 +172,42 @@ def m3_lines(counts: dict[str, Any]) -> list[str]:
     return lines
 
 
+def coverage_matrix(entity_map: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """Entities per family (out-of-scope ones excluded) that each tool maps."""
+    matrix: dict[str, dict[str, int]] = {}
+    for entity in entity_map.get("entities") or []:
+        if entity.get("scope") == "out_of_scope":
+            continue
+        family = _family(entity_map, str(entity.get("group", ""))) or "(no ARK group)"
+        row = matrix.setdefault(family, {"entities": 0, **{name: 0 for name in MATRIX_TOOLS}})
+        row["entities"] += 1
+        for name, field in MATRIX_TOOLS.items():
+            row[name] += bool(entity.get(field))
+    return dict(sorted(matrix.items()))
+
+
+def matrix_lines(matrix: dict[str, dict[str, int]]) -> list[str]:
+    lines = ["| Family | Entities | " + " | ".join(MATRIX_TOOLS) + " |",
+             "|---|---:|" + "---:|" * len(MATRIX_TOOLS)]
+    for family, row in matrix.items():
+        lines.append(f"| {family} | {row['entities']} | " + " | ".join(str(row[name]) for name in MATRIX_TOOLS) + " |")
+    total = {key: sum(row[key] for row in matrix.values()) for key in ("entities", *MATRIX_TOOLS)}
+    lines.append(f"| **all** | {total['entities']} | " + " | ".join(str(total[name]) for name in MATRIX_TOOLS) + " |")
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     count = commands.add_parser("count", help="M3 counts from entity_map.yaml and RuleMeta")
     count.add_argument("--entity-map", type=Path, default=ENTITY_MAP)
     count.add_argument("--json", action="store_true", help="print the counts as JSON")
+    matrix = commands.add_parser("matrix", help="coverage matrix per family from entity_map.yaml")
+    matrix.add_argument("--entity-map", type=Path, default=ENTITY_MAP)
     args = parser.parse_args(argv)
+    if args.command == "matrix":
+        print("\n".join(matrix_lines(coverage_matrix(yaml.safe_load(args.entity_map.read_text(encoding="utf-8"))))))
+        return 0
     try:
         counts = m3_counts(yaml.safe_load(args.entity_map.read_text(encoding="utf-8")), dlp_patterns())
     except (ValueError, OSError) as exc:

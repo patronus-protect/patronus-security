@@ -142,3 +142,13 @@ def test_count_cli_prints_the_m3_table_and_json(capsys):
     assert MODULE.main(["count", "--json"]) == 0
     assert set(json.loads(capsys.readouterr().out)) >= {"gitleaks", "secret_formats", "offline_checks",
                                                          "content_classes", "met"}
+
+
+def test_coverage_matrix_counts_mapped_entities_per_family_without_out_of_scope():
+    matrix = MODULE.coverage_matrix(ENTITY_MAP)
+    assert matrix["provider_secret"] == {"entities": 3, "ARK": 3, "gitleaks": 1, "TruffleHog": 1,
+                                         "detect-secrets": 1, "Google DLP": 0}
+    assert matrix["(no ARK group)"]["entities"] == 1  # p.c (baseline_only); x.d is out of scope
+    assert matrix["document_class"]["Google DLP"] == 1
+    lines = MODULE.matrix_lines(matrix)
+    assert lines[0].startswith("| Family | Entities | ARK | gitleaks |") and lines[-1].startswith("| **all** | 8 | 7 |")
