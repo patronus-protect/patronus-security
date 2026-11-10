@@ -246,18 +246,44 @@ static KEY_VALUE_LINE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+/// The key and separator of a [`KEY_VALUE_LINE`] at the start of a line. The
+/// key holds no separator, so the first separator after it is the one of the
+/// line (H03-2).
+static KEY_VALUE_KEY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\A[ \t]*(?:[-*+][ \t]+)?(\p{L}[\p{L}\p{N} ._'/#()&+\-]{0,47}?)[ \t]*[:=]").unwrap()
+});
+
 /// One line of `text` read as a [`Carrier::KeyValue`] field (DLP K05): the
 /// byte ranges of the key and of the raw value, untrimmed of quotes and
 /// comments, so that a caller can apply the quoting rules of its format.
-/// `None` if `line` is no `key: value` or `key=value` line.
+/// `None` if `line` (without its `\n`) is no `key: value` or `key=value` line.
+///
+/// The same key and value as a [`KEY_VALUE_LINE`] match on the line: only the
+/// short key part runs on the regex, the value is read off the rest of the
+/// line, so a long line (a minified bundle) is not run through the capture
+/// engine (H03-2).
 pub fn key_value_line(text: &str, line: Range<usize>) -> Option<(Range<usize>, Range<usize>)> {
-    let captures = KEY_VALUE_LINE.captures(&text[line.clone()])?;
+    debug_assert!(!text[line.clone()].contains('\n'));
+    let captures = KEY_VALUE_KEY.captures(&text[line.clone()])?;
     let key = captures.get(1)?;
-    let value = captures.get(2)?;
-    Some((
-        line.start + key.start()..line.start + key.end(),
-        line.start + value.start()..line.start + value.end(),
-    ))
+    // `[ \t]*([^\r\n]+?)[ \t]*\r?$`: one `\r` may end the line, the value
+    // holds none and runs from after the blanks to the last non-blank; on a
+    // line of blanks it is the last blank.
+    let after = line.start + captures.get(0)?.end();
+    let rest = &text[after..line.end];
+    let body = rest.strip_suffix('\r').unwrap_or(rest);
+    if body.is_empty() || body.contains('\r') {
+        return None;
+    }
+    let is_blank = |c: char| c == ' ' || c == '\t';
+    let start = body.len() - body.trim_start_matches(is_blank).len();
+    let end = body.trim_end_matches(is_blank).len();
+    let value = if start < end {
+        after + start..after + end
+    } else {
+        after + body.len() - 1..after + body.len()
+    };
+    Some((line.start + key.start()..line.start + key.end(), value))
 }
 
 fn key_value_lines(text: &str, builder: &mut Builder) {
@@ -618,6 +644,69 @@ fn csv(text: &str, builder: &mut Builder) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// H03-2: [`key_value_line`] reads the key and value of a
+    /// `KEY_VALUE_LINE` match on the line, also at the edges of its value
+    /// grammar (blanks, `\r`, bullets, separators in the value, long lines).
+    #[test]
+    fn key_value_line_matches_the_full_line_regex() {
+        let mut lines: Vec<String> = [
+            "password: hunter2",
+            "  - api_key = abc ",
+            "* Schlüssel: wert",
+            "token:",
+            "token:   ",
+            "token:\t",
+            "token: \r",
+            "token:\r",
+            "token: a\rb",
+            "token: ab\r\r",
+            "token: ab\r",
+            "token: ab \t\r",
+            "token = a = b: c",
+            "a b c :x",
+            "key\t: v",
+            "- - key: v",
+            "+key: v",
+            "1key: v",
+            "ключ: значение ",
+            "x: 'quoted' # comment",
+            "no separator here",
+            "",
+            ":",
+            "=value",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+        lines.push(format!("bundle: {}", "é=a:b;".repeat(5_000)));
+        lines.push(format!("{}: v", "k".repeat(48)));
+        lines.push(format!("{}: v", "k".repeat(49)));
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/l1_bilingual_rules.json"))
+                .unwrap();
+        fn strings(value: &serde_json::Value, out: &mut Vec<String>) {
+            match value {
+                serde_json::Value::String(text) => out.extend(text.split('\n').map(str::to_string)),
+                serde_json::Value::Array(items) => items.iter().for_each(|v| strings(v, out)),
+                serde_json::Value::Object(map) => map.values().for_each(|v| strings(v, out)),
+                _ => {}
+            }
+        }
+        strings(&fixture, &mut lines);
+        for line in &lines {
+            let expected = KEY_VALUE_LINE.captures(line).map(|captures| {
+                (
+                    captures.get(1).unwrap().range(),
+                    captures.get(2).unwrap().range(),
+                )
+            });
+            let text = format!("x\n{line}\ny");
+            let found = key_value_line(&text, 2..2 + line.len())
+                .map(|(key, value)| (key.start - 2..key.end - 2, value.start - 2..value.end - 2));
+            assert_eq!(found, expected, "{line:.80?}");
+        }
+    }
 
     /// `(names, value)` of every field.
     fn fields(text: &str) -> Vec<(Vec<String>, &str, Carrier)> {
