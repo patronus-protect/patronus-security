@@ -89,8 +89,8 @@ REPORT_SCHEMA = "ark-dlp-scoreboard-v1"
 PREDICTION_VERSION = 1
 TOLERANCE_PP = 0.5
 # Families of the default-on entity groups; every other family is opt-in.
-SECRET_FAMILIES = ("provider_secret", "generic_credential", "key_material")
-CONTENT_FAMILIES = ("content_class", "document_class")
+SECRET_FAMILIES = MILESTONES.SECRET_FAMILIES
+CONTENT_FAMILIES = MILESTONES.CONTENT_FAMILIES
 UNMAPPED = "(unmapped)"
 # Everything that changes the native module, the Python package or the rule-to-entity map.
 BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "ark-core", "python", str(ENTITY_MAP))

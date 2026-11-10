@@ -39,6 +39,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 ENTITY_MAP = ROOT / "research" / "dlp" / "entity_map.yaml"
+# Families of the default-on secret groups and of the content/document classes (also the scoreboard's).
 SECRET_FAMILIES = ("provider_secret", "generic_credential", "key_material")
 CONTENT_FAMILIES = ("content_class", "document_class")
 SECRET_SCANNERS = ("gitleaks", "trufflehog", "detect_secrets")
