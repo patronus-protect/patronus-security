@@ -531,6 +531,79 @@ mod tests {
         assert_eq!(integer_sequence(&rsa, 9), None);
     }
 
+    /// A PEM body (without armor lines) of the standard base64 of `body`.
+    fn pem_body(body: &[u8]) -> String {
+        const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut encoded = String::new();
+        for chunk in body.chunks(3) {
+            let word = chunk.iter().enumerate().fold(0u32, |word, (index, byte)| {
+                word | u32::from(*byte) << (16 - 8 * index)
+            });
+            for index in 0..=chunk.len() {
+                encoded.push(ALPHABET[(word >> (18 - 6 * index) & 63) as usize] as char);
+            }
+            encoded.push_str(&"=".repeat(3 - chunk.len()));
+        }
+        let lines: Vec<&str> = encoded
+            .as_bytes()
+            .chunks(64)
+            .map(|line| std::str::from_utf8(line).unwrap())
+            .collect();
+        format!("\n{}\n", lines.join("\n"))
+    }
+
+    /// Whether the key octets of a PEM body carry a repeated-chunk fill, the
+    /// H01 example check of `is_example_match`.
+    fn is_filled_key(body: &[u8]) -> bool {
+        private_key_material(&pem_body(body))
+            .is_some_and(|material| super::super::credentials::has_repeated_fill(&material))
+    }
+
+    /// Deterministic pseudo-random bytes (SplitMix64).
+    fn random_bytes(seed: u64, length: usize) -> Vec<u8> {
+        let mut state = seed;
+        (0..length)
+            .map(|_| {
+                state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut mixed = state;
+                mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+                (mixed ^ (mixed >> 31)) as u8
+            })
+            .collect()
+    }
+
+    #[test]
+    fn key_octets_with_repeated_chunks_are_examples() {
+        for fill in ["EXAMPLEKEY", "TESTKEY", "deadbeef", "0123456789"] {
+            let mut der = vec![0x30, 0x24, 0x02, 0x01, 0x01, 0x04, 0x1f];
+            der.extend(fill.bytes().cycle().take(0x1f));
+            assert!(is_filled_key(&der), "{fill}");
+        }
+        // A body without canonical base64, an oversized body.
+        assert!(private_key_material("\nEXAMPLEKEY!\n").is_none());
+        let oversized = pem_body(&b"EXAMPLEKEY".repeat(MAX_BLOCK / 10));
+        assert!(private_key_material(&oversized).is_none());
+    }
+
+    #[test]
+    fn random_key_octets_are_never_examples() {
+        // The OpenSSH blob keeps its printable structure strings
+        // (`openssh-key-v1`, `none`, `ssh-ed25519`) around random key halves.
+        let mut openssh_blob = openssh(b"none", b"none", 1);
+        openssh_blob.extend(ssh_string(b"ssh-ed25519"));
+        for seed in 0..3000 {
+            let mut rsa = vec![
+                0x30, 0x82, 0x04, 0xa4, 0x02, 0x01, 0x00, 0x02, 0x82, 0x01, 0x01,
+            ];
+            rsa.extend(random_bytes(seed, 1180));
+            let mut openssh = openssh_blob.clone();
+            openssh.extend(random_bytes(!seed, 96));
+            assert!(!is_filled_key(&rsa), "{seed}");
+            assert!(!is_filled_key(&openssh), "{seed}");
+        }
+    }
+
     #[test]
     fn body_lines_drop_escapes_quotes_and_armor_headers() {
         let collected: Vec<&str> =
@@ -597,25 +670,6 @@ mod tests {
         assert_eq!(pgp_free_text(&pgp), Some(vec![6..9, 9..11]));
         assert_eq!(pgp_free_text(&[0xcd, 3, b'u', b'i', b'd']), None);
         // The material keeps the key octets and marks each dropped field.
-        let pem_body = |raw: &[u8]| {
-            const ALPHABET: &[u8] =
-                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-            let mut out = String::new();
-            for chunk in raw.chunks(3) {
-                let n = chunk
-                    .iter()
-                    .enumerate()
-                    .fold(0u32, |n, (i, &b)| n | u32::from(b) << (16 - 8 * i));
-                for i in 0..4 {
-                    out.push(if i <= chunk.len() {
-                        ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char
-                    } else {
-                        '='
-                    });
-                }
-            }
-            format!("\n{out}\n")
-        };
         assert_eq!(
             private_key_material(&pem_body(&pgp)),
             Some([&[0xc5, 2, 4, 0][..], &[0xcd, 3, 0, 0]].concat())

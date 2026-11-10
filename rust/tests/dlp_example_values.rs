@@ -900,3 +900,184 @@ fn base64_values_with_a_random_payload_stay_detected() {
         }
     }
 }
+
+/// Deterministic pseudo-random bytes (SplitMix64).
+fn random_bytes(seed: u64, length: usize) -> Vec<u8> {
+    let mut state = seed;
+    (0..length)
+        .map(|_| {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut mixed = state;
+            mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            (mixed ^ (mixed >> 31)) as u8
+        })
+        .collect()
+}
+
+/// A DER element: tag, definite length and content.
+fn der(tag: u8, content: &[u8]) -> Vec<u8> {
+    let mut out = vec![tag];
+    match content.len() {
+        length @ 0..=127 => out.push(length as u8),
+        length @ 128..=255 => out.extend([0x81, length as u8]),
+        length => out.extend([0x82, (length >> 8) as u8, length as u8]),
+    }
+    out.extend_from_slice(content);
+    out
+}
+
+/// A positive DER INTEGER over `octets` (leading zero when the high bit is set).
+fn der_integer(octets: &[u8]) -> Vec<u8> {
+    let mut content = Vec::new();
+    if octets.first().is_some_and(|byte| byte & 0x80 != 0) {
+        content.push(0);
+    }
+    content.extend_from_slice(octets);
+    der(0x02, &content)
+}
+
+fn ssh_string(value: &[u8]) -> Vec<u8> {
+    let mut out = (value.len() as u32).to_be_bytes().to_vec();
+    out.extend_from_slice(value);
+    out
+}
+
+/// T14: the PEM label and decoded body of every PEM private key type, with
+/// the key octets from `octets` (a fill or random bytes, never 0 first).
+fn pem_keys(octets: impl Fn(usize) -> Vec<u8>) -> Vec<(&'static str, Vec<u8>)> {
+    let integers = |lengths: &[usize]| -> Vec<u8> {
+        let mut content = der_integer(&[0]);
+        for length in lengths {
+            content.extend(der_integer(&octets(*length)));
+        }
+        der(0x30, &content)
+    };
+    let mut ec = der_integer(&[1]);
+    ec.extend(der(0x04, &octets(32)));
+    let mut pkcs8 = der_integer(&[0]);
+    pkcs8.extend(der(0x30, &der(0x06, &[0x2b, 0x65, 0x70])));
+    pkcs8.extend(der(0x04, &der(0x04, &octets(32))));
+    let mut encrypted = der(0x30, &der(0x06, b"\x2a\x86\x48\x86\xf7\x0d\x01\x05\x0d"));
+    encrypted.extend(der(0x04, &octets(96)));
+    let public = octets(32);
+    let mut public_blob = ssh_string(b"ssh-ed25519");
+    public_blob.extend(ssh_string(&public));
+    let mut private = vec![0x5e, 0xed, 0xc0, 0xde, 0x5e, 0xed, 0xc0, 0xde];
+    private.extend(ssh_string(b"ssh-ed25519"));
+    private.extend(ssh_string(&public));
+    private.extend(ssh_string(&octets(64)));
+    private.extend(ssh_string(b""));
+    private.extend([1, 2, 3, 4, 5]);
+    let mut openssh = b"openssh-key-v1\0".to_vec();
+    for field in [&b"none"[..], b"none", b""] {
+        openssh.extend(ssh_string(field));
+    }
+    openssh.extend(1u32.to_be_bytes());
+    openssh.extend(ssh_string(&public_blob));
+    openssh.extend(ssh_string(&private));
+    let mut pgp = vec![0xc5, 0, 0x04, 0x65, 0x00, 0x00, 0x00, 0x16];
+    pgp.extend(octets(64));
+    pgp[1] = (pgp.len() - 2) as u8;
+    vec![
+        (
+            "RSA PRIVATE KEY",
+            integers(&[128, 3, 128, 64, 64, 64, 64, 64]),
+        ),
+        ("DSA PRIVATE KEY", integers(&[128, 20, 128, 128, 20])),
+        ("EC PRIVATE KEY", der(0x30, &ec)),
+        ("PRIVATE KEY", der(0x30, &pkcs8)),
+        ("ENCRYPTED PRIVATE KEY", der(0x30, &encrypted)),
+        ("OPENSSH PRIVATE KEY", openssh),
+        ("PGP PRIVATE KEY BLOCK", pgp),
+    ]
+}
+
+/// The PEM block of `label` around the base64 of `body` in lines of 64
+/// characters (70 for OpenSSH); the armor is assembled at test time.
+fn pem_block(label: &str, body: &[u8]) -> String {
+    let width = if label == "OPENSSH PRIVATE KEY" {
+        70
+    } else {
+        64
+    };
+    let encoded = base64(body, false);
+    let lines: Vec<&str> = encoded
+        .as_bytes()
+        .chunks(width)
+        .map(|line| std::str::from_utf8(line).unwrap())
+        .collect();
+    let armor = |side: &str| format!("-----{side} {label}-----");
+    let checksum = if label.starts_with("PGP") {
+        "\n=Qx7v"
+    } else {
+        ""
+    };
+    format!(
+        "{}\n{}{checksum}\n{}",
+        armor("BEGIN"),
+        lines.join("\n"),
+        armor("END")
+    )
+}
+
+/// Carriers of a PEM block in DE and EN: YAML, JSON, TOML, HCL, code, a
+/// Jupyter cell and mail.
+fn pem_carriers(block: &str) -> Vec<String> {
+    let escaped = block.replace('\n', "\\n");
+    let cell = block
+        .lines()
+        .map(|line| format!("    \"{line}\\n\""))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    vec![
+        format!("server:\n  tls:\n    private_key: \"{escaped}\"\n"),
+        format!("{{\n  \"zugang\": {{\n    \"privater_schluessel\": \"{escaped}\"\n  }}\n}}\n"),
+        format!("[tls]\nprivate_key = \"\"\"\n{block}\n\"\"\"\n"),
+        format!("resource \"tls_cert\" \"app\" {{\n  private_key_pem = <<EOT\n{block}\nEOT\n}}\n"),
+        format!("SIGNING_KEY = \"\"\"{block}\"\"\"\n"),
+        format!(
+            "{{\n \"cells\": [\n  {{\n   \"cell_type\": \"code\",\n   \"source\": [\n    \"KEY = \\\"\\\"\\\"\\n\",\n{cell},\n    \"\\\"\\\"\\\"\\n\"\n   ]\n  }}\n ]\n}}\n"
+        ),
+        format!("Hallo Team,\n\nanbei der private Schlüssel für den Server:\n\n{block}\n\nViele Grüße\n"),
+        format!("Hi team,\n\nhere is the private key for the server:\n\n{block}\n\nBest regards\n"),
+    ]
+}
+
+#[test]
+fn private_key_blocks_with_example_key_octets_are_silent_in_de_and_en() {
+    for word in [
+        "EXAMPLEKEY",
+        "TESTKEY",
+        "deadbeef",
+        "1234567890",
+        "0123456789",
+    ] {
+        for (label, body) in pem_keys(|length| fill(word, length).into_bytes()) {
+            for text in pem_carriers(&pem_block(label, &body)) {
+                assert_silent(&text);
+            }
+        }
+    }
+}
+
+#[test]
+fn private_key_blocks_with_random_key_octets_stay_detected() {
+    for seed in 0..20 {
+        let keys = pem_keys(|length| {
+            let mut octets = random_bytes(seed * 1000 + length as u64, length);
+            octets[0] |= 1;
+            octets
+        });
+        for (label, body) in keys {
+            for text in pem_carriers(&pem_block(label, &body)) {
+                assert!(
+                    matched_rules(&scan(&text))
+                        .iter()
+                        .any(|rule| rule == "dlp_private_key_block"),
+                    "random {label} lost in {text:?}"
+                );
+            }
+        }
+    }
+}
