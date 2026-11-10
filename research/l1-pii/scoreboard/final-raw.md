@@ -26,7 +26,12 @@ erreichbares Gold gegen tuned) ab.
   Neunziffern in Gretel). Die Lücken je ID stehen unten; jede liegt unter einer festgehaltenen
   Entscheidung (`known_gaps` in [`../entity_map.yaml`](../entity_map.yaml)) oder an Gold mit ungültiger
   Prüfziffer (README, Q-RAW). Schließen ließen sie sich nur mit gelockerten Validatoren oder revidierten
-  Entscheidungen.
+  Entscheidungen. Nach T38 (Entscheidung 2026-11-09) lautet die öffentliche Aussage: **M1 ist nicht
+  erreicht**, ohne „roh, außer …“. Das Opt-in-Kompatibilitätsprofil
+  [`docs/how-to/pii-presidio-compat.gates.json`](../../../docs/how-to/pii-presidio-compat.gates.json)
+  (Bare-Profil plus Loopback-/unspezifizierte IPs und von der SSA nie vergebene SSNs) hebt auf Dev
+  IP auf 98,8 und US-SSN auf 92,9 und hält damit gegen tuned 22/25; GSTIN, NRIC/FIN (Gold mit ungültiger
+  Prüfziffer) und NINO (Gold-Span mit Leerzeichen) bleiben offen. Es ist keine Engine des Urteils.
 - **M2** hält gegen beide Profile nur mit `balanced-bare` (Steuer-ID, ELSTER-Steuernummer, LANR, BSNR
   blank, seit Q-RAW mit `validators::steuer_id_bare`). `balanced` allein hält gegen default, gegen tuned
   nicht (63,2 < 87,0). Eine öffentliche Aussage zu M2 lautet deshalb „mit Bare-Profil“.

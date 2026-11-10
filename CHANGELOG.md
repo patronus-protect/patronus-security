@@ -24,6 +24,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
   unencrypted OpenSSH key and the User ID and User Attribute packets of a PGP key are dropped
   before the check, so a real key with a repetitive comment (`abcabcabcabcabcabc`) stays a
   finding.
+- Detection change: opt-in compatibility rules and profile (T38, decision option b).
+  `pii_ipv4_local_compat` and `pii_ipv6_local_compat` (new `validators::ip_address_local`) report
+  loopback and unspecified addresses, also IPv4-mapped and with a prefix length (`127.0.0.1`,
+  `0.0.0.0`, `::`, `::1`, `::ffff:127.0.0.1`, `::/0`; multicast stays out, decision D-IP); a bare `::`
+  must follow a word at the end of its line. `pii_ssn_us_unassigned_compat` (new
+  `validators::us_ssn_unassigned`) reports grouped SSNs that the SSA never assigned (area 9xx outside
+  the ITIN groups, the advertising range `987-65-4320` to `4329`, the voided `078-05-1120` and
+  `219-09-9999`; decision B-SSN). The rules are off by default and, once the `rules` gate enables
+  them, report like the bare forms; the new profile `docs/how-to/pii-presidio-compat.gates.json` is
+  the bare profile plus these rules. Validators of the default rules are unchanged; `strict` and
+  `balanced` output with the default gates is unchanged. Dev, raw, EN, exact F1 with the profile:
+  presidio_favored IP 86.1 → 98.8 (Presidio default 100, tuned 96.2), US SSN 80.0 → 92.9 (default
+  100, tuned 88.9); neutral US SSN 82.1 → 80.7 (tuned 79.3). GSTIN and NRIC/FIN gold with invalid
+  check digits and the NINO span with whitespace stay open, so M1 is still not met (no "raw,
+  except …" claim).
 - Detection change: opt-in rules for bare letter-prefixed passport numbers (T37, decision option
   c). `pii_passport_number_us_bare` (US letter form `A12803456`, `validators::us_passport_number`),
   `pii_passport_number_two_letters_bare` (two letters and seven digits `XY9876543`, new

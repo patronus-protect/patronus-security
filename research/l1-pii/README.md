@@ -125,7 +125,50 @@ Gemessen am 2026-11-06 auf Dev (rohes Gold, exakte Spans, Presidio 2.2.364 `defa
   Engine, M2 nur auf Dev mit `balanced-bare`. Q-RAW ist erst erfüllt, wenn das Gate auf dem Head
   `MET` für M1 und M2 druckt (je Split eine Zeile `milestones <split> (balanced, …)` und
   `(balanced-bare, …)`), oder wenn eine festgehaltene Entscheidung des Owners die Abnahme ändert
-  (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt).
+  (etwa die `known_gaps` oben als Ausnahme der Rohsicht zulässt). Die Entscheidung T38 (2026-11-09)
+  lässt keine Ausnahme der Rohsicht zu: M1 bleibt offen, öffentliche Aussagen sagen das ohne
+  „roh, außer …“; das Kompatibilitätsprofil (Abschnitt T38) schließt IP und US-SSN gegen tuned, GSTIN,
+  NRIC/FIN und NINO bleiben offen.
+
+## Rohe M1-Lücken unter festgehaltenen Entscheidungen: Kompatibilitätsprofil (T38)
+
+TRIAGE 2026-W46, Bucket 3, Entscheidung 2026-11-09: Option (b). Ein Opt-in-Kompatibilitätsprofil neben
+dem Bare-Profil meldet Loopback-/unspezifizierte IPs und von der SSA nie vergebene, aber wohlgeformte
+SSNs; die Validatoren der Standardregeln bleiben unverändert. Option (a) („roh, außer …“ mit
+Ausnahmeliste im Scoreboard) ist verworfen: Das Scoreboard-Urteil bleibt unverändert roh, und
+öffentliche Aussagen nennen M1 schlicht **nicht erreicht**.
+
+- **Profil:** [`docs/how-to/pii-presidio-compat.gates.json`](../../docs/how-to/pii-presidio-compat.gates.json)
+  ist das Bare-Profil plus die drei Kompatibilitätsregeln (`*_compat`; Test
+  `the_compatibility_profile_adds_the_compat_rules_to_the_bare_profile`). Sie sind wie die Bare-Formen
+  standardmäßig aus (`pii::is_bare_rule`), melden eingeschaltet in jedem Modus als Wort im Fließtext
+  (Basis 35, Schwelle `balanced` 0,50) und weichen einem Standardtreffer eines anderen Labels.
+- **Regeln:** `pii_ipv4_local_compat` und `pii_ipv6_local_compat` (Muster von `pii_ipv4` und
+  `pii_ipv6_loopback`, neu `validators::ip_address_local`): Loopback und unspezifiziert, auch
+  IPv4-gemappt und mit Präfixlänge (`127.0.0.1`, `0.0.0.0`, `::`, `::1`, `::ffff:127.0.0.1`, `::/0`);
+  Multicast bleibt draußen. Das blanke `::` muss nach einem Wort am Zeilenende stehen (Code schreibt es
+  als Operator, in Anführungszeichen oder als reST-Literalblock). `pii_ssn_us_unassigned_compat`
+  (gruppierte Form, neu `validators::us_ssn_unassigned`): Bereich 9xx außerhalb der ITIN-Gruppen
+  (50–65, 70–88, 90–92, 94–99; die ITIN ist eine eigene ID), der Werbebereich `987-65-4320` bis `4329`,
+  die gesperrten `078-05-1120` und `219-09-9999`; Bereich 000/666, Gruppe 00, Serie 0000 und eine
+  wiederholte Ziffer bleiben draußen.
+- **Bleibt offen (in jedem Profil):** GSTIN und NRIC/FIN (Gold mit ungültiger Prüfziffer), NINO
+  (Gold-Span mit führendem Leerzeichen, T27), IPv4 in einer ungültigen IPv6-Kette (T28,
+  `foo2001:db8::10.0.0.1`) und die SSN-Gruppierungen 3-6 und 5-4 (`078-051121`, `07805-1121`).
+- **Messung (Dev, roh, EN, exakt; Kompatibilitätsprofil statt `balanced-bare`):** auf
+  `presidio_favored` IP 86,1 → 98,8 (default 100, tuned 96,2) und US-SSN 80,0 → 92,9 (default 100, tuned
+  88,9); M1 gegen default 23/25 (offen IP, US-SSN), gegen tuned 20/25 → 22/25 (offen GSTIN, NRIC/FIN,
+  NINO). `neutral` hält gegen beide Profile; US-SSN 82,1 → 80,7 (tuned 79,3) durch `987-65-4321` in
+  einer Gretel-Tabelle ohne Gold. HN-FP der Familien unverändert 0. **M1 bleibt nicht erreicht.** Das
+  Profil ist keine Engine des Gates (`balanced`, `balanced-bare`); es dient dem Vergleich mit Presidio.
+- **FP mit Profil (je Regel allein, `strict` / `balanced` gleich; `bare_rule_false_positive_report`):**
+  Dev-Benign-Code (37,8 MB) IPv4 9 Spans (0,24/MB), IPv6 5 (0,13/MB), SSN 0; Benign-Docs (7,5 MB) IPv4 2
+  (0,27/MB), sonst 0. Es sind echte Loopback-Werte im Code (`"127.0.0.1"`, `tcp6:[::1]:1666`), also das,
+  was die Regeln melden sollen. Vor der Zeilenregel für das blanke `::` meldete die IPv6-Regel 3 120
+  Spans im Benign-Code (reST-Literalblöcke, `'::'`, Haskell-Typen). PII-Hard-Negatives IPv4 3, IPv6 13,
+  SSN 8: alle absichtlich lokale bzw. nie vergebene Werte, die mit Standard-Gates negativ sind (D-IP,
+  B-SSN). ITINs (`911-70-1234`, `916-94-0980`) bleiben ohne SSN-Treffer. `strict` und `balanced` mit
+  Standard-Gates bitgleich (Goldens grün); die Regeln laufen nur, wenn das `rules`-Gate sie einschaltet.
 
 ## Blanke Passnummern im Bare-Profil (T37)
 
