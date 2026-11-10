@@ -492,6 +492,21 @@ class FakeEngine:
         output.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
+    def predict_baseline(self, tool: str, source: Path, output: Path) -> None:
+        """gitleaks finds every gold span, the other tools none; no FP on benign code."""
+        self.baseline_calls = getattr(self, "baseline_calls", []) + [(tool, source.name)]
+        if self.regress == "baseline":
+            raise OSError("no baseline binaries")
+        rows = []
+        for line in source.read_text().splitlines():
+            row = json.loads(line)
+            spans = [{"start_char": e["start"], "end_char": e["end"], "rule_id": "x", "group": e["label"],
+                      "entities": [e["entity"]], "groups": [e["label"]]}
+                     for e in row.get("entities") or []] if tool == "gitleaks" else []
+            rows.append({"id": row["id"], "evidence_spans": spans})
+        output.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
 class FakeLatency:
     """Stands in for latency_check: fixed 100 KiB p95 of base and head, records its calls."""
 
@@ -515,6 +530,7 @@ def run_gate(monkeypatch, capsys, tmp_path, splits, regress: str | None = None, 
     monkeypatch.setattr(MODULE, "predict_file", engine.predict_file)
     engine.latency = latency or FakeLatency()
     monkeypatch.setattr(MODULE, "latency_check", engine.latency)
+    monkeypatch.setattr(MODULE, "predict_baseline", engine.predict_baseline)
     dev, holdout = splits
     subprocess.run(["git", "checkout", "--quiet", head], cwd=repo, check=True)
     if holdout_only:  # the regression only shows on the holdout
@@ -529,8 +545,8 @@ def test_gate_passes_without_regression_and_reports_dev_only(monkeypatch, capsys
     code, out, engine = run_gate(monkeypatch, capsys, tmp_path, splits)
     assert code == 0
     assert "dev" in out and "holdout: no regression" in out and out.rstrip().endswith("PASS")
-    # The holdout appears only as a verdict, never with numbers or row ids.
-    holdout_lines = [line for line in out.splitlines() if "holdout" in line]
+    # The holdout appears only as a verdict and the milestone aggregates, never with row ids.
+    holdout_lines = [line for line in out.splitlines() if "holdout" in line and not line.startswith("milestones")]
     assert holdout_lines and all(not any(ch.isdigit() for ch in line.replace("holdout", "")) for line in holdout_lines)
     assert "h-openai" not in out
     reports = list((tmp_path / "cache" / "scoreboard" / "reports").rglob("*.json"))
@@ -802,3 +818,33 @@ def test_gate_scores_external_goldens_on_dev_in_the_extended_profile(monkeypatch
         assert "external span content.sql" in out
         if regress:
             assert "dev: REGRESSION f1.external.exact:content.sql" in out and "holdout: no regression" in out
+
+
+def test_gate_reports_milestones_per_split_in_the_tail_of_a_passing_run(monkeypatch, capsys, tmp_path, splits):
+    code, out, engine = run_gate(monkeypatch, capsys, tmp_path, splits)
+    assert code == 0
+    lines = out.rstrip().splitlines()
+    # The runner keeps the last 15 lines of a green scoreboard in the gate report.
+    tail = lines[-15:]
+    milestones = [line for line in tail if line.startswith("milestones ")]
+    assert [line.split(" ")[1] for line in milestones] == ["dev", "holdout"]
+    assert lines[-1] == "scoreboard: PASS" and lines[-3].startswith("milestones dev ")
+    assert all(" M1 " in line and " M2 " in line for line in milestones)
+    assert "h-openai" not in out
+    # Baselines scan carriers (all tools) and benign code (gitleaks, for FP/MB) per split, once.
+    calls = engine.baseline_calls
+    assert {tool for tool, name in calls if name == "carriers.jsonl"} == set(MODULE.BASELINE_TOOLS)
+    assert {tool for tool, name in calls if name != "carriers.jsonl"} == {"gitleaks"}
+    second = FakeEngine(engine.repo, engine.head)
+    monkeypatch.setattr(MODULE, "predict_baseline", second.predict_baseline)
+    monkeypatch.setattr(MODULE, "predict_file", second.predict_file)
+    monkeypatch.setattr(MODULE, "latency_check", FakeLatency())
+    assert MODULE.main(["gate", "--head", str(engine.repo), "--base-sha", run_gate.base, "--dev", str(splits[0]),
+                        "--holdout", str(splits[1]), "--cache", str(tmp_path / "cache")]) == 0
+    assert not getattr(second, "baseline_calls", [])  # cached per tool, pin and input
+
+
+def test_gate_names_only_the_error_type_when_milestones_cannot_be_measured(monkeypatch, capsys, tmp_path, splits):
+    code, out, _ = run_gate(monkeypatch, capsys, tmp_path, splits, regress="baseline")
+    assert code == 0  # milestones are reported, never gated
+    assert "milestones holdout: not measured (OSError)" in out and "no baseline binaries" not in out
