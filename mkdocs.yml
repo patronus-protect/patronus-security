@@ -114,6 +114,7 @@ nav:
       - Configuration: reference/configuration.md
       - L1 rule catalog: reference/l1-rule-catalog.md
       - L1 capabilities: reference/l1-capabilities.md
+      - DLP coverage & comparison: reference/dlp-comparison.md
       - Threat L1: reference/threat-l1.md
       - Result schema: reference/result-schema.md
       - Python API: python-api.md
