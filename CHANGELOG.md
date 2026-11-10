@@ -39,6 +39,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   100, tuned 88.9); neutral US SSN 82.1 → 80.7 (tuned 79.3). GSTIN and NRIC/FIN gold with invalid
   check digits and the NINO span with whitespace stay open, so M1 is still not met (no "raw,
   except …" claim).
+- Detection change (compatibility profile only, all modes): `pii_ipv6_local_compat` also reports
+  local IPv6 addresses with a leading zero group (`0::1`, `0:0:0:0:0:0:0:1`,
+  `0:0:0:0:0:0:0:0`, `0:0:0:0:0:ffff:127.0.0.1`), and no longer the subscript of an index or slice
+  in code (`items[::1]`, `items[0::1]`). The default rules are unchanged.
 - Detection change: opt-in rules for bare letter-prefixed passport numbers (T37, decision option
   c). `pii_passport_number_us_bare` (US letter form `A12803456`, `validators::us_passport_number`),
   `pii_passport_number_two_letters_bare` (two letters and seven digits `XY9876543`, new

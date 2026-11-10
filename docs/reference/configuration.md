@@ -255,7 +255,7 @@ Rust callers that use `NativeGates::all_enabled()` get the bare rules too; the l
 
 The compatibility rules (`*_compat`, T38) report values that the default rules reject by decision,
 not by form: `pii_ipv4_local_compat` and `pii_ipv6_local_compat` loopback and unspecified addresses
-(`127.0.0.1`, `0.0.0.0`, `::`, `::1`, `::ffff:127.0.0.1`, `::/0`; multicast stays out, decision
+(`127.0.0.1`, `0.0.0.0`, `::`, `::1`, `::ffff:127.0.0.1`, `::/0`, `0::1`; multicast stays out, decision
 D-IP), `pii_ssn_us_unassigned_compat` grouped SSNs that the SSA never assigned (area 900–999 such
 as the advertising range `987-65-4320` to `4329`, the voided `078-05-1120` and `219-09-9999`; area
 000 or 666, group 00, serial 0000 and one repeated digit stay out, decision B-SSN). They are off by
