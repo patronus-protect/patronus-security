@@ -34,6 +34,12 @@ const MAX_SPELLINGS: usize = 256;
 const MAX_CLASS_CHARS: usize = 16;
 /// Longest lead before a keyword for which a rule searches near its keywords.
 const MAX_LEAD: usize = 64;
+/// Lazy-DFA cache of a rule regex (the `regex` default is 2 MiB). The large
+/// case-insensitive rules (`dlp_cli_password`, `dlp_prose_secret`,
+/// `dlp_jwk_private_key`) outgrow the default on 100 KiB texts; the cache is
+/// then cleared again and again and the search falls back to the NFA, up to
+/// 100 times slower. The cache grows only as far as a search needs it.
+pub const RULE_DFA_CACHE_BYTES: usize = 16 << 20;
 /// A rule scans the whole text once its keyword windows would cover more than
 /// 1/`LOCAL_DENSITY` of it.
 const LOCAL_DENSITY: usize = 8;
@@ -236,8 +242,12 @@ struct Local {
 
 impl Local {
     fn anchored(&self) -> &meta::Regex {
-        self.anchored
-            .get_or_init(|| meta::Regex::new(self.pattern).expect("valid DLP rule regex"))
+        self.anchored.get_or_init(|| {
+            meta::Builder::new()
+                .configure(meta::Config::new().hybrid_cache_capacity(RULE_DFA_CACHE_BYTES))
+                .build(self.pattern)
+                .expect("valid DLP rule regex")
+        })
     }
 }
 
@@ -735,6 +745,54 @@ fn required_run(hir: &Hir, class: ValueClass) -> Run {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Whether the lazy DFA of `pattern` (configured as in `meta::Regex`)
+    /// gives up on `text` with a cache of `capacity` bytes and falls back
+    /// to the NFA.
+    fn dfa_gives_up(pattern: &str, text: &str, capacity: usize) -> bool {
+        use regex_automata::hybrid::dfa::DFA;
+        let dfa = DFA::builder()
+            .configure(
+                DFA::config()
+                    .cache_capacity(capacity)
+                    .minimum_cache_clear_count(Some(3))
+                    .minimum_bytes_per_state(Some(10)),
+            )
+            .build(pattern)
+            .expect("valid DLP rule regex");
+        let mut cache = dfa.create_cache();
+        let mut input = Input::new(text);
+        loop {
+            match dfa.try_search_fwd(&mut cache, &input) {
+                Err(_) => return true,
+                Ok(None) => return false,
+                Ok(Some(found)) => input.set_start(found.offset().max(input.start() + 1)),
+            }
+        }
+    }
+
+    #[test]
+    fn rule_dfa_cache_holds_a_100_kib_command_log() {
+        // H03: on 100 KiB of `curl` calls chained in one line the default
+        // 2 MiB cache of `dlp_cli_password` thrashes (every `curl` opens a
+        // window of up to 256 characters for its `-u`) and the search runs
+        // on the NFA.
+        let pattern = crate::detectors::dlp::dlp::DLP_PATTERNS
+            .iter()
+            .find(|rule| rule.name == "dlp_cli_password")
+            .expect("rule exists")
+            .pattern;
+        let mut text = String::new();
+        for call in 0..5_000 {
+            text.push_str(&format!(
+                "curl -sS -o out{call}.bin {} ",
+                "x".repeat(call % 97)
+            ));
+        }
+        text.truncate(100 * 1024);
+        assert!(dfa_gives_up(pattern, &text, 2 << 20));
+        assert!(!dfa_gives_up(pattern, &text, RULE_DFA_CACHE_BYTES));
+    }
 
     #[test]
     fn longest_run_counts_ascii_class_characters_only() {
