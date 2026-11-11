@@ -1050,6 +1050,7 @@ tasks:
       latency.md and final-raw.md updated
 
   - id: T40
+    status: done
     title: "M4 tolerance: native 100 KiB p95 median 11.1 ms over ten runs (main f23c5f8b), base 66fc95d0 10.65 ms on the same host; set a numeric tolerance and a measuring rule, or resume the performance loop (H06-7)?"
     type: perf
     deps: [T39]

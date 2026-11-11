@@ -551,7 +551,7 @@ in einem eigenen Prozess, ein Aufruf je Sample, nach Warmup:
 ```bash
 VIRTUAL_ENV=$PWD/.venv python3 scripts/l1_presidio/latency.py run \
   --presidio-python ~/ark-l1/presidio-venv/bin/python \
-  --output latency.json --markdown latency.md [--engines ark ark-native] [--check-m4]
+  --output latency.json --markdown latency.md [--engines ark ark-native] [--runs 5] [--check-m4]
 python3 scripts/l1_presidio/latency.py compare --base base.json --head head.json   # [--sizes …] [--tolerance-pct 10]
 ```
 
@@ -561,7 +561,13 @@ python3 scripts/l1_presidio/latency.py compare --base base.json --head head.json
 - **Ausgabe:** p50/p95/p99/Mittel/Max in ms je Eingabe und je Größe (DE + EN gepoolt), Init-Zeit,
   Spans je Eingabe als Plausibilitätsprüfung, Maschine (CPU, nutzbare Kerne), Load vor/nach jeder
   Engine, SHA-256 von Eingaben, nativem Modul bzw. Binary. `--markdown` schreibt die Tabellen.
-- **M4:** `m4` prüft jede ARK-Engine auf 100 KiB p95 ≤ 10 ms; `--check-m4` macht daraus Exit 1.
+- **Läufe:** `--runs N` (Standard 1) misst jede Engine N-mal im Wechsel mit einem Build; je Engine
+  bleibt die Zeile des Laufs mit dem mittleren 100-KiB-p95 (bei geradem N der untere), `runs_p95_ms`
+  hält das 100-KiB-p95 jedes Laufs.
+- **M4** (Entscheidung T40): `m4` nimmt je ARK-Engine den Median der 100-KiB-p95 über die Läufe; M4
+  hält, wenn er für `ark-native` ≤ 12 ms ist und mindestens fünf Läufe vorliegen. `ark`
+  (Python-Bindings) steht daneben, entscheidet aber nicht. `--check-m4` macht aus „nicht erfüllt“
+  Exit 1, also auch bei weniger als fünf Läufen.
 - **Regression:** `compare` vergleicht zwei Berichte derselben Maschine und derselben Eingaben
   (sonst Exit 2) und endet mit Exit 1, wenn das 100-KiB-p95 von `ark` um mehr als 10 % steigt
   (gemeinsame Akzeptanz im Backlog). Im Gate ist der Schritt noch nicht verdrahtet.

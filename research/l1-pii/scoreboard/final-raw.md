@@ -17,7 +17,7 @@ erreichbares Gold gegen tuned) ab.
 | M1 Parität EN | je gemeinsamer ID F1(ARK) ≥ F1(Presidio), je Familie | `balanced`: neutral 9/9 + 9/9, presidio_favored 21/25 (default) + 13/25 (tuned); `balanced-bare`: neutral 9/9 + 8/9, presidio_favored 21/25 + 19/25 | Gate-Bericht, Zeilen `milestones holdout (balanced, …)`, `(balanced-bare, …)` und `M1 gaps holdout` | **nicht erreicht** (mit und ohne Bare-Profil) |
 | M2 DE/EU | DE-Macro-F1 neutral ≥ Presidio + 15 pp, presidio_favored ≥ Presidio | `balanced-bare`: neutral 62,5 ≥ 39,2 / 36,2, presidio_favored 89,9 ≥ 6,6 / 87,0; `balanced`: presidio_favored 63,2 < 87,0 (tuned) | Gate-Bericht, Zeile `milestones holdout (balanced-bare, …)` | Dev **erreicht nur mit Bare-Profil** |
 | M3 Breite | ≥ 2× prüfziffervalidierte Einheiten von Presidio (35 → 70) | ARK 83, Presidio 35, gemeinsam 33 | – (zählt Code, keine Daten) | erreicht |
-| M4 Latenz | 100 KiB p95 ≤ 10 ms | nativ 9,774 ms, Python-Bindings 15,003 ms | – (feste Workloads) | erreicht (nativ, Entscheidung 2026-11-05) |
+| M4 Latenz | 100 KiB p95 ≤ 10 ms; Messregel T40: Median nativ über ≥ 5 VPS-Läufe ≤ 12 ms | nativ Median 10,257 ms über 5 Läufe (9,588–10,782; H06: 9,774), Python-Bindings 15,003 ms | – (feste Workloads) | erreicht (nativ, Entscheidungen 2026-11-05 und 2026-11-11) |
 | Immer | HN-FP ≤ Presidio je Familie; keine Entität verliert > 0,5 pp | HN-FP `balanced` und `balanced-bare` neutral 0 / 0 / 0, presidio_favored 0 / 7 / 0 (ARK / default / tuned) | Gate (Regressionen, neue HN-FP; Zeile `scores holdout`) | Dev erreicht |
 
 - **M1** hält auf `neutral` mit `balanced` gegen beide Profile, auf `presidio_favored` mit keiner
@@ -36,9 +36,12 @@ erreichbares Gold gegen tuned) ab.
   blank, seit Q-RAW mit `validators::steuer_id_bare`). `balanced` allein hält gegen default, gegen tuned
   nicht (63,2 < 87,0). Eine öffentliche Aussage zu M2 lautet deshalb „mit Bare-Profil“.
 - **M3** aus `python3 scripts/l1_presidio/count_validated.py count` (Zählregel T03), unverändert seit H05.
-- **M4** aus [`latency.md`](latency.md) (H06, VPS; DE + EN gepoolt), unverändert seit H05: nativ
-  9,774 ms, über die Python-Bindings 15,003 ms; Presidio default 13 634,6 ms, tuned 11 978,8 ms. Die
-  Bare-Regeln sind standardmäßig aus und ändern die Latenz mit Standard-Gates nicht (D-BARE).
+- **M4** aus [`latency.md`](latency.md) (VPS; DE + EN gepoolt). Seit T40 (2026-11-11) gilt der Median
+  der nativen 100-KiB-p95 über mindestens fünf Läufe, Grenze 12 ms (`latency.py run --engines
+  ark-native --runs 5 --check-m4`): 10,257 ms über fünf Läufe (9,588–10,782 ms, Quellen wie `main`
+  `8d2880b8`). H06 maß in einem Lauf nativ 9,774 ms, über die Python-Bindings 15,003 ms; Presidio
+  default 13 634,6 ms, tuned 11 978,8 ms. Die Bare-Regeln sind standardmäßig aus und ändern die
+  Latenz mit Standard-Gates nicht (D-BARE).
 - **Immer:** `balanced-bare` meldet auf `ark_authored` (berichtet, entscheidet nicht) 80 HN-FP: die
   Hard Negatives der Goldens sind zum Teil absichtlich blanke gültige Werte, die das Opt-in-Profil
   meldet (D-BARE). Presidio default 1 134, tuned 228.

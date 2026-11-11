@@ -215,24 +215,10 @@ class TestElf:
 
 
 class TestReport:
-    def test_assemble_checks_m4(self):
-        ok = MODULE.assemble([worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 6.0}),
-                              worker_result("presidio-tuned", {"short": 5, "4kib": 40, "100kib": 900})])
-        assert ok["m4"] == {"size": "100kib", "limit_ms": 10.0, "pass": True,
-                            "engines": {"ark": {"p95_ms": 6.0, "pass": True}}}
-        assert list(ok["engines"]) == ["ark", "presidio-tuned"]
-        slow = MODULE.assemble([worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 10.5})])
-        assert slow["m4"]["pass"] is False
-
-    def test_m4_needs_every_ark_engine(self):
-        report = MODULE.assemble([worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 12.0}),
-                                  worker_result("ark-native", {"short": 0.02, "4kib": 0.2, "100kib": 5.0})])
-        assert report["m4"]["engines"] == {"ark": {"p95_ms": 12.0, "pass": False},
-                                           "ark-native": {"p95_ms": 5.0, "pass": True}}
-        assert report["m4"]["pass"] is False
-
-    def test_assemble_without_ark_has_no_m4(self):
-        report = MODULE.assemble([worker_result("presidio-default", {"short": 5, "4kib": 40, "100kib": 900})])
+    def test_assemble_merges_engines_without_m4(self):
+        report = MODULE.assemble([worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 6.0}),
+                                  worker_result("presidio-tuned", {"short": 5, "4kib": 40, "100kib": 900})])
+        assert list(report["engines"]) == ["ark", "presidio-tuned"]
         assert "m4" not in report
 
     def test_assemble_rejects_different_workloads(self):
@@ -248,16 +234,119 @@ class TestReport:
             MODULE.assemble([worker_result("ark", {"short": 1, "4kib": 1, "100kib": 1}), other])
 
     def test_markdown_lists_engines_ratios_spans_and_m4(self):
-        report = MODULE.assemble([worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 6.0}),
-                                  worker_result("ark-native", {"short": 0.02, "4kib": 0.3, "100kib": 3.0}),
-                                  worker_result("presidio-tuned", {"short": 5, "4kib": 40, "100kib": 900})])
+        report = MODULE.combine([MODULE.assemble([
+            worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 6.0}),
+            worker_result("ark-native", {"short": 0.02, "4kib": 0.3, "100kib": 3.0}),
+            worker_result("presidio-tuned", {"short": 5, "4kib": 40, "100kib": 900})])] * 5)
         text = MODULE.markdown(report)
         assert "| ark |" in text and "| presidio-tuned |" in text
         assert "| presidio-tuned | 100× | 133× | 150× |" in text
         assert "| ark-native | 0.40× | 1.00× | 0.50× |" in text
         assert "| 100kib-de | 102400 |" in text
-        assert "M4 (ark 100kib p95 ≤ 10 ms): 6.000 ms, pass." in text
-        assert "M4 (ark-native 100kib p95 ≤ 10 ms): 3.000 ms, pass." in text
+        assert "Runs: 5; per engine the run with the median 100kib p95." in text
+        assert "M4 (ark-native 100kib p95, median of 5 runs ≤ 12 ms): 3.000 ms (runs 3.000–3.000), pass." in text
+        assert "ark 100kib p95, median of 5 runs: 6.000 ms (runs 6.000–6.000), reported." in text
+
+
+def run_report(native_p95, ark_p95=None):
+    """One assembled run with ark-native (and ark) at the given 100 KiB p95."""
+    results = [worker_result("ark-native", {"short": 0.02, "4kib": 0.2, "100kib": native_p95})]
+    if ark_p95 is not None:
+        results.insert(0, worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": ark_p95}))
+    return MODULE.assemble(results)
+
+
+class TestRuns:
+    def test_combine_keeps_the_median_run_per_engine(self):
+        runs = [run_report(native, ark) for native, ark in ((11.0, 15.0), (9.0, 17.0), (13.0, 14.0),
+                                                           (10.0, 16.0), (12.0, 18.0))]
+        report = MODULE.combine(runs)
+        assert report["runs"] == 5
+        native = report["engines"]["ark-native"]
+        assert native["sizes"]["100kib"]["p95_ms"] == 11.0
+        assert native["runs_p95_ms"] == [11.0, 9.0, 13.0, 10.0, 12.0]
+        assert report["engines"]["ark"]["sizes"]["100kib"]["p95_ms"] == 16.0
+        assert report["m4"] == {
+            "size": "100kib", "limit_ms": 12.0, "min_runs": 5, "runs": 5, "engine": "ark-native", "pass": True,
+            "engines": {"ark": {"p95_ms": 16.0, "runs_p95_ms": [15.0, 17.0, 14.0, 16.0, 18.0], "pass": False},
+                        "ark-native": {"p95_ms": 11.0, "runs_p95_ms": [11.0, 9.0, 13.0, 10.0, 12.0],
+                                       "pass": True}},
+        }
+
+    def test_m4_holds_up_to_the_limit_on_the_median(self):
+        assert MODULE.combine([run_report(12.0)] * 5)["m4"]["pass"]
+        assert not MODULE.combine([run_report(12.01)] * 5)["m4"]["pass"]
+        # one slow run does not decide, the median does
+        assert MODULE.combine([run_report(p95) for p95 in (11, 11, 11, 20, 20)])["m4"]["pass"]
+
+    def test_even_runs_use_the_mean_of_the_middle_two(self):
+        report = MODULE.combine([run_report(p95) for p95 in (10.0, 11.0, 13.0, 14.0, 15.0, 9.0)])
+        assert report["m4"]["engines"]["ark-native"]["p95_ms"] == 12.0
+        assert report["m4"]["pass"]
+        # the kept rows are a measured run, the lower median
+        assert report["engines"]["ark-native"]["sizes"]["100kib"]["p95_ms"] == 11.0
+
+    def test_m4_needs_five_runs(self):
+        report = MODULE.combine([run_report(5.0)] * 4)
+        assert report["m4"]["runs"] == 4 and report["m4"]["engines"]["ark-native"]["pass"]
+        assert report["m4"]["pass"] is False
+        assert "M4 (ark-native 100kib p95, median of 4 runs ≤ 12 ms): 5.000 ms (runs 5.000–5.000), " \
+               "FAIL (fewer than 5 runs)." in MODULE.markdown(report)
+
+    def test_m4_is_judged_on_ark_native(self):
+        python_only = MODULE.combine([MODULE.assemble([
+            worker_result("ark", {"short": 0.05, "4kib": 0.3, "100kib": 6.0})])] * 5)
+        assert python_only["m4"]["pass"] is False
+        presidio = MODULE.combine([MODULE.assemble([
+            worker_result("presidio-default", {"short": 5, "4kib": 40, "100kib": 900})])] * 5)
+        assert "m4" not in presidio and presidio["runs"] == 5
+
+    def test_combine_rejects_runs_that_differ(self):
+        with pytest.raises(MODULE.LatencyError):
+            MODULE.combine([])
+        with pytest.raises(MODULE.LatencyError):
+            MODULE.combine([run_report(5.0), run_report(5.0, 9.0)])
+        elsewhere = run_report(5.0)
+        elsewhere["machine"] = {"cpu": "elsewhere", "cpus": 2}
+        with pytest.raises(MODULE.LatencyError):
+            MODULE.combine([run_report(5.0), elsewhere])
+
+    def test_run_measures_every_engine_once_per_run_in_turn(self, monkeypatch, tmp_path):
+        calls = []
+        p95s = iter([10.0, 15.0, 11.0, 16.0, 13.0, 14.0, 9.0, 17.0, 12.0, 18.0])
+
+        def fake_native(binary, samples, budget_s):
+            calls.append("ark-native")
+            return worker_result("ark-native", {"short": 0.02, "4kib": 0.2, "100kib": next(p95s)})
+
+        def fake_worker(python, engine, args, env):
+            calls.append(engine)
+            return worker_result(engine, {"short": 0.05, "4kib": 0.3, "100kib": next(p95s)})
+
+        builds = []
+        monkeypatch.setattr(MODULE, "build_native", lambda repo, cargo: builds.append("native") or tmp_path)
+        monkeypatch.setattr(MODULE, "measure_native", fake_native)
+        monkeypatch.setattr(MODULE, "run_worker", fake_worker)
+        output, markdown = tmp_path / "latency.json", tmp_path / "latency.md"
+        code = MODULE.main(["run", "--engines", "ark-native", "presidio-tuned", "--runs", "5", "--check-m4",
+                            "--output", str(output), "--markdown", str(markdown)])
+        assert code == 0
+        assert calls == ["ark-native", "presidio-tuned"] * 5 and builds == ["native"]
+        report = json.loads(output.read_text())
+        assert report["runs"] == 5
+        assert report["m4"]["engines"]["ark-native"] == {"p95_ms": 11.0, "runs_p95_ms": [10.0, 11.0, 13.0, 9.0, 12.0],
+                                                         "pass": True}
+        assert report["engines"]["presidio-tuned"]["runs_p95_ms"] == [15.0, 16.0, 14.0, 17.0, 18.0]
+        assert "median of 5 runs" in markdown.read_text()
+
+    def test_check_m4_fails_a_single_run_and_runs_must_be_positive(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(MODULE, "build_native", lambda repo, cargo: tmp_path)
+        monkeypatch.setattr(MODULE, "measure_native", lambda binary, samples, budget_s: worker_result(
+            "ark-native", {"short": 0.02, "4kib": 0.2, "100kib": 5.0}))
+        args = ["run", "--engines", "ark-native", "--output", str(tmp_path / "latency.json")]
+        assert MODULE.main([*args, "--check-m4"]) == 1
+        assert MODULE.main(args) == 0
+        assert MODULE.main([*args, "--runs", "0"]) == 2
 
 
 class TestCompare:
@@ -329,7 +418,7 @@ class TestNativeWorker:
         assert result["results"]["100kib-de"]["spans"] == 101
         assert result["sizes"]["4kib"]["samples"] == 4
         assert result["info"]["binary_sha256"] == hashlib.sha256(binary.read_bytes()).hexdigest()
-        assert MODULE.assemble([result])["m4"]["engines"]["ark-native"]["pass"]
+        assert MODULE.combine([MODULE.assemble([result])] * 5)["m4"]["pass"]
 
     def test_rejects_missing_workloads_and_failures(self, tmp_path):
         partial = self.fake_binary(tmp_path, f"#!{sys.executable}\nprint('{{\"id\": \"short-de\", "

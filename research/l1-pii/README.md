@@ -337,7 +337,7 @@ englische Recognizer einer `shared`-ID).
 | M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio) gegen `default` und `tuned`, auf rohem Gold (M-RAW) |
 | M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio + 15 pp und auf `presidio_favored` ≥ Presidio, je gegen `default` und `tuned`, auf rohem Gold (Regel unten, M-RAW) |
 | M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
-| M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
+| M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen. Messregel (T40): Median der nativen 100-KiB-p95 über mindestens fünf VPS-Läufe ≤ 12 ms |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
 
 PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an
@@ -347,6 +347,13 @@ tuned, siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.
 **M4 gilt als erreicht** (entschieden am 2026-11-05): nativ 100 KiB p95 9,8 ms (≤ 10 ms seit H06-2);
 die Python-Bindings bleiben bei etwa 15 ms, weitere Durchgänge der Performance-Schleife lagen im
 Rauschen. Die Schleife endet mit H06-6; H05 berichtet nativ und Python getrennt.
+
+**M4-Messregel** (T40, entschieden am 2026-11-11): Ein einzelner Lauf auf der geteilten VPS streut
+um mehr als 2 ms (zehn Läufe von `main` `f23c5f8b`: 10,21–12,48 ms). M4 hält, wenn der Median der
+nativen 100-KiB-p95 über mindestens fünf VPS-Läufe ≤ 12 ms ist:
+`scripts/l1_presidio/latency.py run --engines ark-native --runs 5 --check-m4` (Exit 1 sonst). Das
+10-ms-Budget bleibt das Ziel; die 2 ms decken die Streuung des Hosts. Keine weitere
+Performance-Schleife (H06-7 bleibt aus); Änderungen gegen ihre Basis prüft weiter `compare` (+10 %).
 
 Für M1 und M2 zählt seit M-RAW nur die rohe Sicht gegen Presidio `default` und `tuned`, mit ARK
 `balanced` oder `balanced-bare` (Abschnitt oben); die folgenden Zahlen aus H05 sind auf erreichbarem

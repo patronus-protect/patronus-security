@@ -11,6 +11,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- PII M4 measuring rule (T40, no detection change). `scripts/l1_presidio/latency.py run --runs N`
+  measures every engine N times in turn from one build, keeps per engine the run with the median
+  100 KiB p95 and records every run's p95 (`runs_p95_ms`). M4 is judged on the median of the
+  `ark-native` 100 KiB p95 over at least five runs, at most 12 ms (decision 2026-11-11: the shared
+  VPS spreads a single run by more than 2 ms); `--check-m4` exits 1 otherwise, also with fewer than
+  five runs. The Python binding is reported next to it and no longer decides M4.
 - DLP final report and comparison docs (H-FINAL, no detection change). New page
   `docs/reference/dlp-comparison.md` (ARK vs. gitleaks, TruffleHog and detect-secrets on the
   dev split, breadth counts, coverage matrix incl. Google Cloud DLP and a qualitative Microsoft
