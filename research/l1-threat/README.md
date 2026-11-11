@@ -129,8 +129,10 @@ Grundsätze:
 `score`/`rule_score` über das Trait `ScoredPattern` und die Normalisierungspunkte je Kategorie
 (`Category::normalisation_points`: PII −10, DLP 0, Injection/Threat +10). `PiiPattern` und `DlpPattern`
 implementieren `ScoredPattern`; die Kopien in `pii/score.rs` und `dlp/score.rs` sind entfernt, Scores
-bit-identisch. Offen für S01: Core-Module (Anker-Scanner, `AnchorGate`, `Fields`, Kontext-Engine,
-Klausel-/Negations-/Zitatspannen) unter einen gemeinsamen Core ziehen, Injection/Threat-Regeln mit
+bit-identisch. Die Kontext-Engine (Fenster, Wortgrenzen, `Evidence`, `ProximityLexicon`) liegt in
+`ark-core/src/detectors/context.rs`; PII baut je Label ein `ProximityLexicon`, DLP hängt nicht mehr an
+PII. Offen für S01: übrige Core-Teile (Anker-Scanner, `AnchorGate`, `Fields`, Klausel-/Negations-/
+Zitatspannen) unter ein gemeinsames Core-Modul ziehen, Injection/Threat-Regeln mit
 `base_score`/Validator-Stärke und Ankerpunkten auf `ScoredPattern`, Modus je Kategorie,
 `matched_rules[].context` für Injection/Threat. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
 die Filter `pii` und `dlp` aufnehmen (der Runner darf `.github/` nicht ändern).

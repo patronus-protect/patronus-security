@@ -30,7 +30,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `ValidatorStrength` moves from `detectors::dlp::dlp` and `detectors::pii::score` to
   `detectors::score`; Rust callers update their imports. The 10-point reduction for personal data
   that only spelled-out normalisation reveals is now the normalisation points of the PII category
-  (`Category::normalisation_points`). **Detection change:** none; scores, spans and
+  (`Category::normalisation_points`). The proximity context engine (windows, `Side`, `Evidence`,
+  `ProximityLexicon`, `BEFORE_WINDOW`, `AFTER_WINDOW`) moves from `detectors::pii::context` to
+  `detectors::context` and serves both categories. **Detection change:** none; scores, spans and
   `matched_rules` are unchanged.
 - The Threat L1 detector now ships in the `patronus-ark-core` crate
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
