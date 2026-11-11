@@ -67,6 +67,7 @@ tasks:
 
   # ── S (first): base structure ─────────────────────────────────────
   - id: S01
+    status: done
     title: Base structure — one core (normalisation views, tokenizer, anchor scanner, AnchorGate, Fields, context engine, clause/negation/quote spans) and one pattern form for all categories in ark-core; PII and DLP moved onto it (PiiPattern/DlpPattern become the shared form), then injection/threat; normalisation points per category (PII −10, attack categories +); per-category modes; matched_rules[].context
     type: engine
     deps: [X02]
