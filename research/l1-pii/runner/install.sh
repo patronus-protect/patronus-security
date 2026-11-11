@@ -2,19 +2,21 @@
 # Install the runner from a reviewed checkout. Runs on the VPS as ubuntu.
 # The runner is copied, not linked: agent branches cannot change the gate.
 # Host settings (written to ~/ark-l1/host.env, loaded by the units; see run.sh):
-#   ARK_L1_LANE=a|b       lane of the DLP programme when two hosts share its backlog (unset: all tasks)
+#   ARK_L1_LANE=a|b       lane of the DLP and threat programmes when two hosts share a backlog (unset: all tasks)
 #   ARK_L1_WHEN_IDLE=pii  the other programmes start new work only while PII has nothing to do
 # e.g. `ARK_L1_LANE=a ./install.sh` on the DLP host, `ARK_L1_LANE=b ARK_L1_WHEN_IDLE=pii ./install.sh`
-# on the PII host that also runs the second DLP lane.
+# on the PII host that also runs the second DLP and threat lane.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$HOME/ark-l1"
 DLP_ROOT="$HOME/ark-dlp"
+THREAT_ROOT="$HOME/ark-threat"
 
 mkdir -p "$ROOT"/{bin,state,logs,worktrees,gate,transfer,target,target-gate,gate-home,cache,data/dev,holdout}
 mkdir -p "$DLP_ROOT"/{state,logs,worktrees,gate,transfer,cache,data/dev,holdout}
-chmod 700 "$ROOT/holdout" "$ROOT/state" "$DLP_ROOT/holdout" "$DLP_ROOT/state"
+mkdir -p "$THREAT_ROOT"/{state,logs,worktrees,gate,transfer,cache,data/dev,holdout}
+chmod 700 "$ROOT/holdout" "$ROOT/state" "$DLP_ROOT/holdout" "$DLP_ROOT/state" "$THREAT_ROOT/holdout" "$THREAT_ROOT/state"
 # Gate builds use their own cargo home; seed it once from the host registry to avoid a full download.
 if [ ! -d "$ROOT/gate-home/cargo/registry" ] && [ -d "$HOME/.cargo/registry" ]; then
   mkdir -p "$ROOT/gate-home/cargo" && cp -a "$HOME/.cargo/registry" "$ROOT/gate-home/cargo/"
@@ -28,7 +30,7 @@ install -m 755 "$SRC/run.sh" "$ROOT/bin/"
 sed "1s|.*|#!$ROOT/runner-venv/bin/python|" "$SRC/ark-l1" > "$ROOT/bin/ark-l1"
 chmod 755 "$ROOT/bin/ark-l1"
 install -m 755 "$SRC/secret_check.py" "$ROOT/bin/"
-# Health check and repair ("doctor") per programme: ark-doctor@pii.timer, ark-doctor@dlp.timer.
+# Health check and repair ("doctor") per programme: ark-doctor@pii.timer, ark-doctor@dlp.timer, ark-doctor@threat.timer.
 install -m 755 "$SRC/ark-doctor.sh" "$ROOT/bin/"
 install -m 644 "$SRC/ark-doctor-check.py" "$SRC/DOCTOR_PROMPT.md" "$ROOT/bin/"
 mkdir -p "$ROOT/doctor"
@@ -40,16 +42,20 @@ mkdir -p "$ROOT/doctor"
 mv "$ROOT/host.env.new" "$ROOT/host.env"
 install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 install -m 644 "$SRC/../../dlp/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.dlp.md"
+install -m 644 "$SRC/../../l1-threat/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.threat.md"
 install -m 644 "$SRC/AGENT_PROMPT.restack.md" "$ROOT/bin/AGENT_PROMPT.restack.md"
 install -m 644 "$SRC/AGENT_PROMPT.review.md" "$ROOT/bin/AGENT_PROMPT.review.md"
 install -m 644 "$SRC/AGENT_PROMPT.verify.md" "$ROOT/bin/AGENT_PROMPT.verify.md"
 sudo install -m 644 "$SRC/ark-l1.service" "$SRC/ark-l1.timer" "$SRC/ark-dlp.service" "$SRC/ark-dlp.timer" \
+  "$SRC/ark-threat.service" "$SRC/ark-threat.timer" \
   "$SRC/ark-doctor@.service" "$SRC/ark-doctor@.timer" /etc/systemd/system/
 sudo systemctl daemon-reload
 gh label create ark-l1 --repo patronus-protect/patronus-security --color 5319e7 \
   --description "Scheduled L1-PII run" --force >/dev/null || echo "label not created (token lacks Issues permission); create it once by hand"
 gh label create ark-dlp --repo patronus-protect/patronus-security --color 0e8a16 \
   --description "Scheduled L1-DLP run" --force >/dev/null || echo "label ark-dlp not created; create it once by hand"
+gh label create ark-threat --repo patronus-protect/patronus-security --color b60205 \
+  --description "Scheduled L1-Threat run" --force >/dev/null || echo "label ark-threat not created; create it once by hand"
 [ -f "$ROOT/secrets.env" ] || echo "missing $ROOT/secrets.env (CLAUDE_CODE_OAUTH_TOKEN=...)"
 echo "installed; enable the timers of the programmes this host runs, e.g.:"
-echo "  sudo systemctl enable --now ark-l1.timer ark-dlp.timer ark-doctor@pii.timer ark-doctor@dlp.timer"
+echo "  sudo systemctl enable --now ark-l1.timer ark-dlp.timer ark-threat.timer ark-doctor@pii.timer ark-doctor@dlp.timer ark-doctor@threat.timer"

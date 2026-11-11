@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# One scheduled L1 run (programme pii or dlp): pick a task, let a sandboxed Claude Code session
+# One scheduled L1 run (programme pii, dlp or threat): pick a task, let a sandboxed Claude Code session
 # work on it, gate the result independently, wait for green GitHub CI, publish a ready stacked PR
 # or block the task.
-# Usage: run.sh [--program pii|dlp]
+# Usage: run.sh [--program pii|dlp|threat]
 # Host settings (units: EnvironmentFile ~/ark-l1/host.env, written by install.sh): ARK_L1_LANE, the
 # lane of a programme shared by two hosts (see ark-l1); ARK_L1_WHEN_IDLE, the programme with priority
 # on this host: the other programmes start new work only while it is idle.
@@ -14,9 +14,11 @@ SHARED="${ARK_L1_ROOT:-$HOME/ark-l1}"
 case "$PROGRAM" in
   pii) ROOT="$SHARED" ;;
   dlp) ROOT="$(dirname "$SHARED")/ark-dlp" ;;
+  threat) ROOT="$(dirname "$SHARED")/ark-threat" ;;
   *) echo "unknown programme $PROGRAM"; exit 2 ;;
 esac
 DLP_ROOT="$(dirname "$SHARED")/ark-dlp"
+THREAT_ROOT="$(dirname "$SHARED")/ark-threat"
 BIN="$SHARED/bin"
 L1=("$BIN/ark-l1" --program "$PROGRAM")
 MAX_ROUNDS=3
@@ -155,7 +157,7 @@ $feedback"
     -p ProtectHome=read-only \
     -p PrivateTmp=yes \
     -p "ReadWritePaths=-$WORKTREE -$SHARED/target -$HOME/.cargo -$HOME/.rustup -$HOME/.cache -$HOME/.claude -$HOME/.claude.json -$HOME/.local/state" \
-    -p "InaccessiblePaths=-$SHARED/holdout -$SHARED/secrets.env -$SHARED/state -$SHARED/cache -$SHARED/gate -$SHARED/transfer -$DLP_ROOT/holdout -$DLP_ROOT/state -$DLP_ROOT/cache -$DLP_ROOT/gate -$DLP_ROOT/transfer -$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
+    -p "InaccessiblePaths=-$SHARED/holdout -$SHARED/secrets.env -$SHARED/state -$SHARED/cache -$SHARED/gate -$SHARED/transfer -$DLP_ROOT/holdout -$DLP_ROOT/state -$DLP_ROOT/cache -$DLP_ROOT/gate -$DLP_ROOT/transfer -$THREAT_ROOT/holdout -$THREAT_ROOT/state -$THREAT_ROOT/cache -$THREAT_ROOT/gate -$THREAT_ROOT/transfer -$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
     -p RuntimeMaxSec="$AGENT_MAX_SEC" \
     -p CPUQuota=500% \
     -p MemoryMax=9G \

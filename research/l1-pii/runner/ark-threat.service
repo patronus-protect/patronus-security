@@ -1,0 +1,14 @@
+[Unit]
+Description=ARK L1-Threat scheduled run (one backlog task)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+EnvironmentFile=-/home/ubuntu/ark-l1/host.env
+ExecStart=/home/ubuntu/ark-l1/bin/run.sh --program threat
+TimeoutStartSec=24h
+Nice=5
