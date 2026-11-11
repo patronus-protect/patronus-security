@@ -20,6 +20,7 @@ sources:
   repo: https://github.com/Agent-Threat-Rule/agent-threat-rules
   commit: a0b314dfd24ea33ae63225106771b692459ff546
   licence: MIT
+  licence_file: LICENSE
   extractor: atr
   clone: Agent-Threat-Rule_agent-threat-rules
   paths:
@@ -68,6 +69,8 @@ sources:
   repo: https://github.com/luckyPipewrench/pipelock
   commit: d97bee5b563357517fa4c7efaf0eaf2cd5663d26
   licence: Apache-2.0
+  licence_file: LICENSE
+  note: 'Core is Apache-2.0; enterprise/ is Elastic License 2.0 (NOTICE) and is not read. Rules: response-scanning defaults (injection), shipped DLP presets (out of scope), tool-description poison patterns.'
   extractor: pipelock_go
   clone: luckyPipewrench_pipelock
   paths:
@@ -89,6 +92,8 @@ sources:
   repo: https://github.com/cisco-ai-defense/mcp-scanner
   commit: 9ff8fc84b792aae315a838cf4e37b40ef46a0293
   licence: Apache-2.0
+  licence_file: LICENSE
+  note: One YARA rule per file; inventoried per YARA string.
   extractor: yara
   clone: cisco-ai-defense_mcp-scanner
   paths:
@@ -128,6 +133,8 @@ sources:
   repo: https://github.com/seojoonkim/prompt-guard
   commit: ce4356bfe714ce34e16704a5a6668d5c829309e1
   licence: MIT
+  licence_file: LICENSE
+  note: patterns.py lists (per-language dicts carry their language) and the tiered patterns/*.yaml; the YAML tiers repeat many patterns.py bodies (marked duplicate).
   extractor: prompt_guard
   clone: seojoonkim_prompt-guard
   paths:
@@ -224,6 +231,7 @@ sources:
   repo: https://github.com/deadbits/vigil-llm
   commit: f2b4c134d060bae81d29fad07003f3c657e63fc8
   licence: Apache-2.0
+  licence_file: LICENSE
   extractor: yara
   clone: deadbits_vigil-llm
   paths:
@@ -248,6 +256,8 @@ sources:
   repo: https://github.com/NVIDIA/NeMo-Guardrails
   commit: 093ae1fc7b3eb4701864e9604d6849977947713d
   licence: Apache-2.0
+  licence_file: LICENSE.md
+  note: Only the injection_detection YARA rules (code, SQL, template, XSS); the dialogue rails are LLM-based and not inventoried.
   extractor: yara
   clone: NVIDIA_NeMo-Guardrails
   paths:
@@ -264,6 +274,8 @@ sources:
   repo: https://github.com/meta-llama/PurpleLlama
   commit: 7e163b68c0af2ced1fae19ddbd471a8c36341519
   licence: MIT
+  licence_file: LlamaFirewall/LICENSE
+  note: LlamaFirewall carries its own MIT licence; the PurpleLlama root licence (Llama Community) does not apply to it. Only the regex scanner is deterministic; PromptGuard and AlignmentCheck are models and CodeShield is Semgrep-based.
   extractor: python_re
   clone: meta-llama_PurpleLlama
   paths:
@@ -278,6 +290,8 @@ sources:
   repo: https://github.com/NVIDIA/SkillSpector
   commit: 5f0f73dd204ad2454cca4ad63b06e60ad1ec3648
   licence: Apache-2.0
+  licence_file: LICENSE
+  note: Static YARA layer only; malware.yar.b64 is an encoded third-party signature pack and is not read.
   extractor: yara
   clone: NVIDIA_SkillSpector
   paths:
@@ -308,6 +322,8 @@ sources:
   repo: https://github.com/MaxwellCalkin/sentinel-ai
   commit: 876aff3cdbca15955b0e649cc19117730b10a203
   licence: Apache-2.0
+  licence_file: LICENSE
+  note: Scanner modules under sentinel/scanners; one entry per re.compile.
   extractor: python_re
   clone: MaxwellCalkin_sentinel-ai
   paths:
@@ -342,13 +358,55 @@ sources:
   repo: https://github.com/TryMightyAI/citadel
   commit: 66f3ca490a6a7768ec5300aa7bad5bff15d69c68
   licence: Apache-2.0
+  licence_file: LICENSE
+  note: The research census named citadel-ai/citadel, which no longer resolves; the scanner lives at TryMightyAI/citadel. Pattern registry plus the scorer and multi-turn pattern tables.
   extractor: citadel_go
   clone: TryMightyAI_citadel
   paths:
   - pkg/patterns/categories.go
   - pkg/ml/patterns.go
   - pkg/ml/multiturn_patterns.go
+  - pkg/ml/scorer.go
   category_map:
+  - match: ^re[A-Z]
+    out_of_scope: secrets, keys and PII formats in text, covered by DLP and PII
+  - match: ^xxeAttackPatterns$
+    out_of_scope: XML external entity payloads, application security
+  - match: ^danJailbreakPatterns$
+    classes:
+    - jailbreak
+    - '*'
+  - match: ^PolicyInjectionPatterns$
+    classes:
+    - jailbreak
+    family: policy_spoof
+  - match: ^FlipAttackPatterns$
+    classes:
+    - jailbreak
+    family: decoded_jailbreak
+  - match: ^iclPatternRe$
+    classes:
+    - jailbreak
+    family: many_shot
+  - match: ^dangerousPatternRe$
+    classes:
+    - harmful_content
+    family: hazard_mention
+  - match: ^systemPromptExtractionPatterns$
+    classes:
+    - prompt_extraction
+    - '*'
+  - match: ^buriedAttackPatterns$
+    classes:
+    - instruction_injection
+    - '*'
+  - match: ^toolPoisonPatterns$
+    classes:
+    - tool_poisoning
+  - match: ^markdownExfilPatterns$
+    classes:
+    - exfiltration
+    - instruction_injection
   - match: ^(Credential|PathTraversal|Deserialization)$
     out_of_scope: secrets in text and application-security payloads
   - match: ^(NetworkRecon|PrivilegeEsc)$
@@ -434,7 +492,7 @@ hints:
 - match: memory|rag[-_ ](and[-_ ]knowledge[-_ ]|memory[-_ ])?poisoning|cognitive[-_ ]rootkit|recommendation[-_ ]poisoning|cross[-_ ]conversation
   class: memory_poisoning
   family: persistent_directive
-- match: markdown[-_ ](image|url)|image[-_ ]uri|mdexfil|markdown exfil|rendered[-_ ]output
+- match: markdown[-_ ]?(image|url|exfil)|image[-_ ]uri|mdexfil|markdown exfil|rendered[-_ ]output
   class: exfiltration
   family: markdown_beacon
 - match: dns[-_ ]exfil|dns tunnel
@@ -633,7 +691,7 @@ counts:
   by_class:
     instruction_injection:
       any: {rules: 38, harvest: 27}
-      en: {rules: 407, harvest: 358}
+      en: {rules: 415, harvest: 366}
       de: {rules: 9, harvest: 7}
       fr: {rules: 8, harvest: 7}
       es: {rules: 11, harvest: 9}
@@ -647,7 +705,7 @@ counts:
       hi: {rules: 1, harvest: 1}
     jailbreak:
       any: {rules: 6, harvest: 5}
-      en: {rules: 386, harvest: 327}
+      en: {rules: 418, harvest: 359}
       de: {rules: 14, harvest: 12}
       fr: {rules: 9, harvest: 9}
       es: {rules: 11, harvest: 10}
@@ -658,13 +716,13 @@ counts:
       ko: {rules: 52, harvest: 44}
       vi: {rules: 8, harvest: 8}
     prompt_extraction:
-      en: {rules: 69, harvest: 62}
+      en: {rules: 102, harvest: 94}
       zh: {rules: 11, harvest: 11}
       ja: {rules: 5, harvest: 5}
       ko: {rules: 12, harvest: 12}
     tool_poisoning:
       any: {rules: 6, harvest: 2}
-      en: {rules: 142, harvest: 124}
+      en: {rules: 156, harvest: 138}
     agent_config_tampering:
       en: {rules: 109, harvest: 91}
       ko: {rules: 9, harvest: 6}
@@ -674,7 +732,7 @@ counts:
       de: {rules: 1, harvest: 1}
     exfiltration:
       any: {rules: 6, harvest: 5}
-      en: {rules: 230, harvest: 198}
+      en: {rules: 239, harvest: 207}
       de: {rules: 5, harvest: 5}
       fr: {rules: 3, harvest: 3}
       es: {rules: 4, harvest: 4}
@@ -700,7 +758,7 @@ counts:
       en: {rules: 47, harvest: 34}
     harmful_content:
       any: {rules: 2, harvest: 1}
-      en: {rules: 84, harvest: 77}
+      en: {rules: 85, harvest: 78}
       es: {rules: 1, harvest: 0}
       ru: {rules: 1, harvest: 1}
       zh: {rules: 1, harvest: 1}
@@ -712,8 +770,8 @@ counts:
       any: {rules: 5, harvest: 0}
       en: {rules: 140, harvest: 0}
     (out_of_scope):
-      any: {rules: 86, harvest: 0}
-      en: {rules: 457, harvest: 0}
+      any: {rules: 90, harvest: 0}
+      en: {rules: 484, harvest: 0}
   by_source:
     atr: {rules: 844, harvest: 590}
     pipelock: {rules: 108, harvest: 30}
@@ -724,7 +782,7 @@ counts:
     llamafirewall: {rules: 5, harvest: 1}
     skillspector: {rules: 168, harvest: 43}
     sentinel_ai: {rules: 155, harvest: 71}
-    citadel: {rules: 244, harvest: 79}
+    citadel: {rules: 372, harvest: 175}
 rules:
 - {source: atr, id: ATR-2026-00030, title: Cross-Agent Attack Detection, category: agent-manipulation/cross-agent-attack, path: rules/agent-manipulation/ATR-2026-00030-cross-agent-attack.yaml, kind: regex, class: instruction_injection, family: agent_directive, mapping: hint, languages: [en], harvest: false, sha: 29331b1fe09c, reason: not_portable}
 - {source: atr, id: ATR-2026-00032, title: Agent Goal Hijacking Detection, category: agent-manipulation/goal-hijacking, path: rules/agent-manipulation/ATR-2026-00032-goal-hijacking.yaml, kind: regex, class: instruction_injection, family: replacement_directive, mapping: hint, languages: [en], harvest: true, sha: 6a356e25b353}
@@ -3536,3 +3594,131 @@ rules:
 - {source: citadel, id: patterns.adversarial_suffix.1, title: adversarial suffix, category: adversarial_suffix, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [any], harvest: true, sha: feaa72a518c3}
 - {source: citadel, id: patterns.adversarial_suffix.2, title: adversarial suffix, category: adversarial_suffix, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [any], harvest: true, sha: ea93100037ed}
 - {source: citadel, id: patterns.adversarial_suffix.3, title: adversarial suffix, category: adversarial_suffix, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [any], harvest: true, sha: 0b2b0d8c44b4}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.1, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: c685a4740a2d}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.2, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: ac08b5072fc4}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.3, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: acbd9a04ee51}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.4, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 1624b92b7ddb}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.5, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 3f7d4ec45eaa}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.6, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 2fe6880dbfc0}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.7, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 6198d99c307f}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.8, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: bd493c8433af}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.9, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: b62edc220265}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.10, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 0bce840131af}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.11, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: a7e5ce57724a}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.12, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 5391b079ac41}
+- {source: citadel, id: patterns.PolicyInjectionPatterns.13, title: PolicyInjectionPatterns, category: PolicyInjectionPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: policy_spoof, mapping: hint, languages: [en], harvest: true, sha: 9ffbfba31f10}
+- {source: citadel, id: patterns.FlipAttackPatterns.1, title: FlipAttackPatterns, category: FlipAttackPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: decoded_jailbreak, mapping: category, languages: [en], harvest: true, sha: cd249aec36c4}
+- {source: citadel, id: patterns.FlipAttackPatterns.2, title: FlipAttackPatterns, category: FlipAttackPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: decoded_jailbreak, mapping: category, languages: [en], harvest: true, sha: 518dabeba9ef}
+- {source: citadel, id: patterns.FlipAttackPatterns.3, title: FlipAttackPatterns, category: FlipAttackPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: decoded_jailbreak, mapping: category, languages: [en], harvest: true, sha: bba16d41bcc1}
+- {source: citadel, id: patterns.FlipAttackPatterns.4, title: FlipAttackPatterns, category: FlipAttackPatterns, path: pkg/ml/patterns.go, kind: regex, class: jailbreak, family: decoded_jailbreak, mapping: category, languages: [en], harvest: true, sha: 61196c39601c}
+- {source: citadel, id: multiturn_patterns.iclPatternRe.1, title: iclPatternRe, category: iclPatternRe, path: pkg/ml/multiturn_patterns.go, kind: regex, class: jailbreak, family: many_shot, mapping: category, languages: [en], harvest: true, sha: 6082ce972d5b}
+- {source: citadel, id: multiturn_patterns.dangerousPatternRe.1, title: dangerousPatternRe, category: dangerousPatternRe, path: pkg/ml/multiturn_patterns.go, kind: regex, class: harmful_content, family: hazard_mention, mapping: category, languages: [en], harvest: true, sha: 95960aa03942}
+- {source: citadel, id: scorer.reAWSKey.1, title: reAWSKey, category: reAWSKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 764b78da623b, reason: out_of_scope}
+- {source: citadel, id: scorer.reOpenAIKey.1, title: reOpenAIKey, category: reOpenAIKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 154eec7b8a26, reason: out_of_scope}
+- {source: citadel, id: scorer.rePrivateKey.1, title: rePrivateKey, category: rePrivateKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 5eb6849d343b, reason: out_of_scope}
+- {source: citadel, id: scorer.reCertificate.1, title: reCertificate, category: reCertificate, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: a791ca46bd64, reason: out_of_scope}
+- {source: citadel, id: scorer.rePGPBlock.1, title: rePGPBlock, category: rePGPBlock, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: badc1eded85c, reason: out_of_scope}
+- {source: citadel, id: scorer.reSSHPubKey.1, title: reSSHPubKey, category: reSSHPubKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 68d8aee8f893, reason: out_of_scope}
+- {source: citadel, id: scorer.reStripeKey.1, title: reStripeKey, category: reStripeKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 538ca26a46db, reason: out_of_scope}
+- {source: citadel, id: scorer.reGoogleKey.1, title: reGoogleKey, category: reGoogleKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 077cadc75c14, reason: out_of_scope}
+- {source: citadel, id: scorer.reSlackToken.1, title: reSlackToken, category: reSlackToken, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: c58a355aa704, reason: out_of_scope}
+- {source: citadel, id: scorer.reGitHubToken.1, title: reGitHubToken, category: reGitHubToken, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 622fee3e3e98, reason: out_of_scope}
+- {source: citadel, id: scorer.reGitLabToken.1, title: reGitLabToken, category: reGitLabToken, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: eb9ef65a4989, reason: out_of_scope}
+- {source: citadel, id: scorer.reJWTToken.1, title: reJWTToken, category: reJWTToken, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 169362bc07fa, reason: out_of_scope}
+- {source: citadel, id: scorer.reDBConnStr.1, title: reDBConnStr, category: reDBConnStr, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 7ee4aa88ae73, reason: out_of_scope}
+- {source: citadel, id: scorer.reHerokuKey.1, title: reHerokuKey, category: reHerokuKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 38584824f7fb, reason: out_of_scope}
+- {source: citadel, id: scorer.reDiscord.1, title: reDiscord, category: reDiscord, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 2f8adcd64c82, reason: out_of_scope}
+- {source: citadel, id: scorer.reNPMToken.1, title: reNPMToken, category: reNPMToken, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 151a8bce226a, reason: out_of_scope}
+- {source: citadel, id: scorer.reAzureKey.1, title: reAzureKey, category: reAzureKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 8625df88832e, reason: out_of_scope}
+- {source: citadel, id: scorer.reAnthropicKey.1, title: reAnthropicKey, category: reAnthropicKey, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 3488e929a827, reason: out_of_scope}
+- {source: citadel, id: scorer.reEmail.1, title: reEmail, category: reEmail, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [any], harvest: false, sha: 2f5934d45e58, reason: out_of_scope}
+- {source: citadel, id: scorer.reIPv4.1, title: reIPv4, category: reIPv4, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [any], harvest: false, sha: b004f3243735, reason: out_of_scope}
+- {source: citadel, id: scorer.reVersionContext.1, title: reVersionContext, category: reVersionContext, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 535a25474569, reason: out_of_scope}
+- {source: citadel, id: scorer.reCreditCard.1, title: reCreditCard, category: reCreditCard, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [any], harvest: false, sha: 43e3cd188cce, reason: out_of_scope}
+- {source: citadel, id: scorer.reSSN.1, title: reSSN, category: reSSN, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [any], harvest: false, sha: 74790618d6ee, reason: out_of_scope}
+- {source: citadel, id: scorer.danJailbreakPatterns.1, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 08372af2457b}
+- {source: citadel, id: scorer.danJailbreakPatterns.2, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 069e82ca608b}
+- {source: citadel, id: scorer.danJailbreakPatterns.3, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 17a905775006}
+- {source: citadel, id: scorer.danJailbreakPatterns.4, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 4c56c1de89fd}
+- {source: citadel, id: scorer.danJailbreakPatterns.5, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: dfc9f83d8d67}
+- {source: citadel, id: scorer.danJailbreakPatterns.6, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: c9ad370523a9}
+- {source: citadel, id: scorer.danJailbreakPatterns.7, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: dc38d2bd0865}
+- {source: citadel, id: scorer.danJailbreakPatterns.8, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: b0b5c8bcb559}
+- {source: citadel, id: scorer.danJailbreakPatterns.9, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 6080de033280}
+- {source: citadel, id: scorer.danJailbreakPatterns.10, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 9edba98f9d92}
+- {source: citadel, id: scorer.danJailbreakPatterns.11, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 81683cec579f}
+- {source: citadel, id: scorer.danJailbreakPatterns.12, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 3ae2602553d1}
+- {source: citadel, id: scorer.danJailbreakPatterns.13, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 8a9e20ba9683}
+- {source: citadel, id: scorer.danJailbreakPatterns.14, title: danJailbreakPatterns, category: danJailbreakPatterns, path: pkg/ml/scorer.go, kind: regex, class: jailbreak, family: unbounded_persona, mapping: hint, languages: [en], harvest: true, sha: 5414e1e6299b}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.1, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: d482a845a38c}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.2, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 2c7128d98b49}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.3, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: e5e76d4c4bd0}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.4, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 452dc7a54afd}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.5, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 6f7b5b5fbf1c}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.6, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: b67f61e5e12e}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.7, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 3efd7d15a705}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.8, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: f0f1a672d412}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.9, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: f0b820d6b9de}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.10, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 20f65576c385}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.11, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 0f13aec39866}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.12, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 6ec1f538d437}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.13, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 4ccd19fe425c}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.14, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 79c9082d1771}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.15, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 636c74d11cf0}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.16, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 66012522fccb}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.17, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: b14c37b04baf}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.18, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 3ff5280e6051}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.19, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: b83564848494}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.20, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: ac61d4d0c203}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.21, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 3be36841a6c9}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.22, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 595e513f53d5}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.23, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 12e86a5c02fa}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.24, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: false, sha: 64ce9d3fd43b, reason: duplicate}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.25, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 3275e4f8aaa7}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.26, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: d082205966a5}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.27, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: a124f2149cd2}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.28, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 6cb6181db8e5}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.29, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 736fbfd02a26}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.30, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: be968c892f23}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.31, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 932b92323bfa}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.32, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 416407ebd65b}
+- {source: citadel, id: scorer.systemPromptExtractionPatterns.33, title: systemPromptExtractionPatterns, category: systemPromptExtractionPatterns, path: pkg/ml/scorer.go, kind: regex, class: prompt_extraction, family: reveal_hidden, mapping: default, languages: [en], harvest: true, sha: 343c97fb8f1f}
+- {source: citadel, id: scorer.buriedAttackPatterns.1, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: 4ca95a75b51c}
+- {source: citadel, id: scorer.buriedAttackPatterns.2, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: 695442dfdd7a}
+- {source: citadel, id: scorer.buriedAttackPatterns.3, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: ac642c07adbe}
+- {source: citadel, id: scorer.buriedAttackPatterns.4, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: 388ddc9f613f}
+- {source: citadel, id: scorer.buriedAttackPatterns.5, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: 50ae4b7cafb7}
+- {source: citadel, id: scorer.buriedAttackPatterns.6, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: c9bfb8e1c836}
+- {source: citadel, id: scorer.buriedAttackPatterns.7, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: fb8c20ef71a4}
+- {source: citadel, id: scorer.buriedAttackPatterns.8, title: buriedAttackPatterns, category: buriedAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: instruction_injection, family: discard_prior, mapping: default, languages: [en], harvest: true, sha: da0613cbef63}
+- {source: citadel, id: scorer.toolPoisonPatterns.1, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 8b56f078ccaf}
+- {source: citadel, id: scorer.toolPoisonPatterns.2, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 49f8cfd63e67}
+- {source: citadel, id: scorer.toolPoisonPatterns.3, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: ef8c34727732}
+- {source: citadel, id: scorer.toolPoisonPatterns.4, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: afef327ac13e}
+- {source: citadel, id: scorer.toolPoisonPatterns.5, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 04e3e6120724}
+- {source: citadel, id: scorer.toolPoisonPatterns.6, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: f4744b962c8a}
+- {source: citadel, id: scorer.toolPoisonPatterns.7, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 53871034d9d8}
+- {source: citadel, id: scorer.toolPoisonPatterns.8, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 313cc835f532}
+- {source: citadel, id: scorer.toolPoisonPatterns.9, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 58c959bc3ea1}
+- {source: citadel, id: scorer.toolPoisonPatterns.10, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 9abc14451c91}
+- {source: citadel, id: scorer.toolPoisonPatterns.11, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: bc4e329a6355}
+- {source: citadel, id: scorer.toolPoisonPatterns.12, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 778cd59a1ee2}
+- {source: citadel, id: scorer.toolPoisonPatterns.13, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 23c040f751a6}
+- {source: citadel, id: scorer.toolPoisonPatterns.14, title: toolPoisonPatterns, category: toolPoisonPatterns, path: pkg/ml/scorer.go, kind: regex, class: tool_poisoning, family: preamble_directive, mapping: default, languages: [en], harvest: true, sha: 70615edc9742}
+- {source: citadel, id: scorer.xxeAttackPatterns.1, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 9addcf432a57, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.2, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: db1dbfef8fd5, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.3, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 8f4651706788, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.4, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 90020400272c, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.5, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 34754560cf90, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.6, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 327bf6d5132c, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.7, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 52e736880259, reason: out_of_scope}
+- {source: citadel, id: scorer.xxeAttackPatterns.8, title: xxeAttackPatterns, category: xxeAttackPatterns, path: pkg/ml/scorer.go, kind: regex, class: null, family: null, mapping: out_of_scope, languages: [en], harvest: false, sha: 9d1005e5542f, reason: out_of_scope}
+- {source: citadel, id: scorer.markdownExfilPatterns.1, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: 9afb8f35cddc}
+- {source: citadel, id: scorer.markdownExfilPatterns.2, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: 9e4faf5ce57f}
+- {source: citadel, id: scorer.markdownExfilPatterns.3, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: b34cadf8ea61}
+- {source: citadel, id: scorer.markdownExfilPatterns.4, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: 1aa52fa154e5}
+- {source: citadel, id: scorer.markdownExfilPatterns.5, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: 4f29721d25f3}
+- {source: citadel, id: scorer.markdownExfilPatterns.6, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: a07b575101b2}
+- {source: citadel, id: scorer.markdownExfilPatterns.7, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: c0cfb558c1ef}
+- {source: citadel, id: scorer.markdownExfilPatterns.8, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: 58a29b3ed48d}
+- {source: citadel, id: scorer.markdownExfilPatterns.9, title: markdownExfilPatterns, category: markdownExfilPatterns, path: pkg/ml/scorer.go, kind: regex, class: exfiltration, family: markdown_beacon, mapping: hint, languages: [en], harvest: true, sha: a329549edba3}

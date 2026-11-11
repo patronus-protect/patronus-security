@@ -333,6 +333,8 @@ def extract_pipelock_go(root: Path, paths: list[str]) -> Iterable[dict[str, Any]
 
 _CITADEL_REGISTER = re.compile(r'r\.register\(\s*"([^"]+)",\s*(`[^`]*`|"(?:[^"\\]|\\.)*")\s*,\s*cat\s*,\s*\d+\s*,\s*"([^"]*)"')
 _CITADEL_CAT = re.compile(r"cat\s*:?=\s*Category(\w+)")
+_GO_VAR = re.compile(r"^\s*(?:var\s+)?(\w+)\s*:?=\s*", re.M)
+_GO_COMPILE = re.compile(r"regexp\.MustCompile\((`[^`]*`|\"(?:[^\"\\]|\\.)*\")\)")
 _CITADEL_STRUCT = re.compile(r"Pattern:\s*regexp\.MustCompile\((`[^`]*`|\"(?:[^\"\\]|\\.)*\")\),\s*\n\s*Category:\s*\"([^\"]+)\"")
 
 
@@ -345,11 +347,21 @@ def extract_citadel_go(root: Path, paths: list[str]) -> Iterable[dict[str, Any]]
             category = next((c for pos, c in reversed(cats) if pos < match.start()), "")
             yield _raw(match.group(1), match.group(3), category, rel, "regex", [_go_literals(match.group(2))])
         index: Counter[str] = Counter()
+        done: set[int] = set()
         for match in _CITADEL_STRUCT.finditer(text):
             category = match.group(2)
             index[category] += 1
+            done.add(match.start(1))
             yield _raw(f"{path.stem}.{category}.{index[category]}", category.replace("_", " "), category, rel,
                        "regex", [_go_literals(match.group(1))])
+        # Every other literal regex is named after its enclosing variable (pattern tables, key regexes).
+        heads = [(m.start(), m.group(1)) for m in _GO_VAR.finditer(text)]
+        for match in _GO_COMPILE.finditer(text):
+            if match.start(1) in done:
+                continue
+            var = next((name for pos, name in reversed(heads) if pos < match.start()), "")
+            index[var] += 1
+            yield _raw(f"{path.stem}.{var}.{index[var]}", var, var, rel, "regex", [_go_literals(match.group(1))])
 
 
 def _module_constants(path: Path) -> Iterable[tuple[str, Any]]:
@@ -591,7 +603,7 @@ def build(inventory: dict[str, Any], src: Path) -> dict[str, Any]:
 def _check_source(source: dict[str, Any]) -> list[str]:
     where = f"source {source.get('id')}"
     problems = []
-    for key in ("id", "name", "repo", "commit", "licence", "extractor", "clone", "paths"):
+    for key in ("id", "name", "repo", "commit", "licence", "licence_file", "extractor", "clone", "paths"):
         if key not in source:
             problems.append(f"{where}: missing {key}")
     if "commit" in source and not SHA_RE.match(str(source["commit"])):

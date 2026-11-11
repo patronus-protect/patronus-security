@@ -31,6 +31,7 @@ def source(**overrides):
         "repo": "https://example.org/src",
         "commit": COMMIT,
         "licence": "MIT",
+        "licence_file": "LICENSE",
         "extractor": "yara",
         "clone": "owner_src",
         "paths": ["rules/*.yar"],
@@ -306,12 +307,19 @@ var P = []struct{}{
 		Score:    0.7,
 	},
 }
+var toolPoisonPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\[HIDDEN\]`),
+	regexp.MustCompile(`(?i)keep\s+this\s+secret`),
+}
 """,
     )
     rules = {r["id"]: r for r in MODULE.extract_citadel_go(tmp_path, ["categories.go", "patterns.go"])}
     assert rules["dan_mode"]["category"] == "Jailbreak"
     assert rules["dan_mode"]["title"] == "DAN mode"
     assert rules["patterns.fiction_frame.1"]["category"] == "fiction_frame"
+    # Literal regexes outside the registry are named after their enclosing variable.
+    assert rules["patterns.toolPoisonPatterns.2"]["category"] == "toolPoisonPatterns"
+    assert len(rules) == 4
 
 
 # --- mapping and harvest
