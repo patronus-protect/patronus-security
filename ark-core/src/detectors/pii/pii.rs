@@ -6,7 +6,6 @@ use crate::{
     EvaluationResult,
 };
 
-use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::word_shape::{WordShape, WordShapes};
 use super::{
@@ -16,6 +15,7 @@ use super::{
 };
 use crate::detectors::anchor_gate::AnchorGate;
 use crate::detectors::anchors;
+use crate::detectors::context::Evidence;
 use crate::detectors::dlp::prefilter::{required_value_run, RuleScan, ValueClass, ValueRun};
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::detectors::score::{self, Category, ScoredPattern, ValidatorStrength};

@@ -5,7 +5,8 @@
 //! DE/EN lexicon (since T26 also FR/ES/IT/NL field names): support terms of the value's label and counter-context terms
 //! for numbers that are not PII (order, invoice, tracking, ticket, reference,
 //! serial numbers). Both come from `anchor_lexicons/pii.json`; this module only
-//! maps lexicon IDs to labels. The nearest term decides; see [`proximity`].
+//! maps lexicon IDs to labels; windows and the nearest-term rule are those of
+//! the core engine [`crate::detectors::context`]. See [`proximity`].
 //! [`evidence`] also names the deciding term for `matched_rules[].context`.
 //! Structure (K04): a JSON key, CSV or table header, XML element or `key: value`
 //! line that is a term of the lexicon is a field name of the value it holds; see
@@ -17,7 +18,9 @@ use std::{collections::HashMap, ops::Range, sync::LazyLock};
 use regex::Regex;
 
 use super::validators;
-use crate::detectors::lexical_anchors::LexicalAnchorScanner;
+use crate::detectors::context::{
+    lexicon_regex, lexicon_words, nearest_term, Evidence, ProximityLexicon, Side,
+};
 use crate::detectors::score::{Context, PROXIMITY_CONTEXT_POINTS};
 use crate::detectors::structure::{normalize_key, Field, Fields};
 
@@ -197,242 +200,39 @@ const BARE_FOREIGN_LEXICON: &[&str] = &[
     "pii.identity_card",
 ];
 
-/// Characters between a term and the value: before it (field names, "erreichbar
-/// unter") and after it ("(Handy)", "erreichbar").
-pub const BEFORE_WINDOW: usize = 48;
-pub const AFTER_WINDOW: usize = 32;
-
+/// Proximity lexicon per label with support terms, and the counter-context
+/// lexicon alone for every other label. All search the same windows: those of
+/// the longest term of any of them.
 struct Lexicon {
-    support: HashMap<&'static str, Regex>,
-    counter: Regex,
-    /// Whole-term matchers per lexicon ID, to name the ID of a found term.
-    ids: HashMap<&'static str, Regex>,
-    /// Characters of the longest term.
-    longest: usize,
+    labels: HashMap<&'static str, ProximityLexicon>,
+    counter: ProximityLexicon,
 }
 
-fn lexicon_words(ids: &[&str]) -> Vec<&'static str> {
-    let definitions = LexicalAnchorScanner::shared().definitions();
-    ids.iter()
-        .flat_map(|id| {
-            let definition = definitions
-                .iter()
-                .find(|definition| definition.id == *id)
-                .unwrap_or_else(|| panic!("unknown lexicon id {id}"));
-            definition.words().map(String::as_str)
-        })
-        .collect()
-}
-
-/// Case-insensitive alternation of every word of the lexicon IDs, longest first.
-fn lexicon_regex(ids: &[&str]) -> Regex {
-    Regex::new(&format!("(?i)(?:{})", lexicon_alternation(ids))).unwrap()
-}
-
-fn lexicon_alternation(ids: &[&str]) -> String {
-    let mut words: Vec<_> = lexicon_words(ids).into_iter().map(regex::escape).collect();
-    words.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
-    words.dedup();
-    words.join("|")
-}
-
-static LEXICON: LazyLock<Lexicon> = LazyLock::new(|| Lexicon {
-    support: SUPPORT_LEXICON
+static LEXICON: LazyLock<Lexicon> = LazyLock::new(|| {
+    let counter = ProximityLexicon::new(&[], COUNTER_LEXICON);
+    let labels: Vec<_> = SUPPORT_LEXICON
         .iter()
-        .map(|(label, ids)| (*label, lexicon_regex(ids)))
-        .collect(),
-    counter: lexicon_regex(COUNTER_LEXICON),
-    ids: SUPPORT_LEXICON
+        .map(|(label, ids)| (*label, ProximityLexicon::new(ids, COUNTER_LEXICON)))
+        .collect();
+    let longest = labels
         .iter()
-        .flat_map(|(_, ids)| ids.iter())
-        .chain(COUNTER_LEXICON)
-        .map(|id| {
-            let words = lexicon_alternation(&[id]);
-            (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
-        })
-        .collect(),
-    longest: SUPPORT_LEXICON
-        .iter()
-        .flat_map(|(_, ids)| lexicon_words(ids))
-        .chain(lexicon_words(COUNTER_LEXICON))
-        .map(|word| word.chars().count())
+        .map(|(_, lexicon)| lexicon.longest())
+        .chain([counter.longest()])
         .max()
-        .unwrap_or(0),
+        .unwrap_or(0);
+    Lexicon {
+        labels: labels
+            .into_iter()
+            .map(|(label, lexicon)| (label, lexicon.with_longest(longest)))
+            .collect(),
+        counter: counter.with_longest(longest),
+    }
 });
 
-/// Gap in characters between a term and the value, if the term may describe
-/// the value. A term never reaches across a line break or past a digit (the
-/// value of another field). After the value, the term must also not be the
-/// field name of the next value ("…, Telefon: …"): the gap holds no list or
-/// field separator and the term is not followed by `:`, `=`, `#` or a digit.
-fn term_gap(text: &str, term: (usize, usize), value: (usize, usize)) -> Option<usize> {
-    let word = |ch: Option<char>| ch.is_some_and(char::is_alphanumeric);
-    let term_text = &text[term.0..term.1];
-    // Whole words only where the term starts or ends with a letter or digit.
-    if (word(term_text.chars().next()) && word(text[..term.0].chars().next_back()))
-        || (word(term_text.chars().next_back()) && word(text[term.1..].chars().next()))
-    {
-        return None;
+impl Lexicon {
+    fn of(&self, label: &str) -> &ProximityLexicon {
+        self.labels.get(label).unwrap_or(&self.counter)
     }
-    let (gap, window, after) = if term.1 <= value.0 {
-        (&text[term.1..value.0], BEFORE_WINDOW, false)
-    } else if term.0 >= value.1 {
-        (&text[value.1..term.0], AFTER_WINDOW, true)
-    } else {
-        return None;
-    };
-    if gap
-        .chars()
-        .any(|ch| ch == '\n' || ch == '\r' || ch.is_ascii_digit() || matches!(ch, ';' | '|'))
-    {
-        return None;
-    }
-    if after {
-        let next = text[term.1..]
-            .trim_start_matches([' ', '\t'])
-            .chars()
-            .next();
-        if gap.chars().any(|ch| matches!(ch, ',' | ':' | '=' | '#'))
-            || next.is_some_and(|ch| matches!(ch, ':' | '=' | '#') || ch.is_ascii_digit())
-        {
-            return None;
-        }
-    }
-    let gap = gap.chars().count();
-    (gap <= window).then_some(gap)
-}
-
-/// Byte range around `value` that holds every term whose gap fits the windows:
-/// the window plus the longest term on each side, never past a line break.
-fn region(text: &str, value: (usize, usize), longest: usize) -> (usize, usize) {
-    let start = text[..value.0]
-        .char_indices()
-        .rev()
-        .take(BEFORE_WINDOW + longest)
-        .take_while(|(_, ch)| !matches!(ch, '\n' | '\r'))
-        .last()
-        .map_or(value.0, |(index, _)| index);
-    let end = text[value.1..]
-        .char_indices()
-        .take(AFTER_WINDOW + longest)
-        .take_while(|(_, ch)| !matches!(ch, '\n' | '\r'))
-        .last()
-        .map_or(value.1, |(index, ch)| value.1 + index + ch.len_utf8());
-    (start, end)
-}
-
-/// Which side of the value a context term stands on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Side {
-    Before,
-    After,
-    /// The term is the structural key of the value (K04).
-    Key,
-}
-
-impl Side {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Before => "before",
-            Self::After => "after",
-            Self::Key => "key",
-        }
-    }
-}
-
-/// Context of one value and the term that decided it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Evidence {
-    pub context: Context,
-    /// Lexicon ID of the deciding term, or `field` for a field name the rule
-    /// binds itself.
-    pub anchor: Option<&'static str>,
-    pub side: Option<Side>,
-    /// Characters between the deciding term and the value.
-    pub distance: Option<usize>,
-}
-
-impl Evidence {
-    /// A value the rule binds to its own field name.
-    pub fn field() -> Self {
-        Self {
-            context: Context::Field,
-            anchor: Some("field"),
-            ..Self::none()
-        }
-    }
-
-    /// A value bound to a field name: right before it, or as its structural key
-    /// (K04) when `structural`.
-    pub fn field_at(structural: bool) -> Self {
-        Self {
-            side: structural.then_some(Side::Key),
-            ..Self::field()
-        }
-    }
-
-    pub const fn none() -> Self {
-        Self {
-            context: Context::None,
-            anchor: None,
-            side: None,
-            distance: None,
-        }
-    }
-
-    /// Context points the score adds.
-    pub fn bonus(&self) -> u8 {
-        u8::try_from(self.context.points().max(0)).unwrap_or(u8::MAX)
-    }
-
-    /// Counter-context points the score subtracts.
-    pub fn penalty(&self) -> u8 {
-        u8::try_from((-self.context.points()).max(0)).unwrap_or(u8::MAX)
-    }
-
-    /// `matched_rules[].context` of a finding in a scored mode.
-    pub fn to_json(&self) -> serde_json::Value {
-        let mut value = serde_json::json!({"bonus": self.bonus(), "penalty": self.penalty()});
-        if let Some(anchor) = self.anchor {
-            value["anchor"] = anchor.into();
-        }
-        if let Some(side) = self.side {
-            value["side"] = side.as_str().into();
-        }
-        if let Some(distance) = self.distance {
-            value["distance"] = distance.into();
-        }
-        value
-    }
-}
-
-/// A term that may describe the value: its byte range, side and gap.
-#[derive(Clone, Copy)]
-struct Term {
-    range: (usize, usize),
-    side: Side,
-    gap: usize,
-}
-
-/// Nearest term of `regex` within `region` on either side of `value`.
-fn nearest(
-    text: &str,
-    regex: &Regex,
-    region: (usize, usize),
-    value: (usize, usize),
-) -> Option<Term> {
-    regex
-        .find_iter(&text[region.0..region.1])
-        .filter_map(|term| {
-            let range = (region.0 + term.start(), region.0 + term.end());
-            let side = if range.1 <= value.0 {
-                Side::Before
-            } else {
-                Side::After
-            };
-            term_gap(text, range, value).map(|gap| Term { range, side, gap })
-        })
-        .min_by_key(|term| term.gap)
 }
 
 /// Two-sided proximity context of the value at `value` (byte range) for
@@ -444,129 +244,13 @@ pub fn proximity(text: &str, value: (usize, usize), label: &str) -> Context {
 
 /// [`proximity`] with the lexicon ID, side and distance of the deciding term.
 pub fn evidence(text: &str, value: (usize, usize), label: &str) -> Evidence {
-    proximity_with(text, value, label, true)
+    LEXICON.of(label).evidence(text, value)
 }
 
 /// Whether the context supports `label` at `value`; skips the counter search
 /// when there is no support term at all.
 pub(super) fn supports(text: &str, value: (usize, usize), label: &str) -> bool {
-    proximity_with(text, value, label, false).context.supports()
-}
-
-fn proximity_with(
-    text: &str,
-    value: (usize, usize),
-    label: &str,
-    always_counter: bool,
-) -> Evidence {
-    let lexicon = &*LEXICON;
-    let region = region(text, value, lexicon.longest);
-    let support = lexicon
-        .support
-        .get(label)
-        .and_then(|regex| nearest(text, regex, region, value));
-    if support.is_none() && !always_counter {
-        return Evidence::none();
-    }
-    let counter = nearest(text, &lexicon.counter, region, value);
-    let (context, term, ids) = match (support, counter) {
-        (Some(support), Some(counter)) if counter.gap < support.gap => {
-            (Context::Counter, counter, COUNTER_LEXICON)
-        }
-        (Some(support), _) => (
-            Context::Support { gap: support.gap },
-            support,
-            support_ids(label),
-        ),
-        (None, Some(counter)) => (Context::Counter, counter, COUNTER_LEXICON),
-        (None, None) => return Evidence::none(),
-    };
-    let found = &text[term.range.0..term.range.1];
-    Evidence {
-        context,
-        anchor: ids
-            .iter()
-            .copied()
-            .find(|id| lexicon.ids[id].is_match(found)),
-        side: Some(term.side),
-        distance: Some(term.gap),
-    }
-}
-
-/// The proximity rules of this engine over one support and one counter-context
-/// lexicon, for the score models of other categories (DLP K04): the same
-/// windows, word boundaries and line limits, and the nearest term decides.
-pub struct ProximityLexicon {
-    support_ids: &'static [&'static str],
-    counter_ids: &'static [&'static str],
-    support: Regex,
-    counter: Regex,
-    /// Whole-term matchers per lexicon ID, to name the ID of a found term.
-    ids: Vec<(&'static str, Regex)>,
-    longest: usize,
-}
-
-impl ProximityLexicon {
-    pub fn new(support_ids: &'static [&'static str], counter_ids: &'static [&'static str]) -> Self {
-        let all = || support_ids.iter().chain(counter_ids);
-        Self {
-            support_ids,
-            counter_ids,
-            support: lexicon_regex(support_ids),
-            counter: lexicon_regex(counter_ids),
-            ids: all()
-                .map(|id| {
-                    let words = lexicon_alternation(&[id]);
-                    (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
-                })
-                .collect(),
-            longest: lexicon_words(support_ids)
-                .into_iter()
-                .chain(lexicon_words(counter_ids))
-                .map(|word| word.chars().count())
-                .max()
-                .unwrap_or(0),
-        }
-    }
-
-    /// Two-sided proximity context of the value at `value` (byte range): the
-    /// nearest support term gives [`Context::Support`] unless a counter-context
-    /// term is strictly nearer, which gives [`Context::Counter`].
-    pub fn evidence(&self, text: &str, value: (usize, usize)) -> Evidence {
-        let region = region(text, value, self.longest);
-        let support = nearest(text, &self.support, region, value);
-        let counter = nearest(text, &self.counter, region, value);
-        let (context, term, ids) = match (support, counter) {
-            (Some(support), Some(counter)) if counter.gap < support.gap => {
-                (Context::Counter, counter, self.counter_ids)
-            }
-            (Some(support), _) => (
-                Context::Support { gap: support.gap },
-                support,
-                self.support_ids,
-            ),
-            (None, Some(counter)) => (Context::Counter, counter, self.counter_ids),
-            (None, None) => return Evidence::none(),
-        };
-        let found = &text[term.range.0..term.range.1];
-        Evidence {
-            context,
-            anchor: self
-                .ids
-                .iter()
-                .find(|(id, regex)| ids.contains(id) && regex.is_match(found))
-                .map(|(id, _)| *id),
-            side: Some(term.side),
-            distance: Some(term.gap),
-        }
-    }
-}
-
-fn support_ids(label: &str) -> &'static [&'static str] {
-    SUPPORT_LEXICON
-        .iter()
-        .find(|(known, _)| *known == label)
-        .map_or(&[], |(_, ids)| ids)
+    LEXICON.of(label).supports(text, value)
 }
 
 /// Lexicon terms that are no structural key of a label although they support it
@@ -758,7 +442,7 @@ pub(super) fn foreign_number_term(text: &str, value: Range<usize>, own: &Evidenc
         (lexicon_regex(BARE_FOREIGN_LEXICON), longest)
     });
     let (regex, longest) = &*FOREIGN;
-    let nearest_term = |at: (usize, usize)| nearest(text, regex, region(text, at, *longest), at);
+    let nearest_term = |at: (usize, usize)| nearest_term(text, regex, *longest, at);
     let line_start = text[..value.start].rfind('\n').unwrap_or(0);
     let line_before = &text[text[..line_start].rfind('\n').unwrap_or(0)..line_start];
     let word = |ch: Option<char>| ch.is_some_and(char::is_alphanumeric);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pub mod anchor_gate;
 mod anchors;
+pub mod context;
 pub mod dlp;
 pub mod evidence;
 pub mod injection;
