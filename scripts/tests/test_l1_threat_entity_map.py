@@ -85,6 +85,17 @@ def test_repository_map_ark_blind_decides_only_without_neutral_data():
     assert decided[("prompt_extraction", "en")][0] == "ark_blind"
 
 
+def test_repository_map_keeps_toxicity_out_of_harmful_content():
+    # harmful_content.md §2: hate, insults and profanity belong to toxic_language, not to harm requests.
+    datasets = {entry["id"]: entry for entry in MODULE.load()["datasets"]}
+    ptp = {label["label"]: label.get("classes") for label in datasets["ptp_wildchat_de"]["labels"]}
+    assert ptp["prompt toxicity (Perspective) >= 0.5"] == ["toxic_language"]
+    for label in datasets["aya_redteaming"]["labels"]:
+        if "harmful_content" in label.get("classes", []):
+            for toxic in ("Hate Speech", "Profanity", "Bullying & Harassment"):
+                assert toxic not in label["label"]
+
+
 def test_neutral_wins_over_ark_blind():
     entity_map = minimal_map()
     entity_map["datasets"].append(dataset("blind", family="ark_blind"))
