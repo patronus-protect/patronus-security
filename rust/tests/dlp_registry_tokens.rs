@@ -14,13 +14,14 @@
 //! Doppler prefix. Tokens come from the golden generator or get their
 //! checksum or structure here at test time; no valid token is checked in.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     detectors::{
-        dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
+        dlp::dlp::DLP_PATTERNS,
         validators::{crc32, BASE64URL},
     },
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},

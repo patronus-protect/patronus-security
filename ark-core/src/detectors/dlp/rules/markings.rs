@@ -16,7 +16,8 @@
 //! example, Vorlage, Beispiel) are no label. The counter-context runs on the
 //! M01 content class engine with the marking as strong anchor.
 use crate::detectors::dlp::content_class::{ContentClass, Density, Tier};
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta};
+use crate::detectors::score::ValidatorStrength;
 use regex::Regex;
 use std::ops::Range;
 use std::sync::LazyLock;

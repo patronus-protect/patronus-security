@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Country-neutral contact and network identifiers: e-mail, IP and MAC addresses, E.164 phone numbers.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 // ── Email ────────────────────────────────────────────────────────────────
 // B-EMAIL: a local part holds Unicode letters, digits and marks (RFC 6531) and

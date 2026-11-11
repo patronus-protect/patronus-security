@@ -8,7 +8,8 @@
 //! every mode, in any case and with a hyphen before the letter; in `balanced` and
 //! `recall` an uppercase value is also reported bare (K05). The CIF of companies
 //! is the Spanish VAT ID without `ES` (`vat::VAT_ID_ES_PROXIMITY`).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// DNI/NIF, eight digits (seven of an older DNI) and the control letter, with an
 /// NIF term near the value or as its key.

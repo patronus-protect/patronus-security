@@ -13,9 +13,9 @@ use patronus_ark::detectors::lexical_anchors::LexicalAnchorScanner;
 use patronus_ark::detectors::pii::{
     context::{self, Side, AFTER_WINDOW, BEFORE_WINDOW, COUNTER_LEXICON, SUPPORT_LEXICON},
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS},
     validators,
 };
+use patronus_ark::detectors::score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS};
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,

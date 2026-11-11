@@ -66,8 +66,9 @@ mod providers;
 mod structure;
 mod value_shape;
 
-use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength, SECRET_GROUPS};
+use super::dlp::{DlpPattern, RuleMeta, SECRET_GROUPS};
 use super::overlap::OverlapTier;
+use crate::detectors::score::ValidatorStrength;
 use std::{borrow::Cow, ops::Range};
 
 const PARTS: &[&[DlpPattern]] = &[

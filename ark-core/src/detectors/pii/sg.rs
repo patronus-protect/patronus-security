@@ -7,7 +7,8 @@
 //! check letter) and a UEN of format B (registration year) or C (`T`/`S`/`R`,
 //! entity type) are also reported bare (K05). A UEN of format A, eight digits and
 //! a letter, has the form of a Spanish DNI and needs the term in every mode.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// NRIC/FIN (`S0642712Z`, `G0228472W`, `M1235467X`) in either case, with an NRIC or
 /// FIN term near the value or as its key.

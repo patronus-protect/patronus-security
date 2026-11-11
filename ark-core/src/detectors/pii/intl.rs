@@ -4,7 +4,8 @@
 //! (B-PASS): a format rule after an explicit passport field name, the US letter form,
 //! Austrian and Swiss, Italian and Spanish documents, two letters and seven digits; the
 //! letter-prefixed forms bare as opt-in rules (D-BARE, T37).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 // ── IBAN ─────────────────────────────────────────────────────────────────
 // Keep IBAN as the primary classification when a numeric substring also

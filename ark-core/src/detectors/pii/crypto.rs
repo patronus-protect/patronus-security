@@ -8,7 +8,8 @@
 //! every mode. An EIP-55 address proves one bit per letter (about fifteen in
 //! forty hex digits). A lower-case Ethereum address carries no checksum and is
 //! reported only with a wallet term near it or as its key.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Bitcoin address: P2PKH `1…`, P2SH `3…` or segwit `bc1…`.
 pub(super) const BTC: PiiPattern = PiiPattern {

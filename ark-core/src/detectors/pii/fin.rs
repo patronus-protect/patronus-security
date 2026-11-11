@@ -8,7 +8,8 @@
 //! passes one random value in ten or eleven, and these forms are those of order,
 //! serial and article numbers, so all five rules report a value only with a term
 //! of its label near it or as its key, in every mode.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// VIN with its North American check digit and a VIN term near the value or as
 /// its key.

@@ -2,7 +2,8 @@
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
 use super::{auth_url, connection, http_auth, likeness, structure, ConfigKey, ProviderKey};
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype};
+use crate::detectors::score::ValidatorStrength;
 use crate::detectors::validators::{base64_decode, Base64Kind};
 
 // K05: the key parts of the generic key-bound rules. The rule regexes start

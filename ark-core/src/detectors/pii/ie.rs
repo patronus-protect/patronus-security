@@ -6,7 +6,8 @@
 //! order code and pass the check letter one time in 23, so the PPSN is reported in
 //! every mode only with a term of its label near it or as its key; there is no
 //! context-free form.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// PPSN, `1234567T` or `1234567FA`, with a PPSN term near the value or as its key.
 pub(super) const PPSN: PiiPattern = PiiPattern {

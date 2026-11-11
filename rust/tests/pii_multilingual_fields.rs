@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 
 use patronus_ark::detectors::pii::{
     context::{self, SUPPORT_LEXICON},
-    score::Context,
     validators,
 };
+use patronus_ark::detectors::score::Context;
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,

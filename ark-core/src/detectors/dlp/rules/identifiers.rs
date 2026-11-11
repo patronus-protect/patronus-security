@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! German and business record identifiers (anchor-bound, default off).
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta};
+use crate::detectors::score::ValidatorStrength;
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── German and business identifiers (anchor-bound) ─────────────────────

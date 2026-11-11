@@ -8,6 +8,7 @@ pub mod lexical_anchors;
 pub mod mcp;
 pub mod obfuscation;
 pub mod pii;
+pub mod score;
 pub mod shell;
 pub mod structure;
 pub mod threat;

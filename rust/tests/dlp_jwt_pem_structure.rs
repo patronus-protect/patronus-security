@@ -10,11 +10,12 @@
 //! around a body that is no key. Values come from the golden generator or
 //! are built here at test time.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    detectors::dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
+    detectors::dlp::dlp::DLP_PATTERNS,
     golden_recipes::{materialize, GeneratorSet, SecretRecipe},
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };

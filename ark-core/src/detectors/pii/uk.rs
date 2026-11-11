@@ -12,7 +12,8 @@
 //! The GB BBAN (T29: bank code, sort code, account, `ZFJR88590163492773`) has no check
 //! digit either: it is an account number only with a BBAN or account term near the
 //! value or as its key, in every mode, and never bare.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// The NINO forms: one block (`AB123456C`, `AB 123456 C`) or pairs (`AB 12 34 56 C`).
 macro_rules! nino_value {

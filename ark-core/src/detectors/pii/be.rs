@@ -7,7 +7,8 @@
 //! mode only with a term of its label near it or as its key. In `balanced` and
 //! `recall` the printed form of the Belgian identity card, `85.07.30-033.28`, is
 //! also reported bare (K05).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// National number, eleven digits, `85.07.30-033.28` or `850730-033.28` /
 /// `850730 033 28`, with a national number term near the value or as its key.

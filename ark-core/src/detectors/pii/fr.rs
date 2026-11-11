@@ -9,7 +9,8 @@
 //! term in every mode, like the Australian Company Number. A SIRET in its printed
 //! 3-3-3-5 groups is also reported bare in the scored modes; fourteen bare digits
 //! need the term.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// NIR, 1-2-2-2-3-3-2 (`2 95 10 99 126 111 93`) or fifteen characters with the
 /// key apart or not, with a NIR term near the value or as its key.

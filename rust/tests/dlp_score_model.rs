@@ -12,11 +12,10 @@ use std::{path::Path, sync::OnceLock};
 
 use patronus_ark::detectors::dlp::{
     context::{self, ContextSource},
-    dlp::{ValidatorStrength, DLP_PATTERNS},
-    score,
+    dlp::DLP_PATTERNS,
 };
-use patronus_ark::detectors::pii::score::{
-    Context, ValidatorStrength as PiiStrength, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS,
+use patronus_ark::detectors::score::{
+    self, Context, ValidatorStrength, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS,
 };
 use patronus_ark::golden_recipes::{
     materialize, materialize_fragments, GeneratorSet, SecretRecipe,
@@ -339,15 +338,6 @@ fn scored_modes_keep_strict_spans_and_report_the_model_score() {
 
 #[test]
 fn score_is_base_plus_validator_strength_plus_context() {
-    assert_eq!(
-        ValidatorStrength::Checksum.points(),
-        PiiStrength::Checksum.points()
-    );
-    assert_eq!(
-        ValidatorStrength::Format.points(),
-        PiiStrength::Format.points()
-    );
-    assert_eq!(ValidatorStrength::None.points(), PiiStrength::None.points());
     assert_eq!(ValidatorStrength::Structure.points(), 25);
     assert!(ValidatorStrength::Structure.points() > ValidatorStrength::Format.points());
     assert!(ValidatorStrength::Structure.points() < ValidatorStrength::Checksum.points());

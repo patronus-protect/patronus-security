@@ -12,12 +12,13 @@
 #[path = "support/base58check.rs"]
 mod base58check;
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use base58check::base58check_encode;
 use patronus_ark::{
-    detectors::dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
+    detectors::dlp::dlp::DLP_PATTERNS,
     detectors::validators::crc32,
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,

@@ -8,12 +8,13 @@ use crate::{
 use regex::Regex;
 use std::ops::Range;
 
+use super::context;
 use super::decoder::{self, Decoded};
 use super::overlap::OverlapRules;
 pub use super::overlap::OverlapTier;
 use super::prefilter::{RulePrefilter, ValueClass, ValueRun, RULE_DFA_CACHE_BYTES};
 use super::rules::{self, ExampleCheck};
-use super::{context, score};
+use crate::detectors::score::{self, ScoredPattern, ValidatorStrength};
 use crate::native::ScoreMode;
 
 /// A single DLP heuristic pattern (credentials / secrets).
@@ -35,27 +36,17 @@ pub struct DlpPattern {
     pub meta: RuleMeta,
 }
 
-/// How strongly a rule confirms the matched value beyond the keyword context.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ValidatorStrength {
-    /// A check digit or checksum (CRC32, Base58Check, Bech32) is verified.
-    Checksum,
-    /// The decoded or parsed structure is verified (JWT header, DER, SQL).
-    Structure,
-    /// Fixed prefix, alphabet, length or syntax shape only.
-    Format,
-    /// Keyword or context anchor only; the value shape is free.
-    None,
-}
+impl ScoredPattern for DlpPattern {
+    fn base_score(&self) -> u8 {
+        self.base_score
+    }
 
-impl ValidatorStrength {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Checksum => "checksum",
-            Self::Structure => "structure",
-            Self::Format => "format",
-            Self::None => "none",
-        }
+    fn strength(&self) -> ValidatorStrength {
+        self.meta.validator_strength
+    }
+
+    fn binds_field(&self) -> bool {
+        context::source(self) == context::ContextSource::Field
     }
 }
 

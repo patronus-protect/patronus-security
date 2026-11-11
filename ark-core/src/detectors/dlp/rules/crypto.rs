@@ -5,9 +5,10 @@ use super::structure;
 use crate::detectors::dlp::key_context::has_key_context;
 use crate::detectors::dlp::seed_phrase::{has_seed_context, is_seed_phrase, phrases};
 use crate::detectors::dlp::{
-    dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
+    dlp::{DlpPattern, RuleMeta, SecretSubtype},
     prefilter::ValueClass,
 };
+use crate::detectors::score::ValidatorStrength;
 use crate::detectors::validators::{
     base58check_decode, base64_decode, bech32_decode_with_limit, convert_bits, crc32, Base64Kind,
     Bech32Variant,

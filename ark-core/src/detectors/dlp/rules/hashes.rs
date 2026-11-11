@@ -3,7 +3,8 @@
 use super::credentials::is_secret_value;
 use super::likeness;
 use super::ProviderKey;
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype};
+use crate::detectors::score::ValidatorStrength;
 
 /// `dlp_password_hash`: the hash's key; T23: SQL key fields bind through it.
 macro_rules! password_hash_key {

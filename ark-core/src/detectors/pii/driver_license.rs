@@ -13,7 +13,8 @@
 //! finding in any mode: none of the formats carries a check digit. The one exception is the UK licence,
 //! whose sixteen characters encode surname, birth date and initials: bare, it is
 //! reported in `balanced` and `recall`.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Pattern of a field-bound driver's licence rule with the value regex `$value`.
 /// The word boundaries are ASCII (`(?-u:\b)`): every field name starts and ends with

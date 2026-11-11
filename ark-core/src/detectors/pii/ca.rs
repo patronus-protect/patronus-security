@@ -7,7 +7,8 @@
 //! a BSN or the body of a VAT ID, `DE 130 692 544`) need a term of the label in
 //! every mode. In `balanced` and `recall` the hyphenated groups (`130-692-544`) are
 //! also reported bare (K05).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// SIN, 3-3-3 by spaces or hyphens or nine digits, with a SIN term near the value
 /// or as its key.

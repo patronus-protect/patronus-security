@@ -6,6 +6,7 @@
 //! stress it, each rule finds exactly the matches of `Regex::captures_iter`.
 //! Token values are synthetic and assembled at test time.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -13,7 +14,7 @@ use std::{
 
 use patronus_ark::{
     detectors::dlp::{
-        dlp::{DlpPattern, RuleMeta, ValidatorStrength, DLP_PATTERNS},
+        dlp::{DlpPattern, RuleMeta, DLP_PATTERNS},
         prefilter::{
             has_short_probes, keyword_lead, keywords_are_required, required_value_run, rule_gate,
             RuleGate, RulePrefilter, ValueClass, ValueRun, FOLDS_TO_ASCII,

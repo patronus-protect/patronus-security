@@ -10,7 +10,8 @@
 //! bare (K05): the ABN in 2-3-3-3 groups (mod 89) and the Medicare number in 4-5-1
 //! groups. A bare run of nine to eleven digits is an order, invoice or phone number
 //! too often.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Australian Business Number, 2-3-3-3 (`51 824 753 556`) or eleven digits, with an
 /// ABN term near the value or as its key.

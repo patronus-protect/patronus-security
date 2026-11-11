@@ -11,7 +11,8 @@
 //! are also reported bare (K05), where the date, the region code and the check
 //! digit (RRN, FRN) or the 3-2-5 print form and the check digit (BRN) carry the
 //! finding.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// A registration number with the sex and century digits of `$sex`, hyphenated
 /// or as thirteen digits.

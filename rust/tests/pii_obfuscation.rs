@@ -9,7 +9,7 @@
 //! and `balanced` keep them negative (gold convention T01). Validators are not relaxed: a checksum that
 //! fails behind the obfuscation stays rejected.
 
-use patronus_ark::detectors::pii::score::SPELLED_OUT_PENALTY_POINTS;
+use patronus_ark::detectors::score::Category;
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
@@ -371,7 +371,7 @@ fn spelled_out_forms_are_reported_in_recall_only_below_the_plain_score() {
         assert_eq!(obfuscation(&rule), vec![kind], "{text:?}");
         let plain_text = text.replace(value, plain);
         let plain_rule = assert_reported(&plain_text, label, rule_id, plain, ScoreMode::Recall);
-        let penalty = f64::from(SPELLED_OUT_PENALTY_POINTS) / 100.0;
+        let penalty = -f64::from(Category::Pii.normalisation_points()) / 100.0;
         let (score, plain_score) = (
             rule["score"].as_f64().unwrap(),
             plain_rule["score"].as_f64().unwrap(),

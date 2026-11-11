@@ -8,7 +8,8 @@
 //! is reported in every mode, in any case; in `balanced` and `recall` an
 //! uppercase code is also reported bare (K05). The Partita IVA is the Italian VAT
 //! ID (`vat::VAT_ID_IT_PROXIMITY`, B01).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Codice fiscale with a fiscal code term near the value or as its key. ASCII
 /// case folding (`(?i-u)`): a code has no `ſ` or Kelvin sign, so every match

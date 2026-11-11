@@ -16,11 +16,9 @@ use std::{collections::HashMap, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
-use super::{
-    score::{Context, PROXIMITY_CONTEXT_POINTS},
-    validators,
-};
+use super::validators;
 use crate::detectors::lexical_anchors::LexicalAnchorScanner;
+use crate::detectors::score::{Context, PROXIMITY_CONTEXT_POINTS};
 use crate::detectors::structure::{normalize_key, Field, Fields};
 
 /// Support lexicon IDs of `pii.json` per PII label.

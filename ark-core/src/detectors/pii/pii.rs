@@ -8,7 +8,6 @@ use crate::{
 
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
-use super::score::{self, ValidatorStrength};
 use super::word_shape::{WordShape, WordShapes};
 use super::{
     at, au, be, ca, ch, common, context, crypto, de, device, driver_license, es, fin, fr,
@@ -19,6 +18,7 @@ use crate::detectors::anchor_gate::AnchorGate;
 use crate::detectors::anchors;
 use crate::detectors::dlp::prefilter::{required_value_run, RuleScan, ValueClass, ValueRun};
 use crate::detectors::obfuscation::{Deobfuscated, Level};
+use crate::detectors::score::{self, Category, ScoredPattern, ValidatorStrength};
 use crate::detectors::word_boundary::{self, without_unicode_word_boundaries, BoundarySearch};
 use crate::native::ScoreMode;
 use crate::EvidenceSpan;
@@ -57,6 +57,20 @@ pub struct PiiPattern {
     /// (F01) is here so that `strict` stays unchanged; its numbering plan and a
     /// phone term stand in for a check digit.
     pub scored_only: bool,
+}
+
+impl ScoredPattern for PiiPattern {
+    fn base_score(&self) -> u8 {
+        self.base_score
+    }
+
+    fn strength(&self) -> ValidatorStrength {
+        self.strength
+    }
+
+    fn binds_field(&self) -> bool {
+        self.captured_value
+    }
 }
 
 /// All PII rules in evaluation order. The rules live in regional modules; the
@@ -495,7 +509,7 @@ impl PiiPipeline {
 /// `detection`. Such a finding replaces the same-label findings it contains and
 /// yields to any other same-label overlap. Its `matched_rules` entry carries
 /// original offsets and `obfuscation`; findings that only the `recall` level
-/// reveals lose [`score::SPELLED_OUT_PENALTY_POINTS`].
+/// reveals take the normalisation points of PII ([`Category::normalisation_points`]).
 fn merge_deobfuscated(
     text: &str,
     mut detection: NativeDetection,
@@ -503,7 +517,7 @@ fn merge_deobfuscated(
     view: &Deobfuscated,
     mode: ScoreMode,
 ) -> NativeDetection {
-    // (normalized range, original range, label, obfuscation kinds, penalty points)
+    // (normalized range, original range, label, obfuscation kinds, spelled out)
     let mut added = Vec::new();
     for span in normalized.evidence_spans {
         let range = view.original(span.start_byte..span.end_byte);
@@ -512,13 +526,9 @@ fn merge_deobfuscated(
             continue;
         }
         let mut score = span.score;
-        let penalty = if kinds.iter().any(|kind| kind.level() == Level::SpelledOut) {
-            score::SPELLED_OUT_PENALTY_POINTS
-        } else {
-            0
-        };
-        if penalty > 0 {
-            score = penalized(span.score, penalty);
+        let spelled_out = kinds.iter().any(|kind| kind.level() == Level::SpelledOut);
+        if spelled_out {
+            score = score::normalised_score(span.score, Category::Pii);
             if mode.min_score().is_some_and(|threshold| score < threshold) {
                 continue;
             }
@@ -552,7 +562,7 @@ fn merge_deobfuscated(
             range,
             span.label,
             kinds,
-            penalty,
+            spelled_out,
         ));
     }
     if added.is_empty() {
@@ -572,7 +582,7 @@ fn merge_deobfuscated(
                 .iter()
                 .find(|pattern| rule["rule_id"] == pattern.name)?
                 .entity_group;
-            let (_, original, _, kinds, penalty) =
+            let (_, original, _, kinds, spelled_out) =
                 added.iter().find(|(range, _, added_label, ..)| {
                     *range == (start..end) && added_label == label
                 })?;
@@ -590,9 +600,9 @@ fn merge_deobfuscated(
             }
             rule["obfuscation"] = kinds.iter().map(|kind| kind.as_str()).collect();
             // Each rule keeps its own score (pii_iban_de 0.90, pii_iban_generic 0.80 on
-            // the same value); only the recall penalty applies to it.
-            if let Some(own) = rule["score"].as_f64() {
-                rule["score"] = serde_json::json!(penalized(own, *penalty));
+            // the same value); only the recall normalisation points apply to it.
+            if let Some(own) = rule["score"].as_f64().filter(|_| *spelled_out) {
+                rule["score"] = serde_json::json!(score::normalised_score(own, Category::Pii));
             }
             Some(rule)
         })
@@ -614,11 +624,6 @@ fn merge_deobfuscated(
     }
     result.confidence = spans.iter().map(|span| span.score).fold(0.0, f64::max);
     detection
-}
-
-/// `score` minus `points` hundredths, floored at zero.
-fn penalized(score: f64, points: u8) -> f64 {
-    f64::from(((score * 100.0).round() as i16 - i16::from(points)).max(0)) / 100.0
 }
 
 /// Whether the field part `key` of a rule accepts the normalized structural key

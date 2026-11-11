@@ -2,7 +2,8 @@
 //! Confidential business content and source/SQL/dump/log content classes
 //! (default off).
 use crate::detectors::dlp::content_class::{ContentClass, Density, Tier};
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta};
+use crate::detectors::score::ValidatorStrength;
 use std::ops::Range;
 use std::sync::LazyLock;
 

@@ -23,7 +23,8 @@
 //! or as its key. The NPI (ten digits, first 1 or 2, Luhn behind the prefix
 //! `80840`) is reported by `pii_npi_us` with an NPI term, plain or grouped 4-3-3;
 //! only the grouped form is reported bare, in `balanced` and `recall`.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
 pub(super) const PHONE: PiiPattern = PiiPattern {

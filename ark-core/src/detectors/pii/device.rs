@@ -10,7 +10,8 @@
 //! code `2xx`–`7xx`) carries no check digit. One bare fifteen-digit number in
 //! ten passes Luhn, so every rule reports its value in every mode only with a
 //! term of its label near the value or as its key.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// IMEI, plain or 2-6-6-1, with an IMEI term near the value or as its key.
 pub(super) const IMEI: PiiPattern = PiiPattern {
