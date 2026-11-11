@@ -14,14 +14,16 @@ scan itself. After MIN_SAMPLES samples a workload stops once BUDGET_S is spent.
     # on the VPS: release build of the checkout, Ark + Presidio default/tuned
     python3 scripts/l1_presidio/latency.py run --ark-python .venv/bin/python \
         --presidio-python ~/ark-l1/presidio-venv/bin/python \
-        --output latency.json --markdown latency.md [--check-m4]
+        --output latency.json --markdown latency.md [--runs 5] [--check-m4]
     # a change against its base (gate criterion: 100 KiB p95 at most +10 %)
     python3 scripts/l1_presidio/latency.py compare --base base.json --head head.json
 
-``measure`` is the worker that ``run`` starts once per Python engine. ``run`` exits 1
-with ``--check-m4`` if an Ark engine's 100 KiB p95 exceeds 10 ms (milestone M4); ``compare`` exits 1
-if a gated p95 grew by more than the tolerance; both exit 2 on setup errors (debug
-build, Presidio pins, differing workloads).
+``measure`` is the worker that ``run`` starts once per Python engine and run. ``run --runs N``
+measures every engine N times in turn and keeps, per engine, the run with the median 100 KiB p95.
+Milestone M4 (decision T40): the median of the ark-native 100 KiB p95 over at least five runs is at
+most 12 ms; ``run`` exits 1 with ``--check-m4`` if it is not. ``compare`` exits 1 if a gated p95
+grew by more than the tolerance; both exit 2 on setup errors (debug build, Presidio pins,
+differing workloads).
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ import math
 import os
 import platform
 import shutil
+import statistics
 import struct
 import subprocess
 import sys
@@ -59,7 +62,10 @@ BUDGET_S = 60.0
 ENGINES = ("ark", "ark-native", "presidio-default", "presidio-tuned")
 ARK_ENGINES = ("ark", "ark-native")
 M4_SIZE = "100kib"
-M4_P95_MS = 10.0
+# M4 (decision T40): median of the 100 KiB p95 over at least M4_MIN_RUNS runs, for M4_ENGINE.
+M4_ENGINE = "ark-native"
+M4_P95_MS = 12.0
+M4_MIN_RUNS = 5
 TOLERANCE_PCT = 10.0
 NATIVE_LIBRARY = "lib_patronus_ark.so"
 NATIVE_MODULE = "_patronus_ark.abi3.so"
@@ -494,14 +500,16 @@ def run_worker(python: str, engine: str, args: argparse.Namespace, env: dict[str
 
 
 def m4_check(report: dict[str, Any]) -> dict[str, Any]:
-    """M4 for every measured Ark engine (Python binding and native)."""
+    """M4 on the median 100 KiB p95 over the runs; the Python binding is reported, not judged."""
     checks = {}
     for engine in ARK_ENGINES:
         if engine in report["engines"]:
-            p95 = report["engines"][engine]["sizes"][M4_SIZE]["p95_ms"]
-            checks[engine] = {"p95_ms": p95, "pass": p95 <= M4_P95_MS}
-    return {"size": M4_SIZE, "limit_ms": M4_P95_MS, "engines": checks,
-            "pass": all(check["pass"] for check in checks.values())}
+            runs = report["engines"][engine]["runs_p95_ms"]
+            p95 = statistics.median(runs)
+            checks[engine] = {"p95_ms": p95, "runs_p95_ms": runs, "pass": p95 <= M4_P95_MS}
+    judged = checks.get(M4_ENGINE, {}).get("pass", False)
+    return {"size": M4_SIZE, "limit_ms": M4_P95_MS, "min_runs": M4_MIN_RUNS, "runs": report["runs"],
+            "engine": M4_ENGINE, "engines": checks, "pass": judged and report["runs"] >= M4_MIN_RUNS}
 
 
 def assemble(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -514,7 +522,7 @@ def assemble(results: list[dict[str, Any]]) -> dict[str, Any]:
             raise LatencyError(f"{result['engine']} measured different workloads than {results[0]['engine']}")
         if result["machine"] != results[0]["machine"]:
             raise LatencyError(f"{result['engine']} ran on a different machine than {results[0]['engine']}")
-    report = {
+    return {
         "schema": SCHEMA,
         "workload_version": WORKLOAD_VERSION,
         "machine": results[0]["machine"],
@@ -524,7 +532,24 @@ def assemble(results: list[dict[str, Any]]) -> dict[str, Any]:
             for result in results
         },
     }
-    if any(engine in report["engines"] for engine in ARK_ENGINES):
+
+
+def combine(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Merge repeated runs: per engine the run with the (lower) median 100 KiB p95, all p95s, M4."""
+    if not runs:
+        raise LatencyError("no run measured")
+    first = runs[0]
+    for run in runs[1:]:
+        if (run["workloads"], run["machine"], list(run["engines"])) != (
+                first["workloads"], first["machine"], list(first["engines"])):
+            raise LatencyError("runs measured different workloads, machines or engines")
+    engines = {}
+    for engine in first["engines"]:
+        p95s = [run["engines"][engine]["sizes"][M4_SIZE]["p95_ms"] for run in runs]
+        median_run = runs[p95s.index(statistics.median_low(p95s))]
+        engines[engine] = {**median_run["engines"][engine], "runs_p95_ms": p95s}
+    report = {**first, "runs": len(runs), "engines": engines}
+    if any(engine in engines for engine in ARK_ENGINES):
         report["m4"] = m4_check(report)
     return report
 
@@ -555,11 +580,18 @@ def table(report: dict[str, Any]) -> list[str]:
 
 
 def m4_lines(m4: dict[str, Any]) -> list[str]:
-    return [
-        f"M4 ({engine} {m4['size']} p95 ≤ {m4['limit_ms']:g} ms): {check['p95_ms']:.3f} ms, "
-        + ("pass." if check["pass"] else "FAIL.")
-        for engine, check in m4["engines"].items()
-    ]
+    lines = []
+    for engine, check in m4["engines"].items():
+        what = f"{engine} {m4['size']} p95, median of {m4['runs']} runs"
+        value = (f"{check['p95_ms']:.3f} ms "
+                 f"(runs {min(check['runs_p95_ms']):.3f}–{max(check['runs_p95_ms']):.3f})")
+        if engine != m4["engine"]:
+            lines.append(f"{what}: {value}, reported.")
+            continue
+        verdict = "pass." if m4["pass"] else (
+            "FAIL." if not check["pass"] else f"FAIL (fewer than {m4['min_runs']} runs).")
+        lines.append(f"M4 ({what} ≤ {m4['limit_ms']:g} ms): {value}, {verdict}")
+    return lines
 
 
 def markdown(report: dict[str, Any]) -> str:
@@ -570,6 +602,8 @@ def markdown(report: dict[str, Any]) -> str:
         f"Machine: {machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']} "
         f"{machine['machine']}. One call per sample, sequential, each engine in its own process. "
         f"Workloads v{report['workload_version']}: DE + EN pooled per size class.",
+        "",
+        f"Runs: {report['runs']}; per engine the run with the median {M4_SIZE} p95.",
         "",
         *table(report),
         "",
@@ -585,27 +619,27 @@ def markdown(report: dict[str, Any]) -> str:
 
 
 def cmd_run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    results = []
     engines = [engine for engine in ENGINES if engine in (args.engines or ENGINES)]
+    runs = []
     with tempfile.TemporaryDirectory(prefix="ark-l1-latency-stage-") as stage:
-        for engine in engines:
-            if engine == "ark-native":
-                result = measure_native(build_native(ROOT, args.cargo), sample_counts(args.samples_scale),
-                                        args.budget_s)
-            elif engine == "ark":
-                env = {}
-                if not args.installed_ark:
-                    module = build_release(ROOT, Path(stage), args.cargo)
-                    env = {"PYTHONPATH": stage}
-                result = run_worker(args.ark_python, engine, args, env)
-                loaded = result["info"].pop("native_module")
-                if not args.installed_ark and Path(loaded) != module.resolve():
-                    raise LatencyError(f"ark worker loaded {loaded}, not {module}")
-            else:
-                result = run_worker(args.presidio_python, engine, args, {})
-            results.append(result)
-            print(f"{engine}: done", file=sys.stderr)
-    report = assemble(results)
+        native = build_native(ROOT, args.cargo) if "ark-native" in engines else None
+        module = build_release(ROOT, Path(stage), args.cargo) if "ark" in engines and not args.installed_ark else None
+        for run in range(1, args.runs + 1):
+            results = []
+            for engine in engines:
+                if engine == "ark-native":
+                    result = measure_native(native, sample_counts(args.samples_scale), args.budget_s)
+                elif engine == "ark":
+                    result = run_worker(args.ark_python, engine, args, {"PYTHONPATH": stage} if module else {})
+                    loaded = result["info"].pop("native_module")
+                    if module and Path(loaded) != module.resolve():
+                        raise LatencyError(f"ark worker loaded {loaded}, not {module}")
+                else:
+                    result = run_worker(args.presidio_python, engine, args, {})
+                results.append(result)
+                print(f"run {run}/{args.runs} {engine}: done", file=sys.stderr)
+            runs.append(assemble(results))
+    report = combine(runs)
     failed = args.check_m4 and not report.get("m4", {}).get("pass", False)
     return report, 1 if failed else 0
 
@@ -665,8 +699,11 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--cargo", default="cargo")
     run_parser.add_argument("--output", type=Path, required=True, help="report JSON")
     run_parser.add_argument("--markdown", type=Path, help="report Markdown")
+    run_parser.add_argument("--runs", type=int, default=1,
+                            help=f"measure every engine this often in turn; M4 needs at least {M4_MIN_RUNS}")
     run_parser.add_argument("--check-m4", action="store_true",
-                            help=f"exit 1 if an Ark engine's {M4_SIZE} p95 exceeds {M4_P95_MS:g} ms")
+                            help=f"exit 1 unless the median {M4_ENGINE} {M4_SIZE} p95 over at least "
+                                 f"{M4_MIN_RUNS} runs is at most {M4_P95_MS:g} ms")
 
     for each in (measure_parser, run_parser):
         each.add_argument("--samples-scale", type=float, default=1.0, help="scale the sample counts")
@@ -685,6 +722,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command != "compare" and (args.samples_scale <= 0 or args.budget_s <= 0):
             raise LatencyError("--samples-scale and --budget-s must be positive")
+        if args.command == "run" and args.runs < 1:
+            raise LatencyError("--runs must be positive")
         if args.command == "measure":
             write_json(args.output, cmd_measure(args))
             return 0
