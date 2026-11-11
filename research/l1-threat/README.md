@@ -247,7 +247,7 @@ Lizenz, Sprachen, Split, Quellfamilie und jedes Upstream-Label mit Klasse, `beni
 (Desinformation, Urheberrecht, Bias, mehrdeutige Score-Bänder). Wer je Klasse und Sprache entscheidet, rechnet
 `entity_map.py table` aus: EN entscheidet `neutral` außer bei `prompt_extraction` (CyberSecEval-Leak-Slice zu
 klein, `decides: false`), `memory_poisoning` und `resource_exhaustion`; DE entscheidet `neutral` nur bei
-`harmful_content` (RTP-LX, PTP `wildchat-de`) und `toxic_language`, sonst `ark_blind` (R05). Festgelegt dabei:
+`harmful_content` (RTP-LX) und `toxic_language`, sonst `ark_blind` (R05). Festgelegt dabei:
 ein Satz liegt nie in zwei Splits (GermEval 2018 Train/Test als zwei Einträge, GermEval 2019 enthält die
 2018-Testdaten und wird dagegen dedupliziert); OASST2 und WildChat bleiben im Holdout-Benign-Pool, Dev-Benign für
 `memory_poisoning`/`resource_exhaustion` kommt aus databricks-dolly-15k; MCPTox und AgentHarm nur zur Auswertung.

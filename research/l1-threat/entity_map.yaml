@@ -186,7 +186,8 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "harm_category in (Bullying & Harassment, Discrimination & Injustice, Graphic material, Hate Speech, Non-consensual sexual content, Profanity, Self-Harm, Violence threats & incitement, Violent extremism)", classes: [harmful_content]}
+      - {label: "harm_category in (Graphic material, Non-consensual sexual content, Self-Harm, Violence threats & incitement, Violent extremism)", classes: [harmful_content]}
+      - {label: "harm_category in (Bullying & Harassment, Discrimination & Injustice, Hate Speech, Profanity)", classes: [toxic_language]}
       - {label: "harm_category = Misinformation & Disinformation", out_of_scope: "disinformation is not an L1 class (README scope)"}
       - {label: "harm_category = Harms of Representation Allocation and Quality of Service", out_of_scope: "bias in model output, no input-side signal"}
   - id: rtp_lx
@@ -211,7 +212,7 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "prompt toxicity (Perspective) >= 0.5", classes: [harmful_content, toxic_language]}
+      - {label: "prompt toxicity (Perspective) >= 0.5", classes: [toxic_language]}
       - {label: "prompt toxicity < 0.1", benign: true}
       - {label: "0.1 <= toxicity < 0.5", out_of_scope: "ambiguous machine score band, neither gold nor benign"}
   - id: mcptox
