@@ -124,6 +124,17 @@ Grundsätze:
     Modul und von beiden genutzt, nicht kopiert; Nutzer schreiben Text-Policies wie Shell-Policies. Welches
     Modell eine Klasse bekommt, entscheidet weiter die Ablation; die Form ist für alle gleich.
 
+**Stand S01 (erster Schritt).** Punkte-Schicht gemeinsam: `ark-core/src/detectors/score.rs` hält
+`ValidatorStrength` (checksum/structure/format/none), `Context` (Feld +25, Nähe +25/+20/+15, Gegen −30),
+`score`/`rule_score` über das Trait `ScoredPattern` und die Normalisierungspunkte je Kategorie
+(`Category::normalisation_points`: PII −10, DLP 0, Injection/Threat +10). `PiiPattern` und `DlpPattern`
+implementieren `ScoredPattern`; die Kopien in `pii/score.rs` und `dlp/score.rs` sind entfernt, Scores
+bit-identisch. Offen für S01: Core-Module (Anker-Scanner, `AnchorGate`, `Fields`, Kontext-Engine,
+Klausel-/Negations-/Zitatspannen) unter einen gemeinsamen Core ziehen, Injection/Threat-Regeln mit
+`base_score`/Validator-Stärke und Ankerpunkten auf `ScoredPattern`, Modus je Kategorie,
+`matched_rules[].context` für Injection/Threat. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
+die Filter `pii` und `dlp` aufnehmen (der Runner darf `.github/` nicht ändern).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
