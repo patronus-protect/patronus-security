@@ -491,45 +491,13 @@ python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
 Engines heißen `ark-<engine>` und `presidio-<profil>`; `--ark balanced=DIR`, `--presidio default=DIR`
 und `--presidio tuned=DIR` sind Pflicht, Namen eindeutig, fehlende Vorhersagedateien sind Exit 2.
 
-### Meilenstein-Snapshot für die Capabilities-Seite
+### Zahlen der Capabilities-Seite
 
-`research/scoreboard/YYYY-MM-DD.json` (Schema `ark-l1-scoreboard-snapshot-v1`, `schema_version`
-1.2) speist [`docs/reference/l1-capabilities.md`](../../docs/reference/l1-capabilities.md); die neueste
-Datei gewinnt. Meilensteine, Latenz und Notizen werden von Hand gepflegt, die Ergebnisse je Entität
-und Gruppe erzeugt `scripts/scoreboard_snapshot.py` aus den aggregierten Berichten einer Messung:
-
-```bash
-git show <commit>:research/dlp/entity_map.yaml > /tmp/dlp-entity-map.yaml
-python3 scripts/scoreboard_snapshot.py from-reports --snapshot research/scoreboard/YYYY-MM-DD.json \
-  --pii-report results/pii/report.json \
-  --dlp-reports results/dlp/REPORTS --dlp-entity-map /tmp/dlp-entity-map.yaml
-python3 scripts/generate_docs.py
-```
-
-- `--pii-report`: JSON von `scoreboard.py report --json` (oben). Je gemessener ID (`scopes` des
-  Berichts) und Quellfamilie `gold` und exakt F1 je Engine (`ark-balanced`, `ark-strict`,
-  `presidio-default`, `presidio-tuned`) über alle Zeilen der Familie; Familien ohne Gold-Span stehen als
-  `{"gold": 0}`. Dazu `pii.milestone_view` (Sicht des Urteils, `raw`) und `pii.baselines` (die
-  Presidio-Engines des Urteils, `presidio-default` und `presidio-tuned`; Schema 1.2, ersetzt
-  `pii.baseline`); die Capabilities-Seite zeigt ARK gegen jede dieser Baselines.
-- `--dlp-reports`: `--output-dir` von `scripts/l1_dlp/baseline_report.py`. Secret-Entitäten und -Gruppen
-  bekommen F1/Precision/Recall des Default-Profils für ARK und jede Baseline, die einen getypten Span
-  meldet; standardmäßig aus geschaltete Familien (Business-Identifier, Content-Klassen) die Werte von
-  ARKs Opt-in-Lauf (`ark.extended.json`, `profile: extended`), Content-Klassen je Dokument
-  (`level: document`) auf den externen Korpora, ohne dortiges Gold auf den Carrier-Zeilen
-  (`content_labels`). Geplante Dokumentklassen ohne Regeln und `out_of_scope`
-  fehlen.
-- `--dlp-entity-map`: die Entity-Map des gemessenen Commits, damit später ergänzte IDs als „nicht
-  gemessen“ (`–`) statt „kein Gold“ erscheinen.
-- `--ner-report` (optional): JSON von `scoreboard.py ner --json`. Schreibt `pii.semantic`: je NER-ID,
-  Quellfamilie und Sprache (`en`, `de`) mit Gold `gold` und exakt F1 je Engine (rohes Gold), dazu
-  `latency.<engine>` mit p50/p95 je Text und der messenden Maschine. Von Hand gepflegte Schlüssel dort
-  (etwa `note` zu Plattform und Methode) bleiben erhalten; die Capabilities-Seite zeigt den Abschnitt
-  „Semantic entities“ nur, wenn der Snapshot `pii.semantic` trägt.
-
-Die Berichte enthalten nur Zählungen und Raten; Korpustext, Holdout und Vorhersagen gehören nicht ins
-Repo. Ohne `--output` wird `--snapshot` überschrieben; ein zweiter Lauf auf der eigenen Ausgabe ist
-idempotent.
+[`docs/reference/l1-capabilities.md`](../../docs/reference/l1-capabilities.md) liest die Gesamt- und
+die Je-Entität-Tabelle von [`research/l1-pii/scoreboard/final-raw.md`](../../research/l1-pii/scoreboard/final-raw.md)
+und die Tool- und Gruppentabelle von [`research/dlp/scoreboard/final.md`](../../research/dlp/scoreboard/final.md)
+(`scripts/l1_capabilities_doc.py`); Latenz und NER-Ergebnisse stehen dort als Text. Die
+Snapshots in `research/scoreboard/` sind Verlauf und speisen die Seite nicht mehr.
 
 Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit Lesezugriff auf
 Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,

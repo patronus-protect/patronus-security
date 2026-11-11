@@ -2,8 +2,7 @@
 
 How the native `dlp` category compares with the secret scanners gitleaks, TruffleHog and
 detect-secrets, and which categories Google Cloud DLP and Microsoft Purview cover. All numbers
-are from the L1-DLP programme's final report (2026-11-10); the measured ones come from the frozen
-dev split, the holdout numbers from the scoreboard gate.
+are our own measurements of 2026-11-10.
 
 ## What is compared
 
@@ -17,10 +16,10 @@ dev split, the holdout numbers from the scoreboard gate.
   template references, documented examples, test keys) and FP per MB on real benign code.
 - **Data:** synthetic carriers (.env, YAML, JSON, code, logs, CLI, DE/EN prose) with
   generator-made values only, 37.8 MB of benign code from 8 repositories and 7.5 MB of benign
-  DE/EN documents. The holdout uses a separate seed, separate carrier templates and other
-  repositories and is never visible to development runs.
+  DE/EN documents. A held-back test set uses a separate seed, separate carrier templates and other
+  repositories and is never used during development.
 
-## Results (dev split)
+## Results
 
 | Tool | Precision | Recall | F1 | Hard-negative FP | Benign code FP/MB |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -55,15 +54,14 @@ documented example values, placeholders and test keys.
 
 ## Breadth
 
-| Count | ARK | Programme target |
+| Count | ARK | Target |
 | --- | ---: | ---: |
 | gitleaks default rules mapped to an ARK rule | 91 of 222 (41.0 %) | 90 % |
 | Secret formats (rules) | 139 | 150 |
 | Offline structure checks (checksum or structure validators) | 29 | 30 |
 | Content and document classes no secret scanner has | 16 | 20 |
 
-The breadth targets were not reached: the remaining provider packages were deferred when the
-programme closed. `python3 scripts/l1_dlp/milestones.py count` recomputes the table from
+The breadth targets were not reached: the remaining provider formats were postponed. `python3 scripts/l1_dlp/milestones.py count` recomputes the table from
 `research/dlp/entity_map.yaml` and the rule metadata.
 
 ## Coverage matrix

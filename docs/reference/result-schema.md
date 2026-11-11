@@ -185,7 +185,7 @@ numeric IBAN substring that also passes the credit-card validator. The primary `
 does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
 matches within the same PII label are deduplicated.
 
-DLP secret spans (credential and secret groups) never overlap (K08). Where several secret
+DLP secret spans (credential and secret groups) never overlap. Where several secret
 rules match one value, one span stays:
 
 1. A span of the same tier that only adds quotes or a trailing `;`/`,` to a tighter span gives
@@ -239,7 +239,7 @@ The model score of a finding is the sum of three parts, capped at 100 and divide
   because then it names the next value. The
   [L1 rule catalog](l1-rule-catalog.md#pii-context-lexicon) lists the lexicon entries per label.
 
-**Structure (K04).** A key names the value it holds like a field name right before it: a JSON
+**Structure.** A key names the value it holds like a field name right before it: a JSON
 or Python-dict key (`"kundennummer": "KD-1"`, `customerId`), a `key: value` or `key=value` line
 (YAML, INI, forms), an XML element or attribute (`<bic>…</bic>`, `<customer id="…"/>`, qualified by
 the parent element), a CSV header (`;`, `,`, tab or `|` separated, two or more lines with the same
@@ -256,7 +256,7 @@ instead of proximity: a key of the label scores +25 (`anchor` is the lexicon ent
 rule takes its required context from it. A number inside a longer value (`Phone: (987)
 012-3456`) is not the value its key names.
 
-**Obfuscation (K06).** Values hidden behind characters that leave them readable are found in a
+**Obfuscation.** Values hidden behind characters that leave them readable are found in a
 normalized view of the text and reported with their original span (byte and character offsets
 of the text as sent, including the hidden characters). In every mode, including `strict`, the
 scanner removes zero-width characters (U+200B–U+200D, U+2060, U+FEFF, soft hyphen) between two
@@ -270,22 +270,22 @@ e-mail separators (`ada [at] northwind [dot] com`, `max punkt mustermann ät fir
 word and the domain a common top-level domain, so `docs at example dot com` stays prose) and
 numbers spaced character by character (`D E 8 9 3 7 …`, at least eight characters, six of them
 digits); such findings score 10 points less than the plain form. `strict` and `balanced` keep
-these forms negative (gold convention T01). Rules and validators run on the normalized value, so
+these forms negative. Rules and validators run on the normalized value, so
 a wrong check digit stays unreported. A finding that needed normalization replaces a same-label
 finding it contains and yields to any other; its `matched_rules` entry carries original offsets
 and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `spaced_digits`).
 
-**Cross-label overlaps (K07).** Number labels compete for the same digits: the BBAN of an IBAN can
-be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
-a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
-so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
+**Cross-label overlaps.** Number labels compete for the same digits: the BBAN of an IBAN can
+be a valid card number, and an account field can hold an IBAN or a card-shaped number. A
+card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
+so phone digits do not compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
 `VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER`, `AU_ABN`, `FR_NIR`, `FR_SIRET`, `BE_NATIONAL_NUMBER` and
 `TR_NATIONAL_ID` (a bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11
-digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02; an
-NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in 2-3-3-3 groups or as eleven
-digits can be a Steuer-ID, B-APAC; a Belgian national number can be a Steuer-ID, a SIRET or a NIR a
-card number, B-EU1; a T.C. Kimlik No can be a Steuer-ID, B-LUHN).
+digits like a Steuer-ID; the twelve digits of a Lithuanian one can be card-shaped; an
+NHS number in 3-3-4 groups is also a US phone number; an ABN in 2-3-3-3 groups or as eleven
+digits can be a Steuer-ID; a Belgian national number can be a Steuer-ID, a SIRET or a NIR a
+card number; a T.C. Kimlik No can be a Steuer-ID).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -296,14 +296,14 @@ own label, i.e. a field name, a structural key or a nearby support term (`contex
 reported (`iban_form`). The loser leaves `evidence_spans`; its `matched_rules` entries stay and
 carry `overlap` with the `reason` and, except for `iban_form`, the winning label in `yields_to`.
 `class_name` and `confidence` follow the remaining findings. `PASSPORT_NUMBER` and
-`IDENTITY_CARD_NUMBER` compete with an overlapping finding of any other label (F08): a bare check
+`IDENTITY_CARD_NUMBER` compete with an overlapping finding of any other label: a bare check
 digit of 7-3-1 mod 10 fits one in ten letter-led codes, so a document finding with only a nearby term
 ranks below every other supported label, and `Kundennummer K12345676` stays `CUSTOMER_ID` and
 `Passport number: Y22400855` stays `PASSPORT_NUMBER`. Other labels keep their
 overlaps (an e-mail address after `Username:` stays `EMAIL` and `USERNAME`), and `strict` keeps both
-labels (decision T07).
+labels by design.
 
-**Secondary evidence in `strict` (T07).** `strict` keeps reporting both labels, with spans, class
+**Secondary evidence in `strict`.** `strict` keeps reporting both labels, with spans, class
 and confidence unchanged, but a `CREDITCARD` or `FINANCIAL_ACCOUNT_NUMBER` finding inside a reported
 (MOD-97-valid) IBAN is secondary evidence of it: the card-shaped BBAN of
 `DE94 5001 0517 5401 2345 65`, or the account after `Bank account:` on
@@ -312,7 +312,7 @@ and confidence unchanged, but a `CREDITCARD` or `FINANCIAL_ACCOUNT_NUMBER` findi
 `primary_label` (`IBAN`); it is absent when there is none. Evaluations (`13_l1_golden_eval`,
 `scripts/l1_presidio/run_ark.py` for the scoreboard) score primary findings only. A card or
 account next to an IBAN, and the digits of an IBAN form whose check digits fail, stay primary.
-The scored modes drop these findings instead (K07) and list nothing.
+The scored modes drop these findings instead and list nothing.
 
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
@@ -325,42 +325,42 @@ and carry neither field.
 
 Every rule that does not require context scores at least `0.50` without it, so `balanced` and
 `recall` return the `strict` spans except those a nearer counter-context term pushes below their
-threshold and those that yield to an overlapping finding of a competing label (K07). They also report checksum-strong values without a field name (K05): IBAN and card
+threshold and those that yield to an overlapping finding of a competing label. They also report checksum-strong values without a field name: IBAN and card
 numbers as in `strict`, and scored-only rules add the bare form of values that `strict` reports
 only after their field name. The first is `pii_steuer_id_de_context_free`: 11 digits or
 `86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
 digit twice or three times, never three in a row), standing alone rather than inside a longer
 number, range or decimal. It scores `0.55` bare, `0.80` after `Steuer-ID ist`, and `0.25` behind
 a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. The VAT ID
-rules (B01) are scored-only as well, with one label per country (`VAT_ID_DE`, `VAT_ID_AT`,
+rules are scored-only as well, with one label per country (`VAT_ID_DE`, `VAT_ID_AT`,
 `VAT_ID_CH`, `VAT_ID_FR`, `VAT_ID_NL`, `VAT_ID_BE`, `VAT_ID_IT`, `VAT_ID_ES`): an upper-case
 country prefix, the national form (`DE 136 695 976`, `ATU13585627`, `CHE-100.155.212`,
 `FR 40 303 265 045`, `NL004495445B01`, `BE 0403.019.261`, `IT00743110157`, `ESA13585625`) and its
 check digit; `0.55` bare, `0.80` with a VAT term such as `USt-IdNr.`, `TVA` or `Partita IVA`. A
-bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. Part 2 (B02)
-adds `VAT_ID_BG`, `VAT_ID_CY`, `VAT_ID_CZ`, `VAT_ID_DK`, `VAT_ID_EE`, `VAT_ID_EL` (prefix `EL` or
+bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. The same
+applies to `VAT_ID_BG`, `VAT_ID_CY`, `VAT_ID_CZ`, `VAT_ID_DK`, `VAT_ID_EE`, `VAT_ID_EL` (prefix `EL` or
 `GR`), `VAT_ID_FI`, `VAT_ID_HR`, `VAT_ID_HU`, `VAT_ID_IE` and `VAT_ID_LT` in the same way
 (`BG175074752`, `CY-10259033P`, `CZ25123891`, `DK 13 58 56 28`, `EE100931558`, `EL094259216`,
 `FI20774740`, `HR33392005961`, `HU-12892312`, `IE6433435OA`, `LT100001919017`), with national terms
-such as `DIČ`, `CVR-nr.`, `ΑΦΜ`, `OIB` or `PVM kodas`. B16 adds `VAT_ID_LU`, `VAT_ID_LV`,
+such as `DIČ`, `CVR-nr.`, `ΑΦΜ`, `OIB` or `PVM kodas`, and to `VAT_ID_LU`, `VAT_ID_LV`,
 `VAT_ID_MT`, `VAT_ID_PL`, `VAT_ID_PT`, `VAT_ID_RO`, `VAT_ID_SE`, `VAT_ID_SI`, `VAT_ID_SK`,
 `VAT_ID_NO` and `VAT_ID_GB` the same way (`LU15027442`, `LV40003521600`, `MT 1167-9112`,
 `PL 856-734-62-15`, `PT 501 964 843`, `RO18547290`, `SE556677889901`, `SI 5022 3054`,
 `SK 202 274 96 19`, `NO 995 525 828 MVA` with the suffix in the span, `GB 980 7806 84` with an
 optional three-digit branch); Northern Ireland numbers (`XI 980 7806 84`) are `VAT_ID_GB`. German passport
-and identity card numbers (F08) are scored-only with their ICAO 9303 check digit (weights 7-3-1):
+and identity card numbers are scored-only with their ICAO 9303 check digit (weights 7-3-1):
 passport series `C F G H J K`, identity card series `L M N P R T V W X Y`, eight characters plus the
 check digit (`F12345671`, `L01X00T44`) or the MRZ form of nine plus the check digit (`C01X00T478`,
 `T220001293`); `0.55` bare, `0.80` with a document term such as `Pass-Nr.` or `Ausweis-Nr.`. A bare
 value of a field that names something else is not reported (`DEA-Nummer: RN4135883`, a
 `driver_license_number` column). The old numeric serial of ten digits (`1220001297`) needs such a
-term or key. Three format rules are scored-only too (B-SSN, B-UK), their issuing rules standing in
+term or key. Three format rules are scored-only too, their issuing rules standing in
 for a check digit, and score `0.50` bare: the grouped US SSN, a UK National Insurance number in one
 letter case (`AB123456C`, `AB 12 34 56 C`, `hh 01 02 03 d`; `NATIONALID`) and a UK driving licence
 (`MORGA657054SM9IJ`: surname, birth date, initials; `DRIVER_LICENSE_NUMBER`). The UK NHS number
 (`NHS_NUMBER`, mod-11 check digit: `943 476 5919`, `943-476-5919`, `9434765919`), a UK passport
 number (`925665416`) and a passport number of two letters and seven digits (`PA1234567`) need an NHS
-or passport term or key in every mode. Australian and Singaporean numbers (B-APAC) have one label
+or passport term or key in every mode. Australian and Singaporean numbers have one label
 each and a check digit or letter: `AU_ABN` (mod 89), `AU_ACN` (mod 10), `AU_TFN` (mod 11),
 `AU_MEDICARE` (1-3-7-9 mod 10), `SG_NRIC_FIN` (check letter per series `S T F G M`) and `SG_UEN`
 (check letter per format). With a term of the label near the value or as its key (`ABN`, `TFN`,
@@ -369,20 +369,20 @@ bare, in `balanced`/`recall` only and at `0.55`, the forms whose shape adds to t
 in 2-3-3-3 groups (`51 824 753 556`), a Medicare number in 4-5-1 groups (`2123 45670 1`), an
 uppercase NRIC/FIN (`S0642712Z`) and a UEN with a registration year or entity type (`201434292D`,
 `S57TU0392K`). ACN, TFN (`876 543 210`), the bare digit runs and a UEN of eight digits and a letter
-(`53125226D`) need the term in every mode. German health care numbers (B-DE1) are reported only
+(`53125226D`) need the term in every mode. German health care numbers are reported only
 with their check digit, in every mode: the health insurance number (`HEALTH_INSURANCE_NUMBER`,
 KVNR, `A123456780`), the pension insurance number (`SOCIALID`, `15070649C103`, with a possible birth
 day and month) and the LANR (`PHYSICIAN_NUMBER_LANR`, `123456601`). In `balanced`/`recall` an
 uppercase KVNR and an RVNR (also `15 070649 C 103`) are reported bare at `0.55`; a LANR needs a term
 such as `Arztnummer` near it or as its key there. The BSNR (`FACILITY_NUMBER_BSNR`, nine digits, no
 check digit) needs a BSNR term or key (`BSNR`, `Betriebsstättennummer`, `practice number`) in every
-mode. A US ABA routing number (B-ACCT, `FINANCIAL_ACCOUNT_NUMBER`: Federal Reserve routing symbol
+mode. A US ABA routing number (`FINANCIAL_ACCOUNT_NUMBER`: Federal Reserve routing symbol
 and 3-7-1 check digit, `121000358`, `0711-0130-7`) is reported in every mode with a routing or
 account term near it or as its key (`ABA`, `RTN`, `routing number`, `Routingnummer`, a
 `routing_number` key), `0.75`–`0.85`; bare, only the printed 4-4-1 form in `balanced`/`recall` at
 `0.55`. Under a field name (`BBAN:`, `Bank Routing Number:`, `Acct No:`, a `bban` key or an
 `<AcctNumber>` element) the account rule reports the value without a check digit.
-French, Dutch and Belgian national numbers (B-EU1) have one label each and a check digit:
+French, Dutch and Belgian national numbers have one label each and a check digit:
 `FR_NIR` (numéro de sécurité sociale, key mod 97), `FR_SIREN` and `FR_SIRET` (Luhn; La Poste SIRETs
 by digit sum), `NL_BSN` (burgerservicenummer, 11-proof) and `BE_NATIONAL_NUMBER` (rijksregisternummer /
 numéro de registre national, mod 97). With a term of the label near the value or as its key (`NIR`,
@@ -392,7 +392,7 @@ numéro de registre national, mod 97). With a term of the label near the value o
 fifteen characters of sex 1 or 2, a SIRET in 3-3-3-5 groups (`732 829 320 00074`), a BSN printed
 `1234.56.782` and a national number printed `85.07.30-033.28`. The SIREN (`732 829 320`) and bare
 runs of nine, eleven or fourteen digits need the term in every mode. Four more national numbers
-(B-LUHN) have one label each: the Swedish organisationsnummer (`SE_ORGANISATIONSNUMMER`, third
+have one label each: the Swedish organisationsnummer (`SE_ORGANISATIONSNUMMER`, third
 digit 2 or more, Luhn; `556703-7485`), the Canadian Social Insurance Number (`CA_SIN`, Luhn, first
 digit not 0 or 8; `130-692-544`), the Turkish T.C. Kimlik No (`TR_NATIONAL_ID`, two check digits;
 `10000000146`) and the South African identity number (`ZA_ID_NUMBER`, birth date, citizenship 0–2,
@@ -403,7 +403,7 @@ an 8 or 9 and Luhn; `8001015009087`). With a term of the label near the value or
 `NNNNNN-NNNN`, the SIN in hyphenated 3-3-3 groups and the thirteen digits of a South African ID
 number (also `800101 5009 087`). Ten bare digits, a SIN in 3-3-3 groups by spaces (the print form
 of a SIREN or a BSN) and the eleven digits of a T.C. Kimlik No need the term in every mode. Four
-more (B-EU2): the Austrian social security number (`AT_SOCIAL_SECURITY_NUMBER`, serial from 100, a
+more: the Austrian social security number (`AT_SOCIAL_SECURITY_NUMBER`, serial from 100, a
 weighted check digit mod 11; `1237 010180`), the Swiss AHV number (`CH_AHV_NUMBER`, 756 and an
 EAN-13 check digit; `756.1234.5678.97`), the Portuguese NIF (`PT_NIF`, the mod-11 check of the
 Portuguese VAT ID, a label of its own; `501964843`) and the Irish PPS number (`IE_PPSN`, the check
@@ -411,50 +411,50 @@ letter of the Irish VAT number; `1234567FA`). With a term (`Sozialversicherungsn
 `AHV-Nummer`, `numéro AVS`, `NIF`, `número de contribuinte`, `PPSN`, `PPS number`) or as a key they
 are reported in every mode; bare, in `balanced`/`recall` only and at `0.55`, the Austrian number
 printed `NNNN DDMMYY` with a calendar date and the dotted AHV number. Nine digits after `PT ` are
-the body of a VAT ID, no NIF. Three Korean numbers (B-KR): the resident registration number
+the body of a VAT ID, no NIF. Three Korean numbers: the resident registration number
 (`KR_RRN`, birth date, sex and century digit 1–4, region code up to 95, a check digit mod 11;
 `960121-1021413`), the foreigner registration number (`KR_FRN`, the same form with 5–8;
 `911124-5678906`) and the business registration number (`KR_BRN`, a weighted check digit mod 10;
 `104-82-13138`). With a term (`RRN`, `resident registration number`, `주민등록번호`, `FRN`,
 `외국인등록번호`, `BRN`, `사업자등록번호`) or as a key they are reported in every mode, also as
 thirteen or ten plain digits; bare, in `balanced`/`recall` only and at `0.55`, the hyphenated
-forms. Three Spanish and Italian numbers with a check letter (B-ESIT): the DNI/NIF (`ES_NIF`, eight
+forms. Three Spanish and Italian numbers with a check letter: the DNI/NIF (`ES_NIF`, eight
 digits and a control letter mod 23; `12345678Z`), the NIE (`ES_NIE`, `X`/`Y`/`Z`, seven digits and
 the same letter; `X1234567L`) and the codice fiscale (`IT_FISCAL_CODE`, sixteen characters with a
 check letter mod 26; `RSSMRA85T10A562S`). With a term (`NIF`, `DNI`, `NIE`, `codice fiscale`,
 `fiscal code`) or as a key they are reported in every mode and any case; bare, in
 `balanced`/`recall` only and at `0.55`, the uppercase values. A NIF or NIE right after `ES ` (or a NIF after `CY `) is the
 body of a VAT ID. A bare CIF (`CIF: A58818501`) is a `VAT_ID_ES` in `balanced`/`recall` with a VAT
-or CIF term, like the bare Partita IVA. Two Polish numbers with a check digit (A13): the PESEL
+or CIF term, like the bare Partita IVA. Two Polish numbers with a check digit: the PESEL
 (`PL_PESEL`, eleven digits with the birth date and a check digit weighted 1-3-7-9 mod 10;
 `02070803628`) and the REGON (`PL_REGON`, nine digits or fourteen of a local unit, weighted mod 11;
 `123456785`). They are reported in every mode with a term (`PESEL`, `REGON`) or as a key, never
 bare. A bare NIP (`NIP: 5260250995`) is a `VAT_ID_PL` in `balanced`/`recall` with a NIP term
-(a generic VAT term is not enough). Four Indian numbers (B-IN): the Aadhaar number (`IN_AADHAAR`,
+(a generic VAT term is not enough). Four Indian numbers: the Aadhaar number (`IN_AADHAAR`,
 twelve digits, first digit 2–9, plain or grouped 4-4-4, a Verhoeff check digit; `5915 3375 9365`)
 and the GSTIN (`IN_GSTIN`, state code, PAN, entity number, `Z` and a mod-36 check character;
 `10BAGFF2439K3ZL`) carry a check; the PAN (`IN_PAN`, the holder type in the fourth letter;
 `BNZPM2501F`) and the voter ID (`IN_VOTER`, EPIC, three letters and seven digits; `KLT4471920`) are
 format checks. With a term (`Aadhaar`, `GSTIN`, `GST number`, `PAN`, `Permanent Account Number`,
 `Voter ID`, `EPIC`) or as a key they are reported in every mode; bare, in `balanced`/`recall` only
-and at `0.55`, the grouped Aadhaar number and the GSTIN. Two US medical licence numbers (A06)
+and at `0.55`, the grouped Aadhaar number and the GSTIN. Two US medical licence numbers
 carry a check digit: the DEA registration number (`MEDICAL_LICENSE`, a registrant type letter, the
 last-name initial or `9`, seven digits with a mod-10 check digit; `AB1234563`) and the National
 Provider Identifier (`US_NPI`, ten digits, first 1 or 2, Luhn behind the prefix `80840`;
 `1234567893`). With a term (`DEA number`, `DEA-Nummer`, `NPI`, `National Provider Identifier`) or
 as a key they are reported in every mode; bare, in `balanced`/`recall` only and at `0.55`, the NPI
-in 4-3-3 groups (`1234-567-893`). The German commercial register number (`COMMERCIAL_REGISTER_DE`,
-B-DEFMT: `HRA`/`HRB`, one to six digits, an optional court suffix such as `B`; `HRB 123456`) is
+in 4-3-3 groups (`1234-567-893`). The German commercial register number (`COMMERCIAL_REGISTER_DE`:
+`HRA`/`HRB`, one to six digits, an optional court suffix such as `B`; `HRB 123456`) is
 reported in every mode with a register or local court term (`Amtsgericht`, `Handelsregister`,
 `commercial register`) or as a key, and bare in `balanced`/`recall` only at `0.50`. The Steuernummer
 follows the groups of the Länder or the 13-digit ELSTER form with a Land prefix; the ELSTER form needs
-its field name. Four identifiers of B-FIN are reported in every mode only with a term of their label
+its field name. Four financial and product identifiers are reported in every mode only with a term of their label
 or as a key, never bare: the VIN (`VIN`, seventeen characters without `I`, `O`, `Q`, the last four
 digits; `1HGCM82633A004352` with the North American check digit or `WVWZZZ1JZXW000001` in the
 European form), the ISIN (`ISIN`, Luhn over the letters; `US0378331005`), the LEI (`LEI`, ISO 7064
 MOD 97-10; `529900T8BM49AURSDO55`) and the Pharmazentralnummer (`DE_PZN`, weighted mod 11;
 `PZN: 01126111`; `PZN` followed by blanks only lists a product and stays silent). Crypto wallet
-addresses (`CRYPTO`, A02) are reported bare in every mode when their checksum holds: Bitcoin in
+addresses (`CRYPTO`) are reported bare in every mode when their checksum holds: Bitcoin in
 Base58Check (`1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa`) or Bech32/Bech32m (`bc1q…`, `bc1p…`), Litecoin
 (`L…`, `M…`, `ltc1…`) and Ethereum with the mixed-case EIP-55 checksum
 (`0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed`); a lower-case Ethereum address needs a wallet term or key. The German document number rules keep
@@ -573,7 +573,7 @@ external L1 detectors remain separate and unchanged.
 ### DLP taxonomy
 
 DLP findings use the `entity_group` of their rule as the span `label` and the result
-`class_name`. Taxonomy v2 (K09) keeps these groups unchanged: the credential/secret groups
+`class_name`. Taxonomy v2 keeps these groups unchanged: the credential/secret groups
 `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY`, `SECRET_TOKEN`, `CREDENTIAL`, `PASSWORD_HASH`,
 `PRIVATE_KEY` and `CRYPTO_KEY` (on by default), the classification markings
 (`dlp.document.classification_marking`, on by default), plus the opt-in identifier, content and
