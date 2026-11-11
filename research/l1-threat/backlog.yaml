@@ -52,7 +52,7 @@ setup:  # manual, not run by the schedule
     status: done
     owner: user
   - id: R05
-    title: Blind holdout (source family ark_blind) — native German for instruction_injection, jailbreak, prompt_extraction, harmful_content requests (no native DE set of real size exists on the Hub; research-2026-11.md §5.1), plus DE+EN for prompt_extraction, tool_poisoning, agent_config_tampering, exfiltration, unsafe_action, memory_poisoning and resource_exhaustion (no or thin public data); per category list in categories/*.md §12 — written outside the runner (du/Sie, colloquial, typos, with clean twins), stored only under ~/ark-threat/holdout with SHA manifest, never seen by the runner agent; written by a separate Claude session without runner access, sample checked by hand
+    title: German holdout by translation (decided 2026-11-11) — after E01 has frozen the EN holdout from real public datasets, a separate Claude session without runner access translates it to German once (marked translated, same split, same SHA manifest under ~/ark-threat/holdout); no native German writing. Classes without public data (memory_poisoning, resource_exhaustion, agent_config_tampering, gaps in tool_poisoning/exfiltration/unsafe_action) get synthetic DE+EN items modelled on real public examples (papers, advisories, MCPTox and similar), never on the repo's goldens
     status: manual
     owner: user
 

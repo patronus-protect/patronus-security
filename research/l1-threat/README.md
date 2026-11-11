@@ -208,7 +208,7 @@ bekannte Baseline-Trainingslisten (E01).
 | Familie | Quellen | Rolle |
 |---|---|---|
 | `neutral` | öffentliche Datensätze mit klarer Lizenz | entscheidet |
-| `ark_blind` | R05 (separate Claude-Session ohne Runner-Zugriff, Stichprobe von Hand) und der Seed-Teil der Generatoren (geheimer Seed); von uns, aber für den Runner blind | entscheidet **nur**, wo es keine `neutral`-Daten der Kategorie und Sprache gibt; immer getrennt berichtet |
+| `ark_blind` | R05 (DE-Übersetzung des EN-Holdouts und synthetische Items für Klassen ohne öffentliche Daten; separate Claude-Session ohne Runner-Zugriff) und der Seed-Teil der Generatoren (geheimer Seed); von uns, aber für den Runner blind | entscheidet **nur**, wo es keine `neutral`-Daten der Kategorie und Sprache gibt; immer getrennt berichtet |
 | `ark_authored` | Goldens, Generator-Ausgaben mit Dev-Seed, Übersetzungen des Runners | wird berichtet, entscheidet nie |
 | `baseline_trained` | Sätze, auf denen eine Baseline trainiert wurde | für diese Baseline nur berichtet |
 | `report_only` | NC-, GPL- oder unklar lizenzierte Sätze, verrauschte Sätze | nur berichtet |
@@ -229,7 +229,7 @@ Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-d
 | 1 | Chat | Alle elf Kategorien nach dem Muster [`categories/injection.md`](categories/injection.md) beschreiben (erledigt 2026-11-09) | – |
 | 2 | Chat | Plan-PR (dieser Ordner) | – |
 | 3 | Setup | Runner-Programm `threat` auf VPS 1 und VPS 2 (nur Pfade), Agent-Prompt, Baselines-Venv | R01–R03 |
-| 4 | Setup | Nativer DE-Holdout aus eigener Claude-Session | R05 |
+| 4 | Setup | DE-Holdout als Übersetzung des eingefrorenen EN-Holdouts (nach E01), synthetisch nur für Klassen ohne öffentliche Daten | R05 |
 | 5 | Setup | Timer an | R04 |
 | 6 | Runner | Threat nach `ark-core` | X02 |
 | 7 | Runner | Grundstruktur: ein Core, eine Pattern-Form; PII und DLP zuerst, ohne Verschlechterung | S01 |
@@ -259,8 +259,8 @@ Gebündelt nach der Speed-up-Entscheidung vom 2026-10-21: ein Bündel = ein Lauf
   Der Programmname `threat` im Runner ist nur der
   Sammelname, keine Kategorie. Der Timer startet erst, wenn Backlog und PR #261 (K26) auf
   `main` sind.
-- Übersetzungen macht der Runner-Agent selbst (kein externer MT-Dienst). Den nativen DE-Holdout (R05) schreibt
-  eine eigene Claude-Session ohne Runner-Zugriff.
+- Übersetzungen macht der Runner-Agent selbst (kein externer MT-Dienst). Den DE-Holdout (R05) übersetzt eine
+  eigene Claude-Session ohne Runner-Zugriff einmal aus dem eingefrorenen EN-Holdout (entschieden 2026-11-11).
 - Ein Lauf = ein Bündel, Tests zuerst, unabhängiges Gate, PR erst bei grüner CI, Auto-Merge des untersten
   grünen PRs wie bei PII/DLP.
 - Inhalte im öffentlichen Repo: keine funktionierenden Schadanleitungen, keine Klartext-Slur-Listen
