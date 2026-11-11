@@ -1,6 +1,6 @@
 # L1-Threat: breite Regeln, gelernte Punkte
 
-Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). Recherche:
+Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). OSS-Regelinventar: [`oss_rules.yaml`](oss_rules.yaml) (Prüfung `scripts/l1_threat/oss_inventory.py check`). Recherche:
 [`research-2026-11.md`](research-2026-11.md). Ausführung über denselben VPS-Runner wie
 [`../l1-pii/`](../l1-pii/README.md) und [`../dlp/`](../dlp/README.md), Branch-Präfix `threat/`, Label
 `ark-threat`.
@@ -136,6 +136,25 @@ Regeln kommen aus zwei Quellen: eigene Familien (Taxonomie M01) und **übernomme
 Apache, nie AGPL) als Katalog mit Herkunft, wie `prompt_armor` und `skillspector`: ATR, pipelock, Cisco
 mcp-scanner YARA, seojoonkim/prompt-guard, Vigil, NeMo-YARA, LlamaFirewall. Eine übernommene Regel bleibt
 nur, wenn sie auf Dev die Präzision hält.
+
+**OSS-Inventar (M02, [`oss_rules.yaml`](oss_rules.yaml)).** 2.938 Regeln aus zehn Quellen, je Quelle Repo,
+gepinnter Commit, Lizenz und Lizenzdatei; je Regel Upstream-ID, Kategorie, Klasse und Familie der Taxonomie,
+Sprachen, Ernte ja/nein mit Grund und ein Hash des Regelkörpers (keine Regelkörper im Repo). Alle zehn Quellen
+sind MIT oder Apache-2.0; ausgeschlossen bleiben pipelock `enterprise/` (Elastic License 2.0) und das
+kodierte Malware-Paket von SkillSpector. citadel liegt heute unter `TryMightyAI/citadel`. Ernte = erlaubte
+Lizenz, Klasse zugeordnet, deterministischer Text-Matcher, in Rust-`regex` kompilierbar (kein Lookaround,
+keine Rückverweise), aktiv, erste Kopie des Körpers. Stand: 1.937 erntbar; nicht geerntet 574 außerhalb des
+L1-Scopes (Secrets/PII im Text → DLP/PII, SQL/XSS/Template/Pfad-Payloads, Malware-Signaturen), 145
+Shell-Syntax → K26, 168 Dubletten, 70 nicht portabel, 36 semantisch/Hex, 8 inaktiv. Befunde:
+- Deutsch ist dünn: 27 erntbare DE-Regeln, davon 18 aus prompt-guard und 8 aus ATR (vor allem Injection,
+  Jailbreak, Exfil); für `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `resource_exhaustion`,
+  `harmful_content` und `toxic_language` gibt es keine. Der DE-Vorsprung (M2) kommt aus eigenen Familien.
+- `toxic_language` hat 7 OSS-Regeln (5 sentinel-ai, 2 ATR), `harmful_content` 80 erntbare (44 ATR, 23
+  prompt-guard), fast alle EN.
+- Die Zuordnung ist ein erster Durchlauf aus Kategorie-Tabelle und Stichwort-Hinweisen; 229 erntbare
+  Regeln tragen `mapping: default` (Klassen-Default-Familie) und gehen in die M04-Durchsicht.
+- Die Ernteliste je Klasse liefert `oss_inventory.py harvest --class <klasse>`; die Klassen-Bundles lesen sie
+  und übernehmen Regeln default aus.
 
 ## Ablationen (B1–B5) unter Budget
 

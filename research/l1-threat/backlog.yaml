@@ -94,6 +94,7 @@ tasks:
     accept: scripts/l1_threat/taxonomy.py check fails on an unmapped or doubly mapped ark.injection.*/ark.threat.* rule, a must-family without task, or an unknown lexicon id; pytest in scripts/tests
 
   - id: M02
+    status: done
     title: OSS rule inventory — ATR, pipelock, Cisco mcp-scanner YARA, seojoonkim/prompt-guard, Vigil, NeMo YARA, LlamaFirewall regex, SkillSpector static, sentinel-ai, citadel; per rule licence, family, languages, harvest yes/no
     type: mapping
     deps: [M01]
