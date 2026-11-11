@@ -1,0 +1,11 @@
+[Unit]
+Description=ARK L1-Threat runs back to back (next run 3 minutes after the previous one ends; shared run lock with the other programmes, a busy lock queues the run)
+
+[Timer]
+OnActiveSec=1min
+OnBootSec=2min
+OnUnitInactiveSec=3min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

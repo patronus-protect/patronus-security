@@ -19,21 +19,21 @@ import time
 from collections import Counter
 from pathlib import Path
 
-PROGRAM = sys.argv[1]                      # pii | dlp
+PROGRAM = sys.argv[1]                      # pii | dlp | threat
 HOME = Path.home()
-LOGS = HOME / ("ark-l1/logs" if PROGRAM == "pii" else "ark-dlp/logs")
-PREFIX = "l1/" if PROGRAM == "pii" else "dlp/"
+DIR, PREFIX, UNIT = {"pii": ("ark-l1", "l1/", "ark-l1.service"), "dlp": ("ark-dlp", "dlp/", "ark-dlp.service"),
+                     "threat": ("ark-threat", "threat/", "ark-threat.service")}[PROGRAM]
+LOGS = HOME / DIR / "logs"
 REPO = "patronus-protect/patronus-security"
 STALL_HOURS = 8
 PR_STALE_HOURS = 5
 REPEAT_LIMIT = 3
 RECENT = 8
-RUN_MAX_HOURS = 24                         # TimeoutStartSec of ark-l1/ark-dlp.service
+RUN_MAX_HOURS = 24                         # TimeoutStartSec of the ark-*.service units
 # The longest silent stretch of a healthy run: the gate prints its report only at the end, and its
 # cargo test step alone may take up to 6 h (GATE_TEST_MAX_SEC); an agent round stops at 1.5 h.
 ACTIVE_QUIET_HOURS = 6
-CURRENT = HOME / ("ark-l1/state" if PROGRAM == "pii" else "ark-dlp/state") / "current.json"
-UNIT = "ark-l1.service" if PROGRAM == "pii" else "ark-dlp.service"
+CURRENT = HOME / DIR / "state" / "current.json"
 
 PROGRESS = re.compile(r"LANDED=#\d+|AUTO_MERGED=#\d+|^PR=https", re.M)
 IDLE = re.compile(r"RESULT=(NOTHING_TO_DO|PAUSED|NO_BACKLOG)")

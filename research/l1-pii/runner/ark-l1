@@ -85,6 +85,16 @@ PROGRAMS = {
         # runs on lane b since 2026-11-09: that host is idle and quiet, which the performance loop needs.
         "lanes": {"b": ("M*", "P*", "C*", "H*")},
     },
+    "threat": {
+        "name": "L1-Threat", "title": "Threat", "label": "ark-threat", "prefix": "threat/", "dir": "ark-threat",
+        "backlog": "research/l1-threat/backlog.yaml", "readme": "research/l1-threat/README.md",
+        "prompt": "AGENT_PROMPT.threat.md", "golden": "threat", "eval_dir": "scripts/l1_threat",
+        "eval_venv": "baselines-venv",
+        # Lane b (decided 2026-11-10): unsafe_action → harmful_content and H. The mapping chain (M*) and
+        # the latency corpus (E03) need no other lane's work, so lane b starts with them in parallel
+        # to the restructure on lane a (2026-11-11).
+        "lanes": {"b": ("M*", "E03", "UA*", "MP*", "RE*", "TX*", "HC*", "H*")},
+    },
 }
 
 
@@ -774,6 +784,10 @@ def latency_ab(task: dict) -> dict:
     checkout's (merged, reviewed), never the head's: DLP the gate's `LATENCY.gate_check`, PII
     `latency.py run` + `compare` (ark and ark-native, 100 KiB p95) per attempt. Like the gate, a
     check fails only when it fails in every attempt. Returns {"lines", "regression"} or {"error"}."""
+    if PROGRAM == "threat":
+        # The PII and DLP benchmarks scan only their own category; a threat PR gets no number until
+        # E03 adds the threat latency harness and its A/B here, so verify says so instead of passing.
+        return {"lines": ["threat: no latency benchmark yet (E03); latency not measured"], "regression": False}
     out = GATE_TREES / "verify-latency"   # not under CACHE: head code runs here with network
     trees = {"base": GATE_TREES / "verify-base", "head": GATE_TREES / "verify-head"}
     sides = {"base": task["diff_base"], "head": task["head"]}

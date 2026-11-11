@@ -1,0 +1,245 @@
+# L1-Threat backlog. One scheduled run completes exactly one task (a task may be a bundle).
+# Selection (deterministic, ark-l1 --program threat next): first task in file order with
+# status: todo, all deps done, all ext_deps merged to main and no open needs_decision.
+# status: todo | in_progress | done | blocked | manual | deferred | bundled
+# ext_deps: tasks of other programs, form <program>:<id> (e.g. pii:K06); must be on main.
+#
+# Classes (README, replace the old seven labels in ark-core and ARK, no aliases):
+#   instruction_injection, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering,
+#   memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language.
+# secrets_access (credential access attempts) becomes family credential_access of unsafe_action.
+# Out of scope: shell commands / tool-call args (shell-risk K26), output scanning.
+#
+# Shared acceptance (applies to every task in addition to `accept`):
+#   location:     all detector code in ark-core; nothing new under rust/src/detectors/threat.
+#   categories:   every class is a category like pii/dlp/injection (runs only when active, wired in library,
+#                 ark-api, coordinator known_category, deploy configs); every rule toggles via rules: {id: bool}.
+#                 One category per class; instruction_injection keeps the category name `injection`; the
+#                 category `threat` is removed. Own mode per category (<category>_mode, strict default).
+#                 Default active stays pii, dlp, injection; all new categories are opt-in. Harvested OSS
+#                 rules are default off (rules map), own rules default on. L2/L3 models are not changed or retrained; only their labels
+#                 are mapped onto the new categories by one table in ark-core (X03).
+#   taxonomy:     every rule names its family in research/l1-threat/taxonomy.yaml (taxonomy.py check);
+#                 no rule work before M04 is decided.
+#   sources:      harvested OSS rules (MIT/Apache only, never AGPL) live in a catalog with upstream repo,
+#                 commit and rule id, like prompt_armor/skillspector; each kept rule holds dev precision.
+#   tests_first:  goldens via generate_l1_goldens.py (>= 5 positives + 5 hard negatives per language,
+#                 DE + EN; hard negatives cover defensive prompts, quotation, security docs, tutorials,
+#                 test code, negation), Rust unit tests — committed before the implementation.
+#   content:      no working harm instructions, no plaintext slur lists (toxicity lexica hashed), no
+#                 attack payloads copied from datasets; third-party data only fetched at eval time.
+#   points:       rule/anchor weights >= 0, damping <= 0, n-gram share capped; integer points; Python
+#                 training and Rust inference bit-identical (golden parity cases).
+#   gate:         same steps as CI; threat scoreboard without regression (> 0.5 pp TPR@1%FPR per class),
+#                 0 new FP on hard negatives, L1 100 KiB p95 on the real-DE corpus at most +5 %.
+#   docs:         CHANGELOG "Detection change", rule catalog via scripts/generate_docs.py.
+#   no_relax:     never lower a threshold to buy recall; recall comes from rules, anchors, structure.
+
+setup:  # manual, not run by the schedule
+  - id: R01
+    title: Runner — add programme threat (PROGRAMS entry, prefix threat/, label ark-threat, root ~/ark-threat, golden arg threat, eval_dir scripts/l1_threat, eval_venv baselines-venv); paths and locations only, no extra gate steps; patch on the VPS hosts, sync repo in a bundle
+    status: done
+    owner: user
+  - id: R02
+    title: research/l1-threat/AGENT_PROMPT.md (from the DLP prompt; class list, content rules, ban on fetching holdout sources, points rules) installed as AGENT_PROMPT.threat.md
+    status: done
+  - id: R03
+    title: ~/ark-threat/baselines-venv + binaries, pinned — pipelock, cisco-ai-mcp-scanner (YARA only), ATR rules, seojoonkim/prompt-guard, llamafirewall (regex/hidden-ascii/codeshield), nemoguardrails (YARA/regex rails), reference rows ProtectAI v2 and Prompt Guard 2 (gated, licence accepted by the user) as ONNX via onnxruntime (no torch); versions in VERSIONS
+    status: manual
+    owner: user
+  - id: R04
+    title: The whole programme (all eleven classes, incl. injection and toxic_language) runs on the existing VPS1 and VPS2 in the unified runner, 2h cadence, split into lanes via host.env like DLP — VPS2 lane a (X, S, M, E and injection → exfiltration), VPS1 lane b (unsafe_action → harmful_content, H), lane b starts once its deps are done (no new runner logic, lane mechanism as for DLP); holdout and baselines-venv copied to both hosts (identical SHA); enable ark-threat.timer only after the backlog and PR #261 (K26) are on main
+    status: done
+    owner: user
+  - id: R05
+    title: Blind holdout (source family ark_blind) — native German for instruction_injection, jailbreak, prompt_extraction, harmful_content requests (no native DE set of real size exists on the Hub; research-2026-11.md §5.1), plus DE+EN for prompt_extraction, tool_poisoning, agent_config_tampering, exfiltration, unsafe_action, memory_poisoning and resource_exhaustion (no or thin public data); per category list in categories/*.md §12 — written outside the runner (du/Sie, colloquial, typos, with clean twins), stored only under ~/ark-threat/holdout with SHA manifest, never seen by the runner agent; written by a separate Claude session without runner access, sample checked by hand
+    status: manual
+    owner: user
+
+tasks:
+  # ── X: Restructure ────────────────────────────────────────────────────
+  - id: X02
+    title: Move the threat detector from rust/src/detectors/threat into ark-core next to injection (rules, scorer, lexicon use, tests), no behaviour change
+    type: refactor
+    deps: []
+    accept: rust/src/detectors/threat removed; ark-core tests and goldens bit-identical before/after; no dead re-exports left
+
+  # ── S (first): base structure ─────────────────────────────────────
+  - id: S01
+    title: Base structure — one core (normalisation views, tokenizer, anchor scanner, AnchorGate, Fields, context engine, clause/negation/quote spans) and one pattern form for all categories in ark-core; PII and DLP moved onto it (PiiPattern/DlpPattern become the shared form), then injection/threat; normalisation points per category (PII −10, attack categories +); per-category modes; matched_rules[].context
+    type: engine
+    deps: [X02]
+    accept: >-
+      Separate modules core / patterns per category / (later) facts / models / policies, each layer only
+      depends on the one below; no second copy of context or score code. PII and DLP goldens and
+      scoreboards bit-identical before/after, no measurable latency loss (100 KiB p95); injection/threat
+      rules carry base_score and validator strength, anchors give points, not only gating. Coordinate
+      with open PII/DLP runner tasks on the same files (land between their runs)
+
+  - id: X04
+    title: Hand shell-syntax threat rules to shell-risk K26 and remove them from threat (remote/decoded shell execution, root destruction, container socket/privileged/host-root mounts, env-to-network, the MCP policy rules and the command part of mcp_runtime_risk, both today in category dlp)
+    type: scope
+    deps: [X02]
+    accept: >-
+      Only after PR #261 (K26) is on main. Per removed rule: the K26 core/bundle policy or model case that
+      covers it, verified on the rule's golden positives through shell_command; uncovered cases listed as
+      K26 follow-ups; no duplicate detection left in threat
+
+  # ── M: Mapping ────────────────────────────────────────────────────────
+  - id: M01
+    title: taxonomy.yaml + checker — families per class from research-2026-11.md (shape as word classes, anchors, required/negative context, DE/EN example shapes, carriers, existing rules, baseline coverage, gap, priority, backlog task)
+    type: mapping
+    deps: []
+    accept: scripts/l1_threat/taxonomy.py check fails on an unmapped or doubly mapped ark.injection.*/ark.threat.* rule, a must-family without task, or an unknown lexicon id; pytest in scripts/tests
+
+  - id: M02
+    title: OSS rule inventory — ATR, pipelock, Cisco mcp-scanner YARA, seojoonkim/prompt-guard, Vigil, NeMo YARA, LlamaFirewall regex, SkillSpector static, sentinel-ai, citadel; per rule licence, family, languages, harvest yes/no
+    type: mapping
+    deps: [M01]
+    accept: research/l1-threat/oss_rules.yaml (pinned commits, no rule bodies of AGPL sources); counts per class and language; harvest list feeds the class bundles
+
+  - id: M03
+    title: Baseline and dataset mapping (entity_map.yaml) — every baseline category and dataset label → new class or out_of_scope with reason; source families neutral / ark_blind / ark_authored / baseline_trained / report_only (README "Herkunft"); ark_blind decides only where a category and language has no neutral data
+    type: mapping
+    deps: [M01]
+
+  - id: M04
+    title: Review and freeze taxonomy v1 (classes, must/should families, defaults on/off per class)
+    type: decision
+    deps: [M02, M03]
+    needs_decision: true
+
+  # ── X (cont.): category switch ────────────────────────────────────────
+  - id: X03
+    title: New classes as categories in ark-core and ARK (SecurityCategory, scanner checks, result schema, ark-api, coordinator known_category, deploy configs, decision_thresholds, docs) replacing the old seven threat labels without aliases; per-rule toggles via the rules map (rule id to bool); existing rules re-labelled per research-2026-11.md §2
+    type: engine
+    deps: [X02, M04]
+    accept: >-
+      Action detectors leave category dlp: destructive_operation, sensitive_material and the non-shell rest
+      of mcp_runtime_risk to unsafe_action, secret_transfer to exfiltration; dlp keeps secrets only, its
+      goldens and scoreboard for the remaining rules bit-identical; CHANGELOG names the moved detectors.
+      Old labels gone from ark-core/rust/ark-api/coordinator/deploy/docs (git grep); every existing
+      ark.injection.* / ark.threat.* rule maps to exactly one new class; result-schema and CHANGELOG
+      describe the break; category `threat` removed, `injection` keeps its name; <category>_mode per
+      category; defaults unchanged (only pii/dlp/injection active); L2/L3 output labels (unified threat
+      head, NTDB L2) mapped onto the new categories by one table in ark-core, models untouched; old label
+      names exist only as model-output keys in that table, never in API, result schema or config
+      (secrets_access → unsafe_action, family credential_access, same as its three L1 rules
+      credential_file_access, credential_harvesting, ssrf_metadata; nothing dropped without a new home)
+
+  # ── E: Measurement ────────────────────────────────────────────────────
+  - id: E01
+    title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
+    type: eval-infra
+    deps: [M03]
+    accept: scripts/l1_threat/{datasets.yaml,prepare_corpora.py}; MCPTox included; contamination column per baseline; nothing committed except recipes and manifests
+
+  - id: E02
+    title: Generators — DE translation of decisive EN sets by the runner agent (no external MT; marked translated, hand-checked sample), carrier insertion with clean twin (web, PDF text, ticket, code comment, RAG chunk, mail), exfil-in-tool-output with benign look-alikes, obfuscation slices from the holdout seed
+    type: eval-infra
+    deps: [E01]
+    bundles: [translation, carrier_insertion, exfil_lookalikes, obfuscation_slices]
+    accept: separate seeds and template families for dev/holdout; secret holdout seed under ~/ark-threat/holdout; native vs translated column kept
+
+  - id: E03
+    title: Real-DE latency corpus (>= 50 distinct 100 KiB windows from licensed German text, no repeated paragraph) + harness for threat/injection alone and all L1 combined
+    type: eval-infra
+    deps: []
+    accept: recipe in repo, data only on the VPS; numbers in research/l1-threat/scoreboard/latency.md; the runner's verify latency A/B (ark-l1 latency_ab) measures the threat categories with this harness instead of reporting "not measured"
+
+  - id: E04
+    title: Baseline runners — heuristic (pipelock, Cisco YARA, ATR, prompt-guard, LlamaFirewall/NeMo deterministic) and reference rows (ProtectAI v2, Prompt Guard 2) → doc-level predictions per class, thresholds swept for matched FPR; baseline predictions computed once per frozen holdout/dev version and cached (keyed by dataset SHA + baseline version), never re-run per task
+    type: eval-infra
+    deps: [E01]
+
+  - id: E05
+    title: Golden schema v2 for threat (class, family, carrier, tags negated/quoted/meta/code/indirect/obfuscated/translated, known_gap) + 13_l1_golden_eval -- threat
+    type: eval-infra
+    deps: [X03]
+
+  - id: E06
+    title: Scoreboard gate — TPR@1%/0.1% FPR and AUPRC per class and language, hard-benign FPR, leave-one-dataset-out, native/translated columns, bootstrap CI, delta to base; baseline report research/l1-threat/scoreboard/baseline.md
+    type: eval-infra
+    deps: [E02, E04, E05]
+
+  # ── S: Engine ─────────────────────────────────────────────────────────
+  - id: S02
+    title: Counter-context and support lexica DE/EN with an origin field per term (ark_existing / oss:<source>@<commit> / taxonomy / mined:<train-split-hash> / hand; mining by log-odds on the train split only, reviewed by the runner, never from dev gold, goldens or holdout) (defensive prompts, quotation/reported speech, security docs, tutorials, test code, negation clause-wide; addressee, scope, authority, secrecy, sinks) incl. German compounds, separable verbs, du/Sie/ihr, gender forms
+    type: engine
+    deps: [S01]
+  - id: S03
+    title: Normalisation pre-pass in the core for all category lexica (K06 view, Unicode tags, decoded views base64/hex/rot13) exposed as facts (obfuscated, decoded)
+    type: engine
+    deps: [S01]
+  - id: S06
+    title: patronus.text_facts/1 — versioned, deterministic facts per text (findings with category/family/pattern/points/span, carrier, addressee, sinks, data refs from PII/DLP hits, modifiers obfuscated/decoded/quoted/negated/defensive/language), shaped like patronus.facts/1; tf1 token analyzer for the models
+    type: engine
+    deps: [S01, S03]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): same layout and contracts as K26 — a `facts/` module per concern like shell/facts, a canonical
+      JSON form with a Python reference and exact parity goldens like shell/pyjson.rs, a `tf1` analyzer
+      shaped like `kf1` (fact tokens + text tokens), a `.cedarschema` for the facts next to K26's
+      shell.cedarschema. Code K26 already has (canonical JSON, analyzer plumbing, schema loading) is moved
+      to a shared module and used by both, never copied.
+    # carrier comes from text structure only; request metadata (role, source:untrusted) is not seen by L1 and never feeds patterns, models or policies (decided 2026-11-09)
+  - id: S04
+    title: Model training pipeline per category, compiled in — candidates B0 (today's scorer, recalibrated), K26-like variants (char_wb TF-IDF + tf1 fact tokens → LR) and hashed variants; Python reference + Rust inference with exact parity goldens; whatever wins on the holdout stays (today's scorers may stay)
+    type: engine
+    deps: [S06, E06]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): K26-like candidates use K26's model form (vocabulary file, TF-IDF + LR weights, top features
+      in the explanation like ShellRiskModel/TopFeature) and the same training script layout; shared
+      model and vocabulary code is reused from shell/model.rs and shell/vocab.rs, not duplicated.
+  - id: S07
+    status: deferred
+    title: (later, after facts) Cedar policies over text_facts — schema, core tier compiled in (trifecta, hidden carrier + secrecy), bundle-default for harvested OSS rules (default off), user .cedar files; same tiers and evaluation as shell-risk K26; verdict max(patterns, model, policies)
+    type: engine
+    deps: [S06]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): one policy engine for shell and text — K26's shell/policies (core / bundle-default / user
+      tiers, user .cedar directories, allowlist, Decision) becomes the shared implementation; text
+      policies add a schema and a core.cedar, no second evaluator. Users write text policies the same
+      way as shell policies (same config keys and file layout).
+  - id: S05
+    title: Ablation framework (R, R+A, B0, R+A+L, B1, B4, B5 per class; TPR@FPR, hard-benign FPR, ms/100 KiB, RAM) with the selection rule from the README
+    type: eval-infra
+    deps: [S04]
+
+  # ── Classes: one rule bundle + one points/ablation bundle each ────────
+  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04]}
+  - {id: IJ02, title: "instruction_injection points + ablation decision; today's injection scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [IJ01, S05]}
+  - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01]}
+  - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
+  - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01]}
+  - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
+  - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04]}
+  - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05]}
+  - {id: AC01, title: "agent_config_tampering rules (skills, AGENTS.md/CLAUDE.md/.cursorrules, mcp.json, hooks: hidden directives, auto-approve/permission widening, fetch-and-run in skill text) incl. SkillSpector/ATR harvest", type: new-family, deps: [TP01]}
+  - {id: AC02, title: "agent_config_tampering points + ablation decision", type: scorer, deps: [AC01, S05]}
+  - {id: EX01, title: "exfiltration rules (markdown image/link with templated data, URL/DNS/webhook sinks, tool-parameter egress, send-to-external directives, invisible characters in links) incl. pipelock harvest; DLP hits as source evidence", type: new-family, deps: [S03, M04]}
+  - {id: EX02, title: "exfiltration points + ablation decision", type: scorer, deps: [EX01, S05]}
+  - {id: UA01, title: "unsafe_action rules for prose/code/config carriers (credential_access from the former secrets_access rules, destructive/irreversible requests, download-and-run instructions, privilege widening, security-control and logging disablement, persistence, SSRF/unsafe TLS/deserialisation in code, container/K8s config); shell syntax stays with K26", type: new-family, deps: [X04, S02]}
+  - {id: UA02, title: "unsafe_action points + ablation decision; today's threat scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [UA01, S05]}
+  - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01]}
+  - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}
+  - {id: RE01, title: "resource_exhaustion rules (unbounded repetition quantifiers with configurable count threshold resource_exhaustion_count_threshold, recursive spawning, infinite-loop directives, decoy compute tasks in foreign content) + points", type: new-family, deps: [S04]}
+  - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04]}
+  - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05]}
+  - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01]}
+  - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
+
+  - id: S08
+    status: deferred
+    title: (secondary, after the base structure) Evaluate facts, model and policies for PII and DLP on the same layers
+    type: decision
+    deps: [S01, S06]
+
+  # ── H: Hardening and wrap-up ──────────────────────────────────────────
+  - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02]}
+  - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02]}
+
+recurring:
+  - id: TRIAGE
+    when: Mondays (replaces the first run of the week)
+    title: Scoreboard error analysis → insert new tasks with id Txx at the right place, implement nothing

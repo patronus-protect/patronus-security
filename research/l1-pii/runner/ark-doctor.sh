@@ -2,7 +2,7 @@
 # Health check for the ARK runner programme on this VPS (ark-doctor.timer, every 20 min).
 # When the check reports the programme stuck, a Claude "doctor" run diagnoses and repairs it.
 set -uo pipefail
-PROGRAM="${1:?pii|dlp}"
+PROGRAM="${1:?pii|dlp|threat}"
 BASE="$HOME/ark-l1"
 OUT="$BASE/doctor"
 mkdir -p "$OUT"
