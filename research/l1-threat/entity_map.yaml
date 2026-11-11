@@ -448,6 +448,16 @@ datasets:
     family: neutral
     labels:
       - {label: "guide sections (incl. the adversarial-prompting chapter)", benign: true}
+  - id: mcp_registry
+    name: Official MCP registry server and tool descriptions
+    source: github:modelcontextprotocol/registry (server entries, tool descriptions)
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "tool description, schema or server entry", benign: true}
+    note: licence per server, checked by E01; the dev-seed generator embeds into a server-disjoint part only
   # ── holdout, ark_blind ───────────────────────────────────────────────────────────────────────
   - id: r05_translation_de
     name: R05 German translation of the frozen EN holdout
@@ -697,6 +707,27 @@ datasets:
     labels:
       - {label: "deny", classes: [unsafe_action]}
       - {label: "approve", benign: true}
+  - id: ailuminate_demo
+    name: AILuminate demo prompt set (candidate)
+    source: github:mlcommons/ailuminate
+    licence: CC-BY-4.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "hazard in (vcr, src, cse, ssh, iwp, ncr, hte, sxc)", classes: [harmful_content]}
+      - {label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)", classes: [harmful_content], decides: false, reason: "model-only subclasses (specialized advice, privacy, ip, defamation, elections)"}
+  - id: nemotron_content_safety_v2
+    name: Nemotron Content Safety dataset v2 (candidate)
+    source: hf:nvidia/Aegis-AI-Content-Safety-Dataset-2.0
+    licence: CC-BY-4.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "violated categories of the Aegis 2.0 taxonomy", classes: [harmful_content, toxic_language]}
+      - {label: "safe", benign: true}
+    note: same category scheme as nemotron_safety_v3; E01 dedups the two
   - id: germeval2018_train
     name: GermEval 2018 (training split)
     source: GermEval 2018 shared task, official training release

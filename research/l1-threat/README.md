@@ -1,6 +1,6 @@
 # L1-Threat: breite Regeln, gelernte Punkte
 
-Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). OSS-Regelinventar: [`oss_rules.yaml`](oss_rules.yaml) (Prüfung `scripts/l1_threat/oss_inventory.py check`). Recherche:
+Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). OSS-Regelinventar: [`oss_rules.yaml`](oss_rules.yaml) (Prüfung `scripts/l1_threat/oss_inventory.py check`). Baseline- und Datensatz-Mapping: [`entity_map.yaml`](entity_map.yaml) (Prüfung `scripts/l1_threat/entity_map.py check`). Recherche:
 [`research-2026-11.md`](research-2026-11.md). Ausführung über denselben VPS-Runner wie
 [`../l1-pii/`](../l1-pii/README.md) und [`../dlp/`](../dlp/README.md), Branch-Präfix `threat/`, Label
 `ark-threat`.
@@ -237,6 +237,20 @@ OASST2 EN/DE, WildChat-1M DE (erste Turns), Necent DE (News/Web), Wikipedia, Ger
 Prompt-Guides; dazu je Kategorie die Hard Negatives aus §12.
 
 Lizenz und kommerzielle Nutzbarkeit prüft E01 je Satz; was dort nicht besteht, wandert nach `report_only`.
+
+**Mapping (M03, [`entity_map.yaml`](entity_map.yaml)).** Jede Baseline zählt über eine feste Tabelle auf die
+Klassen: die Heuristiken je Regel über die Zuordnung in `oss_rules.yaml` (Übergabe an K26 und `out_of_scope` zählen
+nicht), LlamaFirewall zusätzlich mit Hidden-ASCII (`instruction_injection`) und CodeShield (`unsafe_action`);
+ProtectAI v2 `INJECTION` zählt für `instruction_injection` und `prompt_extraction` (laut Karte kein Jailbreak),
+Prompt Guard 2 `MALICIOUS` für `instruction_injection`, `jailbreak` und `prompt_extraction`. Je Datensatz stehen
+Lizenz, Sprachen, Split, Quellfamilie und jedes Upstream-Label mit Klasse, `benign` oder `out_of_scope` samt Grund
+(Desinformation, Urheberrecht, Bias, mehrdeutige Score-Bänder). Wer je Klasse und Sprache entscheidet, rechnet
+`entity_map.py table` aus: EN entscheidet `neutral` außer bei `prompt_extraction` (CyberSecEval-Leak-Slice zu
+klein, `decides: false`), `memory_poisoning` und `resource_exhaustion`; DE entscheidet `neutral` nur bei
+`harmful_content` (RTP-LX, PTP `wildchat-de`) und `toxic_language`, sonst `ark_blind` (R05). Festgelegt dabei:
+ein Satz liegt nie in zwei Splits (GermEval 2018 Train/Test als zwei Einträge, GermEval 2019 enthält die
+2018-Testdaten und wird dagegen dedupliziert); OASST2 und WildChat bleiben im Holdout-Benign-Pool, Dev-Benign für
+`memory_poisoning`/`resource_exhaustion` kommt aus databricks-dolly-15k; MCPTox und AgentHarm nur zur Auswertung.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
