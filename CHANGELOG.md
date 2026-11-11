@@ -18,7 +18,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and never stored in the repository. `run` times the native gateway at L1 with `threat` alone,
   `injection` alone and all L1 categories in one request, and reports p50/p95/p99 pooled over the
   windows; `compare` exits 1 when a p95 grows by more than 5 % between two reports of the same
-  machine. The native timing worker (`rust/dev/l1_latency_workloads.rs`) now accepts the categories
+  machine (`--profile` limits the verdict to one profile). The runner's latency A/B counts a profile
+  as regressed only when it fails in every attempt, and re-measures only the profiles still failing. The native timing worker (`rust/dev/l1_latency_workloads.rs`) now accepts the categories
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 
 ## [0.1.16] - 2026-11-11

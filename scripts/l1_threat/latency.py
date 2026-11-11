@@ -17,14 +17,14 @@ MAX_WINDOWS are kept. Data stays on the VPS, never in the repo.
     python3 scripts/l1_threat/latency.py run --corpus DIR --output latency.json \
         [--markdown latency.md] [--runs 3] [--profiles threat injection all] [--repo CHECKOUT]
     # a change against its base (gate criterion: 100 KiB p95 at most +5 % per profile)
-    python3 scripts/l1_threat/latency.py compare --base base.json --head head.json
+    python3 scripts/l1_threat/latency.py compare --base base.json --head head.json [--profile threat]
 
 ``run`` builds the native timing worker (``rust/dev/l1_latency_workloads.rs``) in release mode
 and times one scan per sample through the Rust gateway at L1: profile ``threat`` and
 ``injection`` with that category alone, ``all`` with every L1 category in one request. The
 p95 is pooled over all windows. ``--runs N`` keeps, per profile, the run with the median p95.
-``compare`` exits 1 if a profile's p95 grew by more than the tolerance; every command exits 2
-on setup errors (missing or modified corpus, differing corpora or machines).
+``compare`` exits 1 if a profile's p95 (only ``--profile``'s, when given) grew by more than the
+tolerance; every command exits 2 on setup errors (missing or modified corpus, differing corpora or machines).
 """
 
 from __future__ import annotations
@@ -358,8 +358,9 @@ def markdown(report: dict[str, Any]) -> str:
     ])
 
 
-def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pct: float = TOLERANCE_PCT) -> dict[str, Any]:
-    """p95 of head vs. base per profile; a profile regresses above +tolerance_pct."""
+def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pct: float = TOLERANCE_PCT,
+            profile: str | None = None) -> dict[str, Any]:
+    """p95 of head vs. base per profile (only ``profile`` when given); a profile regresses above +tolerance_pct."""
     for side, report in (("base", base), ("head", head)):
         if report.get("schema") != REPORT_SCHEMA:
             raise LatencyError(f"{side} report is not {REPORT_SCHEMA}")
@@ -367,14 +368,18 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pct: float = T
         raise LatencyError("base and head measured different corpora")
     if base["machine"] != head["machine"]:
         raise LatencyError("base and head were measured on different machines")
+    if profile is not None and profile not in base["profiles"]:
+        raise LatencyError(f"base has no {profile} measurement")
     rows = []
-    for profile, data in base["profiles"].items():
-        if profile not in head["profiles"] or head["profiles"][profile]["categories"] != data["categories"]:
-            raise LatencyError(f"head has no {profile} measurement with the base's categories")
+    for name, data in base["profiles"].items():
+        if profile not in (None, name):
+            continue
+        if name not in head["profiles"] or head["profiles"][name]["categories"] != data["categories"]:
+            raise LatencyError(f"head has no {name} measurement with the base's categories")
         before = data["summary"]["p95_ms"]
-        after = head["profiles"][profile]["summary"]["p95_ms"]
+        after = head["profiles"][name]["summary"]["p95_ms"]
         change = (after / before - 1) * 100 if before else float("inf")
-        rows.append({"profile": profile, "base_p95_ms": before, "head_p95_ms": after,
+        rows.append({"profile": name, "base_p95_ms": before, "head_p95_ms": after,
                      "change_pct": round(change, 1), "regression": change > tolerance_pct})
     return {"tolerance_pct": tolerance_pct, "rows": rows, "regression": any(row["regression"] for row in rows)}
 
@@ -414,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--base", type=Path, required=True)
     compare_parser.add_argument("--head", type=Path, required=True)
     compare_parser.add_argument("--tolerance-pct", type=float, default=TOLERANCE_PCT)
+    compare_parser.add_argument("--profile", choices=list(PROFILES), help="compare only this profile")
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -433,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         base = json.loads(args.base.read_text(encoding="utf-8"))
         head = json.loads(args.head.read_text(encoding="utf-8"))
-        result = compare(base, head, args.tolerance_pct)
+        result = compare(base, head, args.tolerance_pct, args.profile)
         print("\n".join(compare_lines(result)))
         return 1 if result["regression"] else 0
     except LatencyError as error:

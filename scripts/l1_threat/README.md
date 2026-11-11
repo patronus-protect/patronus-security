@@ -88,14 +88,14 @@ Fenster (heute 64 aus rund 17 600 Absätzen). Die Daten liegen nur auf der VPS, 
 python3 scripts/l1_threat/latency.py prepare --out DIR [--sources CACHE] [--offline]   # friert DIR ein (.ready)
 python3 scripts/l1_threat/latency.py check DIR                                          # Exit 1 bei jedem Problem
 python3 scripts/l1_threat/latency.py run --corpus DIR --output latency.json --markdown latency.md --runs 3
-python3 scripts/l1_threat/latency.py compare --base base.json --head head.json          # Exit 1: p95 > +5 %
+python3 scripts/l1_threat/latency.py compare --base base.json --head head.json [--profile P]  # Exit 1: p95 > +5 %
 python3 scripts/l1_dlp/benign_docs.py pin --sources CACHE --list scripts/l1_threat/latency_sources.json --write
 ```
 
 `run` misst je Fenster 5 Scans nach einem Warmup (`--samples-scale`), p95 über alle Fenster gepoolt; bei
 `--runs N` gilt je Profil der Lauf mit dem Median-p95. `--repo` misst einen anderen Checkout mit diesem Skript.
 Der Runner (`ark-l1 latency_ab`, Programm `threat`) baut den Korpus einmal unter `cache/threat-latency-de` und
-vergleicht Base und Head mit dem Skript der Base; eine Regression zählt nur, wenn sie in jedem Versuch
-auftritt. Ergebnisse: [`research/l1-threat/scoreboard/latency.md`](../../research/l1-threat/scoreboard/latency.md).
+vergleicht Base und Head mit dem Skript der Base, je Profil einzeln (`compare --profile`); ein Profil gilt nur
+als regressiert, wenn es in jedem Versuch scheitert, und spätere Versuche messen nur die noch offenen Profile. Ergebnisse: [`research/l1-threat/scoreboard/latency.md`](../../research/l1-threat/scoreboard/latency.md).
 
 Tests: `scripts/tests/test_l1_threat_latency.py`, `scripts/tests/test_runner_threat_latency_ab.py`.
