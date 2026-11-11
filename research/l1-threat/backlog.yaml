@@ -87,6 +87,7 @@ tasks:
 
   # ── M: Mapping ────────────────────────────────────────────────────────
   - id: M01
+    status: done
     title: taxonomy.yaml + checker — families per class from research-2026-11.md (shape as word classes, anchors, required/negative context, DE/EN example shapes, carriers, existing rules, baseline coverage, gap, priority, backlog task)
     type: mapping
     deps: []
