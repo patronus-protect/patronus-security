@@ -59,6 +59,7 @@ setup:  # manual, not run by the schedule
 tasks:
   # ── X: Restructure ────────────────────────────────────────────────────
   - id: X02
+    status: done
     title: Move the threat detector from rust/src/detectors/threat into ark-core next to injection (rules, scorer, lexicon use, tests), no behaviour change
     type: refactor
     deps: []
