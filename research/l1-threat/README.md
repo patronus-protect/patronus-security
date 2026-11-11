@@ -58,7 +58,8 @@ Festgelegt (2026-11-05):
 
 Festgelegt (2026-11-09):
 - **Aktions-Detektoren ziehen aus `dlp` aus.** `dlp` findet danach nur noch Secrets. Shell-Syntax
-  (`mcp_policy`, Befehlsteil von `mcp_runtime_risk`) geht an K26 (X04); `destructive_operation`,
+  (`mcp_policy`, Befehlsteil von `mcp_runtime_risk`) geht an K26 (X04: eine Regel geht erst, wenn K26 ihre
+  Goldens per Policy entscheidet; Stand und K26-Folgeaufgaben in `k26-handoff.md`); `destructive_operation`,
   `sensitive_material` und der Rest von `mcp_runtime_risk` gehen nach `unsafe_action`, `secret_transfer` nach
   `exfiltration` (X03). Wer heute nur `dlp` aktiv hat, bekommt diese Funde erst, wenn er die neuen Kategorien
   einschaltet; das steht im CHANGELOG.

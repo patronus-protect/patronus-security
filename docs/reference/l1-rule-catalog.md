@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (30)
+## Threat rules (28)
 
 Enabled by default when Threat L1 is configured. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -670,7 +670,6 @@ Enabled by default when Threat L1 is configured. Matches report risky operations
 | `ark.threat.environment_exfiltration` | `exfiltration_attempt` | E2 |
 | `ark.threat.docker_socket` | `tool_abuse` | PE4 |
 | `ark.threat.privileged_container` | `tool_abuse` | PE5, TM4 |
-| `ark.threat.host_root_mount` | `tool_abuse` | PE5 |
 | `ark.threat.persistence_payload` | `harmful_behavior` | RA2 |
 | `ark.threat.agent_guard_removal` | `harmful_behavior` | RA1, AS1 |
 | `ark.threat.security_disable` | `tool_abuse` | TM3, SC7 |
@@ -685,7 +684,6 @@ Enabled by default when Threat L1 is configured. Matches report risky operations
 | `ark.threat.unsafe_tls_code` | `tool_abuse` | TM3, SC7 |
 | `ark.threat.unsafe_shell_input` | `tool_abuse` | TM1 |
 | `ark.threat.dynamic_ssrf` | `tool_abuse` | SSRF3, TT |
-| `ark.threat.root_destruction` | `harmful_behavior` | TM1 |
 | `ark.threat.unauthorized_autonomy` | `tool_abuse` | EA2, EA3 |
 | `ark.threat.harmful_intent` | `harmful_behavior` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration_attempt` | E3, E5 |
