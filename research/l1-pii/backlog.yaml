@@ -1053,7 +1053,10 @@ tasks:
     title: "M4 tolerance: native 100 KiB p95 median 11.1 ms over ten runs (main f23c5f8b), base 66fc95d0 10.65 ms on the same host; set a numeric tolerance and a measuring rule, or resume the performance loop (H06-7)?"
     type: perf
     deps: [T39]
-    needs_decision: true
+    decision: >-
+      2026-11-11: option (b) with a 12 ms tolerance. M4 holds when the median of the 100 KiB p95 over
+      several VPS runs (latency.py run --runs N, N >= 5) is <= 12 ms for ark-native; no further performance
+      loop (H06-7 stays off).
     source: "TRIAGE 2026-W46, second run (research/l1-pii/triage/2026-W46-2.md, bucket 2)"
     question: >-
       latency.py on the VPS (release build, PII only): ark-native 100 KiB p95 over ten runs of main f23c5f8b
