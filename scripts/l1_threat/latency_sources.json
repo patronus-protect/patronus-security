@@ -1,0 +1,190 @@
+{
+  "schema": "ark-dlp-benign-docs-sources-v1",
+  "sources": [
+    {
+      "id": "dewiki-latency",
+      "type": "mediawiki",
+      "site": "https://de.wikipedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "de",
+      "genre": "prose",
+      "split": "dev",
+      "note": "Lange Wikipedia-Artikel (Länder, Städte, Geschichte, Personen, Wissenschaft) für den L1-Latenzkorpus; keine Seite aus benign_docs_sources.json",
+      "pages": [
+        {
+          "title": "Automobil",
+          "revid": 269830996
+        },
+        {
+          "title": "Bayern",
+          "revid": 270931243
+        },
+        {
+          "title": "Berlin",
+          "revid": 271960099
+        },
+        {
+          "title": "Bremen",
+          "revid": 271882125
+        },
+        {
+          "title": "Bundeswehr",
+          "revid": 271990895
+        },
+        {
+          "title": "Deutsche Demokratische Republik",
+          "revid": 272022639
+        },
+        {
+          "title": "Deutschland",
+          "revid": 272058828
+        },
+        {
+          "title": "Donau",
+          "revid": 272037802
+        },
+        {
+          "title": "Eisenbahn",
+          "revid": 271762602
+        },
+        {
+          "title": "Erster Weltkrieg",
+          "revid": 271444729
+        },
+        {
+          "title": "Evolution",
+          "revid": 270467686
+        },
+        {
+          "title": "Frankfurt am Main",
+          "revid": 271827027
+        },
+        {
+          "title": "Französische Revolution",
+          "revid": 271443544
+        },
+        {
+          "title": "Friedrich II. (Preußen)",
+          "revid": 271806607
+        },
+        {
+          "title": "Friedrich Schiller",
+          "revid": 271884153
+        },
+        {
+          "title": "Hannover",
+          "revid": 271986824
+        },
+        {
+          "title": "Heiliges Römisches Reich",
+          "revid": 271723860
+        },
+        {
+          "title": "Immanuel Kant",
+          "revid": 271888725
+        },
+        {
+          "title": "Internet",
+          "revid": 271905371
+        },
+        {
+          "title": "Johann Sebastian Bach",
+          "revid": 271006127
+        },
+        {
+          "title": "Karl Marx",
+          "revid": 271842016
+        },
+        {
+          "title": "Karl der Große",
+          "revid": 272031835
+        },
+        {
+          "title": "Konrad Adenauer",
+          "revid": 271861562
+        },
+        {
+          "title": "Köln",
+          "revid": 272037049
+        },
+        {
+          "title": "Martin Luther",
+          "revid": 271338675
+        },
+        {
+          "title": "Nordsee",
+          "revid": 270808419
+        },
+        {
+          "title": "Nürnberg",
+          "revid": 272014742
+        },
+        {
+          "title": "Ostsee",
+          "revid": 271231793
+        },
+        {
+          "title": "Otto von Bismarck",
+          "revid": 270945595
+        },
+        {
+          "title": "Preußen",
+          "revid": 271496475
+        },
+        {
+          "title": "Quantenmechanik",
+          "revid": 271791411
+        },
+        {
+          "title": "Reformation",
+          "revid": 271838880
+        },
+        {
+          "title": "Richard Wagner",
+          "revid": 271951636
+        },
+        {
+          "title": "Römisches Reich",
+          "revid": 271642010
+        },
+        {
+          "title": "Sachsen",
+          "revid": 271811443
+        },
+        {
+          "title": "Schweiz",
+          "revid": 272059078
+        },
+        {
+          "title": "Stuttgart",
+          "revid": 271864779
+        },
+        {
+          "title": "Weimarer Republik",
+          "revid": 271390289
+        },
+        {
+          "title": "Wien",
+          "revid": 270892903
+        },
+        {
+          "title": "Willy Brandt",
+          "revid": 271885497
+        },
+        {
+          "title": "Wolfgang Amadeus Mozart",
+          "revid": 271415616
+        },
+        {
+          "title": "Zweiter Weltkrieg",
+          "revid": 271579134
+        },
+        {
+          "title": "Österreich",
+          "revid": 272059114
+        }
+      ],
+      "sha256": "614cbf62b32879e2676c0248599f1ad5aaa22c9fc3aee1bb69ac4083413bcaf1"
+    }
+  ]
+}

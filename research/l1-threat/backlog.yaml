@@ -145,6 +145,7 @@ tasks:
     accept: separate seeds and template families for dev/holdout; secret holdout seed under ~/ark-threat/holdout; native vs translated column kept
 
   - id: E03
+    status: done
     title: Real-DE latency corpus (>= 50 distinct 100 KiB windows from licensed German text, no repeated paragraph) + harness for threat/injection alone and all L1 combined
     type: eval-infra
     deps: []
