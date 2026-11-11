@@ -253,6 +253,15 @@ def test_compare_cli_exit_codes(tmp_path):
     assert MODULE.main(["compare", "--base", str(base), "--head", str(head)]) == 2
 
 
+def test_compare_limits_the_verdict_to_the_given_profile(tmp_path):
+    base, head = tmp_path / "base.json", tmp_path / "head.json"
+    base.write_text(json.dumps(report({"threat": 2.0, "injection": 1.0})), encoding="utf-8")
+    head.write_text(json.dumps(report({"threat": 3.0, "injection": 1.0})), encoding="utf-8")
+    assert MODULE.main(["compare", "--base", str(base), "--head", str(head), "--profile", "injection"]) == 0
+    assert MODULE.main(["compare", "--base", str(base), "--head", str(head), "--profile", "threat"]) == 1
+    assert MODULE.main(["compare", "--base", str(base), "--head", str(head), "--profile", "all"]) == 2
+
+
 def test_markdown_names_corpus_and_profiles():
     text = MODULE.markdown(report({"threat": 2.0, "injection": 1.0, "all": 8.0}))
     assert "50 distinct windows of 102400 bytes" in text
