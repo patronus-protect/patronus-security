@@ -1,6 +1,6 @@
 # L1-Threat: breite Regeln, gelernte Punkte
 
-Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Recherche:
+Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). Recherche:
 [`research-2026-11.md`](research-2026-11.md). Ausführung über denselben VPS-Runner wie
 [`../l1-pii/`](../l1-pii/README.md) und [`../dlp/`](../dlp/README.md), Branch-Präfix `threat/`, Label
 `ark-threat`.

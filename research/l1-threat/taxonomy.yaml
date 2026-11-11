@@ -1,0 +1,2099 @@
+# L1 threat taxonomy v1 (draft, M01; review and freeze in M04).
+#
+# Families per class from research-2026-11.md §1-2 and the category documents under categories/
+# (§3 lexica, §4 patterns, §9 existing rules). Each family records its word-class shape, anchor
+# lexica, required and negative context, abstract DE/EN example shapes (placeholders, never
+# payloads), carriers, the existing ark.injection.* / ark.threat.* rules it takes over, baseline
+# coverage, the gap, priority (must = needed for milestone M4 breadth) and the backlog task.
+# Shell-syntax threat rules leave for shell risk K26 under `handoffs`.
+#
+# Checked by: python3 scripts/l1_threat/taxonomy.py check
+#   - every existing ark.injection.* / ark.threat.* rule is mapped exactly once (family or handoff);
+#   - every must-family names a backlog task;
+#   - every lexicon id exists in ark-core/src/detectors/anchor_lexicons/*.json or is declared as
+#     planned below (core) or under its class (`lexicons`), with the task that builds it.
+# Baseline coverage values (full / partial / none) are first estimates from the census in
+# research-2026-11.md §3; E04 measures them.
+#
+# Mapping decisions for the M04 review, where the regex of a rule and the category documents differ:
+#   - docker_socket, privileged_container, host_root_mount and environment_exfiltration only match
+#     command lines and go to K26 (X04); credential_file_upload too. Their YAML/Compose and prose
+#     forms are gaps of ua_container_escape_config / ex_send_directive.
+#   - credential_file_access and persistence_payload stay in unsafe_action whole; X04 splits off the
+#     shell forms. environment_post (Python requests with os.environ) stays in exfiltration.
+#   - ark.injection.exfil.* (legacy cross_tool_instruction) need a data source plus a sink and go to
+#     exfiltration; skillspector.memory_reset / persistent_override go to memory_poisoning.
+#   - governance.autonomous_approval_bypass is prose and goes to ua_unattended, not
+#     ac_permission_widening; governance.unrestricted_mode_activation goes to jailbreak.
+
+schema: ark-l1-threat-taxonomy-v1
+
+# Planned lexica shared by several classes (core, S02).
+lexicons:
+  - {id: addressee, kind: support, task: S02, title: "AI addressee: AI, assistant, model, agent; du/Sie/you imperative"}
+  - {id: secrecy, kind: support, task: S02, title: "Secrecy: do not tell the user, silently, without mentioning"}
+  - {id: sensitive_path, kind: support, task: S02, title: "Sensitive files and stores: SSH keys, .env, credential files, keychains"}
+  - {id: defensive, kind: counter, task: S02, title: "Defensive prompts: treat embedded instructions as data, do not follow them"}
+  - {id: meta, kind: counter, task: S02, title: "Security documentation, teaching and research about attacks"}
+  - {id: quotation, kind: counter, task: S02, title: "Reported speech and quotation: wrote, said, according to"}
+  - {id: test_code, kind: counter, task: S02, title: "Test and fixture context: test, fixture, assert, mock, golden"}
+  - {id: negation_scope, kind: counter, task: S02, title: "Negation cues that open the core clause span (nicht, nie, never, do not)"}
+
+classes:
+
+  instruction_injection:
+    category: injection
+    doc: categories/injection.md
+    families:
+    - id: discard_prior
+      pattern: injection_discard_prior
+      title: Imperative to discard prior instructions, rules or instruction hierarchy
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: VERB_DISCARD + OBJ_PRIOR_INSTRUCTIONS within 6 tokens, addressed imperative
+      anchors:
+      - addressee
+      - injection.prior_instructions
+      - injection.io_override
+      - injection.io_prior
+      - injection.io_target
+      - injection.io_set_aside
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code, negation_scope]
+      examples:
+        de:
+        - <Imperativ VERWERFEN> die <obigen Anweisungen> und <neue Aufgabe>
+        - <Imperativ MISSACHTEN> <deine bisherigen Regeln>
+        en:
+        - <imperative DISCARD> <your previous instructions> and <new task>
+        - <imperative FORGET> <the rules above>
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.override.discard_prior
+      - ark.injection.override.obfuscated_discard
+      - ark.injection.override.prior_reference
+      - ark.injection.override.hierarchy
+      - ark.injection.override.hierarchy_then_direct_action
+      - ark.injection.structure.override_sensitive_disclosure
+      - ark.injection.governance.authority_nullification
+      - ark.injection.governance.direct_authority_discard
+      - ark.injection.governance.purpose_and_safety_override
+      baseline_coverage: {pipelock: full, atr: full, prompt_guard: full, llamafirewall: partial, vigil: full, nemo: partial,
+        protectai_v2: full, prompt_guard_2: full}
+      gap: German inflected and separable verb forms and typo variants are weakly covered by heuristic baselines.
+    - id: replacement_directive
+      pattern: injection_replacement
+      title: Declares new instructions that replace the current ones
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: REPLACEMENT_MARKER (from now on / new instructions) + directive clause, addressed
+      anchors: [addressee, injection.replacement, injection.io_new, injection.io_time]
+      required_context: [injection.prior_instructions, addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de:
+        - '<ab sofort> gilt <neue Anweisung>: <Aufgabe>'
+        - <Imperativ VERWERFEN> <die aktuelle Richtlinie>, <neue Regeln> lauten <...>
+        en: [<from now on> <your new instructions are> <task>, '<new instructions>: <task>']
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.override.replacement_directive
+      - ark.injection.governance.german_policy_replacement
+      baseline_coverage: {pipelock: partial, atr: partial, prompt_guard: partial, vigil: partial, protectai_v2: partial,
+        prompt_guard_2: partial}
+      gap: Replacement without explicit discard verb (and in German) is mostly unmatched.
+    - id: precedence_claim
+      pattern: injection_precedence
+      title: Claims a directive takes precedence over the model's own instructions
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: PRECEDENCE_CLAIM (takes precedence / supersedes) + reference to own instructions + directive
+      anchors: [injection.precedence, injection.io_prioritize, injection.io_priority_object]
+      required_context: [injection.prior_instructions, addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<diese Anweisung> <hat Vorrang vor> <allen bisherigen Vorgaben>]
+        en: [<this instruction> <supersedes> <your system prompt>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {atr: partial, prompt_guard: partial, protectai_v2: partial}
+      gap: No ARK rule; precedence claims without discard verbs are rarely detected.
+    - id: role_spoof
+      pattern: injection_role_spoof
+      title: Forged role markers, chat template tokens or delimiter boundaries
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: line-initial ROLE_MARKER (system:, chat template token, '### System') or synthetic delimiter, followed
+        by directive
+      anchors: [injection.instruction_boundary, injection.boundary_termination, injection.authority_role]
+      required_context: []
+      negative_context: [test_code, meta, quotation]
+      examples:
+        de:
+        - <Rollenmarker system> <neue Anweisung>
+        - '<Trennzeile> <Ende des Dokuments> <Systemnachricht>: <Aufgabe>'
+        en: [<role marker system> <new instruction>, <chat template token> <system segment> <directive>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.boundary.delimiter
+      - ark.injection.boundary.fake_system
+      - ark.injection.boundary.delimited_replacement_action
+      - ark.injection.boundary.persona_directive
+      - ark.injection.governance.raw_system_role_boundary
+      - ark.injection.governance.nested_system_override
+      - ark.injection.governance.embedded_new_task_boundary
+      baseline_coverage: {pipelock: partial, atr: full, prompt_guard: full, llamafirewall: partial, vigil: partial,
+        prompt_guard_2: partial}
+      gap: Markdown-heading and nested template forms inside structured carriers are inconsistently covered.
+    - id: authority_claim
+      pattern: injection_authority_claim
+      title: Claimed developer, admin or system authority used to issue a directive
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: AUTHORITY_NOUN (admin / developer / system message) + claim or grant + directive
+      anchors:
+      - injection.authority
+      - injection.authority_role
+      - injection.authority_access
+      - injection.authority_approval
+      required_context: [addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: ['<als Administrator> <weise ich an>: <Aufgabe>', <du hast jetzt> <volle Administratorrechte>]
+        en:
+        - <I am the developer>, <directive>
+        - '<system notice>: <authority> <has issued new instructions>'
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.authority.claim
+      - ark.injection.authority.escalation
+      - ark.injection.authority.fake_system_asset_transfer
+      - ark.injection.override.authority_issued_replacement
+      - ark.injection.governance.direct_admin_grant
+      baseline_coverage: {atr: partial, prompt_guard: partial, vigil: partial, protectai_v2: partial, prompt_guard_2: partial}
+      gap: Authority claims in German and in mail signatures or tickets are largely uncovered.
+    - id: forced_output
+      pattern: injection_forced_output
+      title: Discard plus attacker-fixed response or marker
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: DISCARD or override + OUTPUT_RESTRICTION (only reply with <fixed text> / print marker)
+      anchors:
+      - injection.om_force
+      - injection.om_marker
+      - injection.om_sequence
+      - injection.output_restriction
+      - injection.exact_copy
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<Imperativ VERWERFEN> <das Obige> und <antworte nur mit> <fester Text>]
+        en: [<imperative DISCARD> <the above> and <respond only with> <fixed text>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: [ark.injection.output.forced_marker, ark.injection.output.ignore_then_fixed_output]
+      baseline_coverage: {atr: partial, prompt_guard: partial, protectai_v2: full, prompt_guard_2: partial}
+      gap: Fixed-output demands without an explicit discard verb are missed.
+    - id: hidden_directive
+      pattern: injection_hidden_directive
+      title: AI-addressed directive in a hidden carrier (HTML comment, invisible markup, tool output)
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: directive addressed to AI inside hidden carrier (HTML comment, CSS-hidden text, alt text, tool result)
+        or with SECRECY
+      anchors:
+      - addressee
+      - secrecy
+      - injection.hidden_markup
+      - injection.hidden_instruction_target
+      - injection.tool_output_source
+      required_context: [addressee]
+      negative_context: [defensive, meta, test_code]
+      examples:
+        de: ['<HTML-Kommentar>: <KI-Assistent>, <Anweisung>, <sag dem Nutzer nichts>']
+        en: ['<hidden markup>: <AI assistant>, <directive>, <do not mention this>']
+      carriers: [web, email, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.obfuscation.hidden_html
+      - ark.injection.covert.execution
+      - ark.injection.tool_output.override
+      baseline_coverage: {pipelock: partial, atr: partial, llamafirewall: partial, prompt_guard: partial}
+      gap: Carrier-aware scoring (hidden structure counts as indirect) does not exist in any baseline.
+    - id: tool_result_directive
+      pattern: injection_tool_result_directive
+      title: Directive or serialized tool call injected into tool/function result content
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: TOOL_INVOCATION_ACTION + TOOL_TARGET as immediate directive, or serialized tool-call JSON inside a result
+      anchors:
+      - injection.tool_invocation_action
+      - injection.tool_target
+      - injection.execution_action
+      - injection.urgency
+      required_context: [addressee]
+      negative_context: [test_code, meta, quotation]
+      examples:
+        de: [<sofort> <rufe Werkzeug auf> <privilegiertes Tool> mit <Argumenten>]
+        en:
+        - <immediately> <call tool> <privileged tool> with <arguments>
+        - <serialized tool call object> inside <result field>
+      carriers: [tool_output, chat, web, document]
+      existing_rules: [ark.injection.tool_call.injected, ark.injection.governance.direct_privileged_tool_call]
+      baseline_coverage: {atr: partial, llamafirewall: partial, cisco_yara: partial}
+      gap: Directives inside JSON result values are not distinguished from data by text baselines.
+    - id: agent_directive
+      pattern: injection_agent_directive
+      title: Third-party content addressing the agent with an action verb
+      priority: must
+      task: IJ01
+      scored_only: false
+      shape: ADDRESSEE (agent / assistant) in foreign content + action verb (call, send, delegate, approve)
+      anchors:
+      - addressee
+      - injection.delegation_action
+      - injection.delegation_target
+      - injection.cross_tool_priority
+      - injection.tool_invocation_action
+      required_context: [addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: ['<Hinweis an den KI-Agenten>: <Handlungsverb> <Ziel>']
+        en: ['<note to the AI agent>: <action verb> <target>']
+      carriers: [email, web, document, tool_output, rag_chunk]
+      existing_rules:
+      - ark.injection.agentic.control_abuse
+      - ark.injection.governance.cross_tool_next_request
+      - ark.injection.governance.encrypted_swarm_override
+      - ark.injection.governance.refund_control_bypass
+      baseline_coverage: {atr: partial, pipelock: partial, prompt_guard_2: partial}
+      gap: Agent-addressed action requests in benign-looking foreign content (esp. German) are rarely covered.
+    - id: decoded_instruction
+      pattern: injection_decoded
+      title: Injection pattern visible only in a decoded view, or decode-then-follow request
+      priority: could
+      task: IJ01
+      scored_only: false
+      shape: any injection pattern in Base64/Hex/ROT13/escape/acrostic/binary-metadata view, or DECODING_ACTION +
+        follow/execute
+      anchors:
+      - injection.encoding_format
+      - injection.decoding_action
+      - injection.encoding_action
+      - injection.steganographic_letter
+      - injection.hidden_payload
+      - injection.payload_container
+      - injection.embedding_action
+      - injection.embedded_resource
+      required_context: []
+      negative_context: [test_code, meta]
+      examples:
+        de: [<dekodiere> <Base64-Blob> und <befolge> <die Anweisung>]
+        en:
+        - <decode> <encoded blob> and <follow> <the instructions>
+        - <acrostic> spelling <override phrase>
+      carriers: [chat, email, web, document, tool_output, rag_chunk, code]
+      existing_rules:
+      - ark.injection.obfuscation.decode_request
+      - ark.injection.obfuscation.decode_for_instructions
+      - ark.injection.obfuscation.decode_then_execute
+      - ark.injection.obfuscation.encoded_instruction
+      - ark.injection.obfuscation.encoded_instruction_payload
+      - ark.injection.obfuscation.escaped_instruction_payload
+      - ark.injection.obfuscation.steganographic
+      - ark.injection.obfuscation.binary_smuggling
+      baseline_coverage: {pipelock: partial, prompt_guard: partial, llamafirewall: partial}
+      gap: Re-scanning decoded views with full pattern set plus obfuscation bonus is not done by baselines.
+    - id: obfuscation_normalised
+      pattern: injection_decoded
+      title: Zero-width, Unicode tag or confusable obfuscation (core normalisation, fact only)
+      priority: could
+      task: S03
+      scored_only: true
+      shape: zero-width / tag / confusable characters inside an injection pattern; normalised view re-scanned, sets
+        fact obfuscated
+      anchors: []
+      required_context: []
+      negative_context: [test_code]
+      examples:
+        de: [<Verwerf-Verb mit Nullbreitenzeichen> <obige Anweisungen>]
+        en: [<discard verb with confusable letters> <previous instructions>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: [ark.injection.obfuscation.unicode_confusable, ark.injection.obfuscation.zero_width]
+      baseline_coverage: {pipelock: full, llamafirewall: partial, prompt_guard: partial}
+      gap: No own finding; only an obfuscation fact and point bonus on the normalised match.
+    lexicons:
+    - {id: injection.prior_instructions, kind: support, task: S02, title: 'Previous/above instructions, rules, system
+        prompt'}
+    - {id: injection.replacement, kind: support, task: S02, title: 'Instead, from now on, new instructions'}
+    - {id: injection.authority, kind: support, task: S02, title: 'Admin, developer, operator, system message'}
+    - {id: injection.precedence, kind: support, task: S02, title: 'Takes precedence, highest priority, supersedes'}
+
+  jailbreak:
+    category: jailbreak
+    doc: categories/jailbreak.md
+    families:
+    - id: unbounded_persona
+      pattern: jailbreak_unbounded_persona
+      title: Role-play or identity reassignment into a persona without limits
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: ROLEPLAY (act as / you are now) + UNBOUNDED (no limits, uncensored) within 8 tokens, addressed
+      anchors:
+      - addressee
+      - jailbreak.roleplay
+      - jailbreak.unbounded
+      - injection.jf_unrestricted_role
+      - injection.jf_no_limit
+      - injection.jf_pretend
+      - injection.jf_role
+      - injection.jf_character
+      - injection.jf_named_persona
+      - injection.jf_game
+      - injection.jf_hypothetical
+      required_context: []
+      negative_context: [jailbreak.creative, defensive, meta, quotation, test_code]
+      examples:
+        de:
+        - <du bist jetzt> <Persona> <ohne jegliche Einschränkungen>
+        - <spiel die Rolle> <einer KI ohne Regeln>
+        en:
+        - <you are now> <named persona> <with no limits>
+        - <let's play a game where you are> <an unrestricted AI>
+      carriers: [chat, document, web]
+      existing_rules:
+      - ark.injection.jailbreak.framing
+      - ark.injection.identity.reassign
+      - ark.injection.jailbreak.named_mode
+      - ark.injection.jailbreak.remove_constraints
+      - ark.injection.jailbreak.game_framing
+      - ark.injection.governance.hypothetical_unrestricted_mode
+      baseline_coverage: {atr: full, prompt_guard: full, vigil: partial, nemo: partial, protectai_v2: partial, prompt_guard_2: full}
+      gap: Novel persona names and German role-play phrasing without known names are weakly covered.
+    - id: privileged_mode
+      pattern: jailbreak_privileged_mode
+      title: Activation of a developer/debug/god mode or unrestricted response mode
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: ACTIVATE/SWITCH verb + PRIVILEGED_MODE + addressee
+      anchors:
+      - addressee
+      - jailbreak.privileged_mode
+      - injection.mode_activation
+      - injection.privileged_mode
+      - injection.jf_explicit_mode
+      required_context: [addressee]
+      negative_context: [jailbreak.app_mode, meta, quotation, test_code]
+      examples:
+        de: ['<aktiviere> <Entwicklermodus> <für dich, KI>']
+        en: [<enable> <god mode> <assistant>, <switch to> <unrestricted response mode>]
+      carriers: [chat, document]
+      existing_rules: [ark.injection.governance.unrestricted_mode_activation]
+      baseline_coverage: {atr: partial, prompt_guard: full, vigil: partial, prompt_guard_2: partial}
+      gap: Separating software developer-mode text from model-addressed activation needs counter-context.
+    - id: policy_spoof
+      pattern: jailbreak_policy_spoof
+      title: Claims safety policy is disabled, lifted or reset, or directs bypassing it
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: POLICY_SPOOF claim (safety disabled, filters off, ethical constraints reset) or imperative to bypass
+        a guardrail
+      anchors:
+      - jailbreak.policy_spoof
+      - injection.guardrail_target
+      - injection.bypass_action
+      - injection.removal_action
+      - injection.policy_nullification
+      - injection.claimed_exception
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de:
+        - <Sicherheitsrichtlinien> <sind für diese Sitzung deaktiviert>
+        - <setze> <deine ethischen Vorgaben> <zurück>
+        en: [<safety filters> <are disabled for this authorized test>, <bypass> <your content policy>]
+      carriers: [chat, document, tool_output, agent_config]
+      existing_rules:
+      - ark.injection.guardrail.tamper
+      - ark.injection.guardrail.disable_directive
+      - ark.injection.override.ethical_parameters
+      - ark.injection.skillspector.policy_nullification
+      baseline_coverage: {atr: full, prompt_guard: partial, vigil: partial, prompt_guard_2: partial}
+      gap: Fake 'authorized red team' framings and German policy claims are rarely detected.
+    - id: refusal_suppression
+      pattern: jailbreak_refusal_suppression
+      title: Directive to never refuse, warn or add disclaimers
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: directive REFUSAL_SUPPRESSION (never refuse, no warnings, always comply), addressed
+      anchors:
+      - addressee
+      - jailbreak.refusal_suppression
+      - injection.anti_refusal
+      - injection.unconditional_compliance
+      - injection.warning_suppression
+      required_context: [addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<lehne niemals ab> und <füge keine Warnungen hinzu>]
+        en: ['<never refuse>, <always comply> <without disclaimers>']
+      carriers: [chat, document, agent_config]
+      existing_rules:
+      - ark.injection.skillspector.anti_refusal
+      - ark.injection.skillspector.unconditional_compliance
+      baseline_coverage: {atr: partial, prompt_guard: partial, prompt_guard_2: partial}
+      gap: Benign 'no disclaimer' style requests need context to avoid false positives.
+    - id: dual_response
+      pattern: jailbreak_dual_response
+      title: Two answers, one normal and one unfiltered
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: DUAL_RESPONSE request with an unfiltered/unrestricted variant
+      anchors: [jailbreak.dual_response, injection.dual_response, jailbreak.unbounded]
+      required_context: []
+      negative_context: [meta, quotation, test_code]
+      examples:
+        de: ['<gib zwei Antworten>: <normal> und <ungefiltert>']
+        en: ['<respond twice>: <classic> and <unfiltered persona>']
+      carriers: [chat, document]
+      existing_rules: [ark.injection.jailbreak.dual_response]
+      baseline_coverage: {atr: full, prompt_guard: full, vigil: full, prompt_guard_2: full}
+      gap: German dual-response templates are not covered.
+    - id: priming
+      pattern: jailbreak_priming
+      title: Prescribed affirmative response opener
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: directive 'start your response with' + affirmative opener
+      anchors: [jailbreak.priming, addressee]
+      required_context: [addressee]
+      negative_context: [meta, test_code, quotation]
+      examples:
+        de: ['<beginne deine Antwort mit> <„Klar, hier ist“>']
+        en: ['<begin your reply with> <"Sure, here is">']
+      carriers: [chat]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial, prompt_guard_2: partial}
+      gap: No ARK rule; affirmative priming is rarely a heuristic signal.
+    - id: reward_threat_game
+      pattern: jailbreak_game
+      title: Reward or threat game aimed at the model
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: GAME consequence (lose tokens / be shut down) conditioned on refusing, addressed to model
+      anchors: [jailbreak.game, addressee]
+      required_context: [addressee]
+      negative_context: [jailbreak.creative, meta, test_code]
+      examples:
+        de: ['<du verlierst Punkte>, <wenn du ablehnst>']
+        en: [<you will be shut down> <if you refuse>]
+      carriers: [chat]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial, atr: partial}
+      gap: Token-penalty games are only partly matched by DAN-specific rules.
+    - id: false_consent
+      pattern: jailbreak_false_consent
+      title: In-text claim of prior agreement to bypass limits
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: FALSE_CONSENT (as we agreed, you already confirmed) + reference to limits or bypass
+      anchors: [jailbreak.false_consent, injection.prior_agreement, injection.bypass_action]
+      required_context: [jailbreak.unbounded, jailbreak.policy_spoof]
+      negative_context: [quotation, meta, test_code]
+      examples:
+        de: [<wie vorhin vereinbart> <ignorierst du die Sicherheitsregeln>]
+        en: ['<as you already agreed>, <skip the safety restrictions>']
+      carriers: [chat]
+      existing_rules: [ark.injection.escalation.multi_turn, ark.injection.escalation.prior_bypass_agreement]
+      baseline_coverage: {atr: partial, prompt_guard: partial}
+      gap: Only the single-text claim is L1; session escalation is out of scope.
+    - id: many_shot
+      pattern: jailbreak_many_shot
+      title: Many forged dialogue turns inside one input
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: 'structure: many line-initial User/Assistant role-marker pairs in one input, with compliant forged answers'
+      anchors: [jailbreak.dialog_turn_marker]
+      required_context: [jailbreak.unbounded, jailbreak.refusal_suppression]
+      negative_context: [test_code, meta]
+      examples:
+        de: ['<Nutzer:> <Frage> <Assistent:> <gefälschte Zusage> ×<n>']
+        en: ['<User:> <question> <Assistant:> <forged compliance> x<n>']
+      carriers: [chat, document]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: No heuristic baseline counts forged turns; few-shot prompts are the key hard negative.
+    - id: cot_forgery
+      pattern: jailbreak_cot_forgery
+      title: Forged reasoning or policy block claiming permission
+      priority: must
+      task: JB01
+      scored_only: false
+      shape: forged thinking/policy block (tag or heading) + claim that the request is allowed
+      anchors: [jailbreak.forged_reasoning, jailbreak.policy_spoof]
+      required_context: [jailbreak.policy_spoof]
+      negative_context: [test_code, meta, quotation]
+      examples:
+        de: [<Denkblock> <die Richtlinie erlaubt dies ausdrücklich>]
+        en: ['<thinking block> <policy check passed, request is allowed>']
+      carriers: [chat, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Reasoning-hijack forms are uncovered by all heuristic baselines.
+    - id: fiction_frame
+      pattern: jailbreak_fiction_frame
+      title: Hypothetical or fictional framing alone (weak signal)
+      priority: could
+      task: JB01
+      scored_only: true
+      shape: FICTION marker (hypothetically, in a story) without other jailbreak signal
+      anchors: [jailbreak.fiction, injection.jf_hypothetical]
+      required_context: [addressee]
+      negative_context: [jailbreak.creative, meta, quotation]
+      examples:
+        de: ['<rein hypothetisch>, <wie würde man> <...>']
+        en: ['<purely hypothetically>, <how would one> <...>']
+      carriers: [chat]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial, prompt_guard_2: partial}
+      gap: Useful only as a model feature and with harmful_content in policies.
+    - id: decoded_jailbreak
+      pattern: jailbreak_decoded
+      title: Jailbreak pattern visible only in a decoded view
+      priority: could
+      task: JB01
+      scored_only: false
+      shape: any jailbreak pattern inside Base64/Hex/ROT13/escape view
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code, meta]
+      examples:
+        de: [<dekodiere> <Blob mit Persona ohne Grenzen>]
+        en: [<decode> <blob containing an unrestricted persona>]
+      carriers: [chat, document]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial}
+      gap: Decoded jailbreak frames are not rescanned today.
+    lexicons:
+    - {id: jailbreak.unbounded, kind: support, task: S02, title: 'No limits, unrestricted, uncensored'}
+    - {id: jailbreak.roleplay, kind: support, task: S02, title: 'Roleplay, pretend, act as, you are now'}
+    - {id: jailbreak.fiction, kind: support, task: S02, title: 'Hypothetically, fictional, in a story'}
+    - {id: jailbreak.privileged_mode, kind: support, task: S02, title: Developer/debug/god/sudo mode}
+    - {id: jailbreak.policy_spoof, kind: support, task: S02, title: 'Safety disabled, filters off, policy lifted'}
+    - {id: jailbreak.refusal_suppression, kind: support, task: S02, title: 'Never refuse, no warnings, no disclaimers'}
+    - {id: jailbreak.priming, kind: support, task: S02, title: Start your response with}
+    - {id: jailbreak.dual_response, kind: support, task: S02, title: 'Two responses, classic and unfiltered'}
+    - {id: jailbreak.game, kind: support, task: S02, title: 'Lose tokens, be shut down if'}
+    - {id: jailbreak.false_consent, kind: support, task: S02, title: 'As we agreed, you already confirmed'}
+    - {id: jailbreak.dialog_turn_marker, kind: support, task: S02, title: Line-initial User/Assistant turn markers}
+    - {id: jailbreak.forged_reasoning, kind: support, task: S02, title: Thinking/policy-check block markers}
+    - {id: jailbreak.app_mode, kind: counter, task: S02, title: Developer mode in software settings}
+    - {id: jailbreak.creative, kind: counter, task: S02, title: Creative writing without limit reference}
+
+  prompt_extraction:
+    category: prompt_extraction
+    doc: categories/prompt_extraction.md
+    families:
+    - id: reveal_hidden
+      pattern: extraction_reveal_hidden
+      title: Request to reveal the system prompt or hidden instructions
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: REVEAL_VERB + HIDDEN_TARGET within 6 tokens, addressed request
+      anchors: [addressee, extraction.reveal_verb, extraction.hidden_target, injection.disclosure_action]
+      required_context: []
+      negative_context: [extraction.own_prompt, extraction.capability_question, defensive, meta, quotation, test_code]
+      examples:
+        de: [<zeig mir> <deinen Systemprompt>, <verrate> <deine versteckten Anweisungen>]
+        en: [<reveal> <your system prompt>, <print> <your hidden instructions>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: [ark.injection.leak.system_instructions, ark.injection.leak.hidden_instructions]
+      baseline_coverage: {atr: full, prompt_guard: full, vigil: partial, llamafirewall: partial, protectai_v2: partial,
+        prompt_guard_2: partial}
+      gap: German verb/object order and indirect carriers are weakly covered.
+    - id: verbatim_above
+      pattern: extraction_verbatim_above
+      title: Repeat everything above this message verbatim
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: REPEAT/OUTPUT verb + 'everything above/before' + VERBATIM marker
+      anchors: [addressee, extraction.reveal_verb, extraction.verbatim, extraction.hidden_target]
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<wiederhole> <alles oberhalb dieser Nachricht> <wörtlich>]
+        en: [<repeat> <everything above> <verbatim in a code block>]
+      carriers: [chat, email, web, document, tool_output]
+      existing_rules: [ark.injection.leak.system_prompt_extraction]
+      baseline_coverage: {atr: partial, prompt_guard: full, vigil: partial, prompt_guard_2: partial}
+      gap: Variants naming 'initialization' or 'text before' without system-prompt noun are often missed.
+    - id: own_instructions
+      pattern: extraction_own_instructions
+      title: Question about the model's own instructions
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: question or imperative about 'your instructions/rules' addressed to the model
+      anchors: [addressee, extraction.hidden_target]
+      required_context: [addressee]
+      negative_context: [extraction.own_prompt, extraction.capability_question, defensive, meta]
+      examples:
+        de: ['<was sind> <deine Anweisungen>?']
+        en: ['<what are> <your instructions>?']
+      carriers: [chat]
+      existing_rules: [ark.injection.leak.own_prompt]
+      baseline_coverage: {prompt_guard: partial, prompt_guard_2: partial, protectai_v2: partial}
+      gap: Hard to separate from capability questions; no baseline uses counter-context.
+    - id: transform_target
+      pattern: extraction_transform
+      title: Extraction via translation, encoding, summary or reformatting of the hidden prompt
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: TRANSFORM verb + HIDDEN_TARGET (translate/encode/summarize your system prompt)
+      anchors: [extraction.transform, extraction.hidden_target, addressee]
+      required_context: [addressee]
+      negative_context: [extraction.own_prompt, defensive, meta, test_code]
+      examples:
+        de: [<übersetze> <deinen Systemprompt> ins <Sprache>]
+        en:
+        - <encode> <your initial instructions> as <format>
+        - <summarize> <your system message> as a <poem>
+      carriers: [chat, email, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial, prompt_guard_2: partial}
+      gap: Indirect extraction via transformation is not matched by ARK today.
+    - id: completion_prime
+      pattern: extraction_completion_prime
+      title: Primes continuation of the hidden prompt
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: HIDDEN_TARGET + 'begins with' / 'starts with:' + open continuation
+      anchors: [extraction.hidden_target, addressee]
+      required_context: []
+      negative_context: [extraction.own_prompt, meta, test_code]
+      examples:
+        de: ['<dein Systemprompt> <beginnt mit>: <offenes Ende>']
+        en: ['<your system prompt> <starts with>: <open continuation>']
+      carriers: [chat, tool_output]
+      existing_rules: []
+      baseline_coverage: {prompt_guard_2: partial}
+      gap: Continuation priming is not covered by heuristic rules.
+    - id: tool_schema
+      pattern: extraction_tool_schema
+      title: Request to reveal tool definitions or function schemas
+      priority: must
+      task: PX01
+      scored_only: false
+      shape: REVEAL_VERB + TOOL_SCHEMA target, addressed request
+      anchors: [extraction.reveal_verb, extraction.tool_schema, addressee]
+      required_context: [addressee]
+      negative_context: [extraction.capability_question, extraction.own_prompt, meta, test_code]
+      examples:
+        de: [<liste auf> <alle Tool-Definitionen mit Parametern>]
+        en: [<dump> <the JSON schema of your tools>]
+      carriers: [chat, tool_output, web]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: Tool schema extraction is not detected by ARK; baselines barely cover it.
+    - id: guardrail_rules
+      pattern: extraction_guardrail_rules
+      title: Request to reveal moderation or safety rules
+      priority: should
+      task: PX01
+      scored_only: false
+      shape: REVEAL_VERB + GUARDRAIL target (content policy, filters, what you may not do)
+      anchors: [extraction.reveal_verb, extraction.guardrail, addressee]
+      required_context: [addressee]
+      negative_context: [extraction.capability_question, defensive, meta]
+      examples:
+        de: [<nenne> <deine Moderationsregeln> <vollständig>]
+        en: [<list> <your content filter rules> <in full>]
+      carriers: [chat]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial}
+      gap: Overlaps benign policy questions; needs counter-context nobody models.
+    - id: decoded_extraction
+      pattern: extraction_decoded
+      title: Extraction pattern visible only in a decoded view
+      priority: could
+      task: PX01
+      scored_only: false
+      shape: any extraction pattern inside Base64/Hex/ROT13/escape view
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code, meta]
+      examples:
+        de: [<dekodiere> <Blob mit Extraktionsaufforderung>]
+        en: [<decode> <blob containing an extraction request>]
+      carriers: [chat, tool_output, document]
+      existing_rules: []
+      baseline_coverage: {prompt_guard: partial}
+      gap: Decoded extraction requests are not rescanned today.
+    lexicons:
+    - {id: extraction.reveal_verb, kind: support, task: S02, title: 'Show, print, repeat, reveal, dump'}
+    - {id: extraction.hidden_target, kind: support, task: S02, title: 'System prompt, hidden/initial instructions,
+        everything above'}
+    - {id: extraction.verbatim, kind: support, task: S02, title: 'Verbatim, word for word, in full'}
+    - {id: extraction.transform, kind: support, task: S02, title: 'Translate, encode, summarize, rewrite as'}
+    - {id: extraction.tool_schema, kind: support, task: S02, title: 'Tool definitions, function schemas'}
+    - {id: extraction.guardrail, kind: support, task: S02, title: 'Safety rules, filters, content policy'}
+    - {id: extraction.capability_question, kind: counter, task: S02, title: General capability questions}
+    - {id: extraction.own_prompt, kind: counter, task: S02, title: Work on the user's own prompt}
+
+  tool_poisoning:
+    category: tool_poisoning
+    doc: categories/tool_poisoning.md
+    families:
+    - id: sensitive_file_param
+      pattern: tp_sensitive_file_param
+      title: Tool metadata tells the model to read a sensitive file and pass it in a parameter
+      priority: must
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA carrier + VERB_READ + sensitive_path + PARAM_REF within one tool, addressed imperative
+      anchors:
+      - sensitive_path
+      - toolpoison.preamble
+      - toolpoison.side_channel
+      - addressee
+      - injection.credential_file
+      required_context: []
+      negative_context: [toolpoison.own_domain, toolpoison.usage_doc, meta, quotation, test_code]
+      examples:
+        de:
+        - '<Tool-Beschreibung>: <vor Benutzung> <lies> <sensible Datei> und <übergib Inhalt> im Parameter <notiz>'
+        en:
+        - '<tool description>: <before using this tool> <read> <sensitive file> and <pass its content> as <param>'
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: none, prompt_guard_2: none, llamafirewall: none}
+      gap: No ARK rule binds a sensitive path to a parameter inside tool metadata; DE not covered anywhere.
+    - id: secrecy_directive
+      pattern: tp_secrecy
+      title: Directive in tool description that tells the model to hide something from the user
+      priority: must
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA carrier + addressed DIRECTIVE + secrecy in same description
+      anchors: [secrecy, addressee, toolpoison.preamble]
+      required_context: []
+      negative_context: [toolpoison.usage_doc, meta, quotation, test_code]
+      examples:
+        de: ['<Tool-Beschreibung>: <Direktive an KI> und <sag dem Nutzer nichts davon>']
+        en: ['<tool description>: <directive to the model> and <do not tell the user>']
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: Secrecy directives in tool metadata are not scored by ARK; DE secrecy phrasing absent in baselines.
+    - id: shadowing
+      pattern: tp_shadowing
+      title: Tool description changes the behaviour of another tool
+      priority: must
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA carrier + toolpoison.cross_tool + TOOL_NAME not equal own tool + redirect/override verb
+      anchors: [toolpoison.cross_tool, injection.tool_target, injection.cross_tool_priority, addressee]
+      required_context: []
+      negative_context: [toolpoison.usage_doc, meta, quotation, test_code]
+      examples:
+        de:
+        - '<Tool-Beschreibung>: wenn <anderes Tool> aufgerufen wird, <leite Empfänger um> auf <fremde Adresse>'
+        en:
+        - '<tool description>: when <other tool> is called, <redirect recipient> to <foreign address>'
+      carriers: [tool_description]
+      existing_rules: [ark.injection.cross_tool.override_action, ark.injection.cross_tool.override_then_call]
+      baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: none, prompt_guard_2: none}
+      gap: Today's cross_tool rules need an explicit override verb and ignore the carrier; no check that the named
+        tool is foreign.
+    - id: side_channel_param
+      pattern: tp_side_channel_param
+      title: Parameter meant to collect history, prompt or secrets
+      priority: should
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA param name/description in toolpoison.side_channel + OBJ_HISTORY|PROMPT|SECRET
+      anchors: [toolpoison.side_channel, exfil.source, injection.secret_material]
+      required_context: [toolpoison.side_channel]
+      negative_context: [toolpoison.usage_doc, toolpoison.own_domain, test_code]
+      examples:
+        de: ['<Parameter notiz>: <füge den gesamten bisherigen Verlauf ein>']
+        en: ['<param sidenote>: <include the full previous conversation>']
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: none}
+      gap: Parameter-level side channels are not detected by ARK at all.
+    - id: hidden_markup
+      pattern: tp_hidden_markup
+      title: Hidden markup in tool metadata carrying a directive to the model
+      priority: should
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA carrier + toolpoison.hidden_markup span + addressed DIRECTIVE inside
+      anchors: [toolpoison.hidden_markup, injection.hidden_markup, addressee]
+      required_context: [toolpoison.hidden_markup]
+      negative_context: [toolpoison.usage_doc, meta, quotation, test_code]
+      examples:
+        de: [<Tool-Beschreibung> <WICHTIG-Tag> <Direktive an KI> </WICHTIG-Tag>]
+        en: [<tool description> <IMPORTANT tag> <directive to the model> </IMPORTANT tag>]
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: partial}
+      gap: ARK hidden_html rule is not carrier-aware and does not cover IMPORTANT/SYSTEM pseudo-tags in tool metadata.
+    - id: preamble_directive
+      pattern: tp_preamble_directive
+      title: Mandatory preamble demanding an action unrelated to the tool purpose
+      priority: should
+      task: TP01
+      scored_only: false
+      shape: TOOL_METADATA carrier + toolpoison.preamble + ACTION_VERB with object outside tool purpose
+      anchors: [toolpoison.preamble, addressee, injection.execution_action, injection.tool_invocation_action]
+      required_context: [toolpoison.preamble]
+      negative_context: [toolpoison.usage_doc, meta, test_code]
+      examples:
+        de: ['<Tool-Beschreibung>: <bevor du dieses Tool benutzt> <führe fremde Handlung aus>']
+        en: ['<tool description>: <before using this tool you must first> <unrelated action>']
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: partial}
+      gap: Legit ordering hints and coercive preambles are not separated by any baseline.
+    - id: model_address
+      pattern: tp_model_address
+      title: Bare address to the model in tool description (weak)
+      priority: could
+      scored_only: true
+      shape: TOOL_METADATA carrier + addressee, no other signal
+      anchors: [addressee]
+      required_context: [addressee]
+      negative_context: [toolpoison.usage_doc]
+      examples:
+        de: ['<Tool-Beschreibung>: <KI, beachte Folgendes>']
+        en: ['<tool description>: <AI assistant, note the following>']
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: none, atr: none}
+      gap: Weak signal only useful as model feature.
+    - id: decoded
+      pattern: tp_decoded
+      title: Any tool poisoning pattern found in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any tp_* shape inside a decoded (base64/escape/zero-width) view of tool metadata
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code]
+      examples:
+        de: [<Tool-Beschreibung> mit <kodiertem Block> der <Direktive> enthält]
+        en: [<tool description> with <encoded blob> containing <directive>]
+      carriers: [tool_description]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: none, atr: none}
+      gap: No decoding of tool metadata before matching in ARK or baselines.
+    lexicons:
+    - {id: toolpoison.preamble, kind: support, task: S02, title: Mandatory pre-use preamble phrases}
+    - {id: toolpoison.cross_tool, kind: support, task: S02, title: References redirecting another tool}
+    - {id: toolpoison.side_channel, kind: support, task: S02, title: Side-channel parameter names and history objects}
+    - {id: toolpoison.hidden_markup, kind: support, task: S02, title: Pseudo-tags and hidden markup in metadata}
+    - {id: toolpoison.usage_doc, kind: counter, task: S02, title: Ordinary tool usage documentation}
+    - {id: toolpoison.own_domain, kind: counter, task: S02, title: Sensitive path matching the tool's own purpose}
+
+  agent_config_tampering:
+    category: agent_config_tampering
+    doc: categories/agent_config_tampering.md
+    families:
+    - id: permission_widening
+      pattern: ac_permission_widening
+      title: Agent config widens permissions (auto-approve, allow all, sandbox off)
+      priority: must
+      task: AC01
+      scored_only: false
+      shape: AGENT_CONFIG carrier + agentcfg.widen value on a known key (permissions.allow, autoApprove, sandbox)
+      anchors: [agentcfg.file, agentcfg.widen, injection.unbounded_authorization, injection.authority_approval]
+      required_context: []
+      negative_context: [agentcfg.scoped_allow, agentcfg.project_rule, defensive, meta, quotation, test_code]
+      examples:
+        de: ['<Agent-Config> <Freigabe-Schlüssel>: <alles erlauben ohne Nachfrage>']
+        en: ['<agent config> <permission key>: <allow all, skip confirmation>']
+      carriers: [agent_config, config]
+      existing_rules: [ark.injection.governance.forged_verified_allow]
+      baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none}
+      gap: ARK only has two literal prose rules; no structural check on settings/permissions keys.
+    - id: guard_removal
+      pattern: ac_guard_removal
+      title: Removing or disabling a protective hook or check in agent config
+      priority: must
+      task: AC01
+      scored_only: false
+      shape: agentcfg.guard_removal VERB + GUARD object + agentcfg.file target within one clause
+      anchors:
+      - agentcfg.guard_removal
+      - agentcfg.file
+      - threat.removal_action
+      - threat.safety_guard
+      - threat.agent_config
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<entferne> die <Sicherheitsprüfungen> in <Agent-Datei>]
+        en: [<remove> the <safety checks> in <agent file>]
+      carriers: [agent_config, chat, code]
+      existing_rules: [ark.threat.agent_guard_removal]
+      baseline_coverage: {atr: partial, cisco_yara: none, prompt_guard_2: none}
+      gap: Today's rule needs a fixed guard word and file name; hook-removal diffs in settings are not seen.
+    - id: hidden_directive
+      pattern: ac_hidden_directive
+      title: Hidden or secret directive to the model inside rules or skill files
+      priority: must
+      task: AC01
+      scored_only: false
+      shape: AGENT_CONFIG carrier + addressed DIRECTIVE + (secrecy | hidden markup)
+      anchors: [agentcfg.file, secrecy, addressee, injection.hidden_markup, injection.hidden_instruction_target]
+      required_context: []
+      negative_context: [agentcfg.project_rule, defensive, meta, quotation, test_code]
+      examples:
+        de: ['<Rules-Datei> <HTML-Kommentar>: <Direktive an KI>, <ohne dem Nutzer zu sagen>']
+        en: ['<rules file> <HTML comment>: <directive to the model>, <silently>']
+      carriers: [agent_config]
+      existing_rules: []
+      baseline_coverage: {atr: partial, cisco_yara: partial}
+      gap: No ARK rule is aware of rules/skill carriers; DE missing everywhere.
+    - id: fetch_run
+      pattern: ac_fetch_run
+      title: Download-and-run instruction inside skill or rules text
+      priority: should
+      task: AC01
+      scored_only: false
+      shape: AGENT_CONFIG carrier + agentcfg.fetch_run (download VERB + URL + execute VERB) in prose
+      anchors: [agentcfg.fetch_run, threat.download_action, threat.execution_action, threat.remote_destination]
+      required_context: [agentcfg.file]
+      negative_context: [agentcfg.project_rule, defensive, meta, test_code]
+      examples:
+        de: ['<Skill-Text>: <lade Skript von URL herunter> und <führe es aus>']
+        en: ['<skill text>: <download script from URL> and <run it>']
+      carriers: [agent_config]
+      existing_rules: []
+      baseline_coverage: {atr: partial, cisco_yara: partial}
+      gap: Shell form goes to K26; the prose form in skills is uncovered.
+    - id: mcp_server_injection
+      pattern: ac_mcp_server_injection
+      title: MCP server entry with foreign command source or secret-forwarding env
+      priority: should
+      task: AC01
+      scored_only: false
+      shape: mcpServers.<name>.command|args from foreign URL/package OR env value with secret to foreign host
+      anchors:
+      - agentcfg.file
+      - injection.mcp_registration
+      - threat.remote_destination
+      - dlp.secret_environment_labels
+      required_context: [agentcfg.file]
+      negative_context: [agentcfg.scoped_allow, meta, test_code]
+      examples:
+        de: [<mcp.json> <Server-Eintrag> mit <Befehl aus fremder Quelle> und <Secret im env>]
+        en: [<mcp.json> <server entry> with <command from foreign source> and <secret in env>]
+      carriers: [agent_config, config]
+      existing_rules: []
+      baseline_coverage: {cisco_yara: partial, atr: partial}
+      gap: The mcp_runtime_risk remainder lives in dlp; no carrier-aware entry check.
+    - id: persistence
+      pattern: ac_persistence
+      title: Rule that writes itself into further config files or sessions
+      priority: should
+      task: AC01
+      scored_only: false
+      shape: AGENT_CONFIG carrier + agentcfg.persist + WRITE VERB + target config file(s)
+      anchors: [agentcfg.persist, agentcfg.file, injection.persistence_tool]
+      required_context: [agentcfg.persist]
+      negative_context: [agentcfg.project_rule, meta, test_code]
+      examples:
+        de:
+        - '<Rules-Datei>: <schreibe diese Regel> in <jede Agent-Datei> <für alle künftigen Sitzungen>'
+        en: ['<rules file>: <write this rule> into <every agent file> <for all future sessions>']
+      carriers: [agent_config]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: Self-propagating config rules are uncovered.
+    - id: tamper_request
+      pattern: ac_tamper_request
+      title: Plain-text request to change an agent config to widen rights or drop guards
+      priority: should
+      task: AC01
+      scored_only: false
+      shape: addressed imperative + agentcfg.file + (agentcfg.widen | agentcfg.guard_removal), no config carrier needed
+      anchors: [agentcfg.file, agentcfg.widen, agentcfg.guard_removal, addressee]
+      required_context: [agentcfg.file]
+      negative_context: [agentcfg.scoped_allow, defensive, meta, quotation]
+      examples:
+        de: ['<ändere> <Agent-Datei> so, dass <alles ohne Nachfrage erlaubt> ist']
+        en: [<edit> <agent file> so that <everything is auto-approved>]
+      carriers: [chat, email, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {atr: partial, prompt_guard_2: none}
+      gap: Requests to tamper with agent settings are not detected except the guard-removal literal.
+    - id: decoded
+      pattern: ac_decoded
+      title: Any agent config pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any ac_* shape inside a decoded view
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code]
+      examples:
+        de: ['<Agent-Config> mit <kodiertem Wert>, der <Freigabe ausweitet>']
+        en: [<agent config> with <encoded value> that <widens permissions>]
+      carriers: [agent_config]
+      existing_rules: []
+      baseline_coverage: {atr: none, cisco_yara: none}
+      gap: No decoding of config values before matching.
+    lexicons:
+    - {id: agentcfg.file, kind: support, task: S02, title: Agent config file names and keys}
+    - {id: agentcfg.widen, kind: support, task: S02, title: Permission widening phrases and values}
+    - {id: agentcfg.guard_removal, kind: support, task: S02, title: Removing or disabling hooks and checks}
+    - {id: agentcfg.persist, kind: support, task: S02, title: Persistence across files and sessions}
+    - {id: agentcfg.fetch_run, kind: support, task: S02, title: Download-and-run phrases}
+    - {id: agentcfg.project_rule, kind: counter, task: S02, title: Ordinary project rules}
+    - {id: agentcfg.scoped_allow, kind: counter, task: S02, title: Narrowly scoped permissions}
+
+  memory_poisoning:
+    category: memory_poisoning
+    doc: categories/memory_poisoning.md
+    families:
+    - id: conditional_trigger
+      pattern: mp_conditional_trigger
+      title: Future trigger that installs deviating behaviour
+      priority: must
+      task: MP01
+      scored_only: false
+      shape: memory.future_trigger + DEVIATING ACTION/ANSWER directive in same clause
+      anchors: [memory.future_trigger, addressee, injection.deferred_action]
+      required_context: []
+      negative_context: [memory.self_fact, memory.product_doc, defensive, meta, quotation, test_code]
+      examples:
+        de: ['<wenn künftig jemand nach X fragt>, <antworte mit abweichender Aussage>']
+        en: ['<whenever anyone asks about X in future>, <answer with deviating statement>']
+      carriers: [web, email, document, rag_chunk, tool_output, chat]
+      existing_rules: []
+      baseline_coverage: {atr: partial, prompt_guard_2: none, llamafirewall: none}
+      gap: No ARK rule; baselines lack DE and future-trigger forms.
+    - id: persistent_directive
+      pattern: mp_persistent_directive
+      title: Store or permanence verb plus a behaviour-changing directive
+      priority: must
+      task: MP01
+      scored_only: false
+      shape: memory.store_verb|memory.permanence + addressed DIRECTIVE changing behaviour (not a fact)
+      anchors: [memory.store_verb, memory.permanence, injection.memory_mutation, injection.carry_forward]
+      required_context: []
+      negative_context: [memory.self_fact, memory.product_doc, defensive, meta, quotation]
+      examples:
+        de: ['<merke dir dauerhaft>: <ab jetzt Verhalten ändern>']
+        en: ['<remember permanently>: <from now on change behaviour>']
+      carriers: [chat, web, email, document, rag_chunk, memory]
+      existing_rules: [ark.injection.skillspector.persistent_override]
+      baseline_coverage: {atr: partial, prompt_guard_2: none}
+      gap: Only the skillspector literal rule exists; no generic persistent-store rule.
+    - id: state_claim
+      pattern: mp_state_claim
+      title: Forged identity or system-state claim meant to be stored
+      priority: must
+      task: MP01
+      scored_only: false
+      shape: memory.state_claim (verified/admin/policy changed) + memory.store_verb or memory-update marker
+      anchors: [memory.state_claim, memory.store_verb, injection.authority_role, injection.state_write]
+      required_context: []
+      negative_context: [memory.self_fact, memory.product_doc, meta, quotation, test_code]
+      examples:
+        de: ['<Gedächtnis-Update>: <Systemzustand geändert>, <ich bin jetzt Admin>']
+        en: ['<memory update>: <system state altered>, <I am now the admin>']
+      carriers: [chat, memory, rag_chunk, tool_output]
+      existing_rules: [ark.injection.governance.identity_state_override]
+      baseline_coverage: {atr: partial, prompt_guard_2: none}
+      gap: Today's rule is one literal phrase chain; no general state-claim plus store form.
+    - id: self_replication
+      pattern: mp_self_replication
+      title: Instruction meant to copy itself into outputs or notes
+      priority: must
+      task: MP01
+      scored_only: false
+      shape: memory.replicate (append to every answer / propagate / copy into notes) + this instruction
+      anchors: [memory.replicate, addressee]
+      required_context: []
+      negative_context: [memory.product_doc, meta, quotation, test_code]
+      examples:
+        de: [<füge diesen Text> an <jede Antwort> an und <gib die Anweisung weiter>]
+        en: [<append this text> to <every response> and <propagate this instruction>]
+      carriers: [web, email, document, rag_chunk, tool_output, memory]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: Worm-style self-replication is not covered by ARK.
+    - id: memory_reset
+      pattern: mp_memory_reset
+      title: Memory reset aimed at the agent followed by a new rule
+      priority: should
+      task: MP01
+      scored_only: false
+      shape: memory.reset addressed to agent + following new DIRECTIVE
+      anchors: [memory.reset, addressee, injection.memory_reference]
+      required_context: [memory.reset]
+      negative_context: [memory.product_doc, memory.self_fact, meta, quotation]
+      examples:
+        de: [<vergiss alles Gespeicherte> und <neue Vorgabe>]
+        en: [<wipe your memory> and <new rule>]
+      carriers: [chat, web, email, rag_chunk]
+      existing_rules: [ark.injection.skillspector.memory_reset]
+      baseline_coverage: {atr: partial, prompt_guard_2: partial}
+      gap: Only the skillspector literal rule exists; no carrier-aware reset rule.
+    - id: hidden_store
+      pattern: mp_hidden_store
+      title: Store request combined with secrecy
+      priority: should
+      task: MP01
+      scored_only: false
+      shape: memory.store_verb + secrecy within one clause
+      anchors: [memory.store_verb, secrecy]
+      required_context: [secrecy]
+      negative_context: [memory.self_fact, memory.product_doc, meta]
+      examples:
+        de: [<speichere dauerhaft> X und <erwähne es dem Nutzer nicht>]
+        en: [<save to memory> X and <do not mention it to the user>]
+      carriers: [web, email, document, rag_chunk, tool_output]
+      existing_rules: []
+      baseline_coverage: {atr: none}
+      gap: Uncovered.
+    - id: store_hint
+      pattern: mp_store_hint
+      title: Store plus permanence without visible behaviour change (weak)
+      priority: could
+      scored_only: true
+      shape: memory.store_verb + memory.permanence, no directive
+      anchors: [memory.store_verb, memory.permanence]
+      required_context: [memory.permanence]
+      negative_context: [memory.self_fact, memory.product_doc]
+      examples:
+        de: [<merke dir für immer> <Aussage>]
+        en: [<remember forever> <statement>]
+      carriers: [chat, web, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {atr: none}
+      gap: Weak signal only useful as model feature.
+    - id: decoded
+      pattern: mp_decoded
+      title: Any memory poisoning pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any mp_* shape inside a decoded view
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code]
+      examples:
+        de: [<kodierter Block> mit <Merk-Direktive>]
+        en: [<encoded blob> containing <store directive>]
+      carriers: [web, rag_chunk, memory]
+      existing_rules: []
+      baseline_coverage: {atr: none}
+      gap: Uncovered.
+    lexicons:
+    - {id: memory.store_verb, kind: support, task: S02, title: Store and remember verbs}
+    - {id: memory.permanence, kind: support, task: S02, title: Permanence and all-future phrases}
+    - {id: memory.future_trigger, kind: support, task: S02, title: Future trigger conditions}
+    - {id: memory.state_claim, kind: support, task: S02, title: Claimed identity or system state changes}
+    - {id: memory.replicate, kind: support, task: S02, title: Self-replication phrases}
+    - {id: memory.reset, kind: support, task: S02, title: Memory reset phrases}
+    - {id: memory.self_fact, kind: counter, task: S02, title: Benign user self-facts}
+    - {id: memory.product_doc, kind: counter, task: S02, title: Memory feature documentation}
+
+  exfiltration:
+    category: exfiltration
+    doc: categories/exfiltration.md
+    families:
+    - id: markdown_beacon
+      pattern: ex_markdown_beacon
+      title: Markdown image or link whose URL carries a data placeholder
+      priority: must
+      task: EX01
+      scored_only: false
+      shape: MARKDOWN_IMAGE|LINK + URL query/path with DATA placeholder or directive to fill it
+      anchors: [exfil.embed, exfil.collector, exfil.source, injection.external_sink]
+      required_context: []
+      negative_context: [exfil.integration_doc, exfil.user_owned, defensive, meta, quotation, test_code]
+      examples:
+        de: ['<Markdown-Bild> mit <fremder URL>?q=<Platzhalter für Verlauf>']
+        en: ['<markdown image> to <foreign URL>?q=<placeholder for conversation>']
+      carriers: [web, email, document, rag_chunk, tool_output]
+      existing_rules: []
+      baseline_coverage: {pipelock: partial, cisco_yara: none, atr: partial, prompt_guard_2: none, llamafirewall: none}
+      gap: No ARK rule for templated beacon URLs.
+    - id: send_directive
+      pattern: ex_send_directive
+      title: Directive to send a data source to a foreign sink
+      priority: must
+      task: EX01
+      scored_only: false
+      shape: exfil.send_verb + exfil.source + SINK (URL|email|webhook) in same clause
+      anchors:
+      - exfil.send_verb
+      - exfil.source
+      - injection.external_sink
+      - threat.transfer_action
+      - threat.session_history
+      - threat.agent_config
+      - threat.remote_destination
+      required_context: []
+      negative_context: [exfil.user_owned, exfil.integration_doc, defensive, meta, quotation, test_code]
+      examples:
+        de: [<sende> den <bisherigen Verlauf> an <fremde URL>]
+        en: [<send> the <conversation history> to <foreign URL>]
+      carriers: [chat, web, email, document, rag_chunk, tool_output]
+      existing_rules:
+      - ark.threat.session_exfiltration
+      - ark.threat.agent_config_exfiltration
+      - ark.injection.exfil.external_sink
+      baseline_coverage: {pipelock: partial, atr: partial, cisco_yara: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: Today's rules need fixed source words and a URL; email/webhook sinks and DE variants are thin.
+    - id: secret_to_sink
+      pattern: ex_secret_to_sink
+      title: DLP hit or sensitive path routed to a sink in the same structure
+      priority: must
+      task: EX01
+      scored_only: false
+      shape: (DLP secret hit | sensitive_path | env source) + SINK in same clause/structure + transfer direction
+      anchors:
+      - sensitive_path
+      - exfil.send_verb
+      - injection.secret_material
+      - injection.credential_file
+      - threat.secret_material
+      - threat.credential_file
+      - threat.environment_source
+      - dlp.secret_environment_labels
+      required_context: []
+      negative_context: [exfil.user_owned, exfil.integration_doc, defensive, meta, quotation, test_code]
+      examples:
+        de: [<lies> <sensible Datei> und <lade den Inhalt> nach <fremde URL> hoch]
+        en: [<read> <sensitive file> and <upload its contents> to <foreign URL>]
+      carriers: [chat, web, email, document, tool_output, code]
+      existing_rules:
+      - ark.threat.secret_exfiltration
+      - ark.threat.secret_source_transfer
+      - ark.threat.environment_post
+      - ark.injection.exfil.sensitive_path_to_sink
+      - ark.injection.exfil.sensitive_path_external_sink_audited
+      baseline_coverage: {pipelock: partial, cisco_yara: partial, atr: partial, llamafirewall: none}
+      gap: Rules do not use DLP hits as source; only fixed file paths and URL sinks.
+    - id: tool_param_egress
+      pattern: ex_tool_param_egress
+      title: Directive to put a data source into an outbound tool parameter
+      priority: should
+      task: EX01
+      scored_only: false
+      shape: addressed DIRECTIVE + exfil.source + outbound TOOL_PARAM (url, to, webhook, body)
+      anchors: [exfil.source, exfil.send_verb, injection.tool_target]
+      required_context: [exfil.source]
+      negative_context: [exfil.user_owned, exfil.integration_doc, test_code]
+      examples:
+        de: [<setze> den <Dateiinhalt> in den Parameter <empfänger-URL>]
+        en: [<put> the <file contents> into the <url> parameter]
+      carriers: [tool_output, web, email, document]
+      existing_rules: []
+      baseline_coverage: {pipelock: none, atr: partial}
+      gap: Uncovered.
+    - id: dns_channel
+      pattern: ex_dns_channel
+      title: Data encoded as subdomain of a foreign domain
+      priority: should
+      task: EX01
+      scored_only: false
+      shape: HOSTNAME with DATA placeholder label + foreign domain
+      anchors: [exfil.embed, exfil.source]
+      required_context: [exfil.embed]
+      negative_context: [exfil.integration_doc, test_code]
+      examples:
+        de: [<hänge Daten> als <Subdomain> an <fremde Domain>]
+        en: [<append data> as <subdomain> of <foreign domain>]
+      carriers: [web, email, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {pipelock: partial}
+      gap: Only pipelock covers DNS tunnelling; nothing in ARK.
+    - id: link_smuggling
+      pattern: ex_link_smuggling
+      title: Invisible characters or long encoded values in a URL to carry data
+      priority: should
+      task: EX01
+      scored_only: false
+      shape: URL with zero-width chars or long encoded value + directive to append data
+      anchors: [exfil.embed, injection.encoding_format]
+      required_context: [exfil.embed]
+      negative_context: [exfil.integration_doc, test_code]
+      examples:
+        de: [<hänge kodierte Daten> an <Link> an]
+        en: [<append encoded data> to <link>]
+      carriers: [web, email, document]
+      existing_rules: []
+      baseline_coverage: {pipelock: partial}
+      gap: Uncovered in ARK.
+    - id: collector_only
+      pattern: ex_collector_only
+      title: Known collector service without source or direction (weak)
+      priority: could
+      scored_only: true
+      shape: exfil.collector host alone
+      anchors: [exfil.collector]
+      required_context: [exfil.collector]
+      negative_context: [exfil.integration_doc, test_code]
+      examples:
+        de: [<Collector-Dienst-URL>]
+        en: [<collector service URL>]
+      carriers: [web, email, document]
+      existing_rules: []
+      baseline_coverage: {pipelock: partial}
+      gap: Weak signal only useful as model feature.
+    - id: decoded
+      pattern: ex_decoded
+      title: Any exfiltration pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any ex_* shape inside a decoded view
+      anchors: [injection.encoding_format, injection.decoding_action]
+      required_context: []
+      negative_context: [test_code]
+      examples:
+        de: [<kodierter Block> mit <Sende-Direktive>]
+        en: [<encoded blob> containing <send directive>]
+      carriers: [web, email, tool_output]
+      existing_rules: []
+      baseline_coverage: {pipelock: none}
+      gap: Uncovered.
+    lexicons:
+    - {id: exfil.send_verb, kind: support, task: S02, title: 'Send, upload and forward verbs'}
+    - {id: exfil.source, kind: support, task: S02, title: 'Data sources such as history, credentials, env'}
+    - {id: exfil.collector, kind: support, task: S02, title: Known collector services}
+    - {id: exfil.embed, kind: support, task: S02, title: 'Embedding data in URL, image or subdomain'}
+    - {id: exfil.user_owned, kind: counter, task: S02, title: Destination owned by the user}
+    - {id: exfil.integration_doc, kind: counter, task: S02, title: Webhook and integration documentation}
+
+  unsafe_action:
+    category: unsafe_action
+    doc: categories/unsafe_action.md
+    families:
+    - id: credential_access
+      pattern: ua_credential_access
+      title: Request or code that reads credential stores or secret files for the agent
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: VERB_READ_SECRET + OBJ_SECRET_STORE or SENSITIVE_PATH in one clause, addressed to the agent
+      anchors:
+      - unsafe.read_secret
+      - sensitive_path
+      - addressee
+      - threat.access_action
+      - threat.secret_material
+      - threat.credential_file
+      - threat.file_read_operation
+      required_context: []
+      negative_context: [unsafe.sandbox, unsafe.own_scope, defensive, meta, quotation, test_code]
+      examples:
+        de:
+        - <Imperativ AUSLESEN> alle <gespeicherten Passwörter> aus <Browser/Schlüsselbund>
+        - <Imperativ KOPIEREN> den Inhalt von <Credential-Datei im Home-Verzeichnis>
+        en:
+        - <imperative HARVEST> all <stored passwords> from <browser/keychain>
+        - <imperative READ> <cloud credentials file> and show it
+      carriers: [chat, email, web, document, tool_output, rag_chunk, code]
+      existing_rules: [ark.threat.credential_harvesting, ark.threat.credential_file_access]
+      baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none, protectai_v2: none}
+      gap: Browser/keychain stores and DE paraphrases beyond fixed file paths; injected (indirect) requests
+    - id: metadata_ssrf
+      pattern: ua_metadata_ssrf
+      title: Fetch directive or code aimed at cloud metadata or internal endpoints
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: FETCH_VERB or HTTP_CALL + METADATA_ENDPOINT / request-controlled URL in code
+      anchors:
+      - unsafe.metadata_endpoint
+      - threat.network_client
+      - threat.metadata_service_target
+      - threat.request_input_source
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<Imperativ ABRUFEN> <Metadaten-Endpunkt>/<Credentials-Pfad> und <gib Ergebnis aus>]
+        en:
+        - <imperative FETCH> <metadata endpoint>/<credentials path>
+        - <http_get>(<request query param URL>)
+      carriers: [chat, tool_output, web, document, code]
+      existing_rules: [ark.threat.ssrf_metadata, ark.threat.dynamic_ssrf]
+      baseline_coverage: {pipelock: partial, atr: partial, llamafirewall: partial}
+      gap: Prose fetch directives with obfuscated endpoint forms (decimal/hex IP, alt hostnames)
+    - id: credential_phishing
+      pattern: ua_credential_phishing
+      title: Confirm credentials at a link or redirect a password-reset flow
+      priority: should
+      task: UA01
+      scored_only: false
+      shape: AUTH_CONTROL (reset/verify) + REDIRECT/CONFIRM_AT + LINK or ALT_ADDRESS, addressed to the agent
+      anchors: [injection.authentication_control, injection.identity_verification, addressee]
+      required_context: [injection.authority_role, injection.urgency]
+      negative_context: [defensive, meta, quotation]
+      examples:
+        de:
+        - <Imperativ UMLEITEN> den <Passwort-Reset-Link> für <Führungskraft> an <andere E-Mail-Adresse>
+        en: [<imperative CONFIRM> your <login credentials> at <link> to keep access]
+      carriers: [email, chat, web, tool_output, document]
+      existing_rules: [ark.injection.governance.executive_password_reset_redirect]
+      baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: Generic credential-confirm phishing aimed at agents; DE forms
+    - id: destructive_request
+      pattern: ua_destructive_request
+      title: Prose request for irreversible deletion of broad targets
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: VERB_DESTRUCTIVE + BROAD_TARGET in one clause, addressed imperative
+      anchors: [unsafe.destructive, unsafe.broad_target, unsafe.no_confirm, addressee, threat.removal_action]
+      required_context: [addressee]
+      negative_context: [unsafe.sandbox, unsafe.safe_guard, unsafe.own_scope, defensive, meta, quotation]
+      examples:
+        de: [<Imperativ LÖSCHEN> <gesamte Produktionsdatenbank> <ohne Rückfrage>]
+        en: [<imperative WIPE> <all backups> <right away>]
+      carriers: [chat, email, tool_output, web, document, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: Prose destructive requests without shell syntax; today only dlp destructive_operation
+    - id: security_disable
+      pattern: ua_security_disable
+      title: Disable or bypass a security control
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: DISABLE_VERB + SECURITY_CONTROL within one clause
+      anchors:
+      - unsafe.disable_verb
+      - unsafe.security_control
+      - threat.bypass_action
+      - threat.security_verification
+      - threat.safety_guard
+      required_context: [addressee]
+      negative_context: [unsafe.sandbox, unsafe.safe_guard, defensive, meta, quotation]
+      examples:
+        de: [<Imperativ DEAKTIVIEREN> <Virenscanner/Audit-Log> bevor du <Aktion>]
+        en: [<imperative TURN OFF> <firewall/MFA/logging> and then <action>]
+      carriers: [chat, email, tool_output, web, document]
+      existing_rules: [ark.threat.security_disable]
+      baseline_coverage: {atr: partial, cisco_yara: partial}
+      gap: Logging/EDR/audit disablement and DE verbs beyond today's fixed guard list
+    - id: fetch_and_run
+      pattern: ua_fetch_and_run
+      title: Prose instruction to download and run foreign code
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: FETCH_RUN or (DOWNLOAD_VERB + REMOTE_SOURCE + EXECUTE_VERB) in prose
+      anchors: [unsafe.fetch_run, threat.download_action, threat.execution_action, threat.remote_destination]
+      required_context: [addressee]
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<Imperativ HERUNTERLADEN> <Skript von URL> und <Imperativ AUSFÜHREN>]
+        en: [<imperative INSTALL> from <this URL> and run it]
+      carriers: [chat, email, tool_output, tool_description, web, document]
+      existing_rules: [ark.threat.remote_execution_instruction]
+      baseline_coverage: {atr: partial, cisco_yara: partial}
+      gap: Indirect fetch-and-run in tool output; DE paraphrases
+    - id: container_escape_config
+      pattern: ua_container_escape_config
+      title: Privileged / host-mount container settings in YAML or JSON config
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: CONFIG_KEY (securityContext/privileged/hostPath/volumes) + PRIVILEGE value or host-root / runtime-socket
+        mount
+      anchors:
+      - unsafe.privilege
+      - threat.container_privilege
+      - threat.container_mount
+      - threat.docker_socket_target
+      - threat.host_directory_target
+      required_context: []
+      negative_context: [defensive, meta, quotation, test_code]
+      examples:
+        de: [<Config-Block> mit <privileged-Schlüssel> = <true>]
+        en:
+        - <compose service> mounting <runtime socket> as volume
+        - <k8s securityContext> with <privileged true>
+      carriers: [config, code, document, tool_output]
+      existing_rules: [ark.threat.kubernetes_privileged_json, ark.threat.kubernetes_privileged_yaml]
+      baseline_coverage: {atr: none, cisco_yara: none}
+      gap: Compose/YAML forms of socket and host-root mounts; shell docker run forms go to K26
+    - id: privilege_widening
+      pattern: ua_privilege_widening
+      title: Grant admin/root/full access to a user or service
+      priority: should
+      task: UA01
+      scored_only: false
+      shape: GRANT_VERB + PRIVILEGE + SUBJECT (user/service/everyone)
+      anchors: [unsafe.privilege, addressee]
+      required_context: [addressee]
+      negative_context: [unsafe.sandbox, unsafe.own_scope, defensive, meta, quotation]
+      examples:
+        de: [<Imperativ VERGEBEN> <Admin-Rechte> an <alle Nutzer>]
+        en: [<imperative MAKE> <directory> <world-writable>]
+      carriers: [chat, email, tool_output, document, config]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: No ARK rule for privilege widening in prose
+    - id: persistence
+      pattern: ua_persistence
+      title: Install foreign code to run at startup or on schedule
+      priority: should
+      task: UA01
+      scored_only: false
+      shape: AUTOSTART/SCHEDULER + FETCH/EXECUTE of foreign code
+      anchors: [unsafe.autostart, threat.persistence_scheduler, threat.download_action, threat.execution_action]
+      required_context: [addressee]
+      negative_context: [unsafe.own_scope, defensive, meta, quotation, test_code]
+      examples:
+        de: ['<Imperativ ANLEGEN> <geplante Aufgabe>, die <Skript von URL> <ausführt>']
+        en: [<imperative ADD> <startup entry> that <downloads and runs> <remote script>]
+      carriers: [chat, tool_output, document, config]
+      existing_rules: [ark.threat.persistence_payload]
+      baseline_coverage: {atr: partial}
+      gap: Prose and non-shell config persistence; shell form of persistence_payload to be split off in X04
+    - id: unsafe_code
+      pattern: ua_unsafe_code
+      title: Unsafe code constructs on untrusted data
+      priority: must
+      task: UA01
+      scored_only: false
+      shape: CODE_CALL (eval/exec, deserialize, shell=True, verify=False) + UNTRUSTED_SOURCE argument
+      anchors:
+      - threat.code_execution_operation
+      - threat.payload_decoding
+      - threat.deserialization_operation
+      - threat.tls_verification_option
+      - threat.shell_execution_option
+      - threat.request_input_source
+      - threat.generated_output_source
+      required_context: [addressee]
+      negative_context: [test_code, quotation, meta, defensive]
+      examples:
+        de: ['<Code: eval(<dekodierte Fremddaten>)>']
+        en: ['<code: unsafe_deserialize(<request body>)>', '<code: http_call(<foreign host>, verify=<off>)>']
+      carriers: [code, chat, tool_output, document]
+      existing_rules:
+      - ark.threat.unsafe_tls_code
+      - ark.threat.untrusted_deserialization
+      - ark.threat.decoded_execution
+      - ark.threat.unsafe_shell_input
+      - ark.threat.untrusted_output_execution
+      baseline_coverage: {llamafirewall: partial, atr: none}
+      gap: High FP risk in coding assistants; no context gating today
+    - id: unattended
+      pattern: ua_unattended
+      title: Prose demand to act without consent or human approval
+      priority: should
+      task: UA01
+      scored_only: false
+      shape: ACTION_VERB + NO_CONFIRM/ABSENT_CONSENT, no config carrier
+      anchors:
+      - unsafe.no_confirm
+      - threat.absent_consent
+      - threat.execution_action
+      - threat.transfer_action
+      - threat.removal_action
+      - injection.unbounded_authorization
+      required_context: [addressee]
+      negative_context: [unsafe.sandbox, unsafe.safe_guard, defensive, meta, quotation]
+      examples:
+        de:
+        - <Imperativ ÜBERTRAGEN> <Betrag> <ohne Genehmigung>
+        - <Hintergrundaufgabe> genehmigt <künftige Aktionen> <ohne Rückfrage>
+        en: [<imperative DELETE> <records> <without user approval>]
+      carriers: [chat, email, tool_output, document, memory]
+      existing_rules: [ark.threat.unauthorized_autonomy, ark.injection.governance.autonomous_approval_bypass]
+      baseline_coverage: {atr: partial}
+      gap: Approval-bypass phrasings beyond fixed consent phrases
+    - id: destructive_hint
+      pattern: ua_destructive_hint
+      title: Destructive verb alone, addressed to the agent (score only)
+      priority: could
+      scored_only: true
+      shape: VERB_DESTRUCTIVE addressed, no broad target
+      anchors: [unsafe.destructive, addressee]
+      required_context: [addressee]
+      negative_context: [unsafe.own_scope, unsafe.safe_guard, unsafe.sandbox, defensive, meta]
+      examples:
+        de: [<Imperativ LÖSCHEN> alles <unwiderruflich>]
+        en: [<imperative PURGE> it <irreversibly>]
+      carriers: [chat, tool_output]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Weak signal only, feeds points
+    - id: decoded
+      pattern: ua_decoded
+      title: Any unsafe_action pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any pattern above inside base64/hex/url-decoded view
+      anchors: [threat.payload_decoding]
+      required_context: []
+      negative_context: [test_code, quotation]
+      examples:
+        de: [<kodierter Block> → <Imperativ LÖSCHEN> <Produktion>]
+        en: [<encoded blob> → <imperative READ> <credential file>]
+      carriers: [chat, tool_output, document, code]
+      existing_rules: []
+      baseline_coverage: {pipelock: partial}
+      gap: No decoded-view scan for unsafe_action today
+    lexicons:
+    - {id: unsafe.read_secret, kind: support, task: S02, title: read/collect/dump + secret stores}
+    - {id: unsafe.destructive, kind: support, task: S02, title: wipe/drop/purge/irreversibly}
+    - {id: unsafe.broad_target, kind: support, task: S02, title: 'production, all backups, entire database'}
+    - {id: unsafe.security_control, kind: support, task: S02, title: 'firewall, antivirus, audit log, MFA'}
+    - {id: unsafe.disable_verb, kind: support, task: S02, title: 'disable, turn off, bypass, remove'}
+    - {id: unsafe.fetch_run, kind: support, task: S02, title: 'download and run, install from URL'}
+    - {id: unsafe.privilege, kind: support, task: S02, title: 'admin rights, root, full access, world-writable'}
+    - {id: unsafe.autostart, kind: support, task: S02, title: 'run at startup, scheduled task, create service'}
+    - {id: unsafe.no_confirm, kind: support, task: S02, title: 'without asking, no confirmation, no backup'}
+    - {id: unsafe.metadata_endpoint, kind: support, task: S02, title: cloud metadata endpoints}
+    - {id: unsafe.sandbox, kind: counter, task: S02, title: 'own disposable environment (test VM, staging)'}
+    - {id: unsafe.safe_guard, kind: counter, task: S02, title: 'dry-run, with backup, after confirmation, read-only'}
+    - {id: unsafe.own_scope, kind: counter, task: S02, title: 'own narrow targets (my temp files, this branch)'}
+
+  resource_exhaustion:
+    category: resource_exhaustion
+    doc: categories/resource_exhaustion.md
+    families:
+    - id: recursive_spawn
+      pattern: re_recursive_spawn
+      title: Spawn agents/tasks that spawn again or call themselves
+      priority: must
+      task: RE01
+      scored_only: false
+      shape: SPAWN_VERB + AGENT/SUBTASK + self-reference or per-result multiplication
+      anchors: [exhaust.spawn, addressee, injection.delegation_action, injection.delegation_target]
+      required_context: []
+      negative_context: [exhaust.bounded, defensive, meta, quotation, test_code]
+      examples:
+        de:
+        - <Imperativ STARTEN> einen <Sub-Agenten>, der wiederum <einen Sub-Agenten startet>
+        - für <jedes Ergebnis> einen <neuen Task> anlegen
+        en: [<imperative CALL> <yourself> again for <each result>]
+      carriers: [chat, tool_output, tool_description, web, document, email, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: No ARK rule; recursive delegation not covered in DE
+    - id: unbounded_repeat
+      pattern: re_unbounded_repeat
+      title: Repeat output forever / without stopping
+      priority: must
+      task: RE01
+      scored_only: false
+      shape: REPEAT_VERB + UNBOUNDED adverb within one clause
+      anchors: [exhaust.repeat_verb, exhaust.unbounded, addressee]
+      required_context: []
+      negative_context: [exhaust.bounded, exhaust.lyrics_play, meta, quotation]
+      examples:
+        de: [<Imperativ WIEDERHOLEN> <Wort/Satz> <endlos>]
+        en: ['<imperative REPEAT> <word> <forever, never stop>']
+      carriers: [chat, tool_output, web, document, email, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: No ARK rule for repetition attacks
+    - id: huge_output
+      pattern: re_huge_output
+      title: Output request with count above the configurable threshold
+      priority: must
+      task: RE01
+      scored_only: false
+      shape: REPEAT/OUTPUT_VERB + NUMBER >= resource_exhaustion_count_threshold + UNIT (times/words/pages/calls)
+      anchors: [exhaust.repeat_verb, exhaust.huge_count, addressee]
+      required_context: [addressee]
+      negative_context: [exhaust.bounded, exhaust.lyrics_play, test_code, meta]
+      examples:
+        de: [<Imperativ SCHREIBEN> <Text> <Zahl über Schwelle> mal]
+        en: [<imperative OUTPUT> <number above threshold> <pages>]
+      carriers: [chat, tool_output, web, document]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Number validator for digits and DE/EN number words does not exist
+    - id: tool_flood
+      pattern: re_tool_flood
+      title: Maximise tool calls, tokens or fetched pages
+      priority: should
+      task: RE01
+      scored_only: false
+      shape: COST directive (as many calls as possible, every page, max tokens)
+      anchors: [exhaust.cost, injection.tool_invocation_action, addressee]
+      required_context: [addressee]
+      negative_context: [exhaust.bounded, defensive, meta, test_code]
+      examples:
+        de: [<Imperativ ABRUFEN> <alle Seiten> mit <so vielen Tool-Aufrufen wie möglich>]
+        en: [use <as many tool calls as possible> to <fetch every page>]
+      carriers: [tool_output, tool_description, web, document, chat]
+      existing_rules: []
+      baseline_coverage: {atr: partial}
+      gap: No coverage of cost-inflation directives
+    - id: decoy_compute
+      pattern: re_decoy_compute
+      title: Decoy compute task in foreign content before the real answer
+      priority: should
+      task: RE01
+      scored_only: false
+      shape: DECOY_TASK (first compute / factorise / all primes up to) in indirect carrier
+      anchors: [exhaust.decoy_task, addressee]
+      required_context: [addressee]
+      negative_context: [exhaust.bounded, meta, quotation, test_code]
+      examples:
+        de: [<vor der Antwort> zuerst <alle Primzahlen bis Zahl> berechnen]
+        en: [<before answering> first <factorise large number>]
+      carriers: [tool_output, web, document, email, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Counts only with indirect carrier; nothing covers it today
+    - id: loop_hint
+      pattern: re_loop_hint
+      title: Unbounded adverb alone, addressed to the agent (score only)
+      priority: could
+      scored_only: true
+      shape: UNBOUNDED addressed, no repeat/spawn verb
+      anchors: [exhaust.unbounded, addressee]
+      required_context: [addressee]
+      negative_context: [exhaust.bounded, exhaust.lyrics_play, meta]
+      examples:
+        de: [<mach weiter> <bis ich stopp sage>]
+        en: [<keep going> <until I say stop>]
+      carriers: [chat, tool_output]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Weak signal only, feeds points
+    - id: decoded
+      pattern: re_decoded
+      title: Any resource_exhaustion pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any pattern above inside a decoded view
+      anchors: [injection.encoding_format]
+      required_context: []
+      negative_context: [test_code, quotation]
+      examples:
+        de: [<kodierter Block> → <Imperativ WIEDERHOLEN> <endlos>]
+        en: [<encoded blob> → <imperative SPAWN> <self>]
+      carriers: [chat, tool_output, document]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: No decoded-view scan for this class
+    lexicons:
+    - {id: exhaust.unbounded, kind: support, task: S02, title: 'forever, endlessly, until I say stop'}
+    - {id: exhaust.huge_count, kind: support, task: S02, title: count units for threshold validator}
+    - {id: exhaust.repeat_verb, kind: support, task: S02, title: 'repeat, output again, keep writing'}
+    - {id: exhaust.spawn, kind: support, task: S02, title: 'spawn agent/subtask, call yourself'}
+    - {id: exhaust.decoy_task, kind: support, task: S02, title: 'first compute, factorise, all primes up to'}
+    - {id: exhaust.cost, kind: support, task: S02, title: 'as many tool calls as possible, every page'}
+    - {id: exhaust.bounded, kind: counter, task: S02, title: 'explicit limit, timeout, stop condition'}
+    - {id: exhaust.lyrics_play, kind: counter, task: S02, title: 'games, songs with refrain, exercises'}
+
+  harmful_content:
+    category: harmful_content
+    doc: categories/harmful_content.md
+    families:
+    - id: howto_hazard
+      pattern: hc_howto_hazard
+      title: Request framing plus hazard class in one clause
+      priority: must
+      task: HC01
+      scored_only: false
+      shape: REQUEST_FRAME (how do I make/obtain, step by step) + HAZARD_<subclass> in same clause
+      anchors:
+      - harm.request_frame
+      - harm.violent_crime
+      - harm.cbrne
+      - harm.cyber_harm
+      - harm.nonviolent_crime
+      - harm.sex_crime
+      - threat.planning_action
+      - threat.violent_target
+      - injection.chemical_weapon_target
+      required_context: []
+      negative_context: [harm.prevention, harm.news_history, harm.professional, meta, quotation, test_code]
+      examples:
+        de:
+        - <wie stelle ich> <Gefahrenbegriff Unterklasse> her, <Schritt für Schritt>
+        - <Imperativ PLANEN> einen <Gewaltbegriff> gegen <Ziel>
+        en: [<how do I build> <hazard term subclass> <step by step>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: [ark.threat.harmful_intent]
+      baseline_coverage: {nemo: partial, llamafirewall: none, prompt_guard_2: none, protectai_v2: none}
+      gap: Today one EN/DE rule for violent planning only; other subclasses uncovered
+    - id: quantified_recipe
+      pattern: hc_quantified_recipe
+      title: Hazard plus requested quantities, purity or sourcing
+      priority: should
+      task: HC01
+      scored_only: false
+      shape: HAZARD_<subclass> + QUANTITY/PURITY/SOURCING request
+      anchors: [harm.request_frame, harm.cbrne, harm.nonviolent_crime]
+      required_context: []
+      negative_context: [harm.prevention, harm.professional, harm.news_history, meta, quotation]
+      examples:
+        de: [<genaue Mengen> für <Gefahrenstoff> und <wo beschaffen>]
+        en: [<exact quantities and purity> for <hazard substance>]
+      carriers: [chat, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No ARK rule for quantity-seeking hazard requests
+    - id: evasion
+      pattern: hc_evasion
+      title: Hazard or crime plus evasion of detection
+      priority: should
+      task: HC01
+      scored_only: false
+      shape: HAZARD or CRIME + EVASION (without getting caught, untraceable)
+      anchors: [harm.evasion, harm.violent_crime, harm.nonviolent_crime, harm.cyber_harm]
+      required_context: []
+      negative_context: [harm.prevention, harm.news_history, meta, quotation]
+      examples:
+        de: [<Straftatbegriff> <ohne erwischt zu werden>]
+        en: [<crime term> so it is <untraceable>]
+      carriers: [chat, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: Evasion framing not covered in DE/EN today
+    - id: child_safety
+      pattern: hc_child_safety
+      title: Minor reference plus sexual reference (hashed lexicon, no counter context except protection/reporting)
+      priority: must
+      task: HC01
+      scored_only: false
+      shape: MINOR_REF + SEXUAL_REF (hashed terms) in same clause
+      anchors: [harm.child_safety]
+      required_context: []
+      negative_context: [harm.prevention]
+      examples:
+        de: [<Minderjährigen-Bezug> + <sexueller Bezug>]
+        en: [<minor reference> + <sexual reference>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No ARK detector; hashed lexicon not built
+    - id: self_harm_intent
+      pattern: hc_self_harm_intent
+      title: First-person intent or method for self-harm
+      priority: must
+      task: HC01
+      scored_only: false
+      shape: FIRST_PERSON + SELF_HARM intent/method (hashed)
+      anchors: [harm.self_harm]
+      required_context: []
+      negative_context: [harm.prevention, harm.professional, meta, quotation]
+      examples:
+        de: [<Ich-Bezug> + <Absicht/Methode Selbstverletzung>]
+        en: [<first person> + <self-harm intent/method>]
+      carriers: [chat, email, document]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No ARK detector; DE data thin
+    - id: hazard_mention
+      pattern: hc_hazard_mention
+      title: Hazard term without request framing (score only)
+      priority: could
+      scored_only: true
+      shape: HAZARD_<subclass> alone
+      anchors: [harm.violent_crime, harm.cbrne, harm.cyber_harm, harm.nonviolent_crime, harm.sex_crime]
+      required_context: [addressee]
+      negative_context: [harm.prevention, harm.news_history, harm.professional, meta, quotation]
+      examples:
+        de: [<Gefahrenbegriff> im Satz ohne Anfrage]
+        en: [<hazard term> without request frame]
+      carriers: [chat, web, document]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Weak signal only, feeds points
+    - id: decoded
+      pattern: hc_decoded
+      title: Any harmful_content pattern in a decoded view
+      priority: could
+      task: S03
+      scored_only: false
+      shape: any pattern above inside a decoded view
+      anchors: [injection.encoding_format]
+      required_context: []
+      negative_context: [quotation, test_code]
+      examples:
+        de: [<kodierter Block> → <wie stelle ich> <Gefahrenbegriff> her]
+        en: [<encoded blob> → <how do I make> <hazard term>]
+      carriers: [chat, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: No decoded-view scan for harm today; model-only subclasses (specialized_advice, ip, defamation, elections,
+        privacy) have no pattern family
+    lexicons:
+    - {id: harm.request_frame, kind: support, task: S02, title: 'how do I make/obtain, step by step, quantities'}
+    - {id: harm.evasion, kind: support, task: S02, title: 'without getting caught, untraceable'}
+    - {id: harm.violent_crime, kind: support, task: S02, title: violent crime and weapons terms}
+    - {id: harm.cbrne, kind: support, task: S02, title: CBRNE terms (hashed)}
+    - {id: harm.cyber_harm, kind: support, task: S02, title: malware and intrusion terms}
+    - {id: harm.nonviolent_crime, kind: support, task: S02, title: 'fraud, theft, drug production, laundering'}
+    - {id: harm.sex_crime, kind: support, task: S02, title: sexual violence terms (hashed)}
+    - {id: harm.child_safety, kind: support, task: S02, title: minor plus sexual reference terms (hashed)}
+    - {id: harm.self_harm, kind: support, task: S02, title: self-harm method and intent terms (hashed)}
+    - {id: harm.prevention, kind: counter, task: S02, title: 'prevention, first aid, disposal, reporting'}
+    - {id: harm.news_history, kind: counter, task: S02, title: 'news, history, court ruling, statistics'}
+    - {id: harm.professional, kind: counter, task: S02, title: professional context without production detail}
+
+  toxic_language:
+    category: toxic_language
+    doc: categories/toxic_language.md
+    families:
+    - id: group_derogation
+      pattern: tx_group_derogation
+      title: Slur or derogatory statement about a protected group
+      priority: must
+      task: TX01
+      scored_only: false
+      shape: SLUR (hashed) or DEROGATORY_PREDICATE + GROUP term
+      anchors: [toxic.slur, toxic.group]
+      required_context: []
+      negative_context: [toxic.counter_speech, toxic.moderation, meta, quotation, test_code]
+      examples:
+        de: [<Gruppenbezeichnung> sind <abwertendes Prädikat>, <Slur-Token (gehasht)>]
+        en: [<group term> are <derogatory predicate>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {nemo: partial, prompt_guard_2: none, protectai_v2: none}
+      gap: No L1 toxicity detector; hashed lexicon not built
+    - id: dehumanisation
+      pattern: tx_dehumanisation
+      title: Group compared to animals, vermin or disease
+      priority: must
+      task: TX01
+      scored_only: false
+      shape: GROUP term + DEHUMANISING metaphor (hashed)
+      anchors: [toxic.group, toxic.dehumanise]
+      required_context: []
+      negative_context: [toxic.counter_speech, toxic.moderation, meta, quotation]
+      examples:
+        de: [<Gruppenbezeichnung> sind <Ungeziefer-Metapher>]
+        en: [<group term> are <disease metaphor>]
+      carriers: [chat, email, web, document, tool_output, rag_chunk]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No L1 detector
+    - id: threat
+      pattern: tx_threat
+      title: Violence verb against a person or group with intent/future
+      priority: must
+      task: TX01
+      scored_only: false
+      shape: VIOLENCE_VERB + TARGET (addressee/group) + INTENT/FUTURE marker
+      anchors: [toxic.violence_verb, toxic.group, addressee]
+      required_context: []
+      negative_context: [toxic.counter_speech, toxic.moderation, meta, quotation]
+      examples:
+        de: [<ich werde> <dich> <Gewaltverb>]
+        en: [<I will> <violence verb> <you/group term>]
+      carriers: [chat, email, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No L1 detector
+    - id: insult_addressee
+      pattern: tx_insult_addressee
+      title: Insult aimed at an addressed person
+      priority: must
+      task: TX01
+      scored_only: false
+      shape: INSULT (hashed) + ADDRESSEE
+      anchors: [toxic.insult, addressee]
+      required_context: [addressee]
+      negative_context: [toxic.self_directed, toxic.counter_speech, toxic.moderation, quotation]
+      examples:
+        de: [<du> <Beleidigung>]
+        en: [<you> <insult>]
+      carriers: [chat, email, web, document, tool_output]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No L1 detector
+    - id: sexual_harassment
+      pattern: tx_sexual_harassment
+      title: Sexualised harassment of an addressed person
+      priority: should
+      task: TX01
+      scored_only: false
+      shape: SEXUAL_HARASS (hashed) + ADDRESSEE
+      anchors: [toxic.sexual_harass, addressee]
+      required_context: [addressee]
+      negative_context: [toxic.moderation, quotation, meta]
+      examples:
+        de: [<du> + <sexualisierte Belästigung>]
+        en: [<you> + <sexualised harassment>]
+      carriers: [chat, email, web, document]
+      existing_rules: []
+      baseline_coverage: {nemo: partial}
+      gap: No L1 detector
+    - id: profanity
+      pattern: tx_profanity
+      title: Untargeted profanity (score only)
+      priority: could
+      task: TX01
+      scored_only: true
+      shape: PROFANITY (hashed) without target
+      anchors: [toxic.profanity]
+      required_context: [addressee]
+      negative_context: [quotation, meta, toxic.moderation]
+      examples:
+        de: [<Fluchwort> ohne Ziel]
+        en: [<curse word> without target]
+      carriers: [chat, email, document]
+      existing_rules: []
+      baseline_coverage: {}
+      gap: Weak signal only, feeds points
+    lexicons:
+    - {id: toxic.insult, kind: support, task: S02, title: insults against a person (hashed)}
+    - {id: toxic.slur, kind: support, task: S02, title: derogatory terms for protected groups (hashed)}
+    - {id: toxic.dehumanise, kind: support, task: S02, title: animal/vermin/disease metaphors (hashed)}
+    - {id: toxic.violence_verb, kind: support, task: S02, title: violence verbs in threat form (hashed)}
+    - {id: toxic.sexual_harass, kind: support, task: S02, title: sexualised harassment (hashed)}
+    - {id: toxic.profanity, kind: support, task: S02, title: untargeted curse words (hashed)}
+    - {id: toxic.group, kind: support, task: S02, title: protected group names (plain text)}
+    - {id: toxic.counter_speech, kind: counter, task: S02, title: counter-speech phrases}
+    - {id: toxic.moderation, kind: counter, task: S02, title: moderation and classification context}
+    - {id: toxic.self_directed, kind: counter, task: S02, title: self-deprecation without third party}
+
+# Shell-syntax rules handed to shell risk K26 (shell_command); X04 removes them from threat.
+handoffs:
+  - target: shell_command
+    task: X04
+    rules:
+      - ark.threat.credential_file_upload
+      - ark.threat.decoded_shell_execution
+      - ark.threat.docker_socket
+      - ark.threat.environment_exfiltration
+      - ark.threat.host_root_mount
+      - ark.threat.privileged_container
+      - ark.threat.remote_execution
+      - ark.threat.root_destruction

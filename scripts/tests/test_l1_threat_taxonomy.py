@@ -130,6 +130,13 @@ def test_planned_lexicon_must_be_new_and_unique():
     ]
 
 
+def test_lexicon_with_unknown_key_fails():
+    # An unquoted comma in a flow mapping title turns the rest of the title into extra keys.
+    taxonomy = minimal_taxonomy()
+    taxonomy["lexicons"][0]["step by step"] = None
+    assert problems(taxonomy) == ["lexicon addressee (core): keys id, kind, step by step, task, title, expected id, kind, task, title"]
+
+
 def test_schema_errors_are_reported():
     taxonomy = minimal_taxonomy()
     entry = taxonomy["classes"]["jailbreak"]["families"][0]

@@ -18,7 +18,7 @@ Problems reported by ``check``:
 - a ``must`` family without a task, or a task id that is not in ``backlog.yaml``;
 - a lexicon id that is neither in ``ark-core/src/detectors/anchor_lexicons/*.json`` nor declared
   as planned in the taxonomy (and a planned id that already exists or is declared twice);
-- schema errors (classes, keys, priorities, carriers, baselines, example shapes).
+- schema errors (classes, family and lexicon keys, priorities, carriers, baselines, example shapes).
 """
 
 from __future__ import annotations
@@ -88,6 +88,7 @@ BASELINES = (
 )
 COVERAGE = ("full", "partial", "none")
 LEXICON_KINDS = ("support", "counter")
+LEXICON_KEYS = {"id", "kind", "task", "title"}
 FAMILY_KEYS = {
     "id",
     "pattern",
@@ -219,6 +220,8 @@ def check(
     for owner, lexicon in _planned_lexicons(taxonomy):
         lexicon_id = lexicon.get("id")
         planned[lexicon_id] += 1
+        if set(lexicon) != LEXICON_KEYS:
+            problems.append(f"lexicon {lexicon_id} ({owner}): keys {', '.join(sorted(lexicon))}, expected {', '.join(sorted(LEXICON_KEYS))}")
         if lexicon_id in lexicons:
             problems.append(f"lexicon {lexicon_id} ({owner}) is declared as planned but already exists")
         if lexicon.get("kind") not in LEXICON_KINDS:
