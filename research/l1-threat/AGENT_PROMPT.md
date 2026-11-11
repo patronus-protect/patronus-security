@@ -56,6 +56,10 @@ Du erledigst in diesem Lauf genau die unten angehängte Aufgabe, keine weitere.
 6. Antworte zum Schluss mit drei Zeilen: Aufgabe, was geändert wurde, was offen ist. Diese drei Zeilen und alle Commit-Messages auf Englisch (sie landen im PR).
 
 Regeln für Inhalte:
+- Öffentliche Texte (README, `docs/`, CHANGELOG-Einträge, Docstrings) schreibst du für Nutzer von
+  außen: keine Meilenstein- oder Aufgaben-IDs (M1–M4, T12, X02, IJ01 …) und kein Forschungsjargon
+  (Dev-Split, Holdout, Source-Familie, Rohsicht); sag in Worten, was sich für den Nutzer ändert. Die
+  IDs gehören nur in `research/` und in Commit-Messages.
 - Keine funktionierenden Schadanleitungen, keine Angriffs-Payloads aus Datensätzen kopiert, keine
   Klartext-Listen von Beleidigungen (Toxizitäts-Lexika nur gehasht). Goldens zeigen die Form eines
   Angriffs, nicht einen wirksamen Inhalt.

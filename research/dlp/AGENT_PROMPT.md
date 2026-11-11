@@ -49,6 +49,10 @@ Aufgabe, keine weitere.
    Secret-Werte in der Antwort, auch keine synthetischen.
 
 Regeln:
+- Öffentliche Texte (README, `docs/`, CHANGELOG-Einträge, Docstrings) schreibst du für Nutzer von
+  außen: keine Meilenstein- oder Aufgaben-IDs (M1–M4, T12, X02, IJ01 …) und kein Forschungsjargon
+  (Dev-Split, Holdout, Source-Familie, Rohsicht); sag in Worten, was sich für den Nutzer ändert. Die
+  IDs gehören nur in `research/` und in Commit-Messages.
 - Nur synthetische Secret-Werte aus dem Generator (`python/patronus_ark/dlp_synth/`, ab E03). Nie
   echte, geleakte oder live-gültige Secrets verwenden, suchen oder erzeugen; keine Klartext-Tokens mit
   gültiger Prüfsumme committen (ab E02 speichern Goldens Generator-Rezepte).
