@@ -1396,4 +1396,6 @@ tasks:
 recurring:
   - id: TRIAGE
     when: Mondays (replaces the first run of the week)
+    status: deferred
+    deferred: "Programme end (decided 2026-11-11): PII closes with T40; M1 stays open in the raw view under the T38 decision (gold with invalid check digits, loopback/unspecified IPs, NINO span with whitespace), M2 (balanced-bare) and M3 met; no new tasks"
     title: Scoreboard error analysis → insert new tasks with id Txx at the right place, implement nothing

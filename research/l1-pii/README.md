@@ -3,6 +3,12 @@
 Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 [`AGENT_PROMPT.md`](AGENT_PROMPT.md), Runner: [`runner/`](runner/).
 
+**Programmende (entschieden 2026-11-11):** PII endet mit T40 (M4-Toleranz: Median der 100-KiB-p95 über
+mindestens fünf VPS-Läufe ≤ 12 ms). M1 bleibt in der Rohsicht offen: Die verbleibenden Lücken gegen
+Presidio liegen unter der Entscheidung T38 (Gold mit ungültigen Prüfziffern, Loopback-/unspezifizierte
+IPs, NINO-Span mit Leerzeichen); öffentliche Aussage „M1 roh nicht erreicht“ mit diesem Grund. M2
+(`balanced-bare`) und M3 sind erreicht. `TRIAGE` ist `deferred`; der Runner legt keine neuen Aufgaben an.
+
 ## Ausgangslage
 
 - `rust/src/detectors/pii/pii.rs`: 37 Regeln → 30 Labels, nur DE/EN, jeder Treffer `score: 1.0`.
