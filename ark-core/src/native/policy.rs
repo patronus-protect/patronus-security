@@ -67,8 +67,8 @@ const OPT_IN_RULES: [&str; 3] = [
 
 /// Default of a rule without an explicit gate, shared by every host: all
 /// non-DLP rules (Cat's shell policies included) except the bare PII forms
-/// (D-BARE), the DLP credential/secret rules and the classification markings
-/// (M23) are on, the other DLP content rules are opt-in.
+/// (opt-in), the DLP credential/secret rules and the classification markings
+/// are on, the other DLP content rules are opt-in.
 pub fn default_rule_enabled(rule_id: &str) -> bool {
     if is_bare_rule(rule_id) {
         return false;
