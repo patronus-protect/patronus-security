@@ -9,6 +9,42 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-11-11
+
+### Detection changes in the default modes
+
+The default PII and DLP mode is `strict`; the detailed entries below carry the measurements and
+name the modes each change applies to. New PII rules in this release (bare formats, compatibility
+rules, letter-prefixed passports) and most document classes are opt-in.
+
+- **DLP decoded content:** base64 and base64url runs that decode to text are scanned once more
+  (D01), so provider tokens in Kubernetes `data:` values, CI variables and JSON payloads are
+  reported on their encoded span; `matched_rules` carries `decoded`.
+- **DLP structure checks:** JWTs need a JSON header with `alg` and JSON claims, private key blocks
+  are checked structurally (DER, OpenSSH, PGP, PuTTY PPK) and report `key_encrypted`; keys filled
+  with example bytes are dropped.
+- **DLP key material on by default:** BIP39, Electrum and Monero seed phrases, BIP 32 extended
+  private keys, wallet files, Cardano signing keys and private JWKs and other key material in
+  config and code.
+- **DLP classification markings on by default:** government and corporate markings (VS-NfD,
+  CONFIDENTIAL and similar) are the first document class in the default profile; HR, security,
+  export-control, R&D, corporate and legal document classes are opt-in.
+- **Latency:** three DLP performance passes (no detection change); the 100 KiB DLP p95 is about
+  8 ms warm in the native pipeline. PII M4 is judged on the median p95 over several runs (T40).
+
+### Fixed in this release
+
+- The Linux x86-64 wheel no longer crashes in `warmup()` for ONNX models; it now needs glibc 2.28
+  or newer (`manylinux_2_28`).
+- Model-backed scanners return correct results on x86-64 CPUs without VNNI.
+
+### Breaking
+
+- Python: a gateway with `dynamic-pii` and a `max_level` below `l3` raises `ValueError`, and scans
+  over `dynamic-pii` raise `RuntimeError` until `warmup()` has loaded the model, instead of
+  returning empty results.
+- Linux wheels need glibc 2.28 or newer.
+
 ### Added
 
 - PII M4 measuring rule (T40, no detection change). `scripts/l1_presidio/latency.py run --runs N`
