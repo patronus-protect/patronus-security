@@ -102,14 +102,6 @@
       "pattern": "\\b(?P<runtime>docker|podman)\\s{1,16}(?:run|create)\\b[^\\n]{0,200}?(?P<privilege>--privileged(?:=true)?\\b|--cap-add(?:=|\\s{1,16})(?:SYS_ADMIN|ALL)\\b)"
     },
     {
-      "id": "ark.threat.host_root_mount",
-      "class_name": "tool_abuse",
-      "upstream_groups": [
-        "PE5"
-      ],
-      "pattern": "\\b(?P<runtime>docker|podman)\\s{1,16}(?:run|create)\\b[^\\n]{0,200}?(?P<mount>(?:-v\\s{1,16}|--volume(?:=|\\s{1,16}))/:[^\\s]{1,80})"
-    },
-    {
       "id": "ark.threat.persistence_payload",
       "class_name": "harmful_behavior",
       "upstream_groups": [
@@ -233,14 +225,6 @@
         "TT"
       ],
       "pattern": "\\b(?P<request>requests\\.get|fetch)\\s{0,16}\\(\\s{0,16}(?P<source>(?:request|req)\\.(?:args|query|params)\\s{0,16}\\[\\s{0,16}[\"\\x27](?:url|target)[\"\\x27]\\s{0,16}\\])"
-    },
-    {
-      "id": "ark.threat.root_destruction",
-      "class_name": "harmful_behavior",
-      "upstream_groups": [
-        "TM1"
-      ],
-      "pattern": "\\b(?P<delete>rm)[ \\t]{1,16}(?P<recursive>-[rf]{2,3})[ \\t]{1,16}(?P<target>/|/etc|/home|/var)(?:[ \\t]{0,16}(?:$|[;\\n])|[ \\t]{1,16}--no-preserve-root\\b)"
     },
     {
       "id": "ark.threat.unauthorized_autonomy",
