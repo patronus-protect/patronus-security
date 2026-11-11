@@ -263,6 +263,8 @@ const NewInstructionsRegex = `(?i)new\\s+instructions`
 var p = []ResponseScanPattern{
 				{Name: "Prompt Injection", Regex: `(?i)ignore\\s+previous`},
 				{Name: "New Instructions", Regex: NewInstructionsRegex},
+				{Name: "Bounded Ignore", Regex: `(?i)ignore.{0,40}previous` + "\\s+r}ules"},
+				{Name: "Bounded Forget", Regex: `(?i)forget.{0,40}instructions`},
 }
 var toolPoisonPatterns = []*compiledToolPattern{
 	{
@@ -280,11 +282,16 @@ var toolPoisonPatterns = []*compiledToolPattern{
     assert set(rules) == {
         "defaults.Prompt Injection",
         "defaults.New Instructions",
+        "defaults.Bounded Ignore",
+        "defaults.Bounded Forget",
         "defaults.File Exfiltration Directive",
         "defaults.File Exfiltration Directive#2",
     }
     assert "new\\s+instructions" in rules["defaults.New Instructions"]["bodies"][0]
     assert "upload" in rules["defaults.File Exfiltration Directive#2"]["bodies"][0]
+    # A `}` inside a string literal (bounded repetition) does not end the entry.
+    assert rules["defaults.Bounded Ignore"]["bodies"] == ["(?i)ignore.{0,40}previous \\s+r}ules"]
+    assert rules["defaults.Bounded Forget"]["bodies"] == ["(?i)forget.{0,40}instructions"]
 
 
 def test_extract_citadel_go(tmp_path):

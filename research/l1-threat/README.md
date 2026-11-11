@@ -143,15 +143,15 @@ Sprachen, Ernte ja/nein mit Grund und ein Hash des Regelkörpers (keine Regelkö
 sind MIT oder Apache-2.0; ausgeschlossen bleiben pipelock `enterprise/` (Elastic License 2.0) und das
 kodierte Malware-Paket von SkillSpector. citadel liegt heute unter `TryMightyAI/citadel`. Ernte = erlaubte
 Lizenz, Klasse zugeordnet, deterministischer Text-Matcher, in Rust-`regex` kompilierbar (kein Lookaround,
-keine Rückverweise), aktiv, erste Kopie des Körpers. Stand: 1.929 erntbar; nicht geerntet 574 außerhalb des
+keine Rückverweise), aktiv, erste Kopie des Körpers. Stand: 1.937 erntbar; nicht geerntet 574 außerhalb des
 L1-Scopes (Secrets/PII im Text → DLP/PII, SQL/XSS/Template/Pfad-Payloads, Malware-Signaturen), 145
-Shell-Syntax → K26, 176 Dubletten, 70 nicht portabel, 36 semantisch/Hex, 8 inaktiv. Befunde:
+Shell-Syntax → K26, 168 Dubletten, 70 nicht portabel, 36 semantisch/Hex, 8 inaktiv. Befunde:
 - Deutsch ist dünn: 27 erntbare DE-Regeln, davon 18 aus prompt-guard und 8 aus ATR (vor allem Injection,
   Jailbreak, Exfil); für `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `resource_exhaustion`,
   `harmful_content` und `toxic_language` gibt es keine. Der DE-Vorsprung (M2) kommt aus eigenen Familien.
 - `toxic_language` hat 7 OSS-Regeln (5 sentinel-ai, 2 ATR), `harmful_content` 80 erntbare (44 ATR, 23
   prompt-guard), fast alle EN.
-- Die Zuordnung ist ein erster Durchlauf aus Kategorie-Tabelle und Stichwort-Hinweisen; 228 erntbare
+- Die Zuordnung ist ein erster Durchlauf aus Kategorie-Tabelle und Stichwort-Hinweisen; 229 erntbare
   Regeln tragen `mapping: default` (Klassen-Default-Familie) und gehen in die M04-Durchsicht.
 - Die Ernteliste je Klasse liefert `oss_inventory.py harvest --class <klasse>`; die Klassen-Bundles lesen sie
   und übernehmen Regeln default aus.

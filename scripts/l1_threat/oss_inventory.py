@@ -298,7 +298,11 @@ def extract_yara(root: Path, paths: list[str]) -> Iterable[dict[str, Any]]:
 
 
 _GO_STRING = re.compile(r"`([^`]*)`|\"((?:[^\"\\]|\\.)*)\"")
-_GO_ENTRY = re.compile(r'\{\s*Name:\s*"([^"]+)",\s*Regex:\s*([^}\n]+)|\bname:\s*"([^"]+)",')
+# The Regex expression runs to the entry's closing brace; string literals are skipped whole, since
+# bounded repetitions such as `.{0,40}` put a `}` inside them.
+_GO_ENTRY = re.compile(
+    r'\{\s*Name:\s*"([^"]+)",\s*Regex:\s*((?:`[^`]*`|"(?:[^"\\\n]|\\.)*"|[^}`"\n])+)|\bname:\s*"([^"]+)",'
+)
 _GO_CONST = re.compile(r"^\s*(?:const\s+|var\s+)?(\w+)\s*=\s*(.+)$", re.M)
 
 
