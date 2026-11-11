@@ -175,16 +175,31 @@ tasks:
     title: patronus.text_facts/1 — versioned, deterministic facts per text (findings with category/family/pattern/points/span, carrier, addressee, sinks, data refs from PII/DLP hits, modifiers obfuscated/decoded/quoted/negated/defensive/language), shaped like patronus.facts/1; tf1 token analyzer for the models
     type: engine
     deps: [S01, S03]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): same layout and contracts as K26 — a `facts/` module per concern like shell/facts, a canonical
+      JSON form with a Python reference and exact parity goldens like shell/pyjson.rs, a `tf1` analyzer
+      shaped like `kf1` (fact tokens + text tokens), a `.cedarschema` for the facts next to K26's
+      shell.cedarschema. Code K26 already has (canonical JSON, analyzer plumbing, schema loading) is moved
+      to a shared module and used by both, never copied.
     # carrier comes from text structure only; request metadata (role, source:untrusted) is not seen by L1 and never feeds patterns, models or policies (decided 2026-11-09)
   - id: S04
     title: Model training pipeline per category, compiled in — candidates B0 (today's scorer, recalibrated), K26-like variants (char_wb TF-IDF + tf1 fact tokens → LR) and hashed variants; Python reference + Rust inference with exact parity goldens; whatever wins on the holdout stays (today's scorers may stay)
     type: engine
     deps: [S06, E06]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): K26-like candidates use K26's model form (vocabulary file, TF-IDF + LR weights, top features
+      in the explanation like ShellRiskModel/TopFeature) and the same training script layout; shared
+      model and vocabulary code is reused from shell/model.rs and shell/vocab.rs, not duplicated.
   - id: S07
     status: deferred
     title: (later, after facts) Cedar policies over text_facts — schema, core tier compiled in (trifecta, hidden carrier + secrecy), bundle-default for harvested OSS rules (default off), user .cedar files; same tiers and evaluation as shell-risk K26; verdict max(patterns, model, policies)
     type: engine
     deps: [S06]
+    accept: >-
+      Template: shell-risk K26 (cat-shell-risk-commander, ark-core/src/detectors/shell, decided 2026-11-11): one policy engine for shell and text — K26's shell/policies (core / bundle-default / user
+      tiers, user .cedar directories, allowlist, Decision) becomes the shared implementation; text
+      policies add a schema and a core.cedar, no second evaluator. Users write text policies the same
+      way as shell policies (same config keys and file layout).
   - id: S05
     title: Ablation framework (R, R+A, B0, R+A+L, B1, B4, B5 per class; TPR@FPR, hard-benign FPR, ms/100 KiB, RAM) with the selection rule from the README
     type: eval-infra

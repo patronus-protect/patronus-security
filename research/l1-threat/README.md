@@ -116,6 +116,13 @@ Grundsätze:
    jede aktive Kategorie ihren Fund nach eigenem Modus, auch auf derselben Spanne.
 9. **Schwache Signale** (z. B. nur fiktive Rahmung) sind `scored_only` wie bei PII: nie in `strict`, sonst
    niedrige Punkte; vor allem Merkmal für Modell und spätere Policies.
+10. **Facts, Modelle und Policies in der Form von cat shell commander (K26)** (festgelegt 2026-11-11):
+    `ark-core/src/detectors/shell` ist das Vorbild für Aufbau und Verträge — Facts-Module wie `shell/facts`
+    mit kanonischem JSON und Python-Referenz, ein Analyzer `tf1` wie `kf1`, Modelle im K26-Format
+    (Vokabular, TF-IDF + LR, Top-Merkmale in der Erklärung), Cedar mit denselben Tiers
+    `core`/`bundle-default`/`user`, `.cedar`-Dateien und Allowlist. Was K26 schon hat, wird zum gemeinsamen
+    Modul und von beiden genutzt, nicht kopiert; Nutzer schreiben Text-Policies wie Shell-Policies. Welches
+    Modell eine Klasse bekommt, entscheidet weiter die Ablation; die Form ist für alle gleich.
 
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
