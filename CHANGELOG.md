@@ -21,6 +21,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   machine (`--profile` limits the verdict to one profile). The runner's latency A/B counts a profile
   as regressed only when it fails in every attempt, and re-measures only the profiles still failing. The native timing worker (`rust/dev/l1_latency_workloads.rs`) now accepts the categories
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
+### Changed
+
+- The Threat L1 detector now ships in the `patronus-ark-core` crate
+  (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
+  Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
+  to the same detector.
 
 ## [0.1.16] - 2026-11-11
 

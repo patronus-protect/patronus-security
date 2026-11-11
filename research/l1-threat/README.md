@@ -35,7 +35,7 @@ Abgrenzung:
   `unsafe_action`; Shell-Formen gehen an K26.
 - **Shell-Befehle und Tool-Call-Argumente gehören zu Shell-Risk K26** (`shell_command`, PR #261). Threat
   deckt Prosa-, Code- und Config-Träger ab; Threat-Regeln auf Shell-Syntax gehen in K26 auf.
-- **Alles liegt in `ark-core`.** Der Threat-Detektor zieht aus `rust/src/detectors/threat` dorthin um.
+- **Alles liegt in `ark-core`.** Der Threat-Detektor liegt unter `ark-core/src/detectors/threat` neben Injection.
 - Kein L1-Scope: Rug Pull, Toxic Flows, visuelle Injection, Multi-Turn ohne Sitzungszustand,
   Desinformation, Fachberatung, Urheberrecht.
 

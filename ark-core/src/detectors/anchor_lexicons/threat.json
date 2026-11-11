@@ -19,7 +19,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -47,7 +47,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -80,7 +80,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -111,7 +111,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -136,7 +136,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -160,7 +160,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -182,7 +182,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -223,7 +223,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -241,7 +241,7 @@
       "/etc/shadow"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -257,7 +257,7 @@
       "mcp.json"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -284,7 +284,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -310,7 +310,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -339,7 +339,7 @@
       "sandbox"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -367,7 +367,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -388,7 +388,7 @@
     ],
     "shared": [],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -404,7 +404,7 @@
       "az://"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -423,7 +423,7 @@
       "urllib.request.urlopen"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -437,7 +437,7 @@
       "azcopy"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -454,7 +454,7 @@
       "node"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -471,7 +471,7 @@
       "subprocess.popen"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -488,7 +488,7 @@
       "--decode"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -501,7 +501,7 @@
       "get-content"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -515,7 +515,7 @@
       "os.environ"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -528,7 +528,7 @@
       "--data"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -541,7 +541,7 @@
       "podman"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -554,7 +554,7 @@
       "--mount"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -566,7 +566,7 @@
       "/var/run/docker.sock"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -582,7 +582,7 @@
       "privileged"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -606,7 +606,7 @@
       "launchctl"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -622,7 +622,7 @@
       "unserialize"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -650,7 +650,7 @@
       "$_request"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -677,7 +677,7 @@
       "tool.response"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -701,7 +701,7 @@
       "verify"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -713,7 +713,7 @@
       "shell"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -726,7 +726,7 @@
       "--no-preserve-root"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   },
   {
@@ -740,7 +740,7 @@
       "/var"
     ],
     "sources": [
-      "rust/src/detectors/threat/rules.json"
+      "ark-core/src/detectors/threat/rules.json"
     ]
   }
 ]
