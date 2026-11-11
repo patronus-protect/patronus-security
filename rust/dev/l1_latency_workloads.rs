@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Native timing worker for `scripts/l1_presidio/latency.py` (engine `ark-native`).
+//! Native timing worker for `scripts/l1_presidio/latency.py` (engine `ark-native`) and
+//! `scripts/l1_threat/latency.py`.
 //!
-//! Reads JSON lines `{id, text, samples, warmup, min_samples, budget_ms}` from the file in the
-//! first argument, scans each text with the L1 PII gateway and prints one JSON line per
-//! workload: `{id, spans, samples_ns, init_ms}`. After `min_samples` samples, timing stops once
-//! `budget_ms` is spent. Percentiles are computed by the Python script, so both Ark engines
-//! share one definition.
+//! Reads JSON lines `{id, text, samples, warmup, min_samples, budget_ms, categories?}` from the
+//! file in the first argument, scans each text with an L1 gateway for `categories` (default
+//! `["pii"]`; one gateway per distinct list, all categories in one request) and prints one JSON
+//! line per workload: `{id, spans, samples_ns, init_ms}`. After `min_samples` samples, timing
+//! stops once `budget_ms` is spent. Percentiles are computed by the Python scripts, so all Ark
+//! engines share one definition.
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 use serde::Deserialize;
-use std::{fs, hint::black_box, time::Instant};
+use std::{collections::HashMap, fs, hint::black_box, time::Instant};
 
 #[derive(Deserialize)]
 struct Job {
@@ -18,6 +20,12 @@ struct Job {
     warmup: usize,
     min_samples: usize,
     budget_ms: f64,
+    #[serde(default = "default_categories")]
+    categories: Vec<SecurityCategory>,
+}
+
+fn default_categories() -> Vec<SecurityCategory> {
+    vec![SecurityCategory::Pii]
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,16 +37,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|line| !line.trim().is_empty())
         .map(serde_json::from_str::<Job>)
         .collect::<Result<Vec<_>, _>>()?;
-    let started = Instant::now();
-    let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-        None,
-        false,
-    );
-    let init_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let scan = |text: &str| gateway.scan_category(SecurityCategory::Pii, black_box(text));
+    let mut gateways: HashMap<Vec<SecurityCategory>, (SecurityGateway, f64)> = HashMap::new();
     for job in jobs {
+        let (gateway, init_ms) = gateways.entry(job.categories.clone()).or_insert_with(|| {
+            let started = Instant::now();
+            let gateway =
+                SecurityGateway::with_max_level(job.categories, SecurityLevel::L1, None, false);
+            (gateway, started.elapsed().as_secs_f64() * 1000.0)
+        });
+        let scan = |text: &str| gateway.scan_all(black_box(text));
         for _ in 0..job.warmup {
             black_box(scan(&job.text));
         }
@@ -64,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "id": job.id,
                 "spans": spans,
                 "samples_ns": samples_ns,
-                "init_ms": init_ms,
+                "init_ms": *init_ms,
             })
         );
     }
