@@ -1,0 +1,873 @@
+# L1 threat baseline and dataset mapping (M03).
+#
+# Maps every baseline output label and every dataset label onto the eleven L1 threat classes of
+# taxonomy.yaml, or out of scope with a reason, and puts every dataset into one source family
+# (README "Herkunft"). Nothing here is data: datasets are fetched at evaluation time only (E01),
+# baselines run from ~/ark-threat/baselines (R03, E04).
+#
+# Checked by: python3 scripts/l1_threat/entity_map.py check      (exit code 1 on any problem)
+# Overview:   python3 scripts/l1_threat/entity_map.py table      (Markdown, incl. who decides)
+#
+# Baselines (ids as in taxonomy.yaml `baseline_coverage`):
+#   heuristic  `rules` names the source in oss_rules.yaml; a finding of a rule counts for the class
+#              the inventory gives that rule (class, or handoff / out_of_scope = not counted). The
+#              per-rule mapping lives there only; `labels` lists outputs that are not inventory
+#              rules (other deterministic scanners of the same tool).
+#   reference  model output labels (config id2label); scored as reference rows, never in M1.
+#   `trained_on` lists registered datasets the baseline was trained on (contamination column, E01).
+#
+# Label entries: `label` is the upstream field and value (or derived rule) as in the dataset card;
+# exactly one outcome: `classes` (one or more; optional `family` from taxonomy.yaml when one class),
+# `benign: true` (negative / benign-pool row), `out_of_scope: <reason>` or `handoff: <detector>`.
+# `translated: true` marks a set whose German part is translated (native/translated column, E06).
+# `decides: false` + `reason` keeps a class label reported only (e.g. a slice too small to decide).
+# E01 pins the revisions and fails on upstream labels that this map does not name.
+#
+# Source families:
+#   neutral           public datasets with a clear licence; decide.
+#   ark_blind         R05 (DE translation of the frozen EN holdout, synthetic items for classes
+#                     without public data) and the secret-seed part of the generators; decide only
+#                     for a class and language without neutral holdout data, always reported apart.
+#   ark_authored      goldens, dev-seed generator output, the runner's own translations; reported only.
+#   baseline_trained  sets known only as training data of a baseline; reported only.
+#   report_only       NC, GPL or unclear licence, or noisy labels; reported only.
+# Splits: holdout (only the scoreboard sees it), train_dev (runner), report (any use, never decides).
+# A dataset is never in two splits; sets with an official train/test release (GermEval 2018) are two
+# entries, and E01 dedups across them.
+#
+# Licences are the dataset cards' as far as known; `unknown` means E01 checks before use. A licence
+# with NC or GPL forces report_only. MCPTox has no licence file: evaluation only, never training.
+#
+# Decision (computed by `table`, enforced by `check`): per class and language (de, en), neutral
+# holdout data decides; ark_blind decides only where no neutral holdout label covers the class in
+# that language. Pairs that neither covers must be listed under `gaps` with a reason.
+
+schema: ark-l1-threat-entity-map-v1
+
+baselines:
+  - id: pipelock
+    kind: heuristic
+    rules: pipelock
+  - id: cisco_yara
+    kind: heuristic
+    rules: cisco_mcp_scanner
+  - id: atr
+    kind: heuristic
+    rules: atr
+  - id: prompt_guard
+    kind: heuristic
+    rules: prompt_guard
+  - id: llamafirewall
+    kind: heuristic
+    rules: llamafirewall
+    labels:
+      - {label: "HIDDEN_ASCII scanner: BLOCK", classes: [instruction_injection], family: hidden_directive}
+      - {label: "CODE_SHIELD scanner: BLOCK", classes: [unsafe_action], family: unsafe_code}
+      - {label: "PROMPT_GUARD / AGENT_ALIGNMENT scanners", out_of_scope: "model or LLM based, not a heuristic row (Prompt Guard 2 runs as reference row prompt_guard_2)"}
+  - id: nemo
+    kind: heuristic
+    rules: nemo_yara
+    labels:
+      - {label: "dialogue, jailbreak and self-check rails", out_of_scope: "LLM based rails, not deterministic"}
+  - id: vigil
+    kind: heuristic
+    rules: vigil
+    labels:
+      - {label: "vectordb, similarity, sentiment and transformer scanners", out_of_scope: "embedding or model based, not deterministic"}
+  - id: protectai_v2
+    kind: reference
+    model: protectai-v2/onnx
+    labels:
+      - {label: INJECTION, classes: [instruction_injection, prompt_extraction]}
+      - {label: SAFE, benign: true}
+    note: The model card excludes jailbreak detection; INJECTION is scored for injection and extraction only.
+    trained_on: []
+    training_data: card lists public prompt-injection and benign instruction sets; E01 matches them against this registry and fills trained_on
+  - id: prompt_guard_2
+    kind: reference
+    model: Llama-Prompt-Guard-2-86M-onnx, Llama-Prompt-Guard-2-22M-onnx
+    labels:
+      - {label: "MALICIOUS (LABEL_1)", classes: [instruction_injection, jailbreak, prompt_extraction]}
+      - {label: "BENIGN (LABEL_0)", benign: true}
+    note: Model scope is explicit attempts to override prior instructions (injection and jailbreak); extraction requests are such attempts.
+    trained_on: []
+    training_data: unpublished mix of open-source benign and attack sets plus Meta synthetic and red-team data; no registered set is known to be in it
+
+datasets:
+  # ── holdout, neutral: attacks ────────────────────────────────────────────────────────────────
+  - id: llmail_inject
+    name: LLMail-Inject
+    source: hf:microsoft/llmail-inject-challenge
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "every submission (attack e-mail)", classes: [instruction_injection]}
+      - {label: "objectives.exfil.sent = true", classes: [exfiltration], family: send_directive}
+    note: dedup within the set (many near-identical submissions) before freezing
+  - id: browsesafe
+    name: BrowseSafe / BrowseSafe++
+    source: perplexity BrowseSafe benchmark
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "label = yes (injected web page)", classes: [instruction_injection]}
+      - {label: "label = no", benign: true}
+  - id: boundary_pairs
+    name: boundary-pairs
+    source: paired injection / benign boundary prompts
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "injection member of a pair", classes: [instruction_injection]}
+      - {label: "benign member of a pair", benign: true}
+  - id: cyberseceval_pi
+    name: CyberSecEval prompt-injection (technique slice)
+    source: github:meta-llama/PurpleLlama CybersecurityBenchmarks/datasets/prompt_injection/prompt_injection.json
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "injection_variant in (ignore_previous_instructions, indirect_reference, token_smuggling, system_mode, different_user_input_language, overload_with_information, few_shot_attack, many_shot_attack, repeated_token_attack, output_formatting_manipulation, payload_splitting, mixed_techniques)", classes: [instruction_injection]}
+      - {label: "injection_variant in (virtualization, hypothetical_scenario, persuasion)", classes: [jailbreak]}
+      - {label: "judge_question asks whether a secret of the system prompt was revealed (leak cases)", classes: [prompt_extraction], decides: false, reason: "slice too small for a decisive EN extraction holdout (categories/prompt_extraction.md §12)"}
+  - id: trustairlab_jailbreak
+    name: TrustAIRLab in-the-wild jailbreak prompts
+    source: hf:TrustAIRLab/in-the-wild-jailbreak-prompts
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "jailbreak = true", classes: [jailbreak]}
+      - {label: "jailbreak = false (regular prompts)", benign: true}
+  - id: jbb_behaviors
+    name: JailbreakBench behaviours and artifacts
+    source: hf:JailbreakBench/JBB-Behaviors
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "split harmful (Goal)", classes: [harmful_content]}
+      - {label: "split benign (Goal)", benign: true}
+      - {label: "jailbreak artifacts (attack prompts of the leaderboard)", classes: [jailbreak]}
+  - id: multijail
+    name: MultiJail
+    source: hf:DAMO-NLP-SG/MultiJail
+    licence: MIT
+    languages: [en, it]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "every prompt (tags: hate_speech, violence, self_harm, sexual, weapons, drugs, crime, terrorism, ...)", classes: [harmful_content]}
+  - id: harmbench
+    name: HarmBench behaviours
+    source: hf:walledai/HarmBench
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "SemanticCategory in (chemical_biological, illegal, harmful, harassment_bullying, cybercrime_intrusion)", classes: [harmful_content]}
+      - {label: "SemanticCategory = misinformation_disinformation", out_of_scope: "disinformation is not an L1 class (README scope)"}
+      - {label: "FunctionalCategory = copyright", out_of_scope: "song and book reproduction requests, not a hazard request"}
+  - id: aya_redteaming
+    name: Aya red-teaming
+    source: hf:CohereForAI/aya_redteaming
+    licence: Apache-2.0
+    languages: [en, fr, es]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "harm_category in (Bullying & Harassment, Discrimination & Injustice, Graphic material, Hate Speech, Non-consensual sexual content, Profanity, Self-Harm, Violence threats & incitement, Violent extremism)", classes: [harmful_content]}
+      - {label: "harm_category = Misinformation & Disinformation", out_of_scope: "disinformation is not an L1 class (README scope)"}
+      - {label: "harm_category = Harms of Representation Allocation and Quality of Service", out_of_scope: "bias in model output, no input-side signal"}
+  - id: rtp_lx
+    name: RTP-LX
+    source: github:microsoft/RTP-LX
+    licence: unknown
+    languages: [de, en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "prompt annotation Toxicity >= 3 or Insult / IdentityAttack >= 2", classes: [toxic_language]}
+      - {label: "prompt annotation Violence / SelfHarm / SexualContent >= 2", classes: [harmful_content]}
+      - {label: "prompt annotation Toxicity = 1 and no other harm", benign: true}
+      - {label: "Bias / Microaggression only", out_of_scope: "subtle bias without slur or threat, not an L1 signal"}
+    translated: true
+    note: transcreated German, not native
+  - id: ptp_wildchat_de
+    name: PolygloToxicityPrompts, wildchat-de
+    source: hf:ToxicityPrompts/PolygloToxicityPrompts (wildchat, de)
+    licence: unknown
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "prompt toxicity (Perspective) >= 0.5", classes: [harmful_content, toxic_language]}
+      - {label: "prompt toxicity < 0.1", benign: true}
+      - {label: "0.1 <= toxicity < 0.5", out_of_scope: "ambiguous machine score band, neither gold nor benign"}
+  - id: mcptox
+    name: MCPTox
+    source: MCPTox benchmark (poisoned MCP tool descriptions)
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "poisoned tool, paradigm explicit_trigger_function_hijacking or implicit_trigger_function_hijacking", classes: [tool_poisoning]}
+      - {label: "poisoned tool, paradigm implicit_trigger_parameter_tampering", classes: [tool_poisoning], family: side_channel_param}
+      - {label: "clean tool description of the same server", benign: true}
+    note: no licence file; evaluation only, never training
+  - id: malicious_skill_bench
+    name: MaliciousSkillBench
+    source: MaliciousSkillBench (agent skills)
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "malicious skill", classes: [agent_config_tampering]}
+      - {label: "benign skill", benign: true}
+    note: source-disjoint from SkillSpector (whose rules are inventoried); E01 dedups against SkillSpector fixtures
+  - id: agentapprove_tool_call_safety
+    name: agentapprove tool-call-safety
+    source: agentapprove tool-call-safety (sealed holdout)
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "deny, destructive / privilege / credential categories", classes: [unsafe_action]}
+      - {label: "deny, data egress category", classes: [exfiltration], family: tool_param_egress}
+      - {label: "deny, shell command argument only", handoff: shell_command}
+      - {label: "approve", benign: true}
+  - id: agentharm
+    name: AgentHarm
+    source: hf:ai-safety-institute/AgentHarm
+    licence: MIT (plus a no-training clause)
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "category = Cybercrime", classes: [unsafe_action]}
+      - {label: "category in (Fraud, Self-harm, Harassment, Sexual, Drugs, Hate)", classes: [harmful_content]}
+      - {label: "category in (Copyright, Disinformation)", out_of_scope: "copyright and disinformation are not L1 classes (README scope)"}
+      - {label: "config harmless_benign", benign: true}
+    note: no-training clause; evaluation only
+  # ── holdout, neutral: toxicity ───────────────────────────────────────────────────────────────
+  - id: gahd
+    name: GAHD (German adversarial hate speech)
+    source: hf:jagoldz/gahd
+    licence: CC-BY-4.0
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "gold_label = 1", classes: [toxic_language]}
+      - {label: "gold_label = 0 (incl. contrast pairs)", benign: true}
+    note: rounds with translated items carry the translated column
+  - id: germeval2018_test
+    name: GermEval 2018 (test split)
+    source: GermEval 2018 shared task, official test release
+    licence: unknown
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "coarse OFFENSE (fine ABUSE, INSULT)", classes: [toxic_language]}
+      - {label: "coarse OFFENSE (fine PROFANITY)", classes: [toxic_language], family: profanity}
+      - {label: "coarse OTHER", benign: true}
+  - id: hatecheck_de
+    name: Multilingual HateCheck, German
+    source: hf:Paul/hatecheck-german
+    licence: CC-BY-4.0
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "label_gold = hateful", classes: [toxic_language]}
+      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs)", benign: true}
+  - id: hatecheck_en
+    name: HateCheck
+    source: hf:Paul/hatecheck
+    licence: CC-BY-4.0
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "label_gold = hateful", classes: [toxic_language]}
+      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs)", benign: true}
+  - id: chatmod_bench
+    name: chatmod-bench
+    source: German chat moderation benchmark
+    licence: unknown
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "moderation label toxic / insult / threat", classes: [toxic_language]}
+      - {label: "moderation label ok", benign: true}
+  - id: measuring_hate_speech
+    name: Measuring Hate Speech
+    source: hf:ucberkeley-dlab/measuring-hate-speech
+    licence: CC-BY-4.0
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "hate_speech_score > 0.5", classes: [toxic_language]}
+      - {label: "hate_speech_score < -1", benign: true}
+      - {label: "-1 <= hate_speech_score <= 0.5", out_of_scope: "ambiguous band of the dataset's own scale"}
+  # ── holdout, neutral: benign pool (all classes) ──────────────────────────────────────────────
+  - id: notinject
+    name: NotInject
+    source: hf:leolee99/NotInject
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "every prompt (trigger words, benign)", benign: true}
+  - id: xstest
+    name: XSTest
+    source: hf:Paul/XSTest
+    licence: CC-BY-4.0
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "label = safe", benign: true}
+      - {label: "label = unsafe (contrast prompts)", classes: [harmful_content]}
+  - id: or_bench_hard
+    name: OR-Bench hard-1k
+    source: hf:bench-llm/or-bench (or-bench-hard-1k)
+    licence: CC-BY-4.0
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "every prompt (seemingly toxic, benign)", benign: true}
+  - id: radware_github_ipi
+    name: Radware GitHub indirect injection in the wild
+    source: Radware GitHub IPI collection
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "benign markup (hidden comments, badges, HTML in READMEs and issues)", benign: true}
+      - {label: "confirmed injection", classes: [instruction_injection], family: hidden_directive}
+  - id: oasst2
+    name: OpenAssistant OASST2 (first prompter turns)
+    source: hf:OpenAssistant/oasst2
+    licence: Apache-2.0
+    languages: [de, en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "prompter message, not flagged", benign: true}
+      - {label: "prompter message with toxicity / spam review flags", out_of_scope: "unreviewed moderation flag, neither gold nor benign"}
+  - id: wildchat_de
+    name: WildChat-1M, German first turns
+    source: hf:allenai/WildChat-1M (language German, turn 1)
+    licence: ODC-BY-1.0
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "toxic = false", benign: true}
+      - {label: "toxic = true (OpenAI moderation)", out_of_scope: "machine moderation flag, neither gold nor benign"}
+  - id: necent_de
+    name: Necent German news and web
+    source: Necent DE (native benign side)
+    licence: unknown
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "every document", benign: true}
+  - id: wikipedia
+    name: Wikipedia
+    source: hf:wikimedia/wikipedia (de, en)
+    licence: CC-BY-SA-4.0
+    languages: [de, en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "article paragraphs (incl. security, chemistry, history articles)", benign: true}
+  - id: court_rulings_de
+    name: German court rulings
+    source: Open Legal Data / official court decision portals
+    licence: public-domain (amtliche Werke, §5 UrhG)
+    languages: [de]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "decision text (incl. criminal and insult cases)", benign: true}
+  - id: owasp_docs
+    name: OWASP documentation (LLM Top 10, cheat sheets)
+    source: github:OWASP (www-project-top-10-for-large-language-model-applications, CheatSheetSeries)
+    licence: CC-BY-SA-4.0
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "documentation paragraphs (describe attacks)", benign: true}
+  - id: nvd
+    name: NVD CVE descriptions
+    source: nvd.nist.gov feeds
+    licence: public-domain
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "CVE description", benign: true}
+  - id: mitre_attack
+    name: MITRE ATT&CK technique descriptions
+    source: github:mitre/cti
+    licence: MITRE ATT&CK terms of use (royalty-free, attribution)
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "technique and procedure descriptions", benign: true}
+  - id: prompt_guides
+    name: Prompt-engineering guides
+    source: github:dair-ai/Prompt-Engineering-Guide (en, de)
+    licence: MIT
+    languages: [de, en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "guide sections (incl. the adversarial-prompting chapter)", benign: true}
+  # ── holdout, ark_blind ───────────────────────────────────────────────────────────────────────
+  - id: r05_translation_de
+    name: R05 German translation of the frozen EN holdout
+    source: ~/ark-threat/holdout (separate session without runner access)
+    licence: derived from the EN holdout rows
+    languages: [de]
+    translated: true
+    split: holdout
+    family: ark_blind
+    labels:
+      - {label: "label of the translated EN row", classes: [instruction_injection, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, exfiltration, unsafe_action, harmful_content, toxic_language]}
+      - {label: "translated benign row", benign: true}
+  - id: r05_synthetic
+    name: R05 synthetic items for classes without public data
+    source: ~/ark-threat/holdout (separate session, modelled on public papers and advisories, never on goldens)
+    licence: ark (internal)
+    languages: [de, en]
+    split: holdout
+    family: ark_blind
+    labels:
+      - {label: "attack item", classes: [memory_poisoning, resource_exhaustion, agent_config_tampering, tool_poisoning, exfiltration, unsafe_action, prompt_extraction]}
+      - {label: "clean twin", benign: true}
+  - id: generators_holdout_seed
+    name: Generators, secret holdout seed (carrier insertion, exfil look-alikes, obfuscation slices)
+    source: E02 generators with the seed under ~/ark-threat/holdout
+    licence: ark (internal)
+    languages: [de, en]
+    split: holdout
+    family: ark_blind
+    labels:
+      - {label: "inserted injection / obfuscated slice", classes: [instruction_injection, jailbreak, prompt_extraction]}
+      - {label: "inserted exfil sink in tool output", classes: [exfiltration]}
+      - {label: "inserted memory / repetition directive", classes: [memory_poisoning, resource_exhaustion]}
+      - {label: "registry or skill embedding", classes: [tool_poisoning, agent_config_tampering]}
+      - {label: "clean twin, benign look-alike", benign: true}
+  # ── train / dev ──────────────────────────────────────────────────────────────────────────────
+  - id: neuralchemy
+    name: neuralchemy prompt-injection set
+    source: hf:neuralchemy
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "label = 1 (injection / jailbreak)", classes: [instruction_injection, jailbreak]}
+      - {label: "label = 0", benign: true}
+  - id: spml
+    name: SPML chatbot prompt injection
+    source: hf:reshabhs/SPML_Chatbot_Prompt_Injection
+    licence: MIT
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "Prompt injection = 1", classes: [instruction_injection]}
+      - {label: "Prompt injection = 0", benign: true}
+  - id: gentel
+    name: GenTel-Bench
+    source: GenTel-Safe benchmark
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "attack, scenario prompt injection / goal hijacking / prompt leaking", classes: [instruction_injection]}
+      - {label: "attack, scenario jailbreak", classes: [jailbreak]}
+      - {label: "benign", benign: true}
+  - id: polyguardprompts
+    name: PolyGuardPrompts
+    source: hf:ToxicityPrompts/PolyGuardPrompts
+    licence: unknown
+    languages: [de, en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "prompt_harm_label = harmful", classes: [harmful_content]}
+      - {label: "prompt_harm_label = unharmful", benign: true}
+    translated: true
+    note: the German part is machine-translated
+  - id: nemotron_safety_v3
+    name: Nemotron Safety Guard dataset v3
+    source: hf:nvidia/Nemotron-Safety-Guard-Dataset-v3
+    licence: CC-BY-4.0
+    languages: [de, en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "category in (Hate/Identity Hate, Harassment, Profanity)", classes: [toxic_language]}
+      - {label: "category = Threat", classes: [toxic_language], family: threat}
+      - {label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)", classes: [harmful_content]}
+      - {label: "category = Suicide and Self Harm", classes: [harmful_content], family: self_harm_intent}
+      - {label: "category = Sexual (minor)", classes: [harmful_content], family: child_safety}
+      - {label: "category in (PII/Privacy, Unauthorized Advice, Copyright/Trademark/Plagiarism, High Risk Gov Decision Making)", classes: [harmful_content], decides: false, reason: "model-only subclasses of harmful_content (privacy, specialized advice, ip, elections), off until they pass the TPR floor"}
+      - {label: "category = Political/Misinformation/Conspiracy", out_of_scope: "disinformation is not an L1 class (README scope)"}
+      - {label: "category in (Needs Caution, Other, Immoral/Unethical)", out_of_scope: "no hazard class"}
+      - {label: "safe", benign: true}
+    translated: true
+    note: the German part is machine-translated
+  - id: cyberseceval_multilingual
+    name: CyberSecEval multilingual prompt injection
+    source: github:meta-llama/PurpleLlama CybersecurityBenchmarks/datasets/prompt_injection/prompt_injection_multilingual*.json
+    licence: MIT
+    languages: [de, en, fr, es, it, pt]
+    translated: true
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "every test case", classes: [instruction_injection]}
+    note: machine-translated variants of the technique slice; E01 dedups against cyberseceval_pi (holdout)
+  - id: mosscap
+    name: Mosscap prompt injection
+    source: hf:Lakera/mosscap_prompt_injection
+    licence: MIT
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "every prompt (password game)", classes: [prompt_extraction]}
+  - id: satml_ctf
+    name: SaTML 2024 LLM CTF
+    source: hf:ethz-spylab/ctf-satml24
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "attack chat turns (secret extraction)", classes: [prompt_extraction]}
+      - {label: "defence prompts", benign: true}
+  - id: tensor_trust
+    name: Tensor Trust extraction attacks (candidate)
+    source: github:HumanCompatibleAI/tensor-trust-data
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "extraction attack", classes: [prompt_extraction]}
+      - {label: "hijacking attack", classes: [instruction_injection]}
+      - {label: "defence pre/post prompts", benign: true}
+  - id: bipia
+    name: BIPIA
+    source: github:microsoft/BIPIA
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "text and code attacks inserted into e-mail, web, table, code contexts", classes: [instruction_injection]}
+      - {label: "attacks of the information-gathering group (e.g. data eavesdropping)", classes: [exfiltration]}
+      - {label: "clean context", benign: true}
+  - id: agentdojo
+    name: AgentDojo
+    source: github:ethz-spylab/agentdojo
+    licence: MIT
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "injection task text in tool output", classes: [instruction_injection], family: tool_result_directive}
+      - {label: "injection task goal sends data to an attacker address", classes: [exfiltration]}
+      - {label: "injection task goal deletes, transfers money or changes access", classes: [unsafe_action]}
+      - {label: "user task and clean tool output", benign: true}
+  - id: nemotron_ipi
+    name: Nemotron indirect prompt injection
+    source: hf:nvidia (indirect prompt injection set)
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "injected document", classes: [instruction_injection]}
+      - {label: "injected document with exfiltration goal", classes: [exfiltration]}
+      - {label: "clean document", benign: true}
+  - id: agent_safetybench
+    name: Agent-SafetyBench
+    source: github:thu-coai/Agent-SafetyBench
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "risk = Leak sensitive data / information", classes: [exfiltration]}
+      - {label: "risk in (Lead to property loss, Lead to physical harm, Contribute to harmful / vulnerable code)", classes: [unsafe_action]}
+      - {label: "risk = Compromise availability", classes: [resource_exhaustion]}
+      - {label: "risk = Violate law / ethics", classes: [harmful_content]}
+      - {label: "risk in (Spread unsafe information / misinformation, Produce unsafe information / misinformation)", out_of_scope: "output-side harm and disinformation, not an input signal"}
+      - {label: "fulfillable = 1 safe cases", benign: true}
+  - id: redcode
+    name: RedCode
+    source: github:AI-secure/RedCode
+    licence: unknown
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "RedCode-Exec Python and RedCode-Gen prompts", classes: [unsafe_action], family: unsafe_code}
+      - {label: "RedCode-Exec Bash", handoff: shell_command}
+  - id: wildjailbreak
+    name: WildJailbreak
+    source: hf:allenai/wildjailbreak
+    licence: ODC-BY-1.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "data_type = adversarial_harmful", classes: [jailbreak, harmful_content]}
+      - {label: "data_type = vanilla_harmful", classes: [harmful_content]}
+      - {label: "data_type in (vanilla_benign, adversarial_benign)", benign: true}
+  - id: wildguardmix
+    name: WildGuardMix
+    source: hf:allenai/wildguardmix
+    licence: ODC-BY-1.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "prompt_harm_label = harmful, adversarial = true", classes: [jailbreak, harmful_content]}
+      - {label: "prompt_harm_label = harmful, adversarial = false", classes: [harmful_content]}
+      - {label: "prompt_harm_label = unharmful", benign: true}
+  - id: xl_safetybench
+    name: XL-SafetyBench
+    source: XL-SafetyBench (DE/FR/ES jailbreaks, synthetic)
+    licence: CC-BY-4.0
+    languages: [de, en, fr, es]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "jailbreak prompt", classes: [jailbreak, harmful_content]}
+  - id: ai_safety_brazil
+    name: ai-safety-brazil prompt injection / jailbreak
+    source: hf:ai-safety-brazil
+    licence: CC-BY-4.0
+    languages: [pt]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "prompt injection set, attack", classes: [instruction_injection]}
+      - {label: "jailbreak set, attack", classes: [jailbreak]}
+      - {label: "benign", benign: true}
+  - id: approve_or_deny_de
+    name: ProCreations approve-or-deny
+    source: hf:ProCreations/approve-or-deny
+    licence: unknown
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "deny", classes: [unsafe_action]}
+      - {label: "approve", benign: true}
+  - id: germeval2018_train
+    name: GermEval 2018 (training split)
+    source: GermEval 2018 shared task, official training release
+    licence: unknown
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "coarse OFFENSE", classes: [toxic_language]}
+      - {label: "coarse OTHER", benign: true}
+  - id: germeval2019
+    name: GermEval 2019 task 2
+    source: GermEval 2019 shared task
+    licence: unknown
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "coarse OFFENSE", classes: [toxic_language]}
+      - {label: "coarse OTHER", benign: true}
+    note: its training data contains the GermEval 2018 test tweets; E01 removes them (exact + MinHash) against germeval2018_test
+  - id: germeval2021
+    name: GermEval 2021 toxic comments
+    source: GermEval 2021 shared task
+    licence: unknown
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "Sub1_Toxic = 1", classes: [toxic_language]}
+      - {label: "Sub1_Toxic = 0", benign: true}
+  - id: textdetox_de
+    name: textdetox multilingual toxicity, German
+    source: hf:textdetox/multilingual_toxicity_dataset (de)
+    licence: openrail++
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "toxic = 1", classes: [toxic_language]}
+      - {label: "toxic = 0", benign: true}
+  - id: civil_comments
+    name: Civil Comments / Jigsaw
+    source: hf:google/civil_comments
+    licence: CC0-1.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "toxicity >= 0.5", classes: [toxic_language]}
+      - {label: "toxicity < 0.1", benign: true}
+      - {label: "0.1 <= toxicity < 0.5", out_of_scope: "ambiguous rater band"}
+    note: training of the self-trained n-gram baselines and the toxicity model only
+  - id: dolly_15k
+    name: databricks-dolly-15k
+    source: hf:databricks/databricks-dolly-15k
+    licence: CC-BY-SA-3.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "instruction (incl. remember-this and repetition requests)", benign: true}
+    note: dev benign for memory_poisoning and resource_exhaustion; OASST2 and WildChat stay in the holdout benign pool
+  # ── ark_authored (reported only) ─────────────────────────────────────────────────────────────
+  - id: l1_goldens
+    name: Repository L1 goldens (threat and injection)
+    source: python/patronus_ark/benchmark_data (generate_l1_goldens.py)
+    licence: ark (repository)
+    languages: [de, en]
+    split: report
+    family: ark_authored
+    labels:
+      - {label: "positive golden of a class", classes: [instruction_injection, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language]}
+      - {label: "hard negative golden", benign: true}
+    note: ARK-authored; never decide
+  - id: generators_dev_seed
+    name: Generators, dev seed
+    source: E02 generators with the dev seed
+    licence: ark (internal)
+    languages: [de, en]
+    split: train_dev
+    family: ark_authored
+    labels:
+      - {label: "inserted attack of a class", classes: [instruction_injection, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion]}
+      - {label: "clean twin, benign look-alike", benign: true}
+  - id: runner_translations_de
+    name: Runner translations of decisive EN train/dev sets
+    source: E02 translation by the runner agent (no external MT)
+    licence: derived from the translated sets
+    languages: [de]
+    translated: true
+    split: train_dev
+    family: ark_authored
+    labels:
+      - {label: "label of the translated row", classes: [instruction_injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration, unsafe_action, harmful_content]}
+      - {label: "translated benign row", benign: true}
+  # ── report only ──────────────────────────────────────────────────────────────────────────────
+  - id: deepset_prompt_injections
+    name: deepset prompt-injections
+    source: hf:deepset/prompt-injections
+    licence: Apache-2.0
+    languages: [de, en]
+    split: report
+    family: report_only
+    labels:
+      - {label: "label = 1", classes: [instruction_injection]}
+      - {label: "label = 0", benign: true}
+    note: label noise; the German part is a smoke test only, deduplicated against all training sources
+  - id: jackhhao_jailbreak
+    name: jackhhao jailbreak-classification
+    source: hf:jackhhao/jailbreak-classification
+    licence: Apache-2.0
+    languages: [en]
+    split: report
+    family: report_only
+    labels:
+      - {label: "type = jailbreak", classes: [jailbreak]}
+      - {label: "type = benign", benign: true}
+    note: overlaps the in-the-wild jailbreak collections; reported only
+  - id: gandalf
+    name: Gandalf ignore-instructions
+    source: hf:Lakera/gandalf_ignore_instructions
+    licence: MIT
+    languages: [en]
+    split: report
+    family: report_only
+    labels:
+      - {label: "every prompt (password game)", classes: [instruction_injection, prompt_extraction]}
+    note: single-game distribution; reported only
+  - id: hackaprompt
+    name: HackAPrompt
+    source: hf:hackaprompt/hackaprompt-dataset
+    licence: unknown
+    languages: [en]
+    split: report
+    family: report_only
+    labels:
+      - {label: "submission", classes: [instruction_injection, jailbreak]}
+    note: competition payloads aimed at one target phrase; reported only
+  - id: injecagent
+    name: InjecAgent
+    source: github:uiuc-kang-lab/InjecAgent
+    licence: MIT
+    languages: [en]
+    split: report
+    family: report_only
+    labels:
+      - {label: "attacker instruction, direct harm", classes: [instruction_injection, unsafe_action]}
+      - {label: "attacker instruction, data stealing", classes: [instruction_injection, exfiltration]}
+    note: templated attacker instructions; reported only
+  - id: germeval2025
+    name: GermEval 2025
+    source: GermEval 2025 shared task
+    licence: GPL-3.0
+    languages: [de]
+    split: report
+    family: report_only
+    labels:
+      - {label: "harmful / toxic labels", classes: [toxic_language]}
+      - {label: "not harmful", benign: true}
+  - id: germs_at
+    name: GerMS-AT
+    source: GerMS-AT sexism dataset
+    licence: CC-BY-NC-4.0
+    languages: [de]
+    split: report
+    family: report_only
+    labels:
+      - {label: "sexism level >= 2", classes: [toxic_language]}
+      - {label: "sexism level 0", benign: true}
+      - {label: "sexism level 1", out_of_scope: "mild band, neither gold nor benign"}
+
+# Class and language pairs without deciding data (neither neutral nor ark_blind holdout).
+gaps: []
