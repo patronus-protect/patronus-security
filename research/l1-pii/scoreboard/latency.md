@@ -26,6 +26,25 @@ Machine: Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux x86_64. On
 
 M4 (ark 100kib p95 ≤ 10 ms): 15.003 ms, FAIL.
 M4 (ark-native 100kib p95 ≤ 10 ms): 9.774 ms, pass.
+
+The table above is the H06 run (one run per engine). Since T40 (decision 2026-11-11) M4 is judged on
+the median of the ark-native 100 KiB p95 over at least five VPS runs, at most 12 ms; the Python
+binding is reported, not judged. A single run on the shared VPS spreads by more than 2 ms (ten runs of
+`main` `f23c5f8b`: 10.21–12.48 ms, median 11.06; TRIAGE 2026-W46-2).
+
+## M4 under the T40 rule
+
+`latency.py run --engines ark-native --runs 5 --check-m4`, release build of the sources of `main`
+`8d2880b8`, VPS, load average 3.9 during the runs:
+
+| Run | 1 | 2 | 3 | 4 | 5 | Median |
+|---|---:|---:|---:|---:|---:|---:|
+| ark-native 100 KiB p95 ms | 9.588 | 9.640 | 10.675 | 10.782 | 10.257 | 10.257 |
+
+Median run: short p50 / p95 / p99 0.206 / 0.281 / 0.309 ms, 4 KiB 1.287 / 1.761 / 1.957 ms, 100 KiB
+8.346 / 10.257 / 11.270 ms; spans per workload unchanged.
+
+M4 (ark-native 100kib p95, median of 5 runs ≤ 12 ms): 10.257 ms (runs 9.588–10.782), pass.
 ## Profile and remaining hotspots (H06 pass 6)
 
 Stage profile of one native PII scan of the 100 KiB workloads (`detect_prepared_with_mode`, strict,
