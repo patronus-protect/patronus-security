@@ -782,12 +782,10 @@ def latency_ab(task: dict) -> dict:
     """Quiet latency A/B of the PR head against its merge base with main. run.sh calls it while it
     holds the run lock, so no other ARK job runs on the host. The latency code is the base
     checkout's (merged, reviewed), never the head's: DLP the gate's `LATENCY.gate_check`, PII
-    `latency.py run` + `compare` (ark and ark-native, 100 KiB p95) per attempt. Like the gate, a
-    check fails only when it fails in every attempt. Returns {"lines", "regression"} or {"error"}."""
-    if PROGRAM == "threat":
-        # The PII and DLP benchmarks scan only their own category; a threat PR gets no number until
-        # E03 adds the threat latency harness and its A/B here, so verify says so instead of passing.
-        return {"lines": ["threat: no latency benchmark yet (E03); latency not measured"], "regression": False}
+    `latency.py run` + `compare` (ark and ark-native, 100 KiB p95) per attempt, threat
+    `scripts/l1_threat/latency.py run --repo` + `compare` (real-DE 100 KiB p95 of threat, injection and
+    all L1) per attempt. Like the gate, a check fails only when it fails in every attempt. Returns
+    {"lines", "regression"} or {"error"}."""
     out = GATE_TREES / "verify-latency"   # not under CACHE: head code runs here with network
     trees = {"base": GATE_TREES / "verify-base", "head": GATE_TREES / "verify-head"}
     sides = {"base": task["diff_base"], "head": task["head"]}
@@ -810,6 +808,8 @@ def latency_ab(task: dict) -> dict:
                 raise RuntimeError(f"latency A/B exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
             result = json.loads(proc.stdout.strip().splitlines()[-1])
             return {"lines": [str(x)[:300] for x in result["lines"]], "regression": not all(result["ok"])}
+        if PROGRAM == "threat":
+            return _threat_latency_ab(trees, out)
         return _pii_latency_ab(trees, out)
     except (RuntimeError, OSError, ValueError, KeyError, IndexError, TypeError) as err:
         return {"error": str(err).strip()[-1500:]}
@@ -845,6 +845,37 @@ def _pii_latency_ab(trees: dict[str, Path], out: Path) -> dict:
         if all(passed.values()):
             break
     return {"lines": lines, "regression": not all(passed.values())}
+
+
+THREAT_LATENCY_CORPUS = CACHE / "threat-latency-de"   # frozen real-DE windows, built once by `prepare`
+
+
+def _threat_latency_ab(trees: dict[str, Path], out: Path) -> dict:
+    gpy = str(GATE_VENV / "bin" / "python")
+    script = str(trees["base"] / "scripts/l1_threat/latency.py")
+    corpus = THREAT_LATENCY_CORPUS
+    # Licensed source texts only (pinned revisions and SHA-256); a frozen corpus is kept as it is.
+    proc = sandbox([gpy, script, "prepare", "--out", str(corpus)], trees["base"], [CACHE], gate_env(),
+                   readable=(trees["base"],), max_sec=3600)
+    if proc.returncode != 0:
+        raise RuntimeError(f"threat latency prepare exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+    lines = []
+    for attempt in range(1, VERIFY_LATENCY_ATTEMPTS + 1):
+        for side in ("base", "head"):
+            proc = sandbox([gpy, script, "run", "--corpus", str(corpus), "--repo", str(trees[side]),
+                            "--output", str(out / f"{side}.json")], trees["base"],
+                           [trees[side], GATE_TARGET, GATE_HOME, out], gate_env(), network=False,
+                           readable=(trees["base"], corpus), max_sec=7200)
+            if proc.returncode != 0:
+                raise RuntimeError(f"threat latency run ({side}) exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+        proc = sandbox([gpy, script, "compare", "--base", str(out / "base.json"), "--head", str(out / "head.json")],
+                       trees["base"], [], {}, network=False, readable=(out, trees["base"]), max_sec=300)
+        if proc.returncode not in (0, 1):
+            raise RuntimeError(f"threat latency compare exit {proc.returncode}: {proc.stderr.strip()[-1500:]}")
+        lines += [f"attempt {attempt}: {line[:200]}" for line in proc.stdout.strip().splitlines()]
+        if proc.returncode == 0:
+            return {"lines": lines, "regression": False}
+    return {"lines": lines, "regression": True}
 
 
 def verify_verdict(cur: dict) -> dict | None:
