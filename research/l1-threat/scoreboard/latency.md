@@ -22,6 +22,7 @@ Beobachtungen (Ausgangsstand für H02 und das Gate-Kriterium „100 KiB p95 höc
 
 - Auf echtem deutschem Fließtext liegen `injection` (p95 ≈ 88 ms) und `threat` (≈ 35 ms) je 100 KiB weit über
   dem DLP-Budget von 10 ms; die synthetischen PII-Workloads unterschätzen die Injection-Latenz damit deutlich.
-- `all` (eine Anfrage mit allen L1-Kategorien) ist nicht langsamer als `injection` allein; die Kategorien einer
-  Anfrage laufen also nicht einfach nacheinander. Für das Gate zählt jedes Profil einzeln.
+- `all` (eine Anfrage mit allen L1-Kategorien) ist nicht langsamer als `injection` allein: die Kategorien einer
+  Anfrage laufen parallel (`scan_l1_inputs`, rayon) auf einer geteilten `NativeText`-Sicht, `all` folgt also der
+  langsamsten Kategorie und hängt von der Zahl freier Kerne ab. Für das Gate zählt jedes Profil einzeln.
 - Treffer auf dem gutartigen Korpus: `injection` 0, `threat` 0, `all` 12 Spans (PII/DLP-Spans in den Texten).
