@@ -238,96 +238,90 @@ In full Ark the same runs as the `shell_command` category. Guide:
 
 ## How L1 compares
 
-Native L1 alone — no model, the same rules in Core and Ark — against the established open-source
-tools: dev split, exact span match, raw gold. Both L1 research programmes are closed; the numbers
-below are their final reports.
+L1 alone (rules and validators, no model) against established open-source tools. All numbers are
+our own measurements on public test corpora; a match counts only when its span is exact, and every
+labelled value counts, including ones Ark skips on purpose (see below).
 
-**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364, with its default recognizers
-and with our tuned profile (German recognizers and context words added). Exact F1, measured on
-2026-11-08 (commit `6263e090`). Ark's default `strict` mode reports rule matches only; `balanced`
-(`pii_mode: balanced`) scores matches with context; `balanced-bare` is `balanced` plus the opt-in
-[bare-format profile](docs/how-to/pii-bare-formats.gates.json) (bare tax IDs, LANR, BSNR, SIN, NPI
-and similar numbers without a field name):
+**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364, once with its default
+recognizers and once with a tuned profile (German recognizers and context words added). F1 in %,
+measured on 2026-11-08. Ark's default mode `strict` reports rule matches only; `balanced`
+(`pii_mode: balanced`) also scores matches by their context; *balanced + bare formats* adds the
+opt-in [bare-format rules](docs/how-to/pii-bare-formats.gates.json) (tax IDs, LANR, BSNR, SIN, NPI
+and similar numbers without a field name next to them):
 
-| Corpus family | Ark `strict` (default) | Ark `balanced` | Ark `balanced-bare` | Presidio default | Presidio tuned |
+| Test data | Ark `strict` (default) | Ark `balanced` | Ark balanced + bare formats | Presidio default | Presidio tuned |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Neutral public corpora (Gretel finance, ai4privacy) | 69.6 | **70.0** | 67.8 | 18.0 | 40.5 |
+| Public PII corpora (Gretel finance, ai4privacy) | 69.6 | **70.0** | 67.8 | 18.0 | 40.5 |
 | Presidio's own evaluator and recognizer test data | 65.4 | 78.7 | **82.7** | 63.6 | 77.6 |
-| — of which English rows | 75.1 | 82.6 | **85.5** | 73.3 | 84.6 |
-| — of which German rows | 14.6 | 71.2 | 86.6 | 18.6 | **93.0** |
-| Ark's DE/EU synthetic set ¹ | 75.2 | **88.2** | 82.9 | 16.2 | 42.8 |
+| — of which English | 75.1 | 82.6 | **85.5** | 73.3 | 84.6 |
+| — of which German | 14.6 | 71.2 | 86.6 | 18.6 | **93.0** |
+| Our German/EU synthetic set ¹ | 75.2 | **88.2** | 82.9 | 16.2 | 42.8 |
 
-What this covers:
+- **False positives:** on look-alike values that are not PII (order numbers, hashes, version
+  strings and similar), no Ark mode reports anything on the public corpora or on Presidio's data;
+  Presidio default reports 7 on its own data. On our synthetic set, which deliberately contains
+  bare valid numbers, the bare-format rules report 80 (Presidio default 1,134, tuned 228).
+- **Checksums:** Ark validates check digits for 83 identifier types, Presidio for 35.
+- **Where Presidio is ahead:** on some identifiers of Presidio's own data (IP addresses, US SSNs,
+  Indian GSTIN, Singapore NRIC/FIN, UK NINO) Presidio scores higher, because that data labels
+  loopback addresses such as `127.0.0.1`, numbers with an invalid check digit and a NINO with a
+  leading space. Ark does not report these on purpose. On the German rows of Presidio's data,
+  Presidio tuned leads unless the bare-format rules are on.
 
-- Identifiers with a fixed format: cards, IBANs, phone numbers, e-mail and IP addresses, national
-  IDs. No Ark mode has a false positive on the hard negatives of the neutral corpora or of
-  Presidio's data (Presidio default: 7 on its own data); on Ark's own set `balanced-bare` reports 80,
-  as some of its hard negatives are deliberately bare valid values (Presidio default 1,134, tuned 228).
-  Ark validates checksums for 83 identifier units, Presidio for 35.
-- Per-identifier parity with Presidio (milestone M1) is **not met**: against both profiles Ark
-  stays below Presidio on some identifiers of Presidio's data, among them IP addresses, US SSNs,
-  GSTIN, NRIC/FIN and UK NINO, because that gold holds loopback or unspecified IPs, numbers with an
-  invalid check digit and a NINO span with a leading space, which Ark does not report by decision.
-  The German milestone M2 holds against default and tuned only with `balanced-bare`; with
-  `balanced` alone Presidio tuned leads on the German rows of its own test data.
-- Names, places and organisations are not part of L1; Ark finds them with the optional L3 model:
+**Names, places, organisations** are not part of L1; Ark finds them with the optional L3 model
+(`dynamic-pii`, GLiNER, `max_level="l3"`), compared with Presidio's spaCy NER (`en_core_web_lg`;
+tuned adds `de_core_news_lg`). F1 in % over PERSON, LOCATION and ORGANIZATION, measured on
+2026-11-05:
 
-**Names, places, organisations** — Ark L1 plus the L3 `dynamic-pii` pipeline (GLiNER,
-`max_level="l3"`) against Presidio's spaCy NER (`en_core_web_lg`; tuned adds `de_core_news_lg`).
-Exact F1 over PERSON, LOCATION and ORGANIZATION, measured on 2026-11-05 (commit `cf8e702`):
-
-| Corpus family | Language | Ark L1 + GLiNER | Presidio default | Presidio tuned |
+| Test data | Language | Ark L1 + GLiNER | Presidio default | Presidio tuned |
 | --- | --- | ---: | ---: | ---: |
-| Neutral public corpora | English | **54.7** | 30.2 | 30.2 |
-| Neutral public corpora | German | **44.0** | 7.4 | 27.5 |
+| Public PII corpora | English | **54.7** | 30.2 | 30.2 |
+| Public PII corpora | German | **44.0** | 7.4 | 27.5 |
 | Presidio's evaluator data | English | **65.4** | 58.8 | 58.8 |
-| Ark's DE/EU synthetic set ¹ | English | **70.0** | 54.0 | 54.0 |
-| Ark's DE/EU synthetic set ¹ | German | **69.9** | 31.0 | 42.9 |
+| Our German/EU synthetic set ¹ | English | **70.0** | 54.0 | 54.0 |
+| Our German/EU synthetic set ¹ | German | **69.9** | 31.0 | 42.9 |
 
-Presidio 2.2.364 reports no organisations by default. The L3 model costs several times more time
-per text than Presidio's spaCy model; L1 alone is unaffected. Reports:
-[PII final (raw view)](research/l1-pii/scoreboard/final-raw.md),
+Presidio 2.2.364 reports no organisations by default. The L3 model takes several times longer per
+text than Presidio's spaCy model; L1 alone is unaffected. Details:
+[PII results](research/l1-pii/scoreboard/final-raw.md),
 [names and addresses](research/l1-pii/scoreboard/2026-11-05.md).
 
-**Secrets (DLP) vs. secret scanners**, Ark in its default profile, measured on 2026-11-10
-(commit `e6a32f4`):
+**Secrets vs. secret scanners**, measured on 2026-11-10:
 
-| Tool | Precision | Recall | F1 | Hard-negative FPs | FPs per MB of benign code |
+| Tool | Precision | Recall | F1 | False positives on look-alikes | False positives per MB of normal code |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **Ark L1** ² | **91.3** | **85.5** | **88.3** | **144** | **0.053** |
 | gitleaks 8.30.1 | 49.1 | 53.4 | 51.1 | 974 | 0.212 |
 | TruffleHog 3.97.9 ³ | 63.2 | 36.4 | 46.2 | 326 | 1.430 ⁴ |
 | detect-secrets 1.5.0 | 33.9 | 51.6 | 40.9 | 1,731 | 36.283 ⁴ |
 
-On generic credentials (passwords, tokens, connection strings) Ark scores F1 100.0 against 23.7 for
-the best scanner (gitleaks). Ark does not yet reach the breadth targets: 91 of 222 gitleaks rules
-mapped, 139 secret formats. Report: [DLP final](research/dlp/scoreboard/final.md); per provider and
-coverage matrix: [DLP comparison](docs/reference/dlp-comparison.md).
+On generic credentials (passwords, tokens, connection strings) Ark reaches F1 100.0, the best
+scanner (gitleaks) 23.7. gitleaks still knows more provider formats: Ark covers 91 of its 222
+rules and 139 secret formats in total. Details: [secrets results](research/dlp/scoreboard/final.md),
+[per provider](docs/reference/dlp-comparison.md).
 
-**Latency**, 100 KiB p95 on the same 6-vCPU VPS, one call per sample:
+**Speed**, 95th percentile per 100 KiB text on the same 6-vCPU machine, one call per text:
 
-| Category | Tool | 100 KiB p95 | Scan throughput (10 MiB repo) | Measured |
+| Detection | Tool | 100 KiB p95 | Throughput (10 MiB repository) | Measured |
 | --- | --- | ---: | ---: | --- |
-| PII | Ark L1, native | 9.774 ms | – | 2026-11-05 |
-| PII | Ark L1, Python bindings | 15.003 ms | – | 2026-11-05 |
-| PII | Presidio default | 13,634.6 ms | – | 2026-11-02 |
-| PII | Presidio tuned | 11,978.8 ms | – | 2026-11-02 |
-| DLP | Ark L1, native (warm) | 8.0 ms | – | 2026-11-10 |
-| DLP | Ark L1, Python bindings (warm) | 8.6 ms | – | 2026-11-10 |
-| DLP | Ark L1, Python, benchmark incl. first scan of each document ⁵ | 16.557 ms | 10.37 MiB/s | 2026-11-10 |
-| DLP | gitleaks 8.30.1 (one process per document) | 917.860 ms | 5.11 MiB/s | 2026-11-10 |
+| PII | Ark L1, Rust | 9.8 ms | – | 2026-11-05 |
+| PII | Ark L1, Python | 15.0 ms | – | 2026-11-05 |
+| PII | Presidio default | 13.6 s | – | 2026-11-02 |
+| PII | Presidio tuned | 12.0 s | – | 2026-11-02 |
+| Secrets | Ark L1, Rust | 8.0 ms | – | 2026-11-10 |
+| Secrets | Ark L1, Python | 8.6 ms | – | 2026-11-10 |
+| Secrets | Ark L1, Python, including the first scan in a new process ⁵ | 16.6 ms | 10.37 MiB/s | 2026-11-10 |
+| Secrets | gitleaks 8.30.1 (one process per text) | 918 ms | 5.11 MiB/s | 2026-11-10 |
 
-The PII budget (milestone M4) is judged on the median native p95 over at least five runs, at most
-12 ms, and is met. Reports: [PII latency](research/l1-pii/scoreboard/latency.md),
-[DLP latency](research/dlp/scoreboard/latency.md).
+Details: [PII speed](research/l1-pii/scoreboard/latency.md),
+[secrets speed](research/dlp/scoreboard/latency.md).
 
-¹ Written by us for German and EU identifiers (and names in English and German); reported for
-completeness, not used to decide milestones. ² Includes the opt-in business-identifier rules of the
-`extended` run, which cause all 144 hard-negative FPs; the default rules have none and score F1
-91.9–100.0 per secret group. ³ Run with `--no-verification`, so it scores formats only, like the
-other tools. ⁴ From the 2026-11-02 baseline run on the same corpus and pins. ⁵ The first scan of a
-document in a fresh process builds the regex automata states. These are our own measurements;
-per-entity results, corpora and method are in
+¹ Written by us for German and EU identifiers (and names in English and German); shown for
+completeness, not used for our own conclusions. ² Includes the opt-in business-identifier rules,
+which cause all 144 false positives on look-alikes; the default rules have none and reach F1
+91.9–100.0 per secret type. ³ Run with `--no-verification`, so it checks formats only, like the
+other tools. ⁴ From an earlier run (2026-11-02) on the same data and versions. ⁵ The first scan in
+a new process builds the regex state. Per-entity results, corpora and method:
 [L1 capabilities](https://patronus-protect.github.io/patronus-security/reference/l1-capabilities/).
 
 ## Documentation
