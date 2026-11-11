@@ -107,7 +107,7 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | `ark_existing` (skillspector.persistent_override, skillspector.memory_reset, governance.identity_state_override); `oss`: ATR (Persistenz), prompt-guard (persistente Overrides); `taxonomy`: OWASP Agentic Threats (Memory Poisoning), MITRE ATLAS; Angriffsformen aus der Literatur (nur Formen, kein Text); `mined` auf Train |
-| Train/Dev | Generatoren: Einbettung in Web/Mail/RAG-Chunks (Dev-Seed); echte Merk-Bitten als Benign aus OASST2/WildChat |
+| Train/Dev | Generatoren: Einbettung in Web/Mail/RAG-Chunks (Dev-Seed); echte Merk-Bitten als Benign aus databricks-dolly-15k (OASST2/WildChat bleiben im Holdout-Benign-Pool, [`entity_map.yaml`](../entity_map.yaml)) |
 | Holdout `neutral` | keiner bekannt |
 | Holdout `ark_blind` | R05 DE+EN (entscheidet), Seed-Teil der Einbettung |
 | Hard Negatives | Merk-Bitten über sich selbst, Erinnerungs-Apps, Memory-Doku, Mail-Signaturen |

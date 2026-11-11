@@ -91,7 +91,8 @@ Anker-Fenster, weil es für diese Klassen keine Anker gibt) und muss das L1-Budg
 sie aus und wird in HC02 als Lücke vermerkt.
 
 Kandidaten: B0 (Threat-Scorer 0.1.7, enthält `harmful_intent`), R+A+L, B1, B4, B5. Daten: aya_redteaming
-(FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE nur RTP-LX und `wildchat-de`, deshalb R05 mit
+(FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE nur RTP-LX (`wildchat-de` misst Toxizität, zählt für
+`toxic_language`), deshalb R05 mit
 Harm-Anteil. Prompts mit Gefahrenbegriffen werden zur Eval-Zeit geladen, nicht committet.
 
 ## 8. Policies (später)
@@ -126,7 +127,7 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 |---|---|
 | Patterns/Anker | `ark_existing` (threat.harmful_intent); `taxonomy`: AILuminate-Gefahrenklassen; gehashte Lexika `mined` auf Train; Anfrage-Rahmung `hand` |
 | Train/Dev | WildGuardMix, PolyGuardPrompts, Nemotron v3 (MT-markiert), XL-SafetyBench; Modell-Unterklassen: Kandidaten AILuminate-Demo-Set, Nemotron Content Safety v2 (Lizenz prüft E01) |
-| Holdout `neutral` | aya_redteaming (EN, FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE: RTP-LX de, PolygloToxicityPrompts `wildchat-de` |
+| Holdout `neutral` | aya_redteaming (EN, FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE: RTP-LX de |
 | Holdout `ark_blind` | R05 DE (Harm-Anteil, ohne funktionierende Anleitungen: nur Anfragen) |
 | Hard Negatives | XSTest-safe, OR-Bench-hard, Prävention, Nachrichten, Chemieunterricht, Pentest mit Auftrag |
 | Lücke | Modell-Unterklassen (Fachberatung, Urheberrecht, Verleumdung, Wahlen, Privatsphäre) nur mit Kandidaten-Daten; bleiben aus, bis sie die Grenze aus §7 schaffen |

@@ -101,6 +101,7 @@ tasks:
     accept: research/l1-threat/oss_rules.yaml (pinned commits, no rule bodies of AGPL sources); counts per class and language; harvest list feeds the class bundles
 
   - id: M03
+    status: done
     title: Baseline and dataset mapping (entity_map.yaml) — every baseline category and dataset label → new class or out_of_scope with reason; source families neutral / ark_blind / ark_authored / baseline_trained / report_only (README "Herkunft"); ark_blind decides only where a category and language has no neutral data
     type: mapping
     deps: [M01]
