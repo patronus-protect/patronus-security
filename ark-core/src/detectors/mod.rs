@@ -10,6 +10,7 @@ pub mod obfuscation;
 pub mod pii;
 pub mod shell;
 pub mod structure;
+pub mod threat;
 pub mod validators;
 pub mod word_boundary;
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Embedded document-level Threat logistic scorer, independently calibrated.
 use serde::Deserialize;
 use serde_json::Value;
