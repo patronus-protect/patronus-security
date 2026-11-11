@@ -68,3 +68,34 @@ entscheidet und nicht unter `gaps` steht. `ark_blind` entscheidet nur, wo kein `
 Klasse in der Sprache abdeckt; `decides: false` hält ein Label nur berichtet.
 
 Tests: `scripts/tests/test_l1_threat_entity_map.py`.
+
+## Latenz auf echtem deutschem Text
+
+`latency.py` misst die L1-Latenz von `threat` allein, `injection` allein und allen L1-Kategorien zusammen
+(`injection`, `dlp`, `pii`, `threat`, `shell_command` in einer Anfrage) über das native Rust-Gateway
+(`rust/dev/l1_latency_workloads.rs`, Release-Build) auf einem Korpus aus echtem deutschem Text.
+
+Korpus: die deutschen Dev-Quellen des DLP-Benign-Dokumentkorpus (`dewiki-dev`, `gesetze-dev`, `wmf-dev-de` aus
+[`scripts/l1_dlp/benign_docs_sources.json`](../l1_dlp/benign_docs_sources.json)) und lange deutsche
+Wikipedia-Artikel aus [`latency_sources.json`](latency_sources.json) (`dewiki-latency`, keine Seite aus der
+DLP-Liste), alle mit gepinnter Revision bzw. Commit, Lizenz (CC BY-SA, Unlicense) und SHA-256. Die Dokumente
+werden in Absätze zerlegt; jeder Absatz kommt im ganzen Korpus höchstens einmal vor (NFKC, Groß-/Kleinschreibung
+und Leerraum egal). Der Absatzstrom wird in Fenster von genau 102 400 Byte UTF-8 gepackt; der Absatz, der nicht
+mehr passt, wird an einer Zeichengrenze abgeschnitten und sein Rest verworfen. Mindestens 50, höchstens 64
+Fenster (heute 64 aus rund 17 600 Absätzen). Die Daten liegen nur auf der VPS, nie im Repo.
+
+```bash
+python3 scripts/l1_threat/latency.py prepare --out DIR [--sources CACHE] [--offline]   # friert DIR ein (.ready)
+python3 scripts/l1_threat/latency.py check DIR                                          # Exit 1 bei jedem Problem
+python3 scripts/l1_threat/latency.py run --corpus DIR --output latency.json --markdown latency.md --runs 3
+python3 scripts/l1_threat/latency.py compare --base base.json --head head.json          # Exit 1: p95 > +5 %
+python3 scripts/l1_dlp/benign_docs.py pin --sources CACHE --list scripts/l1_threat/latency_sources.json --write
+```
+
+`run` misst je Fenster 5 Scans nach einem Warmup (`--samples-scale`), p95 über alle Fenster gepoolt; bei
+`--runs N` gilt je Profil der Lauf mit dem Median-p95. `--repo` misst einen anderen Checkout mit diesem Skript.
+Der Runner (`ark-l1 latency_ab`, Programm `threat`) baut den Korpus einmal unter `cache/threat-latency-de` und
+vergleicht Base und Head mit dem Skript der Base; eine Regression zählt nur, wenn sie in jedem Versuch
+auftritt. Ergebnisse: [`research/l1-threat/scoreboard/latency.md`](../../research/l1-threat/scoreboard/latency.md).
+
+Tests: `scripts/tests/test_l1_threat_latency.py`, `scripts/tests/test_runner_threat_latency_ab.py`.

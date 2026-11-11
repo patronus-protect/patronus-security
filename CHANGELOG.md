@@ -9,6 +9,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Add a latency benchmark for the threat and injection categories on real German text
+  (`scripts/l1_threat/latency.py`). `prepare` builds at least 50 distinct windows of exactly 100 KiB
+  from openly licensed German documents (Wikipedia articles, federal laws, Wikimedia policies; pinned
+  revisions and checksums, no paragraph used twice); the texts are downloaded when the corpus is built
+  and never stored in the repository. `run` times the native gateway at L1 with `threat` alone,
+  `injection` alone and all L1 categories in one request, and reports p50/p95/p99 pooled over the
+  windows; `compare` exits 1 when a p95 grows by more than 5 % between two reports of the same
+  machine. The native timing worker (`rust/dev/l1_latency_workloads.rs`) now accepts the categories
+  to scan per workload. **Detection change:** none; this is evaluation tooling only.
+
 ## [0.1.16] - 2026-11-11
 
 ### Detection changes in the default modes
