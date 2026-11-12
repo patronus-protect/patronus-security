@@ -19,6 +19,8 @@
 #   - docker_socket, privileged_container, host_root_mount and environment_exfiltration only match
 #     command lines and go to K26 (X04); credential_file_upload too. Their YAML/Compose and prose
 #     forms are gaps of ua_container_escape_config / ex_send_directive.
+#   - X04 removed root_destruction and host_root_mount (K26 decides their goldens by policy). The
+#     rules left under `handoffs` wait for K26 follow-ups (research/l1-threat/k26-handoff.md).
 #   - credential_file_access and persistence_payload stay in unsafe_action whole; X04 splits off the
 #     shell forms. environment_post (Python requests with os.environ) stays in exfiltration.
 #   - ark.injection.exfil.* (legacy cross_tool_instruction) need a data source plus a sink and go to
@@ -2084,7 +2086,8 @@ classes:
     - {id: toxic.moderation, kind: counter, task: S02, title: moderation and classification context}
     - {id: toxic.self_directed, kind: counter, task: S02, title: self-deprecation without third party}
 
-# Shell-syntax rules handed to shell risk K26 (shell_command); X04 removes them from threat.
+# Shell-syntax rules handed to shell risk K26 (shell_command); each leaves threat once K26 decides
+# its goldens (research/l1-threat/k26-handoff.md).
 handoffs:
   - target: shell_command
     task: X04
@@ -2093,7 +2096,5 @@ handoffs:
       - ark.threat.decoded_shell_execution
       - ark.threat.docker_socket
       - ark.threat.environment_exfiltration
-      - ark.threat.host_root_mount
       - ark.threat.privileged_container
       - ark.threat.remote_execution
-      - ark.threat.root_destruction

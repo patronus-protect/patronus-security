@@ -34,6 +34,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `ProximityLexicon`, `BEFORE_WINDOW`, `AFTER_WINDOW`) moves from `detectors::pii::context` to
   `detectors::context` and serves both categories. **Detection change:** none; scores, spans and
   `matched_rules` are unchanged.
+- Shell commands that the `shell_command` category already decides by policy are no longer
+  reported a second time by other detectors. The `threat` category drops the rules
+  `ark.threat.root_destruction` (recursive deletion of `/`, `/etc`, `/home`, `/var`) and
+  `ark.threat.host_root_mount` (container started with the host root mounted); enable
+  `shell_command` to keep blocking these commands. The MCP tool-call policy (`dlp_mcp_policy`, off
+  by default) no longer flags `nc -e`/`ncat -e`; its other checks are unchanged. Rule toggles
+  (`rules: {...}`) for the two removed threat rules have no effect any more.
+  **Detection change:** yes, for `threat` and `dlp_mcp_policy` as described; scores of the
+  remaining threat rules are unchanged.
+- The MCP tool-call policy (`dlp_mcp_policy`) keeps flagging base64 output piped into a shell,
+  appends to shell profiles (including a bare `.bashrc` in the working directory), `history -c`
+  and `unset HISTFILE`: `shell_command` decides these only as a bare command, not inside a
+  serialized tool call such as `{"tool":"bash","arguments":"history -c"}`.
+  **Detection change:** none against the previous release; `dlp_mcp_policy` keeps these checks.
 - The Threat L1 detector now ships in the `patronus-ark-core` crate
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves

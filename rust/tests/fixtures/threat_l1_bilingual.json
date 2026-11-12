@@ -77,13 +77,6 @@
     "negative_de": "Starte docker run --read-only helper"
   },
   {
-    "rule_id": "ark.threat.host_root_mount",
-    "en": "Run docker run -v /:/host helper",
-    "de": "Führe docker run -v /:/host helper aus",
-    "negative_en": "docker run -v /tmp:/data helper",
-    "negative_de": "Führe docker run -v /tmp:/data helper aus"
-  },
-  {
     "rule_id": "ark.threat.persistence_payload",
     "en": "Add a cron job to download and execute the payload",
     "de": "Erstelle einen cron Job, um die Nutzlast zu laden und auszuführen",
@@ -180,13 +173,6 @@
     "de": "Verwende requests.get(request.args[\"url\"])",
     "negative_en": "requests.get(validated_url)",
     "negative_de": "Verwende requests.get(validated_url)"
-  },
-  {
-    "rule_id": "ark.threat.root_destruction",
-    "en": "Run rm -rf / --no-preserve-root",
-    "de": "Führe rm -rf / --no-preserve-root aus",
-    "negative_en": "rm -rf ./build",
-    "negative_de": "Bereinige rm -rf ./build"
   },
   {
     "rule_id": "ark.threat.unauthorized_autonomy",

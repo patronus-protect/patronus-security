@@ -15,14 +15,12 @@
     "ark.threat.environment_exfiltration",
     "ark.threat.environment_post",
     "ark.threat.harmful_intent",
-    "ark.threat.host_root_mount",
     "ark.threat.kubernetes_privileged_json",
     "ark.threat.kubernetes_privileged_yaml",
     "ark.threat.persistence_payload",
     "ark.threat.privileged_container",
     "ark.threat.remote_execution",
     "ark.threat.remote_execution_instruction",
-    "ark.threat.root_destruction",
     "ark.threat.secret_exfiltration",
     "ark.threat.secret_source_transfer",
     "ark.threat.security_disable",
@@ -47,14 +45,12 @@
     "rule:ark.threat.environment_exfiltration",
     "rule:ark.threat.environment_post",
     "rule:ark.threat.harmful_intent",
-    "rule:ark.threat.host_root_mount",
     "rule:ark.threat.kubernetes_privileged_json",
     "rule:ark.threat.kubernetes_privileged_yaml",
     "rule:ark.threat.persistence_payload",
     "rule:ark.threat.privileged_container",
     "rule:ark.threat.remote_execution",
     "rule:ark.threat.remote_execution_instruction",
-    "rule:ark.threat.root_destruction",
     "rule:ark.threat.secret_exfiltration",
     "rule:ark.threat.secret_source_transfer",
     "rule:ark.threat.security_disable",
@@ -82,14 +78,12 @@
     0.4892502975784925,
     1.0116012749227021,
     0.4978870931262023,
-    -0.22329572889739877,
     0.764539886043498,
     0.7038657745788647,
     0.804585327592898,
     0.49739769805149425,
     -2.8820491719402246,
     -2.5574580035821657,
-    0.20259464853372627,
     0.9584858465568104,
     2.4899303965089277,
     -4.01433916713013,
@@ -115,7 +109,7 @@
       "unified_validation.csv": "e94f9f78ad0df24677cfa7a5e0a601c4d7738879e3f4a1d89d340f4a7d41578b",
       "threat_l1_bilingual.json": "4363c6fc8cba7443edac4443371c10d0bc4717acef034dcb5e4eee1c7460a88a"
     },
-    "rules_sha256": "b227829fadba13f7362fa9c8047acc4ee53061cac18a8b940434a71cf1b46d14",
+    "rules_sha256": "5f21a77eb063f8ecfe026c4b55546cdbd3dc4e9513bea4b49e88dba227e705d9",
     "scanner_sha256": "74aae336c65862b3a4a3dacd425190c43cf6d7d47f6379597f69107f14b2df01",
     "excluded": {
       "fit": 5695,
@@ -142,7 +136,14 @@
       }
     },
     "weighting": "class balanced; positive rule coverage balanced",
-    "operating_point": "Threshold 0.10, selected on development data; unique rule presence counts"
+    "operating_point": "Threshold 0.10, selected on development data; unique rule presence counts",
+    "dropped_rules": {
+      "rules": [
+        "ark.threat.root_destruction",
+        "ark.threat.host_root_mount"
+      ],
+      "reason": "shell syntax decided by shell_command; their columns are dropped, the remaining coefficients and intercept are the trained ones"
+    }
   },
   "golden_cases": [
     {
@@ -152,8 +153,6 @@
         0.0,
         0.0,
         1.0,
-        0.0,
-        0.0,
         0.0,
         0.0,
         0.0,
@@ -202,10 +201,8 @@
         0.0,
         0.0,
         0.0,
-        0.0,
-        0.0,
-        0.0,
         1.0,
+        0.0,
         0.0,
         0.0,
         0.0,
@@ -220,7 +217,7 @@
         2.1972245773362196,
         1.0
       ],
-      "expected_score": 0.988809239018839,
+      "expected_score": 0.8016706904394291,
       "expected_accepted": true
     }
   ]

