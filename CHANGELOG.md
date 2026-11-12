@@ -26,6 +26,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
     tags between U+1F3F4 and the cancel tag spell a valid subdivision id (two letters or three
     digits, then one to four letters or digits); tag-encoded instructions framed by those characters
     are decoded again.
+- The `threat` category now flags dangerous actions on systems written as prose, code or
+  configuration, in German and English: reading saved browser passwords, the keychain or a password
+  vault; fetching a cloud metadata endpoint; deleting a whole production database or all backups;
+  switching off the firewall, antivirus, audit logging or MFA; downloading a file and running it;
+  granting admin, root or full access to everyone; registering a downloaded or attached program for
+  autostart or as a scheduled task; mounting a container runtime socket or the host root into a
+  container, and `privileged: true` services in Compose files; deserialising request data with
+  `yaml.load`, `jsonpickle`, `dill`, `torch.load` or `joblib`; HTTP clients (`httpx`, `aiohttp`,
+  `urllib3`) with certificate checks off against remote hosts. Each of these rules
+  (`ark.threat.ua_*`, listed in `matched_rules`) decides by its own points and the context of its
+  sentence: findings in security documentation and training, quotes, test code, negated sentences,
+  test or staging environments, runs with dry-run or backup, and the user's own narrow scope stay
+  benign; prose requests that need an addressee, a broad scope or a no-confirmation phrase only
+  count with one. Shell commands stay with the `shell_command` detector. The rules can be switched
+  off one by one in the `rules` map. **Detection change:** new threat findings
+  (`secrets_access`, `tool_abuse`, `harmful_behavior`); the decisions of the existing threat rules
+  are unchanged.
 - Add clause-wide context lexica for the attack categories in German and English
   (`patronus_ark_core::detectors::context_lexica`, terms in
   `ark-core/src/detectors/anchor_lexicons/context.json`): who a text addresses (the model, claimed

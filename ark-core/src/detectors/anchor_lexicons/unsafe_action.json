@@ -1,0 +1,267 @@
+[
+  {
+    "id": "unsafe.read_secret",
+    "description": "Auslesen, Sammeln oder Kopieren von Geheimnissen",
+    "en": [
+      "dump",
+      "export",
+      "extract",
+      "harvest",
+      "collect",
+      "copy",
+      "read"
+    ],
+    "de": [
+      "lies",
+      "lese",
+      "kopiere",
+      "exportiere",
+      "extrahiere",
+      "sammle"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.secret_store",
+    "description": "Gespeicherte Passwörter, Schlüsselbund, Passwort-Tresor",
+    "en": [
+      "password",
+      "keychain",
+      "credential",
+      "browser"
+    ],
+    "de": [
+      "passw",
+      "sselbund",
+      "tresor"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.metadata_endpoint",
+    "description": "Metadaten-Endpunkte von Cloud-Instanzen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "169.254.169.254",
+      "metadata.google.internal",
+      "100.100.100.200"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.destructive",
+    "description": "Unumkehrbares Löschen, Leeren oder Zerstören",
+    "en": [
+      "delete",
+      "wipe",
+      "drop",
+      "purge",
+      "erase",
+      "destroy",
+      "truncate"
+    ],
+    "de": [
+      "lösch",
+      "loesch",
+      "leere",
+      "vernichte",
+      "formatiere"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.broad_target",
+    "description": "Breite Ziele: Produktion, gesamte Datenbank, alle Backups",
+    "en": [
+      "entire",
+      "whole",
+      "complete",
+      "production",
+      "all"
+    ],
+    "de": [
+      "gesamte",
+      "komplette",
+      "ganze",
+      "produktion",
+      "alle"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.disable_verb",
+    "description": "Abschalten, Deaktivieren, Deinstallieren",
+    "en": [
+      "disable",
+      "deactivate",
+      "turn",
+      "switch",
+      "uninstall"
+    ],
+    "de": [
+      "deaktiviere",
+      "schalte",
+      "deinstalliere"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.security_control",
+    "description": "Schutz- und Protokollierungsfunktionen",
+    "en": [
+      "firewall",
+      "antivirus",
+      "anti-virus",
+      "virus",
+      "edr",
+      "endpoint",
+      "defender",
+      "audit",
+      "logging",
+      "selinux",
+      "apparmor",
+      "mfa",
+      "2fa",
+      "two-factor"
+    ],
+    "de": [
+      "virenscanner",
+      "virenschutz",
+      "protokollierung",
+      "zwei-faktor"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.privilege",
+    "description": "Admin-, Root- oder Vollzugriffsrechte",
+    "en": [
+      "admin",
+      "root",
+      "full",
+      "sudo",
+      "domain"
+    ],
+    "de": [
+      "vollzugriff",
+      "vollen"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.autostart",
+    "description": "Autostart, geplante Aufgaben und Dienste",
+    "en": [
+      "startup",
+      "scheduled",
+      "login item",
+      "launch agent",
+      "cron",
+      "systemd",
+      "run key"
+    ],
+    "de": [
+      "autostart",
+      "geplante",
+      "systemstart"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.runtime_socket",
+    "description": "Sockets von Container-Laufzeiten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "docker.sock",
+      "containerd.sock",
+      "podman.sock"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.host_path",
+    "description": "Host-Pfad-Volumes in Kubernetes-Manifesten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "hostpath"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.deserialize_call",
+    "description": "Deserialisierung beliebiger Objekte",
+    "en": [],
+    "de": [],
+    "shared": [
+      "yaml.load",
+      "jsonpickle",
+      "dill.load",
+      "cloudpickle",
+      "torch.load",
+      "joblib.load"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.tls_client",
+    "description": "HTTP-Clients mit abschaltbarer Zertifikatsprüfung",
+    "en": [],
+    "de": [],
+    "shared": [
+      "httpx.",
+      "aiohttp.",
+      "urllib3."
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  }
+]

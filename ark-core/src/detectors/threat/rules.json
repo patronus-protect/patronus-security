@@ -251,6 +251,169 @@
         "E5"
       ],
       "pattern": "\\b(?P<access>read|collect|lies|lese|sammle)\\s{1,16}(?P<source>~?/\\.(?:aws/credentials|ssh/id_(?:rsa|ed25519)|kube/config)|(?:the |die )?(?:credentials|passwords|Zugangsdaten|Passwörter))\\s{1,16}(?:and|und)\\s{1,16}(?P<transfer>upload|send|sende|übertrage|uebertrage)\\s{1,16}(?:its contents|their contents|them|deren Inhalt|den Inhalt|sie)\\s{1,16}(?:to|an|nach)\\s{1,16}(?P<sink>(?:https?|s3|gs)://[^\\s\"<>]{1,200})"
+    },
+    {
+      "id": "ark.threat.ua_credential_store_access",
+      "class_name": "secrets_access",
+      "upstream_groups": [
+        "PE3",
+        "AS1"
+      ],
+      "pattern": "\\b(?P<access>dump|export|extract|harvest|collect|copy|read\\s{1,4}out|lies|lese|kopiere|exportiere|extrahiere|sammle)\\b[^\\n.;]{0,60}?(?P<target>\\b(?:saved|stored)\\s{1,4}(?:browser\\s{1,4})?passwords\\b|\\bbrowser\\s{1,4}(?:passwords|cookies|credentials)\\b|\\bkeychain\\b|\\bpassword\\s{1,4}manager\\s{1,4}vault\\b|\\bcredential\\s{1,4}manager\\b|\\bgespeicherten?\\s{1,4}(?:browser-)?passw(?:ö|oe)rter|\\bbrowser-passw(?:ö|oe)rter|\\bschl(?:ü|ue)sselbund\\w{0,4}|\\bpasswort-?tresor\\w{0,4})",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_metadata_fetch",
+      "class_name": "secrets_access",
+      "upstream_groups": [
+        "SSRF1"
+      ],
+      "pattern": "\\b(?P<request>fetch|query|call|request|get|open|rufe|frage|öffne|oeffne|hole|lade)\\b[^\\n;:/]{0,60}?(?P<endpoint>\\b169\\.254\\.169\\.254|\\bmetadata\\.google\\.internal|\\b100\\.100\\.100\\.200)\\b",
+      "points": {
+        "base_score": 45,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_destructive_request",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "RA1"
+      ],
+      "pattern": "\\b(?P<action>delete|wipe|drop|purge|erase|destroy|truncate|lösche|loesche|lösch|loesch|leere|vernichte|formatiere)\\b[^\\n.;]{0,40}?(?P<target>\\b(?:entire|whole|complete)\\s{1,4}(?:production\\s{1,4})?(?:database|db|cluster|bucket|repository|server)\\b|\\bproduction\\s{1,4}(?:database|db|cluster|data|bucket|servers?)\\b|\\ball\\s{1,4}(?:the\\s{1,4})?(?:backups|snapshots|databases|customer\\s{1,4}(?:data|records)|user\\s{1,4}accounts|production\\s{1,4}data)\\b|\\b(?:gesamte|komplette|ganze)n?\\s{1,4}(?:produktions)?datenbank|\\bproduktions(?:datenbank|daten|cluster|server)\\w{0,4}|\\balle\\s{1,4}(?:backups|sicherungen|snapshots|datenbanken|kundendaten|nutzerkonten|benutzerkonten)\\b)",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_security_control_disable",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM3",
+        "SC7"
+      ],
+      "pattern": "\\b(?P<action>disable|deactivate|turn\\s{1,4}off|switch\\s{1,4}off|uninstall|deaktiviere|schalte|deinstalliere)\\b[^\\n.;]{0,60}?(?P<guard>\\b(?:firewall|antivirus|anti-virus|virus\\s{1,4}scanner|edr|endpoint\\s{1,4}protection|defender|audit\\s{1,4}log(?:ging|s)?|logging|selinux|apparmor|mfa|2fa|two-factor\\s{1,4}authentication)\\b|\\b(?:virenscanner|virenschutz|protokollierung|audit-?log\\w{0,8}|zwei-faktor-authentifizierung))",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_fetch_and_run",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SC2",
+        "TM2"
+      ],
+      "pattern": "\\b(?P<download>download|fetch|lade|hole)\\b[^\\n.;:/]{0,80}?\\b(?P<execute>(?:and|then)\\s{1,4}(?:then\\s{1,4})?(?:run|execute|launch|start)|(?:und|dann)\\s{1,4}(?:danach\\s{1,4}|anschließend\\s{1,4}|anschliessend\\s{1,4})?(?:führe|fuehre|starte))\\b",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_runtime_socket_mount",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE4"
+      ],
+      "pattern": "(?m)^[ \\t]{0,16}-[ \\t]{1,8}[\\\"']?(?P<mount>(?:/var)?/run/docker\\.sock|/run/containerd/containerd\\.sock|/run/podman/podman\\.sock)[ \\t]{0,4}:[ \\t]{0,4}(?P<target>/[\\w./-]{1,120})",
+      "points": {
+        "base_score": 40,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_host_root_mount_config",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE5",
+        "TM4"
+      ],
+      "pattern": "(?m)(?P<context>hostPath):[ \\t]{0,8}\\r?\\n[ \\t]{1,16}(?P<mount>path:[ \\t]{0,8}[\\\"']?/[\\\"']?)[ \\t]{0,8}$",
+      "points": {
+        "base_score": 40,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_compose_privileged",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE5",
+        "TM4"
+      ],
+      "pattern": "(?m)^[ \\t]{2,16}(?P<context>privileged):[ \\t]{0,8}(?P<privilege>true)[ \\t]{0,8}$",
+      "points": {
+        "base_score": 40,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_privilege_widening",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE5"
+      ],
+      "pattern": "\\b(?P<action>grant|give|assign|vergib|vergebe|gib|erteile)\\b[^\\n.;]{0,40}?(?P<privilege>\\badmin(?:istrator)?\\s{1,4}(?:rights|privileges|access|role)\\b|\\broot\\s{1,4}(?:access|privileges|rights)\\b|\\bfull\\s{1,4}(?:admin\\s{1,4})?access\\b|\\bsudo\\s{1,4}(?:rights|access)\\b|\\bdomain\\s{1,4}admin\\b|\\badmin(?:istrator)?-?rechte\\b|\\broot-?rechte\\b|\\bsudo-rechte\\b|\\bvollzugriff\\b|\\bvollen\\s{1,4}zugriff\\b)",
+      "points": {
+        "base_score": 30,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_persistence",
+      "class_name": "harmful_behavior",
+      "upstream_groups": [
+        "RA2"
+      ],
+      "pattern": "\\b(?P<persistence>startup\\s{1,4}(?:entry|item|script|folder)|autostart(?:-?eintrag\\w{0,2})?|scheduled\\s{1,4}task|login\\s{1,4}item|launch\\s{1,4}agent|cron\\s?job|systemd\\s{1,4}(?:service|unit)|run\\s{1,4}key|geplante\\s{1,4}aufgabe|systemstart)\\b[^\\n.;]{0,60}?\\b(?P<payload>(?:downloaded|attached|remote|fetched|heruntergeladene|angehängte|angehaengte|nachgeladene)[nms]?\\s{1,4}(?:binary|script|payload|program|executable|installer|programm|skript|datei)\\w{0,2})\\b",
+      "points": {
+        "base_score": 30,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_untrusted_deserialization",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "DS1",
+        "DS2"
+      ],
+      "pattern": "\\b(?P<deserialize>yaml\\.load|jsonpickle\\.decode|dill\\.loads?|cloudpickle\\.loads?|torch\\.load|joblib\\.load)\\s{0,16}\\(\\s{0,16}(?P<source>(?:flask\\.)?(?:request|req)\\.(?:body|data|files|json|form|stream|POST|GET|params|args)\\b|\\$_(?:POST|GET|REQUEST|COOKIE)\\b)",
+      "points": {
+        "base_score": 25,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_unsafe_tls_client",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM3",
+        "SC7"
+      ],
+      "pattern": "\\b(?P<request>httpx\\.(?:get|post|put|patch|delete|request|stream|Client|AsyncClient)|aiohttp\\.(?:ClientSession|TCPConnector|request)|urllib3\\.PoolManager)\\s{0,16}\\([^\\n);]{0,200}?\\b(?P<disable>verify\\s{0,16}=\\s{0,16}False|ssl\\s{0,16}=\\s{0,16}False|cert_reqs\\s{0,16}=\\s{0,16}[\\\"']CERT_NONE[\\\"'])",
+      "points": {
+        "base_score": 25,
+        "validator": "structure",
+        "requires_context": false
+      }
     }
   ]
 }

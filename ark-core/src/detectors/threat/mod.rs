@@ -11,8 +11,9 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::{
+    context_lexica::{ContextLexica, ContextScan, Kind},
     evidence::{char_offsets, L1Match},
-    score::{RulePoints, ValidatorStrength},
+    score::{self, Context, RulePoints, ValidatorStrength},
     NativeDetection,
 };
 use crate::{EvaluationResult, EvidenceSpan};
@@ -23,6 +24,8 @@ const RULES: &str = include_str!("rules.json");
 const MAX_FINDINGS: usize = 256;
 const WINDOW_BYTES: usize = 8192;
 const OVERLAP_BYTES: usize = 4096;
+/// A points rule accepts its finding from this score on (50 points).
+const POINTS_ACCEPTANCE: f64 = 0.5;
 
 #[derive(Deserialize)]
 struct Catalog {
@@ -36,6 +39,24 @@ struct Rule {
     class_name: String,
     upstream_groups: Vec<String>,
     pattern: String,
+    /// Rules with points decide on their own from rule points and clause
+    /// context; the others feed the logistic scorer.
+    #[serde(default)]
+    points: Option<PointsSpec>,
+}
+#[derive(Deserialize, Clone, Copy)]
+struct PointsSpec {
+    base_score: u8,
+    validator: Validator,
+    /// The clause must hold a support term (addressee, authority, scope,
+    /// secrecy, no-confirmation …).
+    requires_context: bool,
+}
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+enum Validator {
+    Structure,
+    Format,
 }
 struct CompiledRule {
     rule: Rule,
@@ -64,7 +85,20 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
                     "Threat rules require components"
                 );
                 let anchor_gate = super::anchor_gate::AnchorGate::regex(&rule.pattern, true);
-                let points = rule_points(&rule.id, &anchor_gate);
+                let points = match rule.points {
+                    Some(spec) => {
+                        assert!((1..=100).contains(&spec.base_score));
+                        RulePoints {
+                            base_score: spec.base_score,
+                            strength: match spec.validator {
+                                Validator::Structure => ValidatorStrength::Structure,
+                                Validator::Format => ValidatorStrength::Format,
+                            },
+                            required_anchors: anchor_gate.required_anchors(),
+                        }
+                    }
+                    None => rule_points(&rule.id, &anchor_gate),
+                };
                 CompiledRule {
                     rule,
                     regex,
@@ -105,6 +139,9 @@ impl ThreatPipeline {
             })
             .collect();
         let mut spans = Vec::new();
+        let mut points_spans = Vec::new();
+        let mut points_score: Option<f64> = None;
+        let mut context: Option<ContextScan> = None;
         let mut matched_rules = Vec::new();
         let mut seen = HashSet::new();
         let mut window_start = 0;
@@ -140,6 +177,9 @@ impl ThreatPipeline {
                     {
                         continue;
                     }
+                    if !points_rule_holds(&compiled.rule.id, text, start, end) {
+                        continue;
+                    }
                     if let (Some(action), Some(target)) = (
                         captures
                             .name("access")
@@ -159,7 +199,20 @@ impl ThreatPipeline {
                     if !seen.insert((compiled.rule.id.as_str(), start, end)) {
                         continue;
                     }
-                    if spans.len() == MAX_FINDINGS {
+                    let decision = compiled.rule.points.map(|spec| {
+                        let scan =
+                            context.get_or_insert_with(|| ContextLexica::shared().scan(text));
+                        let clause = clause_context(scan, text, start..end);
+                        let score = score::score(&compiled.points, clause);
+                        let accepted = score >= POINTS_ACCEPTANCE
+                            && clause != Context::Counter
+                            && (!spec.requires_context || clause.supports());
+                        (score, clause, accepted)
+                    });
+                    if decision.is_some_and(|(_, _, accepted)| !accepted) {
+                        continue;
+                    }
+                    if spans.len() + points_spans.len() == MAX_FINDINGS {
                         capped = true;
                         break 'windows;
                     }
@@ -181,8 +234,21 @@ impl ThreatPipeline {
                     {
                         finding.extend(points);
                     }
+                    let target = if let Some((score, clause, _)) = decision {
+                        finding["rule_score"] = json!(score);
+                        finding["context"]["bonus"] = json!(
+                            clause.points().max(0)
+                                + i16::from(score::anchor_points(compiled.points.required_anchors))
+                        );
+                        finding["context"]["penalty"] = json!(clause.points().min(0));
+                        finding["accepted"] = json!(true);
+                        points_score = Some(points_score.map_or(score, |best| best.max(score)));
+                        &mut points_spans
+                    } else {
+                        &mut spans
+                    };
                     matched_rules.push(finding);
-                    spans.push(EvidenceSpan {
+                    target.push(EvidenceSpan {
                         label: compiled.rule.class_name.clone(),
                         text: text[start..end].into(),
                         score: 1.0,
@@ -201,13 +267,19 @@ impl ThreatPipeline {
                 window_start += 1;
             }
         }
-        let (score, accepted) = scorer::score(&matched_rules);
-        if !accepted {
+        let (model_score, model_accepted) = scorer::score(&matched_rules);
+        if !model_accepted {
             spans.clear();
-        } else {
-            for span in &mut spans {
-                span.score = score;
-            }
+        }
+        spans.append(&mut points_spans);
+        let accepted = model_accepted || points_score.is_some();
+        let score = match (model_accepted, points_score) {
+            (true, Some(points)) => model_score.max(points),
+            (false, Some(points)) => points,
+            _ => model_score,
+        };
+        for span in &mut spans {
+            span.score = score;
         }
         spans.sort_by_key(|s| (s.start_byte, s.end_byte, s.label.clone()));
         let ranges: Vec<_> = spans.iter().map(|s| (s.start_byte, s.end_byte)).collect();
@@ -266,6 +338,55 @@ fn rule_points(rule_id: &str, gate: &super::anchor_gate::AnchorGate) -> RulePoin
         ValidatorStrength::None
     };
     RulePoints::for_severity("high", strength, gate.required_anchors())
+}
+
+/// Context of a points finding: a counter term (defensive, meta, quotation,
+/// test code, negation, sandbox, safeguard, own scope) in its clause, or a
+/// counter term other than negation in the lead-in clause before it, outranks
+/// any support term.
+fn clause_context(scan: &ContextScan, text: &str, span: std::ops::Range<usize>) -> Context {
+    let clause = scan.at(text, span.clone());
+    let lead_in_counters = scan.before(text, span).is_some_and(|before| {
+        before
+            .hits
+            .iter()
+            .any(|hit| hit.kind == Kind::Counter && hit.lexicon != "negation_scope")
+    });
+    if lead_in_counters || clause.hits.iter().any(|hit| hit.kind == Kind::Counter) {
+        Context::Counter
+    } else if clause.hits.iter().any(|hit| hit.kind == Kind::Support) {
+        Context::Support { gap: 0 }
+    } else {
+        Context::None
+    }
+}
+
+/// Structural checks of points rules after the match.
+fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> bool {
+    match rule_id {
+        // An endpoint inside a longer host name or user info is another host.
+        "ark.threat.ua_metadata_fetch" => {
+            let mut after = text[end..].chars();
+            match after.next() {
+                Some('.') => !after.next().is_some_and(char::is_alphanumeric),
+                Some(c) => !(c == '@' || c == '-' || c.is_alphanumeric()),
+                None => true,
+            }
+        }
+        // A client that talks to the local machine (development, tests).
+        "ark.threat.ua_unsafe_tls_client" => !["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
+            .iter()
+            .any(|host| text[start..end].contains(host)),
+        // `privileged: true` right under `securityContext:` is the Kubernetes
+        // rule's finding.
+        "ark.threat.ua_compose_privileged" => !text[..start]
+            .trim_end_matches(|c| c == ' ' || c == '\t')
+            .trim_end_matches(['\r', '\n'])
+            .rsplit('\n')
+            .next()
+            .is_some_and(|line| line.trim() == "securityContext:"),
+        _ => true,
+    }
 }
 
 fn metadata_url(input: &str) -> bool {

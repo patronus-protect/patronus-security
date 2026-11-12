@@ -1403,6 +1403,7 @@ classes:
       shape: VERB_READ_SECRET + OBJ_SECRET_STORE or SENSITIVE_PATH in one clause, addressed to the agent
       anchors:
       - unsafe.read_secret
+      - unsafe.secret_store
       - sensitive_path
       - addressee
       - threat.access_action
@@ -1419,7 +1420,7 @@ classes:
         - <imperative HARVEST> all <stored passwords> from <browser/keychain>
         - <imperative READ> <cloud credentials file> and show it
       carriers: [chat, email, web, document, tool_output, rag_chunk, code]
-      existing_rules: [ark.threat.credential_harvesting, ark.threat.credential_file_access]
+      existing_rules: [ark.threat.credential_harvesting, ark.threat.credential_file_access, ark.threat.ua_credential_store_access]
       baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none, protectai_v2: none}
       gap: Browser/keychain stores and DE paraphrases beyond fixed file paths; injected (indirect) requests
     - id: metadata_ssrf
@@ -1442,7 +1443,7 @@ classes:
         - <imperative FETCH> <metadata endpoint>/<credentials path>
         - <http_get>(<request query param URL>)
       carriers: [chat, tool_output, web, document, code]
-      existing_rules: [ark.threat.ssrf_metadata, ark.threat.dynamic_ssrf]
+      existing_rules: [ark.threat.ssrf_metadata, ark.threat.dynamic_ssrf, ark.threat.ua_metadata_fetch]
       baseline_coverage: {pipelock: partial, atr: partial, llamafirewall: partial}
       gap: Prose fetch directives with obfuscated endpoint forms (decimal/hex IP, alt hostnames)
     - id: credential_phishing
@@ -1477,7 +1478,7 @@ classes:
         de: [<Imperativ LÖSCHEN> <gesamte Produktionsdatenbank> <ohne Rückfrage>]
         en: [<imperative WIPE> <all backups> <right away>]
       carriers: [chat, email, tool_output, web, document, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.ua_destructive_request]
       baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Prose destructive requests without shell syntax; today only dlp destructive_operation
     - id: security_disable
@@ -1499,7 +1500,7 @@ classes:
         de: [<Imperativ DEAKTIVIEREN> <Virenscanner/Audit-Log> bevor du <Aktion>]
         en: [<imperative TURN OFF> <firewall/MFA/logging> and then <action>]
       carriers: [chat, email, tool_output, web, document]
-      existing_rules: [ark.threat.security_disable]
+      existing_rules: [ark.threat.security_disable, ark.threat.ua_security_control_disable]
       baseline_coverage: {atr: partial, cisco_yara: partial}
       gap: Logging/EDR/audit disablement and DE verbs beyond today's fixed guard list
     - id: fetch_and_run
@@ -1509,14 +1510,14 @@ classes:
       task: UA01
       scored_only: false
       shape: FETCH_RUN or (DOWNLOAD_VERB + REMOTE_SOURCE + EXECUTE_VERB) in prose
-      anchors: [unsafe.fetch_run, threat.download_action, threat.execution_action, threat.remote_destination]
+      anchors: [threat.download_action, threat.execution_action, threat.remote_destination]
       required_context: [addressee]
       negative_context: [defensive, meta, quotation, test_code]
       examples:
         de: [<Imperativ HERUNTERLADEN> <Skript von URL> und <Imperativ AUSFÜHREN>]
         en: [<imperative INSTALL> from <this URL> and run it]
       carriers: [chat, email, tool_output, tool_description, web, document]
-      existing_rules: [ark.threat.remote_execution_instruction]
+      existing_rules: [ark.threat.remote_execution_instruction, ark.threat.ua_fetch_and_run]
       baseline_coverage: {atr: partial, cisco_yara: partial}
       gap: Indirect fetch-and-run in tool output; DE paraphrases
     - id: container_escape_config
@@ -1528,7 +1529,8 @@ classes:
       shape: CONFIG_KEY (securityContext/privileged/hostPath/volumes) + PRIVILEGE value or host-root / runtime-socket
         mount
       anchors:
-      - unsafe.privilege
+      - unsafe.runtime_socket
+      - unsafe.host_path
       - threat.container_privilege
       - threat.container_mount
       - threat.docker_socket_target
@@ -1541,7 +1543,7 @@ classes:
         - <compose service> mounting <runtime socket> as volume
         - <k8s securityContext> with <privileged true>
       carriers: [config, code, document, tool_output]
-      existing_rules: [ark.threat.kubernetes_privileged_json, ark.threat.kubernetes_privileged_yaml]
+      existing_rules: [ark.threat.kubernetes_privileged_json, ark.threat.kubernetes_privileged_yaml, ark.threat.ua_runtime_socket_mount, ark.threat.ua_host_root_mount_config, ark.threat.ua_compose_privileged]
       baseline_coverage: {atr: none, cisco_yara: none}
       gap: Compose/YAML forms of socket and host-root mounts; shell docker run forms go to K26
     - id: privilege_widening
@@ -1558,7 +1560,7 @@ classes:
         de: [<Imperativ VERGEBEN> <Admin-Rechte> an <alle Nutzer>]
         en: [<imperative MAKE> <directory> <world-writable>]
       carriers: [chat, email, tool_output, document, config]
-      existing_rules: []
+      existing_rules: [ark.threat.ua_privilege_widening]
       baseline_coverage: {atr: partial}
       gap: No ARK rule for privilege widening in prose
     - id: persistence
@@ -1575,7 +1577,7 @@ classes:
         de: ['<Imperativ ANLEGEN> <geplante Aufgabe>, die <Skript von URL> <ausführt>']
         en: [<imperative ADD> <startup entry> that <downloads and runs> <remote script>]
       carriers: [chat, tool_output, document, config]
-      existing_rules: [ark.threat.persistence_payload]
+      existing_rules: [ark.threat.persistence_payload, ark.threat.ua_persistence]
       baseline_coverage: {atr: partial}
       gap: Prose and non-shell config persistence; shell form of persistence_payload to be split off in X04
     - id: unsafe_code
@@ -1589,6 +1591,8 @@ classes:
       - threat.code_execution_operation
       - threat.payload_decoding
       - threat.deserialization_operation
+      - unsafe.deserialize_call
+      - unsafe.tls_client
       - threat.tls_verification_option
       - threat.shell_execution_option
       - threat.request_input_source
@@ -1605,6 +1609,8 @@ classes:
       - ark.threat.decoded_execution
       - ark.threat.unsafe_shell_input
       - ark.threat.untrusted_output_execution
+      - ark.threat.ua_untrusted_deserialization
+      - ark.threat.ua_unsafe_tls_client
       baseline_coverage: {llamafirewall: partial, atr: none}
       gap: High FP risk in coding assistants; no context gating today
     - id: unattended
@@ -1665,20 +1671,6 @@ classes:
       existing_rules: []
       baseline_coverage: {pipelock: partial}
       gap: No decoded-view scan for unsafe_action today
-    lexicons:
-    - {id: unsafe.read_secret, kind: support, task: UA01, title: read/collect/dump + secret stores}
-    - {id: unsafe.destructive, kind: support, task: UA01, title: wipe/drop/purge/irreversibly}
-    - {id: unsafe.broad_target, kind: support, task: UA01, title: 'production, all backups, entire database'}
-    - {id: unsafe.security_control, kind: support, task: UA01, title: 'firewall, antivirus, audit log, MFA'}
-    - {id: unsafe.disable_verb, kind: support, task: UA01, title: 'disable, turn off, bypass, remove'}
-    - {id: unsafe.fetch_run, kind: support, task: UA01, title: 'download and run, install from URL'}
-    - {id: unsafe.privilege, kind: support, task: UA01, title: 'admin rights, root, full access, world-writable'}
-    - {id: unsafe.autostart, kind: support, task: UA01, title: 'run at startup, scheduled task, create service'}
-    - {id: unsafe.no_confirm, kind: support, task: UA01, title: 'without asking, no confirmation, no backup'}
-    - {id: unsafe.metadata_endpoint, kind: support, task: UA01, title: cloud metadata endpoints}
-    - {id: unsafe.sandbox, kind: counter, task: UA01, title: 'own disposable environment (test VM, staging)'}
-    - {id: unsafe.safe_guard, kind: counter, task: UA01, title: 'dry-run, with backup, after confirmation, read-only'}
-    - {id: unsafe.own_scope, kind: counter, task: UA01, title: 'own narrow targets (my temp files, this branch)'}
 
   resource_exhaustion:
     category: resource_exhaustion
