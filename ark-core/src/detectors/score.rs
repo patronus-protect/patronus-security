@@ -3,7 +3,8 @@
 //! [`crate::native::ScoreMode`].
 //!
 //! Every category scores a finding the same way: the rule base (how specific
-//! the regex form is) plus the strength of its validator plus its context (a
+//! the regex form is) plus the strength of its validator plus the points of
+//! the lexicon anchors every match must contain plus its context (a
 //! field name the rule binds to the value, or else the nearest lexicon term on
 //! either side of the value, minus a penalty when a counter-context term is
 //! nearer), plus the normalisation points of the category when only a
@@ -22,6 +23,12 @@ pub const PROXIMITY_CONTEXT_POINTS: [(usize, u8); 3] = [(16, 25), (32, 20), (48,
 /// Penalty when a counter-context term is nearer to the value than any
 /// support term of its label.
 pub const COUNTER_CONTEXT_POINTS: u8 = 30;
+
+/// Points for each lexicon anchor that every match of a rule must contain.
+pub const ANCHOR_POINTS: u8 = 5;
+
+/// At most this many required anchors give points.
+pub const MAX_SCORED_ANCHORS: usize = 3;
 
 /// Context of one finding, as the context engine sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +65,7 @@ impl Context {
 }
 
 /// What the validator of a rule proves about a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ValidatorStrength {
     /// Real check digit or checksum (Luhn, ISO 7064, CRC32, Base58Check, Bech32).
     Checksum,
@@ -67,6 +74,7 @@ pub enum ValidatorStrength {
     /// Form only: length, alphabet, ranges, dates, prefixes, syntax shape.
     Format,
     /// No validator after the regex: keyword or context anchor only.
+    #[default]
     None,
 }
 
@@ -122,12 +130,89 @@ pub trait ScoredPattern {
     fn strength(&self) -> ValidatorStrength;
     /// Whether the rule binds its value to a field name of its own.
     fn binds_field(&self) -> bool;
+    /// Number of lexicon anchors that every match must contain
+    /// ([`crate::detectors::anchor_gate::AnchorGate::required_anchors`]).
+    fn required_anchors(&self) -> usize {
+        0
+    }
+}
+
+/// Points of the anchors a rule requires, capped at [`MAX_SCORED_ANCHORS`].
+pub fn anchor_points(required_anchors: usize) -> u8 {
+    // The cap keeps the product within `u8`.
+    required_anchors.min(MAX_SCORED_ANCHORS) as u8 * ANCHOR_POINTS
+}
+
+/// Points of an attack rule (injection, threat): the base follows the rule
+/// severity, the strength what its post-match check proves, and the anchors
+/// its anchor gate requires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RulePoints {
+    pub base_score: u8,
+    pub strength: ValidatorStrength,
+    pub required_anchors: usize,
+}
+
+impl RulePoints {
+    /// Base points by severity: critical 55, high 45, medium 35, other 25.
+    pub fn for_severity(
+        severity: &str,
+        strength: ValidatorStrength,
+        required_anchors: usize,
+    ) -> Self {
+        Self {
+            base_score: 25 + 10 * severity_rank(severity),
+            strength,
+            required_anchors,
+        }
+    }
+
+    /// `matched_rules[]` fields of a finding without proximity context: the
+    /// score, the validator strength and the anchor points as `context`.
+    pub fn to_json(self) -> serde_json::Value {
+        serde_json::json!({
+            "rule_score": score(&self, Context::None),
+            "validator_strength": self.strength.as_str(),
+            "context": {
+                "bonus": anchor_points(self.required_anchors),
+                "penalty": 0,
+                "anchors": self.required_anchors,
+            },
+        })
+    }
+}
+
+impl ScoredPattern for RulePoints {
+    fn base_score(&self) -> u8 {
+        self.base_score
+    }
+    fn strength(&self) -> ValidatorStrength {
+        self.strength
+    }
+    fn binds_field(&self) -> bool {
+        false
+    }
+    fn required_anchors(&self) -> usize {
+        self.required_anchors
+    }
+}
+
+/// Order of the rule severities: critical 3, high 2, medium 1, other 0.
+pub fn severity_rank(severity: &str) -> u8 {
+    match severity {
+        "critical" => 3,
+        "high" => 2,
+        "medium" => 1,
+        _ => 0,
+    }
 }
 
 /// Score of a finding of `pattern` in `context`, in `0.0..=1.0`.
 pub fn score(pattern: &impl ScoredPattern, context: Context) -> f64 {
-    let points =
-        i16::from(pattern.base_score()) + i16::from(pattern.strength().points()) + context.points();
+    let points = i16::from(pattern.base_score())
+        + i16::from(pattern.strength().points())
+        + i16::from(anchor_points(pattern.required_anchors()))
+        + context.points();
     to_score(points)
 }
 
@@ -228,6 +313,39 @@ mod tests {
         assert!(!Context::Support { gap: 49 }.supports());
         assert!(!Context::Counter.supports());
         assert!(!Context::None.supports());
+    }
+
+    #[test]
+    fn required_anchors_add_capped_points() {
+        assert_eq!(anchor_points(0), 0);
+        assert_eq!(anchor_points(2), 10);
+        assert_eq!(anchor_points(3), 15);
+        assert_eq!(anchor_points(9), 15);
+        let points = RulePoints::for_severity("high", ValidatorStrength::None, 2);
+        assert_eq!(points.base_score, 45);
+        assert_eq!(score(&points, Context::None), 0.55);
+        let unanchored = RulePoints::for_severity("high", ValidatorStrength::None, 0);
+        assert_eq!(score(&unanchored, Context::None), 0.45);
+    }
+
+    #[test]
+    fn rule_points_follow_severity_and_strength() {
+        let base =
+            |severity| RulePoints::for_severity(severity, ValidatorStrength::None, 0).base_score;
+        assert_eq!(
+            ["critical", "high", "medium", "low", "info"].map(base),
+            [55, 45, 35, 25, 25]
+        );
+        let decoded = RulePoints::for_severity("critical", ValidatorStrength::Structure, 1);
+        assert_eq!(score(&decoded, Context::None), 0.85);
+        assert_eq!(
+            decoded.to_json(),
+            serde_json::json!({
+                "rule_score": 0.85,
+                "validator_strength": "structure",
+                "context": {"bonus": 5, "penalty": 0, "anchors": 1},
+            })
+        );
     }
 
     #[test]

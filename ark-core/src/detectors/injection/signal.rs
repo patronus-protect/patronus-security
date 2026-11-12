@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::candidate::candidates_from_signals;
+use crate::detectors::score::{RulePoints, ValidatorStrength};
 use crate::detectors::NativeDetection;
 use crate::{EvaluationResult, EvidenceSpan};
 
@@ -25,6 +26,8 @@ pub struct InjectionSignal {
     pub source_file: Option<String>,
     pub provenance_weight: Option<f64>,
     pub evidence_tier: Option<String>,
+    /// Base, validator strength and anchor points of the matched rule.
+    pub points: RulePoints,
     pub candidate_only: bool,
     pub adaptation: Option<String>,
     pub references: Vec<InjectionReference>,
@@ -146,6 +149,7 @@ pub fn native_signals(model: &str, matches: Vec<L1Match>) -> Vec<InjectionSignal
                 source_file: Some(definition.source_file.clone()),
                 provenance_weight: None,
                 evidence_tier: None,
+                points: RulePoints::for_severity(&definition.severity, ValidatorStrength::None, 0),
                 candidate_only: false,
                 adaptation: None,
                 references: Vec::new(),
@@ -250,6 +254,9 @@ fn signal_json(signal: &InjectionSignal) -> Value {
         "end_byte": signal.end_byte,
         "span_precision": signal.span_precision,
     });
+    if let (Some(value), Value::Object(points)) = (value.as_object_mut(), signal.points.to_json()) {
+        value.extend(points);
+    }
     if let Some(evidence_tier) = &signal.evidence_tier {
         value["evidence_tier"] = json!(evidence_tier);
     }
