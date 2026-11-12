@@ -328,6 +328,11 @@ mod tests {
             source_file: None,
             provenance_weight: None,
             evidence_tier: None,
+            points: crate::detectors::score::RulePoints::for_severity(
+                severity,
+                crate::detectors::score::ValidatorStrength::None,
+                0,
+            ),
             candidate_only: false,
             adaptation: None,
             references: Vec::new(),

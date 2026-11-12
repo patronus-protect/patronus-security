@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::signal::{InjectionReference, InjectionSignal};
+use crate::detectors::score::severity_rank;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct L1Candidate {
@@ -270,15 +271,6 @@ fn push_unique(values: &mut Vec<String>, value: &str) {
     }
 }
 
-fn severity_rank(severity: &str) -> u8 {
-    match severity {
-        "critical" => 3,
-        "high" => 2,
-        "medium" => 1,
-        _ => 0,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,6 +294,11 @@ mod tests {
             source_file: None,
             provenance_weight: None,
             evidence_tier: None,
+            points: crate::detectors::score::RulePoints::for_severity(
+                severity,
+                crate::detectors::score::ValidatorStrength::None,
+                0,
+            ),
             candidate_only: false,
             adaptation: None,
             references: Vec::new(),

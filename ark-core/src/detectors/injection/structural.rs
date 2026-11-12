@@ -7,6 +7,7 @@ use super::signal::{
     candidate_clauses, detection_from_signals, InjectionReference, InjectionSignal,
     InjectionSignalComponent,
 };
+use crate::detectors::score::{RulePoints, ValidatorStrength};
 use crate::detectors::NativeDetection;
 use crate::EvaluationResult;
 
@@ -85,6 +86,8 @@ impl crate::detectors::NativeDetector for InjectionStructuralPipeline {
                     source_file: Some("rust/src/detectors/injection/structural.rs".to_string()),
                     provenance_weight: None,
                     evidence_tier: None,
+                    // All four components verified in one clause.
+                    points: RulePoints::for_severity("critical", ValidatorStrength::Structure, 0),
                     candidate_only: false,
                     adaptation: Some("Requires all four bounded structural components in one clause; supports source-derived English and German lexical variations.".to_string()),
                     references: structural_references(),

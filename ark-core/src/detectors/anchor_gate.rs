@@ -62,6 +62,17 @@ impl AnchorGate {
         matches!(self, Self::Always)
     }
 
+    /// Least number of anchors that every allowed input contains: one per
+    /// required literal, the cheapest branch of an alternation.
+    pub fn required_anchors(&self) -> usize {
+        match self {
+            Self::Always => 0,
+            Self::Present(_) => 1,
+            Self::All(gates) => gates.iter().map(Self::required_anchors).sum(),
+            Self::Any(gates) => gates.iter().map(Self::required_anchors).min().unwrap_or(0),
+        }
+    }
+
     pub fn allows(&self, presence: &AnchorPresence) -> bool {
         match self {
             Self::Always => true,
@@ -173,6 +184,26 @@ mod tests {
                 "{pattern}"
             );
         }
+    }
+
+    #[test]
+    fn required_anchors_count_literals_and_take_the_cheapest_branch() {
+        let two = AnchorGate::all(vec![
+            AnchorGate::Present(vec![0]),
+            AnchorGate::Present(vec![1]),
+        ]);
+        assert_eq!(two.required_anchors(), 2);
+        let gate = AnchorGate::regex(r"(?:ignore|ignoriere)\s+(?:instructions|regeln)", true);
+        assert!(gate.required_anchors() >= 1);
+        assert_eq!(
+            AnchorGate::regex(r"\d{4}-\d{4}", true).required_anchors(),
+            0
+        );
+        let any = AnchorGate::any(vec![
+            AnchorGate::regex(r"ignore\s+instructions", true),
+            AnchorGate::regex(r"ignore", true),
+        ]);
+        assert_eq!(any.required_anchors(), 1);
     }
 
     #[test]
