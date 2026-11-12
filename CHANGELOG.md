@@ -43,6 +43,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   off one by one in the `rules` map. **Detection change:** new threat findings
   (`secrets_access`, `tool_abuse`, `harmful_behavior`); the decisions of the existing threat rules
   are unchanged.
+- **Detection change:** (all modes with the `threat` category) the local-machine exemption of
+  `ark.threat.ua_unsafe_tls_client` now checks the parsed destination host, so a loopback name in a
+  path, a longer host name or another argument no longer hides a remote request; and
+  `ark.threat.ua_untrusted_deserialization` no longer flags `yaml.load` with an explicitly safe
+  loader (`SafeLoader`, `CSafeLoader`, `BaseLoader`, `CBaseLoader`).
 - Add clause-wide context lexica for the attack categories in German and English
   (`patronus_ark_core::detectors::context_lexica`, terms in
   `ark-core/src/detectors/anchor_lexicons/context.json`): who a text addresses (the model, claimed

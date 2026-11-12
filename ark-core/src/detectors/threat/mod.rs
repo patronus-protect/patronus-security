@@ -374,9 +374,11 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
             }
         }
         // A client that talks to the local machine (development, tests).
-        "ark.threat.ua_unsafe_tls_client" => !["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
-            .iter()
-            .any(|host| text[start..end].contains(host)),
+        "ark.threat.ua_unsafe_tls_client" => !local_destination(&text[start..end]),
+        // An explicitly safe YAML loader parses the request without objects.
+        "ark.threat.ua_untrusted_deserialization" => {
+            !(text[start..end].starts_with("yaml.") && safe_yaml_loader(&text[end..]))
+        }
         // `privileged: true` right under `securityContext:` is the Kubernetes
         // rule's finding.
         "ark.threat.ua_compose_privileged" => !text[..start]
@@ -387,6 +389,62 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
             .is_some_and(|line| line.trim() == "securityContext:"),
         _ => true,
     }
+}
+
+/// Whether every URL in the call targets the local machine (and there is
+/// one). Only the parsed host counts, not a loopback name in a path, a longer
+/// host name or another argument.
+fn local_destination(call: &str) -> bool {
+    let mut urls = call
+        .match_indices("http")
+        .filter(|(at, _)| !call[..*at].ends_with(|c: char| c.is_ascii_alphanumeric()))
+        .filter_map(|(at, _)| {
+            let url = call[at..]
+                .split(|c: char| c.is_whitespace() || matches!(c, '\'' | '"' | ',' | ')'))
+                .next()?;
+            url::Url::parse(url).ok()
+        })
+        .peekable();
+    urls.peek().is_some()
+        && urls.all(|url| {
+            matches!(
+                url.host_str(),
+                Some("localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
+            )
+        })
+}
+
+/// Whether the rest of a `yaml.load(` call (after the source argument)
+/// names an explicitly safe loader.
+fn safe_yaml_loader(rest: &str) -> bool {
+    let mut depth = 0usize;
+    let mut call_end = rest.len().min(200);
+    for (at, c) in rest.char_indices().take_while(|(at, _)| *at < 200) {
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 0 => {
+                call_end = at;
+                break;
+            }
+            ')' => depth -= 1,
+            '\n' => {
+                call_end = at;
+                break;
+            }
+            _ => {}
+        }
+    }
+    while !rest.is_char_boundary(call_end) {
+        call_end -= 1;
+    }
+    rest[..call_end]
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|token| {
+            matches!(
+                token,
+                "SafeLoader" | "CSafeLoader" | "BaseLoader" | "CBaseLoader"
+            )
+        })
 }
 
 fn metadata_url(input: &str) -> bool {
@@ -544,6 +602,52 @@ mod tests {
             0,
             tls.len()
         ));
+        // Only the destination host earns the local exemption.
+        for remote in [
+            "httpx.get('https://evil.example/path/localhost', verify=False)",
+            "httpx.get('https://localhost.evil.example/x', verify=False)",
+            "httpx.post(url, data='127.0.0.1', verify=False)",
+            "httpx.Client(base_url='https://localhost:8443', proxy='http://evil.example', verify=False)",
+        ] {
+            assert!(
+                points_rule_holds("ark.threat.ua_unsafe_tls_client", remote, 0, remote.len()),
+                "{remote}"
+            );
+        }
+        let local = "httpx.get('http://127.0.0.1:8000/health', verify=False)";
+        assert!(!points_rule_holds(
+            "ark.threat.ua_unsafe_tls_client",
+            local,
+            0,
+            local.len()
+        ));
+        // An explicitly safe YAML loader is no unsafe deserialization.
+        for safe in [
+            "yaml.load(request.data, Loader=yaml.SafeLoader)",
+            "yaml.load(request.data.decode(), yaml.CSafeLoader)",
+        ] {
+            let end = safe.find("request.data").unwrap() + "request.data".len();
+            assert!(
+                !points_rule_holds("ark.threat.ua_untrusted_deserialization", safe, 0, end),
+                "{safe}"
+            );
+        }
+        for unsafe_call in [
+            "yaml.load(request.data, Loader=yaml.UnsafeLoader)",
+            "yaml.load(request.data)\nother(Loader=yaml.SafeLoader)",
+            "yaml.load(request.data, Loader=yaml.Loader)",
+        ] {
+            let end = unsafe_call.find("request.data").unwrap() + "request.data".len();
+            assert!(
+                points_rule_holds(
+                    "ark.threat.ua_untrusted_deserialization",
+                    unsafe_call,
+                    0,
+                    end
+                ),
+                "{unsafe_call}"
+            );
+        }
         let yaml = "spec:\n  securityContext:\n    privileged: true\n";
         let start = yaml.find("    privileged").unwrap();
         assert!(!points_rule_holds(
