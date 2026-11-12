@@ -201,3 +201,45 @@ vergleicht Base und Head mit dem Skript der Base, je Profil einzeln (`compare --
 als regressiert, wenn es in jedem Versuch scheitert, und spätere Versuche messen nur die noch offenen Profile. Ergebnisse: [`research/l1-threat/scoreboard/latency.md`](../../research/l1-threat/scoreboard/latency.md).
 
 Tests: `scripts/tests/test_l1_threat_latency.py`, `scripts/tests/test_runner_threat_latency_ab.py`.
+
+## Baselines
+
+`run_baselines.py` rechnet die Baselines der Entity-Map auf eingefrorenen Korpora (oder generierten
+Verzeichnissen) und gibt je Dokument und Klasse einen Score:
+
+- Heuristik-Zeilen (ATR, pipelock, Cisco mcp-scanner YARA, prompt-guard, LlamaFirewall-Regex, NeMo-YARA,
+  Vigil-YARA): Regelkörper aus den Upstream-Klonen auf dem in `oss_rules.yaml` gepinnten Commit, gelesen mit den
+  Extraktoren des Inventars; eine Regel zählt für die Klasse, die ihr das Inventar gibt (ohne Klasse, Übergabe
+  oder `out_of_scope`: läuft nicht). Score einer Klasse = Zahl der verschiedenen Regeln dieser Klasse, die
+  treffen. Regex-Körper laufen mit Python `re`, YARA-Textstrings als Literal, beides ohne Groß-/Kleinschreibung;
+  eine Regel trifft, wenn einer ihrer Körper trifft (YARA-Bedingungen und ATR-Operatoren werden nicht
+  ausgewertet). Hex-, semantische und inaktive Regeln laufen nicht; Körper, die Python nicht kompiliert, stehen
+  in den Metadaten unter `uncompiled`. LlamaFirewall bringt zusätzlich den Hidden-ASCII-Scanner (Unicode-Tags)
+  mit; CodeShield braucht eine eigene Toolchain und läuft nicht.
+- Referenzzeilen (ProtectAI v2, Prompt Guard 2 86M und 22M): ONNX-Modell unter `--models`
+  (`~/ark-threat/baselines/models`) über onnxruntime und `tokenizers`, ohne torch; Score = höchste
+  Wahrscheinlichkeit des Angriffslabels über Fenster von 512 Tokens (höchstens 32 je Dokument), für jede
+  Klasse, auf die die Entity-Map das Label abbildet. Läuft im Baselines-Venv.
+
+Vorhersagen werden je Korpusdatei und Baseline-Version einmal berechnet und unter
+`CACHE/<baseline>/<version>/<satz>-<sha12>.jsonl` (+ `.json` mit Metadaten) abgelegt. Schlüssel: SHA-256 der
+Korpusdatei aus dem Manifest und die Baseline-Version (Runner-Version, Upstream-Commit und Hash des Regelsatzes
+bzw. Hash der Modelldatei). Eine vorhandene Datei wird nie neu berechnet. `sweep` liest nur den Cache und
+sucht je Klasse und Sprache (und `all`) die kleinste Schwelle, deren FPR auf den Benign-Zeilen höchstens die
+Ziel-FPR ist (Score 0 meldet nie); dazu TPR, TP, FP und Zählungen. Positiv ist eine Zeile für die Klassen in
+`classes` (nur berichtete Klassen zählen nicht), negativ jede `benign`-Zeile.
+
+```bash
+python3 scripts/l1_threat/run_baselines.py clone --src SRC                  # Klone auf den gepinnten Commits
+python3 scripts/l1_threat/run_baselines.py run --corpus DIR [--corpus DIR ...] --cache CACHE --src SRC [--jobs N]
+~/ark-threat/baselines-venv/bin/python scripts/l1_threat/run_baselines.py run --corpus DIR --cache CACHE \
+    --models ~/ark-threat/baselines/models [--baseline protectai_v2]
+python3 scripts/l1_threat/run_baselines.py sweep --corpus DIR [...] --cache CACHE [--fpr 0.01 0.001] [--output sweep.json]
+```
+
+Grenzen: pipelock baut einige Regexe in Go aus Teilstücken zusammen; der Inventar-Extraktor setzt nur die
+Literale zusammen, solche Regeln laufen deshalb nur näherungsweise oder gar nicht (`uncompiled`). Die
+Heuristik-Zeilen laufen in `--jobs` geforkten Prozessen (etwa 40 s je 3 000 Dokumente bei 5 Kernen); die
+Referenzzeilen sind auf langen Texten langsam (ProtectAI v2 rund 1 s je Dokument mit vielen Fenstern).
+
+Tests: `scripts/tests/test_l1_threat_run_baselines.py`.

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import multiprocessing
@@ -47,12 +48,16 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import entity_map  # noqa: E402
-import generators  # noqa: E402
-import oss_inventory  # noqa: E402
-import prepare_corpora  # noqa: E402
+_SPEC = importlib.util.spec_from_file_location("_ark_l1_threat_prepare_corpora", HERE / "prepare_corpora.py")
+assert _SPEC is not None and _SPEC.loader is not None
+prepare_corpora = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = prepare_corpora
+_SPEC.loader.exec_module(prepare_corpora)
+# Loaded under their own names, like prepare_corpora's entity_map: other script directories have
+# modules of the same name.
+entity_map = prepare_corpora.entity_map
+generators = prepare_corpora._load_file("_ark_l1_threat_generators", HERE / "generators.py")
+oss_inventory = prepare_corpora._load_file("_ark_l1_threat_oss_inventory", HERE / "oss_inventory.py")
 
 RUNNER_VERSION = "1"
 PREDICTIONS_SCHEMA = "ark-l1-threat-baseline-predictions-v1"

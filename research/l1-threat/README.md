@@ -250,6 +250,18 @@ Heuristik-Baselines: pipelock, Cisco mcp-scanner (YARA), ATR, seojoonkim/prompt-
 Guard 2 (gated, Lizenz akzeptiert), beide als ONNX über onnxruntime. Baseline-Vorhersagen werden einmal je eingefrorener
 Datenversion berechnet und zwischengespeichert, nicht in jedem Lauf.
 
+**Baseline-Runner (E04, [`scripts/l1_threat/run_baselines.py`](../../scripts/l1_threat/run_baselines.py)).**
+Entschieden 2026-11-11: Die Referenzmodelle liegen als ONNX unter `~/ark-threat/baselines/models/`
+(`Llama-Prompt-Guard-2-86M-onnx`, `Llama-Prompt-Guard-2-22M-onnx`, `protectai-v2/onnx`, dazu die
+Originalgewichte) und laufen nur über onnxruntime, kein torch; die Heuristik-Baselines baut E04 selbst. Die
+Heuristiken laufen deshalb nicht als installierte Upstream-Pakete, sondern aus den Klonen auf dem Commit von
+`oss_rules.yaml` über dieselben Extraktoren wie das Inventar; jede Regel zählt für ihre Inventar-Klasse, Score je
+Klasse = Zahl getroffener Regeln (Näherung: YARA-Bedingungen und ATR-Operatoren nicht ausgewertet, pipelock-Regexe
+aus Go-Teilstücken nur teilweise). Prompt Guard 2 läuft als zwei Zeilen (86M, 22M), Score = höchste
+Angriffs-Wahrscheinlichkeit über 512-Token-Fenster. Cache-Schlüssel: SHA-256 der Korpusdatei + Baseline-Version;
+`sweep` liefert je Klasse und Sprache die Schwelle bei gleicher FPR (1 %, 0,1 %) und die TPR dazu. Offen: CodeShield
+(eigene Toolchain) und eine genauere pipelock-Extraktion.
+
 ## Herkunft: Regeln, Train, Gold, Holdout
 
 Festgelegt 2026-11-10. Je Kategorie steht die konkrete Belegung in §12 des Kategorie-Dokuments; hier gelten
