@@ -135,6 +135,7 @@ tasks:
 
   # ── E: Measurement ────────────────────────────────────────────────────
   - id: E01
+    status: done
     title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
     type: eval-infra
     deps: [M03]
