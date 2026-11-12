@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (28)
+## Threat rules (40)
 
 Enabled by default when Threat L1 is configured. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -687,6 +687,18 @@ Enabled by default when Threat L1 is configured. Matches report risky operations
 | `ark.threat.unauthorized_autonomy` | `tool_abuse` | EA2, EA3 |
 | `ark.threat.harmful_intent` | `harmful_behavior` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration_attempt` | E3, E5 |
+| `ark.threat.ua_credential_store_access` | `secrets_access` | PE3, AS1 |
+| `ark.threat.ua_metadata_fetch` | `secrets_access` | SSRF1 |
+| `ark.threat.ua_destructive_request` | `tool_abuse` | RA1 |
+| `ark.threat.ua_security_control_disable` | `tool_abuse` | TM3, SC7 |
+| `ark.threat.ua_fetch_and_run` | `tool_abuse` | SC2, TM2 |
+| `ark.threat.ua_runtime_socket_mount` | `tool_abuse` | PE4 |
+| `ark.threat.ua_host_root_mount_config` | `tool_abuse` | PE5, TM4 |
+| `ark.threat.ua_compose_privileged` | `tool_abuse` | PE5, TM4 |
+| `ark.threat.ua_privilege_widening` | `tool_abuse` | PE5 |
+| `ark.threat.ua_persistence` | `harmful_behavior` | RA2 |
+| `ark.threat.ua_untrusted_deserialization` | `tool_abuse` | DS1, DS2 |
+| `ark.threat.ua_unsafe_tls_client` | `tool_abuse` | TM3, SC7 |
 
 ## Shell command policies (117) { #shell-command-policies }
 

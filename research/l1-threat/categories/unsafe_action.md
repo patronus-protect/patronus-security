@@ -139,3 +139,29 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (Prosa-Aufforderungen, Config, Code), Seed-Teil |
 | Hard Negatives | Admin-Doku und Runbooks, Kubernetes-Doku, Code-Repos mit Testcode, Sicherheitsschulungen |
 | Lücke | kein natives DE |
+
+## 13. Stand UA01 (2026-11-12)
+
+Bis X03 die Kategorie `unsafe_action` anlegt, laufen die neuen Regeln im Threat-Detektor
+(`ark-core/src/detectors/threat/rules.json`, Präfix `ark.threat.ua_*`, alte Labels
+`secrets_access`/`tool_abuse`/`harmful_behavior`). Sie tragen `points` (Basis, Validator,
+`requires_context`) und entscheiden selbst: Punkte ≥ 50, kein Gegenkontext im Satz (oder,
+außer Verneinung, im Satz davor), bei `requires_context` ein Stützterm im Satz. Das logistische
+Threat-Modell bewertet nur seine trainierten Regeln; Entscheidungen der Altregeln bleiben gleich.
+
+| Pattern | Regeln |
+|---|---|
+| `ua_credential_access` | `ua_credential_store_access` (Browser-Passwörter, Schlüsselbund, Tresor) |
+| `ua_metadata_ssrf` | `ua_metadata_fetch` (Prosa-Abruf ohne URL-Schema) |
+| `ua_destructive_request` | `ua_destructive_request` |
+| `ua_security_disable` | `ua_security_control_disable` (Firewall, AV/EDR, Audit-Log, Protokollierung, MFA) |
+| `ua_fetch_and_run` | `ua_fetch_and_run` (Prosa ohne URL; mit URL bleibt `remote_execution_instruction`) |
+| `ua_container_escape_config` | `ua_runtime_socket_mount`, `ua_host_root_mount_config`, `ua_compose_privileged` |
+| `ua_privilege_widening` | `ua_privilege_widening` |
+| `ua_persistence` | `ua_persistence` (Autostart/geplante Aufgabe für fremdes Programm) |
+| `ua_unsafe_code` | `ua_untrusted_deserialization`, `ua_unsafe_tls_client` (ohne Pflicht-Kontext: die Quelle `request.*` bzw. der Fremd-Host ist der Kontext; localhost ausgenommen) |
+
+Lexika: Anker (Prefilter) in `anchor_lexicons/unsafe_action.json`; Kontext `unsafe.no_confirm`
+(Stütze) und `unsafe.sandbox`/`unsafe.safe_guard`/`unsafe.own_scope` (Gegen) in `context.json`.
+Offen: `ua_credential_phishing`, `ua_unattended` (über `unauthorized_autonomy` hinaus),
+`ua_destructive_hint`, `ua_decoded` (S03); Punkte/Ablation in UA02.

@@ -234,3 +234,42 @@ fn windows_do_not_invent_metadata_hosts_or_word_boundaries() {
         "benign"
     );
 }
+
+#[derive(Deserialize)]
+struct UnsafeActionGolden {
+    id: String,
+    case_type: String,
+    rule_id: String,
+    text: String,
+}
+
+#[test]
+fn unsafe_action_goldens_report_their_rule_and_hard_negatives_stay_benign() {
+    let gateway = gateway();
+    let goldens: Vec<UnsafeActionGolden> =
+        include_str!("../../python/patronus_ark/benchmark_data/unsafe_action_l1.jsonl")
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+    assert!(goldens.len() >= 20);
+    let mut failures = Vec::new();
+    for golden in &goldens {
+        let results = gateway.scan_category(SecurityCategory::Threat, &golden.text);
+        let result = &results[0];
+        let rules = result.layers[0].details["matched_rules"]
+            .as_array()
+            .unwrap();
+        let ok = if golden.case_type == "positive" {
+            result.class_name != "benign"
+                && rules
+                    .iter()
+                    .any(|r| r["rule_id"] == golden.rule_id && r["accepted"] == true)
+        } else {
+            result.class_name == "benign" && result.evidence_spans.is_empty()
+        };
+        if !ok {
+            failures.push(format!("{} ({}): {rules:?}", golden.id, golden.rule_id));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}

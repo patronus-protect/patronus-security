@@ -227,7 +227,7 @@ tasks:
   - {id: AC02, title: "agent_config_tampering points + ablation decision", type: scorer, deps: [AC01, S05]}
   - {id: EX01, title: "exfiltration rules (markdown image/link with templated data, URL/DNS/webhook sinks, tool-parameter egress, send-to-external directives, invisible characters in links) incl. pipelock harvest; DLP hits as source evidence", type: new-family, deps: [S03, M04]}
   - {id: EX02, title: "exfiltration points + ablation decision", type: scorer, deps: [EX01, S05]}
-  - {id: UA01, title: "unsafe_action rules for prose/code/config carriers (credential_access from the former secrets_access rules, destructive/irreversible requests, download-and-run instructions, privilege widening, security-control and logging disablement, persistence, SSRF/unsafe TLS/deserialisation in code, container/K8s config); shell syntax stays with K26", type: new-family, deps: [X04, S02]}
+  - {id: UA01, title: "unsafe_action rules for prose/code/config carriers (credential_access from the former secrets_access rules, destructive/irreversible requests, download-and-run instructions, privilege widening, security-control and logging disablement, persistence, SSRF/unsafe TLS/deserialisation in code, container/K8s config); shell syntax stays with K26", type: new-family, deps: [X04, S02], status: done}
   - {id: UA02, title: "unsafe_action points + ablation decision; today's threat scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [UA01, S05]}
   - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01]}
   - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}

@@ -167,7 +167,10 @@
       "without exception",
       "all files",
       "all users",
-      "each and every"
+      "each and every",
+      "everyone",
+      "anyone",
+      "everybody"
     ],
     "de": [
       "alle",
@@ -181,7 +184,9 @@
       "ausnahmslos",
       "komplett*",
       "vollständig*",
-      "vollstaendig*"
+      "vollstaendig*",
+      "jedem",
+      "jedermann"
     ],
     "shared": [],
     "origin": {
@@ -205,10 +210,16 @@
       "ausnahmslos": "hand",
       "komplett*": "hand",
       "vollständig*": "hand",
-      "vollstaendig*": "hand"
+      "vollstaendig*": "hand",
+      "everyone": "hand",
+      "anyone": "hand",
+      "everybody": "hand",
+      "jedem": "hand",
+      "jedermann": "hand"
     },
     "sources": [
-      "research/l1-threat/taxonomy.yaml"
+      "research/l1-threat/taxonomy.yaml",
+      "research/l1-threat/categories/unsafe_action.md"
     ]
   },
   {
@@ -994,6 +1005,216 @@
     "sources": [
       "ark-core/src/detectors/injection/signal.rs",
       "research/l1-threat/taxonomy.yaml"
+    ]
+  },
+  {
+    "id": "unsafe.no_confirm",
+    "kind": "support",
+    "description": "Handeln ohne Rückfrage, Bestätigung oder Sicherung",
+    "en": [
+      "without asking",
+      "without confirmation",
+      "no confirmation",
+      "without approval",
+      "no backup",
+      "without a backup",
+      "right away",
+      "immediately",
+      "no need to check"
+    ],
+    "de": [
+      "ohne rückfrage",
+      "ohne rueckfrage",
+      "ohne nachfrage",
+      "ohne bestätigung",
+      "ohne bestaetigung",
+      "ohne backup",
+      "ohne sicherung",
+      "sofort",
+      "umgehend"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "without asking": "hand",
+      "without confirmation": "hand",
+      "no confirmation": "hand",
+      "without approval": "hand",
+      "no backup": "hand",
+      "without a backup": "hand",
+      "right away": "hand",
+      "immediately": "hand",
+      "no need to check": "hand",
+      "ohne rückfrage": "hand",
+      "ohne rueckfrage": "hand",
+      "ohne nachfrage": "hand",
+      "ohne bestätigung": "hand",
+      "ohne bestaetigung": "hand",
+      "ohne backup": "hand",
+      "ohne sicherung": "hand",
+      "sofort": "hand",
+      "umgehend": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.sandbox",
+    "kind": "counter",
+    "description": "Erkennbar eigene Wegwerf-Umgebung",
+    "en": [
+      "test vm",
+      "lab vm",
+      "lab",
+      "staging",
+      "sandbox",
+      "sandboxed",
+      "local container",
+      "playground",
+      "dev environment",
+      "scratch environment"
+    ],
+    "de": [
+      "test-vm",
+      "testumgebung*",
+      "staging*",
+      "spielwiese",
+      "testcluster*",
+      "testdatenbank*",
+      "entwicklungsumgebung*",
+      "laborumgebung*",
+      "lokaler container",
+      "lokalen container"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "test vm": "hand",
+      "lab vm": "hand",
+      "lab": "hand",
+      "staging": "hand",
+      "sandbox": "hand",
+      "sandboxed": "hand",
+      "local container": "hand",
+      "playground": "hand",
+      "dev environment": "hand",
+      "scratch environment": "hand",
+      "test-vm": "hand",
+      "testumgebung*": "hand",
+      "staging*": "hand",
+      "spielwiese": "hand",
+      "testcluster*": "hand",
+      "testdatenbank*": "hand",
+      "entwicklungsumgebung*": "hand",
+      "laborumgebung*": "hand",
+      "lokaler container": "hand",
+      "lokalen container": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.safe_guard",
+    "kind": "counter",
+    "description": "Absicherung im selben Satz: Probelauf, Backup, Bestätigung, nur lesend",
+    "en": [
+      "dry-run",
+      "--dry-run",
+      "dry run",
+      "with a backup",
+      "with backup",
+      "after confirmation",
+      "after approval",
+      "read-only",
+      "read only",
+      "enable it again",
+      "re-enable"
+    ],
+    "de": [
+      "mit backup",
+      "mit sicherung",
+      "nach bestätigung",
+      "nach bestaetigung",
+      "nach freigabe",
+      "nur lesend",
+      "probelauf",
+      "wieder einschalten",
+      "wieder aktivieren"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "dry-run": "hand",
+      "--dry-run": "hand",
+      "dry run": "hand",
+      "with a backup": "hand",
+      "with backup": "hand",
+      "after confirmation": "hand",
+      "after approval": "hand",
+      "read-only": "hand",
+      "read only": "hand",
+      "enable it again": "hand",
+      "re-enable": "hand",
+      "mit backup": "hand",
+      "mit sicherung": "hand",
+      "nach bestätigung": "hand",
+      "nach bestaetigung": "hand",
+      "nach freigabe": "hand",
+      "nur lesend": "hand",
+      "probelauf": "hand",
+      "wieder einschalten": "hand",
+      "wieder aktivieren": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.own_scope",
+    "kind": "counter",
+    "description": "Eigene, eng begrenzte Ziele",
+    "en": [
+      "my temp files",
+      "my cache",
+      "this branch",
+      "my own",
+      "my test account",
+      "my local copy"
+    ],
+    "de": [
+      "meine temp-dateien",
+      "mein cache",
+      "meinen cache",
+      "diesen branch",
+      "mein eigenes",
+      "meine eigenen",
+      "mein testkonto",
+      "meinem testkonto",
+      "meine lokale kopie"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "my temp files": "hand",
+      "my cache": "hand",
+      "this branch": "hand",
+      "my own": "hand",
+      "my test account": "hand",
+      "my local copy": "hand",
+      "meine temp-dateien": "hand",
+      "mein cache": "hand",
+      "meinen cache": "hand",
+      "diesen branch": "hand",
+      "mein eigenes": "hand",
+      "meine eigenen": "hand",
+      "mein testkonto": "hand",
+      "meinem testkonto": "hand",
+      "meine lokale kopie": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/unsafe_action.md"
     ]
   }
 ]

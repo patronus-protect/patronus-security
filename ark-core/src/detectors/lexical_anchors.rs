@@ -70,6 +70,7 @@ impl LexicalAnchorScanner {
                 include_str!("anchor_lexicons/pii.json"),
                 include_str!("anchor_lexicons/dlp.json"),
                 include_str!("anchor_lexicons/threat.json"),
+                include_str!("anchor_lexicons/unsafe_action.json"),
             ]
             .into_iter()
             .flat_map(|source| {

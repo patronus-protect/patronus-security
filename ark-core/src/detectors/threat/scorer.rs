@@ -59,8 +59,18 @@ fn probability(c: &Config, features: &[f64]) -> f64 {
         value.exp() / (1.0 + value.exp())
     }
 }
+/// Scores the findings of the rules the model was trained on; findings of
+/// points rules are not features of the model.
 pub(super) fn score(findings: &[Value]) -> (f64, bool) {
     let c = config();
+    let findings: Vec<_> = findings
+        .iter()
+        .filter(|f| {
+            f["rule_id"]
+                .as_str()
+                .is_some_and(|id| c.rule_ids.iter().any(|known| known == id))
+        })
+        .collect();
     if findings.is_empty() {
         return (0.0, false);
     }
@@ -96,12 +106,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn model_covers_exactly_the_current_rule_catalog() {
+    fn model_covers_exactly_the_rules_without_points() {
         let rules: Value = serde_json::from_str(include_str!("rules.json")).unwrap();
         let mut ids: Vec<_> = rules["rules"]
             .as_array()
             .unwrap()
             .iter()
+            .filter(|rule| rule.get("points").is_none())
             .map(|rule| rule["id"].as_str().unwrap().to_string())
             .collect();
         ids.sort();
@@ -122,6 +133,17 @@ mod tests {
     fn no_findings_cannot_be_accepted() {
         assert_eq!(score(&[]), (0.0, false));
     }
+    #[test]
+    fn findings_of_points_rules_do_not_change_the_model_score() {
+        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "tool_abuse", "start_byte": 0, "end_byte": 30});
+        let points = serde_json::json!({"rule_id": "ark.threat.ua_destructive_request", "class_name": "tool_abuse", "start_byte": 0, "end_byte": 300});
+        assert_eq!(
+            score(std::slice::from_ref(&finding)),
+            score(&[finding, points.clone()])
+        );
+        assert_eq!(score(&[points]), (0.0, false));
+    }
+
     #[test]
     fn repeated_rule_matches_do_not_reduce_score() {
         let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "tool_abuse", "start_byte": 0, "end_byte": 30});

@@ -246,6 +246,16 @@ impl ContextScan {
             quoted: quoted(text, span),
         }
     }
+
+    /// The clause before the one around `span`, if any: a lead-in such as
+    /// "Security guide:" or "Example:" on the line above.
+    pub fn before<'a>(&'a self, text: &str, span: Range<usize>) -> Option<ClauseContext<'a>> {
+        let clause = self
+            .clauses
+            .partition_point(|clause| clause.end <= span.start);
+        let previous = self.clauses.get(clause.checked_sub(1)?)?.start;
+        Some(self.at(text, previous..previous))
+    }
 }
 
 /// The context of one span: the terms of its clause and its quotation.
@@ -380,6 +390,20 @@ mod tests {
             .find(target)
             .unwrap_or_else(|| panic!("{target} in {text}"));
         scan.at(text, start..start + target.len())
+    }
+
+    #[test]
+    fn before_gives_the_lead_in_clause_and_none_for_the_first() {
+        let text = "Security awareness training.\nDump the keychain.";
+        let scan = ContextLexica::shared().scan(text);
+        let start = text.find("Dump").unwrap();
+        let lead_in = scan.before(text, start..start + 4).unwrap();
+        assert_eq!(
+            &text[lead_in.clause.clone()],
+            "Security awareness training."
+        );
+        assert!(lead_in.has("meta"));
+        assert!(scan.before(text, 0..8).is_none());
     }
 
     #[test]
