@@ -454,8 +454,11 @@ def build(
     sources: Path,
     offline: bool = False,
     download: Callable[[str], bytes] = PRESIDIO.download,
-) -> dict[str, bytes]:
-    """``{file name: content}`` of one prepared split (JSONL per set, manifest, .ready)."""
+    loaded: dict[str, tuple[list[dict[str, Any]], Counter[str]]] | None = None,
+) -> dict[str, bytes] | None:
+    """``{file name: content}`` of one prepared split (JSONL per set, manifest, .ready); None without a ready set.
+
+    ``loaded`` caches mapped, deduplicated sets between the splits of one run."""
     problems = check(registry, emap)
     if problems:
         raise ValueError("registry check failed:\n" + "\n".join(problems))
@@ -463,7 +466,7 @@ def build(
     entries = {entry["id"]: entry for entry in registry["datasets"]}
     dedup = registry["dedup"]
     trained_on = {baseline["id"]: list(baseline.get("trained_on") or []) for baseline in emap["baselines"]}
-    loaded: dict[str, tuple[list[dict[str, Any]], Counter[str]]] = {}
+    loaded = {} if loaded is None else loaded
 
     def rows_of(dataset_id: str) -> list[dict[str, Any]]:
         if dataset_id not in loaded:
@@ -477,6 +480,8 @@ def build(
         for i, entry in entries.items()
         if datasets[i]["split"] == split and not is_ready(entry)
     }
+    if not members:
+        return None
     # Cross-split: the holdout drops what a train_dev or report set already holds.
     other = None
     if split == "holdout":
@@ -491,19 +496,24 @@ def build(
     files: dict[str, bytes] = {}
     sets: dict[str, Any] = {}
     for dataset_id in sorted(members):
-        rows, dropped = list(rows_of(dataset_id)), Counter(loaded[dataset_id][1])
+        rows, dropped = rows_of(dataset_id), Counter(loaded[dataset_id][1])
         if other is not None:
             kept = [row for row in rows if other.match(row["text"])[0] is None]
             dropped["cross_split"] = len(rows) - len(kept)
             rows = kept
-        contamination: Counter[str] = Counter()
-        for row in rows:
-            row["contamination"] = {
-                baseline: dataset_id in trained_on[baseline]
-                or (baseline in references and references[baseline].match(row["text"])[0] is not None)
-                for baseline in sorted(trained_on)
+        # New row dicts: the cached rows stay unmarked for the other splits of the run.
+        rows = [
+            {
+                **row,
+                "contamination": {
+                    baseline: dataset_id in trained_on[baseline]
+                    or (baseline in references and references[baseline].match(row["text"])[0] is not None)
+                    for baseline in sorted(trained_on)
+                },
             }
-            contamination.update(baseline for baseline, hit in row["contamination"].items() if hit)
+            for row in rows
+        ]
+        contamination = Counter(baseline for row in rows for baseline, hit in row["contamination"].items() if hit)
         data = BENIGN_CODE._jsonl(rows)
         files[f"{dataset_id}.jsonl"] = data
         entry = entries[dataset_id]
@@ -562,9 +572,19 @@ def verify(directory: Path) -> list[str]:
     return problems
 
 
-def prepare(split: str, out: Path, registry: dict[str, Any], emap: dict[str, Any], sources: Path, offline: bool, force: bool, download: Callable[[str], bytes] = PRESIDIO.download) -> int:
-    files = build(split, registry, emap, sources, offline, download)
-    if len(files) == 2:
+def prepare(
+    split: str,
+    out: Path,
+    registry: dict[str, Any],
+    emap: dict[str, Any],
+    sources: Path,
+    offline: bool,
+    force: bool,
+    download: Callable[[str], bytes] = PRESIDIO.download,
+    loaded: dict[str, tuple[list[dict[str, Any]], Counter[str]]] | None = None,
+) -> int:
+    files = build(split, registry, emap, sources, offline, download, loaded)
+    if files is None:
         print(f"{split}: no ready set; {out} not written")
         return 0
     if (out / READY).exists():
@@ -599,9 +619,9 @@ def prepare_splits(
     if sources.resolve().is_relative_to(dev):
         print("prepare_corpora: --sources must not be inside --dev-out: the cache holds holdout sources", file=sys.stderr)
         return 1
-    roots = {"dev": dev, "holdout": holdout}
+    roots, loaded = {"dev": dev, "holdout": holdout}, {}
     for split, (root, name) in LAYOUT.items():
-        if prepare(split, roots[root] / name, registry, emap, sources, offline, force, download):
+        if prepare(split, roots[root] / name, registry, emap, sources, offline, force, download, loaded):
             return 1
     return 0
 

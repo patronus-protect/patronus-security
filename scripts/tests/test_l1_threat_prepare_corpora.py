@@ -376,3 +376,14 @@ def test_gate_call_rejects_bad_directories(world, tmp_path, capsys):
     with pytest.raises(SystemExit):
         MODULE.main(["--dev-out", str(dev)])
     assert "--holdout-out are required" in capsys.readouterr().err
+
+
+def test_splits_share_loaded_sets(world, tmp_path, monkeypatch):
+    registry, emap, sources = world
+    calls = []
+    original = MODULE.load_set
+    monkeypatch.setattr(MODULE, "load_set", lambda entry, *args: calls.append(entry["id"]) or original(entry, *args))
+    assert MODULE.prepare_splits(tmp_path / "dev", tmp_path / "holdout", sources, registry, emap, True, False, no_download) == 0
+    assert sorted(calls) == ["baseline_set", "holdout_set", "train_set"]  # each set mapped and deduplicated once
+    rows = read_rows(tmp_path / "dev" / "train_dev" / "train_set.jsonl")
+    assert rows[2]["contamination"] == {"card": False, "heur": False, "ref": True}
