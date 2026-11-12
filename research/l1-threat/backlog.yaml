@@ -157,6 +157,7 @@ tasks:
     accept: recipe in repo, data only on the VPS; numbers in research/l1-threat/scoreboard/latency.md; the runner's verify latency A/B (ark-l1 latency_ab) measures the threat categories with this harness instead of reporting "not measured"
 
   - id: E04
+    status: done
     title: Baseline runners — heuristic (pipelock, Cisco YARA, ATR, prompt-guard, LlamaFirewall/NeMo deterministic) and reference rows (ProtectAI v2, Prompt Guard 2) → doc-level predictions per class, thresholds swept for matched FPR; baseline predictions computed once per frozen holdout/dev version and cached (keyed by dataset SHA + baseline version), never re-run per task
     type: eval-infra
     deps: [E01]
