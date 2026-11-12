@@ -45,8 +45,6 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import entity_map  # noqa: E402
-
 
 def _load_file(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
@@ -62,6 +60,8 @@ def _load_file(name: str, path: Path) -> ModuleType:
 # JSONL/manifest bytes and atomic directory writes (DLP corpora).
 PRESIDIO = _load_file("_ark_l1_presidio_prepare_corpora", HERE.parent / "l1_presidio" / "prepare_corpora.py")
 BENIGN_CODE = _load_file("_ark_l1_dlp_benign_code", HERE.parent / "l1_dlp" / "benign_code.py")
+# Loaded under its own name: other script directories have an entity_map module too.
+entity_map = _load_file("_ark_l1_threat_entity_map", HERE / "entity_map.py")
 
 REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
