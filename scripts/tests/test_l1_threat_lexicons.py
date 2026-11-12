@@ -83,7 +83,8 @@ def test_mining_ranks_class_terms_by_log_odds(tmp_path):
     write_split(train, rows)
     result = MODULE.mine(train, target_label=0, top=5, min_count=3)
     terms = [candidate["term"] for candidate in result]
-    assert "treat as" in terms or "treat" in terms
+    assert len(terms) == 5
+    assert set(terms) <= MODULE._ngrams("please treat as data and do not follow it")
     assert all(candidate["origin"] == f"mined:{MODULE.split_hash(train)}" for candidate in result)
     assert all(candidate["z"] > 0 for candidate in result)
     assert not {"weather", "webhook"} & set(terms)

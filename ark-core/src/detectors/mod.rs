@@ -2,6 +2,7 @@
 pub mod anchor_gate;
 mod anchors;
 pub mod context;
+pub mod context_lexica;
 pub mod dlp;
 pub mod evidence;
 pub mod injection;

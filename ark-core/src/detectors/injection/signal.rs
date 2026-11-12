@@ -288,30 +288,6 @@ pub fn negated_directive(text: &str, start: usize, end: usize) -> bool {
     before || matches!(after.as_str(), "nicht" | "keine" | "keinen" | "keinerlei")
 }
 
-pub fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
-    let mut spans = Vec::new();
-    let mut start = 0;
-    for (index, character) in text.char_indices() {
-        if matches!(character, '.' | '!' | '?' | ';' | '\n') {
-            push_trimmed_span(text, start, index + character.len_utf8(), &mut spans);
-            start = index + character.len_utf8();
-        }
-    }
-    push_trimmed_span(text, start, text.len(), &mut spans);
-    spans
-}
-
-fn push_trimmed_span(text: &str, start: usize, end: usize, spans: &mut Vec<(usize, usize)>) {
-    let candidate = &text[start..end];
-    let leading = candidate.len() - candidate.trim_start().len();
-    let trailing = candidate.len() - candidate.trim_end().len();
-    let trimmed_start = start + leading;
-    let trimmed_end = end.saturating_sub(trailing);
-    if trimmed_start < trimmed_end {
-        spans.push((trimmed_start, trimmed_end));
-    }
-}
-
 #[cfg(test)]
 mod prepared_tests {
     use super::*;

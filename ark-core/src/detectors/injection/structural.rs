@@ -4,9 +4,9 @@ use std::sync::OnceLock;
 use regex::{Regex, RegexBuilder};
 
 use super::signal::{
-    candidate_clauses, detection_from_signals, InjectionReference, InjectionSignal,
-    InjectionSignalComponent,
+    detection_from_signals, InjectionReference, InjectionSignal, InjectionSignalComponent,
 };
+use crate::detectors::context_lexica::clause_spans;
 use crate::detectors::score::{RulePoints, ValidatorStrength};
 use crate::detectors::NativeDetection;
 use crate::EvaluationResult;
@@ -45,7 +45,7 @@ impl crate::detectors::NativeDetector for InjectionStructuralPipeline {
             component.anchor_gate.is_unconditional()
                 || component.anchor_gate.allows(prepared.anchors())
         });
-        let mut signals = (if enabled { candidate_clauses(text) } else { Vec::new() })
+        let mut signals = (if enabled { clause_spans(text) } else { Vec::new() })
             .into_iter()
             .filter_map(|(clause_start, clause_end)| {
                 let clause = &text[clause_start..clause_end];
