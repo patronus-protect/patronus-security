@@ -261,9 +261,11 @@ def test_prepare_train_dev(world, tmp_path):
         "What is the capital of France?",
     ]
     assert rows[0]["classes"] == ["instruction_injection"] and not rows[0]["benign"]
-    assert rows[1]["benign"] and rows[1]["contamination"] == {"card": False, "heur": False, "ref": False}
-    assert rows[2]["contamination"] == {"card": False, "heur": False, "ref": True}
+    # card trained on a holdout set, which train_dev never reads: unchecked (None), not clean (False).
+    assert rows[1]["benign"] and rows[1]["contamination"] == {"card": None, "heur": False, "ref": False}
+    assert rows[2]["contamination"] == {"card": None, "heur": False, "ref": True}
     manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["unchecked"] == {"card": ["holdout_set"]}
     entry = manifest["sets"]["train_set"]
     assert entry["role"] == "dev"
     assert entry["dropped"] == {"exact": 1, "minhash": 1, "out_of_scope": 1}
@@ -283,7 +285,23 @@ def test_prepare_holdout_dedups_across_splits_and_marks_contamination(world, tmp
     assert manifest["sets"]["holdout_set"]["dropped"] == {"cross_split": 2}
     assert manifest["sets"]["holdout_set"]["contamination"] == {"card": 1, "heur": 0, "ref": 0}
     assert manifest["sets"]["holdout_set"]["role"] == "decisive"
+    assert manifest["unchecked"] == {}
     assert manifest["skipped"] == {"blind_set": "R05", "pending_set": "holdout setup"}
+
+
+def test_pending_training_source_leaves_contamination_unchecked(world, tmp_path):
+    # ProtectAI v2 lists XSTest, which is pending (filled by the holdout overlay): its rows are never
+    # compared, so an unmatched row is unknown (None) for that baseline, never clean (False).
+    registry, emap, sources = world
+    emap["baselines"][0]["trained_on"] = ["baseline_set", "pending_set"]
+    for split in ("holdout", "train_dev"):
+        files = MODULE.build(split, registry, emap, sources, offline=True, download=no_download)
+        manifest = json.loads(files["manifest.json"])
+        assert manifest["unchecked"]["ref"] == ["pending_set"]
+    rows = [json.loads(line) for line in files["train_set.jsonl"].decode("utf-8").splitlines()]
+    assert [row["contamination"]["ref"] for row in rows] == [None, None, True]
+    assert json.loads(files["manifest.json"])["sets"]["train_set"]["contamination"]["ref"] == 1
+    assert json.loads(files["manifest.json"])["sets"]["train_set"]["contamination_unchecked"] == {"card": 3, "heur": 0, "ref": 2}
 
 
 def test_frozen_directory(world, tmp_path, capsys):
@@ -386,4 +404,4 @@ def test_splits_share_loaded_sets(world, tmp_path, monkeypatch):
     assert MODULE.prepare_splits(tmp_path / "dev", tmp_path / "holdout", sources, registry, emap, True, False, no_download) == 0
     assert sorted(calls) == ["baseline_set", "holdout_set", "train_set"]  # each set mapped and deduplicated once
     rows = read_rows(tmp_path / "dev" / "train_dev" / "train_set.jsonl")
-    assert rows[2]["contamination"] == {"card": False, "heur": False, "ref": True}
+    assert rows[2]["contamination"] == {"card": None, "heur": False, "ref": True}
