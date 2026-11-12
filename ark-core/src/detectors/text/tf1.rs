@@ -11,9 +11,11 @@ use regex::Regex;
 
 use super::facts::{extract, TextFacts};
 use crate::detectors::facts_common::tokens::{collect, FactTokens};
+use crate::detectors::shell::pyre::{py_regex, Anchor};
 
-/// Python's `\w+` on the lowercased text.
-static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\w+").expect("word"));
+/// Python's `\w+` (letters, numbers, `_`; no marks or joiners) on the
+/// lowercased text.
+static WORD: LazyLock<Regex> = LazyLock::new(|| py_regex(r"\w+", false, Anchor::Search));
 
 /// Deterministic flattening of the facts of one text into model tokens.
 pub(crate) fn fact_tokens(facts: &TextFacts) -> BTreeSet<String> {
@@ -83,5 +85,16 @@ mod tests {
         ] {
             assert!(tokens.iter().any(|t| t == token), "{token}: {tokens:?}");
         }
+    }
+
+    #[test]
+    fn words_follow_python_unicode_word_class() {
+        let tokens = tf1("cafe\u{301} a\u{200d}b x\u{203f}y x²");
+        let words: Vec<&str> = tokens
+            .iter()
+            .map(String::as_str)
+            .filter(|t| t.starts_with("T:"))
+            .collect();
+        assert_eq!(words, ["T:cafe", "T:a", "T:b", "T:x", "T:y", "T:x²"]);
     }
 }

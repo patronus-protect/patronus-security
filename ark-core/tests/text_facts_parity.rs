@@ -59,6 +59,9 @@ fn rust_facts_match_the_python_reference() {
         let facts = extract(text, &findings, &data);
         let canonical = str_of(row, "canonical");
         assert_eq!(facts.canonical_json(), canonical, "{id}: canonical");
+        let reread: Value = serde_json::from_str(canonical).expect("canonical json");
+        let reread = TextFacts::from_json(&reread).expect("canonical facts");
+        assert_eq!(reread, facts, "{id}: canonical facts");
         let kept = TextFacts::from_json(&row["facts"]).expect("facts document");
         assert_eq!(kept, facts, "{id}: facts");
         let mut tokens = Vec::new();

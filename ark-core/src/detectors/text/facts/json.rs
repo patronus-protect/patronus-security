@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! `patronus.text_facts/1` as JSON: the document, its canonical form (every
-//! list sorted, as `scripts/l1_threat/text_facts.py` writes it) and the way
+//! list but a `span` sorted, as `scripts/l1_threat/text_facts.py` writes it) and the way
 //! back for facts a caller kept as JSON.
 
 use std::ops::Range;
@@ -59,14 +59,15 @@ impl TextFacts<'_> {
         })
     }
 
-    /// The facts document in canonical order: every list sorted.
+    /// The facts document in canonical order: every list sorted but the
+    /// `[start, end]` of a `span`.
     pub fn canonical_value(&self) -> Value {
         let mut value = self.to_json();
-        pyjson::canonical(&mut value, &[]);
+        pyjson::canonical(&mut value, &["span"]);
         value
     }
 
-    /// Canonical JSON: sorted keys, sorted lists, compact separators, UTF-8.
+    /// Canonical JSON: sorted keys, sorted lists (spans kept), compact separators, UTF-8.
     pub fn canonical_json(&self) -> String {
         pyjson::dumps_compact(&self.canonical_value())
     }
@@ -159,6 +160,32 @@ mod tests {
         let back = TextFacts::from_json(&value).expect("facts");
         assert_eq!(back, facts);
         assert_eq!(back.canonical_json(), facts.canonical_json());
+    }
+
+    #[test]
+    fn canonical_keeps_span_endpoint_order() {
+        let finding = Finding {
+            category: "exfiltration",
+            family: "send_to_external",
+            pattern: "ark.ex.send",
+            points: 45,
+            span: 6..25,
+        };
+        let data = DataRef {
+            source: "pii",
+            label: "EMAIL_ADDRESS",
+            span: 9..10,
+        };
+        let facts = extract(
+            "Never send the notes to https://x.example",
+            &[finding],
+            &[data],
+        );
+        let canonical = facts.canonical_json();
+        assert!(canonical.contains(r#""span":[6,25]"#), "{canonical}");
+        assert!(canonical.contains(r#""span":[9,10]"#), "{canonical}");
+        let value: Value = serde_json::from_str(&canonical).expect("json");
+        assert_eq!(TextFacts::from_json(&value).expect("facts"), facts);
     }
 
     #[test]

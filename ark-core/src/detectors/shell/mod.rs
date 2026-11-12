@@ -21,7 +21,7 @@ mod kf1;
 mod markers;
 mod model;
 pub mod policies;
-mod pyre;
+pub(crate) mod pyre;
 pub mod shell_risk;
 #[cfg(any(test, feature = "test-util"))]
 pub mod testing;

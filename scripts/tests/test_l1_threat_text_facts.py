@@ -50,6 +50,15 @@ def test_dumps_sorts_keys_and_every_list():
     assert json.loads(text)["v"] == "1.0"
 
 
+def test_dumps_keeps_span_endpoint_order():
+    doc = facts(sinks=[{"kind": "url", "span": [9, 10]}, {"kind": "term", "span": [99, 100]}])
+    doc["findings"][0]["span"] = [6, 25]
+    text = MODULE.dumps(doc)
+    assert '"sinks":[{"kind":"term","span":[99,100]},{"kind":"url","span":[9,10]}]' in text
+    assert '"span":[6,25]' in text
+    assert '"span":[1,2]' in text
+
+
 def test_dumps_keeps_non_ascii_and_refuses_other_versions():
     assert '"label":"Prüfer"' in MODULE.dumps(facts(data=[{"source": "pii", "label": "Prüfer", "span": [0, 1]}]))
     with pytest.raises(ValueError):
@@ -75,6 +84,11 @@ def test_tf1_has_word_and_fact_tokens():
     ):
         assert token in tokens
     assert "F:ADR_SINK" not in MODULE.tf1("x", facts(sinks=[]))
+
+
+def test_tf1_words_follow_python_unicode_word_class():
+    tokens = MODULE.tf1("cafe\u0301 a\u200db x\u203fy x²", facts())
+    assert [t for t in tokens if t.startswith("T:")] == ["T:cafe", "T:a", "T:b", "T:x", "T:y", "T:x²"]
 
 
 def test_parity_goldens_are_fresh(tmp_path):

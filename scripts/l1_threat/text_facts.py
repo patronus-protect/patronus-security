@@ -12,8 +12,9 @@ makes of them:
     python3 scripts/l1_threat/text_facts.py parity           # rewrite canonical and tf1
     python3 scripts/l1_threat/text_facts.py parity --check   # exit code 1 when stale
 
-- ``dumps``: every list sorted by its ``json.dumps(sort_keys=True)`` form, sorted keys, compact
-  separators, UTF-8 (the shell facts use the same form and keep only ``segments`` in order).
+- ``dumps``: every list but a ``span`` sorted by its ``json.dumps(sort_keys=True)`` form, sorted
+  keys, compact separators, UTF-8 (the shell facts use the same form and keep ``segments`` in
+  order).
 - ``tf1``: ``T:<word>`` for every ``\\w+`` of the lowercased text, then the fact tokens
   ``F:<key>=<value>`` (each once, sorted). A multiset; the order does not matter.
 """
@@ -34,9 +35,10 @@ WORD = re.compile(r"\w+")
 
 
 def canonical(value: Any) -> Any:
-    """Every list sorted by its ``json.dumps(sort_keys=True)`` form, recursively."""
+    """Every list sorted by its ``json.dumps(sort_keys=True)`` form, recursively; a ``span``
+    keeps its ``[start, end]`` order."""
     if isinstance(value, dict):
-        return {key: canonical(item) for key, item in value.items()}
+        return {key: item if key == "span" else canonical(item) for key, item in value.items()}
     if isinstance(value, list):
         items = [canonical(item) for item in value]
         return sorted(items, key=lambda item: json.dumps(item, sort_keys=True))

@@ -26,6 +26,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Cedar schema loading are now shared with shell-command risk (`detectors::facts_common`); the
   shell-risk facts, tokens and verdicts are byte-identical. **Detection change:** none; the text
   facts are not yet used on the scan path, so scan latency is unchanged.
+  The canonical form keeps the `[start, end]` order of every `span` (sorting had turned `[9, 10]`
+  into `[10, 9]`, which the reader refused), and `tf1` words use Python's `\w` (letters, numbers,
+  `_`; no combining marks or joiners) in Rust as well. **Detection change:** none.
 
 - Add a shared normalisation pre-pass for the attack categories
   (`patronus_ark_core::detectors::text_views`): one pass builds the views a lexicon reads besides the
