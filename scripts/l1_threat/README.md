@@ -123,7 +123,10 @@ Zeile, die keine Label-Regel trifft, bricht ab. Dedup auf NFKC, Casefold und zus
 exakt und MinHash (Zeichen-5-Gramme, 64 Permutationen, 16 Bänder, Jaccard-Schätzung ≥ 0,8) innerhalb
 jedes Satzes; der Holdout verwirft jede Zeile, die in einem `train_dev`- oder `report`-Satz vorkommt;
 gegen Baseline-Trainingslisten (`trained_on` der Entity-Map) wird nicht verworfen, sondern je Baseline
-markiert. Beim Vorbereiten von `train_dev` und `report` wird nie eine Holdout-Quelle gelesen. Braucht
+markiert. Eine Trainingsquelle, die der Split nicht lesen darf oder kann (ausstehend, intern oder beim
+Vorbereiten von `train_dev`/`report` ein Holdout-Satz), steht im Manifest unter `unchecked`; eine Zeile
+ohne Treffer ist für diese Baseline dann `null` (unbekannt), nie `false`, und `contamination_unchecked`
+zählt solche Zeilen je Satz. Beim Vorbereiten von `train_dev` und `report` wird nie eine Holdout-Quelle gelesen. Braucht
 `numpy` und PyYAML; Downloads und Parquet-Leser kommen aus `scripts/l1_presidio/prepare_corpora.py`.
 
 Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.

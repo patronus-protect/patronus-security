@@ -23,7 +23,10 @@ Deduplication (texts after NFKC, case folding and whitespace collapsing):
   report set, so nothing the runner can train on reaches the holdout;
 - against baseline training lists: ``trained_on`` of a baseline in the entity map names registered
   sets; a row of such a set, or a duplicate of one of its rows, is marked in the row's
-  ``contamination`` column for that baseline (kept, reported apart).
+  ``contamination`` column for that baseline (kept, reported apart). A training source the split
+  cannot read (pending, internal, or a holdout set while preparing train_dev/report) is listed under
+  ``unchecked`` in the manifest, and an unmatched row is ``null`` (unknown) for that baseline, never
+  ``false``.
 """
 
 from __future__ import annotations
@@ -493,6 +496,16 @@ def build(
         for baseline, ids in sorted(trained_on.items())
         if ids
     }
+    # Training sources this split cannot compare against (pending, internal or holdout-only).
+    unchecked = {baseline: [i for i in ids if i not in visible] for baseline, ids in sorted(trained_on.items())}
+    unchecked = {baseline: ids for baseline, ids in unchecked.items() if ids}
+
+    def contaminated(baseline: str, dataset_id: str, text: str) -> bool | None:
+        """True on a hit, False when every training source was compared, None (unknown) otherwise."""
+        if dataset_id in trained_on[baseline] or (baseline in references and references[baseline].match(text)[0] is not None):
+            return True
+        return None if baseline in unchecked else False
+
     files: dict[str, bytes] = {}
     sets: dict[str, Any] = {}
     for dataset_id in sorted(members):
@@ -505,15 +518,12 @@ def build(
         rows = [
             {
                 **row,
-                "contamination": {
-                    baseline: dataset_id in trained_on[baseline]
-                    or (baseline in references and references[baseline].match(row["text"])[0] is not None)
-                    for baseline in sorted(trained_on)
-                },
+                "contamination": {baseline: contaminated(baseline, dataset_id, row["text"]) for baseline in sorted(trained_on)},
             }
             for row in rows
         ]
         contamination = Counter(baseline for row in rows for baseline, hit in row["contamination"].items() if hit)
+        unknown = Counter(baseline for row in rows for baseline, hit in row["contamination"].items() if hit is None)
         data = BENIGN_CODE._jsonl(rows)
         files[f"{dataset_id}.jsonl"] = data
         entry = entries[dataset_id]
@@ -534,6 +544,7 @@ def build(
             "benign": sum(row["benign"] for row in rows),
             "languages": dict(sorted(Counter(row["language"] for row in rows).items())),
             "contamination": {baseline: contamination[baseline] for baseline in sorted(trained_on)},
+            "contamination_unchecked": {baseline: unknown[baseline] for baseline in sorted(trained_on)},
         }
     manifest = BENIGN_CODE._manifest_bytes(
         {
@@ -542,6 +553,7 @@ def build(
             "split_rule": "by source: every dataset belongs to exactly one split (entity_map.yaml)",
             "dedup": dedup,
             "trained_on": trained_on,
+            "unchecked": unchecked,
             "sets": sets,
             "skipped": dict(sorted(skipped.items())),
         }
