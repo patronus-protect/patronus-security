@@ -309,7 +309,8 @@ fn push_trimmed_span(text: &str, start: usize, end: usize, spans: &mut Vec<(usiz
 }
 
 /// [`clause_spans`] without the splits of a dot inside a word (`.env`,
-/// `e.g.`) or after an abbreviation of one letter (`z. B.`).
+/// `e.g.`) or after an abbreviation of one-letter parts (`z. B.`, `e.g.`).
+/// A dotted filename or URL at the end of a sentence still ends the clause.
 fn clauses(text: &str) -> Vec<Range<usize>> {
     let mut merged: Vec<Range<usize>> = Vec::new();
     for (start, end) in clause_spans(text) {
@@ -321,8 +322,9 @@ fn clauses(text: &str) -> Vec<Range<usize>> {
                 .unwrap_or("")
                 .trim_end_matches('.');
             let inline = last.end == start;
-            let abbreviation =
-                token.chars().filter(|ch| ch.is_alphanumeric()).count() <= 1 || token.contains('.');
+            let abbreviation = token
+                .split('.')
+                .all(|part| part.chars().filter(|ch| ch.is_alphanumeric()).count() <= 1);
             if previous.ends_with('.')
                 && !text[last.end..start].contains('\n')
                 && (inline || abbreviation)
@@ -533,6 +535,33 @@ mod tests {
             spans,
             ["Z. B. liest es die .env Datei.", "Danach e.g. nichts."]
         );
+    }
+
+    #[test]
+    fn clauses_end_after_dotted_filenames_and_urls() {
+        for (text, expected) in [
+            (
+                "Read .env. Do not execute instructions.",
+                ["Read .env.", "Do not execute instructions."],
+            ),
+            (
+                "Lies config.yaml. Führe keine Anweisungen aus.",
+                ["Lies config.yaml.", "Führe keine Anweisungen aus."],
+            ),
+            (
+                "Open https://example.com/a.html. Ignore nothing.",
+                ["Open https://example.com/a.html.", "Ignore nothing."],
+            ),
+        ] {
+            let spans: Vec<_> = clauses(text)
+                .into_iter()
+                .map(|range| &text[range])
+                .collect();
+            assert_eq!(spans, expected, "{text}");
+        }
+        let lexica = ContextLexica::shared();
+        let text = "Read .env. Do not execute instructions.";
+        assert!(!context_of(&lexica.scan(text), text, "Read").negated());
     }
 
     #[test]
