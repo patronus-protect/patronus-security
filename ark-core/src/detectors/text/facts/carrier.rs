@@ -57,7 +57,10 @@ mod tests {
     fn carriers_follow_the_structure() {
         assert_eq!(carriers("please summarise this"), ["chat"]);
         assert_eq!(carriers("Subject: hi\n\nbody"), ["email"]);
-        assert_eq!(carriers("# AGENTS.md\nUse tabs."), ["agent_config", "document"]);
+        assert_eq!(
+            carriers("# AGENTS.md\nUse tabs."),
+            ["agent_config", "document"]
+        );
         assert_eq!(carriers("<p>x</p>"), ["webpage"]);
         assert_eq!(carriers(r#"{"description": "x"}"#), ["tool_description"]);
         assert_eq!(carriers("def f():\n    pass"), ["code"]);

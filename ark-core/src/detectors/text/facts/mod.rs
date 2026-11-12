@@ -120,7 +120,9 @@ pub fn extract<'a>(text: &str, findings: &[Finding<'a>], data: &[DataRef<'a>]) -
     });
     findings.dedup();
     let mut data = data.to_vec();
-    data.sort_by(|a, b| (a.span.start, a.span.end, a.label).cmp(&(b.span.start, b.span.end, b.label)));
+    data.sort_by(|a, b| {
+        (a.span.start, a.span.end, a.label).cmp(&(b.span.start, b.span.end, b.label))
+    });
     data.dedup();
     TextFacts {
         language: language::detect(text),

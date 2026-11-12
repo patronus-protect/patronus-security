@@ -16,8 +16,8 @@ use rustc_hash::FxHashMap;
 
 use serde::Deserialize;
 
-use crate::detectors::facts_common::pyjson::py_round;
 use super::pyre::is_py_space;
+use crate::detectors::facts_common::pyjson::py_round;
 use crate::EvidenceSpan;
 
 /// Class name of a flagged command and its evidence spans.

@@ -34,8 +34,8 @@ use regex::{Regex, RegexSet, RegexSetBuilder};
 use serde::Deserialize;
 
 use super::facts::Facts;
-use crate::detectors::facts_common;
 use super::pyre::{py_regex, try_py_regex, Anchor};
+use crate::detectors::facts_common;
 
 mod request;
 mod rules;

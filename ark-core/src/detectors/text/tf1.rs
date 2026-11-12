@@ -24,7 +24,10 @@ pub(crate) fn fact_tokens(facts: &TextFacts) -> BTreeSet<String> {
     out.values("SINK", facts.sinks.iter().map(|s| s.kind));
     out.values(
         "DATA",
-        facts.data.iter().map(|d| format!("{}:{}", d.source, d.label)),
+        facts
+            .data
+            .iter()
+            .map(|d| format!("{}:{}", d.source, d.label)),
     );
     for f in &facts.findings {
         let category = f.finding.category;
