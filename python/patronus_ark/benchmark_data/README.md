@@ -22,6 +22,7 @@ compiled extension.
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
 | `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 692 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
+| `text_views_l1.jsonl` | 24 | Obfuscated and decoded facts of the normalisation pre-pass (schema v1) |
 
 ## Native L1 golden-set contract
 
@@ -348,6 +349,26 @@ The controlled local-corpus candidate workflow is documented separately in
 Its Ark findings and Anchor-selected negatives are explicitly pre-annotations,
 not additions to these Golden Sets until human review and adjudication are
 complete.
+
+### Text-view golden schema v1
+
+`text_views_l1.jsonl` checks the facts of the shared normalisation pre-pass
+(`patronus_ark_core::detectors::text_views`) in German and English, each in a
+carrier (`chat`, `email`, `webpage`, `document`, `tool_description`,
+`agent_config`, `code`, `log`):
+
+```json
+{"id": "text_views_l1-text-views-pos-03", "suite": "text_views_l1", "schema_version": 1,
+ "language": "en", "case_type": "positive", "carrier": "webpage", "text": "...",
+ "expected_facts": {"obfuscated": [], "decoded": ["base64"]},
+ "provenance": {"origin": "ark_authored", "source": "..."}}
+```
+
+`expected_facts.obfuscated` lists what the pre-pass undoes (`zero_width`,
+`full_width`, `defanged`, `unicode_tags`), `expected_facts.decoded` the encodings
+that hid prose (`base64`, `hex`, `rot13`, `unicode_tags`). Hard negatives have
+both lists empty and a `negative_reason`. The generator computes every encoded
+form from a plain sentence.
 
 ## Provenance
 

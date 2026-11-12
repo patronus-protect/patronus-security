@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! The `obfuscated` and `decoded` facts of the normalisation pre-pass on the
+//! text-view goldens (`generate_l1_goldens.py`, suite `text_views_l1`).
+use std::path::Path;
+
+use patronus_ark_core::detectors::text_views::TextViews;
+use serde_json::Value;
+
+fn goldens() -> Vec<Value> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../python/patronus_ark/benchmark_data/text_views_l1.jsonl");
+    std::fs::read_to_string(path)
+        .expect("text view goldens")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("golden row"))
+        .collect()
+}
+
+fn names(value: &Value) -> Vec<&str> {
+    value
+        .as_array()
+        .expect("fact list")
+        .iter()
+        .map(|name| name.as_str().expect("fact name"))
+        .collect()
+}
+
+#[test]
+fn facts_match_the_goldens() {
+    let rows = goldens();
+    let mut failures = Vec::new();
+    for row in &rows {
+        let facts = TextViews::new(row["text"].as_str().expect("text")).facts();
+        let expected = &row["expected_facts"];
+        if facts.obfuscated != names(&expected["obfuscated"])
+            || facts.decoded != names(&expected["decoded"])
+        {
+            failures.push(format!(
+                "{}: got obfuscated={:?} decoded={:?}, expected {expected}",
+                row["id"], facts.obfuscated, facts.decoded
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn goldens_cover_both_languages_and_case_types() {
+    let rows = goldens();
+    for language in ["de", "en"] {
+        for case_type in ["positive", "hard_negative"] {
+            let count = rows
+                .iter()
+                .filter(|row| row["language"] == language && row["case_type"] == case_type)
+                .count();
+            assert!(count >= 5, "{language} {case_type}: {count}");
+        }
+    }
+}

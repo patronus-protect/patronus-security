@@ -74,7 +74,7 @@ impl<'a> NativeText<'a> {
 
     pub fn tags(&self) -> &[(usize, NativeText<'a>)] {
         self.tags.get_or_init(|| {
-            crate::detectors::injection::unicode_tags::views(self.text())
+            crate::detectors::text_views::tags::views(self.text())
                 .map(|(start, decoded)| (start, Self::from_text(Cow::Owned(decoded))))
                 .collect()
         })

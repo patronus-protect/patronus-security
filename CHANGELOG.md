@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add a shared normalisation pre-pass for the attack categories
+  (`patronus_ark_core::detectors::text_views`): one pass builds the views a lexicon reads besides the
+  original text — zero-width characters, full-width forms and defanged separators undone, and
+  decoded text hidden in invisible Unicode tag characters, base64/base64url, hex and ROT13 (after a
+  `ROT13` marker) — each mapped back to its original range. `TextViews::facts` reports two facts,
+  `obfuscated` (what was undone) and `decoded` (which encodings hid prose); digests, token headers,
+  credentials, images and emoji do not count. Decoding is bounded per text. **Detection change:**
+  base64 and hex payloads in the injection and threat categories are now also decoded when the
+  decoded text contains non-ASCII letters (German umlauts), and the tag characters of subdivision
+  flag emoji (such as the flag of England) are no longer decoded as hidden text. The facts are not
+  yet used by a detector, so scan latency is unchanged.
+  - **Detection change:** (injection and threat, all modes) the flag exemption applies only when the
+    tags between U+1F3F4 and the cancel tag spell a valid subdivision id (two letters or three
+    digits, then one to four letters or digits); tag-encoded instructions framed by those characters
+    are decoded again.
 - Add clause-wide context lexica for the attack categories in German and English
   (`patronus_ark_core::detectors::context_lexica`, terms in
   `ark-core/src/detectors/anchor_lexicons/context.json`): who a text addresses (the model, claimed

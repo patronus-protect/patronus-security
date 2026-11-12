@@ -23,5 +23,3 @@ pub mod tool_call_injection;
 pub mod tool_output_instruction;
 pub mod unicode_confusable;
 pub mod zero_width_obfuscation;
-
-pub mod unicode_tags;
