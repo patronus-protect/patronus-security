@@ -133,6 +133,43 @@ zählt solche Zeilen je Satz. Beim Vorbereiten von `train_dev` und `report` wird
 
 Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.
 
+## Generatoren und Übersetzungen
+
+`generators.py` leitet aus den eingefrorenen Korpora abgeleitete Sätze ab, jede Angriffszeile mit
+sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
+
+- `carrier_insertion`: eine Angriffszeile des Eingabekorpus in einem Träger (Web, PDF-Text, Ticket,
+  Code-Kommentar, RAG-Chunk, Mail), der Zwilling trägt an derselben Stelle einen harmlosen Satz;
+- `exfil_lookalikes`: Tool-Ausgabe (JSON, CLI-Log, Datei, MCP-Ergebnis, Suchtreffer) mit einer Anweisung,
+  Daten an eine Senke unter `example.invalid` zu schicken, und derselbe Rahmen mit Doppelgänger (Upload-Log,
+  Webhook-Konfiguration, Bitte an Menschen), DE und EN nativ;
+- `obfuscation_slices`: Angriffs- und Benign-Zeilen unter je einer Verschleierung (`base64`, `hex`,
+  `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`.
+
+Dev und Holdout haben getrennte Seeds und disjunkte Template-Familien (`check_families`). Dev: öffentlicher
+Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`generators_dev_seed`,
+`ark_authored`). Holdout: geheimer Seed (Default `HOLDOUT/.generators-seed`, beim ersten Lauf mit 0600
+angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `HOLDOUT/generated`
+(`generators_holdout_seed`, `ark_blind`). Jede Zeile trägt `template_family`, `carrier`, `source_id` und
+`translated` (nativ vs. übersetzt). Ausgabe eingefroren wie die Korpora (JSONL je Generator,
+`manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`.
+
+Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
+`--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus) in ein
+Arbeitsblatt; der Runner-Agent trägt seine eigene deutsche Übersetzung in `text` ein (kein externer MT-Dienst)
+und setzt `checked: true` für jede Zeile mit `check: true` (feste Hash-Stichprobe, 5 %, mindestens 10), nachdem
+er sie von Hand gegengelesen hat. `translate ingest` prüft das Blatt (jede Zeile übersetzt, nicht gleich dem
+Original, Stichprobe geprüft) und friert `DEV/translated` ein (`translated: true`, `hand_checked`).
+
+```bash
+python3 scripts/l1_threat/generators.py generate --dev-out DEV [--holdout-out HOLDOUT] [--holdout-seed-file F] [--force]
+python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set 200]
+python3 scripts/l1_threat/generators.py translate ingest --dev-out DEV --sheet SHEET.jsonl [--force]
+python3 scripts/l1_threat/generators.py verify DIR
+```
+
+Tests: `scripts/tests/test_l1_threat_generators.py`.
+
 ## Latenz auf echtem deutschem Text
 
 `latency.py` misst die L1-Latenz von `threat` allein, `injection` allein und allen L1-Kategorien zusammen

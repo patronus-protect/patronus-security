@@ -323,6 +323,17 @@ stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus
 Stand: fünf Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf); die übrigen `train_dev`- und
 `report`-Sätze sind `pending` (offene Formate: Parquet mit Zahlenspalten, ZIP, Mehrdatei-Repos auf GitHub).
 
+**Generatoren (E02, [`scripts/l1_threat/generators.py`](../../scripts/l1_threat/generators.py)).** Aus den
+eingefrorenen Korpora: Carrier-Insertion mit sauberem Zwilling (Web, PDF-Text, Ticket, Code-Kommentar,
+RAG-Chunk, Mail), Exfil-Anweisungen in Tool-Ausgaben mit harmlosen Doppelgängern, Obfuskations-Slices über
+Angriffs- und Benign-Zeilen. Dev (`generators_dev_seed`, öffentlicher Seed, liest `train_dev` und die
+Runner-Übersetzungen) und Holdout (`generators_holdout_seed`, geheimer Seed unter `~/ark-threat/holdout`, liest
+nur den Holdout) haben getrennte Seeds und disjunkte Template-Familien. Die DE-Übersetzung der Dev-Sätze
+(`runner_translations_de`) schreibt der Runner-Agent selbst in ein Arbeitsblatt (`translate export`/`ingest`);
+eine feste Hash-Stichprobe (5 %, mindestens 10 Zeilen) muss als von Hand gegengelesen markiert sein. Jede
+erzeugte Zeile trägt die Spalte `translated` (nativ vs. übersetzt); das Scoreboard (E06) berichtet beide
+getrennt. Daten liegen nur auf der VPS.
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |

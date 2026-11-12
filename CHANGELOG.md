@@ -11,6 +11,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add `scripts/l1_threat/generators.py`, which derives generated evaluation sets for the threat
+  categories from the frozen corpora: attack texts embedded in realistic carriers (web page, PDF
+  text, ticket, code comment, retrieval chunk, mail), each with a clean twin that holds a benign
+  sentence in the same place; tool output that tells an agent to send data to an outside address,
+  each with a benign look-alike (upload logs, webhook settings, notes addressed to people); and
+  obfuscation slices (base64, hex, rot13, leetspeak, zero-width characters, homoglyphs, letter
+  spacing, Unicode tag characters) over attack and benign texts alike. Tuning and evaluation output
+  use separate seeds and separate template families; the evaluation seed is secret and stored only
+  next to the evaluation data, its manifest records only the seed's SHA-256. A worksheet flow
+  (`translate export` / `translate ingest`) turns English tuning rows into German rows translated by
+  hand, with a fixed sample that must be marked as re-checked; every generated row says whether its
+  text is native or translated. Output directories are frozen with a SHA-256 manifest like the
+  corpora; no data is in the repository.
+  **Detection change:** none; this is evaluation tooling only.
 - Add a dataset registry for the threat-category evaluation (`scripts/l1_threat/datasets.yaml`) and
   `scripts/l1_threat/prepare_corpora.py`, which fetches every registered public dataset at a pinned
   revision, verifies the SHA-256 of each file, maps its upstream labels onto the eleven attack and
