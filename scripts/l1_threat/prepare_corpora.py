@@ -16,7 +16,9 @@ Preparing writes ``DEV/train_dev/``, ``DEV/report/`` and ``HOLDOUT/holdout/``: o
 ready set of the split, a ``manifest.json`` with the SHA-256 of every source file and output file, and
 ``.ready`` last. Downloads are cached in ``--sources`` (default ``HOLDOUT/.sources``, never inside DEV).
 Holdout recipes come from ``--overlay`` (default ``HOLDOUT/datasets.overlay.yaml`` when present); a
-split without any ready set is not written. A frozen directory is rewritten only with ``--force``.
+split without any ready set is not written. A frozen directory is rewritten only with ``--force``, or
+when it is intact but in an older corpus format and was built from the same inputs (sets, revisions,
+source files, dedup settings, training lists).
 Deduplication (texts after NFKC, case folding and whitespace collapsing):
 - exact and MinHash within each set (first occurrence kept);
 - across splits: preparing the holdout drops every row that duplicates a row of a train_dev or
@@ -69,7 +71,8 @@ entity_map = _load_file("_ark_l1_threat_entity_map", HERE / "entity_map.py")
 
 REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
-CORPORA_SCHEMA = "ark-l1-threat-corpora-v1"
+# v2: unknown contamination (an unchecked training source) is null, manifest lists "unchecked".
+CORPORA_SCHEMA = "ark-l1-threat-corpora-v2"
 READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
@@ -584,6 +587,22 @@ def verify(directory: Path) -> list[str]:
     return problems
 
 
+def _format_upgrade(out: Path, current: bytes, manifest: bytes) -> bool:
+    """True when ``out`` is intact but in an older corpus schema, built from the same inputs as ``manifest``."""
+    try:
+        frozen = json.loads(current)
+    except ValueError:
+        return False
+    if frozen.get("schema") == CORPORA_SCHEMA or verify(out) != [f"{out}: manifest schema is not {CORPORA_SCHEMA}"]:
+        return False
+
+    def inputs(data: dict[str, Any]) -> Any:
+        sets = {i: (s.get("source"), s.get("revision"), s.get("source_files")) for i, s in data.get("sets", {}).items()}
+        return [data.get(key) for key in ("split", "dedup", "trained_on", "skipped")] + [sets]
+
+    return inputs(frozen) == inputs(json.loads(manifest))
+
+
 def prepare(
     split: str,
     out: Path,
@@ -604,7 +623,9 @@ def prepare(
         if not verify(out) and current == files["manifest.json"]:
             print(f"{split}: {out} unchanged (frozen)")
             return 0
-        if not force:
+        if _format_upgrade(out, current, files["manifest.json"]):
+            print(f"{split}: {out} was frozen in an older corpus format from the same inputs; rewriting")
+        elif not force:
             print(f"{split}: {out} is frozen and differs from this run (or was modified); nothing written. Use --force.", file=sys.stderr)
             return 1
     BENIGN_CODE._write(out, files)

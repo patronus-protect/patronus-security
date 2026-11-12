@@ -24,7 +24,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   reference model (for example ProtectAI v2 trained on XSTest and jackhhao/jailbreak-classification)
   and their duplicates; a training set that a split cannot compare against (pending, or evaluation
   data while preparing tuning data) is listed as unchecked in the manifest, and unmatched rows are
-  marked unknown for that baseline instead of clean. Each set gets a derived role (decisive, dev, report) from its split, source
+  marked unknown for that baseline instead of clean (corpus format v2; a corpus frozen in an older
+  format from the same inputs is rewritten without `--force`). Each set gets a derived role (decisive, dev, report) from its split, source
   family and commercial-use flag. Only recipes and manifests are in the repository; no data.
   **Detection change:** none; this is evaluation tooling only.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
