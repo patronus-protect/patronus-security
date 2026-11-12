@@ -142,6 +142,7 @@ tasks:
     accept: scripts/l1_threat/{datasets.yaml,prepare_corpora.py}; MCPTox included; contamination column per baseline; nothing committed except recipes and manifests
 
   - id: E02
+    status: done
     title: Generators — DE translation of decisive EN sets by the runner agent (no external MT; marked translated, hand-checked sample), carrier insertion with clean twin (web, PDF text, ticket, code comment, RAG chunk, mail), exfil-in-tool-output with benign look-alikes, obfuscation slices from the holdout seed
     type: eval-infra
     deps: [E01]
