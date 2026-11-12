@@ -171,6 +171,7 @@ tasks:
 
   # ── S: Engine ─────────────────────────────────────────────────────────
   - id: S02
+    status: done
     title: Counter-context and support lexica DE/EN with an origin field per term (ark_existing / oss:<source>@<commit> / taxonomy / mined:<train-split-hash> / hand; mining by log-odds on the train split only, reviewed by the runner, never from dev gold, goldens or holdout) (defensive prompts, quotation/reported speech, security docs, tutorials, test code, negation clause-wide; addressee, scope, authority, secrecy, sinks) incl. German compounds, separable verbs, du/Sie/ihr, gender forms
     type: engine
     deps: [S01]

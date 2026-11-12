@@ -22,6 +22,29 @@ python3 scripts/l1_threat/taxonomy.py summary   # Familien und Regeln je Klasse
 
 Tests: `scripts/tests/test_l1_threat_taxonomy.py`.
 
+## Kontext-Lexika
+
+`lexicons.py` prüft die Kontext-Lexika in
+[`ark-core/src/detectors/anchor_lexicons/context.json`](../../ark-core/src/detectors/anchor_lexicons/context.json)
+(Stützkontext `addressee`, `authority`, `scope`, `secrecy`, `sensitive_path`, `sink`; Gegenkontext
+`defensive`, `meta`, `quotation`, `test_code`, `negation_scope`) und schlägt Kandidaten-Terme vor.
+
+```bash
+python3 scripts/l1_threat/lexicons.py check                          # Exit 1 bei jedem Problem
+python3 scripts/l1_threat/lexicons.py mine TRAIN.jsonl --label 1     # Kandidaten zur Durchsicht
+```
+
+Jeder Term trägt unter `origin` seine Herkunft: `ark_existing` (aus einem ARK-Lexikon oder einer Regel),
+`oss:<quelle>@<commit>`, `taxonomy`, `mined:<hash des train-splits>` oder `hand`. Term-Syntax: Wörter
+klein; `*` am Anfang oder Ende eines Teils öffnet diese Seite (Komposita, Flexion, Genderformen wie
+`Nutzer:innen`); Teile mit ` … ` müssen im selben Satz aufeinander folgen (trennbare Verben wie
+`leite … weiter`); Terme unter `cased` gelten nur in ihrer Schreibung (`Sie`, `Ihnen`). `mine` ordnet
+Wörter und Wortpaare nach gewichteten Log-Odds mit informativem Dirichlet-Prior und liest nur einen
+Train-Split: Pfade mit `dev`, `gold`, `golden(s)` oder `holdout` oder ohne `train` werden abgewiesen.
+Die Ausgabe ist eine Kandidatenliste; übernommene Terme bekommen `mined:<hash>` als Herkunft.
+
+Tests: `scripts/tests/test_l1_threat_lexicons.py`.
+
 ## OSS-Regelinventar
 
 `oss_inventory.py` baut und prüft [`research/l1-threat/oss_rules.yaml`](../../research/l1-threat/oss_rules.yaml),

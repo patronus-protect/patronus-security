@@ -30,16 +30,10 @@
 
 schema: ark-l1-threat-taxonomy-v1
 
-# Planned lexica shared by several classes (core, S02).
-lexicons:
-  - {id: addressee, kind: support, task: S02, title: "AI addressee: AI, assistant, model, agent; du/Sie/you imperative"}
-  - {id: secrecy, kind: support, task: S02, title: "Secrecy: do not tell the user, silently, without mentioning"}
-  - {id: sensitive_path, kind: support, task: S02, title: "Sensitive files and stores: SSH keys, .env, credential files, keychains"}
-  - {id: defensive, kind: counter, task: S02, title: "Defensive prompts: treat embedded instructions as data, do not follow them"}
-  - {id: meta, kind: counter, task: S02, title: "Security documentation, teaching and research about attacks"}
-  - {id: quotation, kind: counter, task: S02, title: "Reported speech and quotation: wrote, said, according to"}
-  - {id: test_code, kind: counter, task: S02, title: "Test and fixture context: test, fixture, assert, mock, golden"}
-  - {id: negation_scope, kind: counter, task: S02, title: "Negation cues that open the core clause span (nicht, nie, never, do not)"}
+# Core context lexica shared by all classes (addressee, authority, scope, secrecy, sensitive_path,
+# sink, defensive, meta, quotation, test_code, negation_scope) live in anchor_lexicons/context.json
+# with an origin per term (S02; scripts/l1_threat/lexicons.py check). Planned lexica of the core:
+lexicons: []
 
 classes:
 
@@ -331,11 +325,11 @@ classes:
       baseline_coverage: {pipelock: full, llamafirewall: partial, prompt_guard: partial}
       gap: No own finding; only an obfuscation fact and point bonus on the normalised match.
     lexicons:
-    - {id: injection.prior_instructions, kind: support, task: S02, title: 'Previous/above instructions, rules, system
+    - {id: injection.prior_instructions, kind: support, task: IJ01, title: 'Previous/above instructions, rules, system
         prompt'}
-    - {id: injection.replacement, kind: support, task: S02, title: 'Instead, from now on, new instructions'}
-    - {id: injection.authority, kind: support, task: S02, title: 'Admin, developer, operator, system message'}
-    - {id: injection.precedence, kind: support, task: S02, title: 'Takes precedence, highest priority, supersedes'}
+    - {id: injection.replacement, kind: support, task: IJ01, title: 'Instead, from now on, new instructions'}
+    - {id: injection.authority, kind: support, task: IJ01, title: 'Admin, developer, operator, system message'}
+    - {id: injection.precedence, kind: support, task: IJ01, title: 'Takes precedence, highest priority, supersedes'}
 
   jailbreak:
     category: jailbreak
@@ -592,20 +586,20 @@ classes:
       baseline_coverage: {prompt_guard: partial}
       gap: Decoded jailbreak frames are not rescanned today.
     lexicons:
-    - {id: jailbreak.unbounded, kind: support, task: S02, title: 'No limits, unrestricted, uncensored'}
-    - {id: jailbreak.roleplay, kind: support, task: S02, title: 'Roleplay, pretend, act as, you are now'}
-    - {id: jailbreak.fiction, kind: support, task: S02, title: 'Hypothetically, fictional, in a story'}
-    - {id: jailbreak.privileged_mode, kind: support, task: S02, title: Developer/debug/god/sudo mode}
-    - {id: jailbreak.policy_spoof, kind: support, task: S02, title: 'Safety disabled, filters off, policy lifted'}
-    - {id: jailbreak.refusal_suppression, kind: support, task: S02, title: 'Never refuse, no warnings, no disclaimers'}
-    - {id: jailbreak.priming, kind: support, task: S02, title: Start your response with}
-    - {id: jailbreak.dual_response, kind: support, task: S02, title: 'Two responses, classic and unfiltered'}
-    - {id: jailbreak.game, kind: support, task: S02, title: 'Lose tokens, be shut down if'}
-    - {id: jailbreak.false_consent, kind: support, task: S02, title: 'As we agreed, you already confirmed'}
-    - {id: jailbreak.dialog_turn_marker, kind: support, task: S02, title: Line-initial User/Assistant turn markers}
-    - {id: jailbreak.forged_reasoning, kind: support, task: S02, title: Thinking/policy-check block markers}
-    - {id: jailbreak.app_mode, kind: counter, task: S02, title: Developer mode in software settings}
-    - {id: jailbreak.creative, kind: counter, task: S02, title: Creative writing without limit reference}
+    - {id: jailbreak.unbounded, kind: support, task: JB01, title: 'No limits, unrestricted, uncensored'}
+    - {id: jailbreak.roleplay, kind: support, task: JB01, title: 'Roleplay, pretend, act as, you are now'}
+    - {id: jailbreak.fiction, kind: support, task: JB01, title: 'Hypothetically, fictional, in a story'}
+    - {id: jailbreak.privileged_mode, kind: support, task: JB01, title: Developer/debug/god/sudo mode}
+    - {id: jailbreak.policy_spoof, kind: support, task: JB01, title: 'Safety disabled, filters off, policy lifted'}
+    - {id: jailbreak.refusal_suppression, kind: support, task: JB01, title: 'Never refuse, no warnings, no disclaimers'}
+    - {id: jailbreak.priming, kind: support, task: JB01, title: Start your response with}
+    - {id: jailbreak.dual_response, kind: support, task: JB01, title: 'Two responses, classic and unfiltered'}
+    - {id: jailbreak.game, kind: support, task: JB01, title: 'Lose tokens, be shut down if'}
+    - {id: jailbreak.false_consent, kind: support, task: JB01, title: 'As we agreed, you already confirmed'}
+    - {id: jailbreak.dialog_turn_marker, kind: support, task: JB01, title: Line-initial User/Assistant turn markers}
+    - {id: jailbreak.forged_reasoning, kind: support, task: JB01, title: Thinking/policy-check block markers}
+    - {id: jailbreak.app_mode, kind: counter, task: JB01, title: Developer mode in software settings}
+    - {id: jailbreak.creative, kind: counter, task: JB01, title: Creative writing without limit reference}
 
   prompt_extraction:
     category: prompt_extraction
@@ -751,15 +745,15 @@ classes:
       baseline_coverage: {prompt_guard: partial}
       gap: Decoded extraction requests are not rescanned today.
     lexicons:
-    - {id: extraction.reveal_verb, kind: support, task: S02, title: 'Show, print, repeat, reveal, dump'}
-    - {id: extraction.hidden_target, kind: support, task: S02, title: 'System prompt, hidden/initial instructions,
+    - {id: extraction.reveal_verb, kind: support, task: PX01, title: 'Show, print, repeat, reveal, dump'}
+    - {id: extraction.hidden_target, kind: support, task: PX01, title: 'System prompt, hidden/initial instructions,
         everything above'}
-    - {id: extraction.verbatim, kind: support, task: S02, title: 'Verbatim, word for word, in full'}
-    - {id: extraction.transform, kind: support, task: S02, title: 'Translate, encode, summarize, rewrite as'}
-    - {id: extraction.tool_schema, kind: support, task: S02, title: 'Tool definitions, function schemas'}
-    - {id: extraction.guardrail, kind: support, task: S02, title: 'Safety rules, filters, content policy'}
-    - {id: extraction.capability_question, kind: counter, task: S02, title: General capability questions}
-    - {id: extraction.own_prompt, kind: counter, task: S02, title: Work on the user's own prompt}
+    - {id: extraction.verbatim, kind: support, task: PX01, title: 'Verbatim, word for word, in full'}
+    - {id: extraction.transform, kind: support, task: PX01, title: 'Translate, encode, summarize, rewrite as'}
+    - {id: extraction.tool_schema, kind: support, task: PX01, title: 'Tool definitions, function schemas'}
+    - {id: extraction.guardrail, kind: support, task: PX01, title: 'Safety rules, filters, content policy'}
+    - {id: extraction.capability_question, kind: counter, task: PX01, title: General capability questions}
+    - {id: extraction.own_prompt, kind: counter, task: PX01, title: Work on the user's own prompt}
 
   tool_poisoning:
     category: tool_poisoning
@@ -911,12 +905,12 @@ classes:
       baseline_coverage: {cisco_yara: none, atr: none}
       gap: No decoding of tool metadata before matching in ARK or baselines.
     lexicons:
-    - {id: toolpoison.preamble, kind: support, task: S02, title: Mandatory pre-use preamble phrases}
-    - {id: toolpoison.cross_tool, kind: support, task: S02, title: References redirecting another tool}
-    - {id: toolpoison.side_channel, kind: support, task: S02, title: Side-channel parameter names and history objects}
-    - {id: toolpoison.hidden_markup, kind: support, task: S02, title: Pseudo-tags and hidden markup in metadata}
-    - {id: toolpoison.usage_doc, kind: counter, task: S02, title: Ordinary tool usage documentation}
-    - {id: toolpoison.own_domain, kind: counter, task: S02, title: Sensitive path matching the tool's own purpose}
+    - {id: toolpoison.preamble, kind: support, task: TP01, title: Mandatory pre-use preamble phrases}
+    - {id: toolpoison.cross_tool, kind: support, task: TP01, title: References redirecting another tool}
+    - {id: toolpoison.side_channel, kind: support, task: TP01, title: Side-channel parameter names and history objects}
+    - {id: toolpoison.hidden_markup, kind: support, task: TP01, title: Pseudo-tags and hidden markup in metadata}
+    - {id: toolpoison.usage_doc, kind: counter, task: TP01, title: Ordinary tool usage documentation}
+    - {id: toolpoison.own_domain, kind: counter, task: TP01, title: Sensitive path matching the tool's own purpose}
 
   agent_config_tampering:
     category: agent_config_tampering
@@ -1069,13 +1063,13 @@ classes:
       baseline_coverage: {atr: none, cisco_yara: none}
       gap: No decoding of config values before matching.
     lexicons:
-    - {id: agentcfg.file, kind: support, task: S02, title: Agent config file names and keys}
-    - {id: agentcfg.widen, kind: support, task: S02, title: Permission widening phrases and values}
-    - {id: agentcfg.guard_removal, kind: support, task: S02, title: Removing or disabling hooks and checks}
-    - {id: agentcfg.persist, kind: support, task: S02, title: Persistence across files and sessions}
-    - {id: agentcfg.fetch_run, kind: support, task: S02, title: Download-and-run phrases}
-    - {id: agentcfg.project_rule, kind: counter, task: S02, title: Ordinary project rules}
-    - {id: agentcfg.scoped_allow, kind: counter, task: S02, title: Narrowly scoped permissions}
+    - {id: agentcfg.file, kind: support, task: AC01, title: Agent config file names and keys}
+    - {id: agentcfg.widen, kind: support, task: AC01, title: Permission widening phrases and values}
+    - {id: agentcfg.guard_removal, kind: support, task: AC01, title: Removing or disabling hooks and checks}
+    - {id: agentcfg.persist, kind: support, task: AC01, title: Persistence across files and sessions}
+    - {id: agentcfg.fetch_run, kind: support, task: AC01, title: Download-and-run phrases}
+    - {id: agentcfg.project_rule, kind: counter, task: AC01, title: Ordinary project rules}
+    - {id: agentcfg.scoped_allow, kind: counter, task: AC01, title: Narrowly scoped permissions}
 
   memory_poisoning:
     category: memory_poisoning
@@ -1217,14 +1211,14 @@ classes:
       baseline_coverage: {atr: none}
       gap: Uncovered.
     lexicons:
-    - {id: memory.store_verb, kind: support, task: S02, title: Store and remember verbs}
-    - {id: memory.permanence, kind: support, task: S02, title: Permanence and all-future phrases}
-    - {id: memory.future_trigger, kind: support, task: S02, title: Future trigger conditions}
-    - {id: memory.state_claim, kind: support, task: S02, title: Claimed identity or system state changes}
-    - {id: memory.replicate, kind: support, task: S02, title: Self-replication phrases}
-    - {id: memory.reset, kind: support, task: S02, title: Memory reset phrases}
-    - {id: memory.self_fact, kind: counter, task: S02, title: Benign user self-facts}
-    - {id: memory.product_doc, kind: counter, task: S02, title: Memory feature documentation}
+    - {id: memory.store_verb, kind: support, task: MP01, title: Store and remember verbs}
+    - {id: memory.permanence, kind: support, task: MP01, title: Permanence and all-future phrases}
+    - {id: memory.future_trigger, kind: support, task: MP01, title: Future trigger conditions}
+    - {id: memory.state_claim, kind: support, task: MP01, title: Claimed identity or system state changes}
+    - {id: memory.replicate, kind: support, task: MP01, title: Self-replication phrases}
+    - {id: memory.reset, kind: support, task: MP01, title: Memory reset phrases}
+    - {id: memory.self_fact, kind: counter, task: MP01, title: Benign user self-facts}
+    - {id: memory.product_doc, kind: counter, task: MP01, title: Memory feature documentation}
 
   exfiltration:
     category: exfiltration
@@ -1389,12 +1383,12 @@ classes:
       baseline_coverage: {pipelock: none}
       gap: Uncovered.
     lexicons:
-    - {id: exfil.send_verb, kind: support, task: S02, title: 'Send, upload and forward verbs'}
-    - {id: exfil.source, kind: support, task: S02, title: 'Data sources such as history, credentials, env'}
-    - {id: exfil.collector, kind: support, task: S02, title: Known collector services}
-    - {id: exfil.embed, kind: support, task: S02, title: 'Embedding data in URL, image or subdomain'}
-    - {id: exfil.user_owned, kind: counter, task: S02, title: Destination owned by the user}
-    - {id: exfil.integration_doc, kind: counter, task: S02, title: Webhook and integration documentation}
+    - {id: exfil.send_verb, kind: support, task: EX01, title: 'Send, upload and forward verbs'}
+    - {id: exfil.source, kind: support, task: EX01, title: 'Data sources such as history, credentials, env'}
+    - {id: exfil.collector, kind: support, task: EX01, title: Known collector services}
+    - {id: exfil.embed, kind: support, task: EX01, title: 'Embedding data in URL, image or subdomain'}
+    - {id: exfil.user_owned, kind: counter, task: EX01, title: Destination owned by the user}
+    - {id: exfil.integration_doc, kind: counter, task: EX01, title: Webhook and integration documentation}
 
   unsafe_action:
     category: unsafe_action
@@ -1672,19 +1666,19 @@ classes:
       baseline_coverage: {pipelock: partial}
       gap: No decoded-view scan for unsafe_action today
     lexicons:
-    - {id: unsafe.read_secret, kind: support, task: S02, title: read/collect/dump + secret stores}
-    - {id: unsafe.destructive, kind: support, task: S02, title: wipe/drop/purge/irreversibly}
-    - {id: unsafe.broad_target, kind: support, task: S02, title: 'production, all backups, entire database'}
-    - {id: unsafe.security_control, kind: support, task: S02, title: 'firewall, antivirus, audit log, MFA'}
-    - {id: unsafe.disable_verb, kind: support, task: S02, title: 'disable, turn off, bypass, remove'}
-    - {id: unsafe.fetch_run, kind: support, task: S02, title: 'download and run, install from URL'}
-    - {id: unsafe.privilege, kind: support, task: S02, title: 'admin rights, root, full access, world-writable'}
-    - {id: unsafe.autostart, kind: support, task: S02, title: 'run at startup, scheduled task, create service'}
-    - {id: unsafe.no_confirm, kind: support, task: S02, title: 'without asking, no confirmation, no backup'}
-    - {id: unsafe.metadata_endpoint, kind: support, task: S02, title: cloud metadata endpoints}
-    - {id: unsafe.sandbox, kind: counter, task: S02, title: 'own disposable environment (test VM, staging)'}
-    - {id: unsafe.safe_guard, kind: counter, task: S02, title: 'dry-run, with backup, after confirmation, read-only'}
-    - {id: unsafe.own_scope, kind: counter, task: S02, title: 'own narrow targets (my temp files, this branch)'}
+    - {id: unsafe.read_secret, kind: support, task: UA01, title: read/collect/dump + secret stores}
+    - {id: unsafe.destructive, kind: support, task: UA01, title: wipe/drop/purge/irreversibly}
+    - {id: unsafe.broad_target, kind: support, task: UA01, title: 'production, all backups, entire database'}
+    - {id: unsafe.security_control, kind: support, task: UA01, title: 'firewall, antivirus, audit log, MFA'}
+    - {id: unsafe.disable_verb, kind: support, task: UA01, title: 'disable, turn off, bypass, remove'}
+    - {id: unsafe.fetch_run, kind: support, task: UA01, title: 'download and run, install from URL'}
+    - {id: unsafe.privilege, kind: support, task: UA01, title: 'admin rights, root, full access, world-writable'}
+    - {id: unsafe.autostart, kind: support, task: UA01, title: 'run at startup, scheduled task, create service'}
+    - {id: unsafe.no_confirm, kind: support, task: UA01, title: 'without asking, no confirmation, no backup'}
+    - {id: unsafe.metadata_endpoint, kind: support, task: UA01, title: cloud metadata endpoints}
+    - {id: unsafe.sandbox, kind: counter, task: UA01, title: 'own disposable environment (test VM, staging)'}
+    - {id: unsafe.safe_guard, kind: counter, task: UA01, title: 'dry-run, with backup, after confirmation, read-only'}
+    - {id: unsafe.own_scope, kind: counter, task: UA01, title: 'own narrow targets (my temp files, this branch)'}
 
   resource_exhaustion:
     category: resource_exhaustion
@@ -1811,14 +1805,14 @@ classes:
       baseline_coverage: {}
       gap: No decoded-view scan for this class
     lexicons:
-    - {id: exhaust.unbounded, kind: support, task: S02, title: 'forever, endlessly, until I say stop'}
-    - {id: exhaust.huge_count, kind: support, task: S02, title: count units for threshold validator}
-    - {id: exhaust.repeat_verb, kind: support, task: S02, title: 'repeat, output again, keep writing'}
-    - {id: exhaust.spawn, kind: support, task: S02, title: 'spawn agent/subtask, call yourself'}
-    - {id: exhaust.decoy_task, kind: support, task: S02, title: 'first compute, factorise, all primes up to'}
-    - {id: exhaust.cost, kind: support, task: S02, title: 'as many tool calls as possible, every page'}
-    - {id: exhaust.bounded, kind: counter, task: S02, title: 'explicit limit, timeout, stop condition'}
-    - {id: exhaust.lyrics_play, kind: counter, task: S02, title: 'games, songs with refrain, exercises'}
+    - {id: exhaust.unbounded, kind: support, task: RE01, title: 'forever, endlessly, until I say stop'}
+    - {id: exhaust.huge_count, kind: support, task: RE01, title: count units for threshold validator}
+    - {id: exhaust.repeat_verb, kind: support, task: RE01, title: 'repeat, output again, keep writing'}
+    - {id: exhaust.spawn, kind: support, task: RE01, title: 'spawn agent/subtask, call yourself'}
+    - {id: exhaust.decoy_task, kind: support, task: RE01, title: 'first compute, factorise, all primes up to'}
+    - {id: exhaust.cost, kind: support, task: RE01, title: 'as many tool calls as possible, every page'}
+    - {id: exhaust.bounded, kind: counter, task: RE01, title: 'explicit limit, timeout, stop condition'}
+    - {id: exhaust.lyrics_play, kind: counter, task: RE01, title: 'games, songs with refrain, exercises'}
 
   harmful_content:
     category: harmful_content
@@ -1955,18 +1949,18 @@ classes:
       gap: No decoded-view scan for harm today; model-only subclasses (specialized_advice, ip, defamation, elections,
         privacy) have no pattern family
     lexicons:
-    - {id: harm.request_frame, kind: support, task: S02, title: 'how do I make/obtain, step by step, quantities'}
-    - {id: harm.evasion, kind: support, task: S02, title: 'without getting caught, untraceable'}
-    - {id: harm.violent_crime, kind: support, task: S02, title: violent crime and weapons terms}
-    - {id: harm.cbrne, kind: support, task: S02, title: CBRNE terms (hashed)}
-    - {id: harm.cyber_harm, kind: support, task: S02, title: malware and intrusion terms}
-    - {id: harm.nonviolent_crime, kind: support, task: S02, title: 'fraud, theft, drug production, laundering'}
-    - {id: harm.sex_crime, kind: support, task: S02, title: sexual violence terms (hashed)}
-    - {id: harm.child_safety, kind: support, task: S02, title: minor plus sexual reference terms (hashed)}
-    - {id: harm.self_harm, kind: support, task: S02, title: self-harm method and intent terms (hashed)}
-    - {id: harm.prevention, kind: counter, task: S02, title: 'prevention, first aid, disposal, reporting'}
-    - {id: harm.news_history, kind: counter, task: S02, title: 'news, history, court ruling, statistics'}
-    - {id: harm.professional, kind: counter, task: S02, title: professional context without production detail}
+    - {id: harm.request_frame, kind: support, task: HC01, title: 'how do I make/obtain, step by step, quantities'}
+    - {id: harm.evasion, kind: support, task: HC01, title: 'without getting caught, untraceable'}
+    - {id: harm.violent_crime, kind: support, task: HC01, title: violent crime and weapons terms}
+    - {id: harm.cbrne, kind: support, task: HC01, title: CBRNE terms (hashed)}
+    - {id: harm.cyber_harm, kind: support, task: HC01, title: malware and intrusion terms}
+    - {id: harm.nonviolent_crime, kind: support, task: HC01, title: 'fraud, theft, drug production, laundering'}
+    - {id: harm.sex_crime, kind: support, task: HC01, title: sexual violence terms (hashed)}
+    - {id: harm.child_safety, kind: support, task: HC01, title: minor plus sexual reference terms (hashed)}
+    - {id: harm.self_harm, kind: support, task: HC01, title: self-harm method and intent terms (hashed)}
+    - {id: harm.prevention, kind: counter, task: HC01, title: 'prevention, first aid, disposal, reporting'}
+    - {id: harm.news_history, kind: counter, task: HC01, title: 'news, history, court ruling, statistics'}
+    - {id: harm.professional, kind: counter, task: HC01, title: professional context without production detail}
 
   toxic_language:
     category: toxic_language
@@ -2075,16 +2069,16 @@ classes:
       baseline_coverage: {}
       gap: Weak signal only, feeds points
     lexicons:
-    - {id: toxic.insult, kind: support, task: S02, title: insults against a person (hashed)}
-    - {id: toxic.slur, kind: support, task: S02, title: derogatory terms for protected groups (hashed)}
-    - {id: toxic.dehumanise, kind: support, task: S02, title: animal/vermin/disease metaphors (hashed)}
-    - {id: toxic.violence_verb, kind: support, task: S02, title: violence verbs in threat form (hashed)}
-    - {id: toxic.sexual_harass, kind: support, task: S02, title: sexualised harassment (hashed)}
-    - {id: toxic.profanity, kind: support, task: S02, title: untargeted curse words (hashed)}
-    - {id: toxic.group, kind: support, task: S02, title: protected group names (plain text)}
-    - {id: toxic.counter_speech, kind: counter, task: S02, title: counter-speech phrases}
-    - {id: toxic.moderation, kind: counter, task: S02, title: moderation and classification context}
-    - {id: toxic.self_directed, kind: counter, task: S02, title: self-deprecation without third party}
+    - {id: toxic.insult, kind: support, task: TX01, title: insults against a person (hashed)}
+    - {id: toxic.slur, kind: support, task: TX01, title: derogatory terms for protected groups (hashed)}
+    - {id: toxic.dehumanise, kind: support, task: TX01, title: animal/vermin/disease metaphors (hashed)}
+    - {id: toxic.violence_verb, kind: support, task: TX01, title: violence verbs in threat form (hashed)}
+    - {id: toxic.sexual_harass, kind: support, task: TX01, title: sexualised harassment (hashed)}
+    - {id: toxic.profanity, kind: support, task: TX01, title: untargeted curse words (hashed)}
+    - {id: toxic.group, kind: support, task: TX01, title: protected group names (plain text)}
+    - {id: toxic.counter_speech, kind: counter, task: TX01, title: counter-speech phrases}
+    - {id: toxic.moderation, kind: counter, task: TX01, title: moderation and classification context}
+    - {id: toxic.self_directed, kind: counter, task: TX01, title: self-deprecation without third party}
 
 # Shell-syntax rules handed to shell risk K26 (shell_command); each leaves threat once K26 decides
 # its goldens (research/l1-threat/k26-handoff.md).

@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add clause-wide context lexica for the attack categories in German and English
+  (`patronus_ark_core::detectors::context_lexica`, terms in
+  `ark-core/src/detectors/anchor_lexicons/context.json`): who a text addresses (the model, claimed
+  authorities, including du/Sie/ihr), how far it reaches (scope, sensitive files, external
+  receivers), secrecy, and the counter contexts defensive prompts, security documentation and
+  tutorials, quotation and reported speech, test code and clause-wide negation. Terms cover German
+  compounds, gender forms and separable verbs; every term records where it comes from.
+  `scripts/l1_threat/lexicons.py` checks the lexica and proposes candidate terms from a training
+  split. **Detection change:** none; no detector uses the lexica yet.
 - Add a latency benchmark for the threat and injection categories on real German text
   (`scripts/l1_threat/latency.py`). `prepare` builds at least 50 distinct windows of exactly 100 KiB
   from openly licensed German documents (Wikipedia articles, federal laws, Wikimedia policies; pinned
