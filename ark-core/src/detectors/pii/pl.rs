@@ -8,7 +8,8 @@
 //! too little, so both need a term of their label near the value or as its key,
 //! in every mode. The NIP is the body of the Polish VAT ID
 //! (`vat::VAT_ID_PL_PROXIMITY`, B16).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// PESEL with a PESEL term near the value or as its key.
 pub(super) const PESEL: PiiPattern = PiiPattern {

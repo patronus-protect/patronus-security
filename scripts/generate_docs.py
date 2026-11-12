@@ -272,15 +272,18 @@ def _native_pattern_const(directory: Path, struct_name: str, module: str, const:
     return own + "".join(kept)
 
 
-def pii_score_points(path: Path = ROOT / "ark-core/src/detectors/pii/score.rs") -> tuple[dict[str, int], int, list[int], int]:
-    """Validator strength, field bonus, proximity tiers and counter-context penalty of the PII score model."""
+SCORE_PATH = ROOT / "ark-core/src/detectors/score.rs"
+
+
+def score_points(path: Path = SCORE_PATH) -> tuple[dict[str, int], int, list[int], int]:
+    """Validator strength, field bonus, proximity tiers and counter-context penalty of the PII and DLP score model."""
     source = path.read_text()
     body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", source, flags=re.S)
     context = re.search(r"pub const FIELD_CONTEXT_POINTS: u8 = (\d+);", source)
     proximity = re.search(r"pub const PROXIMITY_CONTEXT_POINTS: \[\(usize, u8\); \d+\] = \[(.*?)\];", source)
     counter = re.search(r"pub const COUNTER_CONTEXT_POINTS: u8 = (\d+);", source)
     if not body or not context or not proximity or not counter:
-        raise ValueError(f"Missing PII score points in {path}")
+        raise ValueError(f"Missing score points in {path}")
     strength = {name.lower(): int(points) for name, points in re.findall(r"Self::(\w+) => (\d+),", body.group(1))}
     tiers = [int(points) for _, points in re.findall(r"\((\d+), (\d+)\)", proximity.group(1))]
     return strength, int(context.group(1)), tiers, int(counter.group(1))
@@ -302,11 +305,11 @@ def pii_secondary_labels(path: Path = ROOT / "ark-core/src/detectors/pii/overlap
     return re.findall(r'"([A-Z_]+)"', match.group(1))
 
 
-def pii_spelled_out_penalty(path: Path = ROOT / "ark-core/src/detectors/pii/score.rs") -> int:
+def pii_spelled_out_penalty(path: Path = SCORE_PATH) -> int:
     """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
-    match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
+    match = re.search(r"Self::Pii => -(\d+),", path.read_text())
     if not match:
-        raise ValueError(f"Missing SPELLED_OUT_PENALTY_POINTS in {path}")
+        raise ValueError(f"Missing PII normalisation points in {path}")
     return int(match.group(1))
 
 
@@ -383,14 +386,6 @@ def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_po
     points = rule["base_score"] + strength_points[rule["strength"]]
     low = points + min(tiers) if rule["requires_context"] else points
     return f"{min(low, 100) / 100:.2f}–{min(points + max(tiers), 100) / 100:.2f}"
-
-
-def dlp_strength_points(path: Path = ROOT / "ark-core/src/detectors/dlp/score.rs") -> dict[str, int]:
-    """Validator strength points of the DLP score model (K04)."""
-    body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", path.read_text(), flags=re.S)
-    if not body:
-        raise ValueError(f"Missing DLP strength points in {path}")
-    return {name.lower(): int(points) for name, points in re.findall(r"Self::(\w+) => (\d+),", body.group(1))}
 
 
 def dlp_context_lexicon(path: Path = ROOT / "ark-core/src/detectors/dlp/context.rs") -> tuple[list[str], list[str]]:
@@ -477,9 +472,8 @@ def parse_shell_policies() -> list[dict[str, str]]:
 
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern")
-    strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
+    strength_points, context_points, proximity_tiers, counter_points = score_points()
     dlp = parse_dlp_patterns()
-    dlp_points = dlp_strength_points()
     dlp_support, dlp_counter = dlp_context_lexicon()
     credential_groups = DLP_CREDENTIAL_GROUPS
 
@@ -626,8 +620,8 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `recall` ("
         "thresholds 0.50 and 0.30 as for PII) a finding scores the rule base plus the validator strength "
-        f"(checksum {dlp_points['checksum']}, structure {dlp_points['structure']}, format {dlp_points['format']}, "
-        f"none {dlp_points['none']}) plus its context, capped at 100 and divided by 100: {context_points} for a "
+        f"(checksum {strength_points['checksum']}, structure {strength_points['structure']}, format {strength_points['format']}, "
+        f"none {strength_points['none']}) plus its context, capped at 100 and divided by 100: {context_points} for a "
         "`field` rule, which captures the value behind a field name of its own; for a `proximity` rule "
         f"{'/'.join(str(points) for points in proximity_tiers)} for a credential term near the value "
         f"({', '.join(f'`{lexicon_id}`' for lexicon_id in dlp_support)}) and -{counter_points} when a "
@@ -643,7 +637,7 @@ def generate_l1_rule_catalog_doc() -> str:
         provider = f"`{rule['provider']}`" if rule["provider"] else "–"
         subtype = f"`{rule['subtype']}`" if rule["subtype"] else "–"
         context = dlp_rule_context(rule, credential_groups)
-        score_range = dlp_rule_score_range(rule, context, dlp_points, context_points)
+        score_range = dlp_rule_score_range(rule, context, strength_points, context_points)
         lines.append(
             f"| `{rule['id']}` | `{rule['entity_group']}` | {subtype} | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in DLP_DEFAULT_ON_GROUPS else 'off'} | {rule['base_score']} | {context} | {score_range} |"
         )

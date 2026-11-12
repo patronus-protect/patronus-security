@@ -16,9 +16,9 @@
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::detectors::score::{self, Context, ValidatorStrength};
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,

@@ -10,11 +10,11 @@
 //! (`dlp.digest_reference`: checksum, tx hash, commit SHA, UUID …) counters
 //! it. Content classes and business identifiers without a field name score
 //! without context. This module only maps lexicon IDs; the windows, word
-//! boundaries and line limits are those of [`crate::detectors::pii::context`].
+//! boundaries and line limits are those of [`crate::detectors::context`].
 use std::sync::LazyLock;
 
 use super::dlp::{DlpPattern, SECRET_GROUPS};
-use crate::detectors::pii::context::{Evidence, ProximityLexicon};
+use crate::detectors::context::{Evidence, ProximityLexicon};
 
 /// Support lexicon IDs of `dlp.json` for secrets without a field name.
 pub static SUPPORT_LEXICON: &[&str] = &[

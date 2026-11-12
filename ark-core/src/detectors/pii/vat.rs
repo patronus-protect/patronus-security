@@ -11,7 +11,8 @@
 //! value must stand alone (`context::stands_alone`). A bare Partita IVA (11
 //! digits without `IT`) and a bare Spanish CIF (without `ES`) also need a VAT
 //! term nearby or as their key, a bare Polish NIP (without `PL`) a NIP term.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// `DE136695976`, `DE 136 695 976`, `DE.136.695.976`, `DE-136-695-976`.
 pub(super) const VAT_ID_DE: PiiPattern = PiiPattern {

@@ -5,6 +5,7 @@
 //! testnet keys have severity `test`. Keys come from the golden generator;
 //! invalid vectors are built here and are no keys.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -14,10 +15,7 @@ mod base58check;
 use base58check::base58check_encode;
 use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{
-        dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
-        validators::BASE58,
-    },
+    detectors::{dlp::dlp::DLP_PATTERNS, validators::BASE58},
     golden_recipes::{materialize, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };

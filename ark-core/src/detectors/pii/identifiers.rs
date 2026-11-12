@@ -4,7 +4,8 @@
 //! and customer IDs, usernames, dates of birth and account numbers also accept FR/ES/IT/NL
 //! field names (T26). Account numbers include the BBAN and the US routing number under
 //! its field name, with or without its ABA check digit (B-ACCT).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// An example that opens after a field name: `customer_id (e.g., C352-3474-967)`,
 /// `Kundennummer (z. B. J8382610)`, `date of birth (e.g., 2003-06-14)` (Q-CONTACT).

@@ -17,7 +17,8 @@
 //! The Swedish organisationsnummer (B-LUHN) shares the form too, but its third
 //! digit is 2 or more where the personal numbers carry a birth month; it ends in a
 //! Luhn digit and follows the same two rules.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Swedish personnummer, `YYMMDD-NNNC`, with `+` from the 100th birthday, or the
 /// ten or twelve digits (`198112289874`), with a personnummer term near the value

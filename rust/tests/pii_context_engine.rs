@@ -9,13 +9,14 @@
 //! `balanced` and `recall`, `matched_rules[].context` explains every score:
 //! bonus, penalty and the deciding lexicon term with its side and distance.
 
+use patronus_ark::detectors::context::{Evidence, Side, AFTER_WINDOW, BEFORE_WINDOW};
 use patronus_ark::detectors::lexical_anchors::LexicalAnchorScanner;
 use patronus_ark::detectors::pii::{
-    context::{self, Side, AFTER_WINDOW, BEFORE_WINDOW, COUNTER_LEXICON, SUPPORT_LEXICON},
+    context::{self, COUNTER_LEXICON, SUPPORT_LEXICON},
     pii::{PiiPattern, PII_PATTERNS},
-    score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS},
     validators,
 };
+use patronus_ark::detectors::score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS};
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
@@ -100,7 +101,7 @@ fn span_score(result: &SecurityScanResult, label: &str) -> Option<f64> {
 }
 
 /// Context evidence for the first occurrence of `value` in `text`.
-fn evidence(text: &str, value: &str, label: &str) -> context::Evidence {
+fn evidence(text: &str, value: &str, label: &str) -> Evidence {
     let start = text
         .find(value)
         .unwrap_or_else(|| panic!("{value} in {text}"));

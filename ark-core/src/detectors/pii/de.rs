@@ -2,7 +2,8 @@
 //! German national identifiers: phone numbers, Steuer-ID, Steuernummer, social and health
 //! insurance numbers, LANR, BSNR, passport, identity card, commercial register number. The driving licence lives in `driver_license`
 //! with the other licence formats, the plate in `licence_plate` with the UK plate.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
 pub(super) const PHONE: PiiPattern = PiiPattern {

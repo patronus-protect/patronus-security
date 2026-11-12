@@ -14,11 +14,12 @@
 //! Cloudflare API tokens and Global API Keys. Tokens come from the golden
 //! generator or from random bodies built here at test time.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    detectors::dlp::dlp::{ValidatorStrength, DLP_PATTERNS},
+    detectors::dlp::dlp::DLP_PATTERNS,
     golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };

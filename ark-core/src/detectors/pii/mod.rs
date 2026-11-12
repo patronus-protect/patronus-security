@@ -38,7 +38,6 @@ pub mod overlap;
 pub mod pii;
 mod pl;
 mod pt;
-pub mod score;
 mod sg;
 mod tr;
 mod uk;

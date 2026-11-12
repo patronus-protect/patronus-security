@@ -22,7 +22,7 @@ use std::{cmp::Ordering, ops::Range, sync::LazyLock};
 use regex::Regex;
 
 use super::pii::{is_bare_rule, PII_PATTERNS};
-use super::score::ValidatorStrength;
+use crate::detectors::score::ValidatorStrength;
 use crate::detectors::NativeDetection;
 use crate::EvidenceSpan;
 

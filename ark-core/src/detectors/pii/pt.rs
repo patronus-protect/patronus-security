@@ -6,7 +6,8 @@
 //! check one time in eleven and are also a SIREN, a BSN, a SIN or an order number,
 //! so the NIF is reported in every mode only with a term of its label near it or
 //! as its key; there is no context-free form.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// NIF, nine digits or 3-3-3 by spaces or hyphens, with a NIF term near the value
 /// or as its key.

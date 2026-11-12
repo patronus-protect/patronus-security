@@ -6,7 +6,8 @@
 //! reported in every mode, also plain or in groups by spaces; in `balanced` and
 //! `recall` the dotted form is also reported bare (K05), where the prefix, the
 //! dots and the check digit carry the finding.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// AHV number, `756.NNNN.NNNN.NN`, by spaces or thirteen digits, with an AHV term
 /// near the value or as its key.

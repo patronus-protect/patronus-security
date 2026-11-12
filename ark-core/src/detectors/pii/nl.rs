@@ -5,7 +5,8 @@
 //! the BSN is reported in every mode only with a term of its label near the value
 //! or as its key. In `balanced` and `recall` the form printed on Dutch identity
 //! documents, `1234.56.782`, is also reported bare (K05).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// BSN, nine digits, 3-3-3 or `1234.56.782`, with a BSN term near the value or as
 /// its key.

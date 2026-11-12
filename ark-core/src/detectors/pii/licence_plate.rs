@@ -17,7 +17,8 @@
 //! Indian plate (`KA53ME3456`) likewise (T36). Values are uppercase as printed on
 //! the plate. The bare forms without a plate term, and the lower-case Nigerian
 //! plate, are opt-in rules (D-BARE, T36).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Pattern of a field-bound plate rule with the value regex `$value`. The word
 /// boundaries are ASCII (`(?-u:\b)`), as in `driver_license`: every field name

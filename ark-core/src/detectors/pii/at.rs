@@ -7,7 +7,8 @@
 //! label in every mode. In `balanced` and `recall` the printed form with a space
 //! after the check digit and a calendar date behind it (`1237 010180`) is also
 //! reported bare (K05).
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Social security number, `NNNN DDMMYY` or ten digits, with a social security
 /// term near the value or as its key.

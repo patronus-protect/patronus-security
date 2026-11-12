@@ -28,7 +28,8 @@ use std::ops::Range;
 use crate::detectors::first_match_per_range;
 use crate::EvidenceSpan;
 
-use super::dlp::{RuleMeta, SecretSubtype, ValidatorStrength};
+use super::dlp::{RuleMeta, SecretSubtype};
+use crate::detectors::score::ValidatorStrength;
 
 /// Overlap tier of a secret rule; a lower tier keeps its span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

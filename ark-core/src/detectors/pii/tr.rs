@@ -6,7 +6,8 @@
 //! fødselsnummer, so it is reported in every mode only with a term of its label
 //! near it or as its key; there is no context-free form. In the scored modes it
 //! competes with the other eleven-digit labels (K07), where the term decides.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// T.C. Kimlik No, eleven digits, with a T.C. Kimlik term near the value or as its
 /// key.

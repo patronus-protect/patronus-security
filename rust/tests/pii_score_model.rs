@@ -10,9 +10,9 @@
 use patronus_ark::detectors::pii::{
     context,
     pii::{is_bare_rule, PII_PATTERNS},
-    score::{self, Context, ValidatorStrength},
     validators,
 };
+use patronus_ark::detectors::score::{self, Context, ValidatorStrength};
 use patronus_ark::ScoreMode;
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
@@ -153,7 +153,8 @@ fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
         .unwrap();
     if recall_obfuscation(rule) {
         let (plain, context) = expected_score_of(text, rule, pattern);
-        let points = (plain * 100.0).round() - f64::from(score::SPELLED_OUT_PENALTY_POINTS);
+        let points =
+            (plain * 100.0).round() + f64::from(score::Category::Pii.normalisation_points());
         return (points.max(0.0) / 100.0, context);
     }
     expected_score_of(text, rule, pattern)

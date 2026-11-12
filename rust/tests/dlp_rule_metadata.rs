@@ -4,6 +4,7 @@
 //! live/test severity; matches report them in `matched_rules`. Token values
 //! are synthetic and assembled at test time.
 
+use patronus_ark::detectors::score::ValidatorStrength;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -13,7 +14,7 @@ use std::{
 use patronus_ark::{
     detectors::{
         dlp::{
-            dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
+            dlp::{Severity, DLP_PATTERNS},
             prefilter::FOLDS_TO_ASCII,
         },
         validators::crc32_base62,

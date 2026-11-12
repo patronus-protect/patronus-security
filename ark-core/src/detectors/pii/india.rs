@@ -11,7 +11,8 @@
 //! With a term of the label near it or as its key a value is reported in every
 //! mode; in `balanced` and `recall` the grouped Aadhaar number and the GSTIN are
 //! also reported bare (K05), where the check carries the finding.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// Aadhaar number, plain or grouped, with an Aadhaar term near the value or as
 /// its key.

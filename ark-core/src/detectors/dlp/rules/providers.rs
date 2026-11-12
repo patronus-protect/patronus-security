@@ -4,9 +4,10 @@
 use crate::{
     detectors::dlp::{
         aws_context::{has_aws_secret_context, is_aws_secret_value, lines_above},
-        dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
+        dlp::{DlpPattern, RuleMeta, SecretSubtype},
         prefilter::ValueClass,
     },
+    detectors::score::ValidatorStrength,
     detectors::validators::{
         base64_decode, crc32, crc32_base62_valid, crc32_hex_valid, macaroon_v2_parse, Base64Kind,
     },

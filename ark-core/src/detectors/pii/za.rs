@@ -7,7 +7,8 @@
 //! `balanced` and `recall` the value is also reported bare (K05), plain or grouped
 //! 6-4-3; with a term of its label near it or as its key it is reported in every
 //! mode.
-use super::{pii::PiiPattern, score::ValidatorStrength, validators};
+use super::{pii::PiiPattern, validators};
+use crate::detectors::score::ValidatorStrength;
 
 /// The identity number, thirteen digits or 6-4-3 (`800101 5009 087`), with the
 /// citizenship digit and the 8 or 9 in place.

@@ -23,6 +23,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- PII and secret (DLP) rules now share one scoring module,
+  `patronus_ark_core::detectors::score`: the context points, the validator strength and the score
+  of a finding are defined once for both categories (`ScoredPattern`, `score`, `rule_score`). The
+  former `detectors::pii::score` and `detectors::dlp::score` modules are removed and
+  `ValidatorStrength` moves from `detectors::dlp::dlp` and `detectors::pii::score` to
+  `detectors::score`; Rust callers update their imports. The 10-point reduction for personal data
+  that only spelled-out normalisation reveals is now the normalisation points of the PII category
+  (`Category::normalisation_points`). The proximity context engine (windows, `Side`, `Evidence`,
+  `ProximityLexicon`, `BEFORE_WINDOW`, `AFTER_WINDOW`) moves from `detectors::pii::context` to
+  `detectors::context` and serves both categories. **Detection change:** none; scores, spans and
+  `matched_rules` are unchanged.
 - The Threat L1 detector now ships in the `patronus-ark-core` crate
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
