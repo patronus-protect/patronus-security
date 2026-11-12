@@ -564,8 +564,8 @@ def build(
     return {**files, "manifest.json": manifest, READY: f"{PRESIDIO._sha256(manifest)}  manifest.json\n".encode("utf-8")}
 
 
-def verify(directory: Path) -> list[str]:
-    """Problems of a prepared directory (empty list: frozen and intact)."""
+def verify(directory: Path, schemas: tuple[str, ...] = (CORPORA_SCHEMA,)) -> list[str]:
+    """Problems of a prepared (or generated, ``generators.py``) directory (empty list: frozen and intact)."""
     ready, manifest_path = directory / READY, directory / "manifest.json"
     if not ready.is_file() or not manifest_path.is_file():
         return [f"{directory}: no {READY} or manifest.json"]
@@ -574,8 +574,8 @@ def verify(directory: Path) -> list[str]:
     if ready.read_text(encoding="utf-8") != f"{PRESIDIO._sha256(manifest_bytes)}  manifest.json\n":
         problems.append(f"{directory}: {READY} does not match manifest.json")
     manifest = json.loads(manifest_bytes)
-    if manifest.get("schema") != CORPORA_SCHEMA:
-        problems.append(f"{directory}: manifest schema is not {CORPORA_SCHEMA}")
+    if manifest.get("schema") not in schemas:
+        problems.append(f"{directory}: manifest schema is not {' or '.join(schemas)}")
     expected = {entry["file"]: entry["sha256"] for entry in manifest.get("sets", {}).values()}
     for name, digest in sorted(expected.items()):
         path = directory / name
