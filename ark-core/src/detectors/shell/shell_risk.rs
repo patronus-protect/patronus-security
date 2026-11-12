@@ -20,7 +20,7 @@ use super::facts::{extract, Facts, ShellContext};
 use super::kf1::visit_kf1;
 use super::model::{ShellRiskModel, TopFeature, ASK_THRESHOLD, SHELL_RISK_CLASS};
 use super::policies::{Decision, Lowered, PolicyHit, ShellPolicies, ShellPolicyConfig};
-use super::pyjson::{self, py_round};
+use crate::detectors::facts_common::pyjson::{self, py_round};
 use crate::detectors::{NativeDetection, NativeDetector};
 use crate::threat::NativeText;
 use crate::EvaluationResult;
@@ -78,9 +78,7 @@ impl ShellVerdict {
                 .collect::<Vec<_>>(),
         });
         if with_facts {
-            let mut facts = self.facts.to_json();
-            pyjson::canonical(&mut facts);
-            value["facts"] = facts;
+            value["facts"] = self.facts.canonical_value();
         }
         value
     }

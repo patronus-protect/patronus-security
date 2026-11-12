@@ -5,7 +5,8 @@
 
 use serde_json::{json, Map, Value};
 
-use crate::detectors::shell::pyjson;
+use crate::detectors::facts_common::fields::Fields;
+use crate::detectors::facts_common::pyjson;
 
 use super::{
     Analysis, Facts, Flow, LegacyClass, Network, Object, Segment, Setting, ShellContext, Write,
@@ -111,112 +112,18 @@ impl Facts<'_> {
         })
     }
 
+    /// The facts document in canonical order (`schema.canonical`): sorted
+    /// lists except `segments`, which keeps the command order.
+    pub fn canonical_value(&self) -> Value {
+        let mut value = self.to_json();
+        pyjson::canonical(&mut value, &["segments"]);
+        value
+    }
+
     /// Canonical JSON (`schema.dumps`): sorted keys, sorted lists except
     /// `segments`, compact separators, UTF-8.
     pub fn canonical_json(&self) -> String {
-        let mut value = self.to_json();
-        pyjson::canonical(&mut value);
-        pyjson::dumps_compact(&value)
-    }
-}
-
-/// The fields of one JSON object, taken one by one; [`Self::finish`] refuses
-/// keys nobody took.
-struct Fields<'a> {
-    what: &'static str,
-    map: &'a Map<String, Value>,
-    taken: usize,
-}
-
-impl<'a> Fields<'a> {
-    fn of(value: &'a Value, what: &'static str) -> Result<Self, String> {
-        let map = value
-            .as_object()
-            .ok_or_else(|| format!("{what} must be an object"))?;
-        Ok(Self {
-            what,
-            map,
-            taken: 0,
-        })
-    }
-
-    fn optional(&mut self, key: &str) -> Option<&'a Value> {
-        let value = self.map.get(key);
-        self.taken += usize::from(value.is_some());
-        value
-    }
-
-    fn get(&mut self, key: &str) -> Result<&'a Value, String> {
-        let what = self.what;
-        self.optional(key)
-            .ok_or_else(|| format!("{what}.{key} is missing"))
-    }
-
-    fn str(&mut self, key: &str) -> Result<&'a str, String> {
-        let what = self.what;
-        self.get(key)?
-            .as_str()
-            .ok_or_else(|| format!("{what}.{key} must be a string"))
-    }
-
-    fn opt_str(&mut self, key: &str) -> Result<Option<&'a str>, String> {
-        let what = self.what;
-        match self.get(key)? {
-            Value::Null => Ok(None),
-            value => value
-                .as_str()
-                .map(Some)
-                .ok_or_else(|| format!("{what}.{key} must be a string or null")),
-        }
-    }
-
-    fn bool(&mut self, key: &str) -> Result<bool, String> {
-        let what = self.what;
-        self.get(key)?
-            .as_bool()
-            .ok_or_else(|| format!("{what}.{key} must be a boolean"))
-    }
-
-    fn index(value: &Value, what: &str) -> Result<usize, String> {
-        value
-            .as_u64()
-            .and_then(|n| usize::try_from(n).ok())
-            .ok_or_else(|| format!("{what} must be a non-negative integer"))
-    }
-
-    fn list<T>(
-        &mut self,
-        key: &str,
-        item: impl Fn(&'a Value) -> Result<T, String>,
-    ) -> Result<Vec<T>, String> {
-        let what = self.what;
-        self.get(key)?
-            .as_array()
-            .ok_or_else(|| format!("{what}.{key} must be a list"))?
-            .iter()
-            .map(item)
-            .collect()
-    }
-
-    fn strs(&mut self, key: &str) -> Result<Vec<&'a str>, String> {
-        let what = self.what;
-        self.list(key, |v| {
-            v.as_str()
-                .ok_or_else(|| format!("{what}.{key} must hold strings"))
-        })
-    }
-
-    fn strings(&mut self, key: &str) -> Result<Vec<String>, String> {
-        Ok(self.strs(key)?.into_iter().map(str::to_string).collect())
-    }
-
-    fn finish(self) -> Result<(), String> {
-        if self.taken == self.map.len() {
-            return Ok(());
-        }
-        let mut unknown: Vec<&str> = self.map.keys().map(String::as_str).collect();
-        unknown.sort_unstable();
-        Err(format!("{} has unknown keys among {unknown:?}", self.what))
+        pyjson::dumps_compact(&self.canonical_value())
     }
 }
 

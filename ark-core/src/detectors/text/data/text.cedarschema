@@ -1,0 +1,9 @@
+// Cedar schema of the text requests over patronus.text_facts/1 (`text/schema.rs`).
+entity Agent;
+entity Target;
+type TextContext = {
+  language: String, carrier: Set<String>, addressee: Set<String>, sinks: Set<String>, data: Set<String>,
+  categories: Set<String>, families: Set<String>, patterns: Set<String>, modifiers: Set<String>,
+  obfuscated: Set<String>, decoded: Set<String>, support: Set<String>, counter: Set<String>, points: Long
+};
+action text appliesTo { principal: Agent, resource: Target, context: TextContext };

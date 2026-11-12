@@ -161,6 +161,26 @@ versteckter Text. Goldens: Suite `text_views_l1` (6 Positive + 6 Hard Negatives 
 Aufrufer im Scan-Pfad: S06 übernimmt die Facts in `patronus.text_facts/1`, die Normalisierungspunkte je
 Kategorie (`Category::normalisation_points`) greifen mit der Umstellung auf Facts.
 
+**Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
+`text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
+tool_description, agent_config, code, log; ohne Merkmal `chat`), `language` (de/en/und über
+Funktionswörter), `sinks` (URL, Markdown-Bild, E-Mail-Adresse, `term` aus dem Lexikon `sink`; höchstens 16),
+`context` (Adressat `model`/`authority`, übrige Support- und Gegen-Lexika, Modifikatoren je Finding:
+`decoded`, `defensive` (defensive/meta in der Klausel), `negated`, `obfuscated`, `quoted`, `test_code`),
+`json` (Dokument, kanonische Form, strenges `from_json`). Findings (Kategorie, Familie, Pattern, Punkte,
+Spanne) und Datenbezüge (`data_refs` aus den `evidence_spans` einer PII-/DLP-Detektion) gibt der Aufrufer
+hinein; `obfuscated`/`decoded` kommen aus `TextViews::facts`. Analyzer `tf1` (`text/tf1.rs`): `T:<wort>`
+(Python `\w+` auf dem kleingeschriebenen Text) plus Fact-Tokens `F:LANG/CAR/ADR/SINK/DATA/CAT/FAM/PAT/MOD/
+OBF/DEC/SUP/CTR` und `F:ADR_SINK`. Cedar: `text/data/text.cedarschema` mit einer Aktion `text` und
+`TextFacts::cedar_context` (Paare vorverbunden wie bei K26). Python-Referenz
+`scripts/l1_threat/text_facts.py` (kanonisches JSON, `tf1`, `parity [--check]`), exakte Paritäts-Goldens
+`text/testdata/parity.jsonl`. Gemeinsam mit K26 in `detectors/facts_common/`: `pyjson` (kanonisches JSON,
+Liste der ordnungserhaltenden Schlüssel als Parameter), `fields` (strenger JSON-Leser), `tokens`
+(`FactTokens`, `collect`; `kf1` baut seine Fact-Tokens damit) und `cedar` (Schema laden). Goldens: Suite
+`text_facts_l1` (6 Positive + 6 Hard Negatives je Sprache). Noch kein Aufrufer im Scan-Pfad; die
+Kategorie-Regeln (IJ01 ff.) liefern die Findings, S04 trainiert über `tf1`, S07 schreibt Policies über
+das Schema.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),

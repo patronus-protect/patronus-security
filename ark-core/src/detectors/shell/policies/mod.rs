@@ -35,6 +35,7 @@ use serde::Deserialize;
 
 use super::facts::Facts;
 use super::pyre::{py_regex, try_py_regex, Anchor};
+use crate::detectors::facts_common;
 
 mod request;
 mod rules;
@@ -47,11 +48,8 @@ pub(crate) const DC_RULES_JSON: &str = include_str!("../data/dc_rules.json");
 const CORE_POLICIES: &str = include_str!("../data/core.cedar");
 const SCHEMA: &str = include_str!("../data/shell.cedarschema");
 
-static CEDAR_SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
-    Schema::from_cedarschema_str(SCHEMA)
-        .expect("shell-risk Cedar schema")
-        .0
-});
+static CEDAR_SCHEMA: LazyLock<Schema> =
+    LazyLock::new(|| facts_common::cedar::schema(SCHEMA, "shell-risk"));
 static PRINCIPAL: LazyLock<EntityUid> =
     LazyLock::new(|| EntityUid::from_str(r#"Agent::"shell""#).expect("principal"));
 static RESOURCE: LazyLock<EntityUid> =

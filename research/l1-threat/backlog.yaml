@@ -181,6 +181,7 @@ tasks:
     type: engine
     deps: [S01]
   - id: S06
+    status: done
     title: patronus.text_facts/1 — versioned, deterministic facts per text (findings with category/family/pattern/points/span, carrier, addressee, sinks, data refs from PII/DLP hits, modifiers obfuscated/decoded/quoted/negated/defensive/language), shaped like patronus.facts/1; tf1 token analyzer for the models
     type: engine
     deps: [S01, S03]
