@@ -224,7 +224,9 @@ Verzeichnissen) und gibt je Dokument und Klasse einen Score:
 Vorhersagen werden je Korpusdatei und Baseline-Version einmal berechnet und unter
 `CACHE/<baseline>/<version>/<satz>-<sha12>.jsonl` (+ `.json` mit Metadaten) abgelegt. Schlüssel: SHA-256 der
 Korpusdatei aus dem Manifest und die Baseline-Version (Runner-Version, Upstream-Commit und Hash des Regelsatzes
-bzw. Hash der Modelldatei). Eine vorhandene Datei wird nie neu berechnet. `sweep` liest nur den Cache und
+bzw. Hash der Modelldatei). Eine vorhandene Datei wird nie neu berechnet. `sweep` liest nur den Cache, und
+zwar je Baseline genau eine Version (die zuletzt geschriebene, im Bericht unter `version`); Sätze ohne
+Vorhersagen dieser Version stehen unter `missing`, Scores verschiedener Versionen werden nie gemischt. Es
 sucht je Klasse und Sprache (und `all`) die kleinste Schwelle, deren FPR auf den Benign-Zeilen höchstens die
 Ziel-FPR ist (Score 0 meldet nie); dazu TPR, TP, FP und Zählungen. Positiv ist eine Zeile für die Klassen in
 `classes` (nur berichtete Klassen zählen nicht), negativ jede `benign`-Zeile.

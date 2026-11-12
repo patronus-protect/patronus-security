@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -224,8 +225,9 @@ def test_predictions_are_cached_by_corpus_sha_and_version(corpus, tmp_path):
 
     base.score = lambda texts: pytest.fail("cached predictions must not be recomputed")
     assert MODULE.predict_set(base, set_id, path, sha, cache) == (target, False)
-    assert MODULE.cached_predictions(cache, "atr", set_id, sha) == target
-    assert MODULE.cached_predictions(cache, "atr", set_id, "f" * 64) is None
+    assert MODULE.cached_predictions(cache, "atr", base.version, set_id, sha) == target
+    assert MODULE.cached_predictions(cache, "atr", base.version, set_id, "f" * 64) is None
+    assert MODULE.cached_predictions(cache, "atr", "r0-other", set_id, sha) is None
 
 
 def test_forked_workers_give_the_same_predictions(corpus, tmp_path):
@@ -294,6 +296,30 @@ def test_cli_run_then_sweep_uses_the_cache(corpus, tmp_path, monkeypatch, capsys
     cell = atr["classes"]["instruction_injection"]["all"]["0.5"]
     # benign row 0 hits one injection rule: threshold 1 keeps FPR at 1/3
     assert cell["threshold"] == 1 and cell["tpr"] == 1.0 and cell["fp"] == 1
+
+
+def test_sweep_never_pools_scores_of_different_baseline_versions(corpus, tmp_path):
+    cache = tmp_path / "cache"
+    old, new = heuristic(), heuristic(commit="d" * 40)
+    sets = list(MODULE.corpus_sets(corpus))
+    for set_id, path, sha in sets:
+        MODULE.predict_set(old, set_id, path, sha, cache)
+    # an updated version cached only for the attack set (e.g. a run still in progress)
+    set_id, path, sha = sets[0]
+    target, _ = MODULE.predict_set(new, set_id, path, sha, cache)
+    meta = target.with_suffix(".json")
+    newest = max(p.stat().st_mtime for p in cache.glob("atr/*/*.json")) + 10
+    os.utime(meta, (newest, newest))
+    out = MODULE.sweep_baseline([corpus], cache, "atr", [0.5])
+    assert out["version"] == new.version
+    assert out["sets"] == ["attacks"] and out["missing"] == ["benign"]
+    # no benign rows of the old version: no negatives, so no matched-FPR cell
+    assert out["classes"]["instruction_injection"]["all"]["0.5"] is None
+
+
+def test_sweep_of_an_uncached_baseline_reports_every_set_missing(corpus, tmp_path):
+    out = MODULE.sweep_baseline([corpus], tmp_path / "cache", "atr", [0.5])
+    assert out["version"] is None and out["sets"] == [] and out["missing"] == ["attacks", "benign"]
 
 
 def test_cli_run_rejects_unknown_baselines(corpus, tmp_path):

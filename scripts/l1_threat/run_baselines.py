@@ -22,7 +22,9 @@ Every baseline of ``research/l1-threat/entity_map.yaml`` gives one score per doc
 Predictions are computed once per corpus file and baseline version and cached under
 ``CACHE/<baseline>/<version>/<set>-<sha12>.jsonl`` with a ``.json`` metadata file: the key is the
 SHA-256 of the corpus file from its manifest and the baseline version (runner version, upstream
-commit and rule-set hash, or model file hash). A cached file is never recomputed.
+commit and rule-set hash, or model file hash). A cached file is never recomputed. ``sweep``
+reads one version per baseline, the most recently written one, and lists the sets not cached under
+it as ``missing`` instead of pooling scores of different versions.
 
     python3 scripts/l1_threat/run_baselines.py clone --src DIR
     python3 scripts/l1_threat/run_baselines.py run --corpus DIR [--corpus DIR ...] --cache CACHE \
@@ -340,13 +342,18 @@ def predict_set(baseline: Baseline, set_id: str, path: Path, sha: str, cache: Pa
     return target, True
 
 
-def cached_predictions(cache: Path, baseline_id: str, set_id: str, sha: str) -> Path | None:
-    """The cached predictions of a corpus file for a baseline (newest version), or None."""
-    found = sorted((cache / baseline_id).glob(f"*/{set_id}-{sha[:12]}.json"), key=lambda p: p.stat().st_mtime)
-    for meta_path in reversed(found):
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        if meta.get("corpus_sha256") == sha:
-            return meta_path.with_suffix(".jsonl")
+def latest_version(cache: Path, baseline_id: str) -> str | None:
+    """The cached version of a baseline with the most recently written predictions, or None."""
+    found = sorted((cache / baseline_id).glob("*/*.json"), key=lambda p: p.stat().st_mtime)
+    return found[-1].parent.name if found else None
+
+
+def cached_predictions(cache: Path, baseline_id: str, version: str, set_id: str, sha: str) -> Path | None:
+    """The cached predictions of a corpus file for one baseline version, or None."""
+    target = cache_path(cache, baseline_id, version, set_id, sha)
+    meta_path = target.with_suffix(".json")
+    if meta_path.is_file() and json.loads(meta_path.read_text(encoding="utf-8")).get("corpus_sha256") == sha:
+        return target
     return None
 
 
@@ -411,22 +418,28 @@ def sweep(rows: Iterable[tuple[dict[str, Any], dict[str, Any]]], classes: list[s
 
 
 def sweep_baseline(corpora: list[Path], cache: Path, baseline_id: str, fprs: Iterable[float]) -> dict[str, Any]:
+    """Sweep one baseline version (the latest cached one); sets without it are ``missing``.
+
+    Scores of different versions are never pooled: a set cached only under an older version is
+    missing, not mixed into the threshold sweep.
+    """
+    version = latest_version(cache, baseline_id)
     pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
     classes: set[str] = set()
-    sets: dict[str, str] = {}
+    sets: list[str] = []
     missing: list[str] = []
     for directory in corpora:
         for set_id, path, sha in corpus_sets(directory):
-            pred_path = cached_predictions(cache, baseline_id, set_id, sha)
+            pred_path = cached_predictions(cache, baseline_id, version, set_id, sha) if version else None
             if pred_path is None:
                 missing.append(set_id)
                 continue
             meta = json.loads(pred_path.with_suffix(".json").read_text(encoding="utf-8"))
             classes.update(meta["classes"])
-            sets[set_id] = meta["version"]
+            sets.append(set_id)
             preds = {p["id"]: p for p in read_rows(pred_path)}
             pairs.extend((row, preds[row["id"]]) for row in read_rows(path))
-    return {"baseline": baseline_id, "sets": sets, "missing": missing,
+    return {"baseline": baseline_id, "version": version, "sets": sets, "missing": missing,
             "classes": sweep(pairs, sorted(classes), fprs)}
 
 
