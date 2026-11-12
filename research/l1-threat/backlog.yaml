@@ -176,6 +176,7 @@ tasks:
     type: engine
     deps: [S01]
   - id: S03
+    status: done
     title: Normalisation pre-pass in the core for all category lexica (K06 view, Unicode tags, decoded views base64/hex/rot13) exposed as facts (obfuscated, decoded)
     type: engine
     deps: [S01]
