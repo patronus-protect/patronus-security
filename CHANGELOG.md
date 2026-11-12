@@ -11,6 +11,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add versioned, deterministic text facts `patronus.text_facts/1`
+  (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
+  policies, in the same form as the shell-command facts: the pattern findings of a text (category,
+  family, pattern, points, span) with the modifiers of their clause (`decoded`, `defensive`,
+  `negated`, `obfuscated`, `quoted`, `test_code`), the carrier read from the text structure alone
+  (chat, e-mail, web page, document, tool description, agent configuration, code, log), the
+  addressee (`model`, `authority`), sinks (URLs, markdown images, e-mail addresses, sink terms), data
+  references from PII and DLP hits, the obfuscation and decoding facts of the normalisation
+  pre-pass, context terms and the language (`de`, `en`, `und`). The facts have a canonical JSON form
+  that a Python reference (`scripts/l1_threat/text_facts.py`) reproduces byte for byte, a token
+  analyzer `tf1` (lowercased words plus fact tokens) and a Cedar schema
+  (`detectors/text/data/text.cedarschema`). Canonical JSON, the strict JSON reader, fact tokens and
+  Cedar schema loading are now shared with shell-command risk (`detectors::facts_common`); the
+  shell-risk facts, tokens and verdicts are byte-identical. **Detection change:** none; the text
+  facts are not yet used on the scan path, so scan latency is unchanged.
+
 - Add a shared normalisation pre-pass for the attack categories
   (`patronus_ark_core::detectors::text_views`): one pass builds the views a lexicon reads besides the
   original text — zero-width characters, full-width forms and defanged separators undone, and
