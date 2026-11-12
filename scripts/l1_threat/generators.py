@@ -434,7 +434,11 @@ def exfil_lookalikes(r: Any, split: str, dataset: str, label_of: Callable[[list[
 
 def obfuscation_slices(r: Any, split: str, dataset: str, label_of: Callable[[list[str]], str | None],
                        attacks: list[list[dict[str, Any]]], benign: list[dict[str, Any]], count: int) -> list[dict[str, Any]]:
-    """Attack and benign rows under the same obfuscation and wrapper, one slice per obfuscation."""
+    """Attack and benign rows under the same obfuscation and wrapper, one slice per obfuscation.
+
+    A language without benign rows borrows the whole benign pool; the twin then keeps the language of
+    its clean source, so per-language false-positive counts stay correct.
+    """
     rows: list[dict[str, Any]] = []
     names = sorted(OBFUSCATIONS)
     clean_by_lang = {lang: strata([row for row in benign if row["language"] == lang] or benign) for lang in LANGUAGES}
@@ -447,8 +451,8 @@ def obfuscation_slices(r: Any, split: str, dataset: str, label_of: Callable[[lis
         wrapper = WRAPPERS[split][family]
         base = {**_base(dataset, "obfuscation_slices", family, lang, source), "carrier": "direct", "obfuscation": name}
         attack = {**base, "classes": list(source["classes"]), "text": _fill(wrapper, lang, {"x": OBFUSCATIONS[name](source["text"])})}
-        twin = {**base, "source_id": clean["id"], "translated": bool(clean.get("translated")),
-                "text": _fill(wrapper, lang, {"x": OBFUSCATIONS[name](clean["text"])})}
+        twin = {**base, "language": clean["language"], "source_id": clean["id"], "translated": bool(clean.get("translated")),
+                "text": _fill(wrapper, clean["language"], {"x": OBFUSCATIONS[name](clean["text"])})}
         rows.extend(_pair(dataset, "obfuscation_slices", index, label_of(source["classes"]), attack, twin))
     return rows
 
@@ -465,7 +469,13 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
     def label_of(classes: list[str]) -> str | None:
         return attack_label(labels, classes)
 
-    usable = [row for row in inputs if row["language"] in LANGUAGES and len(row["text"]) <= MAX_PAYLOAD_CHARS and row["text"].strip()]
+    # Corpus rows carry no provenance; the German part of a set marked `translated` in the entity map is
+    # translated. Rows with explicit provenance (runner translations) keep it.
+    translated = {d["id"] for d in emap["datasets"] if d.get("translated")}
+    usable = [
+        {**row, "translated": bool(row.get("translated")) or (row["language"] == "de" and row["dataset"] in translated)}
+        for row in inputs if row["language"] in LANGUAGES and len(row["text"]) <= MAX_PAYLOAD_CHARS and row["text"].strip()
+    ]
     attacks = strata([row for row in usable if not row["benign"] and row["classes"] and label_of(row["classes"])])
     benign = [row for row in usable if row["benign"]]
     if not attacks or not benign:

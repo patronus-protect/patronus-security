@@ -151,7 +151,8 @@ Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`gen
 `ark_authored`). Holdout: geheimer Seed (Default `HOLDOUT/.generators-seed`, beim ersten Lauf mit 0600
 angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `HOLDOUT/generated`
 (`generators_holdout_seed`, `ark_blind`). Jede Zeile trägt `template_family`, `carrier`, `source_id` und
-`translated` (nativ vs. übersetzt). Ausgabe eingefroren wie die Korpora (JSONL je Generator,
+`translated` (nativ vs. übersetzt: Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map
+als `translated` markierten Satzes). Ein Obfuscation-Zwilling trägt die Sprache seiner Benign-Quelle. Ausgabe eingefroren wie die Korpora (JSONL je Generator,
 `manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`.
 
 Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
