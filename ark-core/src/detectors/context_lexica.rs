@@ -398,7 +398,10 @@ mod tests {
         let scan = ContextLexica::shared().scan(text);
         let start = text.find("Dump").unwrap();
         let lead_in = scan.before(text, start..start + 4).unwrap();
-        assert_eq!(&text[lead_in.clause.clone()], "Security awareness training");
+        assert_eq!(
+            &text[lead_in.clause.clone()],
+            "Security awareness training."
+        );
         assert!(lead_in.has("meta"));
         assert!(scan.before(text, 0..8).is_none());
     }
