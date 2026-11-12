@@ -196,9 +196,23 @@ class L1BenchmarkDataTests(unittest.TestCase):
         for name, cases_name in (
             ("pii_l1", "PII_CASES"),
             ("dlp_l1", "DLP_CASES"),
+            ("unsafe_action_l1", "UNSAFE_ACTION_CASES"),
         ):
             expected = namespace["flatten"](name, namespace[cases_name])
             self.assertEqual(load(name), expected, name)
+
+    def test_unsafe_action_goldens_cover_every_rule_in_both_languages(self):
+        rows = load("unsafe_action_l1")
+        counts = Counter((row["language"], row["case_type"]) for row in rows)
+        for language in ("de", "en"):
+            for case_type in ("positive", "hard_negative"):
+                self.assertGreaterEqual(counts[(language, case_type)], 5)
+        per_rule = Counter((row["rule_id"], row["language"], row["case_type"]) for row in rows)
+        for rule_id in {row["rule_id"] for row in rows}:
+            for language in ("de", "en"):
+                for case_type in ("positive", "hard_negative"):
+                    self.assertGreaterEqual(per_rule[(rule_id, language, case_type)], 2, rule_id)
+        self.assertTrue(all(row["provenance"]["origin"] == "ark_authored" for row in rows))
 
     def test_every_native_pii_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E10): known gaps are reported, not gated, so they do not count.
