@@ -37,9 +37,8 @@ struct CompiledMcpRule {
     severity: McpSeverity,
 }
 
-/// All MCP tool policy rules. Befehlsformen, die `shell_command` per Policy
-/// entscheidet (`nc -e`, Base64-Dekodierung in eine Shell, Anhängen an
-/// Shell-Profile, `history -c`/`unset HISTFILE`), prüft nur noch `shell_command`.
+/// All MCP tool policy rules. `nc -e`/`ncat -e` prüft nur noch `shell_command`,
+/// das ihn auch im serialisierten Tool-Call per Policy entscheidet.
 static MCP_RULES: &[McpPolicyRuleDef] = &[
     // ── Destruktive Dateioperationen ─────────────────────────────────────────
     McpPolicyRuleDef {
@@ -98,7 +97,7 @@ static MCP_RULES: &[McpPolicyRuleDef] = &[
     McpPolicyRuleDef {
         name: "pi_mcp_encoded_cmd",
         tool_pattern: r"(?i)^(bash|shell|exec|run_command|execute|terminal|bash_exec)$",
-        arg_pattern: r"(?i)\beval\b.*\bbase64\b",
+        arg_pattern: r"(?i)(\beval\b.*\bbase64\b|\bbase64\s+(-d|--decode)\b.*\|\s*(ba)?sh\b)",
         severity: McpSeverity::Critical,
     },
     McpPolicyRuleDef {
@@ -154,7 +153,7 @@ static MCP_RULES: &[McpPolicyRuleDef] = &[
     McpPolicyRuleDef {
         name: "pi_mcp_shell_profile_cmd",
         tool_pattern: r"(?i)^(bash|shell|exec|run_command|execute|terminal|bash_exec)$",
-        arg_pattern: r"(?i)\balias\s+\w+=",
+        arg_pattern: r"(?i)(>>\s*[^\|;&]*\.(bashrc|bash_profile|profile|zshrc|zprofile|zshenv)\b|\balias\s+\w+=|>>\s*[^\|;&]*/etc/profile\b)",
         severity: McpSeverity::Critical,
     },
     // ── Prozess-Detachment ────────────────────────────────────────────────────
@@ -168,7 +167,7 @@ static MCP_RULES: &[McpPolicyRuleDef] = &[
     McpPolicyRuleDef {
         name: "pi_mcp_log_tamper",
         tool_pattern: r"(?i)^(bash|shell|exec|run_command|execute|terminal|bash_exec|write_file|file_write|edit_file)$",
-        arg_pattern: r"(?i)(\b(rm|truncate|shred)\b[^\|;&]*/var/log/|\b(rm|truncate|shred)\b[^\|;&]*\.(log|audit|jsonl)\b|>\s*[^\|;&]*/var/log/|\bexport\s+HISTFILE=/dev/null\b)",
+        arg_pattern: r"(?i)(\b(rm|truncate|shred)\b[^\|;&]*/var/log/|\b(rm|truncate|shred)\b[^\|;&]*\.(log|audit|jsonl)\b|>\s*[^\|;&]*/var/log/|\bhistory\s+-c\b|\bunset\s+HISTFILE\b|\bexport\s+HISTFILE=/dev/null\b)",
         severity: McpSeverity::Critical,
     },
     McpPolicyRuleDef {
@@ -450,9 +449,13 @@ mod tests {
                 "write_file",
                 "/tmp/task/.bashrc",
             ),
-            ("pi_mcp_shell_profile_cmd", "bash", "alias ls=true"),
+            (
+                "pi_mcp_shell_profile_cmd",
+                "bash",
+                "echo test >> /tmp/task/.bashrc",
+            ),
             ("pi_mcp_detached_process", "bash", "nohup example"),
-            ("pi_mcp_log_tamper", "bash", "shred -u app.log"),
+            ("pi_mcp_log_tamper", "bash", "history -c"),
             (
                 "pi_mcp_windows_event_log_tamper",
                 "cmd",
