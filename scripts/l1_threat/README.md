@@ -92,6 +92,47 @@ Klasse in der Sprache abdeckt; `decides: false` hält ein Label nur berichtet.
 
 Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 
+## Datensatz-Registry und Korpora
+
+[`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
+Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
+`parquet` nur mit UTF-8-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
+→ Upstream-Label der Entity-Map), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
+`report_only`) und `training: false` für reine Auswertungssätze (MCPTox, AgentHarm). Lizenz, Split,
+Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Rolle wird abgeleitet:
+`decisive` (Holdout, Familie `neutral`/`ark_blind`), `dev` (`train_dev`), sonst `report`; `commercial: false`
+ist immer `report`. Sätze aus ARK selbst (`ark_blind`, `ark_authored`) sind `internal`. Holdout-Rezepte
+stehen nie im Repo: Sie sind `pending` und kommen beim Holdout-Setup über `--overlay` aus
+`~/ark-threat/holdout`.
+
+```bash
+python3 scripts/l1_threat/prepare_corpora.py check     # Exit 1 bei jedem Problem
+python3 scripts/l1_threat/prepare_corpora.py list      # Split, Familie, Rolle, Stand je Satz
+python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT [--sources CACHE] [--overlay HOLDOUT.yaml] [--offline] [--force]
+python3 scripts/l1_threat/prepare_corpora.py verify DIR
+```
+
+Das Vorbereiten (Gate-Schritt `prepare-corpora`) schreibt `DEV/train_dev/`, `DEV/report/` und
+`HOLDOUT/holdout/`; der Download-Cache liegt in `--sources` (Default `HOLDOUT/.sources`, nie unter DEV),
+die Holdout-Rezepte kommen aus `--overlay` (Default `HOLDOUT/datasets.overlay.yaml`, falls vorhanden). Ein
+Split ohne fertigen Satz wird nicht geschrieben. Je Split entsteht je fertigem Satz `<id>.jsonl` (Text, Sprache, Upstream-Labels, Klassen,
+nur berichtete Klassen, Familien, `benign`, Spalte `contamination` je Baseline), `manifest.json` (SHA-256
+jeder Quell- und Ausgabedatei, Revision, Rolle, Lizenz, Zähler je Klasse/Sprache, verworfene Zeilen nach
+Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben, oder
+wenn es unversehrt in einem älteren Korpusformat vorliegt und aus denselben Eingaben (Sätze, Revisionen,
+Quelldateien, Dedup-Einstellungen, Trainingslisten) entstand. Eine
+Zeile, die keine Label-Regel trifft, bricht ab. Dedup auf NFKC, Casefold und zusammengefasstem Leerraum:
+exakt und MinHash (Zeichen-5-Gramme, 64 Permutationen, 16 Bänder, Jaccard-Schätzung ≥ 0,8) innerhalb
+jedes Satzes; der Holdout verwirft jede Zeile, die in einem `train_dev`- oder `report`-Satz vorkommt;
+gegen Baseline-Trainingslisten (`trained_on` der Entity-Map) wird nicht verworfen, sondern je Baseline
+markiert. Eine Trainingsquelle, die der Split nicht lesen darf oder kann (ausstehend, intern oder beim
+Vorbereiten von `train_dev`/`report` ein Holdout-Satz), steht im Manifest unter `unchecked`; eine Zeile
+ohne Treffer ist für diese Baseline dann `null` (unbekannt), nie `false`, und `contamination_unchecked`
+zählt solche Zeilen je Satz. Beim Vorbereiten von `train_dev` und `report` wird nie eine Holdout-Quelle gelesen. Braucht
+`numpy` und PyYAML; Downloads und Parquet-Leser kommen aus `scripts/l1_presidio/prepare_corpora.py`.
+
+Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.
+
 ## Latenz auf echtem deutschem Text
 
 `latency.py` misst die L1-Latenz von `threat` allein, `injection` allein und allen L1-Kategorien zusammen
