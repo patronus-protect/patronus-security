@@ -3,6 +3,9 @@
 use super::{obfuscation::*, patterns::*, util::text_windows};
 use super::{prepared::WINDOW_BYTES, NativeText};
 use crate::detectors::evidence::{L1Component, L1Match, MatchText};
+use crate::detectors::text_views::decode::{
+    base64_decode_text, continuous_hex_decode, rot13_decode_text, split_fragments,
+};
 use aho_corasick::AhoCorasick;
 use regex::Regex;
 

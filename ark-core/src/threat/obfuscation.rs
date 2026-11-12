@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+use crate::detectors::text_views::decode::hex_byte;
+
 pub(super) fn is_token_boundary(ch: char) -> bool {
     ch.is_whitespace()
         || matches!(
@@ -220,108 +222,4 @@ pub fn slash_unicode_decode_lossy(text: &str) -> String {
         }
     }
     out
-}
-
-pub(super) fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
-    text.split(|ch: char| {
-        ch.is_whitespace()
-            || matches!(
-                ch,
-                '"' | '\'' | ',' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}'
-            )
-    })
-    .filter(|fragment| (8..=256).contains(&fragment.len()))
-}
-
-pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
-    if !fragment.len().is_multiple_of(2)
-        || fragment.len() < 8
-        || !fragment.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(fragment.len() / 2);
-    for pair in fragment.as_bytes().chunks(2) {
-        bytes.push(hex_byte(pair[0], pair[1])?);
-    }
-    let decoded = String::from_utf8(bytes).ok()?;
-    if decoded
-        .chars()
-        .all(|ch| ch.is_ascii_graphic() || ch.is_ascii_whitespace())
-    {
-        Some(decoded)
-    } else {
-        None
-    }
-}
-
-pub fn base64_decode_text(fragment: &str) -> Option<String> {
-    if fragment.len() < 12 || !fragment.len().is_multiple_of(4) {
-        return None;
-    }
-    if !fragment.bytes().all(|byte| {
-        byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'-' | b'_' | b'=')
-    }) {
-        return None;
-    }
-
-    let mut out = Vec::with_capacity(fragment.len() * 3 / 4);
-    let mut chunk = [0u8; 4];
-    for raw in fragment.as_bytes().chunks(4) {
-        for (idx, byte) in raw.iter().enumerate() {
-            chunk[idx] = base64_value(*byte)?;
-        }
-        out.push((chunk[0] << 2) | (chunk[1] >> 4));
-        if raw[2] != b'=' {
-            out.push((chunk[1] << 4) | (chunk[2] >> 2));
-        }
-        if raw[3] != b'=' {
-            out.push((chunk[2] << 6) | chunk[3]);
-        }
-    }
-
-    let decoded = String::from_utf8(out).ok()?;
-    if decoded
-        .chars()
-        .all(|ch| ch.is_ascii_graphic() || ch.is_ascii_whitespace())
-    {
-        Some(decoded)
-    } else {
-        None
-    }
-}
-
-pub(super) fn base64_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'A'..=b'Z' => Some(byte - b'A'),
-        b'a'..=b'z' => Some(byte - b'a' + 26),
-        b'0'..=b'9' => Some(byte - b'0' + 52),
-        b'+' | b'-' => Some(62),
-        b'/' | b'_' => Some(63),
-        b'=' => Some(0),
-        _ => None,
-    }
-}
-
-pub(super) fn rot13_decode_text(text: &str) -> String {
-    text.chars()
-        .map(|character| match character {
-            'a'..='m' | 'A'..='M' => char::from_u32(character as u32 + 13).unwrap(),
-            'n'..='z' | 'N'..='Z' => char::from_u32(character as u32 - 13).unwrap(),
-            _ => character,
-        })
-        .collect()
-}
-
-pub(super) fn hex_byte(high: u8, low: u8) -> Option<u8> {
-    Some(hex_nibble(high)? << 4 | hex_nibble(low)?)
-}
-
-pub(super) fn hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }

@@ -13,6 +13,7 @@ pub mod pii;
 pub mod score;
 pub mod shell;
 pub mod structure;
+pub mod text_views;
 pub mod threat;
 pub mod validators;
 pub mod word_boundary;

@@ -460,7 +460,7 @@ fn push_regex_matches<'a>(
         if rule.decoded_base64_instruction || rule.decoded_unicode_instruction {
             let decoded = captures.name("encoded_payload").and_then(|payload| {
                 if rule.decoded_base64_instruction {
-                    crate::threat::base64_decode_text(payload.as_str())
+                    crate::detectors::text_views::decode::base64_decode_text(payload.as_str())
                 } else {
                     Some(crate::threat::slash_unicode_decode_lossy(payload.as_str()))
                 }
