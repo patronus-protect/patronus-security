@@ -23,6 +23,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- Prompt-injection and threat findings now report rule points in each `matched_rules` entry, in the
+  same form PII and secret rules use: `rule_score` (base points by rule severity, plus the strength
+  of the rule's post-match check, plus 5 points per keyword anchor every match must contain, at most
+  15), `validator_strength` (`structure` for checks that decode or parse the match, otherwise
+  `none`) and `context` (`bonus`, `penalty`, `anchors`). The Rust type
+  `patronus_ark_core::detectors::score::RulePoints` holds these points, and `ScoredPattern` has a
+  new `required_anchors` method (default 0). **Detection change:** none; verdicts, confidences and
+  spans are unchanged, the points are reported only.
 - PII and secret (DLP) rules now share one scoring module,
   `patronus_ark_core::detectors::score`: the context points, the validator strength and the score
   of a finding are defined once for both categories (`ScoredPattern`, `score`, `rule_score`). The

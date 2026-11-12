@@ -132,11 +132,19 @@ Grundsätze:
 implementieren `ScoredPattern`; die Kopien in `pii/score.rs` und `dlp/score.rs` sind entfernt, Scores
 bit-identisch. Die Kontext-Engine (Fenster, Wortgrenzen, `Evidence`, `ProximityLexicon`) liegt in
 `ark-core/src/detectors/context.rs`; PII baut je Label ein `ProximityLexicon`, DLP hängt nicht mehr an
-PII. S01 ist damit nicht erledigt: Das Abnahmekriterium für Injection/Threat ist noch nicht umgesetzt, die
-Aufgabe bleibt offen, bis folgende Teile stehen: übrige Core-Teile (Anker-Scanner, `AnchorGate`, `Fields`, Klausel-/Negations-/
-Zitatspannen) unter ein gemeinsames Core-Modul ziehen, Injection/Threat-Regeln mit
-`base_score`/Validator-Stärke und Ankerpunkten auf `ScoredPattern`, Modus je Kategorie,
-`matched_rules[].context` für Injection/Threat. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
+PII. Zweiter Teilschritt: `score::RulePoints` (implementiert `ScoredPattern`) gibt jeder Injection-Regel
+(Katalog, nativ, strukturell) und jeder Threat-Regel `base_score` aus der Severity (critical 55, high 45,
+medium 35, sonst 25; Threat-Regeln ohne Severity zählen als high), eine Validator-Stärke (`structure` für
+dekodierte Payloads, die strukturelle Vier-Komponenten-Regel und die URL-Prüfung von
+`ark.threat.ssrf_metadata`, sonst `none`) und Ankerpunkte: `AnchorGate::required_anchors` zählt die
+Anker, die jeder Treffer enthalten muss, je 5 Punkte, höchstens 3 Anker
+(`ScoredPattern::required_anchors`, für PII/DLP 0, Scores dort bit-identisch). `matched_rules[]` von
+Injection und Threat trägt `rule_score`, `validator_strength` und `context` (`bonus`, `penalty`, `anchors`).
+Die Entscheidungen bleiben unverändert: die Punkte werden berichtet, die Annahme läuft weiter über die
+bestehenden Scorer (Umstellung erst mit Facts/Modellen S03–S05). Die doppelte `severity_rank` in Injection
+ist durch die gemeinsame ersetzt. S01 bleibt offen für: übrige Core-Teile (Anker-Scanner, `AnchorGate`,
+`Fields`, Klausel-/Negations-/Zitatspannen) unter ein gemeinsames Core-Modul ziehen, Nähe-Kontext
+(`context.rs`) für Injection/Threat, Modus je Kategorie. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
 die Filter `pii` und `dlp` aufnehmen (der Runner darf `.github/` nicht ändern).
 
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
