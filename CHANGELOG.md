@@ -15,7 +15,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `scripts/l1_threat/prepare_corpora.py`, which fetches every registered public dataset at a pinned
   revision, verifies the SHA-256 of each file, maps its upstream labels onto the eleven attack and
   content categories (a row whose label the mapping does not name stops the run), and freezes one
-  directory per split with a SHA-256 manifest. Datasets are split by source, never at random: each
+  directory per split with a SHA-256 manifest (`--dev-out DIR --holdout-out DIR`: tuning and
+  report-only data go to the first directory, evaluation data to the second, downloads are cached
+  next to the evaluation data). Datasets are split by source, never at random: each
   set is either tuning/training data, evaluation data or report-only data. Texts are deduplicated
   exactly and by MinHash within each set; evaluation rows that repeat a tuning or report row are
   dropped; every row carries a per-baseline contamination column that marks the training sets of a

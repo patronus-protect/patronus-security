@@ -108,12 +108,14 @@ stehen nie im Repo: Sie sind `pending` und kommen beim Holdout-Setup über `--ov
 ```bash
 python3 scripts/l1_threat/prepare_corpora.py check     # Exit 1 bei jedem Problem
 python3 scripts/l1_threat/prepare_corpora.py list      # Split, Familie, Rolle, Stand je Satz
-python3 scripts/l1_threat/prepare_corpora.py prepare --split train_dev --out DIR --sources CACHE [--offline] [--force]
-python3 scripts/l1_threat/prepare_corpora.py --overlay HOLDOUT.yaml prepare --split holdout --out DIR --sources CACHE  # nur Setup
+python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT [--sources CACHE] [--overlay HOLDOUT.yaml] [--offline] [--force]
 python3 scripts/l1_threat/prepare_corpora.py verify DIR
 ```
 
-`prepare` schreibt je fertigem Satz des Splits `<id>.jsonl` (Text, Sprache, Upstream-Labels, Klassen,
+Das Vorbereiten (Gate-Schritt `prepare-corpora`) schreibt `DEV/train_dev/`, `DEV/report/` und
+`HOLDOUT/holdout/`; der Download-Cache liegt in `--sources` (Default `HOLDOUT/.sources`, nie unter DEV),
+die Holdout-Rezepte kommen aus `--overlay` (Default `HOLDOUT/datasets.overlay.yaml`, falls vorhanden). Ein
+Split ohne fertigen Satz wird nicht geschrieben. Je Split entsteht je fertigem Satz `<id>.jsonl` (Text, Sprache, Upstream-Labels, Klassen,
 nur berichtete Klassen, Familien, `benign`, Spalte `contamination` je Baseline), `manifest.json` (SHA-256
 jeder Quell- und Ausgabedatei, Revision, Rolle, Lizenz, Zähler je Klasse/Sprache, verworfene Zeilen nach
 Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben. Eine

@@ -9,14 +9,15 @@ Splitting is by source only: a dataset is ``train_dev``, ``holdout`` or ``report
 
     python3 scripts/l1_threat/prepare_corpora.py check                       # exit 1 on any problem
     python3 scripts/l1_threat/prepare_corpora.py list                        # role and state per set
-    python3 scripts/l1_threat/prepare_corpora.py prepare --split train_dev --out DIR --sources CACHE
-    python3 scripts/l1_threat/prepare_corpora.py prepare --split holdout --out DIR --sources CACHE \\
-        --overlay HOLDOUT_RECIPES.yaml                                        # holdout setup only
+    python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT [--offline] [--force]
     python3 scripts/l1_threat/prepare_corpora.py verify DIR                   # exit 1 unless intact
 
-``prepare`` writes one ``<id>.jsonl`` per ready set of the split, a ``manifest.json`` with the SHA-256
-of every source file and output file, and ``.ready`` last. A frozen directory is rewritten only with
-``--force``. Deduplication (texts after NFKC, case folding and whitespace collapsing):
+Preparing writes ``DEV/train_dev/``, ``DEV/report/`` and ``HOLDOUT/holdout/``: one ``<id>.jsonl`` per
+ready set of the split, a ``manifest.json`` with the SHA-256 of every source file and output file, and
+``.ready`` last. Downloads are cached in ``--sources`` (default ``HOLDOUT/.sources``, never inside DEV).
+Holdout recipes come from ``--overlay`` (default ``HOLDOUT/datasets.overlay.yaml`` when present); a
+split without any ready set is not written. A frozen directory is rewritten only with ``--force``.
+Deduplication (texts after NFKC, case folding and whitespace collapsing):
 - exact and MinHash within each set (first occurrence kept);
 - across splits: preparing the holdout drops every row that duplicates a row of a train_dev or
   report set, so nothing the runner can train on reaches the holdout;
@@ -67,6 +68,9 @@ REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
 CORPORA_SCHEMA = "ark-l1-threat-corpora-v1"
 READY = ".ready"
+OVERLAY_FILE = "datasets.overlay.yaml"
+# Output directory of each split: (DEV or HOLDOUT, subdirectory).
+LAYOUT = {"train_dev": ("dev", "train_dev"), "report": ("dev", "report"), "holdout": ("holdout", "holdout")}
 FORMATS = ("jsonl", "json", "csv", "parquet")
 SPLITS = entity_map.SPLITS
 INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
@@ -560,6 +564,9 @@ def verify(directory: Path) -> list[str]:
 
 def prepare(split: str, out: Path, registry: dict[str, Any], emap: dict[str, Any], sources: Path, offline: bool, force: bool, download: Callable[[str], bytes] = PRESIDIO.download) -> int:
     files = build(split, registry, emap, sources, offline, download)
+    if len(files) == 2:
+        print(f"{split}: no ready set; {out} not written")
+        return 0
     if (out / READY).exists():
         current = (out / "manifest.json").read_bytes() if (out / "manifest.json").is_file() else b""
         if not verify(out) and current == files["manifest.json"]:
@@ -570,6 +577,32 @@ def prepare(split: str, out: Path, registry: dict[str, Any], emap: dict[str, Any
             return 1
     BENIGN_CODE._write(out, files)
     print(f"{split}: {len(files) - 2} sets written to {out}")
+    return 0
+
+
+def prepare_splits(
+    dev_out: Path,
+    holdout_out: Path,
+    sources: Path | None,
+    registry: dict[str, Any],
+    emap: dict[str, Any],
+    offline: bool,
+    force: bool,
+    download: Callable[[str], bytes] = PRESIDIO.download,
+) -> int:
+    """Prepare every split under DEV or HOLDOUT (``LAYOUT``); 0 when all are written or unchanged."""
+    sources = holdout_out / ".sources" if sources is None else sources
+    dev, holdout = dev_out.resolve(), holdout_out.resolve()
+    if dev == holdout or dev.is_relative_to(holdout) or holdout.is_relative_to(dev):
+        print("prepare_corpora: --dev-out and --holdout-out must be separate, non-nested directories", file=sys.stderr)
+        return 1
+    if sources.resolve().is_relative_to(dev):
+        print("prepare_corpora: --sources must not be inside --dev-out: the cache holds holdout sources", file=sys.stderr)
+        return 1
+    roots = {"dev": dev, "holdout": holdout}
+    for split, (root, name) in LAYOUT.items():
+        if prepare(split, roots[root] / name, registry, emap, sources, offline, force, download):
+            return 1
     return 0
 
 
@@ -587,16 +620,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry", type=Path, default=REGISTRY_PATH)
     parser.add_argument("--entity-map", type=Path, default=entity_map.MAP_PATH)
-    parser.add_argument("--overlay", type=Path, help="recipes for pending sets (holdout setup only)")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--overlay", type=Path, help=f"recipes for pending sets (default: HOLDOUT/{OVERLAY_FILE} if present)")
+    parser.add_argument("--dev-out", type=Path, help="train_dev and report corpora (visible to agents)")
+    parser.add_argument("--holdout-out", type=Path, help="holdout corpora (gate only)")
+    parser.add_argument("--sources", type=Path, help="download cache, one directory per set (default: HOLDOUT/.sources)")
+    parser.add_argument("--offline", action="store_true", help="never fetch; the cache must be complete")
+    parser.add_argument("--force", action="store_true", help="replace frozen corpora that differ")
+    sub = parser.add_subparsers(dest="command")
     sub.add_parser("check")
     sub.add_parser("list")
-    prep = sub.add_parser("prepare")
-    prep.add_argument("--split", choices=SPLITS, required=True)
-    prep.add_argument("--out", type=Path, required=True)
-    prep.add_argument("--sources", type=Path, required=True, help="download cache, one directory per set")
-    prep.add_argument("--offline", action="store_true")
-    prep.add_argument("--force", action="store_true")
     ver = sub.add_parser("verify")
     ver.add_argument("directory", type=Path)
     args = parser.parse_args(argv)
@@ -605,9 +637,14 @@ def main(argv: list[str] | None = None) -> int:
         problems = verify(args.directory)
         print("\n".join(problems) or f"{args.directory}: frozen and intact")
         return 1 if problems else 0
+    if args.command is None and (args.dev_out is None or args.holdout_out is None):
+        parser.error("--dev-out and --holdout-out are required (or use check, list or verify)")
+    overlay = args.overlay
+    if overlay is None and args.command is None and (args.holdout_out / OVERLAY_FILE).is_file():
+        overlay = args.holdout_out / OVERLAY_FILE
     registry, emap = load(args.registry), entity_map.load(args.entity_map)
-    if args.overlay:
-        registry = apply_overlay(registry, load(args.overlay))
+    if overlay:
+        registry = apply_overlay(registry, load(overlay))
     if args.command == "check":
         problems = check(registry, emap)
         print("\n".join(problems) or f"{args.registry}: ok ({sum(map(is_ready, registry['datasets']))} ready)")
@@ -615,7 +652,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "list":
         print(listing(registry, emap))
         return 0
-    return prepare(args.split, args.out, registry, emap, args.sources, args.offline, args.force)
+    return prepare_splits(args.dev_out, args.holdout_out, args.sources, registry, emap, args.offline, args.force)
 
 
 if __name__ == "__main__":
