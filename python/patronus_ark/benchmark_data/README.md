@@ -23,6 +23,7 @@ compiled extension.
 | `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 692 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `text_views_l1.jsonl` | 24 | Obfuscated and decoded facts of the normalisation pre-pass (schema v1) |
+| `text_facts_l1.jsonl` | 24 | Language, carrier, addressee, sinks and counter context of the text facts (schema v1) |
 
 ## Native L1 golden-set contract
 
@@ -369,6 +370,28 @@ carrier (`chat`, `email`, `webpage`, `document`, `tool_description`,
 that hid prose (`base64`, `hex`, `rot13`, `unicode_tags`). Hard negatives have
 both lists empty and a `negative_reason`. The generator computes every encoded
 form from a plain sentence.
+
+### Text-facts golden schema v1
+
+`text_facts_l1.jsonl` checks the text-level facts of `patronus.text_facts/1`
+(`patronus_ark_core::detectors::text::facts`) in German and English, in the same
+carriers:
+
+```json
+{"id": "text_facts_l1-text-facts-pos-01", "suite": "text_facts_l1", "schema_version": 1,
+ "language": "en", "case_type": "positive", "carrier": "chat", "text": "...",
+ "expected_facts": {"language": "en", "carrier": ["chat"], "addressee": ["model"],
+                    "sinks": ["url"], "counter": []},
+ "provenance": {"origin": "ark_authored", "source": "..."}}
+```
+
+`language`, `carrier` (read from the text structure alone), `addressee`
+(`model`, `authority`) and the sink kinds (`url`, `markdown_image`, `email`,
+`term`) must match exactly; `counter` lists counter contexts (`defensive`,
+`meta`, `quotation`, `test_code`, `negation_scope`) the text must at least show.
+Positives address the model and name a sink; hard negatives (defensive prompts,
+quotes, security documentation, test code, negated rules) carry a counter
+context and a `negative_reason`.
 
 ## Provenance
 
