@@ -22,6 +22,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   decoded text contains non-ASCII letters (German umlauts), and the tag characters of subdivision
   flag emoji (such as the flag of England) are no longer decoded as hidden text. The facts are not
   yet used by a detector, so scan latency is unchanged.
+  - **Detection change:** (injection and threat, all modes) the flag exemption applies only when the
+    tags between U+1F3F4 and the cancel tag spell a valid subdivision id (two letters or three
+    digits, then one to four letters or digits); tag-encoded instructions framed by those characters
+    are decoded again.
 - Add clause-wide context lexica for the attack categories in German and English
   (`patronus_ark_core::detectors::context_lexica`, terms in
   `ark-core/src/detectors/anchor_lexicons/context.json`): who a text addresses (the model, claimed
