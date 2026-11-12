@@ -34,6 +34,7 @@ fn facts_match_the_goldens() {
         let facts = extract(row["text"].as_str().expect("text"), &[], &[]);
         let expected = &row["expected_facts"];
         let mut sinks: Vec<&str> = facts.sinks.iter().map(|sink| sink.kind).collect();
+        sinks.sort_unstable();
         sinks.dedup();
         let counter_ok = names(&expected["counter"])
             .iter()

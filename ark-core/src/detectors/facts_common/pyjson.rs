@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Python `json.dumps` and float formatting, byte for byte.
 //!
-//! `patronus.facts/1` and `patronus.verdict/1` are defined by the canonical
-//! JSON the Python reference writes, so the port writes the same bytes:
-//! sorted keys, `repr` floats (`1e-05`, `2.0`), Python's string escapes, and
-//! the canonical list order of `schema.canonical`.
+//! `patronus.facts/1`, `patronus.text_facts/1` and `patronus.verdict/1` are
+//! defined by the canonical JSON the Python reference writes, so the port
+//! writes the same bytes: sorted keys, `repr` floats (`1e-05`, `2.0`), Python's
+//! string escapes, and the canonical list order of `schema.canonical`.
 
 use serde_json::Value;
 
@@ -135,19 +135,22 @@ pub fn py_round(value: f64, ndigits: usize) -> f64 {
 }
 
 /// `schema.canonical`: every list sorted by its `json.dumps(sort_keys=True)`
-/// form, except `segments`, which keeps the command order.
-pub fn canonical(value: &mut Value) {
+/// form, except the lists under a key in `ordered` (the `segments` of a
+/// command), which keep their order.
+pub fn canonical(value: &mut Value, ordered: &[&str]) {
     match value {
         Value::Object(map) => {
             for (key, item) in map.iter_mut() {
-                match (key.as_str(), item) {
-                    ("segments", Value::Array(segments)) => segments.iter_mut().for_each(canonical),
-                    (_, item) => canonical(item),
+                match item {
+                    Value::Array(items) if ordered.contains(&key.as_str()) => {
+                        items.iter_mut().for_each(|item| canonical(item, ordered))
+                    }
+                    item => canonical(item, ordered),
                 }
             }
         }
         Value::Array(items) => {
-            items.iter_mut().for_each(canonical);
+            items.iter_mut().for_each(|item| canonical(item, ordered));
             let mut keyed: Vec<(String, Value)> = items
                 .drain(..)
                 .map(|item| (dumps_sort_key(&item), item))
@@ -212,7 +215,7 @@ mod tests {
             "atoms": ["Z", "A"],
             "flows": [{"data": "b"}, {"data": "a"}]
         });
-        canonical(&mut value);
+        canonical(&mut value, &["segments"]);
         assert_eq!(
             dumps_compact(&value),
             r#"{"atoms":["A","Z"],"flows":[{"data":"a"},{"data":"b"}],"segments":[{"argv":["a","b"]},{"argv":[]}]}"#

@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 use serde::Deserialize;
 
-use super::pyjson::py_round;
+use crate::detectors::facts_common::pyjson::py_round;
 use super::pyre::is_py_space;
 use crate::EvidenceSpan;
 
