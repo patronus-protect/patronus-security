@@ -187,25 +187,24 @@ impl ContextLexica {
             .collect();
         found.sort_by_key(|(term, position, range)| (*term, *position, range.start));
         let mut hits = Vec::new();
-        for (index, (term, position, range)) in found.iter().enumerate() {
+        for (term, position, range) in &found {
             if *position != 0 {
                 continue;
             }
             let clause = clause_of(range.start);
             let mut end = range.end;
-            let mut complete = true;
-            for next in 1..self.terms[*term].parts {
-                // Earliest match of the next part after the previous one, in the same clause.
-                match found[index..].iter().find(|(t, p, r)| {
-                    t == term && *p == next && r.start >= end && clause_of(r.start) == clause
-                }) {
-                    Some((_, _, r)) => end = r.end,
-                    None => {
-                        complete = false;
-                        break;
+            let complete = (1..self.terms[*term].parts).all(|next| {
+                // Earliest match of the next part after the previous one; `found`
+                // is sorted by term, part and start, so a binary search finds it.
+                let at = found.partition_point(|(t, p, r)| (*t, *p, r.start) < (*term, next, end));
+                match found.get(at) {
+                    Some((t, p, r)) if t == term && *p == next && clause_of(r.start) == clause => {
+                        end = r.end;
+                        true
                     }
+                    _ => false,
                 }
-            }
+            });
             if complete {
                 let (lexicon, kind) = self.lexica[self.terms[*term].lexicon];
                 hits.push(Hit {
