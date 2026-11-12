@@ -124,14 +124,15 @@ Grundsätze:
     Modul und von beiden genutzt, nicht kopiert; Nutzer schreiben Text-Policies wie Shell-Policies. Welches
     Modell eine Klasse bekommt, entscheidet weiter die Ablation; die Form ist für alle gleich.
 
-**Stand S01 (erster Schritt).** Punkte-Schicht gemeinsam: `ark-core/src/detectors/score.rs` hält
+**Stand S01 (Teilschritt, S01 bleibt offen).** Punkte-Schicht gemeinsam: `ark-core/src/detectors/score.rs` hält
 `ValidatorStrength` (checksum/structure/format/none), `Context` (Feld +25, Nähe +25/+20/+15, Gegen −30),
 `score`/`rule_score` über das Trait `ScoredPattern` und die Normalisierungspunkte je Kategorie
 (`Category::normalisation_points`: PII −10, DLP 0, Injection/Threat +10). `PiiPattern` und `DlpPattern`
 implementieren `ScoredPattern`; die Kopien in `pii/score.rs` und `dlp/score.rs` sind entfernt, Scores
 bit-identisch. Die Kontext-Engine (Fenster, Wortgrenzen, `Evidence`, `ProximityLexicon`) liegt in
 `ark-core/src/detectors/context.rs`; PII baut je Label ein `ProximityLexicon`, DLP hängt nicht mehr an
-PII. Offen für S01: übrige Core-Teile (Anker-Scanner, `AnchorGate`, `Fields`, Klausel-/Negations-/
+PII. S01 ist damit nicht erledigt: Das Abnahmekriterium für Injection/Threat ist noch nicht umgesetzt, die
+Aufgabe bleibt offen, bis folgende Teile stehen: übrige Core-Teile (Anker-Scanner, `AnchorGate`, `Fields`, Klausel-/Negations-/
 Zitatspannen) unter ein gemeinsames Core-Modul ziehen, Injection/Threat-Regeln mit
 `base_score`/Validator-Stärke und Ankerpunkten auf `ScoredPattern`, Modus je Kategorie,
 `matched_rules[].context` für Injection/Threat. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
