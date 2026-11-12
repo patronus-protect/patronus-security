@@ -147,6 +147,20 @@ ist durch die gemeinsame ersetzt. S01 bleibt offen für: übrige Core-Teile (Ank
 (`context.rs`) für Injection/Threat, Modus je Kategorie. `.github/ci-paths.yml` muss `detectors/score.rs` noch in
 die Filter `pii` und `dlp` aufnehmen (der Runner darf `.github/` nicht ändern).
 
+**Stand S03.** Normalisierungs-Vorlauf im Core: `ark-core/src/detectors/text_views/` baut je Text die
+K06-Sicht (`obfuscation::Level::Invisible`: Nullbreite in Wörtern, Vollbreite, Defang) und dekodierte
+Sichten (Unicode-Tags, base64/base64url, Hex am Stück, ROT13 nach einem `ROT13`-Marker), jeweils mit
+Quellspanne. `TextViews::facts()` liefert die Facts `obfuscated` (rückgängig gemachte Arten plus
+`unicode_tags`) und `decoded` (Kodierungen, hinter denen Fließtext stand: ≥ 3 Wörter, ≥ 60 % Buchstaben;
+ROT13 zusätzlich mehr DE/EN-Funktionswörter nach als vor dem Dekodieren). Grenzen: Fragmente 8–256 Byte,
+höchstens 16 dekodierte Fragmente, 512 Byte hinter den ersten vier ROT13-Markern. Die Dekoder
+(base64/hex/rot13) sind aus `threat/obfuscation.rs`, die Tag-Sichten aus `injection/unicode_tags.rs` in den
+Core gezogen; Threat und Injection nutzen sie von dort. Dekoder nehmen druckbares UTF-8 statt nur ASCII
+(deutsche Payloads mit Umlauten), Tag-Folgen von Flaggen-Emoji (🏴 + Tags + U+E007F) zählen nicht als
+versteckter Text. Goldens: Suite `text_views_l1` (6 Positive + 6 Hard Negatives je Sprache). Noch kein
+Aufrufer im Scan-Pfad: S06 übernimmt die Facts in `patronus.text_facts/1`, die Normalisierungspunkte je
+Kategorie (`Category::normalisation_points`) greifen mit der Umstellung auf Facts.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
