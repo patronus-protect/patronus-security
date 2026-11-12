@@ -503,11 +503,11 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
 
 
 def _set_entry(name: str, data: bytes, rows: list[dict[str, Any]], dataset: str, emap: dict[str, Any]) -> dict[str, Any]:
-    family = next(d for d in emap["datasets"] if d["id"] == dataset)["family"]
+    entry = next(d for d in emap["datasets"] if d["id"] == dataset)
     return {
         "dataset": dataset,
-        "family": family,
-        "role": "decisive" if family == "ark_blind" else "internal",
+        "family": entry["family"],
+        "role": CORPORA.role(entry, {}),
         "file": f"{name}.jsonl",
         "sha256": CORPORA.PRESIDIO._sha256(data),
         "rows": len(rows),
@@ -593,7 +593,7 @@ def export_sheet(rows: list[dict[str, Any]], per_set: int) -> list[dict[str, Any
     ]
 
 
-def ingest_sheet(sheet: list[dict[str, Any]]) -> dict[str, bytes]:
+def ingest_sheet(sheet: list[dict[str, Any]], emap: dict[str, Any]) -> dict[str, bytes]:
     """Frozen ``runner_translations_de`` set from a filled worksheet; raises on any gap."""
     problems = []
     sample = check_sample([row["id"] for row in sheet])
@@ -625,6 +625,7 @@ def ingest_sheet(sheet: list[dict[str, Any]]) -> dict[str, bytes]:
         for row in sheet
     ]
     data = CORPORA.BENIGN_CODE._jsonl(rows)
+    dataset = next(d for d in emap["datasets"] if d["id"] == TRANSLATION_DATASET)
     manifest = CORPORA.BENIGN_CODE._manifest_bytes(
         {
             "schema": SCHEMA,
@@ -633,8 +634,8 @@ def ingest_sheet(sheet: list[dict[str, Any]]) -> dict[str, bytes]:
             "sets": {
                 TRANSLATION_DATASET: {
                     "dataset": TRANSLATION_DATASET,
-                    "family": "ark_authored",
-                    "role": "internal",
+                    "family": dataset["family"],
+                    "role": CORPORA.role(dataset, {}),
                     "file": f"{TRANSLATION_DATASET}.jsonl",
                     "sha256": CORPORA.PRESIDIO._sha256(data),
                     "rows": len(rows),
@@ -687,7 +688,7 @@ def main(argv: list[str] | None = None) -> int:
         args.sheet.write_bytes(CORPORA.BENIGN_CODE._jsonl(sheet))
         print(f"{args.sheet}: {len(sheet)} rows, {sum(row['check'] for row in sheet)} to check by hand")
         return 0
-    return freeze(args.dev_out / TRANSLATED_DIR, ingest_sheet(_read_jsonl(args.sheet)), args.force)
+    return freeze(args.dev_out / TRANSLATED_DIR, ingest_sheet(_read_jsonl(args.sheet), entity_map.load(args.entity_map)), args.force)
 
 
 if __name__ == "__main__":

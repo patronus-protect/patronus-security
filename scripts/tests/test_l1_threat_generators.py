@@ -109,6 +109,7 @@ def test_dev_generation_is_deterministic_and_paired(roots):
     manifest = json.loads((dev / "generated" / "manifest.json").read_text())
     assert manifest["seed"] == MODULE.DEV_SEED and manifest["split"] == "train_dev"
     assert manifest["sets"]["carrier_insertion"]["family"] == "ark_authored"
+    assert manifest["sets"]["carrier_insertion"]["role"] == "dev"
 
 
 def test_carrier_insertion_keeps_the_payload_and_clean_twin_drops_it(roots):
@@ -156,6 +157,7 @@ def test_holdout_uses_a_secret_seed_and_its_own_families(roots):
     manifest = json.loads((holdout / "generated" / "manifest.json").read_text())
     assert "seed" not in manifest and manifest["seed_sha256"] == hashlib.sha256(seed.encode()).hexdigest()
     assert manifest["split"] == "holdout" and manifest["sets"]["carrier_insertion"]["family"] == "ark_blind"
+    assert manifest["sets"]["carrier_insertion"]["role"] == "decisive"
     assert seed not in (holdout / "generated" / "manifest.json").read_text()
     holdout_families = {f for splits in MODULE.CARRIERS.values() for f in splits["holdout"]} | set(MODULE.TOOL_FRAMES["holdout"]) | set(MODULE.WRAPPERS["holdout"])
     labels = {item["label"] for item in next(d for d in EMAP["datasets"] if d["id"] == "generators_holdout_seed")["labels"]}
@@ -201,14 +203,14 @@ def test_translation_sheet_round_trip_marks_translated_rows(roots):
     assert "x:de" not in {row["id"] for row in sheet}
     assert sum(row["check"] for row in sheet) == MODULE.CHECK_MIN
     with pytest.raises(ValueError, match="no translation"):
-        MODULE.ingest_sheet(sheet)
+        MODULE.ingest_sheet(sheet, EMAP)
     filled = [{**row, "text": f"Übersetzt: {row['source_text']}"} for row in sheet]
     with pytest.raises(ValueError, match="hand-check sample"):
-        MODULE.ingest_sheet(filled)
+        MODULE.ingest_sheet(filled, EMAP)
     with pytest.raises(ValueError, match="equals the source"):
-        MODULE.ingest_sheet([{**filled[0], "text": filled[0]["source_text"], "checked": True}])
+        MODULE.ingest_sheet([{**filled[0], "text": filled[0]["source_text"], "checked": True}], EMAP)
     checked = [{**row, "checked": row["check"]} for row in filled]
-    assert MODULE.freeze(dev / MODULE.TRANSLATED_DIR, MODULE.ingest_sheet(checked), False) == 0
+    assert MODULE.freeze(dev / MODULE.TRANSLATED_DIR, MODULE.ingest_sheet(checked, EMAP), False) == 0
     translated = read_jsonl(dev / MODULE.TRANSLATED_DIR / f"{MODULE.TRANSLATION_DATASET}.jsonl")
     assert all(row["language"] == "de" and row["translated"] is True for row in translated)
     assert sum(row["hand_checked"] for row in translated) == MODULE.CHECK_MIN
