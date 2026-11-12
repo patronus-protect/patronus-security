@@ -78,6 +78,7 @@ tasks:
       with open PII/DLP runner tasks on the same files (land between their runs)
 
   - id: X04
+    status: done
     title: Hand shell-syntax threat rules to shell-risk K26 and remove them from threat (remote/decoded shell execution, root destruction, container socket/privileged/host-root mounts, env-to-network, the MCP policy rules and the command part of mcp_runtime_risk, both today in category dlp)
     type: scope
     deps: [X02]
