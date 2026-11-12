@@ -380,7 +380,7 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
         // `privileged: true` right under `securityContext:` is the Kubernetes
         // rule's finding.
         "ark.threat.ua_compose_privileged" => !text[..start]
-            .trim_end_matches(|c| c == ' ' || c == '\t')
+            .trim_end_matches([' ', '\t'])
             .trim_end_matches(['\r', '\n'])
             .rsplit('\n')
             .next()
