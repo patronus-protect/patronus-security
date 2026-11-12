@@ -11,6 +11,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add a dataset registry for the threat-category evaluation (`scripts/l1_threat/datasets.yaml`) and
+  `scripts/l1_threat/prepare_corpora.py`, which fetches every registered public dataset at a pinned
+  revision, verifies the SHA-256 of each file, maps its upstream labels onto the eleven attack and
+  content categories (a row whose label the mapping does not name stops the run), and freezes one
+  directory per split with a SHA-256 manifest. Datasets are split by source, never at random: each
+  set is either tuning/training data, evaluation data or report-only data. Texts are deduplicated
+  exactly and by MinHash within each set; evaluation rows that repeat a tuning or report row are
+  dropped; every row carries a per-baseline contamination column that marks the training sets of a
+  reference model (for example ProtectAI v2 trained on XSTest and jackhhao/jailbreak-classification)
+  and their duplicates. Each set gets a derived role (decisive, dev, report) from its split, source
+  family and commercial-use flag. Only recipes and manifests are in the repository; no data.
+  **Detection change:** none; this is evaluation tooling only.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
   (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
   policies, in the same form as the shell-command facts: the pattern findings of a text (category,

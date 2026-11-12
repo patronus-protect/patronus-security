@@ -312,6 +312,17 @@ Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, si
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
 
+**Registry (E01, [`scripts/l1_threat/datasets.yaml`](../../scripts/l1_threat/datasets.yaml)).** Je Satz der
+Entity-Map ein Eintrag mit Abruf-Rezept (gepinnter Commit, Dateien mit SHA-256, Format, Textfeld,
+Label-Regeln auf die Upstream-Labels der Entity-Map), Flag `commercial` und `training: false` für reine
+Auswertungssätze; die Rolle `decisive`/`dev`/`report` wird aus Split, Familie und `commercial` abgeleitet.
+`prepare_corpora.py` friert je Split ein Verzeichnis mit SHA-Manifest ein; Dedup exakt + MinHash im Satz,
+Holdout gegen `train_dev`/`report` (die Holdout-Zeile fliegt), gegen Baseline-Trainingslisten als Spalte
+`contamination` je Baseline (ProtectAI v2: XSTest, jackhhao laut Modellkarte). Holdout-Rezepte, auch MCPTox,
+stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus `~/ark-threat/holdout`.
+Stand: fünf Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf); die übrigen `train_dev`- und
+`report`-Sätze sind `pending` (offene Formate: Parquet mit Zahlenspalten, ZIP, Mehrdatei-Repos auf GitHub).
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |

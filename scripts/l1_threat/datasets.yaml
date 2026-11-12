@@ -1,0 +1,313 @@
+# L1 threat dataset registry (E01): how prepare_corpora.py fetches and reads every dataset of
+# entity_map.yaml. Nothing here is data; rows are fetched at evaluation time only and never committed.
+#
+# Licence, languages, split, source family and the meaning of every upstream label stay in
+# entity_map.yaml; this file only adds what fetching needs. The role of a set is derived, not stored:
+#   decisive  holdout set of a deciding family (neutral, ark_blind) that may be used commercially
+#   dev       train_dev set (tuning, training, lexicon mining)
+#   report    everything else (report split, ark_authored, baseline_trained, report_only,
+#             commercial: false); reported, never decides
+#
+# Entry keys:
+#   id          entity_map.yaml dataset id (every dataset there has exactly one entry here)
+#   commercial  true | false | unknown: may the set be used for a commercial product's evaluation;
+#               `false` requires family report_only in entity_map.yaml
+#   training    false: evaluation only (licence clause or no licence file); never in train_dev
+#   internal    produced inside ARK (goldens, generators, R05); not fetched here
+#   pending     recipe not written yet (reason); holdout recipes come from the holdout setup
+#               through --overlay and never live in the repository
+#   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
+#   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8 columns only)
+#   text        record field holding the text; `language` a fixed code or `language_field`
+#   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
+#               field matches every row; `label` is the upstream label of entity_map.yaml. Every
+#               row must match at least one rule, otherwise preparing fails (unmapped label).
+#   limit       keep at most this many rows (lowest text hash first, deterministic)
+#
+# Checked by: python3 scripts/l1_threat/prepare_corpora.py check
+
+schema: ark-l1-threat-datasets-v1
+
+dedup:
+  # Texts are compared after NFKC, case folding and whitespace collapsing.
+  shingle_chars: 5
+  permutations: 64
+  bands: 16
+  threshold: 0.8
+  seed: ark-l1-threat-e01-v1
+
+datasets:
+  - id: llmail_inject
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: browsesafe
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: boundary_pairs
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: cyberseceval_pi
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: trustairlab_jailbreak
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: jbb_behaviors
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: multijail
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: harmbench
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: aya_redteaming
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: rtp_lx
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: ptp_wildchat_de
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: mcptox
+    commercial: unknown
+    training: false
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: malicious_skill_bench
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: agentapprove_tool_call_safety
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: agentharm
+    commercial: true
+    training: false
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: gahd
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: germeval2018_test
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: hatecheck_de
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: hatecheck_en
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: chatmod_bench
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: measuring_hate_speech
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: notinject
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: xstest
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: or_bench_hard
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: radware_github_ipi
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: oasst2
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: wildchat_de
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: necent_de
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: wikipedia
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: court_rulings_de
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: owasp_docs
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: nvd
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: mitre_attack
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: prompt_guides
+    commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: mcp_registry
+    commercial: unknown
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: r05_translation_de
+    commercial: true
+    internal: ~/ark-threat/holdout (separate session without runner access)
+  - id: r05_synthetic
+    commercial: true
+    internal: ~/ark-threat/holdout (separate session, modelled on public papers and advisories, never on goldens)
+  - id: generators_holdout_seed
+    commercial: true
+    internal: E02 generators with the seed under ~/ark-threat/holdout
+  - id: neuralchemy
+    commercial: unknown
+    pending: recipe not written yet
+  - id: spml
+    commercial: true
+    source: https://huggingface.co/datasets/reshabhs/SPML_Chatbot_Prompt_Injection
+    revision: 02ce8084e979bc7d4c24ee35d22ecb7f2db96ff5
+    files:
+      - {path: spml_prompt_injection.csv, sha256: 4ca6590cd8ec10832fcebee5e243acb32be5c3e79b7a260f8638eed738c784f8}
+    format: csv
+    text: User Prompt
+    language: en
+    labels:
+      - {field: Prompt injection, equals: "1", label: "Prompt injection = 1"}
+      - {field: Prompt injection, equals: "0", label: "Prompt injection = 0"}
+  - id: gentel
+    commercial: unknown
+    pending: recipe not written yet
+  - id: polyguardprompts
+    commercial: unknown
+    pending: recipe not written yet
+  - id: nemotron_safety_v3
+    commercial: true
+    pending: recipe not written yet
+  - id: cyberseceval_multilingual
+    commercial: true
+    pending: recipe not written yet
+  - id: mosscap
+    commercial: true
+    source: https://huggingface.co/datasets/Lakera/mosscap_prompt_injection
+    revision: b7e495ff63373ff7f7dabc1e9390cf62b5838570
+    files:
+      - {path: data/train-00000-of-00001-07ae0ed17fa07cc1.parquet, sha256: a3c354dd1457c0125243ed107a4cc3eafdc09b2c60eb7ce3e3854a2fbb12a4b2}
+      - {path: data/validation-00000-of-00001-e136a45438d15f16.parquet, sha256: d6c112992c73a1744f540cc3f6d51ecafabdf4023ec2188de6dde31ca7e52d24}
+      - {path: data/test-00000-of-00001-06acab2d6a2bcf9f.parquet, sha256: 9311f64ca579c947e43ff64ad4996585c51e4dae8ae747342926cf0091160d21}
+    format: parquet
+    text: prompt
+    language: en
+    labels:
+      - {label: "every prompt (password game)"}
+  - id: satml_ctf
+    commercial: unknown
+    pending: recipe not written yet
+  - id: tensor_trust
+    commercial: unknown
+    pending: recipe not written yet
+  - id: bipia
+    commercial: unknown
+    pending: recipe not written yet
+  - id: agentdojo
+    commercial: true
+    pending: recipe not written yet
+  - id: nemotron_ipi
+    commercial: unknown
+    pending: recipe not written yet
+  - id: agent_safetybench
+    commercial: unknown
+    pending: recipe not written yet
+  - id: redcode
+    commercial: unknown
+    pending: recipe not written yet
+  - id: wildjailbreak
+    commercial: true
+    pending: recipe not written yet
+  - id: wildguardmix
+    commercial: true
+    pending: recipe not written yet
+  - id: xl_safetybench
+    commercial: true
+    pending: recipe not written yet
+  - id: ai_safety_brazil
+    commercial: true
+    pending: recipe not written yet
+  - id: approve_or_deny_de
+    commercial: unknown
+    pending: recipe not written yet
+  - id: ailuminate_demo
+    commercial: true
+    pending: recipe not written yet
+  - id: nemotron_content_safety_v2
+    commercial: true
+    pending: recipe not written yet
+  - id: germeval2018_train
+    commercial: unknown
+    pending: recipe not written yet
+  - id: germeval2019
+    commercial: unknown
+    pending: recipe not written yet
+  - id: germeval2021
+    commercial: unknown
+    pending: recipe not written yet
+  - id: textdetox_de
+    commercial: true
+    pending: recipe not written yet
+  - id: civil_comments
+    commercial: true
+    pending: recipe not written yet
+  - id: dolly_15k
+    commercial: true
+    source: https://huggingface.co/datasets/databricks/databricks-dolly-15k
+    revision: bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a
+    files:
+      - {path: databricks-dolly-15k.jsonl, sha256: 2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec}
+    format: jsonl
+    text: instruction
+    language: en
+    labels:
+      - {label: "instruction (incl. remember-this and repetition requests)"}
+  - id: l1_goldens
+    commercial: true
+    internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)
+  - id: generators_dev_seed
+    commercial: true
+    internal: E02 generators with the dev seed
+  - id: runner_translations_de
+    commercial: true
+    internal: E02 translation by the runner agent (no external MT)
+  - id: deepset_prompt_injections
+    commercial: true
+    pending: recipe not written yet
+  - id: jackhhao_jailbreak
+    commercial: true
+    source: https://huggingface.co/datasets/jackhhao/jailbreak-classification
+    revision: 2f2ceeb39658696fd3f462403562b6eea5306287
+    files:
+      - {path: default/jailbreak_dataset_full.csv, sha256: 79a7b90b0abe00e3586cc5048353c3236543cca228a1ee261fe3b57a7cb7e29f}
+    format: csv
+    text: prompt
+    language: en
+    labels:
+      - {field: type, equals: jailbreak, label: "type = jailbreak"}
+      - {field: type, equals: benign, label: "type = benign"}
+  - id: gandalf
+    commercial: true
+    source: https://huggingface.co/datasets/Lakera/gandalf_ignore_instructions
+    revision: 04737b65e90a6794ec227012e4a255a7def6344b
+    files:
+      - {path: data/train-00000-of-00001-ded53be747ff55cd.parquet, sha256: 5b6acf3e5a5998d21f8e1222bb45bbdec25a14408747b1cd63bebef4a75fa439}
+      - {path: data/validation-00000-of-00001-94481a2a09ff2fff.parquet, sha256: f51ab3e3407a368845b0f57932cc745c09280429416d7507bd178a16326a79f6}
+      - {path: data/test-00000-of-00001-bc92128b9288a6d1.parquet, sha256: 56b646d133335ebc535266bd55dbe1b5bee7caa4b95bf49d040684b9b5dd9972}
+    format: parquet
+    text: text
+    language: en
+    labels:
+      - {label: "every prompt (password game)"}
+  - id: hackaprompt
+    commercial: unknown
+    pending: recipe not written yet
+  - id: injecagent
+    commercial: true
+    pending: recipe not written yet
+  - id: germeval2025
+    commercial: false
+    pending: recipe not written yet
+  - id: germs_at
+    commercial: false
+    pending: recipe not written yet

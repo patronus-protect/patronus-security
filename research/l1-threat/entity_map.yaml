@@ -14,7 +14,8 @@
 #              per-rule mapping lives there only; `labels` lists outputs that are not inventory
 #              rules (other deterministic scanners of the same tool).
 #   reference  model output labels (config id2label); scored as reference rows, never in M1.
-#   `trained_on` lists registered datasets the baseline was trained on (contamination column, E01).
+#   `trained_on` lists registered datasets the baseline was trained on; prepare_corpora.py marks their
+#   rows and their duplicates in other sets in the per-baseline contamination column (E01).
 #
 # Label entries: `label` is the upstream field and value (or derived rule) as in the dataset card;
 # exactly one outcome: `classes` (one or more; optional `family` from taxonomy.yaml when one class),
@@ -81,8 +82,12 @@ baselines:
       - {label: INJECTION, classes: [instruction_injection, prompt_extraction]}
       - {label: SAFE, benign: true}
     note: The model card excludes jailbreak detection; INJECTION is scored for injection and extraction only.
-    trained_on: []
-    training_data: card lists public prompt-injection and benign instruction sets; E01 matches them against this registry and fills trained_on
+    trained_on: [jackhhao_jailbreak, xstest]
+    training_data: >-
+      card (revision of 2024-05) lists natolambert/xstest-v2-copy (a copy of XSTest), VMware/open-instruct,
+      alespalla/chatbot_instruction_prompts, HuggingFaceH4/grok-conversation-harmless,
+      Harelix/Prompt-Injection-Mixed-Techniques-2024, OpenSafetyLab/Salad-Data and
+      jackhhao/jailbreak-classification; only XSTest and jackhhao are registered here (E01 contamination column)
   - id: prompt_guard_2
     kind: reference
     model: Llama-Prompt-Guard-2-86M-onnx, Llama-Prompt-Guard-2-22M-onnx
