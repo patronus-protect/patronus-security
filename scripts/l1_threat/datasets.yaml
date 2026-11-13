@@ -288,6 +288,17 @@ datasets:
     language: en
     labels:
       - {label: "instruction (incl. remember-this and repetition requests)"}
+  - id: germanquad
+    commercial: true
+    source: https://huggingface.co/datasets/deepset/germanquad
+    revision: a2f3a59f0be843fc305d0417d7292ef0b1a66884  # refs/convert/parquet
+    files:
+      - {path: plain_text/train/0000.parquet, sha256: 319334092605ed9ade8a1e6535584debb2e99def474697417a06ad4a455bf0ec}
+    format: parquet
+    text: question
+    language: de
+    labels:
+      - {label: question}
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)

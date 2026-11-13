@@ -798,6 +798,16 @@ datasets:
     labels:
       - {label: "instruction (incl. remember-this and repetition requests)", benign: true}
     note: dev benign for memory_poisoning and resource_exhaustion; OASST2 and WildChat stay in the holdout benign pool
+  - id: germanquad
+    name: GermanQuAD questions
+    source: hf:deepset/germanquad
+    licence: CC-BY-4.0
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "question", benign: true}
+    note: dev benign in German (annotator-written questions); the Wikipedia contexts are not read
   # ── ark_authored (reported only) ─────────────────────────────────────────────────────────────
   - id: l1_goldens
     name: Repository L1 goldens (threat and injection)
