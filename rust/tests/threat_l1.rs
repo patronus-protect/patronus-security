@@ -258,25 +258,28 @@ fn windows_do_not_invent_metadata_hosts_or_word_boundaries() {
 }
 
 #[derive(Deserialize)]
-struct UnsafeActionGolden {
+struct ThreatGolden {
     id: String,
     case_type: String,
-    rule_id: String,
+    rule_id: Option<String>,
     text: String,
 }
 
 #[test]
-fn unsafe_action_goldens_report_their_rule_and_hard_negatives_stay_benign() {
+fn threat_rule_goldens_report_their_rule_and_hard_negatives_stay_benign() {
     let gateway = gateway();
-    let goldens: Vec<UnsafeActionGolden> =
-        include_str!("../../python/patronus_ark/benchmark_data/unsafe_action_l1.jsonl")
+    // The goldens that name a bounded threat rule (the other classes run in 13_l1_golden_eval).
+    let goldens: Vec<(String, ThreatGolden)> =
+        include_str!("../../python/patronus_ark/benchmark_data/threat_l1.jsonl")
             .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
+            .map(|line| serde_json::from_str::<ThreatGolden>(line).unwrap())
+            .filter_map(|golden| Some((golden.rule_id.clone()?, golden)))
+            .filter(|(rule_id, _)| rule_id.starts_with("ark.threat."))
             .collect();
     assert!(goldens.len() >= 20);
     let mut failures = Vec::new();
-    for golden in &goldens {
-        let result = &threat_result(&gateway, rule_category(&golden.rule_id), &golden.text);
+    for (rule_id, golden) in &goldens {
+        let result = &threat_result(&gateway, rule_category(rule_id), &golden.text);
         let rules = result.layers[0].details["matched_rules"]
             .as_array()
             .unwrap();
@@ -284,12 +287,12 @@ fn unsafe_action_goldens_report_their_rule_and_hard_negatives_stay_benign() {
             result.class_name != "benign"
                 && rules
                     .iter()
-                    .any(|r| r["rule_id"] == golden.rule_id && r["accepted"] == true)
+                    .any(|r| r["rule_id"] == rule_id.as_str() && r["accepted"] == true)
         } else {
             result.class_name == "benign" && result.evidence_spans.is_empty()
         };
         if !ok {
-            failures.push(format!("{} ({}): {rules:?}", golden.id, golden.rule_id));
+            failures.push(format!("{} ({rule_id}): {rules:?}", golden.id));
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");

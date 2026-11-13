@@ -196,23 +196,44 @@ class L1BenchmarkDataTests(unittest.TestCase):
         for name, cases_name in (
             ("pii_l1", "PII_CASES"),
             ("dlp_l1", "DLP_CASES"),
-            ("unsafe_action_l1", "UNSAFE_ACTION_CASES"),
+            ("threat_l1", "THREAT_CASES"),
         ):
             expected = namespace["flatten"](name, namespace[cases_name])
             self.assertEqual(load(name), expected, name)
 
-    def test_unsafe_action_goldens_cover_every_rule_in_both_languages(self):
-        rows = load("unsafe_action_l1")
-        counts = Counter((row["language"], row["case_type"]) for row in rows)
+    def test_threat_goldens_cover_every_class_and_tag_in_both_languages(self):
+        namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        rows = load("threat_l1")
+        self.assertTrue(all(row["schema_version"] == 2 for row in rows))
+        gated = Counter((row["language"], row["case_type"]) for row in rows if not row["known_gap"])
+        per_class = Counter((row["class"], row["language"], row["case_type"]) for row in rows)
         for language in ("de", "en"):
             for case_type in ("positive", "hard_negative"):
-                self.assertGreaterEqual(counts[(language, case_type)], 5)
+                self.assertGreaterEqual(gated[(language, case_type)], namespace["THREAT_MIN_PER_LANGUAGE"])
+                for class_name in namespace["THREAT_CLASSES"]:
+                    self.assertGreaterEqual(per_class[(class_name, language, case_type)], 1, class_name)
+        self.assertEqual({tag for row in rows for tag in row["tags"]}, set(namespace["THREAT_TAGS"]))
+        self.assertFalse([row["id"] for row in rows if row["known_gap"] and row["case_type"] != "positive"])
+        self.assertTrue(all(row["provenance"]["origin"] == "ark_authored" for row in rows))
+        self.assertTrue(all("negative_reason" in row for row in rows if row["case_type"] == "hard_negative"))
+
+    def test_threat_rule_goldens_cover_every_rule_in_both_languages(self):
+        rows = [row for row in load("threat_l1") if "rule_id" in row]
         per_rule = Counter((row["rule_id"], row["language"], row["case_type"]) for row in rows)
         for rule_id in {row["rule_id"] for row in rows}:
             for language in ("de", "en"):
                 for case_type in ("positive", "hard_negative"):
                     self.assertGreaterEqual(per_rule[(rule_id, language, case_type)], 2, rule_id)
-        self.assertTrue(all(row["provenance"]["origin"] == "ark_authored" for row in rows))
+
+    def test_threat_generator_rejects_unknown_tags_and_negative_gaps(self):
+        namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        th = namespace["th"]
+        with self.assertRaises(AssertionError):
+            th("jailbreak", "priming", "en", "chat", "text", tags=("plain",))
+        with self.assertRaises(AssertionError):
+            th("jailbreak", "priming", "en", "chat", "text", reason="tutorial", known_gap=True)
+        with self.assertRaises(AssertionError):
+            th("threat", "priming", "en", "chat", "text")
 
     def test_every_native_pii_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E10): known gaps are reported, not gated, so they do not count.
