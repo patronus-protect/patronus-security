@@ -61,7 +61,7 @@ MIN_CLASS_ROWS = 50
 
 
 def read_pool(directories: list[Path]) -> list[tuple[str, dict[str, Any], list[dict[str, Any]]]]:
-    """``(set key, manifest entry, rows)`` per set of the frozen directories (exit on a broken one)."""
+    """``(set key, manifest entry, rows)`` per set of the frozen directories (ValueError on a broken one)."""
     pool = []
     for directory in directories:
         problems = CORPORA.verify(directory, schemas=(CORPORA.CORPORA_SCHEMA, CORPORA.GENERATED_SCHEMA))
