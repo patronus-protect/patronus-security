@@ -162,6 +162,22 @@ tasks:
       whose gold fails validation is listed as not measurable and its rule tasks stay blocked; if the
       owner report is not yet present, M06 waits (runner blocks the task with that reason)
 
+  # Gold cleanup (owner, 2026-11-13): gold.md lists every class as no-go or pending. The noisy dev
+  # sources must be cleaned before the scoreboard numbers mean anything; M07 therefore sits between
+  # the M06 report and the per-class scoreboard work the rule families wait for.
+  - id: M07
+    status: todo
+    title: Gold cleanup — restore the no-go classes of research/l1-threat/scoreboard/gold.md to go; fix the carrier_insertion and obfuscation_slices templates that emit benign rows under attack labels (27.5% error), re-label or demote the noisy rows of spml and mosscap (24%; password-game probes are not extraction outside the game context), textdetox_de (18%) and ailuminate_demo (6%), and give jailbreak a scored dev source (0 scored dev rows; trustairlab is holdout, jackhhao is report-only); then re-run the gold.py dev review on every changed set and update gold.md
+    type: eval-infra
+    deps: [M06]
+    accept: >-
+      gold.md regenerated on main with every previously failing dev set either passing the 5% bar
+      or demoted to report-only with the reason named; jailbreak has at least 50 scored dev rows
+      outside report-only sets; no row deleted silently — filters and template fixes live in the
+      recipes and generators, the frozen corpora are rebuilt through the gate, and the manifest
+      documents the new row counts; classes that still fail stay listed as not measurable and their
+      rule tasks stay blocked
+
   - id: E01
     status: done
     title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
