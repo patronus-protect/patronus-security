@@ -216,6 +216,16 @@ def test_dev_generation_never_reads_a_holdout_corpus(tmp_path):
         MODULE.generate(dev, None, None, EMAP, False, SMALL)
 
 
+def test_output_of_an_older_generator_version_is_regenerated(roots, capsys, monkeypatch):
+    dev, _ = roots
+    monkeypatch.setattr(MODULE, "GENERATOR_VERSION", 1)
+    assert MODULE.generate(dev, None, None, EMAP, False, SMALL) == 0
+    monkeypatch.setattr(MODULE, "GENERATOR_VERSION", 2)
+    assert MODULE.generate(dev, None, None, EMAP, False, SMALL) == 0
+    assert "frozen by generator version 1, now 2; regenerating" in capsys.readouterr().out
+    assert json.loads((dev / "generated" / "manifest.json").read_text())["generator_version"] == 2
+
+
 def test_frozen_output_that_differs_needs_force(roots, capsys):
     dev, _ = roots
     MODULE.generate(dev, None, None, EMAP, False, SMALL)

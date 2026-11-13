@@ -17,9 +17,10 @@ Preparing writes ``DEV/train_dev/``, ``DEV/report/`` and ``HOLDOUT/holdout/``: o
 ready set of the split, a ``manifest.json`` with the SHA-256 of every source file and output file, and
 ``.ready`` last. Downloads are cached in ``--sources`` (default ``HOLDOUT/.sources``, never inside DEV).
 Holdout recipes come from ``--overlay`` (default ``HOLDOUT/datasets.overlay.yaml`` when present); a
-split without any ready set is not written. A frozen directory is rewritten only with ``--force``, or
-when it is intact but in an older corpus format and was built from the same inputs (sets, revisions,
-source files, dedup settings, training lists).
+split without any ready set is not written. A frozen directory is rewritten only with ``--force``, when it
+was frozen under a lower registry ``generation`` (raising it is the reviewed way to re-freeze every
+split), or when it is intact but in an older corpus format and was built from the same inputs (sets,
+revisions, source files, dedup settings, training lists).
 Row caps: after deduplication every set keeps at most ``sampling.max_rows`` rows (or its lower
 ``cap``), sampled per stratum (benign, classes, language) in proportion to the stratum size and,
 within a stratum, by a hash of the sampling seed, the set and the text; caps, seed and the row count
@@ -215,6 +216,8 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
         str(dedup["seed"])
     except (KeyError, TypeError):
         problems.append("dedup needs shingle_chars, permutations, bands, threshold and seed")
+    if not _positive(registry.get("generation")):
+        problems.append("generation must be a positive integer")
     sampling = registry.get("sampling") or {}
     if not _positive(sampling.get("max_rows")) or not str(sampling.get("seed") or "").strip():
         problems.append("sampling needs a positive integer max_rows and a seed")
@@ -609,6 +612,7 @@ def build(
     manifest = BENIGN_CODE._manifest_bytes(
         {
             "schema": CORPORA_SCHEMA,
+            "generation": registry["generation"],
             "split": split,
             "split_rule": "by source: every dataset belongs to exactly one split (entity_map.yaml)",
             "dedup": dedup,
@@ -643,6 +647,14 @@ def verify(directory: Path, schemas: tuple[str, ...] = (CORPORA_SCHEMA,)) -> lis
         if path.name not in expected:
             problems.append(f"{path} is not in manifest.json")
     return problems
+
+
+def frozen_version(manifest: bytes, key: str = "generation") -> int:
+    """Integer ``key`` of a frozen manifest (registry generation, generator version); 1 if absent or unreadable."""
+    try:
+        return int(json.loads(manifest).get(key, 1))
+    except (ValueError, TypeError, AttributeError):
+        return 1
 
 
 def _format_upgrade(out: Path, current: bytes, manifest: bytes) -> bool:
@@ -682,7 +694,10 @@ def prepare(
         if not verify(out) and current == files["manifest.json"]:
             print(f"{split}: {out} unchanged (frozen)")
             return 0
-        if _format_upgrade(out, current, files["manifest.json"]):
+        frozen = frozen_version(current)
+        if frozen < registry["generation"]:
+            print(f"{split}: {out} was frozen as generation {frozen}, the registry is at {registry['generation']}; re-freezing")
+        elif _format_upgrade(out, current, files["manifest.json"]):
             print(f"{split}: {out} was frozen in an older corpus format from the same inputs; rewriting")
         elif not force:
             print(f"{split}: {out} is frozen and differs from this run (or was modified); nothing written. Use --force.", file=sys.stderr)
@@ -742,9 +757,9 @@ def coverage(directories: list[Path]) -> tuple[str, list[str]]:
             benign[dataset] += entry["benign"]
             unchecked.update(entry.get("contamination_unchecked") or {})
     lines = ["| Class | Rows | Sources |", "|---|---:|---|"]
-    for name, sources in classes.items():
-        lines.append(f"| {name} | {sum(sources.values())} | {', '.join(f'{s}: {n}' for s, n in sorted(sources.items())) or '-'} |")
-        if not sources:
+    for name, by_source in classes.items():
+        lines.append(f"| {name} | {sum(by_source.values())} | {', '.join(f'{s}: {n}' for s, n in sorted(by_source.items())) or '-'} |")
+        if not by_source:
             problems.append(f"class {name}: no gold rows")
     sources = {dataset: count for dataset, count in benign.items() if count}
     lines.append(f"| benign | {sum(sources.values())} | {', '.join(f'{s}: {n}' for s, n in sorted(sources.items())) or '-'} |")

@@ -75,7 +75,8 @@ entity_map = CORPORA.entity_map
 Rng = SYNTH.Rng
 
 SCHEMA = CORPORA.GENERATED_SCHEMA
-GENERATOR_VERSION = 1
+# v2: class_templates. A frozen output of a lower version is regenerated without --force.
+GENERATOR_VERSION = 2
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -738,7 +739,11 @@ def freeze(out: Path, files: dict[str, bytes], force: bool) -> int:
         if same:
             print(f"{out}: unchanged (frozen)")
             return 0
-        if not force:
+        manifest = (out / "manifest.json").read_bytes() if (out / "manifest.json").is_file() else b""
+        frozen = CORPORA.frozen_version(manifest, "generator_version")
+        if frozen < GENERATOR_VERSION:
+            print(f"{out}: frozen by generator version {frozen}, now {GENERATOR_VERSION}; regenerating")
+        elif not force:
             print(f"{out} is frozen and differs from this run (or was modified); nothing written. Use --force.", file=sys.stderr)
             return 1
     CORPORA.BENIGN_CODE._write(out, files)

@@ -358,9 +358,13 @@ Sätzen, keine ungeprüfte Kontamination. Klassen ohne öffentliche Dev-Daten (`
 `agent_config_tampering`, `memory_poisoning`, `unsafe_action`, `resource_exhaustion`) bekommen
 dokumentierte synthetische Zeilen über den Generator `class_templates` (Form öffentlicher Beispiele, in
 `modelled_on` genannt; Dev- und Holdout-Familien disjunkt; im Holdout zählt `unsafe_action` über das neue
-Label „unsafe agent action request“ von `generators_holdout_seed`). Offen für das Holdout-Setup außerhalb
-des Runners: Overlay-Rezepte für MCPTox, GAHD, HateCheck, GermEval 2018 (Test) und weitere Benign-Quellen,
-danach Neu-Einfrieren von Dev und Holdout mit `--force` und `coverage` auf beiden Splits.
+Label „unsafe agent action request“ von `generators_holdout_seed`). Neu eingefroren wird über
+`generation: 2` in `datasets.yaml` (und Generator-Version 2): Der nächste Gate-Lauf schreibt alle Splits
+ohne `--force` neu. Dev-Pool danach (`coverage` über `train_dev`, `report`, `generated`): alle elf Klassen
+mit Zeilen (sechs davon nur synthetisch: die fünf Template-Klassen und `exfiltration`), Benign 34 844 Zeilen aus sechs Sätzen;
+offen bleibt nur die XSTest-Kontamination (ProtectAI v2), die erst der Gate-Lauf mit Holdout-Overlay prüft.
+Offen für das Holdout-Setup außerhalb des Runners: Overlay-Rezepte für MCPTox, GAHD, HateCheck,
+GermEval 2018 (Test), XSTest und die Benign-Quellen, danach `coverage` auf dem Holdout-Pool.
 
 **Generatoren (E02, [`scripts/l1_threat/generators.py`](../../scripts/l1_threat/generators.py)).** Aus den
 eingefrorenen Korpora: Carrier-Insertion mit sauberem Zwilling (Web, PDF-Text, Ticket, Code-Kommentar,

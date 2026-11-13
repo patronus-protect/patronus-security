@@ -114,6 +114,7 @@ def world(tmp_path):
     registry = {
         "schema": MODULE.SCHEMA,
         "dedup": {"shingle_chars": 5, "permutations": 64, "bands": 16, "threshold": 0.8, "seed": "test"},
+        "generation": 1,
         "sampling": {"max_rows": 1000, "seed": "test-sampling"},
         "datasets": [
             recipe("train_set", TRAIN),
@@ -191,6 +192,34 @@ def test_check_needs_sampling(world):
     assert "sampling needs a positive integer max_rows and a seed" in MODULE.check(registry, emap)
     del registry["sampling"]
     assert "sampling needs a positive integer max_rows and a seed" in MODULE.check(registry, emap)
+
+
+def test_check_needs_a_generation(world):
+    registry, emap, _ = world
+    registry = dict(registry, generation=0)
+    assert "generation must be a positive integer" in MODULE.check(registry, emap)
+
+
+def test_raised_generation_refreezes_without_force(world, tmp_path, capsys):
+    registry, emap, sources = world
+    out = tmp_path / "train_dev"
+    assert MODULE.prepare("train_dev", out, registry, emap, sources, True, False, no_download) == 0
+    changed = copy.deepcopy(registry)
+    changed["datasets"][0]["cap"] = 2
+    assert MODULE.prepare("train_dev", out, changed, emap, sources, True, False, no_download) == 1  # same generation
+    changed["generation"] = 2
+    assert MODULE.prepare("train_dev", out, changed, emap, sources, True, False, no_download) == 0
+    assert "frozen as generation 1, the registry is at 2; re-freezing" in capsys.readouterr().out
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["generation"] == 2 and manifest["sets"]["train_set"]["rows"] == 2
+    # Never back to a lower generation without --force.
+    assert MODULE.prepare("train_dev", out, registry, emap, sources, True, False, no_download) == 1
+
+
+def test_frozen_version_defaults_to_one():
+    assert MODULE.frozen_version(b"") == 1
+    assert MODULE.frozen_version(b'{"schema": "x"}') == 1
+    assert MODULE.frozen_version(b'{"generator_version": 3}', "generator_version") == 3
 
 
 def test_repository_registry_caps_every_set():

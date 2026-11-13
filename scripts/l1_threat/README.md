@@ -119,7 +119,9 @@ die Holdout-Rezepte kommen aus `--overlay` (Default `HOLDOUT/datasets.overlay.ya
 Split ohne fertigen Satz wird nicht geschrieben. Je Split entsteht je fertigem Satz `<id>.jsonl` (Text, Sprache, Upstream-Labels, Klassen,
 nur berichtete Klassen, Familien, `benign`, Spalte `contamination` je Baseline), `manifest.json` (SHA-256
 jeder Quell- und Ausgabedatei, Revision, Rolle, Lizenz, Zähler je Klasse/Sprache, verworfene Zeilen nach
-Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben, oder
+Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben, wenn
+`generation` in `datasets.yaml` höher ist als im eingefrorenen Manifest (der geprüfte Weg, alle Splits neu
+einzufrieren, etwa nach neuen Sätzen oder Zeilengrenzen; nie zurück auf eine niedrigere), oder
 wenn es unversehrt in einem älteren Korpusformat vorliegt und aus denselben Eingaben (Sätze, Revisionen,
 Quelldateien, Dedup-Einstellungen, Trainingslisten) entstand. Eine
 Zeile, die keine Label-Regel trifft, bricht ab. Nach dem Dedup behält jeder Satz höchstens
@@ -172,7 +174,8 @@ angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `
 (`generators_holdout_seed`, `ark_blind`). Jede Zeile trägt `template_family`, `carrier`, `source_id` und
 `translated` (nativ vs. übersetzt: Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map
 als `translated` markierten Satzes). Ein Obfuscation-Zwilling trägt die Sprache seiner Benign-Quelle. Ausgabe eingefroren wie die Korpora (JSONL je Generator,
-`manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`.
+`manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`, außer die Ausgabe stammt
+von einer älteren Generator-Version (`GENERATOR_VERSION`, im Manifest `generator_version`).
 
 Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
 `--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus) in ein
