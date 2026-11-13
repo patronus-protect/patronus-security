@@ -366,8 +366,18 @@ impl SecurityGateway {
                 SecurityCategory::ToolAction => base_dir.join("tool_action"),
                 SecurityCategory::ToolTags => base_dir.join("tool_tags"),
                 SecurityCategory::Routing => base_dir.join("routing"),
-                SecurityCategory::Threat => base_dir.join("threat"),
-                SecurityCategory::Dlp | SecurityCategory::Pii => continue,
+                SecurityCategory::UnsafeAction => base_dir.join("threat"),
+                SecurityCategory::Dlp
+                | SecurityCategory::Pii
+                | SecurityCategory::Jailbreak
+                | SecurityCategory::PromptExtraction
+                | SecurityCategory::ToolPoisoning
+                | SecurityCategory::AgentConfigTampering
+                | SecurityCategory::MemoryPoisoning
+                | SecurityCategory::Exfiltration
+                | SecurityCategory::ResourceExhaustion
+                | SecurityCategory::HarmfulContent
+                | SecurityCategory::ToxicLanguage => continue,
                 SecurityCategory::DynamicPii | SecurityCategory::ShellCommand => {
                     unreachable!("handled above")
                 }
@@ -582,7 +592,7 @@ impl SecurityGateway {
             | SecurityCategory::ToolAction
             | SecurityCategory::ToolTags
             | SecurityCategory::Routing
-            | SecurityCategory::Threat => {
+            | SecurityCategory::UnsafeAction => {
                 let asset = revision_pinned_l3_asset(config.category)?;
                 LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
                     category_dir,

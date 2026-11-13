@@ -9,6 +9,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Breaking
+
+- The category `threat` is gone. Attacks on models and agents are now reported in eleven
+  categories, one per attack class: `injection` (keeps its name), `jailbreak`,
+  `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`,
+  `exfiltration`, `unsafe_action`, `resource_exhaustion`, `harmful_content` and `toxic_language`.
+  There are no aliases: configurations, API keys and requests that name `threat` are rejected and
+  must list the new categories instead. Each category runs only when it is selected; results carry
+  the new category name in `category` and in `class_name`, and the old threat class names
+  (`tool_abuse`, `secrets_access`, `exfiltration_attempt`, `harmful_behavior`, …) no longer appear
+  as rule-based class names. Every bounded threat rule (`ark.threat.*`) belongs to exactly one
+  category; rules that look for access to credentials (credential files, credential stores, cloud
+  metadata endpoints) are reported under `unsafe_action`. Single rules still toggle through the
+  `rules` map.
+- When no categories are given, the library scanner runs `pii`, `dlp`, `injection`, `jailbreak`,
+  `prompt_extraction`, `tool_poisoning` and `exfiltration`; the other six attack categories are
+  opt-in. The example and deployment configurations use the same defaults.
+- **Detection change:** the action detectors leave the `dlp` category, which now reports secrets
+  and classification markings only. `native:destructive_operation`, `native:sensitive_material`
+  and `native:mcp_runtime_risk` report under `unsafe_action`, `native:secret_transfer` under
+  `exfiltration`; their rule switches (`dlp_destructive_operation`, `dlp_sensitive_material`,
+  `dlp_mcp_runtime_risk`, `dlp_secret_transfer`) and their findings are unchanged. Callers that
+  relied on these findings in `dlp` must select the new categories.
+
 ### Added
 
 - Add `scripts/l1_threat/generators.py`, which derives generated evaluation sets for the threat

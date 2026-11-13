@@ -139,7 +139,7 @@ pub(super) fn classifier_model_configs_for_category(
             "PATRONUS_NTDB_ROUTING_DIR",
             "routing_current",
         ),
-        SecurityCategory::Threat => model_config(
+        SecurityCategory::UnsafeAction => model_config(
             execution,
             category,
             "unified-v3-threat",
@@ -149,7 +149,16 @@ pub(super) fn classifier_model_configs_for_category(
         SecurityCategory::Dlp
         | SecurityCategory::Pii
         | SecurityCategory::DynamicPii
-        | SecurityCategory::ShellCommand => Vec::new(),
+        | SecurityCategory::ShellCommand
+        | SecurityCategory::Jailbreak
+        | SecurityCategory::PromptExtraction
+        | SecurityCategory::ToolPoisoning
+        | SecurityCategory::AgentConfigTampering
+        | SecurityCategory::MemoryPoisoning
+        | SecurityCategory::Exfiltration
+        | SecurityCategory::ResourceExhaustion
+        | SecurityCategory::HarmfulContent
+        | SecurityCategory::ToxicLanguage => Vec::new(),
     }
 }
 
@@ -186,7 +195,7 @@ pub fn ntdb_l2_model_config_for_id(model_id: &str) -> Option<NtdbL2ModelConfig> 
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
     ]
     .into_iter()
     .flat_map(|category| ntdb_l2_model_configs_for_category(&execution, category))
@@ -624,7 +633,7 @@ mod tests {
 
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",
@@ -682,7 +691,7 @@ mod tests {
 
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",
@@ -741,7 +750,7 @@ mod tests {
         let execution = ScanExecution::new(SecurityLevel::L2);
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",

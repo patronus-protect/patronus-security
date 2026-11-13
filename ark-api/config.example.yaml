@@ -15,14 +15,14 @@ auth:
       # `gateway.worker_token`. Never store the raw token in this file.
       key_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       # The gateway must be able to forward every configured category.
-      categories: ["injection", "dlp", "threat", "pii", "dynamic-pii"]
+      categories: ["pii", "dlp", "injection", "jailbreak", "prompt_extraction", "tool_poisoning", "exfiltration", "dynamic-pii"]
       # Optional per-key gate override. Falls back to `pipeline.gates` when
       # omitted. Same shape as `pipeline.gates` below.
       # gates:
       #   l3: false
 
 pipeline:
-  categories: ["injection", "dlp", "threat", "pii", "dynamic-pii"]
+  categories: ["pii", "dlp", "injection", "jailbreak", "prompt_extraction", "tool_poisoning", "exfiltration", "dynamic-pii"]
   max_level: "L3"
   model_dir: "/data/models"
   # Assets are baked into the image at build time (see Dockerfile); leave

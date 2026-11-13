@@ -46,7 +46,7 @@ def entrypoint_peer():
                 index = len(jobs)
                 job_id = f"job_{index}"
                 path = f"/v1/scan/{job_id}"
-                categories = smoke.CATEGORIES if '"threat"' in body else {"injection"}
+                categories = smoke.CATEGORIES if '"jailbreak"' in body else {"injection"}
                 risky = smoke.INJECTION in body
                 jobs[path] = {
                     "job_id": job_id, "status": "completed", "completion": {"state": "complete"},
@@ -140,13 +140,17 @@ def test_loaded_categories_are_separate_from_default_inference():
     worker = yaml.safe_load((DEPLOY / "worker.template.yaml").read_text())
     build = yaml.safe_load((ROOT / "ark-api/config.build.yaml").read_text())
     key = worker["auth"]["keys"][0]
-    all_categories = {"injection", "dlp", "pii", "threat", "dynamic-pii", "sensitive_document",
-                      "routing", "tool_class", "tool_action", "tool_tags", "shell_command"}
+    attack_classes = {"jailbreak", "prompt_extraction", "tool_poisoning", "agent_config_tampering",
+                      "memory_poisoning", "exfiltration", "unsafe_action", "resource_exhaustion",
+                      "harmful_content", "toxic_language"}
+    all_categories = {"injection", "dlp", "pii", "dynamic-pii", "sensitive_document",
+                      "routing", "tool_class", "tool_action", "tool_tags", "shell_command"} | attack_classes
     assert set(worker["pipeline"]["categories"]) == all_categories
     assert set(build["pipeline"]["categories"]) == all_categories
     assert set(key["categories"]) == all_categories
-    assert set(key["default_categories"]) == {"injection", "dlp", "threat", "pii"}
+    assert set(key["default_categories"]) == {"pii", "dlp", "injection", "jailbreak", "prompt_extraction",
+                                              "tool_poisoning", "exfiltration"}
     gates = worker["pipeline"]["gates"]
     assert gates["l1"] and gates["l2"] and gates["l3"]
     assert gates["conditional"][0]["level"] == "L3"
-    assert gates["conditional"][0]["pipeline"] == "threat"
+    assert gates["conditional"][0]["pipeline"] == "unsafe_action"

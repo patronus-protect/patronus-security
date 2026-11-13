@@ -184,7 +184,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         ],
     },
     PipelineModelAssetSpec {
-        category: SecurityCategory::Threat,
+        category: SecurityCategory::UnsafeAction,
         model: "unified-v3-threat",
         repo: "patronus-studio/wolf-defender-threat-classifier",
         revision: "f186c09846c325256a262babcd8558d4e5f93dc9",
@@ -356,7 +356,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         required: true,
     },
     NtdbL2PackageAssetSpec {
-        category: SecurityCategory::Threat,
+        category: SecurityCategory::UnsafeAction,
         level: SecurityLevel::L2,
         model: "unified-v3-threat",
         repo: "patronus-studio/wolf-defender-threat-classifier",

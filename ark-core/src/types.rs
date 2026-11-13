@@ -172,6 +172,7 @@ impl SecurityCategory {
     }
 
     /// Return whether this category is backed by one head of the unified classifier.
+    /// `unsafe_action` carries the unified threat head.
     pub fn is_unified_classifier(self) -> bool {
         matches!(
             self,
@@ -181,6 +182,7 @@ impl SecurityCategory {
                 | Self::ToolAction
                 | Self::ToolTags
                 | Self::Routing
+                | Self::UnsafeAction
         )
     }
 
