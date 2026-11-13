@@ -193,9 +193,9 @@ datasets:
       - label: "Prompt injection = 1"
         reason: >-
           upstream marks a row as an attack when the chatbot's system prompt was altered, so many attack rows are a
-          system prompt plus an ordinary on-topic question; only rows with an override or role-change cue are kept
-        pattern: >-
-          \b(?:ignore|disregard|forget|override|bypass|abandon|set aside|put aside|drop|skip)\b[^.!?\n]{0,60}\b(?:instructions?|rules?|guidelines?|programming|restrictions?|directives?|prompt|role|purpose|focus|constraints?|limitations?|boundaries|protocols?|policy|policies)\b|\bpretend\b|\byou are now\b|\bfrom now on\b|\b(?:new|updated|different) (?:instructions|rules|role|persona)\b|\bsystem prompt\b|\bdeveloper mode\b|\bjailbreak|\bno longer (?:bound|restricted|limited|an?)\b|\bwithout (?:any )?(?:restrictions|limitations|filters|rules)\b|\b(?:stray|step|break) (?:away from|outside|out of|free from)\b|\bdeviate from\b|\bbreak (?:character|your rules)\b|\b(?:reveal|show|tell me|print|repeat)\b[^.!?\n]{0,30}\b(?:instructions|prompt|code|password|secret)\b
+          system prompt plus an ordinary on-topic question; only rows with an override cue in the user turn (after the
+          last ### separator, or anywhere when there is none) are kept
+        pattern: '(?:(?<!never )(?<!not )(?<!n''t )\b(?:ignore|disregard|forget|override|bypass|abandon)\b[^.!?\n]{0,40}\b(?:previous|prior|above|earlier|all|your|those|these|the|original|any)\b[^.!?\n]{0,20}\b(?:instructions?|rules?|guidelines?|programming|restrictions?|directives?|directions|prompt|conditions|constraints?|limitations?)\b|\bpretend\b[^.!?\n]{0,40}\b(?:no|forgot\w*|without)\b[^.!?\n]{0,30}\b(?:rules|restrictions|limits|guidelines|instructions)\b|\b(?:new|updated) instructions\b|\bdeveloper mode\b|\bjailbreak|\bno longer (?:bound|restricted|limited)\b|\bwithout (?:any )?(?:restrictions|limitations|filters|rules)\b|\b(?:stray|break) (?:away from|free from)\b|\bbreak (?:character|your rules)\b)(?![\s\S]*###)'
   - id: gentel
     commercial: unknown
     pending: recipe not written yet
@@ -226,8 +226,7 @@ datasets:
         reason: >-
           every prompt of the password game is labelled, including greetings, unrelated questions and game moves that
           only mean extraction inside the game; only prompts that name the secret or the hidden instructions are kept
-        pattern: >-
-          \b(?:pass ?words?|passwor[dt]\w*|passphrase|secrets?|code ?words?|magic word|hidden word|(?:system|initial|original|hidden) (?:prompt|instructions?)|your (?:instructions|prompt|rules))\b
+        pattern: '\b(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)\b|\bsecret (?:word|password|phrase|key|code)\b|\b(?:system|initial|original|hidden) (?:prompt|instructions?)\b'
   - id: satml_ctf
     commercial: unknown
     pending: recipe not written yet
