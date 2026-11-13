@@ -141,6 +141,7 @@ tasks:
   # MCPTox was missing although E01's accept named it. M-ids so lane b (the otherwise idle host)
   # picks them; E05/E06 — and through E06 every rule family — wait for M06.
   - id: M05
+    status: done
     title: Dataset registry v2 — per-set row caps (seeded, stratified; no decisive set above ~15k rows) and sources for the uncovered classes — MCPTox (tool_poisoning; already promised in E01's accept), AILuminate (harmful_content), GAHD/HateCheck/GermEval 2018 (toxic_language), and documented synthetic sets via the E02 generators (modelled on real public examples — papers, advisories, MCPTox patterns) for exfiltration, unsafe_action, memory_poisoning, agent_config_tampering, resource_exhaustion; grow the benign side (more benign sources, never fewer benign rows) so 0.1% FPR keeps resolution; re-freeze dev+holdout with new SHA manifests
     type: eval-infra
     deps: [E02]
