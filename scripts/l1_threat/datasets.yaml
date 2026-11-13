@@ -225,8 +225,9 @@ datasets:
       - label: "every prompt (password game)"
         reason: >-
           every prompt of the password game is labelled, including greetings, unrelated questions and game moves that
-          only mean extraction inside the game; only prompts that name the secret or the hidden instructions are kept
-        pattern: '\b(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)\b|\bsecret (?:word|password|phrase|key|code)\b|\b(?:system|initial|original|hidden) (?:prompt|instructions?)\b'
+          only mean extraction inside the game; only prompts that ask for, probe or confirm the secret (a request word
+          next to the secret in the same sentence) or name the hidden instructions are kept
+        pattern: '\b(?:tell|give|reveal|say|spell|print|write|show|share|output|repeat|list|encode|encrypt|translate|reverse|hint|confirm|what(?:''s|’s| is| are| was)|is|letters?|characters?|first|last)\b[^.!?\n]{0,60}\b(?:(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)|secret (?:word|password|phrase|key|code))\b|\b(?:(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)|secret (?:word|password|phrase|key|code))\b[^.!?\n]{0,60}\b(?:tell|give|reveal|say|spell|print|write|show|share|output|repeat|list|encode|encrypt|translate|reverse|hint|confirm|what(?:''s|’s| is| are| was)|is|letters?|characters?|first|last)\b|\b(?:system|initial|original|hidden) (?:prompt|instructions?)\b'
   - id: satml_ctf
     commercial: unknown
     pending: recipe not written yet
