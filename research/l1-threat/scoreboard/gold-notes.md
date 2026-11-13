@@ -27,7 +27,7 @@ generators too), adding a scored jailbreak dev source, and re-reviewing TextDeto
 
 ## Findings (dev review after the gold cleanup, 2026-11-13)
 
-Dev pool rebuilt from the cleaned recipes (registry generation 3, generator version 3; built locally with the
+Dev pool rebuilt from the cleaned recipes (registry generation 4, generator version 3; built locally with the
 same recipes the gate uses) and re-sampled with `gold.py sample`. Every set whose rows changed was reviewed again in
 full; sets with unchanged rows and sample (Dolly, GermanQuAD, Gandalf, jackhhao, `exfil_lookalikes`) keep their first
 verdicts, and the re-sampled report-only sets (TextDetox-DE, AILuminate demo) and `class_templates` were reviewed anew.

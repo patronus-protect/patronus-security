@@ -378,7 +378,7 @@ politische Äußerungen auf beiden Seiten des Labels) und AILuminate-Demo (6 %, 
 Uplift) sind `report_only`; `toxic_language` und `harmful_content` haben damit bis zu einer saubereren Quelle keine
 gewertete Dev-Quelle und bleiben nicht messbar, ihre Regelaufgaben bleiben blockiert. `jailbreak` bekommt gewertete
 Dev-Zeilen über `class_templates` (Familien nach DAN- und Jailbroken-Mustern: Persona ohne Regeln,
-Refusal-Suppression; Holdout disjunkt: Doppelantwort, Fiktionsrahmen). `generation: 3` und Generator-Version 3
+Refusal-Suppression; Holdout disjunkt: Doppelantwort, Fiktionsrahmen). `generation: 4` (3 belegte zuvor Tensor Trust) und Generator-Version 3
 frieren alle Splits im nächsten Gate-Lauf neu ein. Dev-Pool danach: SPML 5 729 Zeilen (2 403 Angriffe, 10 138 ohne
 Cue verworfen), Mosscap 15 000 (42 666 vor der Grenze, 192 258 ohne Cue verworfen), `jailbreak` 84 gewertete
 synthetische Zeilen, Benign 35 025 Zeilen aus sechs Sätzen.
