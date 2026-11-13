@@ -196,12 +196,8 @@ def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet:
 def leakage(dev: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], holdout: list[tuple[str, dict[str, Any], list[dict[str, Any]]]],
             dedup: dict[str, Any]) -> dict[str, Any]:
     """Holdout rows per set that duplicate a dev row, exactly or by MinHash (counts only)."""
-    index = CORPORA.Deduper(dedup)
-    for _, _, rows in dev:
-        for row in rows:
-            kind, _, signature = index.match(row["text"])
-            if kind is None:
-                index.add(row["text"], signature)
+    # Every dev row: MinHash is not transitive, a holdout row can match a dev row but not its near twin.
+    index = CORPORA._index((row for _, _, rows in dev for row in rows), dedup)
     sets = {}
     for key, _, rows in holdout:
         found = Counter(index.match(row["text"])[0] for row in rows)

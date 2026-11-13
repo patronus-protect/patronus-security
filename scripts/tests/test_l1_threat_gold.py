@@ -165,6 +165,21 @@ def test_leakage_counts_exact_and_near_duplicates_across_splits(tmp_path):
     assert "text" not in json.dumps(result)
 
 
+def test_leakage_indexes_near_duplicate_dev_rows(tmp_path):
+    # MinHash is not transitive: the holdout row matches dev row b, not its near twin a.
+    tail = ("the quarterly report for the finance team and list the three largest cost items together with their "
+            "change against the previous quarter and the owner of each")
+    a, b = f"Please summarise {tail} budget line in the sheet", f"Kindly draft and send {tail} budget line in the sheet"
+    held = f"Kindly draft and send {tail} cost centre in the sheet"
+    index = CORPORA.Deduper(CORPORA.load()["dedup"])
+    index.add(a)
+    assert index.match(b)[0] == "minhash" and index.match(held)[0] is None
+    dev = MODULE.read_pool([freeze(tmp_path / "dev" / "train_dev", {"a": [row("a", 0, a), row("a", 1, b)]})])
+    holdout = MODULE.read_pool([freeze(tmp_path / "holdout" / "holdout", {"h": [row("h", 0, held)]})])
+    result = MODULE.leakage(dev, holdout, CORPORA.load()["dedup"])
+    assert result["sets"]["holdout/h"] == {"rows": 1, "exact": 0, "minhash": 1}
+
+
 def test_cli_end_to_end_renders_pending_holdout(dev_pool, tmp_path):
     directories = [str(tmp_path / "train_dev"), str(tmp_path / "generated")]
     sheet_path, summary_path, report = tmp_path / "sheet.jsonl", tmp_path / "dev.json", tmp_path / "gold.md"
