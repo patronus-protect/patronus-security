@@ -341,13 +341,35 @@ Auswertungssätze; die Rolle `decisive`/`dev`/`report` wird aus Split, Familie u
 Holdout gegen `train_dev`/`report` (die Holdout-Zeile fliegt), gegen Baseline-Trainingslisten als Spalte
 `contamination` je Baseline (ProtectAI v2: XSTest, jackhhao laut Modellkarte). Holdout-Rezepte, auch MCPTox,
 stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus `~/ark-threat/holdout`.
-Stand: fünf Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf); die übrigen `train_dev`- und
-`report`-Sätze sind `pending` (offene Formate: Parquet mit Zahlenspalten, ZIP, Mehrdatei-Repos auf GitHub).
+Stand: acht Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILuminate-Demo, textdetox DE,
+GermanQuAD-Fragen als deutscher Dev-Benign-Satz;
+der Parquet-Leser liest einfache Ganzzahl-Spalten als Dezimaltext); die übrigen `train_dev`- und
+`report`-Sätze sind `pending` (offene Formate: Parquet mit Gleitkomma- oder Listen-Spalten, ZIP,
+Mehrdatei-Repos auf GitHub).
+
+**Registry v2 (M05).** Kein Satz dominiert den Pool: Nach dem Dedup behält jeder Satz höchstens 15 000
+Zeilen (`sampling.max_rows`, je Satz kleiner über `cap`), geschichtet nach Benign/Klassen/Sprache mit
+festem Seed (`sampling.seed`); Grenze, Seed und Zeilen vor der Grenze stehen im Manifest (Korpusformat v3;
+mosscap fällt von 158k auf 15k Zeilen). Der Gate-Aufruf über beide Splits prüft Dev-Zeilen auch gegen
+Holdout-Trainingsquellen (XSTest für ProtectAI v2), sodass `contamination_unchecked` nur noch für
+ausstehende Rezepte bleibt. `prepare_corpora.py coverage` prüft je Split den Pool (vorbereitet plus
+generiert): Zeilen für jede Klasse (Quelle `native`/`synthetic`), Benign-Pool ≥ 30 000 Zeilen aus ≥ 3
+Sätzen, keine ungeprüfte Kontamination. Klassen ohne öffentliche Dev-Daten (`tool_poisoning`,
+`agent_config_tampering`, `memory_poisoning`, `unsafe_action`, `resource_exhaustion`) bekommen
+dokumentierte synthetische Zeilen über den Generator `class_templates` (Form öffentlicher Beispiele, in
+`modelled_on` genannt; Dev- und Holdout-Familien disjunkt; im Holdout zählt `unsafe_action` über das neue
+Label „unsafe agent action request“ von `generators_holdout_seed`). Neu eingefroren wird über
+`generation: 2` in `datasets.yaml` (und Generator-Version 2): Der nächste Gate-Lauf schreibt alle Splits
+ohne `--force` neu. Dev-Pool danach (`coverage` über `train_dev`, `report`, `generated`): alle elf Klassen
+mit Zeilen (sechs davon nur synthetisch: die fünf Template-Klassen und `exfiltration`), Benign 34 844 Zeilen aus sechs Sätzen;
+offen bleibt nur die XSTest-Kontamination (ProtectAI v2), die erst der Gate-Lauf mit Holdout-Overlay prüft.
+Offen für das Holdout-Setup außerhalb des Runners: Overlay-Rezepte für MCPTox, GAHD, HateCheck,
+GermEval 2018 (Test), XSTest und die Benign-Quellen, danach `coverage` auf dem Holdout-Pool.
 
 **Generatoren (E02, [`scripts/l1_threat/generators.py`](../../scripts/l1_threat/generators.py)).** Aus den
 eingefrorenen Korpora: Carrier-Insertion mit sauberem Zwilling (Web, PDF-Text, Ticket, Code-Kommentar,
 RAG-Chunk, Mail), Exfil-Anweisungen in Tool-Ausgaben mit harmlosen Doppelgängern, Obfuskations-Slices über
-Angriffs- und Benign-Zeilen. Dev (`generators_dev_seed`, öffentlicher Seed, liest `train_dev` und die
+Angriffs- und Benign-Zeilen, dazu (M05) synthetische Klassen-Templates mit Doppelgänger. Dev (`generators_dev_seed`, öffentlicher Seed, liest `train_dev` und die
 Runner-Übersetzungen) und Holdout (`generators_holdout_seed`, geheimer Seed unter `~/ark-threat/holdout`, liest
 nur den Holdout) haben getrennte Seeds und disjunkte Template-Familien. Die DE-Übersetzung der Dev-Sätze
 (`runner_translations_de`) schreibt der Runner-Agent selbst in ein Arbeitsblatt (`translate export`/`ingest`);

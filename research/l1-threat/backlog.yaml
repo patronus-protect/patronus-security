@@ -137,6 +137,48 @@ tasks:
       credential_file_access, credential_harvesting, ssrf_metadata; nothing dropped without a new home)
 
   # ── E: Measurement ────────────────────────────────────────────────────
+  # Gold first (owner, 2026-11-13): build and validate the gold before eval and rule work. Seven of
+  # eleven classes had no gold rows, one set (mosscap, 158k rows of one class) dwarfed the rest, and
+  # MCPTox was missing although E01's accept named it. M-ids so lane b (the otherwise idle host)
+  # picks them; E05/E06 — and through E06 every rule family — wait for M06.
+  - id: M05
+    status: done
+    title: Dataset registry v2 — per-set row caps (seeded, stratified; no decisive set above ~15k rows) and sources for the uncovered classes — MCPTox (tool_poisoning; already promised in E01's accept), AILuminate (harmful_content), GAHD/HateCheck/GermEval 2018 (toxic_language), and documented synthetic sets via the E02 generators (modelled on real public examples — papers, advisories, MCPTox patterns) for exfiltration, unsafe_action, memory_poisoning, agent_config_tampering, resource_exhaustion; grow the benign side (more benign sources, never fewer benign rows) so 0.1% FPR keeps resolution; re-freeze dev+holdout with new SHA manifests
+    type: eval-infra
+    deps: [E02]
+    accept: >-
+      Every class in taxonomy.yaml has gold rows in dev AND holdout (native or documented-synthetic,
+      column kept); per-set caps and sampling seed in the manifest; benign pool >= 30k rows across
+      at least three sources; contamination column complete for every baseline (no
+      contamination_unchecked left); licence per source; nothing committed except recipes and manifests
+  - id: M06
+    status: done
+    title: Gold validation — per-set label spot-check (>= 50 rows per set; dev sets hand-reviewed by the runner, holdout sets by the owner in a separate authorized session that leaves an aggregate review report under ~/ark-threat/transfer/, since the runner sandbox cannot read the holdout), cross-split leakage check (exact + MinHash between dev and holdout, in the independent gate), class/language counts, per-class data provenance (native / translated / synthetic) — report research/l1-threat/scoreboard/gold.md
+    type: eval-infra
+    deps: [M05]
+    accept: >-
+      gold.md on main with per-set error rates (dev from the runner's review, holdout from the
+      owner's aggregate report — error rates and counts only, never holdout contents), per-class row
+      counts for dev and holdout separately, leakage zero, and a named go/no-go per class: a class
+      whose gold fails validation is listed as not measurable and its rule tasks stay blocked; if the
+      owner report is not yet present, M06 waits (runner blocks the task with that reason)
+
+  # Gold cleanup (owner, 2026-11-13): gold.md lists every class as no-go or pending. The noisy dev
+  # sources must be cleaned before the scoreboard numbers mean anything; M07 therefore sits between
+  # the M06 report and the per-class scoreboard work the rule families wait for.
+  - id: M07
+    status: todo
+    title: Gold cleanup — restore the no-go classes of research/l1-threat/scoreboard/gold.md to go; fix the carrier_insertion and obfuscation_slices templates that emit benign rows under attack labels (27.5% error), re-label or demote the noisy rows of spml and mosscap (24%; password-game probes are not extraction outside the game context), textdetox_de (18%) and ailuminate_demo (6%), and give jailbreak a scored dev source (0 scored dev rows; trustairlab is holdout, jackhhao is report-only); then re-run the gold.py dev review on every changed set and update gold.md
+    type: eval-infra
+    deps: [M06]
+    accept: >-
+      gold.md regenerated on main with every previously failing dev set either passing the 5% bar
+      or demoted to report-only with the reason named; jailbreak has at least 50 scored dev rows
+      outside report-only sets; no row deleted silently — filters and template fixes live in the
+      recipes and generators, the frozen corpora are rebuilt through the gate, and the manifest
+      documents the new row counts; classes that still fail stay listed as not measurable and their
+      rule tasks stay blocked
+
   - id: E01
     status: done
     title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
@@ -168,12 +210,12 @@ tasks:
   - id: E05
     title: Golden schema v2 for threat (class, family, carrier, tags negated/quoted/meta/code/indirect/obfuscated/translated, known_gap) + 13_l1_golden_eval -- threat
     type: eval-infra
-    deps: [X03]
+    deps: [X03, M06]  # gold first (owner, 2026-11-13)
 
   - id: E06
     title: Scoreboard gate — TPR@1%/0.1% FPR and AUPRC per class and language, hard-benign FPR, leave-one-dataset-out, native/translated columns, bootstrap CI, delta to base; baseline report research/l1-threat/scoreboard/baseline.md
     type: eval-infra
-    deps: [E02, E04, E05]
+    deps: [E02, E04, E05, M06]
 
   # ── S: Engine ─────────────────────────────────────────────────────────
   - id: S02
@@ -222,24 +264,26 @@ tasks:
     deps: [S04]
 
   # ── Classes: one rule bundle + one points/ablation bundle each ────────
-  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04]}
+  # Eval first (owner, 2026-11-13): no rule bundle lands before the scoreboard exists — every
+  # family task depends on E06, so each rule PR is measured (TPR@FPR per class, hard-benign FPR).
+  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06]}
   - {id: IJ02, title: "instruction_injection points + ablation decision; today's injection scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [IJ01, S05]}
   - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01]}
   - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
   - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01]}
   - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
-  - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04]}
+  - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04, E06]}
   - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05]}
   - {id: AC01, title: "agent_config_tampering rules (skills, AGENTS.md/CLAUDE.md/.cursorrules, mcp.json, hooks: hidden directives, auto-approve/permission widening, fetch-and-run in skill text) incl. SkillSpector/ATR harvest", type: new-family, deps: [TP01]}
   - {id: AC02, title: "agent_config_tampering points + ablation decision", type: scorer, deps: [AC01, S05]}
-  - {id: EX01, title: "exfiltration rules (markdown image/link with templated data, URL/DNS/webhook sinks, tool-parameter egress, send-to-external directives, invisible characters in links) incl. pipelock harvest; DLP hits as source evidence", type: new-family, deps: [S03, M04]}
+  - {id: EX01, title: "exfiltration rules (markdown image/link with templated data, URL/DNS/webhook sinks, tool-parameter egress, send-to-external directives, invisible characters in links) incl. pipelock harvest; DLP hits as source evidence", type: new-family, deps: [S03, M04, E06]}
   - {id: EX02, title: "exfiltration points + ablation decision", type: scorer, deps: [EX01, S05]}
   - {id: UA01, title: "unsafe_action rules for prose/code/config carriers (credential_access from the former secrets_access rules, destructive/irreversible requests, download-and-run instructions, privilege widening, security-control and logging disablement, persistence, SSRF/unsafe TLS/deserialisation in code, container/K8s config); shell syntax stays with K26", type: new-family, deps: [X04, S02], status: done}
   - {id: UA02, title: "unsafe_action points + ablation decision; today's threat scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [UA01, S05]}
   - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01]}
   - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}
   - {id: RE01, title: "resource_exhaustion rules (unbounded repetition quantifiers with configurable count threshold resource_exhaustion_count_threshold, recursive spawning, infinite-loop directives, decoy compute tasks in foreign content) + points", type: new-family, deps: [S04]}
-  - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04]}
+  - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06]}
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05]}
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01]}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}

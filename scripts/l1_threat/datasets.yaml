@@ -18,16 +18,21 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8 columns only)
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns)
 #   text        record field holding the text; `language` a fixed code or `language_field`
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
 #               field matches every row; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
-#   limit       keep at most this many rows (lowest text hash first, deterministic)
+#   cap         keep at most this many rows (default and upper bound: sampling.max_rows); sampled per
+#               stratum (benign, classes, language) with the sampling seed, see prepare_corpora.py
 #
 # Checked by: python3 scripts/l1_threat/prepare_corpora.py check
 
 schema: ark-l1-threat-datasets-v1
+
+# Corpus generation: raising it re-freezes every prepared split on the next run (row caps, new sets).
+# 3: Tensor Trust extraction benchmark joins the holdout registry.
+generation: 3
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -36,6 +41,12 @@ dedup:
   bands: 16
   threshold: 0.8
   seed: ark-l1-threat-e01-v1
+
+# Row cap of every set after deduplication: no set dominates the pool, and a set larger than the cap
+# keeps the share of each stratum (benign, classes, language). Changing the seed or the cap re-freezes.
+sampling:
+  max_rows: 15000
+  seed: ark-l1-threat-m05-v1
 
 datasets:
   - id: llmail_inject
@@ -49,6 +60,10 @@ datasets:
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: cyberseceval_pi
     commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: tensortrust_extraction
+    commercial: unknown
+    training: false
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: trustairlab_jailbreak
     commercial: true
@@ -232,7 +247,17 @@ datasets:
     pending: recipe not written yet
   - id: ailuminate_demo
     commercial: true
-    pending: recipe not written yet
+    source: https://github.com/mlcommons/ailuminate
+    revision: 769cc2be9d20c8d4fb26ce53b68865ed41dfb8e2
+    files:
+      - {path: airr_official_1.0_demo_en_us_prompt_set_release.csv, sha256: 63e2b654325c5405096fabf28ef5f057b0ad674904b1839fd1f52b523e324d02}
+    format: csv
+    text: prompt_text
+    language: en
+    labels:
+      # upstream spells the sexual-content hazard sxc_prn
+      - {field: hazard, equals: [vcr, src, cse, ssh, iwp, ncr, hte, sxc_prn], label: "hazard in (vcr, src, cse, ssh, iwp, ncr, hte, sxc)"}
+      - {field: hazard, equals: [spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm], label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)"}
   - id: nemotron_content_safety_v2
     commercial: true
     pending: recipe not written yet
@@ -247,7 +272,16 @@ datasets:
     pending: recipe not written yet
   - id: textdetox_de
     commercial: true
-    pending: recipe not written yet
+    source: https://huggingface.co/datasets/textdetox/multilingual_toxicity_dataset
+    revision: 01907546324b0330d2d8b7669648cc18823323e5
+    files:
+      - {path: data/de-00000-of-00001.parquet, sha256: 47acf7a5d1f172d8b897a6963e4578162595509b38aff3f1b1d1527765ab93ff}
+    format: parquet
+    text: text
+    language: de
+    labels:
+      - {field: toxic, equals: "1", label: "toxic = 1"}
+      - {field: toxic, equals: "0", label: "toxic = 0"}
   - id: civil_comments
     commercial: true
     pending: recipe not written yet
@@ -262,6 +296,17 @@ datasets:
     language: en
     labels:
       - {label: "instruction (incl. remember-this and repetition requests)"}
+  - id: germanquad
+    commercial: true
+    source: https://huggingface.co/datasets/deepset/germanquad
+    revision: a2f3a59f0be843fc305d0417d7292ef0b1a66884  # refs/convert/parquet
+    files:
+      - {path: plain_text/train/0000.parquet, sha256: 319334092605ed9ade8a1e6535584debb2e99def474697417a06ad4a455bf0ec}
+    format: parquet
+    text: question
+    language: de
+    labels:
+      - {label: question}
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)
