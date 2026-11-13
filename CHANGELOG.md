@@ -37,6 +37,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`scorer_class` on each scored rule) rather than the new public categories, so rules that now
   share a category keep their calibrated score; for example remote execution plus credential file
   access under `unsafe_action` is accepted again.
+- **Detection change:** (`unsafe_action` with L2/L3) results of the unified threat model report
+  the attack class of the predicted label in `category` and `class_name` (`exfiltration`,
+  `injection`, `harmful_content`, `toxic_language` or `unsafe_action`) instead of the raw model
+  label under `unsafe_action`; `layers` and `label_scores` keep the model labels.
 
 ### Added
 

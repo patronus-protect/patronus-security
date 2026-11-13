@@ -64,7 +64,11 @@ was accepted. The former threat class names (`tool_abuse`, `secrets_access`,
 that look for credential access report under `unsafe_action`. The DLP operation detectors
 `native:destructive_operation`, `native:sensitive_material` and `native:mcp_runtime_risk` report
 under `unsafe_action`, `native:secret_transfer` under `exfiltration`; `dlp` keeps secrets,
-classification markings and `native:mcp_policy`.
+classification markings and `native:mcp_policy`. The unified threat model (`unified-v3-threat`,
+L2/L3) runs when `unsafe_action` is selected; its final result names the attack class of the
+predicted label in `category` and `class_name` (for example `exfiltration` for an exfiltration
+prediction, `unsafe_action` for credential access or tool abuse), while `layers` and
+`label_scores` keep the model's own labels.
 
 ### Layer entry
 
