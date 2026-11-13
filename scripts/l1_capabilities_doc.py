@@ -347,7 +347,7 @@ def generate(
     pii_rules: list[dict],
     dlp_rules: list[dict],
     default_on_groups: set[str],
-    relationship_rules: list[tuple[str, str, bool]],
+    relationship_rules: list[tuple[str, str, str, bool]],
 ) -> str:
     pii_map = yaml.safe_load(PII_ENTITY_MAP_PATH.read_text(encoding="utf-8"))
     dlp_map = yaml.safe_load(DLP_ENTITY_MAP_PATH.read_text(encoding="utf-8"))
@@ -495,7 +495,7 @@ def generate(
         "| Type | Covered by | Group | Rule ID(s) | Structure check | Default | Scanner rules |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ])
-    relationship_defaults = {rule_id: default for rule_id, _, default in relationship_rules}
+    relationship_defaults = {rule_id: default for rule_id, _, _, default in relationship_rules}
     for scope, scope_name in DLP_SCOPES.items():
         for entity in (e for e in dlp_entities if e["scope"] == scope):
             ark = entity.get("ark") or []

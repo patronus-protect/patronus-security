@@ -1630,7 +1630,7 @@ Return the max-level cap backing this execution.
 
 ```rust
 pub struct ScannerConfig {
-    /// Native text-scan categories: `pii`, `dlp` and `injection`.
+    /// Native text-scan categories: `pii`, `dlp` and the eleven attack classes.
     pub categories: Vec<SecurityCategory>,
     /// Rule, model, mode and `explain` gates; their keys sit at the top level
     /// of the serialized config.
@@ -1647,8 +1647,9 @@ pub struct ScannerConfig {
 }
 ```
 
-Queue-free scanner policy. Defaults to all three native categories, no Wolf
-and no Cat.
+Queue-free scanner policy. Defaults to pii, dlp and the core attack classes
+(injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration), no
+Wolf and no Cat.
 
 ```rust
 pub enum ScanError {
@@ -1771,7 +1772,7 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 
 ```rust
 pub struct NativeEngine {
-    groups: [Vec<NativeProducerSpec>; 3],
+    groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -2296,8 +2297,26 @@ pub enum SecurityCategory {
     ToolTags,
     /// Operational request routing.
     Routing,
-    /// Security threat classification.
-    Threat,
+    /// Jailbreak techniques that bypass safety rules.
+    Jailbreak,
+    /// Requests to reveal hidden instructions, tool schemas or rules.
+    PromptExtraction,
+    /// Instructions hidden in tool or MCP descriptions, schemas and agent cards.
+    ToolPoisoning,
+    /// Malicious instructions in skills, rules files, agent configuration or hooks.
+    AgentConfigTampering,
+    /// Content that tries to write itself into long-term memory or a profile.
+    MemoryPoisoning,
+    /// Data sent to external sinks (markdown/URL, DNS, tool parameters, webhooks).
+    Exfiltration,
+    /// Requests for destructive, executing, privilege-widening or control-disabling actions.
+    UnsafeAction,
+    /// Endless loops, recursive spawning and cost explosions.
+    ResourceExhaustion,
+    /// Requests for dangerous content.
+    HarmfulContent,
+    /// Hate, harassment, threats, insults and profanity.
+    ToxicLanguage,
     /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
     ShellCommand,
 }
@@ -2316,6 +2335,7 @@ pub fn is_unified_classifier(self) -> bool;
 ```
 
 Return whether this category is backed by one head of the unified classifier.
+`unsafe_action` carries the unified threat head.
 
 ```rust
 pub struct EvidenceSpan {

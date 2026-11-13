@@ -41,7 +41,7 @@ def test_every_registry_label_and_rule_appears():
     for rule in pii + dlp:
         assert f"`{rule['entity_group']}`" in page, rule["entity_group"]
         assert f"`{rule['id']}`" in page, rule["id"]
-    for rule_id, _, _ in GENERATE_DOCS.DLP_RELATIONSHIP_RULES:
+    for rule_id, _, _, _ in GENERATE_DOCS.DLP_RELATIONSHIP_RULES:
         assert f"`{rule_id}`" in page, rule_id
 
 

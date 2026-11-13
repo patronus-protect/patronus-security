@@ -446,11 +446,11 @@ DLP_DEFAULT_ON_GROUPS = DLP_CREDENTIAL_GROUPS | {"dlp.document.classification_ma
 
 # (rule ID, model gate, default on) of the DLP relationship rules.
 DLP_RELATIONSHIP_RULES = [
-    ("dlp_sensitive_material", "native:sensitive_material", True),
-    ("dlp_secret_transfer", "native:secret_transfer", True),
-    ("dlp_mcp_runtime_risk", "native:mcp_runtime_risk", False),
-    ("dlp_mcp_policy", "native:mcp_policy", False),
-    ("dlp_destructive_operation", "native:destructive_operation", False),
+    ("dlp_sensitive_material", "native:sensitive_material", "unsafe_action", True),
+    ("dlp_secret_transfer", "native:secret_transfer", "exfiltration", True),
+    ("dlp_mcp_runtime_risk", "native:mcp_runtime_risk", "unsafe_action", False),
+    ("dlp_mcp_policy", "native:mcp_policy", "dlp", False),
+    ("dlp_destructive_operation", "native:destructive_operation", "unsafe_action", False),
 ]
 
 
@@ -662,15 +662,15 @@ def generate_l1_rule_catalog_doc() -> str:
 
     lines.extend([
         "",
-        f"## DLP relationship rules ({len(DLP_RELATIONSHIP_RULES)})",
+        f"## Relationship rules ({len(DLP_RELATIONSHIP_RULES)})",
         "",
-        "These rules use the shared source-bound component contract and emit finding spans. Their evidence includes action/target relations or MCP tool/argument components.",
+        "These rules use the shared source-bound component contract and emit finding spans. Their evidence includes action/target relations or MCP tool/argument components. They keep their `dlp_` rule IDs but report under the category shown.",
         "",
-        "| Rule ID | Model gate | Default |",
-        "| --- | --- | --- |",
+        "| Rule ID | Model gate | Category | Default |",
+        "| --- | --- | --- | --- |",
         *(
-            f"| `{rule_id}` | `{gate}` | {'on' if default else 'off'} |"
-            for rule_id, gate, default in DLP_RELATIONSHIP_RULES
+            f"| `{rule_id}` | `{gate}` | `{category}` | {'on' if default else 'off'} |"
+            for rule_id, gate, category, default in DLP_RELATIONSHIP_RULES
         ),
         "",
         f"## Injection rules ({len(injection)})",
@@ -688,11 +688,11 @@ def generate_l1_rule_catalog_doc() -> str:
     threat = json.loads((ROOT / "ark-core/src/detectors/threat/rules.json").read_text())["rules"]
     lines.extend([
         "", f"## Threat rules ({len(threat)})", "",
-        "Enabled by default when Threat L1 is configured. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.", "",
-        "| Rule ID | Threat class | SkillSpector reference groups |", "| --- | --- | --- |",
+        "Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.", "",
+        "| Rule ID | Category | Family | SkillSpector reference groups |", "| --- | --- | --- | --- |",
     ])
     for rule in threat:
-        lines.append(f"| `{rule['id']}` | `{rule['class_name']}` | {', '.join(rule['upstream_groups'])} |")
+        lines.append(f"| `{rule['id']}` | `{rule['class_name']}` | `{rule['family']}` | {', '.join(rule['upstream_groups'])} |")
     shell = parse_shell_policies()
     lines.extend([
         "", f"## Shell command policies ({len(shell)}) {{ #shell-command-policies }}", "",
