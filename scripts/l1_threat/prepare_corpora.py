@@ -470,9 +470,9 @@ def cap_rows(rows: list[dict[str, Any]], cap: int, seed: str, dataset_id: str) -
 
 
 def load_set(
-    entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: dict[str, Any], sampling: dict[str, Any]
+    entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
-    """Mapped rows of one set, deduplicated within the set (exact and MinHash) and capped, with drop counts."""
+    """Mapped rows of one set, deduplicated within the set (exact and MinHash), with drop counts; not capped."""
     index = Deduper(dedup)
     rows: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
@@ -494,9 +494,7 @@ def load_set(
         index.add(text, signature)
         language = entry["language"] if "language" in entry else str(_field(record, entry["language_field"]))
         rows.append({"id": f"{entry['id']}:{number:07d}", "dataset": entry["id"], "text": text, "language": language, **outcome})
-    capped = cap_rows(rows, entry.get("cap", sampling["max_rows"]), str(sampling["seed"]), entry["id"])
-    dropped["cap"] = len(rows) - len(capped)
-    return capped, dropped
+    return rows, dropped
 
 
 def _index(rows: Iterable[dict[str, Any]], dedup: dict[str, Any]) -> Deduper:
@@ -518,7 +516,8 @@ def build(
 ) -> dict[str, bytes] | None:
     """``{file name: content}`` of one prepared split (JSONL per set, manifest, .ready); None without a ready set.
 
-    ``loaded`` caches mapped, deduplicated sets between the splits of one run. ``with_holdout``: the
+    ``loaded`` caches mapped, deduplicated sets between the splits of one run, before the cap: contamination
+    references hold every row a baseline trained on, only the output corpora are capped. ``with_holdout``: the
     call prepares the holdout as well, so train_dev and report rows are compared against holdout
     training sources (only the contamination flag reaches their output)."""
     problems = check(registry, emap)
@@ -533,8 +532,12 @@ def build(
     def rows_of(dataset_id: str) -> list[dict[str, Any]]:
         if dataset_id not in loaded:
             entry = entries[dataset_id]
-            loaded[dataset_id] = load_set(entry, datasets[dataset_id], fetch(entry, sources, offline, download), dedup, sampling)
+            loaded[dataset_id] = load_set(entry, datasets[dataset_id], fetch(entry, sources, offline, download), dedup)
         return loaded[dataset_id][0]
+
+    def capped_of(dataset_id: str) -> list[dict[str, Any]]:
+        cap = entries[dataset_id].get("cap", sampling["max_rows"])
+        return cap_rows(rows_of(dataset_id), cap, str(sampling["seed"]), dataset_id)
 
     members = [i for i, entry in entries.items() if datasets[i]["split"] == split and is_ready(entry)]
     skipped = {
@@ -547,7 +550,7 @@ def build(
     # Cross-split: the holdout drops what a train_dev or report set already holds.
     other = None
     if split == "holdout":
-        other = _index((row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in rows_of(i)), dedup)
+        other = _index((row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in capped_of(i)), dedup)
     # Holdout rows are only read by a call that prepares the holdout itself.
     visible = [
         i for i, entry in entries.items() if is_ready(entry) and (split == "holdout" or with_holdout or datasets[i]["split"] != "holdout")
@@ -570,7 +573,9 @@ def build(
     files: dict[str, bytes] = {}
     sets: dict[str, Any] = {}
     for dataset_id in sorted(members):
-        rows, dropped = rows_of(dataset_id), Counter(loaded[dataset_id][1])
+        rows, dropped = capped_of(dataset_id), Counter(loaded[dataset_id][1])
+        rows_before_cap = len(rows_of(dataset_id))
+        dropped["cap"] = rows_before_cap - len(rows)
         if other is not None:
             kept = [row for row in rows if other.match(row["text"])[0] is None]
             dropped["cross_split"] = len(rows) - len(kept)
@@ -601,7 +606,7 @@ def build(
             "sha256": PRESIDIO._sha256(data),
             "rows": len(rows),
             "cap": entry.get("cap", sampling["max_rows"]),
-            "rows_before_cap": len(rows) + dropped["cap"],
+            "rows_before_cap": rows_before_cap,
             "dropped": dict(sorted((key, value) for key, value in dropped.items() if value)),
             "classes": dict(sorted(Counter(name for row in rows for name in row["classes"]).items())),
             "benign": sum(row["benign"] for row in rows),

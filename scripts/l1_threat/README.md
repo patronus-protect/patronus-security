@@ -129,7 +129,9 @@ Zeile, die keine Label-Regel trifft, bricht ab. Nach dem Dedup behält jeder Sat
 (`benign`, Klassen, Sprache), jede Schicht behält eine Zeile, solange die Grenze reicht, der Rest geht
 anteilig an die Schichten (größter Rest), innerhalb einer Schicht entscheidet ein Hash aus Seed
 (`sampling.seed`), Satz und Text. Grenze und Seed stehen im Manifest (`sampling`, je Satz `cap`,
-`rows_before_cap`, `dropped.cap`). Dedup auf NFKC, Casefold und zusammengefasstem Leerraum:
+`rows_before_cap`, `dropped.cap`; `rows_before_cap` zählt auch Zeilen, die der Holdout danach
+satzübergreifend verwirft). Die Grenze kürzt nur die geschriebenen Korpora: der Kontaminationsabgleich
+liest die Trainingsquellen einer Baseline ungekürzt. Dedup auf NFKC, Casefold und zusammengefasstem Leerraum:
 exakt und MinHash (Zeichen-5-Gramme, 64 Permutationen, 16 Bänder, Jaccard-Schätzung ≥ 0,8) innerhalb
 jedes Satzes; der Holdout verwirft jede Zeile, die in einem `train_dev`- oder `report`-Satz vorkommt;
 gegen Baseline-Trainingslisten (`trained_on` der Entity-Map) wird nicht verworfen, sondern je Baseline
