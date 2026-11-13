@@ -208,6 +208,7 @@ tasks:
     deps: [E01]
 
   - id: E05
+    status: done
     title: Golden schema v2 for threat (class, family, carrier, tags negated/quoted/meta/code/indirect/obfuscated/translated, known_gap) + 13_l1_golden_eval -- threat
     type: eval-infra
     deps: [X03, M06]  # gold first (owner, 2026-11-13)
