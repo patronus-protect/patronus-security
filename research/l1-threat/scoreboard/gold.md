@@ -135,7 +135,7 @@ generators too), adding a scored jailbreak dev source, and re-reviewing TextDeto
 Dev pool rebuilt from the cleaned recipes (registry generation 4, generator version 3; built locally with the
 same recipes the gate uses) and re-sampled with `gold.py sample`. Every set whose rows changed was reviewed again in
 full; sets with unchanged rows and sample (Dolly, GermanQuAD, Gandalf, jackhhao, `exfil_lookalikes`) keep their first
-verdicts, and the re-sampled report-only sets (TextDetox-DE, AILuminate demo) and `class_templates` were reviewed anew.
+verdicts (`exfil_lookalikes` keeps its version-2 random stream, so its 600 rows are byte-identical to the reviewed ones), and the re-sampled report-only sets (TextDetox-DE, AILuminate demo) and `class_templates` were reviewed anew.
 
 - **SPML: 1 of 50 unclear (was 24 %).** The recipe keeps an attack row only when its user turn (after the last `###`
   separator, or the whole text without one) carries an override cue; 10 138 attack rows without one are dropped and

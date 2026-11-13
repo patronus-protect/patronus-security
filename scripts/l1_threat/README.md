@@ -209,6 +209,9 @@ angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `
 als `translated` markierten Satzes). Ein Obfuscation-Zwilling trägt die Sprache seiner Benign-Quelle. Ausgabe eingefroren wie die Korpora (JSONL je Generator,
 `manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`, außer die Ausgabe stammt
 von einer älteren Generator-Version (`GENERATOR_VERSION`, im Manifest `generator_version`).
+Jeder Generator hat einen eigenen Zufallsstrom; seine Version (`STREAMS`) steigt nur, wenn sich seine Zeilen
+ändern sollen, damit ein Satz mit unveränderten Zeilen bei einem Versionssprung dieselben Texte unter denselben
+IDs behält (und sein Gold-Review gültig bleibt).
 
 Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
 `--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus) in ein

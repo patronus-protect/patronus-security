@@ -76,7 +76,8 @@ entity_map = CORPORA.entity_map
 Rng = SYNTH.Rng
 
 SCHEMA = CORPORA.GENERATED_SCHEMA
-# v2: class_templates. A frozen output of a lower version is regenerated without --force.
+# v2: class_templates; v3: jailbreak templates, cue-filtered inputs. A frozen output of a lower version is
+# regenerated without --force.
 GENERATOR_VERSION = 3
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
@@ -89,6 +90,9 @@ TRANSLATION_DATASET = "runner_translations_de"
 INPUTS = {"dev": ("train_dev", TRANSLATED_DIR), "holdout": ("holdout",)}
 INPUT_SPLIT = {"dev": "train_dev", "holdout": "holdout"}
 GENERATORS = ("carrier_insertion", "exfil_lookalikes", "obfuscation_slices", "class_templates")
+# Version in each generator's RNG stream: the version that last changed its rows. Raise an entry only with
+# that generator's output, so a set whose rows stay the same keeps its texts (and its gold review) per row id.
+STREAMS = {"carrier_insertion": 3, "exfil_lookalikes": 2, "obfuscation_slices": 3, "class_templates": 3}
 DEFAULT_COUNTS = {"dev": {"carrier_insertion": 600, "exfil_lookalikes": 300, "obfuscation_slices": 400, "class_templates": 500},
                   "holdout": {"carrier_insertion": 900, "exfil_lookalikes": 450, "obfuscation_slices": 600, "class_templates": 750}}
 LANGUAGES = ("de", "en")
@@ -715,7 +719,7 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
     sets: dict[str, Any] = {}
     for name in GENERATORS:
         # One stream per generator: changing one count leaves the other sets unchanged.
-        rows = built[name](Rng(f"{seed}/{split}/{name}/v{GENERATOR_VERSION}"))
+        rows = built[name](Rng(f"{seed}/{split}/{name}/v{STREAMS[name]}"))
         data = CORPORA.BENIGN_CODE._jsonl(rows)
         files[f"{name}.jsonl"] = data
         sets[name] = _set_entry(name, data, rows, dataset, emap)
