@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::detectors::dlp::dlp::{DEFAULT_ON_DOCUMENT_GROUPS, DLP_PATTERNS, SECRET_GROUPS};
 use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
+use crate::SecurityCategory;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, str::FromStr};
 
-/// Output mode of the scored native detectors (PII and DLP). `Strict` is the
+/// Output mode of a native category (`<category>_mode`). `Strict` is the
 /// default and the pre-score behaviour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -103,6 +104,20 @@ pub struct NativeGates {
     pub pii_mode: ScoreMode,
     /// Native DLP output mode.
     pub dlp_mode: ScoreMode,
+    /// Output modes of the attack classes. `strict` keeps each producer's own
+    /// acceptance; `balanced`/`recall` also drop evidence scoring below
+    /// [`ScoreMode::min_score`].
+    pub injection_mode: ScoreMode,
+    pub jailbreak_mode: ScoreMode,
+    pub prompt_extraction_mode: ScoreMode,
+    pub tool_poisoning_mode: ScoreMode,
+    pub agent_config_tampering_mode: ScoreMode,
+    pub memory_poisoning_mode: ScoreMode,
+    pub exfiltration_mode: ScoreMode,
+    pub unsafe_action_mode: ScoreMode,
+    pub resource_exhaustion_mode: ScoreMode,
+    pub harmful_content_mode: ScoreMode,
+    pub toxic_language_mode: ScoreMode,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -126,6 +141,26 @@ impl NativeGates {
         Self {
             rules,
             ..Self::default()
+        }
+    }
+
+    /// The `<category>_mode` of a native category; other categories are strict.
+    pub fn mode(&self, category: SecurityCategory) -> ScoreMode {
+        match category {
+            SecurityCategory::Pii => self.pii_mode,
+            SecurityCategory::Dlp => self.dlp_mode,
+            SecurityCategory::Injection => self.injection_mode,
+            SecurityCategory::Jailbreak => self.jailbreak_mode,
+            SecurityCategory::PromptExtraction => self.prompt_extraction_mode,
+            SecurityCategory::ToolPoisoning => self.tool_poisoning_mode,
+            SecurityCategory::AgentConfigTampering => self.agent_config_tampering_mode,
+            SecurityCategory::MemoryPoisoning => self.memory_poisoning_mode,
+            SecurityCategory::Exfiltration => self.exfiltration_mode,
+            SecurityCategory::UnsafeAction => self.unsafe_action_mode,
+            SecurityCategory::ResourceExhaustion => self.resource_exhaustion_mode,
+            SecurityCategory::HarmfulContent => self.harmful_content_mode,
+            SecurityCategory::ToxicLanguage => self.toxic_language_mode,
+            _ => ScoreMode::Strict,
         }
     }
 
@@ -196,5 +231,38 @@ mod tests {
             assert!(invalid.parse::<ScoreMode>().is_err(), "{invalid:?}");
         }
         assert!(serde_json::from_str::<ScoreMode>("\"fast\"").is_err());
+    }
+
+    #[test]
+    fn every_native_category_has_a_strict_by_default_mode_gate() {
+        let gates = NativeGates::default();
+        for category in crate::native::NATIVE_CATEGORIES {
+            assert_eq!(gates.mode(category), ScoreMode::Strict, "{category:?}");
+            let key = format!("{}_mode", category.as_str());
+            for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+                let gates: NativeGates =
+                    serde_json::from_value(serde_json::json!({ key.as_str(): mode })).unwrap();
+                assert_eq!(gates.mode(category), mode, "{key}");
+                assert_eq!(serde_json::to_value(&gates).unwrap()[&key], mode.as_str());
+                for other in crate::native::NATIVE_CATEGORIES {
+                    if other != category {
+                        assert_eq!(gates.mode(other), ScoreMode::Strict, "{key} {other:?}");
+                    }
+                }
+            }
+            for invalid in ["fast", "Balanced", ""] {
+                assert!(
+                    serde_json::from_value::<NativeGates>(
+                        serde_json::json!({ key.as_str(): invalid })
+                    )
+                    .is_err(),
+                    "{key}={invalid:?}"
+                );
+            }
+        }
+        assert_eq!(
+            gates.mode(SecurityCategory::ShellCommand),
+            ScoreMode::Strict
+        );
     }
 }

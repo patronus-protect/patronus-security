@@ -34,9 +34,37 @@ impl NativeProducerSpec {
             && self.rule.is_none_or(|id| gates.allows_rule(id))
     }
 
+    /// PII and DLP apply their mode inside the pipeline; the attack classes
+    /// share the score floor of their `<category>_mode` here.
     pub(super) fn detect(&self, text: &NativeText<'_>, gates: &NativeGates) -> NativeDetection {
-        (self.detect)(text, gates)
+        let detection = (self.detect)(text, gates);
+        match self.category {
+            SecurityCategory::Pii | SecurityCategory::Dlp => detection,
+            category => apply_score_floor(detection, gates.mode(category).min_score()),
+        }
     }
+}
+
+/// Drops evidence scoring below `min_score`; a detection left without evidence
+/// becomes `benign` with the complementary confidence.
+fn apply_score_floor(mut detection: NativeDetection, min_score: Option<f64>) -> NativeDetection {
+    let Some(min_score) = min_score else {
+        return detection;
+    };
+    if detection.evidence_spans.is_empty() {
+        return detection;
+    }
+    detection
+        .evidence_spans
+        .retain(|span| span.score >= min_score);
+    if detection.evidence_spans.is_empty() {
+        detection.result.class_name = "benign".into();
+        detection.result.confidence = 1.0 - detection.result.confidence;
+        if let Some(accepted) = detection.details.get_mut("accepted") {
+            *accepted = false.into();
+        }
+    }
+    detection
 }
 
 /// The PII pipeline, compiled once per process: every engine and gateway

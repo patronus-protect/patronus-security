@@ -15,6 +15,7 @@
         "explain": true
       }
     },
+    {"categories": ["injection", "unsafe_action"], "gates": {"injection_mode": "strict", "jailbreak_mode": "balanced", "prompt_extraction_mode": "recall", "tool_poisoning_mode": "strict", "agent_config_tampering_mode": "balanced", "memory_poisoning_mode": "recall", "exfiltration_mode": "strict", "unsafe_action_mode": "balanced", "resource_exhaustion_mode": "recall", "harmful_content_mode": "strict", "toxic_language_mode": "balanced"}},
     {"categories": ["injection"], "chunk_overlap_tokens": 16},
     {
       "categories": ["injection", "dynamic-pii"],
@@ -67,6 +68,10 @@
     {"gates": {"policy": {"enabled": true}}},
     {"gates": {"l3": {"enabled": true}}},
     {"gates": {"pii_mode": "fast"}},
+    {"gates": {"injection_mode": "fast"}},
+    {"gates": {"unsafe_action_mode": "Balanced"}},
+    {"gates": {"threat_mode": "strict"}},
+    {"gates": {"shell_command_mode": "strict"}},
     {"gates": {"rules": {"pii_email": "no"}}},
     {"gates": {"l3_policy": {"execution": "rank_only"}}},
     {"gates": {"l3_policy": {"degraded_factor": 1.1}}},
