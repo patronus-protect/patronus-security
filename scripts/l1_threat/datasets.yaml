@@ -60,6 +60,10 @@ datasets:
   - id: cyberseceval_pi
     commercial: true
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: tensortrust_extraction
+    commercial: unknown
+    training: false
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: trustairlab_jailbreak
     commercial: true
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
