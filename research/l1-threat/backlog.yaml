@@ -151,6 +151,7 @@ tasks:
       at least three sources; contamination column complete for every baseline (no
       contamination_unchecked left); licence per source; nothing committed except recipes and manifests
   - id: M06
+    status: done
     title: Gold validation — per-set label spot-check (>= 50 rows per set; dev sets hand-reviewed by the runner, holdout sets by the owner in a separate authorized session that leaves an aggregate review report under ~/ark-threat/transfer/, since the runner sandbox cannot read the holdout), cross-split leakage check (exact + MinHash between dev and holdout, in the independent gate), class/language counts, per-class data provenance (native / translated / synthetic) — report research/l1-threat/scoreboard/gold.md
     type: eval-infra
     deps: [M05]
