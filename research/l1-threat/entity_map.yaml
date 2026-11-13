@@ -487,7 +487,7 @@ datasets:
       - {label: "attack item", classes: [memory_poisoning, resource_exhaustion, agent_config_tampering, tool_poisoning, exfiltration, unsafe_action, prompt_extraction]}
       - {label: "clean twin", benign: true}
   - id: generators_holdout_seed
-    name: Generators, secret holdout seed (carrier insertion, exfil look-alikes, obfuscation slices)
+    name: Generators, secret holdout seed (carrier insertion, exfil look-alikes, obfuscation slices, class templates)
     source: E02 generators with the seed under ~/ark-threat/holdout
     licence: ark (internal)
     languages: [de, en]
@@ -498,6 +498,7 @@ datasets:
       - {label: "inserted exfil sink in tool output", classes: [exfiltration]}
       - {label: "inserted memory / repetition directive", classes: [memory_poisoning, resource_exhaustion]}
       - {label: "registry or skill embedding", classes: [tool_poisoning, agent_config_tampering]}
+      - {label: "unsafe agent action request", classes: [unsafe_action]}
       - {label: "clean twin, benign look-alike", benign: true}
   # ── train / dev ──────────────────────────────────────────────────────────────────────────────
   - id: neuralchemy
@@ -797,6 +798,16 @@ datasets:
     labels:
       - {label: "instruction (incl. remember-this and repetition requests)", benign: true}
     note: dev benign for memory_poisoning and resource_exhaustion; OASST2 and WildChat stay in the holdout benign pool
+  - id: germanquad
+    name: GermanQuAD questions
+    source: hf:deepset/germanquad
+    licence: CC-BY-4.0
+    languages: [de]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "question", benign: true}
+    note: dev benign in German (annotator-written questions); the Wikipedia contexts are not read
   # ── ark_authored (reported only) ─────────────────────────────────────────────────────────────
   - id: l1_goldens
     name: Repository L1 goldens (threat and injection)

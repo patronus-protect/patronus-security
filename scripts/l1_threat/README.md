@@ -96,7 +96,7 @@ Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 
 [`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
 Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
-`parquet` nur mit UTF-8-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
+`parquet` mit UTF-8- und einfachen Ganzzahl-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
 → Upstream-Label der Entity-Map), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
 `report_only`) und `training: false` für reine Auswertungssätze (MCPTox, AgentHarm). Lizenz, Split,
 Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Rolle wird abgeleitet:
@@ -110,6 +110,7 @@ python3 scripts/l1_threat/prepare_corpora.py check     # Exit 1 bei jedem Proble
 python3 scripts/l1_threat/prepare_corpora.py list      # Split, Familie, Rolle, Stand je Satz
 python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT [--sources CACHE] [--overlay HOLDOUT.yaml] [--offline] [--force]
 python3 scripts/l1_threat/prepare_corpora.py verify DIR
+python3 scripts/l1_threat/prepare_corpora.py coverage DIR [DIR ...]   # Exit 1, wenn der Pool eines Splits unvollständig ist
 ```
 
 Das Vorbereiten (Gate-Schritt `prepare-corpora`) schreibt `DEV/train_dev/`, `DEV/report/` und
@@ -118,17 +119,34 @@ die Holdout-Rezepte kommen aus `--overlay` (Default `HOLDOUT/datasets.overlay.ya
 Split ohne fertigen Satz wird nicht geschrieben. Je Split entsteht je fertigem Satz `<id>.jsonl` (Text, Sprache, Upstream-Labels, Klassen,
 nur berichtete Klassen, Familien, `benign`, Spalte `contamination` je Baseline), `manifest.json` (SHA-256
 jeder Quell- und Ausgabedatei, Revision, Rolle, Lizenz, Zähler je Klasse/Sprache, verworfene Zeilen nach
-Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben, oder
+Grund) und zuletzt `.ready`; ein eingefrorenes Verzeichnis wird nur mit `--force` neu geschrieben, wenn
+`generation` in `datasets.yaml` höher ist als im eingefrorenen Manifest (der geprüfte Weg, alle Splits neu
+einzufrieren, etwa nach neuen Sätzen oder Zeilengrenzen; nie zurück auf eine niedrigere), oder
 wenn es unversehrt in einem älteren Korpusformat vorliegt und aus denselben Eingaben (Sätze, Revisionen,
 Quelldateien, Dedup-Einstellungen, Trainingslisten) entstand. Eine
-Zeile, die keine Label-Regel trifft, bricht ab. Dedup auf NFKC, Casefold und zusammengefasstem Leerraum:
+Zeile, die keine Label-Regel trifft, bricht ab. Nach dem Dedup behält jeder Satz höchstens
+`sampling.max_rows` Zeilen (15 000; ein Satz kann mit `cap` weniger verlangen): geschichtet nach
+(`benign`, Klassen, Sprache), jede Schicht behält eine Zeile, solange die Grenze reicht, der Rest geht
+anteilig an die Schichten (größter Rest), innerhalb einer Schicht entscheidet ein Hash aus Seed
+(`sampling.seed`), Satz und Text. Grenze und Seed stehen im Manifest (`sampling`, je Satz `cap`,
+`rows_before_cap`, `dropped.cap`; `rows_before_cap` zählt auch Zeilen, die der Holdout danach
+satzübergreifend verwirft). Die Grenze kürzt nur die geschriebenen Korpora: der Kontaminationsabgleich
+liest die Trainingsquellen einer Baseline ungekürzt. Dedup auf NFKC, Casefold und zusammengefasstem Leerraum:
 exakt und MinHash (Zeichen-5-Gramme, 64 Permutationen, 16 Bänder, Jaccard-Schätzung ≥ 0,8) innerhalb
 jedes Satzes; der Holdout verwirft jede Zeile, die in einem `train_dev`- oder `report`-Satz vorkommt;
 gegen Baseline-Trainingslisten (`trained_on` der Entity-Map) wird nicht verworfen, sondern je Baseline
 markiert. Eine Trainingsquelle, die der Split nicht lesen darf oder kann (ausstehend, intern oder beim
-Vorbereiten von `train_dev`/`report` ein Holdout-Satz), steht im Manifest unter `unchecked`; eine Zeile
+Vorbereiten von `train_dev`/`report` allein ein Holdout-Satz), steht im Manifest unter `unchecked`; eine Zeile
 ohne Treffer ist für diese Baseline dann `null` (unbekannt), nie `false`, und `contamination_unchecked`
-zählt solche Zeilen je Satz. Beim Vorbereiten von `train_dev` und `report` wird nie eine Holdout-Quelle gelesen. Braucht
+zählt solche Zeilen je Satz. Der Gate-Aufruf mit `--dev-out` und `--holdout-out` bereitet alle Splits vor
+und vergleicht dabei auch `train_dev`- und `report`-Zeilen mit Holdout-Trainingsquellen (XSTest für
+ProtectAI v2); in die Dev-Ausgabe gelangt nur das Flag, nie eine Holdout-Zeile. Wer nur einen Split
+vorbereitet, liest für `train_dev` und `report` keine Holdout-Quelle.
+
+`coverage` prüft den Pool eines Splits (vorbereitete und generierte Verzeichnisse zusammen, z. B.
+`DEV/train_dev DEV/report DEV/generated DEV/translated`): Zeilen für jede Klasse aus `taxonomy.yaml`
+(Quelle je Klasse als `native` oder `synthetic`), ein Benign-Pool von mindestens 30 000 Zeilen aus
+mindestens drei Sätzen und keine Zeile mit unbekannter Kontamination. Braucht
 `numpy` und PyYAML; Downloads und Parquet-Leser kommen aus `scripts/l1_presidio/prepare_corpora.py`.
 
 Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.
@@ -144,7 +162,12 @@ sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
   Daten an eine Senke unter `example.invalid` zu schicken, und derselbe Rahmen mit Doppelgänger (Upload-Log,
   Webhook-Konfiguration, Bitte an Menschen), DE und EN nativ;
 - `obfuscation_slices`: Angriffs- und Benign-Zeilen unter je einer Verschleierung (`base64`, `hex`,
-  `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`.
+  `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`;
+- `class_templates`: dokumentierte synthetische Angriffe für die Klassen ohne öffentliche Dev-Daten
+  (`tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
+  `resource_exhaustion`), DE und EN nativ. Jede Template-Familie hat die Form öffentlicher Beispiele, die
+  `modelled_on` nennt (Paper, Advisories, MCPTox-Muster), und einen harmlosen Doppelgänger im selben
+  Rahmen; nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
 
 Dev und Holdout haben getrennte Seeds und disjunkte Template-Familien (`check_families`). Dev: öffentlicher
 Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`generators_dev_seed`,
@@ -153,7 +176,8 @@ angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `
 (`generators_holdout_seed`, `ark_blind`). Jede Zeile trägt `template_family`, `carrier`, `source_id` und
 `translated` (nativ vs. übersetzt: Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map
 als `translated` markierten Satzes). Ein Obfuscation-Zwilling trägt die Sprache seiner Benign-Quelle. Ausgabe eingefroren wie die Korpora (JSONL je Generator,
-`manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`.
+`manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`, außer die Ausgabe stammt
+von einer älteren Generator-Version (`GENERATOR_VERSION`, im Manifest `generator_version`).
 
 Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
 `--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus) in ein

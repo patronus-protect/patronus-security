@@ -71,6 +71,18 @@ def test_parquet_reader_keeps_nulls_and_rejects_unknown_columns():
         MODULE.read_parquet_columns(FIXTURES / "gretel_v1_test.parquet", ["no_such_column"])
 
 
+@pytest.mark.parametrize("shard", GRETEL_SHARDS)
+def test_parquet_reader_reads_plain_integer_columns_as_decimal_strings(shard):
+    # quality_score: optional int64, plain pages in v1, dictionary pages in v2, every fifth row null.
+    rows = MODULE.read_parquet_columns(FIXTURES / shard, ["quality_score"])
+    assert [row["quality_score"] for row in rows] == [None if i % 5 == 0 else str(i) for i in range(12)]
+
+
+def test_parquet_reader_rejects_nested_columns():
+    with pytest.raises(ValueError, match="no top-level column 'pii_types'"):
+        MODULE.read_parquet_columns(FIXTURES / "gretel_v1_test.parquet", ["pii_types"])
+
+
 def test_parquet_reader_rejects_non_parquet_files(tmp_path):
     path = tmp_path / "broken.parquet"
     path.write_bytes(b"PAR1 not really parquet")
