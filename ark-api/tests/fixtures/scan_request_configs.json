@@ -15,7 +15,7 @@
         "explain": true
       }
     },
-    {"categories": ["injection", "unsafe_action"], "gates": {"injection_mode": "strict", "jailbreak_mode": "balanced", "prompt_extraction_mode": "recall", "tool_poisoning_mode": "strict", "agent_config_tampering_mode": "balanced", "memory_poisoning_mode": "recall", "exfiltration_mode": "strict", "unsafe_action_mode": "balanced", "resource_exhaustion_mode": "recall", "harmful_content_mode": "strict", "toxic_language_mode": "balanced"}},
+    {"categories": ["injection"], "gates": {"injection_mode": "strict", "jailbreak_mode": "balanced", "prompt_extraction_mode": "recall", "tool_poisoning_mode": "strict", "agent_config_tampering_mode": "balanced", "memory_poisoning_mode": "recall", "exfiltration_mode": "strict", "unsafe_action_mode": "balanced", "resource_exhaustion_mode": "recall", "harmful_content_mode": "strict", "toxic_language_mode": "balanced"}},
     {"categories": ["injection"], "chunk_overlap_tokens": 16},
     {
       "categories": ["injection", "dynamic-pii"],
