@@ -129,6 +129,10 @@ fn result_head(result: &SecurityScanResult) -> &str {
             return head.0;
         }
     }
+    // The unified threat head reports under `unsafe_action`.
+    if result.category == "unsafe_action" {
+        return "threat";
+    }
     &result.category
 }
 
@@ -1987,7 +1991,7 @@ mod tests {
             chunk_scores_by_head: HashMap::new(),
         };
         let subscribers = vec![
-            test_subscriber(2, "threat", 2),
+            test_subscriber(2, "unsafe_action", 2),
             test_subscriber(1, "tool_class", 8),
         ];
 
@@ -2026,7 +2030,7 @@ mod tests {
 
         let outputs = materialize_completed_unified_subscribers(subscribers, &run);
 
-        assert_eq!(outputs[0].0.category, "threat");
+        assert_eq!(outputs[0].0.category, "unsafe_action");
         assert_eq!(outputs[0].1.level, "L3");
         assert_eq!(outputs[0].1.class_name, "instruction_override");
         assert_eq!(outputs[1].0.category, "tool_class");

@@ -2037,11 +2037,11 @@ mod tests {
         L3WorkerJob {
             job_id: 1,
             request_id: "request-1".to_string(),
-            category: "threat".to_string(),
+            category: "unsafe_action".to_string(),
             model: "unified-v3-threat".to_string(),
             input: L3WorkerInput::PlannedChunks(vec![selected_chunk("text", 0)]),
             fallback: SecurityScanResult {
-                category: "threat".to_string(),
+                category: "unsafe_action".to_string(),
                 class_name: "benign".to_string(),
                 confidence: 0.9,
                 level: "L2".to_string(),
