@@ -9,14 +9,15 @@ row text), so the holdout parts can run where the holdout is readable and leave 
     python3 scripts/l1_threat/gold.py sample DIR [DIR ...] --out SHEET.jsonl [--per-set 50]
     python3 scripts/l1_threat/gold.py summary DIR [DIR ...] --split dev|holdout --review SHEET.jsonl --out SUMMARY.json
     python3 scripts/l1_threat/gold.py leakage --dev DIR [DIR ...] --holdout DIR [DIR ...] --out LEAKAGE.json
-    python3 scripts/l1_threat/gold.py render --dev SUMMARY.json [--holdout SUMMARY.json] [--leakage LEAKAGE.json] --out gold.md
+    python3 scripts/l1_threat/gold.py render --dev SUMMARY.json [--holdout SUMMARY.json] [--leakage LEAKAGE.json] [--notes NOTES.md] --out gold.md
 
 ``sample`` draws a fixed hash sample of at least ``--per-set`` rows from every set, stratified by label
 (benign or class combination), into a review sheet; the reviewer sets ``verdict`` of each row to ``ok``
 (label right), ``wrong`` (label wrong) or ``unclear``. ``summary`` checks the sheet against the pool
 and writes rows per class and language, provenance per class (native / translated / synthetic) and the
 error rate per set. ``leakage`` counts holdout rows that duplicate a dev row (exact and MinHash, the
-dedup settings of the corpora). ``render`` writes the report with a go/no-go per class.
+dedup settings of the corpora). ``render`` writes the report with a go/no-go per class. Only the dev
+summary lists the flagged rows (id, label, verdict, note); a holdout summary holds counts alone.
 """
 
 from __future__ import annotations
@@ -179,9 +180,12 @@ def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet:
             "benign_reviewed": sum(benign.values()),
             "benign_errors": benign["wrong"] + benign["unclear"],
         }
+    # Row ids only on dev: the holdout summary leaves the owner's session with counts alone.
+    flagged = [{key: item[key] for key in ("set", "id", "label", "verdict", "note")} for item in sheet if item["verdict"] != "ok"]
     return {
         "schema": SUMMARY_SCHEMA,
         "split": split,
+        **({"flagged": flagged} if split == "dev" else {}),
         "sets": sets,
         "classes": {name: dict(sorted(by_lang.items())) for name, by_lang in sorted(classes.items())},
         "provenance": {name: dict(sorted(counts.items())) for name, counts in sorted(origin.items())},
@@ -265,7 +269,8 @@ def _rate(entry: dict[str, Any]) -> str:
     return "-" if entry["error_rate"] is None else f"{entry['error_rate']:.1%}"
 
 
-def render(classes: list[str], dev: dict[str, Any], holdout: dict[str, Any] | None, leak: dict[str, Any] | None) -> str:
+def render(classes: list[str], dev: dict[str, Any], holdout: dict[str, Any] | None, leak: dict[str, Any] | None,
+           notes: str = "") -> str:
     splits = {"dev": dev, **({"holdout": holdout} if holdout else {})}
     lines = ["# L1-Threat gold validation", ""]
     lines += [
@@ -314,6 +319,11 @@ def render(classes: list[str], dev: dict[str, Any], holdout: dict[str, Any] | No
     else:
         lines.append(f"{leak['leaked']} of {sum(e['rows'] for e in leak['sets'].values())} holdout rows duplicate one of "
                      f"{leak['dev_rows']} dev rows (exact or MinHash).")
+    if dev.get("flagged"):
+        lines += ["", "## Flagged dev rows", "", "| Set | Row | Label | Verdict | Note |", "|---|---|---|---|---|"]
+        lines += [f"| {item['set']} | {item['id']} | {item['label']} | {item['verdict']} | {item['note']} |" for item in dev["flagged"]]
+    if notes.strip():
+        lines += ["", notes.strip()]
     return "\n".join(lines) + "\n"
 
 
@@ -354,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     rend.add_argument("--dev", type=Path, required=True)
     rend.add_argument("--holdout", type=Path)
     rend.add_argument("--leakage", type=Path)
+    rend.add_argument("--notes", type=Path, help="hand-written findings (Markdown) appended to the report")
     rend.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -382,7 +393,8 @@ def main(argv: list[str] | None = None) -> int:
     dev = _load_summary(args.dev, "dev")
     assert dev is not None
     leak_data = json.loads(args.leakage.read_text(encoding="utf-8")) if args.leakage else None
-    args.out.write_text(render(list(CORPORA.taxonomy.CLASSES), dev, _load_summary(args.holdout, "holdout"), leak_data), encoding="utf-8")
+    notes = args.notes.read_text(encoding="utf-8") if args.notes else ""
+    args.out.write_text(render(list(CORPORA.taxonomy.CLASSES), dev, _load_summary(args.holdout, "holdout"), leak_data, notes), encoding="utf-8")
     print(f"{args.out}: written")
     return 0
 

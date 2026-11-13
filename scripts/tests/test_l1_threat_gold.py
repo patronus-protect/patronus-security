@@ -95,7 +95,10 @@ def test_summary_counts_classes_languages_provenance_and_error_rates(dev_pool):
     assert result["provenance"]["benign"] == {"native": 60, "translated": 70}
     assert result["sets"]["train_dev/inj"]["error_rate"] == 0.1
     assert result["sets"]["train_dev/de"]["error_rate"] == 0.0
+    assert [item["verdict"] for item in result["flagged"]] == ["wrong"] * 5
     assert "text" not in json.dumps(result)
+    holdout = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "holdout", set())
+    assert "flagged" not in holdout and holdout["sets"]["train_dev/inj"]["wrong"] == 5
 
 
 def summaries(pool, wrong=()):
@@ -170,10 +173,13 @@ def test_cli_end_to_end_renders_pending_holdout(dev_pool, tmp_path):
     assert MODULE.main(["summary", *directories, "--split", "dev", "--review", str(sheet_path), "--out", str(summary_path)]) == 1
     sheet_path.write_bytes(CORPORA.BENIGN_CODE._jsonl(review(sheet)))
     assert MODULE.main(["summary", *directories, "--split", "dev", "--review", str(sheet_path), "--out", str(summary_path)]) == 0
-    assert MODULE.main(["render", "--dev", str(summary_path), "--out", str(report)]) == 0
+    notes = tmp_path / "notes.md"
+    notes.write_text("## Findings\n\nAll clean.\n", encoding="utf-8")
+    assert MODULE.main(["render", "--dev", str(summary_path), "--notes", str(notes), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "| instruction_injection | pending | owner holdout review missing |" in text
     assert "| jailbreak | no-go | dev: 0 scored rows (needs 50) |" in text
     assert "Pending: the owner's aggregate review report is not present." in text
+    assert text.endswith("## Findings\n\nAll clean.\n") and "## Flagged dev rows" not in text
     with pytest.raises(ValueError, match="not a holdout summary"):
         MODULE.main(["render", "--dev", str(summary_path), "--holdout", str(summary_path), "--out", str(report)])

@@ -151,6 +151,35 @@ mindestens drei Sätzen und keine Zeile mit unbekannter Kontamination. Braucht
 
 Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.
 
+## Gold-Validierung
+
+`gold.py` prüft das Gold eines Splits (vorbereitete und generierte Verzeichnisse zusammen) und schreibt
+[`research/l1-threat/scoreboard/gold.md`](../../research/l1-threat/scoreboard/gold.md):
+
+- `sample`: feste Hash-Stichprobe von mindestens 50 Zeilen je Satz (kleinere Sätze ganz), geschichtet nach
+  Label (`benign` oder Klassenkombination), als Prüfblatt; je Zeile setzt der Prüfer `verdict` auf `ok`,
+  `wrong` oder `unclear` und eine kurze Notiz.
+- `summary`: prüft das Blatt gegen den Pool (jede Zeile beurteilt, Label unverändert, genug Zeilen je Satz) und
+  schreibt nur Zahlen: Zeilen je Klasse und Sprache, Herkunft je Klasse (`native`, `translated`,
+  `synthetic`), Fehlerquote je Satz (`wrong` + `unclear`) und die der Benign-Zeilen. Nur die Dev-Zusammenfassung
+  nennt die markierten Zeilen-IDs; die Holdout-Zusammenfassung entsteht in der Sitzung des Owners und enthält
+  ausschließlich Zahlen.
+- `leakage`: zählt Holdout-Zeilen, die eine Dev-Zeile exakt oder per MinHash (Einstellungen aus `datasets.yaml`)
+  wiederholen; läuft im Gate. Exit 1 bei jedem Treffer.
+- `render`: Bericht mit Go/No-go je Klasse. `go` verlangt in Dev und Holdout je mindestens 50 gewertete Zeilen
+  (Report-only-Sätze zählen nicht), höchstens 5 % Fehler in jedem Satz mit Zeilen der Klasse und im
+  Benign-Pool jedes Splits, und kein Leck. Fehlt die Holdout-Zusammenfassung oder der Leckcheck, steht eine
+  sonst bestandene Klasse auf `pending`.
+
+```bash
+python3 scripts/l1_threat/gold.py sample DIR [DIR ...] --out SHEET.jsonl [--per-set 50]
+python3 scripts/l1_threat/gold.py summary DIR [DIR ...] --split dev|holdout --review SHEET.jsonl --out SUMMARY.json
+python3 scripts/l1_threat/gold.py leakage --dev DIR [DIR ...] --holdout DIR [DIR ...] --out LEAKAGE.json
+python3 scripts/l1_threat/gold.py render --dev SUMMARY.json [--holdout SUMMARY.json] [--leakage LEAKAGE.json] [--notes NOTES.md] --out gold.md
+```
+
+Prüfblätter enthalten Datensatztext und werden nie eingecheckt. Tests: `scripts/tests/test_l1_threat_gold.py`.
+
 ## Generatoren und Übersetzungen
 
 `generators.py` leitet aus den eingefrorenen Korpora abgeleitete Sätze ab, jede Angriffszeile mit

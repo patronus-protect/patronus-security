@@ -1,0 +1,748 @@
+{
+  "class_sets": {
+    "agent_config_tampering": {
+      "generated/class_templates": 100
+    },
+    "benign": {
+      "generated/carrier_insertion": 600,
+      "generated/class_templates": 500,
+      "generated/exfil_lookalikes": 300,
+      "generated/obfuscation_slices": 400,
+      "report/jackhhao_jailbreak": 1321,
+      "train_dev/dolly_15k": 14635,
+      "train_dev/germanquad": 11451,
+      "train_dev/spml": 3145,
+      "train_dev/textdetox_de": 2492
+    },
+    "exfiltration": {
+      "generated/exfil_lookalikes": 300
+    },
+    "harmful_content": {
+      "train_dev/ailuminate_demo": 800
+    },
+    "instruction_injection": {
+      "generated/carrier_insertion": 344,
+      "generated/obfuscation_slices": 188,
+      "report/gandalf": 998,
+      "train_dev/spml": 11855
+    },
+    "jailbreak": {
+      "report/jackhhao_jailbreak": 544
+    },
+    "memory_poisoning": {
+      "generated/class_templates": 100
+    },
+    "prompt_extraction": {
+      "generated/carrier_insertion": 256,
+      "generated/obfuscation_slices": 212,
+      "report/gandalf": 998,
+      "train_dev/mosscap": 15000
+    },
+    "resource_exhaustion": {
+      "generated/class_templates": 100
+    },
+    "tool_poisoning": {
+      "generated/class_templates": 100
+    },
+    "toxic_language": {
+      "train_dev/textdetox_de": 2072
+    },
+    "unsafe_action": {
+      "generated/class_templates": 100
+    }
+  },
+  "classes": {
+    "agent_config_tampering": {
+      "de": 50,
+      "en": 50
+    },
+    "benign": {
+      "de": 14343,
+      "en": 19180
+    },
+    "exfiltration": {
+      "de": 150,
+      "en": 150
+    },
+    "harmful_content": {
+      "en": 800
+    },
+    "instruction_injection": {
+      "en": 12387
+    },
+    "memory_poisoning": {
+      "de": 50,
+      "en": 50
+    },
+    "prompt_extraction": {
+      "en": 15468
+    },
+    "resource_exhaustion": {
+      "de": 50,
+      "en": 50
+    },
+    "tool_poisoning": {
+      "de": 50,
+      "en": 50
+    },
+    "toxic_language": {
+      "de": 2072
+    },
+    "unsafe_action": {
+      "de": 50,
+      "en": 50
+    }
+  },
+  "flagged": [
+    {
+      "id": "generators_dev_seed:carrier_insertion:000123",
+      "label": "instruction_injection",
+      "note": "Policy-violating advice request, no instruction override",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000390",
+      "label": "instruction_injection",
+      "note": "No injection or override; benign off-topic user request",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000009",
+      "label": "prompt_extraction",
+      "note": "Vague request for another trick, no extraction payload",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000213",
+      "label": "prompt_extraction",
+      "note": "Benign help request, no extraction attempt",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000024",
+      "label": "instruction_injection",
+      "note": "Policy-violating advice request, no instruction override",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000221",
+      "label": "instruction_injection",
+      "note": "No injection or override; benign off-topic user request",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000210",
+      "label": "prompt_extraction",
+      "note": "Hint request only meaningful in password game context",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000285",
+      "label": "instruction_injection",
+      "note": "No injection or override; benign off-topic user request",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000471",
+      "label": "prompt_extraction",
+      "note": "Password probe only meaningful in game context",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000204",
+      "label": "prompt_extraction",
+      "note": "Password guess, unclear as extraction outside game",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000208",
+      "label": "instruction_injection",
+      "note": "No injection or override; benign off-topic user request",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000434",
+      "label": "prompt_extraction",
+      "note": "Benign clarification request, no extraction attempt",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000122",
+      "label": "prompt_extraction",
+      "note": "Ambiguous story request, extraction intent not evident",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000518",
+      "label": "instruction_injection",
+      "note": "No injection or override; benign off-topic user request",
+      "set": "generated/carrier_insertion",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000146",
+      "label": "prompt_extraction",
+      "note": "Decoded text lacks clear extraction intent outside game",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000230",
+      "label": "instruction_injection",
+      "note": "Decodes to risky data-sharing request, no override",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000353",
+      "label": "prompt_extraction",
+      "note": "Decodes to harmless repeat request, no extraction",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000185",
+      "label": "prompt_extraction",
+      "note": "Decoded fragment has no clear extraction intent",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000317",
+      "label": "prompt_extraction",
+      "note": "Decodes to harmless poem request",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000381",
+      "label": "instruction_injection",
+      "note": "Decodes to harmless joke request, no injection",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000398",
+      "label": "prompt_extraction",
+      "note": "Decoded coding request, extraction intent not evident",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000364",
+      "label": "prompt_extraction",
+      "note": "Decodes to letter count question, game-context only",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000180",
+      "label": "instruction_injection",
+      "note": "Decodes to benign wellbeing request, no injection",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000279",
+      "label": "prompt_extraction",
+      "note": "Decodes to harmless question, no extraction",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000151",
+      "label": "instruction_injection",
+      "note": "Decoded off-topic request, no explicit override",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000323",
+      "label": "prompt_extraction",
+      "note": "Decoded question about secret storage, weak extraction",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000207",
+      "label": "instruction_injection",
+      "note": "Decodes to benign analysis request, no injection",
+      "set": "generated/obfuscation_slices",
+      "verdict": "wrong"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000213",
+      "label": "prompt_extraction",
+      "note": "Decodes to refusal suppression, not prompt extraction",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "gandalf:0000636",
+      "label": "instruction_injection+prompt_extraction",
+      "note": "Only asks about memory; neither override nor extraction clear",
+      "set": "report/gandalf",
+      "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0001451",
+      "label": "jailbreak",
+      "note": "Instruction override with harmless goal; injection rather than jailbreak",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0000236",
+      "label": "jailbreak",
+      "note": "Persona pretext for risky essay, but no rule-lifting",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0000452",
+      "label": "jailbreak",
+      "note": "Harmless D&D campaign request, no rule-lifting",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "wrong"
+    },
+    {
+      "id": "ailuminate_demo:0001007",
+      "label": "harmful_content",
+      "note": "Opinion statement about pornography, no harmful request",
+      "set": "train_dev/ailuminate_demo",
+      "verdict": "unclear"
+    },
+    {
+      "id": "ailuminate_demo:0000408",
+      "label": "harmful_content",
+      "note": "Moral discussion question about banned weapons, no uplift sought",
+      "set": "train_dev/ailuminate_demo",
+      "verdict": "unclear"
+    },
+    {
+      "id": "ailuminate_demo:0001095",
+      "label": "harmful_content",
+      "note": "Asks how to keep descriptions non-graphic; mild sexual content",
+      "set": "train_dev/ailuminate_demo",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0130442",
+      "label": "prompt_extraction",
+      "note": "Plain greeting; no attempt at the password",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0198136",
+      "label": "prompt_extraction",
+      "note": "Meta question about the game, not clearly extraction",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0146242",
+      "label": "prompt_extraction",
+      "note": "Content-free filler; no extraction attempt",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0037054",
+      "label": "prompt_extraction",
+      "note": "Asks bot to withhold password on some days; odd",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0080263",
+      "label": "prompt_extraction",
+      "note": "Unrelated animal question; no extraction attempt",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0118815",
+      "label": "prompt_extraction",
+      "note": "Reverses an unrelated sentence; no attempt at password",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0027765",
+      "label": "prompt_extraction",
+      "note": "Harmless FAQ question; no attempt at the password",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0120459",
+      "label": "prompt_extraction",
+      "note": "Single word fragment; intent cannot be determined",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0062810",
+      "label": "prompt_extraction",
+      "note": "Asks how to update rules; more injection prelude",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0123645",
+      "label": "prompt_extraction",
+      "note": "Classic goal-hijack injection, not prompt extraction",
+      "set": "train_dev/mosscap",
+      "verdict": "wrong"
+    },
+    {
+      "id": "mosscap:0255649",
+      "label": "prompt_extraction",
+      "note": "General privacy question; no clear extraction attempt",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "mosscap:0256551",
+      "label": "prompt_extraction",
+      "note": "Ambiguous counting task; link to password unclear",
+      "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "spml:0014537",
+      "label": "instruction_injection",
+      "note": "Only a system prompt plus benign on-topic user question",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0003451",
+      "label": "instruction_injection",
+      "note": "Only a system prompt plus benign on-topic user question",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0001503",
+      "label": "instruction_injection",
+      "note": "Off-scope demands only; override intent is weak",
+      "set": "train_dev/spml",
+      "verdict": "unclear"
+    },
+    {
+      "id": "spml:0005871",
+      "label": "instruction_injection",
+      "note": "Only a system prompt plus benign on-topic user question",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0002573",
+      "label": "instruction_injection",
+      "note": "System prompt plus ordinary in-scope user request; no override",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0012724",
+      "label": "instruction_injection",
+      "note": "System prompt plus harmless user question; no override attempt",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0007083",
+      "label": "instruction_injection",
+      "note": "Policy-violating user request, but no instruction override",
+      "set": "train_dev/spml",
+      "verdict": "unclear"
+    },
+    {
+      "id": "spml:0012718",
+      "label": "instruction_injection",
+      "note": "Harmless personal questions to the bot; no instruction override",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0008781",
+      "label": "instruction_injection",
+      "note": "Ordinary request for study tips; no override attempt",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0010210",
+      "label": "instruction_injection",
+      "note": "Harmless question about meals and fitness; no override",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0007905",
+      "label": "instruction_injection",
+      "note": "Only a system prompt plus benign recipe request",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "spml:0013522",
+      "label": "instruction_injection",
+      "note": "Harmless history/investing question; no override attempt",
+      "set": "train_dev/spml",
+      "verdict": "wrong"
+    },
+    {
+      "id": "textdetox_de:0000857",
+      "label": "toxic_language",
+      "note": "Mild political jab, borderline toxic",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004616",
+      "label": "benign",
+      "note": "Aggressive remark about Nazi sympathizers, borderline toxic",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0003717",
+      "label": "toxic_language",
+      "note": "Sarcastic political remark without direct insult",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0003791",
+      "label": "toxic_language",
+      "note": "Argues for civility; profanity only mentioned, not directed",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004345",
+      "label": "benign",
+      "note": "Demeaning generalization about others, borderline toxic",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004847",
+      "label": "toxic_language",
+      "note": "Mild pejorative label only, borderline toxic",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0001727",
+      "label": "toxic_language",
+      "note": "Political statement against antisemitism; generalization is borderline",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004426",
+      "label": "toxic_language",
+      "note": "Mild criticism, borderline toxic",
+      "set": "train_dev/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0001588",
+      "label": "toxic_language",
+      "note": "Civil political argument, no insult or hate",
+      "set": "train_dev/textdetox_de",
+      "verdict": "wrong"
+    }
+  ],
+  "provenance": {
+    "agent_config_tampering": {
+      "synthetic": 100
+    },
+    "benign": {
+      "native": 31723,
+      "synthetic": 1800
+    },
+    "exfiltration": {
+      "synthetic": 300
+    },
+    "harmful_content": {
+      "native": 800
+    },
+    "instruction_injection": {
+      "native": 11855,
+      "synthetic": 532
+    },
+    "memory_poisoning": {
+      "synthetic": 100
+    },
+    "prompt_extraction": {
+      "native": 15000,
+      "synthetic": 468
+    },
+    "resource_exhaustion": {
+      "synthetic": 100
+    },
+    "tool_poisoning": {
+      "synthetic": 100
+    },
+    "toxic_language": {
+      "native": 2072
+    },
+    "unsafe_action": {
+      "synthetic": 100
+    }
+  },
+  "schema": "ark-l1-threat-gold-summary-v1",
+  "sets": {
+    "generated/carrier_insertion": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.2745,
+      "reviewed": 51,
+      "role": "dev",
+      "rows": 1200,
+      "unclear": 7,
+      "wrong": 7
+    },
+    "generated/class_templates": {
+      "benign_errors": 0,
+      "benign_reviewed": 9,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.0,
+      "reviewed": 54,
+      "role": "dev",
+      "rows": 1000,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "generated/exfil_lookalikes": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 600,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "generated/obfuscation_slices": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.2745,
+      "reviewed": 51,
+      "role": "dev",
+      "rows": 800,
+      "unclear": 8,
+      "wrong": 6
+    },
+    "report/gandalf": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "gandalf",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 998,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "report/jackhhao_jailbreak": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "jackhhao_jailbreak",
+      "error_rate": 0.06,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 1865,
+      "unclear": 2,
+      "wrong": 1
+    },
+    "train_dev/ailuminate_demo": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "ailuminate_demo",
+      "error_rate": 0.06,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 1200,
+      "unclear": 3,
+      "wrong": 0
+    },
+    "train_dev/dolly_15k": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "dolly_15k",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 14635,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/germanquad": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "germanquad",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 11451,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/mosscap": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "mosscap",
+      "error_rate": 0.24,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 15000,
+      "unclear": 6,
+      "wrong": 6
+    },
+    "train_dev/spml": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "spml",
+      "error_rate": 0.24,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 15000,
+      "unclear": 2,
+      "wrong": 10
+    },
+    "train_dev/textdetox_de": {
+      "benign_errors": 2,
+      "benign_reviewed": 25,
+      "dataset": "textdetox_de",
+      "error_rate": 0.18,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 4564,
+      "unclear": 8,
+      "wrong": 1
+    }
+  },
+  "split": "dev"
+}
