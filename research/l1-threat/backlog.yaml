@@ -150,13 +150,15 @@ tasks:
       at least three sources; contamination column complete for every baseline (no
       contamination_unchecked left); licence per source; nothing committed except recipes and manifests
   - id: M06
-    title: Gold validation — per-set label spot-check (>= 50 rows per set, hand-reviewed by the runner, error rate in the report), cross-split leakage check (exact + MinHash between dev and holdout), class/language counts, per-class data provenance (native / translated / synthetic) — report research/l1-threat/scoreboard/gold.md
+    title: Gold validation — per-set label spot-check (>= 50 rows per set; dev sets hand-reviewed by the runner, holdout sets by the owner in a separate authorized session that leaves an aggregate review report under ~/ark-threat/transfer/, since the runner sandbox cannot read the holdout), cross-split leakage check (exact + MinHash between dev and holdout, in the independent gate), class/language counts, per-class data provenance (native / translated / synthetic) — report research/l1-threat/scoreboard/gold.md
     type: eval-infra
     deps: [M05]
     accept: >-
-      gold.md on main with per-set error rates, per-class row counts (dev and holdout separately,
-      without leaking holdout contents), leakage zero, and a named go/no-go per class: a class whose
-      gold fails validation is listed as not measurable and its rule tasks stay blocked
+      gold.md on main with per-set error rates (dev from the runner's review, holdout from the
+      owner's aggregate report — error rates and counts only, never holdout contents), per-class row
+      counts for dev and holdout separately, leakage zero, and a named go/no-go per class: a class
+      whose gold fails validation is listed as not measurable and its rule tasks stay blocked; if the
+      owner report is not yet present, M06 waits (runner blocks the task with that reason)
 
   - id: E01
     status: done
