@@ -178,7 +178,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=float, default=300.0)
     parser.add_argument("--ntdb-operating-point", default="best_promote")
     args = parser.parse_args()
-    args.categories = ["injection", "dlp", "threat"]
+    args.categories = ["injection", "dlp", "unsafe_action"]
 
     requests = stratified_workload(args.validation_csv, seed=args.seed)
     report = {"dataset": dynamic_dataset(args, requests), "moby_dick": {}}

@@ -55,7 +55,7 @@ class ApiThroughputProfileTests(unittest.TestCase):
     def test_profile_is_full_gated_unified_api_profile(self):
         self.assertEqual(
             profile.CATEGORIES,
-            ["injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii"],
+            ["injection", "dlp", "pii", "sensitive_document", "unsafe_action", "routing", "dynamic-pii"],
         )
         gates = profile.execution_gates()
         self.assertEqual((gates["l1"], gates["l2"], gates["l3"]), (True, True, True))
@@ -78,7 +78,7 @@ class ApiThroughputProfileTests(unittest.TestCase):
         self.assertEqual([name for name, _ in requests[2:]], [f"short-0-{n}" for n in range(1, 6)])
 
     def test_throughput_profile_matches_initial_api_surface(self):
-        self.assertEqual(benchmark.THROUGHPUT_CATEGORIES, ["injection", "dlp", "threat"])
+        self.assertEqual(benchmark.THROUGHPUT_CATEGORIES, ["injection", "dlp", "unsafe_action"])
         gates = benchmark.throughput_gates()
         self.assertTrue(gates["models"]["unified-v3-threat"])
         self.assertEqual(gates["l3_policy"]["clustering"], "representative")
@@ -159,7 +159,7 @@ class ApiThroughputProfileTests(unittest.TestCase):
                 **job,
                 "models": {http_benchmark.UNIFIED_MODEL},
                 "l3_models": {http_benchmark.UNIFIED_MODEL},
-                "pipelines": {"injection", "dlp", "threat"},
+                "pipelines": {"injection", "dlp", "unsafe_action"},
                 "levels": {"L1", "L2", "L3"},
                 "failures": [],
                 "l2_promoted_categories": {"injection"},
@@ -167,11 +167,11 @@ class ApiThroughputProfileTests(unittest.TestCase):
                 "l3_runs": {(0.0, 1.0, 1)},
                 "l2_chunk_spans": {
                     "injection": {(0, 10), (10, 20)},
-                    "threat": {(0, 10), (10, 20)},
+                    "unsafe_action": {(0, 10), (10, 20)},
                 },
                 "promoted_chunk_spans": {
                     "injection": {(10, 20)},
-                    "threat": {(0, 10)},
+                    "unsafe_action": {(0, 10)},
                 },
                 "completion": "complete",
             }
@@ -184,13 +184,13 @@ class ApiThroughputProfileTests(unittest.TestCase):
                 "token",
                 [(f"case-{index}", str(index)) for index in range(42)],
                 1.0,
-                ["injection", "dlp", "threat"],
+                ["injection", "dlp", "unsafe_action"],
                 "best_promote",
             )
             rotated = http_benchmark.run_batch(
                 ["http://ark-1", "http://ark-2", "http://ark-3"],
                 "token", [("rotated", "content")], 1.0,
-                ["injection", "dlp", "threat"], "best_promote",
+                ["injection", "dlp", "unsafe_action"], "best_promote",
                 concurrency=1, endpoint_offset=1,
             )
 
@@ -203,14 +203,14 @@ class ApiThroughputProfileTests(unittest.TestCase):
         self.assertEqual(report["requests_promoted_by_category"], {
             "injection": 42,
             "dlp": 0,
-            "threat": 0,
+            "unsafe_action": 0,
         })
         self.assertNotIn("promotion_rate", report)
         self.assertEqual(report["chunk_promotion"], {
             "by_category": {
                 "injection": {"total_chunks": 84, "promoted_chunks": 42, "rate": 0.5},
                 "dlp": {"total_chunks": 0, "promoted_chunks": 0, "rate": None},
-                "threat": {"total_chunks": 84, "promoted_chunks": 42, "rate": 0.5},
+                "unsafe_action": {"total_chunks": 84, "promoted_chunks": 42, "rate": 0.5},
             },
             "union": {"total_chunks": 84, "promoted_chunks": 84, "rate": 1.0},
         })

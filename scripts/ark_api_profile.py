@@ -5,7 +5,7 @@ from __future__ import annotations
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 CATEGORIES = [
-    "injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii",
+    "injection", "dlp", "pii", "sensitive_document", "unsafe_action", "routing", "dynamic-pii",
 ]
 
 MODEL_GATES = {
@@ -39,7 +39,6 @@ MODEL_GATES = {
     "gliner_small-v2.5-edge": True,
     "sensitive_document": True,
     "orca-sonar-document-classifier": True,
-    "threat": True,
     "unified-v3-threat": True,
     "native:tool_call_injection": True,
     "routing": True,
@@ -70,7 +69,7 @@ LABEL_THRESHOLDS = {
 CONDITIONAL_LABELS = [
     {"when": {"pipeline": "injection", "results": ["attack"]},
      "labels": ["person", "legal_party", "street_address", "username"]},
-    {"when": {"pipeline": "threat", "results": ["secrets_access", "exfiltration_attempt"]},
+    {"when": {"pipeline": "unsafe_action", "results": ["secrets_access", "exfiltration_attempt"]},
      "labels": ["person", "legal_party", "street_address", "username", "employee_identifier",
                 "student_identifier", "applicant_identifier", "research_participant_identifier",
                 "passport_number", "driver_license_number", "medical_record_number",
