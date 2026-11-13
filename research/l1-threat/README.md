@@ -371,8 +371,8 @@ SPML, Mosscap, TextDetox-DE, AILuminate-Demo und in den Generatoren, die SPML- u
 können jetzt Cue-Filter tragen (`keep` in `datasets.yaml`: Zeilen eines Upstream-Labels bleiben nur mit einem Cue im
 Text, die übrigen zählt das Manifest unter `dropped.no_cue`; nichts fällt stumm weg): SPML-Angriffe brauchen einen
 Override-Cue im Nutzerteil (nach dem letzten `###`; SPML markiert eine Zeile als Angriff, wenn der System-Prompt verändert wurde; der Text
-ist dann oft nur System-Prompt plus normale Frage), Mosscap-Prompts müssen das Geheimnis oder die verborgenen
-Anweisungen nennen (Spielzüge ohne diesen Bezug sind außerhalb des Passwortspiels keine Extraktion). Carrier-Insertion
+ist dann oft nur System-Prompt plus normale Frage), Mosscap-Prompts müssen im selben Satz das Geheimnis und ein Frage- oder
+Auslesewort tragen oder die verborgenen Anweisungen nennen (Spielzüge ohne diesen Bezug sind außerhalb des Passwortspiels keine Extraktion). Carrier-Insertion
 und Obfuscation-Slices lesen die gefilterten Sätze und erben die Bereinigung. TextDetox-DE (18 % Fehler, grenzwertige
 politische Äußerungen auf beiden Seiten des Labels) und AILuminate-Demo (6 %, Meinungs- und Diskussionsfragen ohne
 Uplift) sind `report_only`; `toxic_language` und `harmful_content` haben damit bis zu einer saubereren Quelle keine
@@ -380,7 +380,7 @@ gewertete Dev-Quelle und bleiben nicht messbar, ihre Regelaufgaben bleiben block
 Dev-Zeilen über `class_templates` (Familien nach DAN- und Jailbroken-Mustern: Persona ohne Regeln,
 Refusal-Suppression; Holdout disjunkt: Doppelantwort, Fiktionsrahmen). `generation: 3` und Generator-Version 3
 frieren alle Splits im nächsten Gate-Lauf neu ein. Dev-Pool danach: SPML 5 729 Zeilen (2 403 Angriffe, 10 138 ohne
-Cue verworfen), Mosscap 15 000 (56 438 vor der Grenze, 169 138 ohne Cue verworfen), `jailbreak` 84 gewertete
+Cue verworfen), Mosscap 15 000 (42 666 vor der Grenze, 192 258 ohne Cue verworfen), `jailbreak` 84 gewertete
 synthetische Zeilen, Benign 35 025 Zeilen aus sechs Sätzen.
 
 **Generatoren (E02, [`scripts/l1_threat/generators.py`](../../scripts/l1_threat/generators.py)).** Aus den
