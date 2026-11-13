@@ -167,7 +167,6 @@ tasks:
   # the M06 report and the per-class scoreboard work the rule families wait for.
   - id: M07
     status: done
-    status: todo
     title: Gold cleanup — restore the no-go classes of research/l1-threat/scoreboard/gold.md to go; fix the carrier_insertion and obfuscation_slices templates that emit benign rows under attack labels (27.5% error), re-label or demote the noisy rows of spml and mosscap (24%; password-game probes are not extraction outside the game context), textdetox_de (18%) and ailuminate_demo (6%), and give jailbreak a scored dev source (0 scored dev rows; trustairlab is holdout, jackhhao is report-only); then re-run the gold.py dev review on every changed set and update gold.md
     type: eval-infra
     deps: [M06]
