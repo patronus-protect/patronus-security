@@ -112,7 +112,9 @@ default ['EMAIL', 'safe']
 custom ['safe', 'dlp.content.sql']
 ```
 
-`pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`) choose the scoring; `explain` adds
+`pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`) choose the scoring, and every attack class
+has its own `<category>_mode` with the same values (`injection_mode`, …, `toxic_language_mode`;
+strict by default, `balanced`/`recall` drop evidence scoring below 0.50/0.30); `explain` adds
 anchor diagnostics. Cat policies are rules `cat.<policy id>` in the same map (see below).
 
 ## Wolf Defender

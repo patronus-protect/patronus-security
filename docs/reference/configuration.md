@@ -152,6 +152,12 @@ scanner.set_execution_gates({
 - `dlp_mode` — native DLP output mode: `strict` (default; every finding scores `1.0`),
   `balanced` or `recall` (model scores with the PII thresholds 0.50 and 0.30). See
   [DLP score and modes](result-schema.md#dlp-score-and-modes).
+- `<category>_mode` — output mode of each attack class (`injection_mode`, `jailbreak_mode`,
+  `prompt_extraction_mode`, `tool_poisoning_mode`, `agent_config_tampering_mode`,
+  `memory_poisoning_mode`, `exfiltration_mode`, `unsafe_action_mode`, `resource_exhaustion_mode`,
+  `harmful_content_mode`, `toxic_language_mode`): `strict` (default; the producers' own
+  acceptance), `balanced` or `recall` (native evidence scoring below 0.50 or 0.30 is dropped). See
+  [Attack-class categories](result-schema.md#attack-class-categories).
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.

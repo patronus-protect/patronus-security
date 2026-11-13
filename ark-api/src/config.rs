@@ -525,35 +525,42 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
     }
 
     #[test]
-    fn pii_mode_is_strict_by_default_and_explicitly_configurable() {
+    fn category_modes_are_strict_by_default_and_explicitly_configurable() {
         use patronus_ark::ScoreMode;
-        assert_eq!(ScanGateMatrix::default().native.pii_mode, ScoreMode::Strict);
-        for (yaml, mode) in [
-            ("pii_mode: strict", ScoreMode::Strict),
-            ("pii_mode: balanced", ScoreMode::Balanced),
-            ("pii_mode: recall", ScoreMode::Recall),
+        for category in [
+            "pii",
+            "dlp",
+            "injection",
+            "jailbreak",
+            "prompt_extraction",
+            "tool_poisoning",
+            "agent_config_tampering",
+            "memory_poisoning",
+            "exfiltration",
+            "unsafe_action",
+            "resource_exhaustion",
+            "harmful_content",
+            "toxic_language",
         ] {
-            let gates: ScanGateMatrix = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(gates.native.pii_mode, mode);
+            let category_id: SecurityCategory = category.parse().unwrap();
+            assert_eq!(
+                ScanGateMatrix::default().native.mode(category_id),
+                ScoreMode::Strict
+            );
+            for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+                let gates: ScanGateMatrix =
+                    serde_yaml::from_str(&format!("{category}_mode: {mode}")).unwrap();
+                assert_eq!(gates.native.mode(category_id), mode, "{category}");
+            }
+            for invalid in ["fast", "Balanced"] {
+                let yaml = format!("{category}_mode: {invalid}");
+                assert!(
+                    serde_yaml::from_str::<ScanGateMatrix>(&yaml).is_err(),
+                    "{yaml}"
+                );
+            }
         }
-        assert!(serde_yaml::from_str::<ScanGateMatrix>("pii_mode: fast").is_err());
-        assert!(serde_yaml::from_str::<ScanGateMatrix>("pii_mode: Balanced").is_err());
-    }
-
-    #[test]
-    fn dlp_mode_is_strict_by_default_and_explicitly_configurable() {
-        use patronus_ark::ScoreMode;
-        assert_eq!(ScanGateMatrix::default().native.dlp_mode, ScoreMode::Strict);
-        for (yaml, mode) in [
-            ("dlp_mode: strict", ScoreMode::Strict),
-            ("dlp_mode: balanced", ScoreMode::Balanced),
-            ("dlp_mode: recall", ScoreMode::Recall),
-        ] {
-            let gates: ScanGateMatrix = serde_yaml::from_str(yaml).unwrap();
-            assert_eq!(gates.native.dlp_mode, mode);
-        }
-        assert!(serde_yaml::from_str::<ScanGateMatrix>("dlp_mode: fast").is_err());
-        assert!(serde_yaml::from_str::<ScanGateMatrix>("dlp_mode: Balanced").is_err());
+        assert!(serde_yaml::from_str::<ScanGateMatrix>("threat_mode: strict").is_err());
     }
 
     #[test]

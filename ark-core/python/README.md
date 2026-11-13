@@ -72,8 +72,9 @@ default ['EMAIL', 'safe']
 custom ['safe', 'dlp.content.sql']
 ```
 
-Also at the top level of the config: `pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`)
-and `explain`.
+Also at the top level of the config: `pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`),
+one `<category>_mode` per attack class with the same values (`injection_mode`, …,
+`toxic_language_mode`; strict by default) and `explain`.
 
 ## Wolf Defender and Cat
 

@@ -23,7 +23,8 @@ Args:
         "rules": {"pii_email": False, "cat.core.remote_to_exec": False}}`
         disables levels, model/native scanner areas, or individual L1 rules
         (Cat shell policies included) for subsequent scan calls; `pii_mode`,
-        `dlp_mode`, `explain`, `conditional` and the L3 worker policy
+        `dlp_mode`, one `<category>_mode` per attack class (such as
+        `unsafe_action_mode`), `explain`, `conditional` and the L3 worker policy
         `l3_policy` complete it. Unknown keys raise `ValueError`.
         New classifier pipelines can be gated independently through
         `models`, for example `{"models": {"tool_action": False}}`.
@@ -116,7 +117,8 @@ Replace the gate matrix used by subsequent scan calls.
 
 Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
 uses the shared gate schema (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`,
-`dlp_mode`, `explain`, `conditional`, `l3_policy`); model keys match result
+`dlp_mode`, the attack-class `<category>_mode` keys, `explain`, `conditional`,
+`l3_policy`); model keys match result
 `model` values such as `native:mcp_runtime_risk`.
 
 ### `set_onnx_batch_mode(mode: str)`

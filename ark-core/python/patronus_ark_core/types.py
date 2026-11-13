@@ -127,12 +127,26 @@ class ShellConfig(TypedDict):
     allowlist: NotRequired[dict[str, Literal["ask"]]]
 
 
+ScoreMode = Literal["strict", "balanced", "recall"]
+
+
 class ScannerConfig(TypedDict, total=False):
     categories: list[NativeCategory]
     rules: dict[str, bool]
     models: dict[str, bool]
-    pii_mode: Literal["strict", "balanced", "recall"]
-    dlp_mode: Literal["strict", "balanced", "recall"]
+    pii_mode: ScoreMode
+    dlp_mode: ScoreMode
+    injection_mode: ScoreMode
+    jailbreak_mode: ScoreMode
+    prompt_extraction_mode: ScoreMode
+    tool_poisoning_mode: ScoreMode
+    agent_config_tampering_mode: ScoreMode
+    memory_poisoning_mode: ScoreMode
+    exfiltration_mode: ScoreMode
+    unsafe_action_mode: ScoreMode
+    resource_exhaustion_mode: ScoreMode
+    harmful_content_mode: ScoreMode
+    toxic_language_mode: ScoreMode
     explain: bool
     max_input_bytes: int
     max_findings: int

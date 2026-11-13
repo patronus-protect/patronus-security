@@ -395,7 +395,8 @@ impl std::str::FromStr for L3Strategy {
 ///
 /// Deserializes from the one gate schema of every host (Python
 /// `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
-/// `pii_mode`, `dlp_mode` and `explain`, the level switches `l1`, `l2` and
+/// `pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
+/// `explain`, the level switches `l1`, `l2` and
 /// `l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
 /// out-of-range values are refused.
 pub struct ScanGateMatrix {
@@ -1340,6 +1341,7 @@ mod gate_schema_tests {
             "models": {"native:pii": false},
             "pii_mode": "recall",
             "dlp_mode": "balanced",
+            "unsafe_action_mode": "recall",
             "explain": true,
             "l1": true,
             "l2": false,
@@ -1376,6 +1378,14 @@ mod gate_schema_tests {
         assert!(!gates.native.allows_rule("cat.core.remote_to_exec"));
         assert!(!gates.native.allows_model("native:pii"));
         assert_eq!(gates.native.pii_mode, crate::ScoreMode::Recall);
+        assert_eq!(
+            gates.native.mode(SecurityCategory::UnsafeAction),
+            crate::ScoreMode::Recall
+        );
+        assert_eq!(
+            gates.native.mode(SecurityCategory::Injection),
+            crate::ScoreMode::Strict
+        );
         assert!(gates.native.explain);
         assert_eq!(
             (gates.l1, gates.l2, gates.l3),

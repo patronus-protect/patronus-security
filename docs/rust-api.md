@@ -1152,7 +1152,8 @@ scored PII and DLP modes are opt-in. `max_level` is still enforced by
 
 Deserializes from the one gate schema of every host (Python
 `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
-`pii_mode`, `dlp_mode` and `explain`, the level switches `l1`, `l2` and
+`pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
+`explain`, the level switches `l1`, `l2` and
 `l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
 out-of-range values are refused.
 
@@ -1819,7 +1820,7 @@ pub enum ScoreMode {
 }
 ```
 
-Output mode of the scored native detectors (PII and DLP). `Strict` is the
+Output mode of a native category (`<category>_mode`). `Strict` is the
 default and the pre-score behaviour.
 
 ```rust
@@ -1842,6 +1843,20 @@ pub struct NativeGates {
     pub pii_mode: ScoreMode,
     /// Native DLP output mode.
     pub dlp_mode: ScoreMode,
+    /// Output modes of the attack classes. `strict` keeps each producer's own
+    /// acceptance; `balanced`/`recall` also drop evidence scoring below
+    /// [`ScoreMode::min_score`].
+    pub injection_mode: ScoreMode,
+    pub jailbreak_mode: ScoreMode,
+    pub prompt_extraction_mode: ScoreMode,
+    pub tool_poisoning_mode: ScoreMode,
+    pub agent_config_tampering_mode: ScoreMode,
+    pub memory_poisoning_mode: ScoreMode,
+    pub exfiltration_mode: ScoreMode,
+    pub unsafe_action_mode: ScoreMode,
+    pub resource_exhaustion_mode: ScoreMode,
+    pub harmful_content_mode: ScoreMode,
+    pub toxic_language_mode: ScoreMode,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -1857,6 +1872,12 @@ pub fn all_enabled() -> Self;
 
 Gates with every native rule enabled, including the opt-in DLP content
 families and the bare PII forms.
+
+```rust
+pub fn mode(&self, category: SecurityCategory) -> ScoreMode;
+```
+
+The `<category>_mode` of a native category; other categories are strict.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;

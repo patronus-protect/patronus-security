@@ -41,6 +41,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the attack class of the predicted label in `category` and `class_name` (`exfiltration`,
   `injection`, `harmful_content`, `toxic_language` or `unsafe_action`) instead of the raw model
   label under `unsafe_action`; `layers` and `label_scores` keep the model labels.
+- **Detection change:** (all eleven attack classes, opt-in only) every attack class has its own
+  output mode gate next to `pii_mode` and `dlp_mode`: `injection_mode`, `jailbreak_mode`,
+  `prompt_extraction_mode`, `tool_poisoning_mode`, `agent_config_tampering_mode`,
+  `memory_poisoning_mode`, `exfiltration_mode`, `unsafe_action_mode`, `resource_exhaustion_mode`,
+  `harmful_content_mode` and `toxic_language_mode` (Rust `NativeGates`, Python
+  `execution_gates` and Core config, Ark API and coordinator `gates`). `strict` is the default and
+  leaves results unchanged; `balanced` and `recall` drop native evidence scoring below 0.50 or 0.30,
+  and a producer left without evidence reports `benign`. Unknown values are rejected.
 
 ### Added
 
