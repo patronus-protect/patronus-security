@@ -127,7 +127,7 @@ def threat_l2_only_config(categories, operating_point):
     config = ORIGINAL_REQUEST_CONFIG(categories, operating_point)
     config["gates"]["conditional"] = [{
         "level": "L3",
-        "pipeline": "threat",
+        "pipeline": "unsafe_action",
         "when": {
             "metadata": {
                 "path": "__benchmark_enable_threat_l3",
@@ -186,7 +186,7 @@ def main() -> int:
     execute.add_argument("--timeout-seconds", type=float, default=300.0)
     execute.add_argument("--seed", type=int, default=20260828)
     execute.add_argument("--ntdb-operating-point", default="best_promote")
-    execute.set_defaults(categories=["injection", "dlp", "threat"])
+    execute.set_defaults(categories=["injection", "dlp", "unsafe_action"])
     args = parser.parse_args()
 
     if args.command == "build-fixtures":

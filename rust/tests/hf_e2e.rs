@@ -138,7 +138,7 @@ fn hf_short_german_greeting_is_not_an_injection() {
         vec![
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
         ],
         SecurityLevel::L3,
         Some(model_dir()),
@@ -152,7 +152,7 @@ fn hf_short_german_greeting_is_not_an_injection() {
         &[
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
         ],
         "Was geht ab",
     );
@@ -230,7 +230,7 @@ fn hf_product_asset_sync_progress_smoke() {
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
         SecurityCategory::DynamicPii,
         SecurityCategory::ShellCommand,
     ];
@@ -498,7 +498,7 @@ fn classifier_categories() -> Vec<SecurityCategory> {
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
     ]
 }
 

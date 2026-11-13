@@ -1152,7 +1152,8 @@ scored PII and DLP modes are opt-in. `max_level` is still enforced by
 
 Deserializes from the one gate schema of every host (Python
 `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
-`pii_mode`, `dlp_mode` and `explain`, the level switches `l1`, `l2` and
+`pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
+`explain`, the level switches `l1`, `l2` and
 `l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
 out-of-range values are refused.
 
@@ -1630,7 +1631,7 @@ Return the max-level cap backing this execution.
 
 ```rust
 pub struct ScannerConfig {
-    /// Native text-scan categories: `pii`, `dlp` and `injection`.
+    /// Native text-scan categories: `pii`, `dlp` and the eleven attack classes.
     pub categories: Vec<SecurityCategory>,
     /// Rule, model, mode and `explain` gates; their keys sit at the top level
     /// of the serialized config.
@@ -1647,8 +1648,9 @@ pub struct ScannerConfig {
 }
 ```
 
-Queue-free scanner policy. Defaults to all three native categories, no Wolf
-and no Cat.
+Queue-free scanner policy. Defaults to pii, dlp and the core attack classes
+(injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration), no
+Wolf and no Cat.
 
 ```rust
 pub enum ScanError {
@@ -1771,7 +1773,7 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 
 ```rust
 pub struct NativeEngine {
-    groups: [Vec<NativeProducerSpec>; 3],
+    groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -1818,7 +1820,7 @@ pub enum ScoreMode {
 }
 ```
 
-Output mode of the scored native detectors (PII and DLP). `Strict` is the
+Output mode of a native category (`<category>_mode`). `Strict` is the
 default and the pre-score behaviour.
 
 ```rust
@@ -1841,6 +1843,20 @@ pub struct NativeGates {
     pub pii_mode: ScoreMode,
     /// Native DLP output mode.
     pub dlp_mode: ScoreMode,
+    /// Output modes of the attack classes. `strict` keeps each producer's own
+    /// acceptance; `balanced`/`recall` also drop evidence scoring below
+    /// [`ScoreMode::min_score`].
+    pub injection_mode: ScoreMode,
+    pub jailbreak_mode: ScoreMode,
+    pub prompt_extraction_mode: ScoreMode,
+    pub tool_poisoning_mode: ScoreMode,
+    pub agent_config_tampering_mode: ScoreMode,
+    pub memory_poisoning_mode: ScoreMode,
+    pub exfiltration_mode: ScoreMode,
+    pub unsafe_action_mode: ScoreMode,
+    pub resource_exhaustion_mode: ScoreMode,
+    pub harmful_content_mode: ScoreMode,
+    pub toxic_language_mode: ScoreMode,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -1856,6 +1872,12 @@ pub fn all_enabled() -> Self;
 
 Gates with every native rule enabled, including the opt-in DLP content
 families and the bare PII forms.
+
+```rust
+pub fn mode(&self, category: SecurityCategory) -> ScoreMode;
+```
+
+The `<category>_mode` of a native category; other categories are strict.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;
@@ -2296,8 +2318,26 @@ pub enum SecurityCategory {
     ToolTags,
     /// Operational request routing.
     Routing,
-    /// Security threat classification.
-    Threat,
+    /// Jailbreak techniques that bypass safety rules.
+    Jailbreak,
+    /// Requests to reveal hidden instructions, tool schemas or rules.
+    PromptExtraction,
+    /// Instructions hidden in tool or MCP descriptions, schemas and agent cards.
+    ToolPoisoning,
+    /// Malicious instructions in skills, rules files, agent configuration or hooks.
+    AgentConfigTampering,
+    /// Content that tries to write itself into long-term memory or a profile.
+    MemoryPoisoning,
+    /// Data sent to external sinks (markdown/URL, DNS, tool parameters, webhooks).
+    Exfiltration,
+    /// Requests for destructive, executing, privilege-widening or control-disabling actions.
+    UnsafeAction,
+    /// Endless loops, recursive spawning and cost explosions.
+    ResourceExhaustion,
+    /// Requests for dangerous content.
+    HarmfulContent,
+    /// Hate, harassment, threats, insults and profanity.
+    ToxicLanguage,
     /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
     ShellCommand,
 }
@@ -2316,6 +2356,7 @@ pub fn is_unified_classifier(self) -> bool;
 ```
 
 Return whether this category is backed by one head of the unified classifier.
+`unsafe_action` carries the unified threat head.
 
 ```rust
 pub struct EvidenceSpan {

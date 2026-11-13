@@ -117,6 +117,7 @@ tasks:
 
   # ── X (cont.): category switch ────────────────────────────────────────
   - id: X03
+    status: done
     title: New classes as categories in ark-core and ARK (SecurityCategory, scanner checks, result schema, ark-api, coordinator known_category, deploy configs, decision_thresholds, docs) replacing the old seven threat labels without aliases; per-rule toggles via the rules map (rule id to bool); existing rules re-labelled per research-2026-11.md §2
     type: engine
     deps: [X02, M04]

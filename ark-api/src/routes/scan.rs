@@ -757,13 +757,13 @@ mod tests {
         config.categories = vec![
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
         ];
         key.allowed_categories = Some(config.categories.clone());
         key.default_categories = Some(vec![
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
         ]);
 
         let resolved = resolve_request_config(&config, &key, None).unwrap();

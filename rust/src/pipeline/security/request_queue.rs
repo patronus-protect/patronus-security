@@ -573,10 +573,15 @@ impl SecurityGateway {
                 None => (!registry.ready.is_empty()).then_some(0),
             };
             if let Some(index) = ready_index {
-                let event = registry
+                let mut event = registry
                     .ready
                     .remove(index)
                     .expect("ready index disappeared");
+                if let QueuedSecurityEvent::Result(queued)
+                | QueuedSecurityEvent::Provisional(queued) = &mut event
+                {
+                    super::ntdb_l2::publish_threat_model_result(&mut queued.result);
+                }
                 if matches!(event, QueuedSecurityEvent::Finished { .. }) {
                     registry.requests.remove(event.request_id());
                     drop(registry);
@@ -986,14 +991,14 @@ impl SecurityGateway {
         let threat_job_id = self.l3_worker.next_job_id();
         let tool_job_id = self.l3_worker.next_job_id();
         let mut threat_fallback = self.test_l3_fallback("test-threat-l3");
-        threat_fallback.category = "threat".to_string();
+        threat_fallback.category = "unsafe_action".to_string();
         let mut tool_fallback = self.test_l3_fallback("test-tool-l3");
         tool_fallback.category = "tool_class".to_string();
         let execution = self.scan_execution();
         let state = RequestState {
             pending_l3_job_ids: HashSet::from([threat_job_id, tool_job_id]),
             pending_l3_job_categories: HashMap::from([
-                (threat_job_id, "threat".to_string()),
+                (threat_job_id, "unsafe_action".to_string()),
                 (tool_job_id, "tool_class".to_string()),
             ]),
             gate_results: HashMap::new(),
@@ -1028,7 +1033,7 @@ impl SecurityGateway {
                 L3JobSpec {
                     job_id: threat_job_id,
                     request_id: request_id.clone(),
-                    category: "threat".to_string(),
+                    category: "unsafe_action".to_string(),
                     model: "test-threat-l3".to_string(),
                     text: "test".into(),
                     fallback: threat_fallback,

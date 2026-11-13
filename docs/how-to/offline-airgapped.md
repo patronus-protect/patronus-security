@@ -27,8 +27,9 @@ while (event := scanner.consume_next_event(timeout=1.0)) is not None:
 ```
 
 This gateway never touches the network. `pii` and `dlp` are fully covered here;
-`injection` gets its native L1 stage. Add `threat` to `categories` for its native
-[`native:threat_l1`](../reference/threat-l1.md) stage. `sensitive_document`, `tool_*`,
+`injection` gets its native L1 stage. The attack-class categories `exfiltration`,
+`unsafe_action`, `agent_config_tampering` and `harmful_content` run their
+[`native:threat_l1`](../reference/threat-l1.md) rules when selected. `sensitive_document`, `tool_*`,
 and `routing` are model-only and produce no verdict at `max_level="l1"`.
 
 ## Offline with pre-cached models (split lifecycle)

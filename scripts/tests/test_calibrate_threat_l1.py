@@ -12,7 +12,8 @@ import calibrate_threat_l1 as module
 
 
 def candidate(rule, start=0, end=20, label="tool_abuse"):
-    return dict(rule_id=rule, start_byte=start, end_byte=end, class_name=label)
+    # Both rules share the public category; the scorer counts the trained classes.
+    return dict(rule_id=rule, start_byte=start, end_byte=end, class_name="unsafe_action", scorer_class=label)
 
 
 def test_repeated_rule_matches_do_not_change_presence_features():

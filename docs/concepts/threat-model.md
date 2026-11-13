@@ -20,7 +20,9 @@ it ingests, and the documents that pass through it.
 Concretely, the library provides signals to:
 
 - detect **prompt injection and jailbreaks** before untrusted text reaches the model
-  (`injection`, `threat`);
+  (`injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`);
+- detect **risky agent actions and data exfiltration** (`unsafe_action`, `exfiltration`,
+  `agent_config_tampering`, `memory_poisoning`, `harmful_content`);
 - detect **PII, secrets, and DLP-relevant content** leaving or entering the boundary
   (`pii`, `dynamic-pii`, `dlp`, `sensitive_document`);
 - classify **agentic tool use** so a policy engine can gate risky actions
@@ -97,8 +99,8 @@ activity is the optional, one-time download of model assets from Hugging Face.
 If a model asset is missing or an L3 inference errors or times out, the scan **does not throw**
 — it [degrades](layered-scanning.md#degradation-contract) to the best available lower-layer
 result and reports a structured failure. This means a broken L3 does not take your application
-down, but it also means **you must decide your policy for degraded verdicts**: if `threat` can
-only answer at L1 because its model is missing, is that acceptable for your risk posture? Check
+down, but it also means **you must decide your policy for degraded verdicts**: if `unsafe_action`
+can only answer at L1 because its model is missing, is that acceptable for your risk posture? Check
 `runtime_readiness()` / `asset_readiness()` and the failure entries on terminal events.
 
 ## Using it correctly (defense in depth)

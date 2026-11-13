@@ -117,7 +117,7 @@ fn request_wide_threat_early_exit_skips_queued_lower_priority_l3_jobs() {
     }
 
     assert_eq!(l3.len(), 2);
-    assert_eq!(l3[0].category, "threat");
+    assert_eq!(l3[0].category, "unsafe_action");
     assert_eq!(l3[0].class_name, "test_l3");
     assert_eq!(l3[1].category, "tool_class");
     assert!(l3[1]

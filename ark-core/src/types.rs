@@ -120,8 +120,26 @@ pub enum SecurityCategory {
     ToolTags,
     /// Operational request routing.
     Routing,
-    /// Security threat classification.
-    Threat,
+    /// Jailbreak techniques that bypass safety rules.
+    Jailbreak,
+    /// Requests to reveal hidden instructions, tool schemas or rules.
+    PromptExtraction,
+    /// Instructions hidden in tool or MCP descriptions, schemas and agent cards.
+    ToolPoisoning,
+    /// Malicious instructions in skills, rules files, agent configuration or hooks.
+    AgentConfigTampering,
+    /// Content that tries to write itself into long-term memory or a profile.
+    MemoryPoisoning,
+    /// Data sent to external sinks (markdown/URL, DNS, tool parameters, webhooks).
+    Exfiltration,
+    /// Requests for destructive, executing, privilege-widening or control-disabling actions.
+    UnsafeAction,
+    /// Endless loops, recursive spawning and cost explosions.
+    ResourceExhaustion,
+    /// Requests for dangerous content.
+    HarmfulContent,
+    /// Hate, harassment, threats, insults and profanity.
+    ToxicLanguage,
     /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
     ShellCommand,
 }
@@ -139,12 +157,22 @@ impl SecurityCategory {
             SecurityCategory::ToolAction => "tool_action",
             SecurityCategory::ToolTags => "tool_tags",
             SecurityCategory::Routing => "routing",
-            SecurityCategory::Threat => "threat",
+            SecurityCategory::Jailbreak => "jailbreak",
+            SecurityCategory::PromptExtraction => "prompt_extraction",
+            SecurityCategory::ToolPoisoning => "tool_poisoning",
+            SecurityCategory::AgentConfigTampering => "agent_config_tampering",
+            SecurityCategory::MemoryPoisoning => "memory_poisoning",
+            SecurityCategory::Exfiltration => "exfiltration",
+            SecurityCategory::UnsafeAction => "unsafe_action",
+            SecurityCategory::ResourceExhaustion => "resource_exhaustion",
+            SecurityCategory::HarmfulContent => "harmful_content",
+            SecurityCategory::ToxicLanguage => "toxic_language",
             SecurityCategory::ShellCommand => "shell_command",
         }
     }
 
     /// Return whether this category is backed by one head of the unified classifier.
+    /// `unsafe_action` carries the unified threat head.
     pub fn is_unified_classifier(self) -> bool {
         matches!(
             self,
@@ -154,9 +182,35 @@ impl SecurityCategory {
                 | Self::ToolAction
                 | Self::ToolTags
                 | Self::Routing
-                | Self::Threat
+                | Self::UnsafeAction
         )
     }
+
+    /// The eleven attack classes; `injection` is the instruction-injection class.
+    pub const ATTACK_CLASSES: [SecurityCategory; 11] = [
+        Self::Injection,
+        Self::Jailbreak,
+        Self::PromptExtraction,
+        Self::ToolPoisoning,
+        Self::AgentConfigTampering,
+        Self::MemoryPoisoning,
+        Self::Exfiltration,
+        Self::UnsafeAction,
+        Self::ResourceExhaustion,
+        Self::HarmfulContent,
+        Self::ToxicLanguage,
+    ];
+
+    /// Categories active when a caller selects none: pii, dlp and the core attack classes.
+    pub const DEFAULT_ACTIVE: [SecurityCategory; 7] = [
+        Self::Pii,
+        Self::Dlp,
+        Self::Injection,
+        Self::Jailbreak,
+        Self::PromptExtraction,
+        Self::ToolPoisoning,
+        Self::Exfiltration,
+    ];
 }
 
 /// Serializes the canonical [`SecurityCategory::as_str`] name.
@@ -189,7 +243,16 @@ impl std::str::FromStr for SecurityCategory {
             "tool_action" => Ok(SecurityCategory::ToolAction),
             "tool_tags" => Ok(SecurityCategory::ToolTags),
             "routing" => Ok(SecurityCategory::Routing),
-            "threat" => Ok(SecurityCategory::Threat),
+            "jailbreak" => Ok(SecurityCategory::Jailbreak),
+            "prompt_extraction" => Ok(SecurityCategory::PromptExtraction),
+            "tool_poisoning" => Ok(SecurityCategory::ToolPoisoning),
+            "agent_config_tampering" => Ok(SecurityCategory::AgentConfigTampering),
+            "memory_poisoning" => Ok(SecurityCategory::MemoryPoisoning),
+            "exfiltration" => Ok(SecurityCategory::Exfiltration),
+            "unsafe_action" => Ok(SecurityCategory::UnsafeAction),
+            "resource_exhaustion" => Ok(SecurityCategory::ResourceExhaustion),
+            "harmful_content" => Ok(SecurityCategory::HarmfulContent),
+            "toxic_language" => Ok(SecurityCategory::ToxicLanguage),
             "shell_command" | "shell-command" => Ok(SecurityCategory::ShellCommand),
             _ => Err(format!("Unknown security category: {}", s)),
         }

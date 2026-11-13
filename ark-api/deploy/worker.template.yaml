@@ -5,11 +5,11 @@ auth:
   keys:
     - name: gateway-internal
       key_hash: "sha256:__WORKER_HASH__"
-      categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
-      default_categories: [injection, dlp, threat, pii]
+      categories: [injection, dlp, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
+      default_categories: [pii, dlp, injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration]
 pipeline:
   # Availability/warmup is independent of the default inference selection above.
-  categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
+  categories: [injection, dlp, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
   max_level: L3
   model_dir: /data/models
   download_files: false
@@ -24,9 +24,9 @@ pipeline:
     l3: true
     conditional:
       - level: L3
-        pipeline: threat
+        pipeline: unsafe_action
         # Constant false using the existing gate language: a field cannot
-        # simultaneously exist and not exist. Threat L1/L2 stay enabled.
+        # simultaneously exist and not exist. unsafe_action L1/L2 stay enabled.
         when:
           all:
             - metadata: {path: threat_l3, exists: true}

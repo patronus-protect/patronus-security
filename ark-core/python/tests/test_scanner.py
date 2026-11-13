@@ -36,10 +36,16 @@ def test_limits_deadline_and_cancellation_never_return_partial_results():
 @pytest.mark.parametrize("config", [
     {"categories": []}, {"categories": ["unknown"]}, {"max_findings": 0},
     {"unsupported": True}, {"pii_mode": "unknown"}, {"categories": ["threat"]},
+    {"injection_mode": "unknown"}, {"unsafe_action_mode": "Balanced"}, {"threat_mode": "strict"},
 ])
 def test_core_rejects_invalid_configuration(config):
     with pytest.raises(ValueError):
         Scanner(config)
+
+
+@pytest.mark.parametrize("mode", ["strict", "balanced", "recall"])
+def test_core_accepts_a_mode_gate_per_category(mode):
+    Scanner({"injection_mode": mode, "unsafe_action_mode": mode, "toxic_language_mode": mode})
 
 
 def test_shell_command_points_to_shell_verdict():

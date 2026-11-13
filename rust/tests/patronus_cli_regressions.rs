@@ -89,7 +89,7 @@ fn hidden_system_prompt_disclosure_is_accepted_with_rule_and_offsets() {
 #[test]
 fn destination_first_secret_handoff_is_accepted_with_rule_and_offsets() {
     check(
-        SecurityCategory::Dlp,
+        SecurityCategory::Exfiltration,
         "secret_transfer",
         "dlp_secret_transfer",
         &[
@@ -161,7 +161,7 @@ fn governance_prompt_relationships_preserve_positive_negative_and_gate_contracts
         ],
     );
     check(
-        SecurityCategory::Dlp,
+        SecurityCategory::Exfiltration,
         "secret_transfer",
         "dlp_secret_transfer",
         &[

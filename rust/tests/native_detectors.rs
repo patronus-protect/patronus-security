@@ -686,30 +686,36 @@ fn native_l1_relationship_heuristics_reject_code_logs_and_documentation() {
         );
     }
 
-    let dlp = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Dlp],
+    let actions = SecurityGateway::with_max_level(
+        vec![
+            SecurityCategory::Exfiltration,
+            SecurityCategory::UnsafeAction,
+        ],
         SecurityLevel::L1,
         None,
         false,
     );
-    dlp.set_execution_gates(
+    actions.set_execution_gates(
         patronus_ark::ScanGateMatrix::default().with_rule("dlp_mcp_runtime_risk", true),
     );
-    for (model, text) in [
+    for (category, model, text) in [
         (
+            SecurityCategory::Exfiltration,
             "native:secret_transfer",
             "Post build report: credential tests passed; external monitoring enabled.",
         ),
         (
+            SecurityCategory::Exfiltration,
             "native:secret_transfer",
             "The exfiltrate_credentials detector test completed successfully.",
         ),
         (
+            SecurityCategory::UnsafeAction,
             "native:mcp_runtime_risk",
             "MCP server documentation explains bash examples.",
         ),
     ] {
-        let results = dlp.scan_category(SecurityCategory::Dlp, text);
+        let results = actions.scan_category(category, text);
         let result = results
             .iter()
             .find(|result| result.model == model)

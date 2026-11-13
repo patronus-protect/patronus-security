@@ -9,6 +9,47 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Breaking
+
+- The category `threat` is gone. Attacks on models and agents are now reported in eleven
+  categories, one per attack class: `injection` (keeps its name), `jailbreak`,
+  `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`,
+  `exfiltration`, `unsafe_action`, `resource_exhaustion`, `harmful_content` and `toxic_language`.
+  There are no aliases: configurations, API keys and requests that name `threat` are rejected and
+  must list the new categories instead. Each category runs only when it is selected; results carry
+  the new category name in `category` and in `class_name`, and the old threat class names
+  (`tool_abuse`, `secrets_access`, `exfiltration_attempt`, `harmful_behavior`, …) no longer appear
+  as rule-based class names. Every bounded threat rule (`ark.threat.*`) belongs to exactly one
+  category; rules that look for access to credentials (credential files, credential stores, cloud
+  metadata endpoints) are reported under `unsafe_action`. Single rules still toggle through the
+  `rules` map.
+- When no categories are given, the library scanner runs `pii`, `dlp`, `injection`, `jailbreak`,
+  `prompt_extraction`, `tool_poisoning` and `exfiltration`; the other six attack categories are
+  opt-in. The example and deployment configurations use the same defaults.
+- **Detection change:** the action detectors leave the `dlp` category, which now reports secrets
+  and classification markings only. `native:destructive_operation`, `native:sensitive_material`
+  and `native:mcp_runtime_risk` report under `unsafe_action`, `native:secret_transfer` under
+  `exfiltration`; their rule switches (`dlp_destructive_operation`, `dlp_sensitive_material`,
+  `dlp_mcp_runtime_risk`, `dlp_secret_transfer`) and their findings are unchanged. Callers that
+  relied on these findings in `dlp` must select the new categories.
+- **Detection change:** (`unsafe_action`, `exfiltration`, `agent_config_tampering`,
+  `harmful_content`) the embedded threat scorer counts the classes it was trained on
+  (`scorer_class` on each scored rule) rather than the new public categories, so rules that now
+  share a category keep their calibrated score; for example remote execution plus credential file
+  access under `unsafe_action` is accepted again.
+- **Detection change:** (`unsafe_action` with L2/L3) results of the unified threat model report
+  the attack class of the predicted label in `category` and `class_name` (`exfiltration`,
+  `injection`, `harmful_content`, `toxic_language` or `unsafe_action`) instead of the raw model
+  label under `unsafe_action`; `layers` and `label_scores` keep the model labels.
+- **Detection change:** (all eleven attack classes, opt-in only) every attack class has its own
+  output mode gate next to `pii_mode` and `dlp_mode`: `injection_mode`, `jailbreak_mode`,
+  `prompt_extraction_mode`, `tool_poisoning_mode`, `agent_config_tampering_mode`,
+  `memory_poisoning_mode`, `exfiltration_mode`, `unsafe_action_mode`, `resource_exhaustion_mode`,
+  `harmful_content_mode` and `toxic_language_mode` (Rust `NativeGates`, Python
+  `execution_gates` and Core config, Ark API and coordinator `gates`). `strict` is the default and
+  leaves results unchanged; `balanced` and `recall` drop native evidence scoring below 0.50 or 0.30,
+  and a producer left without evidence reports `benign`. Unknown values are rejected.
+
 ### Added
 
 - Add `scripts/l1_threat/generators.py`, which derives generated evaluation sets for the threat

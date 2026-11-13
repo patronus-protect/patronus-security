@@ -14,7 +14,15 @@ from pathlib import Path
 import numpy as np
 from calibrate_injection_l1 import JsonlScanner, normalized_text_hash, sha256_file
 
+# Attack classes that hold bounded threat rules; the scorer sees the candidates of all of them.
+RULE_CATEGORIES = ["unsafe_action", "exfiltration", "agent_config_tampering", "harmful_content"]
 CLASSES = ["instruction_override", "secrets_access", "tool_abuse", "harmful_behavior", "exfiltration_attempt", "toxic_or_harmful", "benign"]
+
+
+def threat_candidates(scanner, text):
+    """Matched bounded threat rules of ``text`` across the rule-bearing attack classes."""
+    return [rule for category in RULE_CATEGORIES for result in scanner.scan_category(category, text)
+            if result["model"] == "native:threat_l1" for rule in result["layers"][0]["details"]["matched_rules"]]
 
 
 def feature_vector(candidates, rule_ids):
@@ -22,7 +30,7 @@ def feature_vector(candidates, rule_ids):
     return [float(r in present) for r in rule_ids] + [
         math.log1p(len(present)),
         math.log1p(max((c["end_byte"] - c["start_byte"] for c in candidates), default=0)),
-        float(len({c["class_name"] for c in candidates})),
+        float(len({c["scorer_class"] for c in candidates})),
     ]
 
 
@@ -93,8 +101,7 @@ def main():
                             raise ValueError("conflicting labels for duplicate text")
                         excluded[split] += 1; continue
                     seen[key] = label
-                    result = scanner.scan_category("threat", row["text"])[0]
-                    candidates = result["layers"][0]["details"]["matched_rules"]
+                    candidates = threat_candidates(scanner, row["text"])
                     records.append(dict(id=f"{split}:{i}", split=split, label=label, text_hash=key,
                                         candidates=candidates, features=feature_vector(candidates, rule_ids)))
             print(f"Extracted {split}", flush=True)
@@ -110,8 +117,7 @@ def main():
                                 raise ValueError("conflicting regression label")
                             continue
                         seen[key] = int(not negative)
-                        result = scanner.scan_category("threat", text)[0]
-                        candidates = result["layers"][0]["details"]["matched_rules"]
+                        candidates = threat_candidates(scanner, text)
                         records.append(dict(id=f"regression:{row['rule_id']}:{lang}:{negative}", split="fit", label=int(not negative), text_hash=key,
                                             candidates=candidates, features=feature_vector(candidates, rule_ids)))
     finally:

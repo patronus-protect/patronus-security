@@ -132,6 +132,20 @@ fn result_head(result: &SecurityScanResult) -> &str {
     &result.category
 }
 
+/// Model heads that serve a pipeline of another name. Inside a unified run every head
+/// is named after its pipeline, so L2 candidates, the per-pipeline L3 policy (priority,
+/// early exit, clustering) and the model output agree.
+const RENAMED_HEADS: &[(&str, &str)] = &[("threat", "unsafe_action")];
+
+fn add_pipeline_heads(output: &mut UnifiedModelOutput) {
+    for &(model_head, pipeline) in RENAMED_HEADS {
+        if let Some(head) = output.heads.remove(model_head) {
+            output.heads.insert(pipeline.to_string(), head);
+        }
+    }
+    add_tool_property_heads(output);
+}
+
 fn add_tool_property_heads(output: &mut UnifiedModelOutput) {
     let Some(tags) = output.heads.get("tool_tags").cloned() else {
         return;
@@ -742,7 +756,7 @@ fn infer_unified_exact(
         .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
         .decode_raw(&raw)
         .map_err(|error| error.to_string())?;
-    add_tool_property_heads(&mut output);
+    add_pipeline_heads(&mut output);
     let mut similarity_heads = lookup.output.heads.clone();
     similarity_heads.extend(output.heads.iter().map(|(head, output)| {
         decision_output(
@@ -956,7 +970,7 @@ fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
             positive_class: "injection".to_string(),
             threshold: 0.93,
         }),
-        "threat" => {
+        "unsafe_action" => {
             Some(ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 })
         }
         "sensitive_document" | "tool_class" | "tool_action" | "routing" => {
@@ -968,7 +982,7 @@ fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
 
 fn unified_safe_class(head: &str) -> &'static str {
     match head {
-        "injection" | "threat" => "benign",
+        "injection" | "unsafe_action" => "benign",
         "tool_tags_source_sensitive" | "tool_tags_source_untrusted" | "tool_tags_sink_external" => {
             "absent"
         }
@@ -1704,7 +1718,7 @@ pub(super) fn aggregate_distributed_results(
             .collect::<HashSet<_>>();
         if !allowed_heads.is_empty() {
             let mut output = chunk.output.clone();
-            add_tool_property_heads(&mut output);
+            add_pipeline_heads(&mut output);
             chunk_outputs.push(UnifiedChunkOutput {
                 chunk_index: chunk.chunk_index,
                 output,
@@ -1963,7 +1977,7 @@ mod tests {
             output: UnifiedModelOutput {
                 heads: HashMap::from([
                     (
-                        "threat".to_string(),
+                        "unsafe_action".to_string(),
                         head_output("instruction_override", 0.98),
                     ),
                     ("tool_class".to_string(), head_output("database", 0.8)),
@@ -1977,9 +1991,9 @@ mod tests {
             planned_l3_chunks: 2,
             resolved_chunks: 1,
             total_effective_chunks: 2,
-            head_early_exits: HashSet::from(["threat".to_string()]),
-            resolved_chunks_by_head: HashMap::from([("threat".to_string(), 1)]),
-            total_chunks_by_head: HashMap::from([("threat".to_string(), 2)]),
+            head_early_exits: HashSet::from(["unsafe_action".to_string()]),
+            resolved_chunks_by_head: HashMap::from([("unsafe_action".to_string(), 1)]),
+            total_chunks_by_head: HashMap::from([("unsafe_action".to_string(), 2)]),
             cache_hits: 0,
             clustering: L3ClusteringStrategy::RankOnly,
             physical_job_id: 7,
@@ -1987,7 +2001,7 @@ mod tests {
             chunk_scores_by_head: HashMap::new(),
         };
         let subscribers = vec![
-            test_subscriber(2, "threat", 2),
+            test_subscriber(2, "unsafe_action", 2),
             test_subscriber(1, "tool_class", 8),
         ];
 
@@ -2026,7 +2040,7 @@ mod tests {
 
         let outputs = materialize_completed_unified_subscribers(subscribers, &run);
 
-        assert_eq!(outputs[0].0.category, "threat");
+        assert_eq!(outputs[0].0.category, "unsafe_action");
         assert_eq!(outputs[0].1.level, "L3");
         assert_eq!(outputs[0].1.class_name, "instruction_override");
         assert_eq!(outputs[1].0.category, "tool_class");
@@ -2297,6 +2311,35 @@ mod tests {
                 },
             )]),
         }
+    }
+
+    #[test]
+    fn threat_model_head_runs_under_the_unsafe_action_pipeline() {
+        // L2 candidates of `unsafe_action` name their pipeline; the unified run plans,
+        // aggregates and applies the L3 policy (priority, request-wide early exit) per head.
+        let mut output = UnifiedModelOutput {
+            heads: HashMap::from([(
+                "threat".to_string(),
+                UnifiedHeadOutput {
+                    class_name: "secrets_access".to_string(),
+                    confidence: 0.97,
+                    label_scores: Vec::new(),
+                },
+            )]),
+        };
+
+        add_pipeline_heads(&mut output);
+
+        let head = crate::SecurityCategory::UnsafeAction.as_str();
+        assert_eq!(output.heads.keys().collect::<Vec<_>>(), vec![head]);
+        let policy = crate::L3SchedulerPolicy::default();
+        assert_eq!(
+            policy.pipeline_policy(head, head).early_exit,
+            crate::L3PipelineEarlyExit::RequestWidePositive
+        );
+        assert!(priority_index(&policy, head, head) < policy.priority.len());
+        assert!(unified_head_aggregation(head).is_some());
+        assert_eq!(unified_safe_class(head), "benign");
     }
 
     #[test]

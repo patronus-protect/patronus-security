@@ -169,7 +169,7 @@ pub(crate) fn candidate_head_priority(candidate: &L3Candidate) -> usize {
         .as_str()
         .split(',')
         .map(str::trim)
-        .any(|item| item == "injection" || item == "threat");
+        .any(|item| item == "injection" || item == "unsafe_action");
     if has_request_wide_head && !is_request_wide_safe_l2_class(&candidate.l2_class) {
         0
     } else if has_request_wide_head {
@@ -681,7 +681,7 @@ mod tests {
             .collect::<Vec<_>>();
         let candidates = vec![
             candidate_with_pipeline(0, 100, 0.99, 0.5, "tool_class"),
-            candidate_with_pipeline(300, 400, 0.6, 0.5, "threat"),
+            candidate_with_pipeline(300, 400, 0.6, 0.5, "unsafe_action"),
         ];
 
         let selected =
@@ -708,7 +708,7 @@ mod tests {
                 400,
                 0.06,
                 0.05,
-                "threat",
+                "unsafe_action",
                 "instruction_override",
             ),
         ];

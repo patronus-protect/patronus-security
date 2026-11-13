@@ -2,7 +2,7 @@
 use super::NativeGates;
 use crate::detectors::NativeDetector;
 use crate::{
-    detectors::{dlp, injection::*, mcp, pii, NativeDetection},
+    detectors::{dlp, injection::*, mcp, pii, threat, NativeDetection},
     threat::NativeText,
     SecurityCategory,
 };
@@ -34,9 +34,37 @@ impl NativeProducerSpec {
             && self.rule.is_none_or(|id| gates.allows_rule(id))
     }
 
+    /// PII and DLP apply their mode inside the pipeline; the attack classes
+    /// share the score floor of their `<category>_mode` here.
     pub(super) fn detect(&self, text: &NativeText<'_>, gates: &NativeGates) -> NativeDetection {
-        (self.detect)(text, gates)
+        let detection = (self.detect)(text, gates);
+        match self.category {
+            SecurityCategory::Pii | SecurityCategory::Dlp => detection,
+            category => apply_score_floor(detection, gates.mode(category).min_score()),
+        }
     }
+}
+
+/// Drops evidence scoring below `min_score`; a detection left without evidence
+/// becomes `benign` with the complementary confidence.
+fn apply_score_floor(mut detection: NativeDetection, min_score: Option<f64>) -> NativeDetection {
+    let Some(min_score) = min_score else {
+        return detection;
+    };
+    if detection.evidence_spans.is_empty() {
+        return detection;
+    }
+    detection
+        .evidence_spans
+        .retain(|span| span.score >= min_score);
+    if detection.evidence_spans.is_empty() {
+        detection.result.class_name = "benign".into();
+        detection.result.confidence = 1.0 - detection.result.confidence;
+        if let Some(accepted) = detection.details.get_mut("accepted") {
+            *accepted = false.into();
+        }
+    }
+    detection
 }
 
 /// The PII pipeline, compiled once per process: every engine and gateway
@@ -50,6 +78,20 @@ fn pii_pipeline() -> &'static pii::pii::PiiPipeline {
 fn dlp_pipeline() -> &'static dlp::dlp::DlpPipeline {
     static PIPELINE: LazyLock<dlp::dlp::DlpPipeline> = LazyLock::new(dlp::dlp::DlpPipeline::new);
     &PIPELINE
+}
+
+/// The bounded attack-class rules of `category`, gated per rule by the rules map.
+fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCategory) {
+    static PIPELINE: LazyLock<threat::ThreatPipeline> = LazyLock::new(threat::ThreatPipeline::new);
+    specs.push(NativeProducerSpec {
+        category,
+        id: "native:threat_l1",
+        parent: None,
+        rule: None,
+        detect: Box::new(move |prepared, gates| {
+            PIPELINE.detect_prepared(prepared, category, |id| gates.allows_rule(id))
+        }),
+    });
 }
 
 /// Producers of one native category; see [`super::NATIVE_CATEGORIES`].
@@ -102,16 +144,19 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                 }),
             });
             add!(
+                mcp::mcp_policy::McpPolicyPipeline,
+                "native:mcp_policy",
+                None,
+                Some("dlp_mcp_policy")
+            );
+        }
+        SecurityCategory::UnsafeAction => {
+            add_threat_rules(&mut specs, category);
+            add!(
                 dlp::sensitive_material::SensitiveMaterialPipeline,
                 "native:sensitive_material",
                 None,
                 Some("dlp_sensitive_material")
-            );
-            add!(
-                dlp::secret_transfer::SecretTransferPipeline,
-                "native:secret_transfer",
-                None,
-                Some("dlp_secret_transfer")
             );
             add!(
                 mcp::mcp_runtime_risk::McpRuntimeRiskPipeline,
@@ -120,17 +165,23 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                 Some("dlp_mcp_runtime_risk")
             );
             add!(
-                mcp::mcp_policy::McpPolicyPipeline,
-                "native:mcp_policy",
-                None,
-                Some("dlp_mcp_policy")
-            );
-            add!(
                 dlp::destructive_operation::DestructiveOperationPipeline,
                 "native:destructive_operation",
                 None,
                 Some("dlp_destructive_operation")
             );
+        }
+        SecurityCategory::Exfiltration => {
+            add_threat_rules(&mut specs, category);
+            add!(
+                dlp::secret_transfer::SecretTransferPipeline,
+                "native:secret_transfer",
+                None,
+                Some("dlp_secret_transfer")
+            );
+        }
+        SecurityCategory::AgentConfigTampering | SecurityCategory::HarmfulContent => {
+            add_threat_rules(&mut specs, category);
         }
         SecurityCategory::Injection => {
             let pipeline = rule_catalog::InjectionRuleCatalogPipeline::new();

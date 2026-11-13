@@ -139,17 +139,36 @@ pub(super) fn classifier_model_configs_for_category(
             "PATRONUS_NTDB_ROUTING_DIR",
             "routing_current",
         ),
-        SecurityCategory::Threat => model_config(
-            execution,
-            category,
-            "unified-v3-threat",
-            "PATRONUS_NTDB_THREAT_DIR",
-            "threat_current",
-        ),
+        // The unified threat head; its labels map onto the attack classes in
+        // `patronus_ark_core::attack_classes`.
+        SecurityCategory::UnsafeAction => {
+            if execution.gates().native.allows_model("unified-v3-threat") {
+                vec![NtdbL2ModelConfig {
+                    category,
+                    model_id: "threat",
+                    public_model: "unified-v3-threat",
+                    asset_model: "unified-v3-threat",
+                    env_key: "PATRONUS_NTDB_THREAT_DIR",
+                    package_name: "threat_current",
+                    has_l3: true,
+                }]
+            } else {
+                Vec::new()
+            }
+        }
         SecurityCategory::Dlp
         | SecurityCategory::Pii
         | SecurityCategory::DynamicPii
-        | SecurityCategory::ShellCommand => Vec::new(),
+        | SecurityCategory::ShellCommand
+        | SecurityCategory::Jailbreak
+        | SecurityCategory::PromptExtraction
+        | SecurityCategory::ToolPoisoning
+        | SecurityCategory::AgentConfigTampering
+        | SecurityCategory::MemoryPoisoning
+        | SecurityCategory::Exfiltration
+        | SecurityCategory::ResourceExhaustion
+        | SecurityCategory::HarmfulContent
+        | SecurityCategory::ToxicLanguage => Vec::new(),
     }
 }
 
@@ -186,7 +205,7 @@ pub fn ntdb_l2_model_config_for_id(model_id: &str) -> Option<NtdbL2ModelConfig> 
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
     ]
     .into_iter()
     .flat_map(|category| ntdb_l2_model_configs_for_category(&execution, category))
@@ -386,6 +405,25 @@ pub fn ntdb_l2_scan_result(
         scan.decision = None;
     }
     scan
+}
+
+/// The public face of a threat-model result. The unified threat head runs under the
+/// `unsafe_action` pipeline; once its result is final, the predicted model label becomes
+/// its attack class in `category` and `class_name` (an `exfiltration_attempt` prediction
+/// is an `exfiltration` result). Layers and `label_scores` keep the raw model labels that
+/// calibrated arbitration and L3 decided on.
+pub(crate) fn publish_threat_model_result(result: &mut SecurityScanResult) {
+    if result.category != SecurityCategory::UnsafeAction.as_str() {
+        return;
+    }
+    if let Some(class) = result
+        .class_name
+        .split(',')
+        .find_map(patronus_ark_core::attack_classes::model_label_class)
+    {
+        result.category = class.category.as_str().to_string();
+        result.class_name = result.category.clone();
+    }
 }
 
 fn source_pipeline_for(category: &str, model_id: &str, aggregator_id: &str) -> String {
@@ -624,7 +662,7 @@ mod tests {
 
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",
@@ -642,6 +680,70 @@ mod tests {
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
         assert!(result.decision.is_none());
+    }
+
+    #[test]
+    fn threat_model_labels_are_published_as_their_attack_class() {
+        let decision = |label: &str| NtdbDecision {
+            model_id: "threat".to_string(),
+            aggregator_id: "test".to_string(),
+            task: "multiclass".to_string(),
+            labels: vec!["benign".to_string(), "exfiltration_attempt".to_string()],
+            fallback_label: label.to_string(),
+            fallback_confidence: 0.99,
+            route_to_l3: false,
+            promote_score: None,
+            promote_threshold: None,
+            class_scores: if label == "benign" {
+                vec![0.99, 0.01]
+            } else {
+                vec![0.01, 0.99]
+            },
+            class_logits: Vec::new(),
+            chunks: 1,
+            chunk_promote_scores: vec![None],
+            l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
+        };
+        let config = NtdbL2ModelConfig {
+            category: SecurityCategory::UnsafeAction,
+            model_id: "threat",
+            public_model: "unified-v3-threat",
+            asset_model: "unified-v3-threat",
+            env_key: "TEST",
+            package_name: "test",
+            has_l3: false,
+        };
+        let execution = ScanExecution::new(SecurityLevel::L2);
+
+        let mut result =
+            ntdb_l2_scan_result(config, &decision("exfiltration_attempt"), &execution, 1.0);
+        // Arbitration runs on the raw model label under the model's pipeline.
+        assert_eq!(result.category, "unsafe_action");
+        assert_eq!(result.class_name, "exfiltration_attempt");
+        publish_threat_model_result(&mut result);
+        assert_eq!(result.category, "exfiltration");
+        assert_eq!(result.class_name, "exfiltration");
+        assert!(result
+            .label_scores
+            .iter()
+            .any(|score| score.label == "exfiltration_attempt" && score.matched));
+
+        let mut benign = ntdb_l2_scan_result(config, &decision("benign"), &execution, 1.0);
+        publish_threat_model_result(&mut benign);
+        assert_eq!(
+            (benign.category.as_str(), benign.class_name.as_str()),
+            ("unsafe_action", "benign")
+        );
+
+        // Same label names outside the threat head's pipeline stay untouched.
+        let mut injection = benign.clone();
+        injection.category = "injection".to_string();
+        injection.class_name = "instruction_override".to_string();
+        publish_threat_model_result(&mut injection);
+        assert_eq!(injection.category, "injection");
+        assert_eq!(injection.class_name, "instruction_override");
     }
 
     #[test]
@@ -682,7 +784,7 @@ mod tests {
 
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",
@@ -741,7 +843,7 @@ mod tests {
         let execution = ScanExecution::new(SecurityLevel::L2);
         let result = ntdb_l2_scan_result(
             NtdbL2ModelConfig {
-                category: SecurityCategory::Threat,
+                category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
                 asset_model: "unified-v3-threat",

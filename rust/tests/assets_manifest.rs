@@ -109,7 +109,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
             "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
         ),
         (
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
             "f186c09846c325256a262babcd8558d4e5f93dc9",
         ),
     ] {
@@ -122,7 +122,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
             category,
             SecurityCategory::Injection
                 | SecurityCategory::SensitiveDocument
-                | SecurityCategory::Threat
+                | SecurityCategory::UnsafeAction
         ) {
             assert!(asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
         }
@@ -157,7 +157,7 @@ fn classifier_assets_use_the_public_hub_repositories() {
             "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
         ),
         (
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
             "patronus-studio/wolf-defender-threat-classifier",
             "patronus-studio/wolf-defender-threat-classifier",
             "f186c09846c325256a262babcd8558d4e5f93dc9",
@@ -189,7 +189,7 @@ fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
         UNIFIED_L3_ASSET,
         dedicated_l3_asset(SecurityCategory::Injection).unwrap(),
         dedicated_l3_asset(SecurityCategory::SensitiveDocument).unwrap(),
-        dedicated_l3_asset(SecurityCategory::Threat).unwrap(),
+        dedicated_l3_asset(SecurityCategory::UnsafeAction).unwrap(),
     ];
 
     assert!(migrated.iter().all(|asset| !asset.repo.ends_with("-edge")));
@@ -239,7 +239,7 @@ fn static_manifest_has_no_legacy_l2_file_assets() {
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
         SecurityCategory::Pii,
     ] {
         assert!(category_assets(category, SecurityLevel::L3)
@@ -283,7 +283,7 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             "l2_ntdb/routing_current",
         ),
         (
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
             "unified-v3-threat",
             "l2_ntdb/threat_current",
         ),
@@ -359,7 +359,7 @@ fn asset_manifest_has_unique_destination_paths_per_category() {
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();
@@ -382,7 +382,7 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
         SecurityCategory::ToolAction,
         SecurityCategory::ToolTags,
         SecurityCategory::Routing,
-        SecurityCategory::Threat,
+        SecurityCategory::UnsafeAction,
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();
@@ -479,7 +479,7 @@ mod asset_downloads {
             (SecurityCategory::ToolClass, "unified-v3-tool-class"),
             (SecurityCategory::ToolAction, "unified-v3-tool-action"),
             (SecurityCategory::Routing, "unified-v3-routing"),
-            (SecurityCategory::Threat, "unified-v3-threat"),
+            (SecurityCategory::UnsafeAction, "unified-v3-threat"),
         ] {
             let assets = ntdb_l2_package_assets(category, SecurityLevel::L2);
             assert_eq!(assets.len(), 1);

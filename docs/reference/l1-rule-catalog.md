@@ -577,17 +577,17 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_marking_tlp` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
 | `dlp_marking_nato_eu` | `dlp.document.classification_marking` | – | – | `format` | `ark` | no | on | 40 | none | 0.55 |
 
-## DLP relationship rules (5)
+## Relationship rules (5)
 
-These rules use the shared source-bound component contract and emit finding spans. Their evidence includes action/target relations or MCP tool/argument components.
+These rules use the shared source-bound component contract and emit finding spans. Their evidence includes action/target relations or MCP tool/argument components. They keep their `dlp_` rule IDs but report under the category shown.
 
-| Rule ID | Model gate | Default |
-| --- | --- | --- |
-| `dlp_sensitive_material` | `native:sensitive_material` | on |
-| `dlp_secret_transfer` | `native:secret_transfer` | on |
-| `dlp_mcp_runtime_risk` | `native:mcp_runtime_risk` | off |
-| `dlp_mcp_policy` | `native:mcp_policy` | off |
-| `dlp_destructive_operation` | `native:destructive_operation` | off |
+| Rule ID | Model gate | Category | Default |
+| --- | --- | --- | --- |
+| `dlp_sensitive_material` | `native:sensitive_material` | `unsafe_action` | on |
+| `dlp_secret_transfer` | `native:secret_transfer` | `exfiltration` | on |
+| `dlp_mcp_runtime_risk` | `native:mcp_runtime_risk` | `unsafe_action` | off |
+| `dlp_mcp_policy` | `native:mcp_policy` | `dlp` | off |
+| `dlp_destructive_operation` | `native:destructive_operation` | `unsafe_action` | off |
 
 ## Injection rules (57)
 
@@ -655,50 +655,50 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 
 ## Threat rules (40)
 
-Enabled by default when Threat L1 is configured. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
+Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
-| Rule ID | Threat class | SkillSpector reference groups |
-| --- | --- | --- |
-| `ark.threat.remote_execution` | `tool_abuse` | SC2, TM2 |
-| `ark.threat.remote_execution_instruction` | `tool_abuse` | SC2, TM2 |
-| `ark.threat.decoded_execution` | `tool_abuse` | SC3 |
-| `ark.threat.decoded_shell_execution` | `tool_abuse` | SC3, TM2 |
-| `ark.threat.credential_harvesting` | `secrets_access` | PE3, AS1, E3 |
-| `ark.threat.credential_file_access` | `secrets_access` | PE3, AS1 |
-| `ark.threat.secret_exfiltration` | `exfiltration_attempt` | E1, E3, E5 |
-| `ark.threat.credential_file_upload` | `exfiltration_attempt` | E3, E5 |
-| `ark.threat.environment_exfiltration` | `exfiltration_attempt` | E2 |
-| `ark.threat.docker_socket` | `tool_abuse` | PE4 |
-| `ark.threat.privileged_container` | `tool_abuse` | PE5, TM4 |
-| `ark.threat.persistence_payload` | `harmful_behavior` | RA2 |
-| `ark.threat.agent_guard_removal` | `harmful_behavior` | RA1, AS1 |
-| `ark.threat.security_disable` | `tool_abuse` | TM3, SC7 |
-| `ark.threat.untrusted_deserialization` | `tool_abuse` | DS1, DS2, DS3, AST10 |
-| `ark.threat.untrusted_output_execution` | `tool_abuse` | OH1, OH2 |
-| `ark.threat.ssrf_metadata` | `secrets_access` | SSRF1 |
-| `ark.threat.session_exfiltration` | `exfiltration_attempt` | E4, P3 |
-| `ark.threat.environment_post` | `exfiltration_attempt` | E2 |
-| `ark.threat.agent_config_exfiltration` | `exfiltration_attempt` | AS1, AS2, AS3 |
-| `ark.threat.kubernetes_privileged_json` | `tool_abuse` | TM4, PE5 |
-| `ark.threat.kubernetes_privileged_yaml` | `tool_abuse` | TM4, PE5 |
-| `ark.threat.unsafe_tls_code` | `tool_abuse` | TM3, SC7 |
-| `ark.threat.unsafe_shell_input` | `tool_abuse` | TM1 |
-| `ark.threat.dynamic_ssrf` | `tool_abuse` | SSRF3, TT |
-| `ark.threat.unauthorized_autonomy` | `tool_abuse` | EA2, EA3 |
-| `ark.threat.harmful_intent` | `harmful_behavior` | P5 |
-| `ark.threat.secret_source_transfer` | `exfiltration_attempt` | E3, E5 |
-| `ark.threat.ua_credential_store_access` | `secrets_access` | PE3, AS1 |
-| `ark.threat.ua_metadata_fetch` | `secrets_access` | SSRF1 |
-| `ark.threat.ua_destructive_request` | `tool_abuse` | RA1 |
-| `ark.threat.ua_security_control_disable` | `tool_abuse` | TM3, SC7 |
-| `ark.threat.ua_fetch_and_run` | `tool_abuse` | SC2, TM2 |
-| `ark.threat.ua_runtime_socket_mount` | `tool_abuse` | PE4 |
-| `ark.threat.ua_host_root_mount_config` | `tool_abuse` | PE5, TM4 |
-| `ark.threat.ua_compose_privileged` | `tool_abuse` | PE5, TM4 |
-| `ark.threat.ua_privilege_widening` | `tool_abuse` | PE5 |
-| `ark.threat.ua_persistence` | `harmful_behavior` | RA2 |
-| `ark.threat.ua_untrusted_deserialization` | `tool_abuse` | DS1, DS2 |
-| `ark.threat.ua_unsafe_tls_client` | `tool_abuse` | TM3, SC7 |
+| Rule ID | Category | Family | SkillSpector reference groups |
+| --- | --- | --- | --- |
+| `ark.threat.remote_execution` | `unsafe_action` | `handoff_shell` | SC2, TM2 |
+| `ark.threat.remote_execution_instruction` | `unsafe_action` | `fetch_and_run` | SC2, TM2 |
+| `ark.threat.decoded_execution` | `unsafe_action` | `unsafe_code` | SC3 |
+| `ark.threat.decoded_shell_execution` | `unsafe_action` | `handoff_shell` | SC3, TM2 |
+| `ark.threat.credential_harvesting` | `unsafe_action` | `credential_access` | PE3, AS1, E3 |
+| `ark.threat.credential_file_access` | `unsafe_action` | `credential_access` | PE3, AS1 |
+| `ark.threat.secret_exfiltration` | `exfiltration` | `secret_to_sink` | E1, E3, E5 |
+| `ark.threat.credential_file_upload` | `exfiltration` | `handoff_shell` | E3, E5 |
+| `ark.threat.environment_exfiltration` | `exfiltration` | `handoff_shell` | E2 |
+| `ark.threat.docker_socket` | `unsafe_action` | `handoff_shell` | PE4 |
+| `ark.threat.privileged_container` | `unsafe_action` | `handoff_shell` | PE5, TM4 |
+| `ark.threat.persistence_payload` | `unsafe_action` | `persistence` | RA2 |
+| `ark.threat.agent_guard_removal` | `agent_config_tampering` | `guard_removal` | RA1, AS1 |
+| `ark.threat.security_disable` | `unsafe_action` | `security_disable` | TM3, SC7 |
+| `ark.threat.untrusted_deserialization` | `unsafe_action` | `unsafe_code` | DS1, DS2, DS3, AST10 |
+| `ark.threat.untrusted_output_execution` | `unsafe_action` | `unsafe_code` | OH1, OH2 |
+| `ark.threat.ssrf_metadata` | `unsafe_action` | `metadata_ssrf` | SSRF1 |
+| `ark.threat.session_exfiltration` | `exfiltration` | `send_directive` | E4, P3 |
+| `ark.threat.environment_post` | `exfiltration` | `secret_to_sink` | E2 |
+| `ark.threat.agent_config_exfiltration` | `exfiltration` | `send_directive` | AS1, AS2, AS3 |
+| `ark.threat.kubernetes_privileged_json` | `unsafe_action` | `container_escape_config` | TM4, PE5 |
+| `ark.threat.kubernetes_privileged_yaml` | `unsafe_action` | `container_escape_config` | TM4, PE5 |
+| `ark.threat.unsafe_tls_code` | `unsafe_action` | `unsafe_code` | TM3, SC7 |
+| `ark.threat.unsafe_shell_input` | `unsafe_action` | `unsafe_code` | TM1 |
+| `ark.threat.dynamic_ssrf` | `unsafe_action` | `metadata_ssrf` | SSRF3, TT |
+| `ark.threat.unauthorized_autonomy` | `unsafe_action` | `unattended` | EA2, EA3 |
+| `ark.threat.harmful_intent` | `harmful_content` | `howto_hazard` | P5 |
+| `ark.threat.secret_source_transfer` | `exfiltration` | `secret_to_sink` | E3, E5 |
+| `ark.threat.ua_credential_store_access` | `unsafe_action` | `credential_access` | PE3, AS1 |
+| `ark.threat.ua_metadata_fetch` | `unsafe_action` | `metadata_ssrf` | SSRF1 |
+| `ark.threat.ua_destructive_request` | `unsafe_action` | `destructive_request` | RA1 |
+| `ark.threat.ua_security_control_disable` | `unsafe_action` | `security_disable` | TM3, SC7 |
+| `ark.threat.ua_fetch_and_run` | `unsafe_action` | `fetch_and_run` | SC2, TM2 |
+| `ark.threat.ua_runtime_socket_mount` | `unsafe_action` | `container_escape_config` | PE4 |
+| `ark.threat.ua_host_root_mount_config` | `unsafe_action` | `container_escape_config` | PE5, TM4 |
+| `ark.threat.ua_compose_privileged` | `unsafe_action` | `container_escape_config` | PE5, TM4 |
+| `ark.threat.ua_privilege_widening` | `unsafe_action` | `privilege_widening` | PE5 |
+| `ark.threat.ua_persistence` | `unsafe_action` | `persistence` | RA2 |
+| `ark.threat.ua_untrusted_deserialization` | `unsafe_action` | `unsafe_code` | DS1, DS2 |
+| `ark.threat.ua_unsafe_tls_client` | `unsafe_action` | `unsafe_code` | TM3, SC7 |
 
 ## Shell command policies (117) { #shell-command-policies }
 

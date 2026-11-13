@@ -7,10 +7,10 @@ you scan what matters without paying for what you don't.
 
 | Use case | Suggested categories |
 | --- | --- |
-| Prompt firewall (block injections) | `injection`, `threat` |
+| Prompt firewall (block injections) | `injection`, `jailbreak`, `prompt_extraction` |
 | DLP / leak prevention | `dlp`, `pii`, `sensitive_document` |
 | Open-vocabulary PII extraction | `dynamic-pii` (+ `pii` for validated identifiers) |
-| Agent tool-use guard | `injection`, `tool_class`, `tool_action`, `tool_tags` |
+| Agent tool-use guard | `injection`, `tool_poisoning`, `unsafe_action`, `exfiltration`, `tool_class`, `tool_action`, `tool_tags` |
 | Request router | `routing` |
 | Shell / Bash tool guard (caller passes the command) | `shell_command` |
 
@@ -31,10 +31,10 @@ for what each one classifies and which layers back it.
 
     ```python
     scanner = SecurityGateway(
-        categories=["injection", "threat"],
+        categories=["injection", "unsafe_action"],
         max_level="l2",          # learned classifiers, no L3
         download_files=True,
-        download_categories=["injection", "threat"],
+        download_categories=["injection", "unsafe_action"],
     )
     scanner.warmup()
     ```
@@ -45,11 +45,11 @@ for what each one classifies and which layers back it.
     use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
     let mut scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection, SecurityCategory::Threat],
+        vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
         SecurityLevel::L2,       // learned classifiers, no L3
         None,
         true,                    // download_files
-        Some(vec![SecurityCategory::Injection, SecurityCategory::Threat]),
+        Some(vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction]),
     );
     scanner.warmup().expect("warmup");
     ```
@@ -87,7 +87,8 @@ How the default profile compares with gitleaks, TruffleHog and detect-secrets is
 ## Consider the offline implications
 
 - `pii`, `dlp` → native L1, no assets ever.
-- `injection`, `threat` → native L1 works without assets; L2/L3 need assets.
+- `injection`, `unsafe_action` → native L1 works without assets; L2/L3 need assets.
+- the other attack classes (`jailbreak`, `exfiltration`, …) → native L1 only, no assets.
 - `sensitive_document`, `tool_*`, `routing` → **model-only**; with no cached assets they produce
   no verdict.
 - `dynamic-pii` → **L3-only**; needs its GLiNER bundle or it cannot run.

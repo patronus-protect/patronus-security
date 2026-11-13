@@ -4,7 +4,7 @@ use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLe
 use std::io::{self, BufRead};
 fn main() {
     let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection, SecurityCategory::Threat],
+        vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
         SecurityLevel::L1,
         None,
         false,
@@ -15,7 +15,7 @@ fn main() {
             serde_json::from_str(&line.expect("stdin")).expect("JSON input");
         let category = match input["category"].as_str().expect("category") {
             "injection" => SecurityCategory::Injection,
-            "threat" => SecurityCategory::Threat,
+            "threat" => SecurityCategory::UnsafeAction,
             _ => panic!("unsupported calibration category"),
         };
         let results = gateway.scan_category(category, input["text"].as_str().expect("text"));

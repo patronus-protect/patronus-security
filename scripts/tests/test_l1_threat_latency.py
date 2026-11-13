@@ -188,7 +188,8 @@ def test_prepare_refuses_a_source_off_its_pin_and_too_few_windows(tmp_path, monk
 def test_profiles_name_categories_the_gateway_parses():
     names = set(re.findall(r'"([a-z_-]+)" (?:\|[^=]*)?=> Ok\(SecurityCategory::',
                            (ROOT / "ark-core" / "src" / "types.rs").read_text(encoding="utf-8")))
-    assert {"threat", "injection"} <= names
+    assert {"unsafe_action", "injection"} <= names
+    assert "threat" not in names
     for categories in MODULE.PROFILES.values():
         assert set(categories) <= names
     assert set(MODULE.PROFILES["threat"]) | set(MODULE.PROFILES["injection"]) <= set(MODULE.PROFILES["all"])
@@ -265,4 +266,4 @@ def test_compare_limits_the_verdict_to_the_given_profile(tmp_path):
 def test_markdown_names_corpus_and_profiles():
     text = MODULE.markdown(report({"threat": 2.0, "injection": 1.0, "all": 8.0}))
     assert "50 distinct windows of 102400 bytes" in text
-    assert "| all | injection, dlp, pii, threat, shell_command |" in text
+    assert f"| all | injection, dlp, pii, {', '.join(MODULE.THREAT_CATEGORIES)}, shell_command |" in text

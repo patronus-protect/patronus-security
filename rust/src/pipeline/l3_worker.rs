@@ -1166,7 +1166,7 @@ pub(super) fn request_wide_early_exit(result: &SecurityScanResult) -> Option<Str
     if result.level != SecurityLevel::L3.as_str() {
         return None;
     }
-    if result.category != "injection" && result.category != "threat" {
+    if result.category != "injection" && result.category != "unsafe_action" {
         return None;
     }
     let class = result.class_name.as_str();

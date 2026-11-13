@@ -866,6 +866,8 @@ fn threshold_for(
 fn pipeline_key(pipeline: &str) -> &str {
     match pipeline {
         "sensitive_document" => "sensitive_docs",
+        // The unified threat head reports under `unsafe_action`.
+        "unsafe_action" => "threat",
         other => other,
     }
 }

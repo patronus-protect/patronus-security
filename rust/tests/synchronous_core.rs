@@ -47,11 +47,7 @@ fn assert_native_parity(direct: &[NativeResult], queued: &[patronus_ark::Securit
 fn core_preserves_gateway_native_decisions_and_source_evidence() {
     let mut core = Scanner::new(ScannerConfig::default()).unwrap();
     let gateway = SecurityGateway::with_max_level(
-        vec![
-            SecurityCategory::Pii,
-            SecurityCategory::Dlp,
-            SecurityCategory::Injection,
-        ],
+        SecurityCategory::DEFAULT_ACTIVE.to_vec(),
         SecurityLevel::L1,
         None,
         false,
@@ -148,11 +144,7 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
     policies.push(rules);
 
     let gateway = SecurityGateway::with_max_level(
-        vec![
-            SecurityCategory::Pii,
-            SecurityCategory::Dlp,
-            SecurityCategory::Injection,
-        ],
+        SecurityCategory::DEFAULT_ACTIVE.to_vec(),
         SecurityLevel::L1,
         None,
         false,

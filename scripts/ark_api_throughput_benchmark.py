@@ -21,7 +21,7 @@ from ark_api_profile import execution_gates
 
 MIB = 1024 * 1024
 UNIFIED_MODEL = "unified-multitask-model-augmented-v3"
-THROUGHPUT_CATEGORIES = ["injection", "dlp", "threat"]
+THROUGHPUT_CATEGORIES = ["injection", "dlp", "unsafe_action"]
 BENCHMARK_RUN_MARKER = "0123456789abcdef0123456789abcdef"
 VALIDATION_CASES = [
     # One non-promoted hard benign spike, followed by 11 promoted validation

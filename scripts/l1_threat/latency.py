@@ -75,10 +75,15 @@ MIN_WINDOWS = 50
 MAX_WINDOWS = 64
 MIN_PARAGRAPH_CHARS = 40
 # Profile -> categories scanned in one request. ``all`` is every category with an L1 stage.
+# ``threat`` is every attack class besides injection.
+THREAT_CATEGORIES = (
+    "jailbreak", "prompt_extraction", "tool_poisoning", "agent_config_tampering", "memory_poisoning",
+    "exfiltration", "unsafe_action", "resource_exhaustion", "harmful_content", "toxic_language",
+)
 PROFILES: dict[str, tuple[str, ...]] = {
-    "threat": ("threat",),
+    "threat": THREAT_CATEGORIES,
     "injection": ("injection",),
-    "all": ("injection", "dlp", "pii", "threat", "shell_command"),
+    "all": ("injection", "dlp", "pii", *THREAT_CATEGORIES, "shell_command"),
 }
 SAMPLES_PER_WINDOW = 5
 WARMUP_PER_WINDOW = 1

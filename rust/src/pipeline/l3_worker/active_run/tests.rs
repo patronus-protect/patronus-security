@@ -44,7 +44,7 @@ fn early_exit_cancels_only_eligible_runs_and_rejects_late_registration() {
         ScanControl::default(),
     )
     .unwrap();
-    requests.cancel_early_exit_runs("request", "threat:attack:0.9900");
+    requests.cancel_early_exit_runs("request", "unsafe_action:attack:0.9900");
     assert!(matches!(
         eligible.control().check(),
         Err(ScanError::Cancelled)
@@ -52,7 +52,7 @@ fn early_exit_cancels_only_eligible_runs_and_rejects_late_registration() {
     direct.control().check().unwrap();
     assert_eq!(
         eligible.early_exit_reason().as_deref(),
-        Some("threat:attack:0.9900")
+        Some("unsafe_action:attack:0.9900")
     );
     assert!(matches!(
         ActiveRunGuard::register(
@@ -265,7 +265,7 @@ fn request_early_exit_terminates_active_onnx_and_preserves_terminal_lifecycle() 
         &worker,
         2,
         "request".into(),
-        test_result("threat", "attack", 0.99, "L3"),
+        test_result("unsafe_action", "attack", 0.99, "L3"),
     );
     let result = rx
         .recv_timeout(Duration::from_secs(3))

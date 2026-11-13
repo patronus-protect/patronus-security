@@ -135,7 +135,11 @@ scanner.set_execution_gates({
 - `rules` — per-L1-rule on/off. Missing IDs inherit shared defaults. PII patterns use stable `pii_*`
   IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
-  `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
+  `dlp_destructive_operation` (the IDs keep their `dlp_` prefix although `sensitive_material`,
+  `mcp_runtime_risk` and `destructive_operation` report under `unsafe_action` and
+  `secret_transfer` under `exfiltration`). Injection uses the `ark.injection.*` IDs returned in
+  evidence; the bounded threat rules use `ark.threat.*` IDs and run under their attack-class
+  category.
   The `shell_command` (Cat) policy IDs (`core.*`, bundle-default IDs such as `CMD-PIPE-CURL`, your
   `user.*` IDs) are rules too, on unless gated off (see
   [Turn Cat policies on and off](../how-to/check-shell-commands.md#turn-cat-policies-on-and-off)).
@@ -148,6 +152,12 @@ scanner.set_execution_gates({
 - `dlp_mode` — native DLP output mode: `strict` (default; every finding scores `1.0`),
   `balanced` or `recall` (model scores with the PII thresholds 0.50 and 0.30). See
   [DLP score and modes](result-schema.md#dlp-score-and-modes).
+- `<category>_mode` — output mode of each attack class (`injection_mode`, `jailbreak_mode`,
+  `prompt_extraction_mode`, `tool_poisoning_mode`, `agent_config_tampering_mode`,
+  `memory_poisoning_mode`, `exfiltration_mode`, `unsafe_action_mode`, `resource_exhaustion_mode`,
+  `harmful_content_mode`, `toxic_language_mode`): `strict` (default; the producers' own
+  acceptance), `balanced` or `recall` (native evidence scoring below 0.50 or 0.30 is dropped). See
+  [Attack-class categories](result-schema.md#attack-class-categories).
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.
@@ -341,10 +351,10 @@ that pipeline's scope explicitly:
 - `disabled`: do not stop from a stable head decision.
 - `head_stable`: stop only the current head when its result can no longer change.
 - `request_wide_positive`: a thresholded positive result stops lower-priority heads for the
-  request. This is the default behavior for Injection and Threat.
+  request. This is the default behavior for `injection` and `unsafe_action`.
 
 Independently of the per-pipeline `early_exit` scope above, a fixed cross-pipeline guard cancels
-the rest of a request's queued (or coalesced) L3 jobs once any Injection or Threat result crosses
+the rest of a request's queued (or coalesced) L3 jobs once any `injection` or `unsafe_action` result crosses
 `0.93` confidence on a non-safe class. That threshold is not configurable.
 Eligible dedicated Wolf jobs that are already running are now signalled through
 Core cancellation and return the same policy skip result as queued jobs. This
@@ -545,7 +555,7 @@ contextual label group that the final source result rejects.
 | `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection`. |
 | `PATRONUS_NTDB_ROUTING_DIR` | — | Local NTDB override for `routing`. |
 | `PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR` | — | Local NTDB override for `sensitive_document`. |
-| `PATRONUS_NTDB_THREAT_DIR` | — | Local NTDB override for `threat`. |
+| `PATRONUS_NTDB_THREAT_DIR` | — | Local NTDB override for the threat model (`unsafe_action`). |
 | `PATRONUS_NTDB_TOOL_CLASS_DIR` | — | Local NTDB override for `tool_class`. |
 | `PATRONUS_NTDB_TOOL_ACTION_DIR` | — | Local NTDB override for `tool_action`. |
 | `PATRONUS_NTDB_TOOL_TAGS_DIR` | — | Local NTDB override for `tool_tags`. |

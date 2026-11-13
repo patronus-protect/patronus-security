@@ -56,7 +56,7 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 | ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_sensitive` | `l2_ntdb/tool_tags_source_sensitive_current` |
 | ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_untrusted` | `l2_ntdb/tool_tags_source_untrusted_current` |
 | Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `3e997999c05a3a8be8ea6b3e23dd97126ca10d70` | `l2` | `l2_ntdb/routing_current` |
-| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `ef87add2834a1a257754fbf9d7ba69df48aea733` | `l2` | `l2_ntdb/threat_current` |
+| UnsafeAction | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `ef87add2834a1a257754fbf9d7ba69df48aea733` | `l2` | `l2_ntdb/threat_current` |
 
 ## Download Size Snapshot
 
@@ -75,7 +75,16 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `tool_action` | 0 B | 0 B | 0 B | none |
 | `tool_tags` | 0 B | 0 B | 0 B | none |
 | `routing` | 0 B | 0 B | 0 B | none |
-| `threat` | 0 B | 0 B | 0 B | none |
+| `jailbreak` | 0 B | 0 B | 0 B | none |
+| `prompt_extraction` | 0 B | 0 B | 0 B | none |
+| `tool_poisoning` | 0 B | 0 B | 0 B | none |
+| `agent_config_tampering` | 0 B | 0 B | 0 B | none |
+| `memory_poisoning` | 0 B | 0 B | 0 B | none |
+| `exfiltration` | 0 B | 0 B | 0 B | none |
+| `unsafe_action` | 0 B | 0 B | 0 B | none |
+| `resource_exhaustion` | 0 B | 0 B | 0 B | none |
+| `harmful_content` | 0 B | 0 B | 0 B | none |
+| `toxic_language` | 0 B | 0 B | 0 B | none |
 | `shell_command` | 4.4 MiB | 4.4 MiB | 4.4 MiB | patronus-studio/cat-shell-risk-commander |
 
 ## Manifest Detail
