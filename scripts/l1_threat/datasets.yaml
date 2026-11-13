@@ -23,6 +23,10 @@
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
 #               field matches every row; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
+#   keep        cue filters [{label, pattern, reason}]: a row carrying the upstream `label` is kept only
+#               when the case-insensitive regex `pattern` finds a cue in its text; the others are dropped
+#               and counted in the manifest (dropped.no_cue). For upstream labels that mark rows without
+#               the attack in their text; `reason` names why.
 #   cap         keep at most this many rows (default and upper bound: sampling.max_rows); sampled per
 #               stratum (benign, classes, language) with the sampling seed, see prepare_corpora.py
 #
@@ -32,7 +36,8 @@ schema: ark-l1-threat-datasets-v1
 
 # Corpus generation: raising it re-freezes every prepared split on the next run (row caps, new sets).
 # 3: Tensor Trust extraction benchmark joins the holdout registry.
-generation: 3
+# 4: cue filters (keep) in the SPML and Mosscap recipes, TextDetox-DE and AILuminate demo report-only.
+generation: 4
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -184,6 +189,13 @@ datasets:
     labels:
       - {field: Prompt injection, equals: "1", label: "Prompt injection = 1"}
       - {field: Prompt injection, equals: "0", label: "Prompt injection = 0"}
+    keep:
+      - label: "Prompt injection = 1"
+        reason: >-
+          upstream marks a row as an attack when the chatbot's system prompt was altered, so many attack rows are a
+          system prompt plus an ordinary on-topic question; only rows with an override or role-change cue are kept
+        pattern: >-
+          \b(?:ignore|disregard|forget|override|bypass|abandon|set aside|put aside|drop|skip)\b[^.!?\n]{0,60}\b(?:instructions?|rules?|guidelines?|programming|restrictions?|directives?|prompt|role|purpose|focus|constraints?|limitations?|boundaries|protocols?|policy|policies)\b|\bpretend\b|\byou are now\b|\bfrom now on\b|\b(?:new|updated|different) (?:instructions|rules|role|persona)\b|\bsystem prompt\b|\bdeveloper mode\b|\bjailbreak|\bno longer (?:bound|restricted|limited|an?)\b|\bwithout (?:any )?(?:restrictions|limitations|filters|rules)\b|\b(?:stray|step|break) (?:away from|outside|out of|free from)\b|\bdeviate from\b|\bbreak (?:character|your rules)\b|\b(?:reveal|show|tell me|print|repeat)\b[^.!?\n]{0,30}\b(?:instructions|prompt|code|password|secret)\b
   - id: gentel
     commercial: unknown
     pending: recipe not written yet
@@ -209,6 +221,13 @@ datasets:
     language: en
     labels:
       - {label: "every prompt (password game)"}
+    keep:
+      - label: "every prompt (password game)"
+        reason: >-
+          every prompt of the password game is labelled, including greetings, unrelated questions and game moves that
+          only mean extraction inside the game; only prompts that name the secret or the hidden instructions are kept
+        pattern: >-
+          \b(?:pass ?words?|passwor[dt]\w*|passphrase|secrets?|code ?words?|magic word|hidden word|(?:system|initial|original|hidden) (?:prompt|instructions?)|your (?:instructions|prompt|rules))\b
   - id: satml_ctf
     commercial: unknown
     pending: recipe not written yet

@@ -76,7 +76,7 @@ def test_template_families_are_split_disjoint():
 
 def test_class_templates_cover_the_classes_without_public_dev_data(roots):
     dev, holdout = roots
-    assert set(MODULE.CLASS_TEMPLATES) == {"tool_poisoning", "agent_config_tampering", "memory_poisoning", "unsafe_action", "resource_exhaustion"}
+    assert set(MODULE.CLASS_TEMPLATES) == {"jailbreak", "tool_poisoning", "agent_config_tampering", "memory_poisoning", "unsafe_action", "resource_exhaustion"}
     assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
     for root, split in ((dev, "dev"), (holdout, "holdout")):
         rows = generated(root / "generated")["class_templates"]

@@ -97,7 +97,9 @@ Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 [`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
 Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
 `parquet` mit UTF-8- und einfachen Ganzzahl-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
-→ Upstream-Label der Entity-Map), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
+→ Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
+wenn der Regex `pattern` ohne Groß-/Kleinschreibung im Text trifft; `reason` nennt den Grund, das Manifest zählt
+die übrigen unter `dropped.no_cue`), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
 `report_only`) und `training: false` für reine Auswertungssätze (MCPTox, AgentHarm). Lizenz, Split,
 Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Rolle wird abgeleitet:
 `decisive` (Holdout, Familie `neutral`/`ark_blind`), `dev` (`train_dev`), sonst `report`; `commercial: false`
@@ -193,7 +195,7 @@ sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
 - `obfuscation_slices`: Angriffs- und Benign-Zeilen unter je einer Verschleierung (`base64`, `hex`,
   `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`;
 - `class_templates`: dokumentierte synthetische Angriffe für die Klassen ohne öffentliche Dev-Daten
-  (`tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
+  (`jailbreak`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
   `resource_exhaustion`), DE und EN nativ. Jede Template-Familie hat die Form öffentlicher Beispiele, die
   `modelled_on` nennt (Paper, Advisories, MCPTox-Muster), und einen harmlosen Doppelgänger im selben
   Rahmen; nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.

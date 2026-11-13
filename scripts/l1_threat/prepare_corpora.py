@@ -96,7 +96,8 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap"}
+OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep"}
+KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "at_least", "below")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -198,7 +199,29 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
         return problems + [f"{where}: labels must be a non-empty list"]
     for index, rule in enumerate(rules):
         problems.extend(_check_rule(f"{where} labels[{index}]", rule, labels))
+    for index, keep in enumerate(entry.get("keep") or []):
+        problems.extend(_check_keep(f"{where} keep[{index}]", keep, labels))
     return problems
+
+
+def _check_keep(where: str, keep: Any, labels: set[str]) -> list[str]:
+    if not isinstance(keep, dict) or set(keep) != KEEP_KEYS:
+        return [f"{where}: needs exactly {sorted(KEEP_KEYS)}"]
+    problems = []
+    if keep["label"] not in labels:
+        problems.append(f"{where}: label {keep['label']!r} is not a label of the set in entity_map.yaml")
+    if not str(keep["reason"] or "").strip():
+        problems.append(f"{where}: reason must name why rows without the cue are dropped")
+    try:
+        re.compile(str(keep["pattern"]))
+    except re.error as error:
+        problems.append(f"{where}: pattern does not compile ({error})")
+    return problems
+
+
+def keep_filters(entry: dict[str, Any]) -> list[tuple[str, re.Pattern[str]]]:
+    """(upstream label, cue) of the recipe's ``keep`` rules: a row with that label needs the cue."""
+    return [(keep["label"], re.compile(keep["pattern"], re.IGNORECASE)) for keep in entry.get("keep") or []]
 
 
 def _positive(value: Any) -> bool:
@@ -476,6 +499,7 @@ def load_set(
     index = Deduper(dedup)
     rows: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
+    filters = keep_filters(entry)
     for number, record in enumerate(read_records(entry, root)):
         text = _field(record, entry["text"])
         if not isinstance(text, str) or not text.strip():
@@ -484,6 +508,9 @@ def load_set(
         outcome = map_labels(entry, dataset, record)
         if outcome is None:
             dropped["out_of_scope"] += 1
+            continue
+        if any(label in outcome["labels"] and not cue.search(text) for label, cue in filters):
+            dropped["no_cue"] += 1
             continue
         kind, matched, signature = index.match(text)
         if kind is not None:
