@@ -31,7 +31,8 @@
 schema: ark-l1-threat-datasets-v1
 
 # Corpus generation: raising it re-freezes every prepared split on the next run (row caps, new sets).
-generation: 2
+# 3: Tensor Trust extraction benchmark joins the holdout registry.
+generation: 3
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -59,6 +60,10 @@ datasets:
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: cyberseceval_pi
     commercial: true
+    pending: recipe pinned by the holdout setup outside the runner (--overlay)
+  - id: tensortrust_extraction
+    commercial: unknown
+    training: false
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: trustairlab_jailbreak
     commercial: true
