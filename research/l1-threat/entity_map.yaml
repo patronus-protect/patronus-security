@@ -381,6 +381,7 @@ datasets:
     labels:
       - {label: "prompter message, not flagged", benign: true}
       - {label: "prompter message with toxicity / spam review flags", out_of_scope: "unreviewed moderation flag, neither gold nor benign"}
+      - {label: "assistant message (model reply)", out_of_scope: "replies are not inputs; L1 scans inputs only (taxonomy v1)"}
   - id: wildchat_de
     name: WildChat-1M, German first turns
     source: hf:allenai/WildChat-1M (language German, turn 1)
