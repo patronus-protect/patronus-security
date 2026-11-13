@@ -54,7 +54,7 @@ in a single inference:
 
 ```python
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_document", "threat", "routing"],
+    categories=["injection", "sensitive_document", "unsafe_action", "routing"],
     max_level="l3",
     l3_strategy="multi",     # one inference vs. one per category
 )

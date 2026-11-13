@@ -519,7 +519,7 @@ class PublicApiTests(unittest.TestCase):
     def test_result_to_dict_decodes_decision_json(self):
         result = SimpleNamespace(
             request_id=None,
-            category="threat",
+            category="unsafe_action",
             class_name="benign",
             confidence=0.0,
             level="L2",
@@ -550,7 +550,7 @@ class PublicApiTests(unittest.TestCase):
     def test_result_to_dict_omits_decision_for_l2_pending(self):
         result = SimpleNamespace(
             request_id=None,
-            category="threat",
+            category="unsafe_action",
             class_name="benign",
             confidence=0.0,
             level="L2",

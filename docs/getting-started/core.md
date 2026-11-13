@@ -11,7 +11,7 @@ inference, and decides on **shell commands** with Cat (`allow`, `ask`, `block`).
 | | Ark Core | Full Ark |
 | --- | --- | --- |
 | Package | `patronus-ark-core` (crate and PyPI, imports as `patronus_ark_core`) | `patronus-ark` (crate and PyPI, imports as `patronus_ark`) |
-| Categories | `pii`, `dlp`, `injection`, + Cat via `shell_verdict` (not a scan category) | all [eleven categories](../concepts/categories.md), Cat as the `shell_command` category |
+| Categories | `pii`, `dlp`, the attack classes (`injection`, `unsafe_action`, `exfiltration`, …), + Cat via `shell_verdict` (not a scan category) | all [categories](../concepts/categories.md), Cat as the `shell_command` category |
 | Cat | `Scanner::shell_verdict` with harness context (cwd, home, repo root) and `prior_facts` of earlier commands | `shell_command` category scan; no harness context or session |
 | Detection | native L1 rules; Wolf as an optional prompt-injection model; Cat as an optional shell-command verdict | L1, NTDB L2 heads and L3 transformers ([layered scanning](../concepts/layered-scanning.md)) |
 | Execution | synchronous on the calling thread; no queue, no worker threads | asynchronous queue with background L3 workers |

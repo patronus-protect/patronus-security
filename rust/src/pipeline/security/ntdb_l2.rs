@@ -139,13 +139,23 @@ pub(super) fn classifier_model_configs_for_category(
             "PATRONUS_NTDB_ROUTING_DIR",
             "routing_current",
         ),
-        SecurityCategory::UnsafeAction => model_config(
-            execution,
-            category,
-            "unified-v3-threat",
-            "PATRONUS_NTDB_THREAT_DIR",
-            "threat_current",
-        ),
+        // The unified threat head; its labels map onto the attack classes in
+        // `patronus_ark_core::attack_classes`.
+        SecurityCategory::UnsafeAction => {
+            if execution.gates().native.allows_model("unified-v3-threat") {
+                vec![NtdbL2ModelConfig {
+                    category,
+                    model_id: "threat",
+                    public_model: "unified-v3-threat",
+                    asset_model: "unified-v3-threat",
+                    env_key: "PATRONUS_NTDB_THREAT_DIR",
+                    package_name: "threat_current",
+                    has_l3: true,
+                }]
+            } else {
+                Vec::new()
+            }
+        }
         SecurityCategory::Dlp
         | SecurityCategory::Pii
         | SecurityCategory::DynamicPii

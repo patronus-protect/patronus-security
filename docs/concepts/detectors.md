@@ -70,9 +70,10 @@ their score and evidence in the typed decision contract without becoming finding
 
 The [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/threat)
 module provides shared pattern- and obfuscation-detection primitives used internally by several
-injection and DLP detectors. The `threat` category also has a native L1 producer,
-[`native:threat_l1`](../reference/threat-l1.md), before its NTDB L2 stage (see
-[Categories](categories.md)).
+injection and DLP detectors. The bounded threat rules of
+[`native:threat_l1`](../reference/threat-l1.md) report under their attack-class category
+(`unsafe_action`, `exfiltration`, `agent_config_tampering`, `harmful_content`); `unsafe_action`
+also has an NTDB L2 stage (see [Categories](categories.md)).
 
 `instruction_override` includes common German imperative variants such as attempts to forget,
 ignore, disregard, override, skip, or discard prior instructions, while contextless everyday
@@ -82,16 +83,18 @@ uses of those verbs remain safe.
 
 Data-loss-prevention detectors report credential material, sensitive technical or business
 content, and risky data-handling operations. Ark emits findings; enforcement remains the
-caller's responsibility.
+caller's responsibility. The `dlp` category itself reports secrets, classification markings and
+MCP policy matches; the operation detectors report under the attack-class categories shown in
+the table and run only when that category is selected.
 
-| Detector | Catches |
-| --- | --- |
-| `dlp` | Regex bank for leaked secrets/credentials, business-record identifiers, internal metrics, source code, SQL, dumps, and system logs, reported with exact evidence spans. |
-| `secret_transfer` | Requests to transfer secrets to external sinks, or explicit exfiltration. |
-| `destructive_operation` | Destructive commands/operations (mass delete, disable protections, wipe). |
-| `sensitive_material` | Requests to read or disclose credential material, including sensitive files. |
-| `mcp_policy` | A fixed built-in set of MCP tool-policy patterns, including destructive shell operations and credential-file reads. |
-| `mcp_runtime_risk` | Risk indicators in an MCP tool invocation. |
+| Detector | Category | Catches |
+| --- | --- | --- |
+| `dlp` | `dlp` | Regex bank for leaked secrets/credentials, business-record identifiers, internal metrics, source code, SQL, dumps, and system logs, reported with exact evidence spans. |
+| `secret_transfer` | `exfiltration` | Requests to transfer secrets to external sinks, or explicit exfiltration. |
+| `destructive_operation` | `unsafe_action` | Destructive commands/operations (mass delete, disable protections, wipe). |
+| `sensitive_material` | `unsafe_action` | Requests to read or disclose credential material, including sensitive files. |
+| `mcp_policy` | `dlp` | A fixed built-in set of MCP tool-policy patterns, including destructive shell operations and credential-file reads. |
+| `mcp_runtime_risk` | `unsafe_action` | Risk indicators in an MCP tool invocation. |
 
 All six producers populate `evidence_spans` from their matched source components. MCP policy
 matches retain both the tool field and the matching argument. With `explain: true`, the regex detector also exposes
@@ -99,7 +102,8 @@ matches retain both the tool field and the matching argument. With `explain: tru
 database/dump, and log/stacktrace context. These context-only anchors are not findings; Ark does not enforce blocking.
 
 Rust, Python, and the Ark API share the same DLP default profile: it enables the credential- and
-secret-oriented regex rules plus `secret_transfer` and `sensitive_material`, while business
+secret-oriented regex rules plus `secret_transfer` and `sensitive_material` (when `exfiltration`
+or `unsafe_action` is selected), while business
 records, source code, SQL, logs, metrics, destructive operations, and MCP-specific producers are
 opt-in. See [Configuration → execution gates](../reference/configuration.md#execution-gates).
 

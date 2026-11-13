@@ -92,10 +92,14 @@ material for four different needs:
 
 ## What it detects
 
-Eleven scan categories cover prompt-level, data-level, and agentic-tool-level risks:
+Scan categories cover prompt-level, data-level, and agentic-tool-level risks:
 
 `injection` · `dlp` · `pii` · `dynamic-pii` · `sensitive_document` ·
-`tool_class` · `tool_action` · `tool_tags` · `routing` · `threat` · `shell_command`
+`tool_class` · `tool_action` · `tool_tags` · `routing` · `shell_command`
+
+and ten further attack classes: `jailbreak` · `prompt_extraction` · `tool_poisoning` ·
+`agent_config_tampering` · `memory_poisoning` · `exfiltration` · `unsafe_action` ·
+`resource_exhaustion` · `harmful_content` · `toxic_language`
 
 See [Categories](concepts/categories.md) for what each one classifies and which layers back it.
 

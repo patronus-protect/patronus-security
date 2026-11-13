@@ -72,7 +72,7 @@ executed by the L3 background worker. Only required assets are downloaded by def
 
 | Family | Category(ies) | Role |
 | --- | --- | --- |
-| **Wolf Defender** | `injection`, `threat` | Prompt-injection detection and threat-type classification. |
+| **Wolf Defender** | `injection`, `unsafe_action` | Prompt-injection detection and threat classification. |
 | **Orca Sonar** | `sensitive_document` | Document classification for DLP / sensitive-document routing. |
 | **Panther Read** | `routing` | User-intent / request-routing classification. |
 | **Husky** (Sight / Paw / Nose) | `tool_class` / `tool_action` / `tool_tags` | Agentic tool-type, operation, and data-flow properties. |

@@ -614,7 +614,7 @@ impl Default for L3SchedulerPolicy {
             "tool_action",
             "tool_tags",
             "routing",
-            "threat",
+            "unsafe_action",
             "unified-v3-tool-class",
             "unified-v3-tool-action",
             "unified-v3-tool-tags",
@@ -636,7 +636,7 @@ impl Default for L3SchedulerPolicy {
             "tool_action",
             "tool_tags",
             "routing",
-            "threat",
+            "unsafe_action",
             "unified-v3-tool-class",
             "unified-v3-tool-action",
             "unified-v3-tool-tags",
@@ -651,7 +651,7 @@ impl Default for L3SchedulerPolicy {
             priority: vec![
                 "injection".to_string(),
                 "wolf-defender-small".to_string(),
-                "threat".to_string(),
+                "unsafe_action".to_string(),
                 "unified-v3-threat".to_string(),
                 "dynamic-pii".to_string(),
                 "gliner_small-v2.5-edge".to_string(),
@@ -691,7 +691,7 @@ impl L3SchedulerPolicy {
             L3EarlyExitMode::Disabled => L3PipelineEarlyExit::Disabled,
             L3EarlyExitMode::ClassStable
                 if category == "injection"
-                    || category == "threat"
+                    || category == "unsafe_action"
                     || model == "wolf-defender-small"
                     || model == "unified-v3-threat" =>
             {

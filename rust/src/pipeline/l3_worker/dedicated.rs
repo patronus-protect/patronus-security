@@ -1819,7 +1819,9 @@ fn l3_strategy(job: &L3WorkerJob) -> PipelineStrategy {
 }
 
 fn l3_safe_class(job: &L3WorkerJob) -> &'static str {
-    if job.category == "injection" || job.model == "wolf-defender-small" || job.category == "threat"
+    if job.category == "injection"
+        || job.model == "wolf-defender-small"
+        || job.category == "unsafe_action"
     {
         "benign"
     } else {

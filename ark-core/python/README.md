@@ -29,8 +29,6 @@ print(email["label"], email["start_char"], email["end_char"])
 ```text
 pii        EMAIL                 native:pii
 dlp        safe                  native:dlp
-dlp        safe                  native:sensitive_material
-dlp        safe                  native:secret_transfer
 injection  instruction_override  native:injection_l1
 EMAIL 49 69
 ```
@@ -48,7 +46,7 @@ print([r["category"] for r in report["native"]])
 ```
 
 ```text
-['pii', 'dlp', 'dlp', 'dlp']
+['pii', 'dlp']
 ```
 
 Skipping `injection` also skips Wolf for that call.
@@ -70,8 +68,8 @@ for name, scanner in [("default", default), ("custom", custom)]:
 ```
 
 ```text
-default ['EMAIL', 'safe', 'safe', 'safe']
-custom ['safe', 'dlp.content.sql', 'safe', 'safe']
+default ['EMAIL', 'safe']
+custom ['safe', 'dlp.content.sql']
 ```
 
 Also at the top level of the config: `pii_mode` / `dlp_mode` (`strict`, `balanced`, `recall`)

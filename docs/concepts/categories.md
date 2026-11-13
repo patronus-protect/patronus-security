@@ -4,12 +4,12 @@ A **category** is one kind of security question Patronus Ark can answer about a 
 You choose the categories a gateway scans at construction time. Each category is backed by a
 specific set of layers — some are native-only, some are model-backed, one is transformer-only.
 
-## The eleven categories
+## The categories
 
 | Category | Question it answers | L1 | L2 | L3 model |
 | --- | --- | :---: | :---: | --- |
-| `injection` | Is this a prompt-injection / jailbreak attempt? | ✅ | ✅ | Wolf Defender (small) or unified Lion Warden |
-| `dlp` | Does this contain credentials, sensitive business identifiers/content, or a risky data operation? | ✅ | — | — |
+| `injection` | Is this a prompt-injection attempt? | ✅ | ✅ | Wolf Defender (small) or unified Lion Warden |
+| `dlp` | Does this contain credentials, secrets, or sensitive business identifiers/content? | ✅ | — | — |
 | `pii` | Does this contain validated or anchor-bound personal identifiers? | ✅ | — | — |
 | `dynamic-pii` | Which named entities (GLiNER labels) appear, with exact spans? | — | — | GLiNER small v2.5 (edge) |
 | `sensitive_document` | What document class is this (legal, HR, finance, source code, …)? | — | ✅ | Orca Sonar |
@@ -17,8 +17,26 @@ specific set of layers — some are native-only, some are model-backed, one is t
 | `tool_action` | Which operation does the tool perform (read, write, exec, …)? | — | ✅ | Husky Paw |
 | `tool_tags` | Data-flow properties (sensitive source, untrusted source, external sink)? | — | ✅ | Husky Nose |
 | `routing` | What is the operational intent of the request? | — | ✅ | Panther Read |
-| `threat` | What *type* of security threat is this? | Native rules | ✅ | Wolf Defender Threat |
 | `shell_command` | Is this shell command or script (POSIX/Bash, PowerShell, CMD) risky? | ✅ (model) | — | — |
+| `jailbreak` | Does this try to switch off the model's safety behaviour? | — | — | — |
+| `prompt_extraction` | Does this try to reveal the system prompt or hidden instructions? | — | — | — |
+| `tool_poisoning` | Does a tool description or tool output carry hidden instructions? | — | — | — |
+| `agent_config_tampering` | Does this try to change an agent's configuration, rules or guards? | Native rules | — | — |
+| `memory_poisoning` | Does this try to plant instructions in an agent's memory? | — | — | — |
+| `exfiltration` | Does this try to send data, secrets or sessions to an outside target? | Native rules | — | — |
+| `unsafe_action` | Does this ask for a risky operation (remote execution, credential access, destructive or privileged actions)? | Native rules | ✅ | Wolf Defender Threat |
+| `resource_exhaustion` | Does this try to exhaust compute, tokens or other resources? | — | — | — |
+| `harmful_content` | Does this ask for harmful content or harmful actions? | Native rules | — | — |
+| `toxic_language` | Is this toxic or abusive language? | — | — | — |
+
+`injection` and the ten categories below `shell_command` are the **attack classes**: each one
+answers one question about attacks on models and agents. When no categories are given, the
+library scanner runs `pii`, `dlp`, `injection`, `jailbreak`, `prompt_extraction`,
+`tool_poisoning` and `exfiltration`; the example and deployment configurations use the same
+defaults. `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
+`resource_exhaustion`, `harmful_content` and `toxic_language` are opt-in. An attack class
+without a detector yet returns no finding. The bounded `ark.threat.*` rules each belong to one
+attack class and report under it (see [Threat L1](../reference/threat-l1.md)).
 
 The models are documented on Hugging Face under the
 [`patronus-studio`](https://huggingface.co/patronus-studio) organization and mapped to
@@ -33,11 +51,13 @@ See [Models & the NTDB format](models-and-ntdb.md).
 assets** and are always available offline. `pii` combines checksum/structure validators with
 field anchors for contact, payment, government, account, and person identifiers. `dlp` detects
 credentials and secrets as well as gateable business identifiers, internal metrics, source code,
-SQL, dumps, logs, and risky operations. Credential/secret findings keep their entity group
+SQL, dumps, and logs. Risky operations are not `dlp` findings: the destructive-operation,
+sensitive-material and MCP runtime-risk detectors report under `unsafe_action`, the
+secret-transfer detector under `exfiltration`. Credential/secret findings keep their entity group
 (`API_KEY`, `SECRET_TOKEN`, `CREDENTIAL` …) as label and name a `subtype` within it, such as
 `password`, `access_token`, `auth_url` or `private_key` (see
 [DLP taxonomy](../reference/result-schema.md#dlp-taxonomy)). PII and regex-based DLP findings populate
-`evidence_spans` with original-text offsets; native DLP operation and MCP rules also retain
+`evidence_spans` with original-text offsets; native MCP policy rules also retain
 source-bound components and finding spans.
 Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only
 credential/secret DLP rules and the classification markings by default; other DLP families are opt-in through rule gates. See
@@ -64,8 +84,9 @@ of earlier commands (`prior_facts`). See [Check shell commands](../how-to/check-
 
 ### Native + model-backed (L1 → L2 → L3)
 
-`injection` and `threat` start with native L1 detectors and can escalate to an NTDB L2 classifier and, on
-promotion, a full transformer at L3. This gives immediate rule-based coverage plus learned
+`injection` and `unsafe_action` start with native L1 detectors and can escalate to an NTDB L2
+classifier and, on promotion, a full transformer at L3. `unsafe_action` uses the Wolf Defender
+Threat model at L2/L3. This gives immediate rule-based coverage plus learned
 generalization for novel phrasings.
 
 ### Model-backed (L2 → L3)
@@ -103,7 +124,7 @@ at once. See [`l3_strategy`](../reference/configuration.md#l3-strategy) and
 ## Choosing categories
 
 Scan only what you need — every category adds work. A prompt firewall might run
-`["injection", "threat"]`; a DLP gateway `["dlp", "pii", "sensitive_document"]`; an agent
+`["injection", "jailbreak", "prompt_extraction"]`; a DLP gateway `["dlp", "pii", "sensitive_document"]`; an agent
 guard `["injection", "tool_class", "tool_action", "tool_tags"]`; a Bash-tool hook
 `["shell_command"]`. See
 [Choose categories & levels](../how-to/choose-categories-and-levels.md) for guidance and the
