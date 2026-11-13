@@ -135,8 +135,8 @@ mod tests {
     }
     #[test]
     fn findings_of_points_rules_do_not_change_the_model_score() {
-        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "tool_abuse", "start_byte": 0, "end_byte": 30});
-        let points = serde_json::json!({"rule_id": "ark.threat.ua_destructive_request", "class_name": "tool_abuse", "start_byte": 0, "end_byte": 300});
+        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "unsafe_action", "start_byte": 0, "end_byte": 30});
+        let points = serde_json::json!({"rule_id": "ark.threat.ua_destructive_request", "class_name": "unsafe_action", "start_byte": 0, "end_byte": 300});
         assert_eq!(
             score(std::slice::from_ref(&finding)),
             score(&[finding, points.clone()])
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn repeated_rule_matches_do_not_reduce_score() {
-        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "tool_abuse", "start_byte": 0, "end_byte": 30});
+        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "class_name": "unsafe_action", "start_byte": 0, "end_byte": 30});
         assert_eq!(
             score(std::slice::from_ref(&finding)),
             score(&vec![finding; 256])

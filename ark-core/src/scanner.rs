@@ -12,10 +12,11 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Queue-free scanner policy. Defaults to all three native categories, no Wolf
-/// and no Cat.
+/// Queue-free scanner policy. Defaults to pii, dlp and the core attack classes
+/// (injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration), no
+/// Wolf and no Cat.
 pub struct ScannerConfig {
-    /// Native text-scan categories: `pii`, `dlp` and `injection`.
+    /// Native text-scan categories: `pii`, `dlp` and the eleven attack classes.
     pub categories: Vec<SecurityCategory>,
     /// Rule, model, mode and `explain` gates; their keys sit at the top level
     /// of the serialized config.
@@ -33,7 +34,7 @@ pub struct ScannerConfig {
 impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
-            categories: NATIVE_CATEGORIES.to_vec(),
+            categories: SecurityCategory::DEFAULT_ACTIVE.to_vec(),
             gates: NativeGates::default(),
             max_input_bytes: 1024 * 1024,
             max_findings: 10_000,
@@ -79,7 +80,7 @@ fn unsupported_category(category: SecurityCategory) -> ScanError {
             configure `shell` and call `shell_verdict`"
             .into(),
         other => format!(
-            "category {} is not supported by the Core scanner; expected pii, dlp or injection",
+            "category {} is not supported by the Core scanner; expected pii, dlp or an attack class",
             other.as_str()
         ),
     })
@@ -367,7 +368,11 @@ mod scope_tests {
             .scan_categories(text, &[SecurityCategory::Pii, SecurityCategory::Dlp])
             .unwrap();
         let full = scanner.scan(text).unwrap();
-        for expected in full.native.iter().filter(|r| r.category != "injection") {
+        for expected in full
+            .native
+            .iter()
+            .filter(|r| ["pii", "dlp"].contains(&r.category.as_str()))
+        {
             let actual = scoped
                 .native
                 .iter()
@@ -501,7 +506,7 @@ mod selected_checks_tests {
         assert!(report
             .native
             .iter()
-            .all(|r| ["pii", "dlp", "injection"].contains(&r.category.as_str())));
+            .all(|r| r.category != "shell_command"));
 
         let unset = Scanner::new(ScannerConfig::default()).unwrap();
         assert!(matches!(
@@ -558,12 +563,13 @@ mod config_tests {
         };
         assert!(message.contains("`shell`") && message.contains("shell_verdict"));
         let Err(ScanError::Config(message)) = Scanner::new(ScannerConfig {
-            categories: vec![SecurityCategory::Threat],
+            categories: vec![SecurityCategory::Routing],
             ..ScannerConfig::default()
         }) else {
-            panic!("threat must be rejected");
+            panic!("routing must be rejected");
         };
-        assert!(message.contains("expected pii, dlp or injection"));
+        assert!(message.contains("expected pii, dlp or an attack class"));
+        assert!("threat".parse::<SecurityCategory>().is_err());
         let mut scanner = Scanner::new(ScannerConfig::default()).unwrap();
         assert!(matches!(
             scanner.scan_categories("ls", &[SecurityCategory::ShellCommand]),

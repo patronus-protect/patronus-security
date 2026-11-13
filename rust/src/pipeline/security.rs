@@ -14,7 +14,6 @@ use crate::{
     assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
     detectors::{
         shell::{ShellPolicyConfig, ShellRiskPipeline},
-        threat::ThreatPipeline,
         NativeDetection,
     },
     diagnostics::PhaseMetricScope,
@@ -252,7 +251,6 @@ pub struct SecurityGatewayCore {
 
     // Shared native producer state, initialized only for configured categories.
     native_engine: NativeEngine,
-    threat_pipeline: Option<ThreatPipeline>,
     /// Shell command risk model, loaded from local assets during warmup.
     shell_command_pipeline: Option<ShellRiskPipeline>,
 
@@ -475,7 +473,7 @@ mod native_adapter_tests {
     #[test]
     fn ark_only_categories_do_not_initialize_shared_native_producers() {
         let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::ShellCommand, SecurityCategory::Threat],
+            vec![SecurityCategory::ShellCommand, SecurityCategory::Routing],
             SecurityLevel::L1,
             None,
             false,
@@ -483,7 +481,6 @@ mod native_adapter_tests {
         for category in patronus_ark_core::native::NATIVE_CATEGORIES {
             assert!(gateway.native_engine.producers(category).is_empty());
         }
-        assert!(gateway.threat_pipeline.is_some());
     }
 }
 
@@ -590,9 +587,6 @@ impl SecurityGateway {
         let requests = Arc::new(RequestRegistry::default());
         let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
         let native_engine = NativeEngine::new(&categories);
-        let threat_pipeline = categories
-            .contains(&SecurityCategory::Threat)
-            .then(ThreatPipeline::new);
         let core = SecurityGatewayCore {
             categories,
             max_level,
@@ -609,7 +603,6 @@ impl SecurityGateway {
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
             native_engine,
-            threat_pipeline,
             shell_command_pipeline: None,
             request_counter: AtomicU64::new(1),
             requests,
@@ -641,13 +634,8 @@ impl SecurityGateway {
             .lock()
             .expect("external L1 registry mutex poisoned");
         let has_l1_category = self.categories.iter().any(|category| {
-            matches!(
-                category,
-                SecurityCategory::Injection
-                    | SecurityCategory::Dlp
-                    | SecurityCategory::Pii
-                    | SecurityCategory::Threat
-            ) || external_l1
+            !self.native_engine.producers(*category).is_empty()
+                || external_l1
                 .get(category)
                 .is_some_and(|detectors| !detectors.is_empty())
         });
@@ -1281,31 +1269,6 @@ impl SecurityGateway {
             }
         }
         match category {
-            SecurityCategory::Threat => {
-                if self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, "native:threat_l1")
-                {
-                    if let Some(ref native) = self.threat_pipeline {
-                        results.push(run_measured_l1_detector(
-                            category,
-                            "native:threat_l1",
-                            text.len(),
-                            || {
-                                timed_native_detection_scan_result(
-                                    category,
-                                    "native:threat_l1",
-                                    text,
-                                    || {
-                                        native.detect_prepared(prepared, |id| {
-                                            execution.gates().native.allows_rule(id)
-                                        })
-                                    },
-                                )
-                            },
-                        ));
-                    }
-                }
-            }
             SecurityCategory::ShellCommand => {
                 if self.level_enabled(execution, SecurityLevel::L1)
                     && self.model_enabled(execution, SHELL_COMMAND_ASSET.model)
@@ -1335,6 +1298,16 @@ impl SecurityGateway {
             SecurityCategory::Pii
             | SecurityCategory::Dlp
             | SecurityCategory::Injection
+            | SecurityCategory::Jailbreak
+            | SecurityCategory::PromptExtraction
+            | SecurityCategory::ToolPoisoning
+            | SecurityCategory::AgentConfigTampering
+            | SecurityCategory::MemoryPoisoning
+            | SecurityCategory::Exfiltration
+            | SecurityCategory::UnsafeAction
+            | SecurityCategory::ResourceExhaustion
+            | SecurityCategory::HarmfulContent
+            | SecurityCategory::ToxicLanguage
             | SecurityCategory::DynamicPii => {}
             SecurityCategory::SensitiveDocument
             | SecurityCategory::ToolClass

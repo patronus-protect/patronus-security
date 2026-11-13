@@ -18,6 +18,7 @@ pub use scanner::*;
 pub mod warmup;
 pub use warmup::{DownloadPolicy, WarmupOptions};
 pub mod aggregation;
+pub mod attack_classes;
 mod wolf_options;
 pub use wolf_options::WolfExecutionOptions;
 #[cfg(feature = "wolf")]

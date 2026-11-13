@@ -14,16 +14,27 @@ pub struct NativeProducerOutcome {
     pub duration_ms: f64,
 }
 
-/// The categories with native producers, in group order.
-pub const NATIVE_CATEGORIES: [SecurityCategory; 3] = [
+/// The native text-scan categories, in group order: pii, dlp and the eleven
+/// attack classes. A class without rules yet has no producers.
+pub const NATIVE_CATEGORIES: [SecurityCategory; 13] = [
     SecurityCategory::Pii,
     SecurityCategory::Dlp,
     SecurityCategory::Injection,
+    SecurityCategory::Jailbreak,
+    SecurityCategory::PromptExtraction,
+    SecurityCategory::ToolPoisoning,
+    SecurityCategory::AgentConfigTampering,
+    SecurityCategory::MemoryPoisoning,
+    SecurityCategory::Exfiltration,
+    SecurityCategory::UnsafeAction,
+    SecurityCategory::ResourceExhaustion,
+    SecurityCategory::HarmfulContent,
+    SecurityCategory::ToxicLanguage,
 ];
 
 /// Owns each selected category's detector state once, without worker threads.
 pub struct NativeEngine {
-    groups: [Vec<NativeProducerSpec>; 3],
+    groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
 }
 
 impl NativeEngine {
