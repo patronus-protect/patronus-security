@@ -113,7 +113,7 @@ tasks:
     title: Review and freeze taxonomy v1 (classes, must/should families, defaults on/off per class)
     type: decision
     deps: [M02, M03]
-    needs_decision: true
+    status: done
 
   # ── X (cont.): category switch ────────────────────────────────────────
   - id: X03
@@ -127,7 +127,9 @@ tasks:
       Old labels gone from ark-core/rust/ark-api/coordinator/deploy/docs (git grep); every existing
       ark.injection.* / ark.threat.* rule maps to exactly one new class; result-schema and CHANGELOG
       describe the break; category `threat` removed, `injection` keeps its name; <category>_mode per
-      category; defaults unchanged (only pii/dlp/injection active); L2/L3 output labels (unified threat
+      category; defaults per M04 (2026-11-12) — active are pii, dlp and the core classes injection,
+      jailbreak, prompt_extraction, tool_poisoning, exfiltration; the other six classes opt-in — set in
+      ark-core and every ARK layer (ark-api, coordinator, deploy configs); L2/L3 output labels (unified threat
       head, NTDB L2) mapped onto the new categories by one table in ark-core, models untouched; old label
       names exist only as model-output keys in that table, never in API, result schema or config
       (secrets_access → unsafe_action, family credential_access, same as its three L1 rules

@@ -51,10 +51,19 @@ Festgelegt (2026-11-05):
 - **Eine Kategorie je Klasse.** `instruction_injection` behält den Kategorienamen `injection`; die Kategorie
   `threat` des alten Unified-Kopfs entfällt.
 - **Modus je Kategorie** (`<kategorie>_mode`, Default `strict`), wie `pii_mode`/`dlp_mode`.
-- **Default aktiv bleibt `pii`, `dlp`, `injection`.** Alle neuen Kategorien sind opt-in.
+- **Default aktiv bleibt `pii`, `dlp`, `injection`.** Alle neuen Kategorien sind opt-in (für den
+  Kern geändert am 2026-11-12, siehe unten).
 - **Übernommene OSS-Regeln sind default aus** und über die `rules`-Map einschaltbar; eigene Regeln default an.
 - **L2/L3 unverändert:** Die bestehenden Modelle bleiben, wie sie sind; ihre Labels laufen über die
   Mapping-Tabelle in `ark-core` auf die neuen Kategorien (X03).
+
+Festgelegt (2026-11-12, Taxonomie v1, M04):
+- **Taxonomie v1 eingefroren** wie in [`taxonomy.yaml`](taxonomy.yaml): elf Klassen, Muss-/Soll-Familien
+  unverändert.
+- **Default aktiv ist nur der Kern:** `injection` (`instruction_injection`), `jailbreak`, `prompt_extraction`,
+  `tool_poisoning`, `exfiltration` (X03 setzt das in `ark-core` und ARK um). Opt-in bleiben
+  `agent_config_tampering`, `memory_poisoning`, `unsafe_action`, `resource_exhaustion`, `harmful_content`,
+  `toxic_language`.
 
 Festgelegt (2026-11-09):
 - **Aktions-Detektoren ziehen aus `dlp` aus.** `dlp` findet danach nur noch Secrets. Shell-Syntax
