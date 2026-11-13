@@ -136,6 +136,28 @@ tasks:
       credential_file_access, credential_harvesting, ssrf_metadata; nothing dropped without a new home)
 
   # ── E: Measurement ────────────────────────────────────────────────────
+  # Gold first (owner, 2026-11-13): build and validate the gold before eval and rule work. Seven of
+  # eleven classes had no gold rows, one set (mosscap, 158k rows of one class) dwarfed the rest, and
+  # MCPTox was missing although E01's accept named it. M-ids so lane b (the otherwise idle host)
+  # picks them; E05/E06 — and through E06 every rule family — wait for M06.
+  - id: M05
+    title: Dataset registry v2 — per-set row caps (seeded, stratified; no decisive set above ~15k rows) and sources for the uncovered classes — MCPTox (tool_poisoning; already promised in E01's accept), AILuminate (harmful_content), GAHD/HateCheck/GermEval 2018 (toxic_language), and documented synthetic sets via the E02 generators (modelled on real public examples — papers, advisories, MCPTox patterns) for exfiltration, unsafe_action, memory_poisoning, agent_config_tampering, resource_exhaustion; grow the benign side (more benign sources, never fewer benign rows) so 0.1% FPR keeps resolution; re-freeze dev+holdout with new SHA manifests
+    type: eval-infra
+    deps: [E02]
+    accept: >-
+      Every class in taxonomy.yaml has gold rows in dev AND holdout (native or documented-synthetic,
+      column kept); per-set caps and sampling seed in the manifest; benign pool >= 30k rows across
+      at least three sources; contamination column complete for every baseline (no
+      contamination_unchecked left); licence per source; nothing committed except recipes and manifests
+  - id: M06
+    title: Gold validation — per-set label spot-check (>= 50 rows per set, hand-reviewed by the runner, error rate in the report), cross-split leakage check (exact + MinHash between dev and holdout), class/language counts, per-class data provenance (native / translated / synthetic) — report research/l1-threat/scoreboard/gold.md
+    type: eval-infra
+    deps: [M05]
+    accept: >-
+      gold.md on main with per-set error rates, per-class row counts (dev and holdout separately,
+      without leaking holdout contents), leakage zero, and a named go/no-go per class: a class whose
+      gold fails validation is listed as not measurable and its rule tasks stay blocked
+
   - id: E01
     status: done
     title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
@@ -167,12 +189,12 @@ tasks:
   - id: E05
     title: Golden schema v2 for threat (class, family, carrier, tags negated/quoted/meta/code/indirect/obfuscated/translated, known_gap) + 13_l1_golden_eval -- threat
     type: eval-infra
-    deps: [X03]
+    deps: [X03, M06]  # gold first (owner, 2026-11-13)
 
   - id: E06
     title: Scoreboard gate — TPR@1%/0.1% FPR and AUPRC per class and language, hard-benign FPR, leave-one-dataset-out, native/translated columns, bootstrap CI, delta to base; baseline report research/l1-threat/scoreboard/baseline.md
     type: eval-infra
-    deps: [E02, E04, E05]
+    deps: [E02, E04, E05, M06]
 
   # ── S: Engine ─────────────────────────────────────────────────────────
   - id: S02
