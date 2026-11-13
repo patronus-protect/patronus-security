@@ -636,8 +636,8 @@ impl SecurityGateway {
         let has_l1_category = self.categories.iter().any(|category| {
             !self.native_engine.producers(*category).is_empty()
                 || external_l1
-                .get(category)
-                .is_some_and(|detectors| !detectors.is_empty())
+                    .get(category)
+                    .is_some_and(|detectors| !detectors.is_empty())
         });
         let shell_command_configured = self.shell_command_configured(&execution);
         let l1 = if !execution.allows_level(SecurityLevel::L1)

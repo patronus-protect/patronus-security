@@ -189,22 +189,23 @@ fn policies(pipeline: &ShellRiskPipeline, command: &str) -> Vec<String> {
     verdict.policies.iter().map(|p| p.id.clone()).collect()
 }
 
-/// Rule ids that fire on `command`: threat rules through the threat category,
+/// Rule ids that fire on `command`: threat rules through their attack classes,
 /// MCP policy rules as the argument of a `bash` tool call.
 fn fired(command: &str) -> BTreeSet<String> {
     let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Threat],
+        SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
         None,
         false,
     );
-    let mut ids: BTreeSet<String> = gateway
-        .scan_category(SecurityCategory::Threat, command)
-        .iter()
+    let mut ids: BTreeSet<String> = SecurityCategory::ATTACK_CLASSES
+        .into_iter()
+        .flat_map(|category| gateway.scan_category(category, command))
+        .filter(|result| result.model == "native:threat_l1")
         .flat_map(|result| {
             result
                 .layers
-                .iter()
+                .into_iter()
                 .flat_map(|layer| layer.details["matched_rules"].as_array().cloned())
                 .flatten()
         })

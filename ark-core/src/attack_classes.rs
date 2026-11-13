@@ -52,7 +52,10 @@ mod tests {
     #[test]
     fn every_threat_model_label_has_exactly_one_attack_class() {
         for (label, category, _) in MODEL_LABELS {
-            assert!(SecurityCategory::ATTACK_CLASSES.contains(&category), "{label}");
+            assert!(
+                SecurityCategory::ATTACK_CLASSES.contains(&category),
+                "{label}"
+            );
             assert_eq!(
                 MODEL_LABELS.iter().filter(|(l, _, _)| *l == label).count(),
                 1

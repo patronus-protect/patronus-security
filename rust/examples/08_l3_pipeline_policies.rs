@@ -15,7 +15,7 @@ fn main() {
     let scanner = SecurityGateway::with_max_level(
         vec![
             SecurityCategory::Injection,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
             SecurityCategory::ToolClass,
         ],
         SecurityLevel::L3,

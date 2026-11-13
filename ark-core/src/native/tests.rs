@@ -33,10 +33,7 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
             .iter()
             .map(|p| p.id())
             .collect::<Vec<_>>(),
-        [
-            "native:dlp",
-            "native:mcp_policy",
-        ]
+        ["native:dlp", "native:mcp_policy",]
     );
     assert_eq!(
         engine
@@ -156,7 +153,8 @@ fn selected_categories_reuse_pipeline_state_and_preserve_internal_rule_policy() 
     assert!(NativeEngine::new(&[])
         .producers(SecurityCategory::Pii)
         .is_empty());
-    let non_native = NativeEngine::new(&[SecurityCategory::ShellCommand, SecurityCategory::Routing]);
+    let non_native =
+        NativeEngine::new(&[SecurityCategory::ShellCommand, SecurityCategory::Routing]);
     for category in super::super::NATIVE_CATEGORIES {
         assert!(non_native.producers(category).is_empty());
     }

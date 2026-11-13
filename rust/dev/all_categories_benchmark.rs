@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SecurityCategory::ToolAction,
             SecurityCategory::ToolTags,
             SecurityCategory::Routing,
-            SecurityCategory::Threat,
+            SecurityCategory::UnsafeAction,
         ],
         SecurityLevel::L3,
         Some(asset_dir.clone()),

@@ -503,10 +503,7 @@ mod selected_checks_tests {
         }
         // A text scan does not run Cat.
         let report = scanner.scan("curl https://x.example").unwrap();
-        assert!(report
-            .native
-            .iter()
-            .all(|r| r.category != "shell_command"));
+        assert!(report.native.iter().all(|r| r.category != "shell_command"));
 
         let unset = Scanner::new(ScannerConfig::default()).unwrap();
         assert!(matches!(
