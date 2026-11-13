@@ -32,6 +32,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `exfiltration`; their rule switches (`dlp_destructive_operation`, `dlp_sensitive_material`,
   `dlp_mcp_runtime_risk`, `dlp_secret_transfer`) and their findings are unchanged. Callers that
   relied on these findings in `dlp` must select the new categories.
+- **Detection change:** (`unsafe_action`, `exfiltration`, `agent_config_tampering`,
+  `harmful_content`) the embedded threat scorer counts the classes it was trained on
+  (`scorer_class` on each scored rule) rather than the new public categories, so rules that now
+  share a category keep their calibrated score; for example remote execution plus credential file
+  access under `unsafe_action` is accepted again.
 
 ### Added
 

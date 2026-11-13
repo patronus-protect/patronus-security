@@ -30,7 +30,7 @@ def feature_vector(candidates, rule_ids):
     return [float(r in present) for r in rule_ids] + [
         math.log1p(len(present)),
         math.log1p(max((c["end_byte"] - c["start_byte"] for c in candidates), default=0)),
-        float(len({c["class_name"] for c in candidates})),
+        float(len({c["scorer_class"] for c in candidates})),
     ]
 
 

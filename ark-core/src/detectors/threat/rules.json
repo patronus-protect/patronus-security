@@ -7,6 +7,7 @@
       "id": "ark.threat.remote_execution",
       "class_name": "unsafe_action",
       "family": "handoff_shell",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "SC2",
         "TM2"
@@ -17,6 +18,7 @@
       "id": "ark.threat.remote_execution_instruction",
       "class_name": "unsafe_action",
       "family": "fetch_and_run",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "SC2",
         "TM2"
@@ -27,6 +29,7 @@
       "id": "ark.threat.decoded_execution",
       "class_name": "unsafe_action",
       "family": "unsafe_code",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "SC3"
       ],
@@ -36,6 +39,7 @@
       "id": "ark.threat.decoded_shell_execution",
       "class_name": "unsafe_action",
       "family": "handoff_shell",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "SC3",
         "TM2"
@@ -46,6 +50,7 @@
       "id": "ark.threat.credential_harvesting",
       "class_name": "unsafe_action",
       "family": "credential_access",
+      "scorer_class": "secrets_access",
       "upstream_groups": [
         "PE3",
         "AS1",
@@ -57,6 +62,7 @@
       "id": "ark.threat.credential_file_access",
       "class_name": "unsafe_action",
       "family": "credential_access",
+      "scorer_class": "secrets_access",
       "upstream_groups": [
         "PE3",
         "AS1"
@@ -67,6 +73,7 @@
       "id": "ark.threat.secret_exfiltration",
       "class_name": "exfiltration",
       "family": "secret_to_sink",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E1",
         "E3",
@@ -78,6 +85,7 @@
       "id": "ark.threat.credential_file_upload",
       "class_name": "exfiltration",
       "family": "handoff_shell",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E3",
         "E5"
@@ -88,6 +96,7 @@
       "id": "ark.threat.environment_exfiltration",
       "class_name": "exfiltration",
       "family": "handoff_shell",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E2"
       ],
@@ -97,6 +106,7 @@
       "id": "ark.threat.docker_socket",
       "class_name": "unsafe_action",
       "family": "handoff_shell",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "PE4"
       ],
@@ -106,6 +116,7 @@
       "id": "ark.threat.privileged_container",
       "class_name": "unsafe_action",
       "family": "handoff_shell",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "PE5",
         "TM4"
@@ -116,6 +127,7 @@
       "id": "ark.threat.persistence_payload",
       "class_name": "unsafe_action",
       "family": "persistence",
+      "scorer_class": "harmful_behavior",
       "upstream_groups": [
         "RA2"
       ],
@@ -125,6 +137,7 @@
       "id": "ark.threat.agent_guard_removal",
       "class_name": "agent_config_tampering",
       "family": "guard_removal",
+      "scorer_class": "harmful_behavior",
       "upstream_groups": [
         "RA1",
         "AS1"
@@ -135,6 +148,7 @@
       "id": "ark.threat.security_disable",
       "class_name": "unsafe_action",
       "family": "security_disable",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "TM3",
         "SC7"
@@ -145,6 +159,7 @@
       "id": "ark.threat.untrusted_deserialization",
       "class_name": "unsafe_action",
       "family": "unsafe_code",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "DS1",
         "DS2",
@@ -157,6 +172,7 @@
       "id": "ark.threat.untrusted_output_execution",
       "class_name": "unsafe_action",
       "family": "unsafe_code",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "OH1",
         "OH2"
@@ -167,6 +183,7 @@
       "id": "ark.threat.ssrf_metadata",
       "class_name": "unsafe_action",
       "family": "metadata_ssrf",
+      "scorer_class": "secrets_access",
       "upstream_groups": [
         "SSRF1"
       ],
@@ -176,6 +193,7 @@
       "id": "ark.threat.session_exfiltration",
       "class_name": "exfiltration",
       "family": "send_directive",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E4",
         "P3"
@@ -186,6 +204,7 @@
       "id": "ark.threat.environment_post",
       "class_name": "exfiltration",
       "family": "secret_to_sink",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E2"
       ],
@@ -195,6 +214,7 @@
       "id": "ark.threat.agent_config_exfiltration",
       "class_name": "exfiltration",
       "family": "send_directive",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "AS1",
         "AS2",
@@ -206,6 +226,7 @@
       "id": "ark.threat.kubernetes_privileged_json",
       "class_name": "unsafe_action",
       "family": "container_escape_config",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "TM4",
         "PE5"
@@ -216,6 +237,7 @@
       "id": "ark.threat.kubernetes_privileged_yaml",
       "class_name": "unsafe_action",
       "family": "container_escape_config",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "TM4",
         "PE5"
@@ -226,6 +248,7 @@
       "id": "ark.threat.unsafe_tls_code",
       "class_name": "unsafe_action",
       "family": "unsafe_code",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "TM3",
         "SC7"
@@ -236,6 +259,7 @@
       "id": "ark.threat.unsafe_shell_input",
       "class_name": "unsafe_action",
       "family": "unsafe_code",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "TM1"
       ],
@@ -245,6 +269,7 @@
       "id": "ark.threat.dynamic_ssrf",
       "class_name": "unsafe_action",
       "family": "metadata_ssrf",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "SSRF3",
         "TT"
@@ -255,6 +280,7 @@
       "id": "ark.threat.unauthorized_autonomy",
       "class_name": "unsafe_action",
       "family": "unattended",
+      "scorer_class": "tool_abuse",
       "upstream_groups": [
         "EA2",
         "EA3"
@@ -265,6 +291,7 @@
       "id": "ark.threat.harmful_intent",
       "class_name": "harmful_content",
       "family": "howto_hazard",
+      "scorer_class": "harmful_behavior",
       "upstream_groups": [
         "P5"
       ],
@@ -274,6 +301,7 @@
       "id": "ark.threat.secret_source_transfer",
       "class_name": "exfiltration",
       "family": "secret_to_sink",
+      "scorer_class": "exfiltration_attempt",
       "upstream_groups": [
         "E3",
         "E5"
