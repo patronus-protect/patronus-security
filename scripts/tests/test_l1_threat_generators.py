@@ -226,6 +226,18 @@ def test_output_of_an_older_generator_version_is_regenerated(roots, capsys, monk
     assert json.loads((dev / "generated" / "manifest.json").read_text())["generator_version"] == 2
 
 
+def test_a_version_bump_keeps_the_stream_of_an_unchanged_generator(monkeypatch):
+    # The dev gold review of exfil_lookalikes read the rows of its v2 stream; a version bump for another
+    # generator must not swap those texts under the same row ids.
+    inputs = corpus_rows("dev")
+    counts = {**COUNTS, "exfil_lookalikes": MODULE.DEFAULT_COUNTS["dev"]["exfil_lookalikes"]}
+    files = MODULE.generate_split("dev", MODULE.DEV_SEED, inputs, EMAP, counts)
+    assert hashlib.sha256(files["exfil_lookalikes.jsonl"]).hexdigest() == "32a44b8d6ebba842fb7203b94f186da3fba3a8a8fb5783a8b17185cae87866ab"
+    monkeypatch.setattr(MODULE, "GENERATOR_VERSION", MODULE.GENERATOR_VERSION + 1)
+    bumped = MODULE.generate_split("dev", MODULE.DEV_SEED, inputs, EMAP, counts)
+    assert bumped["exfil_lookalikes.jsonl"] == files["exfil_lookalikes.jsonl"]
+
+
 def test_frozen_output_that_differs_needs_force(roots, capsys):
     dev, _ = roots
     MODULE.generate(dev, None, None, EMAP, False, SMALL)
