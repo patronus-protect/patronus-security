@@ -113,7 +113,7 @@ tasks:
     title: Review and freeze taxonomy v1 (classes, must/should families, defaults on/off per class)
     type: decision
     deps: [M02, M03]
-    needs_decision: true
+    status: done
 
   # ── X (cont.): category switch ────────────────────────────────────────
   - id: X03
