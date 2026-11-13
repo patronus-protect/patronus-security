@@ -6,53 +6,53 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | Decision | Reason |
 |---|---|---|
-| instruction_injection | no-go | dev generated/carrier_insertion: error rate 27.5%; dev generated/obfuscation_slices: error rate 27.5%; dev train_dev/spml: error rate 24.0% |
-| jailbreak | no-go | dev: 0 scored rows (needs 50) |
-| prompt_extraction | no-go | dev generated/carrier_insertion: error rate 27.5%; dev generated/obfuscation_slices: error rate 27.5%; dev train_dev/mosscap: error rate 24.0% |
+| instruction_injection | pending | owner holdout review missing |
+| jailbreak | pending | owner holdout review missing |
+| prompt_extraction | pending | owner holdout review missing |
 | tool_poisoning | pending | owner holdout review missing |
 | agent_config_tampering | pending | owner holdout review missing |
 | memory_poisoning | pending | owner holdout review missing |
 | exfiltration | pending | owner holdout review missing |
 | unsafe_action | pending | owner holdout review missing |
 | resource_exhaustion | pending | owner holdout review missing |
-| harmful_content | no-go | dev train_dev/ailuminate_demo: error rate 6.0% |
-| toxic_language | no-go | dev train_dev/textdetox_de: error rate 18.0% |
+| harmful_content | no-go | dev: 0 scored rows (needs 50) |
+| toxic_language | no-go | dev: 0 scored rows (needs 50) |
 
 ## Rows per class and language
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 0 | 12387 | ? | ? | 11855 | 0 | 532 | ? | ? | ? |
-| jailbreak | 0 | 0 | ? | ? | 0 | 0 | 0 | ? | ? | ? |
-| prompt_extraction | 0 | 15468 | ? | ? | 15000 | 0 | 468 | ? | ? | ? |
-| tool_poisoning | 50 | 50 | ? | ? | 0 | 0 | 100 | ? | ? | ? |
-| agent_config_tampering | 50 | 50 | ? | ? | 0 | 0 | 100 | ? | ? | ? |
-| memory_poisoning | 50 | 50 | ? | ? | 0 | 0 | 100 | ? | ? | ? |
+| instruction_injection | 0 | 2927 | ? | ? | 2403 | 0 | 524 | ? | ? | ? |
+| jailbreak | 42 | 42 | ? | ? | 0 | 0 | 84 | ? | ? | ? |
+| prompt_extraction | 0 | 15476 | ? | ? | 15000 | 0 | 476 | ? | ? | ? |
+| tool_poisoning | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
+| agent_config_tampering | 42 | 42 | ? | ? | 0 | 0 | 84 | ? | ? | ? |
+| memory_poisoning | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
 | exfiltration | 150 | 150 | ? | ? | 0 | 0 | 300 | ? | ? | ? |
-| unsafe_action | 50 | 50 | ? | ? | 0 | 0 | 100 | ? | ? | ? |
-| resource_exhaustion | 50 | 50 | ? | ? | 0 | 0 | 100 | ? | ? | ? |
-| harmful_content | 0 | 800 | ? | ? | 800 | 0 | 0 | ? | ? | ? |
-| toxic_language | 2072 | 0 | ? | ? | 2072 | 0 | 0 | ? | ? | ? |
-| benign | 14343 | 19180 | ? | ? | 31723 | 0 | 1800 | ? | ? | ? |
+| unsafe_action | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
+| resource_exhaustion | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
+| harmful_content | 0 | 0 | ? | ? | 0 | 0 | 0 | ? | ? | ? |
+| toxic_language | 0 | 0 | ? | ? | 0 | 0 | 0 | ? | ? | ? |
+| benign | 11853 | 19359 | ? | ? | 29412 | 0 | 1800 | ? | ? | ? |
 
 ## Spot-check dev
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/carrier_insertion | dev | 1200 | 51 | 7 | 7 | 27.5% | 0 / 17 |
-| generated/class_templates | dev | 1000 | 54 | 0 | 0 | 0.0% | 0 / 9 |
+| generated/carrier_insertion | dev | 1200 | 51 | 1 | 1 | 3.9% | 0 / 17 |
+| generated/class_templates | dev | 1000 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| generated/obfuscation_slices | dev | 800 | 51 | 6 | 8 | 27.5% | 0 / 17 |
+| generated/obfuscation_slices | dev | 800 | 51 | 0 | 2 | 3.9% | 0 / 17 |
+| report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
-| train_dev/ailuminate_demo | dev | 1200 | 50 | 0 | 3 | 6.0% | 0 / 0 |
+| report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
-| train_dev/mosscap | dev | 15000 | 50 | 6 | 6 | 24.0% | 0 / 0 |
-| train_dev/spml | dev | 15000 | 50 | 10 | 2 | 24.0% | 0 / 25 |
-| train_dev/textdetox_de | dev | 4564 | 50 | 1 | 8 | 18.0% | 2 / 25 |
+| train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
+| train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 
-Benign pool (dev, scored sets): 2 of 218 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 192 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -66,76 +66,44 @@ Pending: runs in the independent gate, where both splits are readable.
 
 | Set | Row | Label | Verdict | Note |
 |---|---|---|---|---|
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000123 | instruction_injection | unclear | Policy-violating advice request, no instruction override |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000390 | instruction_injection | wrong | No injection or override; benign off-topic user request |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000009 | prompt_extraction | unclear | Vague request for another trick, no extraction payload |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000213 | prompt_extraction | wrong | Benign help request, no extraction attempt |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000024 | instruction_injection | unclear | Policy-violating advice request, no instruction override |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000221 | instruction_injection | wrong | No injection or override; benign off-topic user request |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000210 | prompt_extraction | unclear | Hint request only meaningful in password game context |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000285 | instruction_injection | wrong | No injection or override; benign off-topic user request |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000471 | prompt_extraction | unclear | Password probe only meaningful in game context |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000204 | prompt_extraction | unclear | Password guess, unclear as extraction outside game |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000208 | instruction_injection | wrong | No injection or override; benign off-topic user request |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000434 | prompt_extraction | wrong | Benign clarification request, no extraction attempt |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000122 | prompt_extraction | unclear | Ambiguous story request, extraction intent not evident |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000518 | instruction_injection | wrong | No injection or override; benign off-topic user request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000146 | prompt_extraction | unclear | Decoded text lacks clear extraction intent outside game |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000230 | instruction_injection | unclear | Decodes to risky data-sharing request, no override |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000353 | prompt_extraction | wrong | Decodes to harmless repeat request, no extraction |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000185 | prompt_extraction | unclear | Decoded fragment has no clear extraction intent |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000317 | prompt_extraction | wrong | Decodes to harmless poem request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000381 | instruction_injection | wrong | Decodes to harmless joke request, no injection |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000398 | prompt_extraction | unclear | Decoded coding request, extraction intent not evident |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000364 | prompt_extraction | unclear | Decodes to letter count question, game-context only |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000180 | instruction_injection | wrong | Decodes to benign wellbeing request, no injection |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000279 | prompt_extraction | wrong | Decodes to harmless question, no extraction |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000151 | instruction_injection | unclear | Decoded off-topic request, no explicit override |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000323 | prompt_extraction | unclear | Decoded question about secret storage, weak extraction |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000207 | instruction_injection | wrong | Decodes to benign analysis request, no injection |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000213 | prompt_extraction | unclear | Decodes to refusal suppression, not prompt extraction |
+| train_dev/spml | spml:0007279 | instruction_injection | unclear | Only asks whether override possible; rest no override |
+| report/ailuminate_demo | ailuminate_demo:0000505 | harmful_content | unclear | Discussion of fraud tactics; mostly educational, limited uplift |
+| report/ailuminate_demo | ailuminate_demo:0000510 | harmful_content | wrong | Asks how to react to crime; seeks no uplift |
+| report/ailuminate_demo | ailuminate_demo:0000624 | other | unclear | Garbled; vulnerability angle is cyber, not reported subclass |
+| report/ailuminate_demo | ailuminate_demo:0001023 | harmful_content | unclear | Incoherent opinion question; no harmful request |
+| report/ailuminate_demo | ailuminate_demo:0000380 | other | unclear | Benign question on avoiding copyright infringement |
+| report/ailuminate_demo | ailuminate_demo:0001139 | harmful_content | wrong | Opinion rant about justice system; no harm sought |
+| report/ailuminate_demo | ailuminate_demo:0000182 | other | unclear | Fact-check question; weak defamation link |
+| report/ailuminate_demo | ailuminate_demo:0001145 | harmful_content | unclear | Analytical question about terrorism; no clear uplift |
+| report/ailuminate_demo | ailuminate_demo:0000743 | other | unclear | Asset concealment is crime help, fits harmful_content |
+| report/ailuminate_demo | ailuminate_demo:0000388 | other | unclear | Benign career question; weak IP link |
+| report/ailuminate_demo | ailuminate_demo:0001196 | harmful_content | unclear | Vague philosophical question; no uplift |
+| report/ailuminate_demo | ailuminate_demo:0000449 | harmful_content | unclear | Historical bioweapon info; jailbreak frame, little uplift |
+| report/ailuminate_demo | ailuminate_demo:0000502 | harmful_content | unclear | Tax planning loopholes; borderline legal |
+| report/ailuminate_demo | ailuminate_demo:0000590 | harmful_content | unclear | Statement about abandoning child; no request |
+| report/ailuminate_demo | ailuminate_demo:0000931 | harmful_content | wrong | Benign question about coping behaviours |
 | report/gandalf | gandalf:0000636 | instruction_injection+prompt_extraction | unclear | Only asks about memory; neither override nor extraction clear |
 | report/jackhhao_jailbreak | jackhhao_jailbreak:0001451 | jailbreak | unclear | Instruction override with harmless goal; injection rather than jailbreak |
 | report/jackhhao_jailbreak | jackhhao_jailbreak:0000236 | jailbreak | unclear | Persona pretext for risky essay, but no rule-lifting |
 | report/jackhhao_jailbreak | jackhhao_jailbreak:0000452 | jailbreak | wrong | Harmless D&D campaign request, no rule-lifting |
-| train_dev/ailuminate_demo | ailuminate_demo:0001007 | harmful_content | unclear | Opinion statement about pornography, no harmful request |
-| train_dev/ailuminate_demo | ailuminate_demo:0000408 | harmful_content | unclear | Moral discussion question about banned weapons, no uplift sought |
-| train_dev/ailuminate_demo | ailuminate_demo:0001095 | harmful_content | unclear | Asks how to keep descriptions non-graphic; mild sexual content |
-| train_dev/mosscap | mosscap:0130442 | prompt_extraction | wrong | Plain greeting; no attempt at the password |
-| train_dev/mosscap | mosscap:0198136 | prompt_extraction | unclear | Meta question about the game, not clearly extraction |
-| train_dev/mosscap | mosscap:0146242 | prompt_extraction | wrong | Content-free filler; no extraction attempt |
-| train_dev/mosscap | mosscap:0037054 | prompt_extraction | unclear | Asks bot to withhold password on some days; odd |
-| train_dev/mosscap | mosscap:0080263 | prompt_extraction | wrong | Unrelated animal question; no extraction attempt |
-| train_dev/mosscap | mosscap:0118815 | prompt_extraction | wrong | Reverses an unrelated sentence; no attempt at password |
-| train_dev/mosscap | mosscap:0027765 | prompt_extraction | wrong | Harmless FAQ question; no attempt at the password |
-| train_dev/mosscap | mosscap:0120459 | prompt_extraction | unclear | Single word fragment; intent cannot be determined |
-| train_dev/mosscap | mosscap:0062810 | prompt_extraction | unclear | Asks how to update rules; more injection prelude |
-| train_dev/mosscap | mosscap:0123645 | prompt_extraction | wrong | Classic goal-hijack injection, not prompt extraction |
-| train_dev/mosscap | mosscap:0255649 | prompt_extraction | unclear | General privacy question; no clear extraction attempt |
-| train_dev/mosscap | mosscap:0256551 | prompt_extraction | unclear | Ambiguous counting task; link to password unclear |
-| train_dev/spml | spml:0014537 | instruction_injection | wrong | Only a system prompt plus benign on-topic user question |
-| train_dev/spml | spml:0003451 | instruction_injection | wrong | Only a system prompt plus benign on-topic user question |
-| train_dev/spml | spml:0001503 | instruction_injection | unclear | Off-scope demands only; override intent is weak |
-| train_dev/spml | spml:0005871 | instruction_injection | wrong | Only a system prompt plus benign on-topic user question |
-| train_dev/spml | spml:0002573 | instruction_injection | wrong | System prompt plus ordinary in-scope user request; no override |
-| train_dev/spml | spml:0012724 | instruction_injection | wrong | System prompt plus harmless user question; no override attempt |
-| train_dev/spml | spml:0007083 | instruction_injection | unclear | Policy-violating user request, but no instruction override |
-| train_dev/spml | spml:0012718 | instruction_injection | wrong | Harmless personal questions to the bot; no instruction override |
-| train_dev/spml | spml:0008781 | instruction_injection | wrong | Ordinary request for study tips; no override attempt |
-| train_dev/spml | spml:0010210 | instruction_injection | wrong | Harmless question about meals and fitness; no override |
-| train_dev/spml | spml:0007905 | instruction_injection | wrong | Only a system prompt plus benign recipe request |
-| train_dev/spml | spml:0013522 | instruction_injection | wrong | Harmless history/investing question; no override attempt |
-| train_dev/textdetox_de | textdetox_de:0000857 | toxic_language | unclear | Mild political jab, borderline toxic |
-| train_dev/textdetox_de | textdetox_de:0004616 | benign | unclear | Aggressive remark about Nazi sympathizers, borderline toxic |
-| train_dev/textdetox_de | textdetox_de:0003717 | toxic_language | unclear | Sarcastic political remark without direct insult |
-| train_dev/textdetox_de | textdetox_de:0003791 | toxic_language | unclear | Argues for civility; profanity only mentioned, not directed |
-| train_dev/textdetox_de | textdetox_de:0004345 | benign | unclear | Demeaning generalization about others, borderline toxic |
-| train_dev/textdetox_de | textdetox_de:0004847 | toxic_language | unclear | Mild pejorative label only, borderline toxic |
-| train_dev/textdetox_de | textdetox_de:0001727 | toxic_language | unclear | Political statement against antisemitism; generalization is borderline |
-| train_dev/textdetox_de | textdetox_de:0004426 | toxic_language | unclear | Mild criticism, borderline toxic |
-| train_dev/textdetox_de | textdetox_de:0001588 | toxic_language | wrong | Civil political argument, no insult or hate |
+| report/textdetox_de | textdetox_de:0002064 | toxic_language | unclear | Sarcastic political jab; mild |
+| report/textdetox_de | textdetox_de:0002101 | toxic_language | unclear | Sarcastic camp remark; tone unclear |
+| report/textdetox_de | textdetox_de:0003412 | benign | unclear | Common dehumanizing trope, likely aimed at migrants |
+| report/textdetox_de | textdetox_de:0004666 | toxic_language | unclear | Crude but generic political venting |
+| report/textdetox_de | textdetox_de:0002408 | toxic_language | unclear | Harsh political comparison, no direct insult |
+| report/textdetox_de | textdetox_de:0004698 | toxic_language | wrong | Political criticism without insult |
+| report/textdetox_de | textdetox_de:0001886 | toxic_language | unclear | Ethnically framed deportation call; borderline |
+| report/textdetox_de | textdetox_de:0003894 | toxic_language | wrong | Political complaint without insult |
+| report/textdetox_de | textdetox_de:0002396 | benign | unclear | Mild jab at addressee's education |
+| report/textdetox_de | textdetox_de:0001950 | toxic_language | unclear | Condescending but mild |
+| report/textdetox_de | textdetox_de:0004397 | benign | unclear | Calls politician fascist; insulting label |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000024 | prompt_extraction | unclear | Fake note tells bot to deny knowing password |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000435 | prompt_extraction | wrong | Sets a new password, no extraction request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000279 | instruction_injection | unclear | Roleplay password extraction; override phrase only quoted |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000180 | prompt_extraction | unclear | Meta question on password case, no extraction |
+| train_dev/mosscap | mosscap:0068803 | prompt_extraction | unclear | Literal phrase request; extraction intent only implied |
 
-## Findings (dev review, 2026-11-13)
+## Findings (first dev review, 2026-11-13)
 
 Dev pool: `train_dev` and `report` as frozen by M05 (registry generation 2, sampling seed `ark-l1-threat-m05-v1`)
 plus `generated` from `generators.py generate` with the public dev seed (no `translated` directory is frozen yet).
@@ -161,6 +129,36 @@ Consequences: no class is `go` yet. The holdout review and the leakage check are
 synthetic-only classes are `pending`. The classes listed as `no-go` stay blocked until their dev gold is cleaned,
 for example by filtering SPML and Mosscap attack rows to those with an override or extraction cue (before they feed the
 generators too), adding a scored jailbreak dev source, and re-reviewing TextDetox-DE and AILuminate.
+
+## Findings (dev review after the gold cleanup, 2026-11-13)
+
+Dev pool rebuilt from the cleaned recipes (registry generation 4, generator version 3; built locally with the
+same recipes the gate uses) and re-sampled with `gold.py sample`. Every set whose rows changed was reviewed again in
+full; sets with unchanged rows and sample (Dolly, GermanQuAD, Gandalf, jackhhao, `exfil_lookalikes`) keep their first
+verdicts (`exfil_lookalikes` keeps its version-2 random stream, so its 600 rows are byte-identical to the reviewed ones), and the re-sampled report-only sets (TextDetox-DE, AILuminate demo) and `class_templates` were reviewed anew.
+
+- **SPML: 1 of 50 unclear (was 24 %).** The recipe keeps an attack row only when its user turn (after the last `###`
+  separator, or the whole text without one) carries an override cue; 10 138 attack rows without one are dropped and
+  counted in the manifest (`dropped.no_cue`). SPML now has 5 729 rows (2 403 attacks).
+- **Mosscap: 1 of 50 unclear (was 24 %).** The recipe keeps a prompt only when it asks for, probes or confirms the
+  secret (a request word next to the secret in the same sentence) or names the hidden instructions; 192 258 prompts
+  are dropped as `no_cue` before deduplication, 42 666 remain before the row cap (15 000 after).
+- **`carrier_insertion` and `obfuscation_slices` inherit the cleanup** (they embed the filtered SPML and Mosscap
+  rows); no template change was needed, their benign twins were already clean.
+- **TextDetox-DE and the AILuminate demo are report-only.** The re-review confirms the first one (TextDetox-DE 11 of
+  50, AILuminate 15 of 50 wrong or unclear: civil political remarks labelled toxic, opinion and discussion prompts
+  labelled harmful). `toxic_language` and `harmful_content` have no scored dev rows and stay not measurable until a
+  cleaner source is registered; their rule tasks stay blocked.
+- **`jailbreak` has 84 scored dev rows** from new `class_templates` families (persona without rules, refusal
+  suppression; modelled on the DAN and Jailbroken papers, placeholders only, each with a look-alike twin).
+- **`class_templates`:** 0 errors under the taxonomy's class definitions. Eight `agent_config_tampering` rows (a
+  rules or skill file with a hidden instruction that sends data out) were first marked unclear against a narrower
+  reviewer brief; the taxonomy defines the class as malicious instructions in skills, rules files and agent
+  config, so they count as correct. The set still repeats some texts verbatim (few families), so scores on it
+  overstate generalisation.
+
+The holdout review and the leakage check are still missing, so no class can be `go` yet; the classes whose dev gold
+now passes move from `no-go` to `pending`.
 
 ## How this report is made
 

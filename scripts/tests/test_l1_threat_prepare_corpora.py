@@ -171,6 +171,10 @@ def test_check_accepts_fixture(world):
         ("train_set", {"cap": 1001}, "cap must be a positive integer up to sampling.max_rows"),
         ("train_set", {"cap": 0}, "cap must be a positive integer up to sampling.max_rows"),
         ("pending_set", {"internal": "x", "pending": None}, "internal exactly for families"),
+        ("train_set", {"keep": [{"label": "label = attack", "pattern": "x"}]}, "needs exactly"),
+        ("train_set", {"keep": [{"label": "label = other", "pattern": "x", "reason": "r"}]}, "is not a label of the set"),
+        ("train_set", {"keep": [{"label": "label = attack", "pattern": "(", "reason": "r"}]}, "pattern does not compile"),
+        ("train_set", {"keep": [{"label": "label = attack", "pattern": "x", "reason": " "}]}, "reason must name"),
     ],
 )
 def test_check_flags(world, dataset_id, change, message):
@@ -263,6 +267,21 @@ def test_load_set_caps_after_dedup(world, tmp_path):
     rows = [json.loads(line) for line in files["train_set.jsonl"].decode("utf-8").splitlines()]
     assert sum(row["benign"] for row in rows) == 1 and sum(not row["benign"] for row in rows) == 1
     assert json.loads(files["manifest.json"])["sampling"] == registry["sampling"]
+
+
+def test_keep_drops_rows_of_the_label_without_the_cue(world):
+    registry, emap, sources = world
+    registry = copy.deepcopy(registry)
+    registry["datasets"][0]["keep"] = [{"label": "label = attack", "pattern": "REVEAL", "reason": "extraction cue"}]
+    assert MODULE.check(registry, emap) == []
+    files = MODULE.build("train_dev", registry, emap, sources, offline=True, download=no_download)
+    assert json.loads(files["manifest.json"])["sets"]["train_set"]["dropped"] == {"exact": 1, "minhash": 1, "out_of_scope": 1}
+    registry["datasets"][0]["keep"][0]["pattern"] = r"\bwithout limits\b"
+    files = MODULE.build("train_dev", registry, emap, sources, offline=True, download=no_download)
+    entry = json.loads(files["manifest.json"])["sets"]["train_set"]
+    # Both attack rows lack the cue; the benign rows of the set are untouched.
+    assert entry["dropped"] == {"minhash": 1, "no_cue": 2, "out_of_scope": 1}
+    assert entry["classes"] == {} and entry["benign"] == 2
 
 
 def test_contamination_compares_against_uncapped_training_sources(world):

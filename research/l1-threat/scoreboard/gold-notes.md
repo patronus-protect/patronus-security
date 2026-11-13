@@ -1,4 +1,4 @@
-## Findings (dev review, 2026-11-13)
+## Findings (first dev review, 2026-11-13)
 
 Dev pool: `train_dev` and `report` as frozen by M05 (registry generation 2, sampling seed `ark-l1-threat-m05-v1`)
 plus `generated` from `generators.py generate` with the public dev seed (no `translated` directory is frozen yet).
@@ -24,6 +24,36 @@ Consequences: no class is `go` yet. The holdout review and the leakage check are
 synthetic-only classes are `pending`. The classes listed as `no-go` stay blocked until their dev gold is cleaned,
 for example by filtering SPML and Mosscap attack rows to those with an override or extraction cue (before they feed the
 generators too), adding a scored jailbreak dev source, and re-reviewing TextDetox-DE and AILuminate.
+
+## Findings (dev review after the gold cleanup, 2026-11-13)
+
+Dev pool rebuilt from the cleaned recipes (registry generation 4, generator version 3; built locally with the
+same recipes the gate uses) and re-sampled with `gold.py sample`. Every set whose rows changed was reviewed again in
+full; sets with unchanged rows and sample (Dolly, GermanQuAD, Gandalf, jackhhao, `exfil_lookalikes`) keep their first
+verdicts (`exfil_lookalikes` keeps its version-2 random stream, so its 600 rows are byte-identical to the reviewed ones), and the re-sampled report-only sets (TextDetox-DE, AILuminate demo) and `class_templates` were reviewed anew.
+
+- **SPML: 1 of 50 unclear (was 24 %).** The recipe keeps an attack row only when its user turn (after the last `###`
+  separator, or the whole text without one) carries an override cue; 10 138 attack rows without one are dropped and
+  counted in the manifest (`dropped.no_cue`). SPML now has 5 729 rows (2 403 attacks).
+- **Mosscap: 1 of 50 unclear (was 24 %).** The recipe keeps a prompt only when it asks for, probes or confirms the
+  secret (a request word next to the secret in the same sentence) or names the hidden instructions; 192 258 prompts
+  are dropped as `no_cue` before deduplication, 42 666 remain before the row cap (15 000 after).
+- **`carrier_insertion` and `obfuscation_slices` inherit the cleanup** (they embed the filtered SPML and Mosscap
+  rows); no template change was needed, their benign twins were already clean.
+- **TextDetox-DE and the AILuminate demo are report-only.** The re-review confirms the first one (TextDetox-DE 11 of
+  50, AILuminate 15 of 50 wrong or unclear: civil political remarks labelled toxic, opinion and discussion prompts
+  labelled harmful). `toxic_language` and `harmful_content` have no scored dev rows and stay not measurable until a
+  cleaner source is registered; their rule tasks stay blocked.
+- **`jailbreak` has 84 scored dev rows** from new `class_templates` families (persona without rules, refusal
+  suppression; modelled on the DAN and Jailbroken papers, placeholders only, each with a look-alike twin).
+- **`class_templates`:** 0 errors under the taxonomy's class definitions. Eight `agent_config_tampering` rows (a
+  rules or skill file with a hidden instruction that sends data out) were first marked unclear against a narrower
+  reviewer brief; the taxonomy defines the class as malicious instructions in skills, rules files and agent
+  config, so they count as correct. The set still repeats some texts verbatim (few families), so scores on it
+  overstate generalisation.
+
+The holdout review and the leakage check are still missing, so no class can be `go` yet; the classes whose dev gold
+now passes move from `no-go` to `pending`.
 
 ## How this report is made
 

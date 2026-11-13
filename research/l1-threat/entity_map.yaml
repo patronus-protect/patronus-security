@@ -732,11 +732,14 @@ datasets:
     source: github:mlcommons/ailuminate
     licence: CC-BY-4.0
     languages: [en]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
       - {label: "hazard in (vcr, src, cse, ssh, iwp, ncr, hte, sxc)", classes: [harmful_content]}
       - {label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)", classes: [harmful_content], decides: false, reason: "model-only subclasses (specialized advice, privacy, ip, defamation, elections)"}
+    note: >-
+      reported only since the gold spot-check (6 % unclear: opinion and discussion prompts without uplift carry a hazard
+      label); harmful_content has no scored dev source until a cleaner one is registered
   - id: nemotron_content_safety_v2
     name: Nemotron Content Safety dataset v2 (candidate)
     source: hf:nvidia/Aegis-AI-Content-Safety-Dataset-2.0
@@ -784,11 +787,14 @@ datasets:
     source: hf:textdetox/multilingual_toxicity_dataset (de)
     licence: openrail++
     languages: [de]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
       - {label: "toxic = 1", classes: [toxic_language]}
       - {label: "toxic = 0", benign: true}
+    note: >-
+      reported only since the gold spot-check (18 % wrong or unclear: borderline political remarks on both sides of
+      the label); toxic_language has no scored dev source until a cleaner one is registered
   - id: civil_comments
     name: Civil Comments / Jigsaw
     source: hf:google/civil_comments

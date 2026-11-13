@@ -76,7 +76,7 @@ def test_template_families_are_split_disjoint():
 
 def test_class_templates_cover_the_classes_without_public_dev_data(roots):
     dev, holdout = roots
-    assert set(MODULE.CLASS_TEMPLATES) == {"tool_poisoning", "agent_config_tampering", "memory_poisoning", "unsafe_action", "resource_exhaustion"}
+    assert set(MODULE.CLASS_TEMPLATES) == {"jailbreak", "tool_poisoning", "agent_config_tampering", "memory_poisoning", "unsafe_action", "resource_exhaustion"}
     assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
     for root, split in ((dev, "dev"), (holdout, "holdout")):
         rows = generated(root / "generated")["class_templates"]
@@ -224,6 +224,18 @@ def test_output_of_an_older_generator_version_is_regenerated(roots, capsys, monk
     assert MODULE.generate(dev, None, None, EMAP, False, SMALL) == 0
     assert "frozen by generator version 1, now 2; regenerating" in capsys.readouterr().out
     assert json.loads((dev / "generated" / "manifest.json").read_text())["generator_version"] == 2
+
+
+def test_a_version_bump_keeps_the_stream_of_an_unchanged_generator(monkeypatch):
+    # The dev gold review of exfil_lookalikes read the rows of its v2 stream; a version bump for another
+    # generator must not swap those texts under the same row ids.
+    inputs = corpus_rows("dev")
+    counts = {**COUNTS, "exfil_lookalikes": MODULE.DEFAULT_COUNTS["dev"]["exfil_lookalikes"]}
+    files = MODULE.generate_split("dev", MODULE.DEV_SEED, inputs, EMAP, counts)
+    assert hashlib.sha256(files["exfil_lookalikes.jsonl"]).hexdigest() == "32a44b8d6ebba842fb7203b94f186da3fba3a8a8fb5783a8b17185cae87866ab"
+    monkeypatch.setattr(MODULE, "GENERATOR_VERSION", MODULE.GENERATOR_VERSION + 1)
+    bumped = MODULE.generate_split("dev", MODULE.DEV_SEED, inputs, EMAP, counts)
+    assert bumped["exfil_lookalikes.jsonl"] == files["exfil_lookalikes.jsonl"]
 
 
 def test_frozen_output_that_differs_needs_force(roots, capsys):
