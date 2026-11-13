@@ -18,7 +18,7 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8 columns only)
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns)
 #   text        record field holding the text; `language` a fixed code or `language_field`
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
 #               field matches every row; `label` is the upstream label of entity_map.yaml. Every
@@ -264,7 +264,16 @@ datasets:
     pending: recipe not written yet
   - id: textdetox_de
     commercial: true
-    pending: "only file data/de-00000-of-00001.parquet (rev 01907546324b) keeps the label in an int64 column the reader cannot read yet"
+    source: https://huggingface.co/datasets/textdetox/multilingual_toxicity_dataset
+    revision: 01907546324b0330d2d8b7669648cc18823323e5
+    files:
+      - {path: data/de-00000-of-00001.parquet, sha256: 47acf7a5d1f172d8b897a6963e4578162595509b38aff3f1b1d1527765ab93ff}
+    format: parquet
+    text: text
+    language: de
+    labels:
+      - {field: toxic, equals: "1", label: "toxic = 1"}
+      - {field: toxic, equals: "0", label: "toxic = 0"}
   - id: civil_comments
     commercial: true
     pending: recipe not written yet

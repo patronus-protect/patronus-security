@@ -341,9 +341,10 @@ Auswertungssätze; die Rolle `decisive`/`dev`/`report` wird aus Split, Familie u
 Holdout gegen `train_dev`/`report` (die Holdout-Zeile fliegt), gegen Baseline-Trainingslisten als Spalte
 `contamination` je Baseline (ProtectAI v2: XSTest, jackhhao laut Modellkarte). Holdout-Rezepte, auch MCPTox,
 stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus `~/ark-threat/holdout`.
-Stand: sechs Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILuminate-Demo); die übrigen
-`train_dev`- und `report`-Sätze sind `pending` (offene Formate: Parquet mit Zahlenspalten wie textdetox DE,
-ZIP, Mehrdatei-Repos auf GitHub).
+Stand: sieben Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILuminate-Demo, textdetox DE;
+der Parquet-Leser liest einfache Ganzzahl-Spalten als Dezimaltext); die übrigen `train_dev`- und
+`report`-Sätze sind `pending` (offene Formate: Parquet mit Gleitkomma- oder Listen-Spalten, ZIP,
+Mehrdatei-Repos auf GitHub).
 
 **Registry v2 (M05).** Kein Satz dominiert den Pool: Nach dem Dedup behält jeder Satz höchstens 15 000
 Zeilen (`sampling.max_rows`, je Satz kleiner über `cap`), geschichtet nach Benign/Klassen/Sprache mit

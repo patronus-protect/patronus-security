@@ -139,8 +139,11 @@ def snappy_decompress(data: bytes) -> bytes:
 
 # ── minimal Parquet reader ───────────────────────────────────────────────────
 # Enough for the pinned Gretel shards: flat optional/required BYTE_ARRAY columns, PLAIN and
-# (RLE_|PLAIN_)DICTIONARY pages, data page v1 and v2, UNCOMPRESSED or SNAPPY. Anything else
+# (RLE_|PLAIN_)DICTIONARY pages, data page v1 and v2, UNCOMPRESSED or SNAPPY; plain INT32/INT64
+# columns (no logical type, e.g. label columns) are read as decimal strings. Anything else
 # is rejected rather than misread; the source SHA-256 pins the files it has to read.
+# Physical types read: Parquet type id -> fixed width in bytes (None: length-prefixed byte array).
+PARQUET_TYPES = {1: 4, 2: 8, 6: None}
 
 
 class _Thrift:
@@ -229,7 +232,14 @@ def _rle_hybrid(data: bytes, bit_width: int, count: int) -> list[int]:
     return values[:count]
 
 
-def _plain_byte_arrays(data: bytes, count: int) -> list[bytes]:
+def _plain_values(data: bytes, count: int, width: int | None) -> list[bytes]:
+    """PLAIN values: byte arrays as they are, little-endian integers as decimal ASCII."""
+    if width is not None:
+        if count * width > len(data):
+            raise ValueError("truncated PLAIN integers")
+        return [
+            str(int.from_bytes(data[i * width : (i + 1) * width], "little", signed=True)).encode("ascii") for i in range(count)
+        ]
     values = []
     pos = 0
     for _ in range(count):
@@ -251,7 +261,7 @@ def _decompress(codec: int, data: bytes) -> bytes:
     raise ValueError(f"unsupported Parquet codec {codec}")
 
 
-def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool) -> list[bytes | None]:
+def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, width: int | None) -> list[bytes | None]:
     codec, total = meta[4], meta[5]
     pos = meta.get(11) or meta[9]
     dictionary: list[bytes] | None = None
@@ -266,7 +276,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool) -> list[byt
         payload = data[start : start + compressed_size]
         pos = start + compressed_size
         if page_type == 2:
-            dictionary = _plain_byte_arrays(_decompress(codec, payload), header[7][1])
+            dictionary = _plain_values(_decompress(codec, payload), header[7][1], width)
             continue
         if page_type == 0:
             page = _decompress(codec, payload)
@@ -290,7 +300,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool) -> list[byt
             continue  # index pages carry no values
         present = sum(levels)
         if encoding == 0:
-            decoded = _plain_byte_arrays(body, present)
+            decoded = _plain_values(body, present, width)
         elif encoding in (2, 8):
             if dictionary is None or not body:
                 raise ValueError("dictionary-encoded Parquet page without a dictionary")
@@ -308,7 +318,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool) -> list[byt
 
 
 def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> list[dict[str, str | None]]:
-    """Rows of the requested top-level UTF-8 columns of a Parquet file, nulls as ``None``."""
+    """Rows of the requested top-level UTF-8 (or plain integer) columns of a Parquet file, nulls as ``None``."""
     data = path.read_bytes()
     if len(data) < 12 or data[:4] != b"PAR1" or data[-4:] != b"PAR1":
         raise ValueError(f"{path} is not a Parquet file")
@@ -334,15 +344,16 @@ def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> li
         element = leaves.get(column)
         if element is None:
             raise ValueError(f"{path}: no top-level column {column!r}")
-        if element.get(1) != 6 or element.get(3) == 2:
-            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY column")
+        integer = element.get(1) in (1, 2) and 6 not in element and 10 not in element
+        if not (element.get(1) == 6 or integer) or element.get(3) == 2:
+            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY or plain integer column")
     result: dict[str, list[bytes | None]] = {column: [] for column in columns}
     for row_group in metadata[4]:
         for chunk in row_group[1]:
             meta = chunk[3]
             name = b".".join(meta[3]).decode("utf-8")
             if name in result:
-                result[name].extend(_column_chunk(data, meta, leaves[name].get(3) == 1))
+                result[name].extend(_column_chunk(data, meta, leaves[name].get(3) == 1, PARQUET_TYPES[leaves[name][1]]))
     rows = metadata[3]
     for column, values in result.items():
         if len(values) != rows:
