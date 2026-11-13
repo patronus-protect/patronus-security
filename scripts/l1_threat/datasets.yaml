@@ -31,7 +31,8 @@
 schema: ark-l1-threat-datasets-v1
 
 # Corpus generation: raising it re-freezes every prepared split on the next run (row caps, new sets).
-generation: 2
+# 3: Tensor Trust extraction benchmark joins the holdout registry.
+generation: 3
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
