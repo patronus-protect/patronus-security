@@ -184,6 +184,19 @@ def test_repository_taxonomy_is_clean():
     assert MODULE.main(["check"]) == 0
 
 
+def test_backlog_task_ids_rejects_duplicate_keys(tmp_path):
+    backlog = tmp_path / "backlog.yaml"
+    backlog.write_text("tasks:\n  - id: M07\n    status: done\n    status: todo\n", encoding="utf-8")
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
+        MODULE.backlog_task_ids(backlog)
+
+
+def test_backlog_task_ids_reads_tasks_and_recurring(tmp_path):
+    backlog = tmp_path / "backlog.yaml"
+    backlog.write_text("tasks:\n  - id: M07\nrecurring:\n  - id: TRIAGE\n", encoding="utf-8")
+    assert MODULE.backlog_task_ids(backlog) == {"M07", "TRIAGE"}
+
+
 def test_repository_must_families_cover_de_and_en_for_every_class():
     taxonomy = MODULE.load()
     for name in MODULE.CLASSES:

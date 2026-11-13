@@ -16,6 +16,8 @@ Problems reported by ``check``:
   threat ``rules.json``) that no family or handoff maps, or that two places map;
 - a mapped rule id that does not exist;
 - a ``must`` family without a task, or a task id that is not in ``backlog.yaml``;
+- a key that ``backlog.yaml`` repeats within one mapping (YAML keeps the last one silently, so a
+  merge that leaves ``status: done`` above ``status: todo`` would reopen the task);
 - a lexicon id that is neither in ``ark-core/src/detectors/anchor_lexicons/*.json`` nor declared
   as planned in the taxonomy (and a planned id that already exists or is declared twice);
 - schema errors (classes, family and lexicon keys, priorities, carriers, baselines, example shapes).
@@ -145,8 +147,19 @@ def existing_lexicon_ids(root: Path = ROOT) -> set[str]:
     return ids
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        keys = [self.construct_object(key, deep=deep) for key, _ in node.value]
+        duplicates = sorted({str(key) for key, count in Counter(keys).items() if count > 1})
+        if duplicates:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key(s) {', '.join(duplicates)}", node.start_mark
+            )
+        return super().construct_mapping(node, deep=deep)
+
+
 def backlog_task_ids(path: Path = BACKLOG_PATH) -> set[str]:
-    backlog = yaml.safe_load(path.read_text(encoding="utf-8"))
+    backlog = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
     return {task["id"] for section in ("tasks", "recurring") for task in backlog.get(section) or []}
 
 
