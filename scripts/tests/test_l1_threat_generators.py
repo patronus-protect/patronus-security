@@ -18,7 +18,7 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 EMAP = MODULE.entity_map.load(MODULE.entity_map.MAP_PATH)
-COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32}
+COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20}
 SMALL = {"dev": COUNTS, "holdout": COUNTS}
 
 
@@ -74,6 +74,34 @@ def test_template_families_are_split_disjoint():
     assert set(MODULE.CARRIERS) == {"web", "pdf_text", "ticket", "code_comment", "rag_chunk", "mail"}
 
 
+def test_class_templates_cover_the_classes_without_public_dev_data(roots):
+    dev, holdout = roots
+    assert set(MODULE.CLASS_TEMPLATES) == {"tool_poisoning", "agent_config_tampering", "memory_poisoning", "unsafe_action", "resource_exhaustion"}
+    assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
+    for root, split in ((dev, "dev"), (holdout, "holdout")):
+        rows = generated(root / "generated")["class_templates"]
+        attacks = [row for row in rows if not row["benign"]]
+        assert {c for row in attacks for c in row["classes"]} == set(MODULE.CLASS_TEMPLATES)
+        assert {(row["classes"][0], row["language"]) for row in attacks} == {(c, lang) for c in MODULE.CLASS_TEMPLATES for lang in ("de", "en")}
+        by_id = {row["id"]: row for row in rows}
+        for row in rows:
+            name = (row if not row["benign"] else by_id[row["twin_of"]])["classes"][0]
+            assert row["template_family"] in MODULE.CLASS_TEMPLATES[name][split]
+            assert row["modelled_on"] == MODULE.CLASS_TEMPLATES[name]["modelled_on"]
+            assert row["translated"] is False and "{" + "n}" not in row["text"]
+        manifest = json.loads((root / "generated" / "manifest.json").read_text())
+        assert manifest["template_families"]["class_templates"]["unsafe_action"] == sorted(MODULE.CLASS_TEMPLATES["unsafe_action"][split])
+
+
+def test_check_families_needs_a_documented_model_and_a_lookalike(monkeypatch):
+    table = dict(MODULE.CLASS_TEMPLATES["unsafe_action"], modelled_on="")
+    monkeypatch.setitem(MODULE.CLASS_TEMPLATES, "unsafe_action", table)
+    assert any("modelled_on" in problem for problem in MODULE.check_families())
+    same = {lang: ("same text", "same text") for lang in ("de", "en")}
+    monkeypatch.setitem(MODULE.CLASS_TEMPLATES, "unsafe_action", dict(table, modelled_on="paper", dev={"x": same}))
+    assert any("(attack, look-alike)" in problem for problem in MODULE.check_families())
+
+
 def test_check_families_reports_a_shared_family(monkeypatch):
     shared = {"dev": {"same": "{x}"}, "holdout": {"same": "{x}"}}
     monkeypatch.setitem(MODULE.WRAPPERS, "dev", shared["dev"])
@@ -94,6 +122,7 @@ def test_dev_generation_is_deterministic_and_paired(roots):
 
     labels = {item["label"] for item in next(d for d in EMAP["datasets"] if d["id"] == "generators_dev_seed")["labels"]}
     dev_families = {f for splits in MODULE.CARRIERS.values() for f in splits["dev"]} | set(MODULE.TOOL_FRAMES["dev"]) | set(MODULE.WRAPPERS["dev"])
+    dev_families |= {f for table in MODULE.CLASS_TEMPLATES.values() for f in table["dev"]}
     for name, rows in generated(dev / "generated").items():
         assert len(rows) == 2 * COUNTS[name]
         by_id = {row["id"]: row for row in rows}
@@ -160,6 +189,7 @@ def test_holdout_uses_a_secret_seed_and_its_own_families(roots):
     assert manifest["sets"]["carrier_insertion"]["role"] == "decisive"
     assert seed not in (holdout / "generated" / "manifest.json").read_text()
     holdout_families = {f for splits in MODULE.CARRIERS.values() for f in splits["holdout"]} | set(MODULE.TOOL_FRAMES["holdout"]) | set(MODULE.WRAPPERS["holdout"])
+    holdout_families |= {f for table in MODULE.CLASS_TEMPLATES.values() for f in table["holdout"]}
     labels = {item["label"] for item in next(d for d in EMAP["datasets"] if d["id"] == "generators_holdout_seed")["labels"]}
     for rows in generated(holdout / "generated").values():
         for row in rows:
