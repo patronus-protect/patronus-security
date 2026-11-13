@@ -11,6 +11,7 @@ Splitting is by source only: a dataset is ``train_dev``, ``holdout`` or ``report
     python3 scripts/l1_threat/prepare_corpora.py list                        # role and state per set
     python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT [--offline] [--force]
     python3 scripts/l1_threat/prepare_corpora.py verify DIR                   # exit 1 unless intact
+    python3 scripts/l1_threat/prepare_corpora.py coverage DIR [DIR ...]       # exit 1 unless the pool is complete
 
 Preparing writes ``DEV/train_dev/``, ``DEV/report/`` and ``HOLDOUT/holdout/``: one ``<id>.jsonl`` per
 ready set of the split, a ``manifest.json`` with the SHA-256 of every source file and output file, and
@@ -19,16 +20,23 @@ Holdout recipes come from ``--overlay`` (default ``HOLDOUT/datasets.overlay.yaml
 split without any ready set is not written. A frozen directory is rewritten only with ``--force``, or
 when it is intact but in an older corpus format and was built from the same inputs (sets, revisions,
 source files, dedup settings, training lists).
+Row caps: after deduplication every set keeps at most ``sampling.max_rows`` rows (or its lower
+``cap``), sampled per stratum (benign, classes, language) in proportion to the stratum size and,
+within a stratum, by a hash of the sampling seed, the set and the text; caps, seed and the row count
+before the cap are in the manifest. ``coverage`` checks a pool of frozen directories (prepared and
+generated) for gold rows of every taxonomy class, a benign pool of at least ``MIN_BENIGN_ROWS`` rows
+from at least ``MIN_BENIGN_SOURCES`` sets, and contamination checked for every baseline.
 Deduplication (texts after NFKC, case folding and whitespace collapsing):
 - exact and MinHash within each set (first occurrence kept);
 - across splits: preparing the holdout drops every row that duplicates a row of a train_dev or
   report set, so nothing the runner can train on reaches the holdout;
 - against baseline training lists: ``trained_on`` of a baseline in the entity map names registered
   sets; a row of such a set, or a duplicate of one of its rows, is marked in the row's
-  ``contamination`` column for that baseline (kept, reported apart). A training source the split
-  cannot read (pending, internal, or a holdout set while preparing train_dev/report) is listed under
-  ``unchecked`` in the manifest, and an unmatched row is ``null`` (unknown) for that baseline, never
-  ``false``.
+  ``contamination`` column for that baseline (kept, reported apart). Preparing every split in one
+  call compares train_dev and report rows against holdout training sources too (only the flag
+  reaches the dev output, never a holdout row). A training source the split cannot read (pending,
+  internal, or a holdout set when one split is prepared alone) is listed under ``unchecked`` in the
+  manifest, and an unmatched row is ``null`` (unknown) for that baseline, never ``false``.
 """
 
 from __future__ import annotations
@@ -68,11 +76,15 @@ PRESIDIO = _load_file("_ark_l1_presidio_prepare_corpora", HERE.parent / "l1_pres
 BENIGN_CODE = _load_file("_ark_l1_dlp_benign_code", HERE.parent / "l1_dlp" / "benign_code.py")
 # Loaded under its own name: other script directories have an entity_map module too.
 entity_map = _load_file("_ark_l1_threat_entity_map", HERE / "entity_map.py")
+taxonomy = _load_file("_ark_l1_threat_taxonomy", HERE / "taxonomy.py")
 
 REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
 # v2: unknown contamination (an unchecked training source) is null, manifest lists "unchecked".
-CORPORA_SCHEMA = "ark-l1-threat-corpora-v2"
+# v3: seeded, stratified row caps per set (manifest "sampling", per set "cap" and "rows_before_cap").
+CORPORA_SCHEMA = "ark-l1-threat-corpora-v3"
+# Schema of the generated sets (generators.py), which ``coverage`` pools with the prepared ones.
+GENERATED_SCHEMA = "ark-l1-threat-generated-v1"
 READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
@@ -83,12 +95,15 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "limit"}
+OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap"}
 RULE_OPS = ("equals", "at_least", "below")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # Mersenne prime 2^31 - 1: a * h + b stays below 2^63 for a, b, h < P (int64 without overflow).
 PRIME = (1 << 31) - 1
+# Benign pool a split needs so that 0.1 % FPR still resolves (``coverage``).
+MIN_BENIGN_ROWS = 30_000
+MIN_BENIGN_SOURCES = 3
 
 
 def load(path: Path = REGISTRY_PATH) -> dict[str, Any]:
@@ -177,14 +192,16 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
         problems.append(f"{where}: format must be one of {FORMATS}")
     if ("language" in entry) == ("language_field" in entry):
         problems.append(f"{where}: exactly one of language / language_field")
-    if "limit" in entry and (not isinstance(entry["limit"], int) or isinstance(entry["limit"], bool) or entry["limit"] < 1):
-        problems.append(f"{where}: limit must be a positive integer")
     rules = entry["labels"]
     if not isinstance(rules, list) or not rules:
         return problems + [f"{where}: labels must be a non-empty list"]
     for index, rule in enumerate(rules):
         problems.extend(_check_rule(f"{where} labels[{index}]", rule, labels))
     return problems
+
+
+def _positive(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
@@ -198,6 +215,9 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
         str(dedup["seed"])
     except (KeyError, TypeError):
         problems.append("dedup needs shingle_chars, permutations, bands, threshold and seed")
+    sampling = registry.get("sampling") or {}
+    if not _positive(sampling.get("max_rows")) or not str(sampling.get("seed") or "").strip():
+        problems.append("sampling needs a positive integer max_rows and a seed")
     datasets = {dataset["id"]: dataset for dataset in emap.get("datasets") or []}
     seen: Counter[str] = Counter()
     for entry in registry.get("datasets") or []:
@@ -221,6 +241,8 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
             problems.append(f"{where}: commercial false needs family report_only in entity_map.yaml")
         if "training" in entry and entry["training"] is not False:
             problems.append(f"{where}: training may only be false")
+        if "cap" in entry and not (_positive(entry["cap"]) and entry["cap"] <= (sampling.get("max_rows") or 0)):
+            problems.append(f"{where}: cap must be a positive integer up to sampling.max_rows")
         if entry.get("training") is False and dataset["split"] == "train_dev":
             problems.append(f"{where}: an evaluation-only set (training: false) cannot be train_dev")
         kinds = [key for key in ("internal", "pending") if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
@@ -416,8 +438,38 @@ def fetch(entry: dict[str, Any], sources: Path, offline: bool, download: Callabl
     return root
 
 
-def load_set(entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: dict[str, Any]) -> tuple[list[dict[str, Any]], Counter[str]]:
-    """Mapped rows of one set, deduplicated within the set (exact and MinHash), with drop counts."""
+def cap_rows(rows: list[dict[str, Any]], cap: int, seed: str, dataset_id: str) -> list[dict[str, Any]]:
+    """At most ``cap`` rows, stratified by (benign, classes, language); input order kept.
+
+    Every stratum keeps one row while the cap allows; the rest of the cap is shared in proportion to
+    the stratum sizes (largest remainder). Within a stratum the rows with the lowest seeded text hash
+    are kept."""
+    if len(rows) <= cap:
+        return rows
+    strata: dict[tuple[Any, ...], list[int]] = {}
+    for i, row in enumerate(rows):
+        key = (row["benign"], tuple(row["classes"]), tuple(row["reported_classes"]), row["language"])
+        strata.setdefault(key, []).append(i)
+    keys = sorted(strata, key=lambda key: (-len(strata[key]), json.dumps(key)))
+    floor = 1 if cap >= len(keys) else 0
+    rest, total = cap - floor * len(keys), len(rows) - floor * len(keys)
+    shares = {key: floor + (len(strata[key]) - floor) * rest // total for key in keys}
+    for key in sorted(keys, key=lambda key: -((len(strata[key]) - floor) * rest % total)):
+        if sum(shares.values()) == cap:
+            break
+        shares[key] += 1
+
+    def rank(i: int) -> str:
+        return hashlib.sha256(f"{seed}/{dataset_id}/{normalise(rows[i]['text'])}".encode("utf-8")).hexdigest()
+
+    keep = {i for key in keys for i in sorted(strata[key], key=rank)[: shares[key]]}
+    return [row for i, row in enumerate(rows) if i in keep]
+
+
+def load_set(
+    entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: dict[str, Any], sampling: dict[str, Any]
+) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """Mapped rows of one set, deduplicated within the set (exact and MinHash) and capped, with drop counts."""
     index = Deduper(dedup)
     rows: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
@@ -439,11 +491,9 @@ def load_set(entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: 
         index.add(text, signature)
         language = entry["language"] if "language" in entry else str(_field(record, entry["language_field"]))
         rows.append({"id": f"{entry['id']}:{number:07d}", "dataset": entry["id"], "text": text, "language": language, **outcome})
-    if "limit" in entry and len(rows) > entry["limit"]:
-        dropped["limit"] = len(rows) - entry["limit"]
-        keep = set(sorted(range(len(rows)), key=lambda i: hashlib.sha256(normalise(rows[i]["text"]).encode("utf-8")).hexdigest())[: entry["limit"]])
-        rows = [row for i, row in enumerate(rows) if i in keep]
-    return rows, dropped
+    capped = cap_rows(rows, entry.get("cap", sampling["max_rows"]), str(sampling["seed"]), entry["id"])
+    dropped["cap"] = len(rows) - len(capped)
+    return capped, dropped
 
 
 def _index(rows: Iterable[dict[str, Any]], dedup: dict[str, Any]) -> Deduper:
@@ -461,23 +511,26 @@ def build(
     offline: bool = False,
     download: Callable[[str], bytes] = PRESIDIO.download,
     loaded: dict[str, tuple[list[dict[str, Any]], Counter[str]]] | None = None,
+    with_holdout: bool = False,
 ) -> dict[str, bytes] | None:
     """``{file name: content}`` of one prepared split (JSONL per set, manifest, .ready); None without a ready set.
 
-    ``loaded`` caches mapped, deduplicated sets between the splits of one run."""
+    ``loaded`` caches mapped, deduplicated sets between the splits of one run. ``with_holdout``: the
+    call prepares the holdout as well, so train_dev and report rows are compared against holdout
+    training sources (only the contamination flag reaches their output)."""
     problems = check(registry, emap)
     if problems:
         raise ValueError("registry check failed:\n" + "\n".join(problems))
     datasets = {dataset["id"]: dataset for dataset in emap["datasets"]}
     entries = {entry["id"]: entry for entry in registry["datasets"]}
-    dedup = registry["dedup"]
+    dedup, sampling = registry["dedup"], registry["sampling"]
     trained_on = {baseline["id"]: list(baseline.get("trained_on") or []) for baseline in emap["baselines"]}
     loaded = {} if loaded is None else loaded
 
     def rows_of(dataset_id: str) -> list[dict[str, Any]]:
         if dataset_id not in loaded:
             entry = entries[dataset_id]
-            loaded[dataset_id] = load_set(entry, datasets[dataset_id], fetch(entry, sources, offline, download), dedup)
+            loaded[dataset_id] = load_set(entry, datasets[dataset_id], fetch(entry, sources, offline, download), dedup, sampling)
         return loaded[dataset_id][0]
 
     members = [i for i, entry in entries.items() if datasets[i]["split"] == split and is_ready(entry)]
@@ -492,8 +545,10 @@ def build(
     other = None
     if split == "holdout":
         other = _index((row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in rows_of(i)), dedup)
-    # Holdout rows are only ever read while preparing the holdout itself.
-    visible = [i for i, entry in entries.items() if is_ready(entry) and (split == "holdout" or datasets[i]["split"] != "holdout")]
+    # Holdout rows are only read by a call that prepares the holdout itself.
+    visible = [
+        i for i, entry in entries.items() if is_ready(entry) and (split == "holdout" or with_holdout or datasets[i]["split"] != "holdout")
+    ]
     references = {
         baseline: _index((row for i in ids if i in visible for row in rows_of(i)), dedup)
         for baseline, ids in sorted(trained_on.items())
@@ -542,6 +597,8 @@ def build(
             "file": f"{dataset_id}.jsonl",
             "sha256": PRESIDIO._sha256(data),
             "rows": len(rows),
+            "cap": entry.get("cap", sampling["max_rows"]),
+            "rows_before_cap": len(rows) + dropped["cap"],
             "dropped": dict(sorted((key, value) for key, value in dropped.items() if value)),
             "classes": dict(sorted(Counter(name for row in rows for name in row["classes"]).items())),
             "benign": sum(row["benign"] for row in rows),
@@ -555,6 +612,7 @@ def build(
             "split": split,
             "split_rule": "by source: every dataset belongs to exactly one split (entity_map.yaml)",
             "dedup": dedup,
+            "sampling": sampling,
             "trained_on": trained_on,
             "unchecked": unchecked,
             "sets": sets,
@@ -613,8 +671,9 @@ def prepare(
     force: bool,
     download: Callable[[str], bytes] = PRESIDIO.download,
     loaded: dict[str, tuple[list[dict[str, Any]], Counter[str]]] | None = None,
+    with_holdout: bool = False,
 ) -> int:
-    files = build(split, registry, emap, sources, offline, download, loaded)
+    files = build(split, registry, emap, sources, offline, download, loaded, with_holdout)
     if files is None:
         print(f"{split}: no ready set; {out} not written")
         return 0
@@ -654,9 +713,45 @@ def prepare_splits(
         return 1
     roots, loaded = {"dev": dev, "holdout": holdout}, {}
     for split, (root, name) in LAYOUT.items():
-        if prepare(split, roots[root] / name, registry, emap, sources, offline, force, download, loaded):
+        if prepare(split, roots[root] / name, registry, emap, sources, offline, force, download, loaded, with_holdout=True):
             return 1
     return 0
+
+
+def coverage(directories: list[Path]) -> tuple[str, list[str]]:
+    """Report and problems of the pool of frozen directories (prepared and generated) of one split.
+
+    The pool needs rows of every taxonomy class, at least MIN_BENIGN_ROWS benign rows from at least
+    MIN_BENIGN_SOURCES datasets, and no row whose contamination is unknown for a baseline."""
+    problems: list[str] = []
+    classes: dict[str, Counter[str]] = {name: Counter() for name in taxonomy.CLASSES}
+    benign: Counter[str] = Counter()
+    unchecked: Counter[str] = Counter()
+    for directory in directories:
+        broken = verify(directory, schemas=(CORPORA_SCHEMA, GENERATED_SCHEMA))
+        if broken:
+            problems.extend(broken)
+            continue
+        manifest = json.loads((directory / "manifest.json").read_bytes())
+        generated = manifest["schema"] == GENERATED_SCHEMA
+        for name, entry in sorted(manifest["sets"].items()):
+            dataset = entry["dataset"] if generated else name
+            source = f"{dataset} ({'synthetic' if generated else 'native'})"
+            for class_name, count in entry["classes"].items():
+                classes.setdefault(class_name, Counter())[source] += count
+            benign[dataset] += entry["benign"]
+            unchecked.update(entry.get("contamination_unchecked") or {})
+    lines = ["| Class | Rows | Sources |", "|---|---:|---|"]
+    for name, sources in classes.items():
+        lines.append(f"| {name} | {sum(sources.values())} | {', '.join(f'{s}: {n}' for s, n in sorted(sources.items())) or '-'} |")
+        if not sources:
+            problems.append(f"class {name}: no gold rows")
+    sources = {dataset: count for dataset, count in benign.items() if count}
+    lines.append(f"| benign | {sum(sources.values())} | {', '.join(f'{s}: {n}' for s, n in sorted(sources.items())) or '-'} |")
+    if sum(sources.values()) < MIN_BENIGN_ROWS or len(sources) < MIN_BENIGN_SOURCES:
+        problems.append(f"benign pool: {sum(sources.values())} rows from {len(sources)} sets (needs {MIN_BENIGN_ROWS} from {MIN_BENIGN_SOURCES})")
+    problems.extend(f"contamination unchecked for {baseline}: {count} rows" for baseline, count in sorted(unchecked.items()) if count)
+    return "\n".join(lines), problems
 
 
 def listing(registry: dict[str, Any], emap: dict[str, Any]) -> str:
@@ -684,7 +779,14 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("list")
     ver = sub.add_parser("verify")
     ver.add_argument("directory", type=Path)
+    cov = sub.add_parser("coverage")
+    cov.add_argument("directories", type=Path, nargs="+", help="frozen directories of one split (prepared and generated)")
     args = parser.parse_args(argv)
+
+    if args.command == "coverage":
+        report, problems = coverage(args.directories)
+        print("\n".join([report, *problems]))
+        return 1 if problems else 0
 
     if args.command == "verify":
         problems = verify(args.directory)

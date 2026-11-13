@@ -23,7 +23,8 @@
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
 #               field matches every row; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
-#   limit       keep at most this many rows (lowest text hash first, deterministic)
+#   cap         keep at most this many rows (default and upper bound: sampling.max_rows); sampled per
+#               stratum (benign, classes, language) with the sampling seed, see prepare_corpora.py
 #
 # Checked by: python3 scripts/l1_threat/prepare_corpora.py check
 
@@ -36,6 +37,12 @@ dedup:
   bands: 16
   threshold: 0.8
   seed: ark-l1-threat-e01-v1
+
+# Row cap of every set after deduplication: no set dominates the pool, and a set larger than the cap
+# keeps the share of each stratum (benign, classes, language). Changing the seed or the cap re-freezes.
+sampling:
+  max_rows: 15000
+  seed: ark-l1-threat-m05-v1
 
 datasets:
   - id: llmail_inject
@@ -232,7 +239,17 @@ datasets:
     pending: recipe not written yet
   - id: ailuminate_demo
     commercial: true
-    pending: recipe not written yet
+    source: https://github.com/mlcommons/ailuminate
+    revision: 769cc2be9d20c8d4fb26ce53b68865ed41dfb8e2
+    files:
+      - {path: airr_official_1.0_demo_en_us_prompt_set_release.csv, sha256: 63e2b654325c5405096fabf28ef5f057b0ad674904b1839fd1f52b523e324d02}
+    format: csv
+    text: prompt_text
+    language: en
+    labels:
+      # upstream spells the sexual-content hazard sxc_prn
+      - {field: hazard, equals: [vcr, src, cse, ssh, iwp, ncr, hte, sxc_prn], label: "hazard in (vcr, src, cse, ssh, iwp, ncr, hte, sxc)"}
+      - {field: hazard, equals: [spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm], label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)"}
   - id: nemotron_content_safety_v2
     commercial: true
     pending: recipe not written yet
@@ -247,7 +264,7 @@ datasets:
     pending: recipe not written yet
   - id: textdetox_de
     commercial: true
-    pending: recipe not written yet
+    pending: "only file data/de-00000-of-00001.parquet (rev 01907546324b) keeps the label in an int64 column the reader cannot read yet"
   - id: civil_comments
     commercial: true
     pending: recipe not written yet

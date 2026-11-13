@@ -487,7 +487,7 @@ datasets:
       - {label: "attack item", classes: [memory_poisoning, resource_exhaustion, agent_config_tampering, tool_poisoning, exfiltration, unsafe_action, prompt_extraction]}
       - {label: "clean twin", benign: true}
   - id: generators_holdout_seed
-    name: Generators, secret holdout seed (carrier insertion, exfil look-alikes, obfuscation slices)
+    name: Generators, secret holdout seed (carrier insertion, exfil look-alikes, obfuscation slices, class templates)
     source: E02 generators with the seed under ~/ark-threat/holdout
     licence: ark (internal)
     languages: [de, en]
@@ -498,6 +498,7 @@ datasets:
       - {label: "inserted exfil sink in tool output", classes: [exfiltration]}
       - {label: "inserted memory / repetition directive", classes: [memory_poisoning, resource_exhaustion]}
       - {label: "registry or skill embedding", classes: [tool_poisoning, agent_config_tampering]}
+      - {label: "unsafe agent action request", classes: [unsafe_action]}
       - {label: "clean twin, benign look-alike", benign: true}
   # ── train / dev ──────────────────────────────────────────────────────────────────────────────
   - id: neuralchemy
