@@ -52,6 +52,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add a golden set for the eleven attack categories, `threat_l1.jsonl` (150 rows, German and
+  English). Every row names its attack class, the attack family, the carrier the text sits in
+  (chat, mail, web page, document, tool description or output, agent configuration, code, config)
+  and difficulty tags (`negated`, `quoted`, `meta`, `code`, `indirect`, `obfuscated`,
+  `translated`); positives that no rule detects yet are marked as known gaps. The unsafe-action
+  goldens move into this set. `13_l1_golden_eval` gains the suite `threat` (also run by `all`),
+  which scans each row in the category of its class and prints results per class, family,
+  carrier and tag for each language. **Detection change:** none; this is evaluation tooling only.
 - Add `scripts/l1_threat/generators.py`, which derives generated evaluation sets for the threat
   categories from the frozen corpora: attack texts embedded in realistic carriers (web page, PDF
   text, ticket, code comment, retrieval chunk, mail), each with a clean twin that holds a benign

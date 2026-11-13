@@ -296,6 +296,16 @@ die gemeinsamen Regeln.
 | Holdout | Meilensteine M1–M4 und Ablation; eingefroren, SHA-gepinnt, nur unter `~/ark-threat/holdout` | nur das Scoreboard, nie der Runner-Agent |
 | Benign-Pool | FPR je Sprache, für alle Kategorien | Holdout-Teil wie oben, Dev-Teil getrennt |
 
+**Golden-Schema v2 (E05).** Die Goldens aller elf Klassen liegen in
+`python/patronus_ark/benchmark_data/threat_l1.jsonl` (Generator `THREAT_CASES` in `generate_l1_goldens.py`,
+die `unsafe_action`-Regelgoldens sind darin aufgegangen). Je Zeile: `class`, `family` (aus `taxonomy.yaml`),
+`carrier` (`taxonomy.py`-Carrier), `tags` (`negated`, `quoted`, `meta`, `code`, `indirect`, `obfuscated`,
+`translated`), `known_gap`, optional `rule_id`. `13_l1_golden_eval -- threat` (auch in `all`) scannt jede Zeile in
+der Kategorie ihrer Klasse; Positive ohne heutige L1-Erkennung stehen als `known_gap` (berichtet, nicht gegatet,
+ein geschlossener Gap lässt den Lauf scheitern), Hard Negatives müssen die Kategorie benign lassen. Ausgabe
+je Klasse, Familie, Carrier und Tag pro Sprache. `taxonomy.py check` prüft Familie, Carrier und Regel jeder
+Zeile gegen die Taxonomie. Neue Regel-Aufgaben ergänzen ihre Goldens dort und kippen `known_gap`.
+
 Datensätze werden nach Quelle getrennt, nie zufällig gesplittet: Ein Satz ist entweder Train/Dev oder Holdout.
 Zusätzlich Leave-one-dataset-out im Scoreboard. Dedup exakt + MinHash innerhalb, über Splits und gegen
 bekannte Baseline-Trainingslisten (E01).
