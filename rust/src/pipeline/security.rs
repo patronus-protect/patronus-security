@@ -955,12 +955,16 @@ impl SecurityGateway {
         execution: &ScanExecution,
         duration_ms: f64,
     ) -> Result<Vec<SecurityScanResult>, String> {
-        self.l3_worker.aggregate_distributed_unified_chunks(
+        let mut results = self.l3_worker.aggregate_distributed_unified_chunks(
             chunks,
             l2_fallbacks,
             execution,
             duration_ms,
-        )
+        )?;
+        results
+            .iter_mut()
+            .for_each(ntdb_l2::publish_threat_model_result);
+        Ok(results)
     }
 
     /// Aggregate all worker L2 evidence and map it through the normal gateway thresholds.

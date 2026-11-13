@@ -573,10 +573,15 @@ impl SecurityGateway {
                 None => (!registry.ready.is_empty()).then_some(0),
             };
             if let Some(index) = ready_index {
-                let event = registry
+                let mut event = registry
                     .ready
                     .remove(index)
                     .expect("ready index disappeared");
+                if let QueuedSecurityEvent::Result(queued)
+                | QueuedSecurityEvent::Provisional(queued) = &mut event
+                {
+                    super::ntdb_l2::publish_threat_model_result(&mut queued.result);
+                }
                 if matches!(event, QueuedSecurityEvent::Finished { .. }) {
                     registry.requests.remove(event.request_id());
                     drop(registry);

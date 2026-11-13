@@ -37,14 +37,6 @@ pub fn model_label_class(label: &str) -> Option<ModelLabelClass> {
         .map(|&(_, category, family)| ModelLabelClass { category, family })
 }
 
-/// The threat-model output labels that land in `category`.
-pub fn model_labels_for(category: SecurityCategory) -> impl Iterator<Item = &'static str> {
-    MODEL_LABELS
-        .iter()
-        .filter(move |(_, target, _)| *target == category)
-        .map(|(name, _, _)| *name)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,10 +64,6 @@ mod tests {
                 category: SecurityCategory::UnsafeAction,
                 family: Some("credential_access"),
             })
-        );
-        assert_eq!(
-            model_labels_for(SecurityCategory::UnsafeAction).collect::<Vec<_>>(),
-            ["secrets_access", "tool_abuse"]
         );
     }
 
