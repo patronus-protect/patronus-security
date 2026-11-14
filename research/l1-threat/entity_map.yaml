@@ -139,8 +139,8 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "injection_variant in (ignore_previous_instructions, indirect_reference, token_smuggling, system_mode, different_user_input_language, overload_with_information, few_shot_attack, many_shot_attack, repeated_token_attack, output_formatting_manipulation, payload_splitting, mixed_techniques)", classes: [instruction_injection]}
-      - {label: "injection_variant in (virtualization, hypothetical_scenario, persuasion)", classes: [jailbreak]}
+      - {label: "injection_variant in (ignore_previous_instructions, indirect_reference, token_smuggling, system_mode, different_user_input_language, overload_with_information, few_shot_attack, many_shot_attack, repeated_token_attack, output_formatting_manipulation, payload_splitting, mixed_techniques)", classes: [instruction_injection], decides: false, reason: "owner holdout review 2026-11-13: 68% label errors; the attack often exists only relative to the source's off-row system prompt, so the row alone is not gold"}
+      - {label: "injection_variant in (virtualization, hypothetical_scenario, persuasion)", classes: [jailbreak], decides: false, reason: "owner holdout review 2026-11-13: the fictional-frame and persuasion variants are mostly secret or personal-data probes, not jailbreaks"}
       - {label: "judge_question asks whether a secret of the system prompt was revealed (leak cases)", classes: [prompt_extraction], decides: false, reason: "slice too small for a decisive EN extraction holdout (categories/prompt_extraction.md §12)"}
   - id: tensortrust_extraction
     name: Tensor Trust extraction-robustness benchmark (v1)
@@ -162,7 +162,7 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "jailbreak = true", classes: [jailbreak]}
+      - {label: "jailbreak = true", classes: [jailbreak], decides: false, reason: "owner holdout review 2026-11-13: 24% label errors; benign character cards, game setups and prompt-writing templates carry the jailbreak flag"}
       - {label: "jailbreak = false (regular prompts)", benign: true}
   - id: jbb_behaviors
     name: JailbreakBench behaviours and artifacts
@@ -172,7 +172,9 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "split harmful (Goal)", classes: [harmful_content]}
+      - {label: "split harmful, Category in (Physical harm, Malware/Hacking, Fraud/Deception, Economic harm, Privacy)", classes: [harmful_content]}
+      - {label: "split harmful, Category Harassment/Discrimination (hate and harassment writing requests)", classes: [toxic_language]}
+      - {label: "split harmful, Category in (Disinformation, Sexual/Adult content, Expert advice, Government decision-making)", out_of_scope: "no L1 class covers disinformation, consensual adult content or unqualified advice requests (owner holdout review 2026-11-13)"}
       - {label: "split benign (Goal)", benign: true}
       - {label: "jailbreak artifacts (attack prompts of the leaderboard)", classes: [jailbreak]}
   - id: multijail
@@ -183,7 +185,7 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "every prompt (tags: hate_speech, violence, self_harm, sexual, weapons, drugs, crime, terrorism, ...)", classes: [harmful_content]}
+      - {label: "every prompt (tags: hate_speech, violence, self_harm, sexual, weapons, drugs, crime, terrorism, ...)", classes: [harmful_content], decides: false, reason: "owner holdout review 2026-11-13: 52% label errors; many rows are benign, opinion or toxic-language prompts rather than hazard requests"}
   - id: harmbench
     name: HarmBench behaviours
     source: hf:walledai/HarmBench
@@ -289,7 +291,7 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "gold_label = 1", classes: [toxic_language]}
+      - {label: "gold_label = 1", classes: [toxic_language], decides: false, reason: "owner holdout review 2026-11-13: 10% label errors (antisemitic tropes, threats and degrading insults on the benign side too); reported until the labels are cleaned"}
       - {label: "gold_label = 0 (incl. contrast pairs)", benign: true}
     note: rounds with translated items carry the translated column
   - id: germeval2018_test
@@ -312,7 +314,8 @@ datasets:
     family: neutral
     labels:
       - {label: "label_gold = hateful", classes: [toxic_language]}
-      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs)", benign: true}
+      - {label: "label_gold = non-hateful, functionality target_indiv_nh (abuse aimed at an individual)", classes: [toxic_language]}
+      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs, non-human targets)", benign: true}
   - id: hatecheck_en
     name: HateCheck
     source: hf:Paul/hatecheck
@@ -322,7 +325,8 @@ datasets:
     family: neutral
     labels:
       - {label: "label_gold = hateful", classes: [toxic_language]}
-      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs)", benign: true}
+      - {label: "label_gold = non-hateful, functionality target_indiv_nh (abuse aimed at an individual)", classes: [toxic_language]}
+      - {label: "label_gold = non-hateful (counter speech, quotation, negation, reclaimed slurs, non-human targets)", benign: true}
   - id: chatmod_bench
     name: chatmod-bench
     source: German chat moderation benchmark
@@ -363,7 +367,8 @@ datasets:
     family: neutral
     labels:
       - {label: "label = safe", benign: true}
-      - {label: "label = unsafe (contrast prompts)", classes: [harmful_content]}
+      - {label: "label = unsafe, type contrast_discr (discrimination-argument prompts)", classes: [toxic_language]}
+      - {label: "label = unsafe (other contrast prompts)", classes: [harmful_content]}
   - id: or_bench_hard
     name: OR-Bench hard-1k
     source: hf:bench-llm/or-bench (or-bench-hard-1k)
