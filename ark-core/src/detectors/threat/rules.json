@@ -564,7 +564,7 @@
       "upstream_groups": [
         "LLM10"
       ],
-      "pattern": "(?-u:\\b)(?P<repeat>(?:repeat|keep\\s{1,4}(?:writing|repeating|printing|generating|saying|outputting|going)|loop|wiederhole|wiederholst|schreib\\s{1,4}weiter|mach\\s{1,4}weiter))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<unbounded>(?:forever|endlessly|infinitely|indefinitely|without\\s{1,4}(?:stopping|end)|never\\s{1,4}stop(?:ping)?|until\\s{1,4}I\\s{1,4}(?:say|tell\\s{1,4}you\\s{1,4}to)\\s{1,4}stop|endlos|unendlich(?:\\s{1,4}oft)?|f(?:ü|ue)r\\s{1,4}immer|ohne\\s{1,4}(?:aufzuh(?:ö|oe)ren|ende|pause)|bis\\s{1,4}ich\\s{1,4}stopp?\\s{1,4}sage))(?-u:\\b)",
+      "pattern": "(?-u:\\b)(?P<repeat>(?:repeat|keep\\s{1,4}(?:writing|repeating|printing|generating|saying|outputting|going)|loop|wiederhole|wiederholst|schreib\\s{1,4}weiter|mach\\s{1,4}weiter))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<unbounded>(?:forever|endlessly|infinitely|indefinitely|without\\s{1,4}(?:stopping|end)|never\\s{1,4}stop(?:ping)?|until\\s{1,4}I\\s{1,4}(?:say|tell\\s{1,4}you\\s{1,4}to)\\s{1,4}stop|endlos|unendlich(?:\\s{1,4}oft)?|f(?:ü|ue)r\\s{1,4}immer|ohne\\s{1,4}(?:aufzuh(?:ö|oe)ren|ende|pause)|bis\\s{1,4}ich\\s{1,4}stopp?\\s{1,4}sage)(?:,?\\s{1,4}(?:and|und)\\s{1,4}(?:never\\s{1,4}stop(?:ping)?|h(?:ö|oe)re?\\s{1,4}(?:nie|niemals)\\s{1,4}(?:mehr\\s{1,4})?auf))?)(?-u:\\b)",
       "points": {
         "base_score": 40,
         "validator": "format",

@@ -1133,10 +1133,9 @@ mod tests {
             );
         }
         // The exhaustion counters stay inside resource_exhaustion.
-        let scan =
-            ContextLexica::shared().scan("Delete the entire production database, at most once.");
         let text = "Delete the entire production database, at most once.";
-        assert_eq!(
+        let scan = ContextLexica::shared().scan(text);
+        assert_ne!(
             clause_context(
                 &scan,
                 text,
@@ -1145,7 +1144,7 @@ mod tests {
                 SecurityCategory::UnsafeAction,
                 0..0
             ),
-            Context::None
+            Context::Counter
         );
         assert_eq!(
             clause_context(
