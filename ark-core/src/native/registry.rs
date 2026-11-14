@@ -180,7 +180,9 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                 Some("dlp_secret_transfer")
             );
         }
-        SecurityCategory::AgentConfigTampering | SecurityCategory::HarmfulContent => {
+        SecurityCategory::ToolPoisoning
+        | SecurityCategory::AgentConfigTampering
+        | SecurityCategory::HarmfulContent => {
             add_threat_rules(&mut specs, category);
         }
         SecurityCategory::Injection => {

@@ -121,6 +121,7 @@ fn action_detectors_live_in_their_attack_classes() {
         ["native:threat_l1", "native:secret_transfer"]
     );
     for category in [
+        SecurityCategory::ToolPoisoning,
         SecurityCategory::AgentConfigTampering,
         SecurityCategory::HarmfulContent,
     ] {

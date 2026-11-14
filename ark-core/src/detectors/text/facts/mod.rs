@@ -21,6 +21,7 @@ use super::super::text_views::TextViews;
 use super::super::NativeDetection;
 
 mod carrier;
+pub(crate) use carrier::is_tool_metadata;
 mod context;
 mod json;
 mod language;

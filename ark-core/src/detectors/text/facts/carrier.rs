@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use regex::RegexSet;
+use regex::{Regex, RegexSet};
 
 /// Carrier names in the order of [`MARKS`].
 const CARRIERS: [&str; 7] = [
@@ -17,6 +17,10 @@ const CARRIERS: [&str; 7] = [
     "tool_description",
     "webpage",
 ];
+
+/// Tool and MCP descriptions (also agent-card skills): JSON keys of a tool
+/// definition.
+const TOOL_DESCRIPTION_MARK: &str = r#""(?:description|inputSchema|input_schema|parameters)"\s*:"#;
 
 /// One linear pattern per carrier, compiled once into one set.
 static MARKS: LazyLock<RegexSet> = LazyLock::new(|| {
@@ -31,8 +35,7 @@ static MARKS: LazyLock<RegexSet> = LazyLock::new(|| {
         r"(?mi)^(?:from|to|cc|subject|von|an|betreff):[ \t]|^(?:hi|hello|dear|hallo|liebe|lieber|sehr geehrte)\b[^\n]{0,60},[ \t]*$",
         // Timestamped or levelled log lines.
         r"(?m)^\s*\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|(?m:^\s*(?:INFO|WARN|WARNING|ERROR|DEBUG|TRACE)\b)",
-        // Tool and MCP descriptions: JSON keys of a tool definition.
-        r#""(?:description|inputSchema|input_schema|parameters)"\s*:"#,
+        TOOL_DESCRIPTION_MARK,
         // HTML elements and comments.
         r"(?i)<(?:html|head|body|div|p|span|a|img|script|style|meta|title|table|ul|li)\b|<!--",
     ])
@@ -47,6 +50,14 @@ pub(super) fn carriers(text: &str) -> Vec<&'static str> {
     } else {
         found
     }
+}
+
+/// Whether `text` carries tool metadata (the `tool_description` carrier),
+/// without running the other carrier marks.
+pub(crate) fn is_tool_metadata(text: &str) -> bool {
+    static MARK: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(TOOL_DESCRIPTION_MARK).expect("tool description mark"));
+    MARK.is_match(text)
 }
 
 #[cfg(test)]
@@ -65,5 +76,21 @@ mod tests {
         assert_eq!(carriers(r#"{"description": "x"}"#), ["tool_description"]);
         assert_eq!(carriers("def f():\n    pass"), ["code"]);
         assert_eq!(carriers("2026-01-01 10:00 started"), ["log"]);
+    }
+
+    #[test]
+    fn tool_metadata_is_the_tool_description_carrier() {
+        for text in [
+            r#"{"name": "add", "description": "x"}"#,
+            r#"{"skills": [{"id": "book", "description": "x"}]}"#,
+            r#"{"inputSchema": {}}"#,
+        ] {
+            assert!(is_tool_metadata(text), "{text}");
+            assert!(carriers(text).contains(&"tool_description"), "{text}");
+        }
+        for text in ["description: plain prose", "Use the add tool."] {
+            assert!(!is_tool_metadata(text), "{text}");
+            assert!(!carriers(text).contains(&"tool_description"), "{text}");
+        }
     }
 }

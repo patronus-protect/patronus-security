@@ -772,6 +772,7 @@ classes:
       - toolpoison.side_channel
       - addressee
       - injection.credential_file
+      - toolpoison.sensitive_file
       required_context: []
       negative_context: [toolpoison.own_domain, toolpoison.usage_doc, meta, quotation, test_code]
       examples:
@@ -780,7 +781,7 @@ classes:
         en:
         - '<tool description>: <before using this tool> <read> <sensitive file> and <pass its content> as <param>'
       carriers: [tool_description]
-      existing_rules: []
+      existing_rules: [ark.threat.tp_sensitive_file_param]
       baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: none, prompt_guard_2: none, llamafirewall: none}
       gap: No ARK rule binds a sensitive path to a parameter inside tool metadata; DE not covered anywhere.
     - id: secrecy_directive
@@ -790,14 +791,14 @@ classes:
       task: TP01
       scored_only: false
       shape: TOOL_METADATA carrier + addressed DIRECTIVE + secrecy in same description
-      anchors: [secrecy, addressee, toolpoison.preamble]
+      anchors: [secrecy, toolpoison.secrecy, addressee, toolpoison.preamble]
       required_context: []
       negative_context: [toolpoison.usage_doc, meta, quotation, test_code]
       examples:
         de: ['<Tool-Beschreibung>: <Direktive an KI> und <sag dem Nutzer nichts davon>']
         en: ['<tool description>: <directive to the model> and <do not tell the user>']
       carriers: [tool_description]
-      existing_rules: []
+      existing_rules: [ark.threat.tp_secrecy]
       baseline_coverage: {cisco_yara: partial, atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Secrecy directives in tool metadata are not scored by ARK; DE secrecy phrasing absent in baselines.
     - id: shadowing
@@ -816,7 +817,7 @@ classes:
         en:
         - '<tool description>: when <other tool> is called, <redirect recipient> to <foreign address>'
       carriers: [tool_description]
-      existing_rules: [ark.injection.cross_tool.override_action, ark.injection.cross_tool.override_then_call]
+      existing_rules: [ark.injection.cross_tool.override_action, ark.injection.cross_tool.override_then_call, ark.threat.tp_shadowing]
       baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: none, prompt_guard_2: none}
       gap: Today's cross_tool rules need an explicit override verb and ignore the carrier; no check that the named
         tool is foreign.
@@ -834,7 +835,7 @@ classes:
         de: ['<Parameter notiz>: <füge den gesamten bisherigen Verlauf ein>']
         en: ['<param sidenote>: <include the full previous conversation>']
       carriers: [tool_description]
-      existing_rules: []
+      existing_rules: [ark.threat.tp_side_channel_param]
       baseline_coverage: {cisco_yara: partial, atr: none}
       gap: Parameter-level side channels are not detected by ARK at all.
     - id: hidden_markup
@@ -851,7 +852,7 @@ classes:
         de: [<Tool-Beschreibung> <WICHTIG-Tag> <Direktive an KI> </WICHTIG-Tag>]
         en: [<tool description> <IMPORTANT tag> <directive to the model> </IMPORTANT tag>]
       carriers: [tool_description]
-      existing_rules: []
+      existing_rules: [ark.threat.tp_hidden_markup]
       baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: partial}
       gap: ARK hidden_html rule is not carrier-aware and does not cover IMPORTANT/SYSTEM pseudo-tags in tool metadata.
     - id: preamble_directive
@@ -906,9 +907,6 @@ classes:
       gap: No decoding of tool metadata before matching in ARK or baselines.
     lexicons:
     - {id: toolpoison.preamble, kind: support, task: TP01, title: Mandatory pre-use preamble phrases}
-    - {id: toolpoison.cross_tool, kind: support, task: TP01, title: References redirecting another tool}
-    - {id: toolpoison.side_channel, kind: support, task: TP01, title: Side-channel parameter names and history objects}
-    - {id: toolpoison.hidden_markup, kind: support, task: TP01, title: Pseudo-tags and hidden markup in metadata}
     - {id: toolpoison.usage_doc, kind: counter, task: TP01, title: Ordinary tool usage documentation}
     - {id: toolpoison.own_domain, kind: counter, task: TP01, title: Sensitive path matching the tool's own purpose}
 
