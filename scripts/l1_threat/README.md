@@ -350,3 +350,45 @@ Sätze (je Baseline die zuletzt geschriebene Version) auf denselben Zellen aus u
 Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
 
 Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
+
+## Ablation und Modellwahl
+
+`ablation.py` misst je Klasse dieselben Zeilen mit allen Stufen der README-Ablation und wendet die Auswahlregel an:
+
+| Stufe | Score einer Zeile |
+|---|---|
+| `R` | nur Regeln: höchste `points` eines Findings der Kategorie in den Facts |
+| `R+A` | `R` plus handgesetzte Kontextpunkte (Stützkontext +25, Gegenkontext −30), nur bei Regeltreffer, nicht unter 0 |
+| `B0` | heutiger Scorer: ARKs Score aus Vorhersagen von `scoreboard.py predict` (`--b0-predictions`), Urteil von ARK |
+| `R+A+L` | `R+A` plus gelernte ganzzahlige Punkte je Fact-Token (balancierte L2-LR, projiziert: Gegenkontext-Tokens ≤ 0, alle anderen ≥ 0) |
+| `B1` | Zeichen-N-Gramm-TF-IDF + LR allein (`category_model.py`, Vokabular, ohne Token-Merkmale) |
+| `B4` | gehashte Zeichen-N-Gramme + Wörter (TF-IDF + LR) allein, ohne Fact-Tokens |
+| `B5` | `R+A` plus der `B4`-Logit als Punkte (10 je Logit-Einheit), gedeckelt auf 40 |
+
+Zeilen tragen `id`, `text`, `facts` (aus dem Beispiel `text_facts`), `classes`, `benign`, `language`, `dataset`.
+Positiv: Klasse in `classes`; negativ: `benign`; andere Zeilen fallen heraus. `--rows` wird über sha256 der
+Zeilen-ID in Trainings- und Auswertungshälfte geteilt, sofern `--eval-rows` fehlt. Gelernte Stufen trainieren
+auf der Trainingshälfte; der Arbeitspunkt jeder Stufe hält 1 % FPR auf deren Negativen.
+
+Je Stufe auf der Auswertungshälfte und Sprache (`all`, `de`, `en`): TPR bei gleicher FPR 1 % und 0,1 %, AUPRC
+(`scoreboard.cell_metrics`), Hard-Benign-FPR am Arbeitspunkt (`scoreboard.is_hard_benign`), RAM-Schätzung des
+Modells (f64-Gewicht + f32-idf je Merkmal, je Vokabular-Term Map-Eintrag und Kopie in `names`) und die ms je 100 KiB, die das Modell zu den
+Facts hinzufügt (p95 des Beispiels `text_model_latency` auf den 100-KiB-Fenstern von `latency.py`;
+Punkte-Stufen summieren über die Facts und kosten nichts zusätzlich).
+
+Auswahl: unter den Modell-Stufen `B0`, `R+A+L`, `B1`, `B4`, `B5` im Budget (RAM ≤ 2 MB, ≤ 1 ms je 100 KiB
+zusätzlich) die günstigste (ms, dann RAM, dann Stufenreihenfolge), deren TPR@1 % höchstens 1 pp unter der
+besten liegt. `R` und `R+A` sind Vergleichszeilen. `B0` ist der Status quo und kostet nichts zusätzlich.
+Stufen ohne gemessene Kosten (`B1`, `B4`, `B5` ohne `--bench-bin`/`--windows`) stehen unter `untimed`
+und bleiben aus der Auswahl.
+
+```bash
+cargo run --release -q -p patronus-ark-core --example text_facts < rows.jsonl > rows.facts.jsonl
+cargo build --release -p patronus-ark-core --example text_model_latency
+python3 scripts/l1_threat/ablation.py run --rows rows.facts.jsonl --class exfiltration \
+    [--eval-rows EVAL.facts.jsonl] [--b0-predictions PRED] \
+    [--bench-bin $CARGO_TARGET_DIR/release/examples/text_model_latency --windows windows.jsonl] \
+    --out ablation.json [--markdown ablation.md]
+```
+
+Tests: `scripts/tests/test_l1_threat_ablation.py`.

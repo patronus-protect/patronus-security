@@ -39,7 +39,7 @@ import math
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -265,10 +265,13 @@ def train(
     token_buckets: int = 0,
     c: float = 1.0,
     iterations: int = 400,
+    tokens: Callable[[dict], list[str]] = row_tokens,
 ) -> dict:
-    """A ``format_version: 2`` model document trained on rows with text, facts and label."""
+    """A ``format_version: 2`` model document trained on rows with text, facts and label;
+    ``tokens`` feeds the token block (``tf1`` by default; the ablation trains n-gram-only stages
+    on a subset of it)."""
     texts = [row["text"] for row in rows]
-    token_docs = [row_tokens(row) for row in rows]
+    token_docs = [tokens(row) for row in rows]
     char_docs = [list(char_wb_ngrams(text, *ngram_range)) for text in texts]
     char_block = Block.fit(char_docs, min_df, char_buckets)
     token_block = Block.fit(token_docs, min_df, token_buckets)
