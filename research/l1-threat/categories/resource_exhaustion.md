@@ -142,3 +142,10 @@ Lexika: Anker (Prefilter) `exhaust.spawn`, `exhaust.repeat_verb`, `exhaust.cost`
 (höchstens, Timeout, Lasttest) und `exhaust.lyrics_play` (Lied, Refrain, Übung) in `context.json`,
 nur für diese Klasse wirksam. `exhaust.unbounded` und `exhaust.huge_count` stecken in den Regeln
 bzw. im Zahl-Validator. Offen: `re_loop_hint` (scored only), `re_decoded` (S03), ATR-Regeln (§10).
+
+**Latenz (offen).** Python-Release-Build, 100-KiB-Fenster aus GermanQuAD (dev): Kategorie
+`resource_exhaustion` allein p50 4,5 ms / p95 5,4 ms mit den Regeln, 0,35 / 0,49 ms ohne; je Regel
+allein `re_tool_flood` 0,7 ms, die übrigen 2,6–3,4 ms. Kein akzeptierter Treffer auf 3.000
+GermanQuAD-Absätzen. Nächster Schritt: Ursache isolieren (Regex-Scan mit häufigen Präfixwörtern wie
+„vor“, „start“, „gib“ vs. Kontext-Scan nach Rohtreffern) und die Präfixe/Lücken enger fassen, bevor
+die Kategorie im `all`-Profil gemessen wird.
