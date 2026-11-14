@@ -11,7 +11,15 @@ or MCP metadata (JSON tool definitions with `description`, `inputSchema` or `par
 cards, and plain-text listing lines such as `Tool send_report: …`): an instruction to read a sensitive file into a parameter, to keep something from the
 user, to change what another tool does (extra copies, a new recipient), a hidden `<IMPORTANT>`
 or HTML-comment directive to the model, or a parameter that should collect the conversation or
-system prompt. The same instruction in plain text is left to `injection`. Configure, for
+system prompt. The same instruction in plain text is left to `injection`.
+`agent_config_tampering` rules look at agent instruction and configuration files (`AGENTS.md`,
+`CLAUDE.md`, `.cursorrules`, skills, `.claude/settings.json`, `mcp.json`): settings that widen
+permissions (`bypassPermissions`, auto-approve all, `Bash(*)`, approval policy `never`), removed
+protective hooks, HTML comments that give the agent a directive, download-and-run instructions
+without asking, MCP server entries that pipe a remote script into a shell or install from a raw
+URL, and rules that copy themselves into other rules files; lines a diff removes do not count.
+A plain-text request to change such a file so that everything is auto-approved is reported
+without the file itself. Configure, for
 example, `categories=["unsafe_action", "exfiltration"]` and `max_level="l1"` for an offline
 native scan. Rules support
 English and German prose; command names, API names, paths and JSON/YAML keys keep their

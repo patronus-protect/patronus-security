@@ -97,6 +97,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
   or the agent itself, so delegating one task (`Start an agent that creates a summary`) stays
   benign; huge output counts of any length reach the count threshold, so a lowered
   `resource_exhaustion_count_threshold` (e.g. `100`) also catches `print this line 100 times`.
+- **Detection change:** (`agent_config_tampering`, opt-in) the category now has its own L1 rules
+  for agent instruction and configuration files in German and English: rules files (`AGENTS.md`,
+  `CLAUDE.md`, `.cursorrules`), skills, agent settings and `mcp.json`. They report settings that
+  widen the agent's permissions (`bypassPermissions`, auto-approve all, allow every shell
+  command, approval policy `never`, full-access sandbox), the removal of protective hooks and
+  checks, HTML comments or hidden tags that give the agent a directive, instructions in a skill or
+  rules file to download and run a script without asking, MCP server entries that pipe a remote
+  script into a shell or install from a raw URL, rules that tell the agent to copy themselves into
+  every other rules file, and plain-text requests to change an agent config so that everything is
+  auto-approved. Apart from such requests, the rules only run on text that is or names an agent
+  config, and lines a diff removes do not count. Narrow allow lists, project rules (style, tests,
+  React hooks), maintainer comments, installs after the user agrees, official MCP server entries,
+  security documentation, test code and negated rules stay benign. Each rule
+  (`ark.threat.ac_*`, listed in `matched_rules`) can be switched off in the `rules` map. The
+  `agent_config` carrier of the text facts also recognises `.claude/`, `.cursor/` and `.codex/`
+  paths, `.windsurfrules`, `permissions`/`defaultMode`/`disableAllHooks` keys and skill
+  frontmatter.
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
   (German, English, both) and origin (native or translated text): the detection rate at a matched
