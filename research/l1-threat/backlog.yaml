@@ -262,6 +262,7 @@ tasks:
       policies add a schema and a core.cedar, no second evaluator. Users write text policies the same
       way as shell policies (same config keys and file layout).
   - id: S05
+    status: done
     title: Ablation framework (R, R+A, B0, R+A+L, B1, B4, B5 per class; TPR@FPR, hard-benign FPR, ms/100 KiB, RAM) with the selection rule from the README
     type: eval-infra
     deps: [S04]
