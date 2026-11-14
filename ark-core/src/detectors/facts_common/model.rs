@@ -8,6 +8,11 @@
 //! - `tokens`: a named token analyzer of the [`ModelForm`] (`kf1` for shell
 //!   commands, `tf1` for texts).
 //!
+//! A block either has a vocabulary (feature -> index, as scikit-learn's
+//! `TfidfVectorizer` stores it) or is hashed: `n_features` buckets, a
+//! feature's bucket is the 32-bit FNV-1a hash of its UTF-8 bytes modulo
+//! `n_features`, and its name in the top features is `#<bucket>`.
+//!
 //! Scores match scikit-learn's float32 pipeline and scipy's summation order.
 
 use std::collections::{BTreeMap, HashMap};
@@ -55,6 +60,7 @@ struct RawBlock {
     vectorizer: BlockVectorizer,
     feature_dtype: String,
     idf_dtype: String,
+    #[serde(default)]
     vocabulary: HashMap<String, u32>,
     idf: Vec<f64>,
 }
@@ -77,16 +83,32 @@ struct BlockVectorizer {
     norm: Option<String>,
     #[serde(default)]
     use_idf: Option<bool>,
+    #[serde(default)]
+    n_features: Option<usize>,
+    #[serde(default)]
+    hash: Option<String>,
 }
 
-/// One TF-IDF feature block with its own vocabulary, idf and weight offset in
-/// the concatenated feature space.
+/// The only feature hash of hashed blocks.
+const FNV1A_32: &str = "fnv1a_32";
+
+/// One TF-IDF feature block with its own feature lookup, idf and weight
+/// offset in the concatenated feature space.
 struct Block {
-    vocabulary: FxHashMap<Box<str>, u32>,
-    /// Feature name of each vocabulary index (for the verdict's top features).
-    names: Vec<Box<str>>,
+    lookup: Lookup,
     idf: Vec<f32>,
     weight_offset: usize,
+}
+
+/// How a block maps a feature to its index.
+enum Lookup {
+    Vocabulary {
+        index: FxHashMap<Box<str>, u32>,
+        /// Feature name of each vocabulary index (for the top features).
+        names: Vec<Box<str>>,
+    },
+    /// FNV-1a bucket of the feature among `idf.len()` buckets.
+    Hashed,
 }
 
 impl Block {
@@ -108,18 +130,50 @@ impl Block {
                 raw.kind
             ));
         }
-        validate_vocabulary(&raw.vocabulary, raw.idf.len(), label)?;
-        let (vocabulary, names) = into_vocabulary(raw.vocabulary);
+        let lookup = match (cfg.n_features, cfg.hash.as_deref()) {
+            (None, None) => {
+                validate_vocabulary(&raw.vocabulary, raw.idf.len(), label)?;
+                let (index, names) = into_vocabulary(raw.vocabulary);
+                Lookup::Vocabulary { index, names }
+            }
+            (Some(buckets), Some(FNV1A_32))
+                if buckets > 0
+                    && buckets <= u32::MAX as usize
+                    && raw.vocabulary.is_empty()
+                    && raw.idf.len() == buckets =>
+            {
+                Lookup::Hashed
+            }
+            _ => return Err(format!("unsupported {label} {} block hashing", raw.kind)),
+        };
         Ok(Self {
-            vocabulary,
-            names,
+            lookup,
             idf: into_f32(raw.idf),
             weight_offset,
         })
     }
 
+    /// Number of features (vocabulary entries or buckets).
+    fn len(&self) -> usize {
+        self.idf.len()
+    }
+
+    fn index(&self, feature: &str) -> Option<u32> {
+        match &self.lookup {
+            Lookup::Vocabulary { index, .. } => index.get(feature).copied(),
+            Lookup::Hashed => Some(fnv1a_32(feature.as_bytes()) % self.len() as u32),
+        }
+    }
+
+    fn name(&self, index: usize) -> String {
+        match &self.lookup {
+            Lookup::Vocabulary { names, .. } => names[index].to_string(),
+            Lookup::Hashed => format!("#{index}"),
+        }
+    }
+
     fn count(&self, counts: &mut FxHashMap<u32, u32>, feature: &str) {
-        if let Some(&index) = self.vocabulary.get(feature) {
+        if let Some(index) = self.index(feature) {
             *counts.entry(index).or_default() += 1;
         }
     }
@@ -130,10 +184,16 @@ impl Block {
     /// Mirrors scikit-learn's float32 pipeline: `1 + ln(tf)` and the idf
     /// product are rounded to float32, while the row norm accumulates in double
     /// precision and the normalized values are stored back as float32.
+    /// `ln(tf)` is taken in double precision and rounded to float32, which
+    /// the Python reference reproduces exactly (single-precision `ln`
+    /// implementations disagree in the last bit, e.g. numpy's at tf = 7).
     fn tfidf(&self, counts: FxHashMap<u32, u32>) -> Vec<(u32, f32)> {
         let mut values = counts
             .into_iter()
-            .map(|(index, tf)| (index, ((tf as f32).ln() + 1.0) * self.idf[index as usize]))
+            .map(|(index, tf)| {
+                let sublinear = (f64::from(tf).ln() as f32) + 1.0;
+                (index, sublinear * self.idf[index as usize])
+            })
             .collect::<Vec<_>>();
         values.sort_unstable_by_key(|(index, _)| *index);
         let squared = values
@@ -217,7 +277,9 @@ impl TfidfLrModel {
                 form.analyzer
             ));
         }
-        let total = char_wb.vocabulary.len() + tokens.vocabulary.len();
+        let char_wb = Block::load(char_wb, 0, label)?;
+        let tokens = Block::load(tokens, char_wb.len(), label)?;
+        let total = char_wb.len() + tokens.len();
         if file.weights.len() != total {
             return Err(format!(
                 "{label} model has {total} block features and {} weights",
@@ -230,12 +292,11 @@ impl TfidfLrModel {
                 .copied()
                 .ok_or_else(|| format!("{label} model has no {name} threshold"))
         };
-        let char_features = char_wb.vocabulary.len();
         Ok(Self {
             name: file.name,
-            char_wb: Block::load(char_wb, 0, label)?,
+            char_wb,
             char_ngrams: (min_n, max_n),
-            tokens: Block::load(tokens, char_features, label)?,
+            tokens,
             weights: file.weights,
             intercept: file.intercept,
             ask_cut: cut(form.ask_threshold)?,
@@ -320,11 +381,11 @@ impl TfidfLrModel {
 
     fn feature_name(&self, index: usize) -> String {
         if index < self.tokens.weight_offset {
-            format!("char:{}", self.char_wb.names[index])
+            format!("char:{}", self.char_wb.name(index))
         } else {
             format!(
                 "tok:{}",
-                self.tokens.names[index - self.tokens.weight_offset]
+                self.tokens.name(index - self.tokens.weight_offset)
             )
         }
     }
@@ -353,7 +414,7 @@ impl TfidfLrModel {
 
         let mut occurrences = Vec::<(u32, std::ops::Range<usize>)>::new();
         visit_char_wb_ngrams(text, min_n, max_n, true, |ngram, range| {
-            if let Some(&index) = block.vocabulary.get(ngram) {
+            if let Some(index) = block.index(ngram) {
                 if selected.contains_key(&index) && !range.is_empty() {
                     occurrences.push((index, range));
                 }
@@ -454,6 +515,13 @@ fn visit_char_wb_ngrams(
             }
         }
     });
+}
+
+/// 32-bit FNV-1a of `bytes`.
+fn fnv1a_32(bytes: &[u8]) -> u32 {
+    bytes.iter().fold(0x811c_9dc5, |hash: u32, byte| {
+        (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
+    })
 }
 
 /// Build a block vocabulary into the owned representation, with the feature
@@ -558,5 +626,17 @@ fn for_each_word(text: &str, mut visit: impl FnMut(usize, &str)) {
     }
     if let Some(word_start) = start {
         visit(word_start, &text[word_start..]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fnv1a_32_reference_values() {
+        assert_eq!(fnv1a_32(b""), 0x811c_9dc5);
+        assert_eq!(fnv1a_32(b"a"), 0xe40c_292c);
+        assert_eq!(fnv1a_32(b"foobar"), 0xbf9c_f968);
     }
 }

@@ -97,6 +97,27 @@ def test_fpr_cut_allows_at_most_the_rate():
     assert MODULE.fpr_cut([0.5], 0.01) == 0.5
 
 
+def test_fnv1a_32_reference_values():
+    assert MODULE.fnv1a_32("") == 0x811C9DC5
+    assert MODULE.fnv1a_32("a") == 0xE40C292C
+    assert MODULE.fnv1a_32("foobar") == 0xBF9CF968
+
+
+def test_hashed_blocks_have_buckets_and_no_vocabulary():
+    document = MODULE.train(toy_rows(), "toy", min_df=1, char_buckets=16, token_buckets=8)
+    char_wb, tokens = document["blocks"]
+    assert "vocabulary" not in char_wb and "vocabulary" not in tokens
+    assert char_wb["vectorizer"]["n_features"] == len(char_wb["idf"]) == 16
+    assert tokens["vectorizer"] == {"min_df": 1, "sublinear_tf": True, "n_features": 8, "hash": "fnv1a_32"}
+    assert len(document["weights"]) == 24
+    model = MODULE.Model(document)
+    _, top = model.score(toy_rows()[0]["text"], MODULE.row_tokens(toy_rows()[0]))
+    assert all(f["feature"].split(":", 1)[1].startswith("#") for f in top)
+    document["blocks"][1]["vectorizer"]["hash"] = "murmur3"
+    with pytest.raises(ValueError):
+        MODULE.Model(document)
+
+
 def test_model_rejects_other_analyzers():
     document = json.loads(MODULE.SYNTHETIC_MODEL_PATH.read_text(encoding="utf-8"))
     document["blocks"][1]["analyzer_func"] = "kf1"
@@ -109,3 +130,4 @@ def test_parity_goldens_are_fresh():
     rows = [json.loads(line) for line in MODULE.MODEL_PARITY_PATH.read_text("utf-8").splitlines()]
     assert len(rows) >= 5
     assert {r["id"] for r in rows} == {r["id"] for r in MODULE.synthetic_rows()}
+    assert all(set(r["models"]) == set(MODULE.SYNTHETIC_MODELS) for r in rows)
