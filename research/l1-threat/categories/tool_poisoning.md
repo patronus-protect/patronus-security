@@ -209,3 +209,12 @@ die Regel-Ergänzungen sind an denselben Vorlagen-Formen entstanden, an denen ge
 (83 Zeilen, zwei Vorlagenfamilien); die Zahl ist eine Obergrenze, das Urteil fällt auf dem Holdout.
 Offen wie in §13: `tp_preamble_directive`, `tp_model_address`, `tp_decoded`, Gegen-Lexika,
 YAML-Tool-Listen, Harvest der Cisco-YARA-/ATR-Regeln.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, Default-Kategorien mit gegen ohne
+`tool_poisoning`, gleiche Binärdatei, 40 Samples je Fenster; Basis-Build gegen Head nicht gemessen,
+das gebündelte E03-Korpus fehlt in der Sandbox): 6 × 100 KiB deutsche Prosa p50 40,94 → 40,61 ms,
+p95 56,05 → 58,02 ms (Rauschen); Worst Case 100 KiB JSON-Tool-Liste p50 11,25 → 11,94 ms, p95
+13,99 → 16,05 ms; 100 KiB Klartext-Tool-Liste (`Tool get_item_N: …` je Zeile) p50 20,74 → 21,64 ms,
+p95 23,68 → 26,56 ms. Zusätzliche Arbeit der Änderung: eine zeilenverankerte Alternative in der
+Träger-Marke (eine Regex, einmal kompiliert) und die Kopfzeilen-Suche nur bei einem
+`tp_shadowing`-Treffer.
