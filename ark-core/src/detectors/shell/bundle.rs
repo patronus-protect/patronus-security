@@ -19,9 +19,10 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::model::ShellRiskModel;
+use super::model::SHELL_MODEL;
 use super::policies::DC_RULES_JSON;
 use super::vocab::VOCAB_CSV;
+use crate::detectors::facts_common::model::TfidfLrModel;
 
 const EMBEDDED_FILES: [(&str, &str); 2] = [
     ("shellrisk/policies/dc_rules.json", DC_RULES_JSON),
@@ -42,7 +43,7 @@ struct Config {
 
 /// The verified contents of a bundle directory.
 pub(crate) struct Bundle {
-    pub model: ShellRiskModel,
+    pub model: TfidfLrModel,
     /// Policy id -> `block` | `ask` | `rejected`, from the release's gate.
     pub levels: HashMap<String, String>,
 }
@@ -104,6 +105,6 @@ pub(crate) fn load(dir: &Path, manifest_sha256: Option<&str>) -> Result<Bundle, 
         .map_err(|error| format!("invalid config.json: {error}"))?;
     let levels = serde_json::from_slice(&verified(&config.policy_levels_file)?)
         .map_err(|error| format!("invalid {}: {error}", config.policy_levels_file))?;
-    let model = ShellRiskModel::from_json_slice(&verified(&config.model_file)?)?;
+    let model = TfidfLrModel::from_json_slice(&verified(&config.model_file)?, SHELL_MODEL)?;
     Ok(Bundle { model, levels })
 }

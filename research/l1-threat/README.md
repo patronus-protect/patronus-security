@@ -190,6 +190,28 @@ Liste der ordnungserhaltenden Schlüssel als Parameter), `fields` (strenger JSON
 Kategorie-Regeln (IJ01 ff.) liefern die Findings, S04 trainiert über `tf1`, S07 schreibt Policies über
 das Schema.
 
+**Stand S04.** Modellform je Kategorie wie K26, ein Code für Shell und Text:
+`detectors/facts_common/model.rs` (`TfidfLrModel`, früher `shell/model.rs`) lädt `model.json`
+`format_version: 2` mit einer `ModelForm` (Analyzer `kf1` → `SHELL_MODEL`, `tf1` → `TEXT_MODEL` mit den
+Schwellen `1pct_fpr`/`0_1pct_fpr`); Top-Merkmale (`char:`/`tok:`) wie bei K26. Ein Block hat ein Vokabular
+oder ist gehasht (`n_features`, `hash: fnv1a_32`, Merkmalsname `#<bucket>`) — die Kandidaten
+„K26-artig“ und „gehasht“ teilen damit Form, Loader und Scorer. `shell/vocab.rs` (Programm-Vokabular
+der Shell-Facts) bleibt Shell-eigen; das Modell-Vokabular steht im Block von `model.json` wie bei K26.
+Training und Referenz-Inferenz: `scripts/l1_threat/category_model.py` (`train` mit `--min-df`,
+`--char-buckets`, `--token-buckets`, `--c`; `score`; `parity [--retrain] [--check]`), nur numpy:
+klassen-balancierte L2-LR per beschleunigtem Gradientenabstieg, Schnitte bei 1 %/0,1 % FPR der
+Negativen. Facts der Trainingszeilen kommen aus Rust (`cargo run -p patronus-ark-core --example
+text_facts`), damit Training und Inferenz dieselben `tf1`-Tokens sehen. Parität bitgleich
+(`text/testdata/model_parity.jsonl`, zwei synthetische Modelle: Vokabular und gehasht;
+`ark-core/tests/text_model_parity.rs`): `ln(tf)` in double, dann float32 (numpys float32-`log` weicht
+z. B. bei tf = 7 im letzten Bit von `logf` ab), serde_json mit `float_roundtrip`. B0 (heutige Scorer neu
+kalibriert) läuft über die vorhandenen `scripts/calibrate_injection_l1.py`/`calibrate_threat_l1.py`.
+Smoke-Lauf (2026-11-14, nur train_dev, keine Entscheidung): `instruction_injection` auf SPML + Dolly +
+GermanQuAD (10 729 Zeilen, je Hälfte Train/Test, in-distribution) — Vokabular- und gehashte Variante
+(65 536 + 16 384 Buckets) je TPR 0,999 bei 1 % FPR, Training ~20 s, `model.json` ~2,6–2,9 MB JSON.
+Noch kein Text-Modell eingebaut: welches Modell je Klasse bleibt, entscheidet die Ablation (S05) und das
+Gate; erst dann wird das Gewinner-`model.json` einkompiliert und im Scan-Pfad verdrahtet.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),

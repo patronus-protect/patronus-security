@@ -243,6 +243,7 @@ tasks:
       to a shared module and used by both, never copied.
     # carrier comes from text structure only; request metadata (role, source:untrusted) is not seen by L1 and never feeds patterns, models or policies (decided 2026-11-09)
   - id: S04
+    status: done
     title: Model training pipeline per category, compiled in — candidates B0 (today's scorer, recalibrated), K26-like variants (char_wb TF-IDF + tf1 fact tokens → LR) and hashed variants; Python reference + Rust inference with exact parity goldens; whatever wins on the holdout stays (today's scorers may stay)
     type: engine
     deps: [S06, E06]
