@@ -52,6 +52,27 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`agent_config_tampering`, opt-in) the category now has its own L1 rules
+  for agent instruction and configuration files in German and English: rules files (`AGENTS.md`,
+  `CLAUDE.md`, `.cursorrules`), skills, agent settings and `mcp.json`. They report settings that
+  widen the agent's permissions (`bypassPermissions`, auto-approve all, allow every shell
+  command, approval policy `never`, full-access sandbox), the removal of protective hooks and
+  checks, HTML comments or hidden tags that give the agent a directive, instructions in a skill or
+  rules file to download and run a script without asking, MCP server entries that pipe a remote
+  script into a shell or install from a raw URL, rules that tell the agent to copy themselves into
+  every other rules file, and plain-text requests to change an agent config so that everything is
+  auto-approved. Apart from such requests, the rules only run on text that is or names an agent
+  config, and lines a diff removes do not count. Narrow allow lists, project rules (style, tests,
+  React hooks), maintainer comments, installs after the user agrees, official MCP server entries,
+  security documentation, test code and negated rules stay benign. Each rule
+  (`ark.threat.ac_*`, listed in `matched_rules`) can be switched off in the `rules` map. The
+  `agent_config` carrier of the text facts also recognises `.claude/`, `.cursor/` and `.codex/`
+  paths, `.windsurfrules`, `permissions`/`defaultMode`/`disableAllHooks` keys and skill
+  frontmatter.
+- **Detection change:** (`agent_config_tampering`, opt-in) the permission-widening rule also
+  matches pretty-printed `allow` and `autoApprove` arrays whose entries stand on their own lines,
+  and a hidden agent comment that tells the agent to keep a step secret ("never tell the user")
+  is no longer read as negated.
 - **Detection change:** (`tool_poisoning`, on by default) the category now has its own L1 rules
   for tool and MCP metadata in German and English: tool descriptions, parameter schemas and agent
   cards that tell the model to read a sensitive file (SSH keys, cloud credentials, kubeconfig,
