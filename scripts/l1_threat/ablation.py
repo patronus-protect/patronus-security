@@ -33,7 +33,7 @@ TPR at 1 % FPR is within 1 pp of the best. ``R`` and ``R+A`` are comparison rows
 status quo and adds no cost. A stage whose cost is unknown (``B1``, ``B4``, ``B5`` without
 ``--bench-bin``/``--windows``) is reported as ``untimed`` and left out of the selection.
 
-    cargo run -q -p patronus-ark-core --example text_facts < rows.jsonl > rows.facts.jsonl
+    cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
     python3 scripts/l1_threat/ablation.py run --rows rows.facts.jsonl --class exfiltration \\
         [--eval-rows EVAL.facts.jsonl] [--b0-predictions PRED_DIR] \\

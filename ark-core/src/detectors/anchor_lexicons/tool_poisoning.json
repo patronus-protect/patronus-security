@@ -17,7 +17,8 @@
       ".gnupg",
       ".docker/config.json",
       "mcp.json",
-      "/etc/shadow"
+      "/etc/shadow",
+      "/credentials"
     ],
     "sources": [
       "ark-core/src/detectors/threat/rules.json",
@@ -75,6 +76,10 @@
       "<secret>",
       "<hidden>",
       "<admin>",
+      "<wichtig>",
+      "<anweisung",
+      "<geheim>",
+      "<versteckt>",
       "<!--"
     ],
     "sources": [

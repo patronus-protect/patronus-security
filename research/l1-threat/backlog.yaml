@@ -277,7 +277,7 @@ tasks:
   - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01]}
   - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
   - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04, E06], status: done}
-  - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05]}
+  - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05], status: done}
   - {id: AC01, title: "agent_config_tampering rules (skills, AGENTS.md/CLAUDE.md/.cursorrules, mcp.json, hooks: hidden directives, auto-approve/permission widening, fetch-and-run in skill text) incl. SkillSpector/ATR harvest", type: new-family, deps: [TP01]}
   - {id: AC02, title: "agent_config_tampering points + ablation decision", type: scorer, deps: [AC01, S05]}
   - {id: EX01, title: "exfiltration rules (markdown image/link with templated data, URL/DNS/webhook sinks, tool-parameter egress, send-to-external directives, invisible characters in links) incl. pipelock harvest; DLP hits as source evidence", type: new-family, deps: [S03, M04, E06]}

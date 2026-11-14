@@ -8,7 +8,7 @@ stores and cloud metadata endpoints), others under `exfiltration`, `tool_poisoni
 `agent_config_tampering` or `harmful_content`. `exfiltration` and `tool_poisoning` are on by
 default; the other three are opt-in. `tool_poisoning` rules only look at text that carries tool
 or MCP metadata (JSON tool definitions with `description`, `inputSchema` or `parameters`, agent
-cards): an instruction to read a sensitive file into a parameter, to keep something from the
+cards, and plain-text listing lines such as `Tool send_report: …`): an instruction to read a sensitive file into a parameter, to keep something from the
 user, to change what another tool does (extra copies, a new recipient), a hidden `<IMPORTANT>`
 or HTML-comment directive to the model, or a parameter that should collect the conversation or
 system prompt. The same instruction in plain text is left to `injection`. Configure, for

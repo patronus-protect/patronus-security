@@ -227,6 +227,17 @@ kosten in Rust 17–21 ms je 100 KiB (Budget 1 ms) und fallen aus dem Budget, ge
 IJ02 ff.: ein N-Gramm-Modell braucht ein Anker-Fenster (README: „Modelle laufen nur dort, wo ein Anker ein
 Fenster geöffnet hat“) oder ein schnelleres Merkmals-Verfahren, sonst gewinnt es die Auswahl nie.
 
+**Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
+Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
+[`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).
+Facts tragen jetzt Regel-Findings: `threat::facts_findings` macht aus den angenommenen
+Punkte-Findings einer Detektion `text_facts`-Findings (Regel-ID als Pattern, Taxonomie-Familie,
+Punkte = angenommener Score × 100), das Beispiel `text_facts --threat-findings` fügt sie für alle
+Angriffsklassen ein; `R`/`R+A`/`R+A+L` sind damit nicht mehr 0. Befund für die übrigen `*02`-Aufgaben:
+`R+A+L` lernt auf Vorlagen-Daten Träger-/Sprach-Tokens und meldet Hard-Benign-Zeilen (hier 3,3–4,6 %);
+die Auswahlregel prüft das nicht — Vorschlag an den Owner: Hard-Benign-FPR ≤ 1 % (M3) als
+Zulassungsbedingung einer Stufe.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
