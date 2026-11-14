@@ -608,7 +608,7 @@
       "class_name": "agent_config_tampering",
       "family": "permission_widening",
       "upstream_groups": [],
-      "pattern": "(?P<key>\"?(?:defaultMode|permissionMode|permission_mode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:autoApprove|alwaysAllow|auto_approve)\"?\\s{0,4}[:=]\\s{0,4}|\"?(?:approval_policy|approvalPolicy)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:sandbox_mode|sandboxMode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:dangerouslySkipPermissions|dangerously_skip_permissions|yolo)\"?\\s{0,4}[:=]\\s{0,4}|\"allow\"\\s{0,4}:\\s{0,4}\\[[^\\]\\n]{0,200}?\")(?P<value>bypassPermissions(?-u:\\b)|true(?-u:\\b)|\\[\\s{0,4}\"\\*\"|never(?-u:\\b)|danger-full-access(?-u:\\b)|(?:\\*|Bash|Bash\\(\\s{0,2}\\*\\s{0,2}\\))\")",
+      "pattern": "(?P<key>\"?(?:defaultMode|permissionMode|permission_mode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:autoApprove|alwaysAllow|auto_approve)\"?\\s{0,4}[:=]\\s{0,4}|\"?(?:approval_policy|approvalPolicy)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:sandbox_mode|sandboxMode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:dangerouslySkipPermissions|dangerously_skip_permissions|yolo)\"?\\s{0,4}[:=]\\s{0,4}|\"allow\"\\s{0,4}:\\s{0,4}\\[[^\\]]{0,200}?\")(?P<value>bypassPermissions(?-u:\\b)|true(?-u:\\b)|\\[\\s{0,16}\"\\*\"|never(?-u:\\b)|danger-full-access(?-u:\\b)|(?:\\*|Bash|Bash\\(\\s{0,2}\\*\\s{0,2}\\))\")",
       "points": {
         "base_score": 40,
         "validator": "structure",
