@@ -365,7 +365,8 @@ Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
 | `B4` | gehashte Zeichen-N-Gramme + Wörter (TF-IDF + LR) allein, ohne Fact-Tokens |
 | `B5` | `R+A` plus der `B4`-Logit als Punkte (10 je Logit-Einheit), gedeckelt auf 40 |
 
-Zeilen tragen `id`, `text`, `facts` (aus dem Beispiel `text_facts`), `classes`, `benign`, `language`, `dataset`.
+Zeilen tragen `id`, `text`, `facts` (aus dem Beispiel `text_facts`; mit `--threat-findings` samt den angenommenen
+Punkte-Findings der Threat-Regeln aller Angriffsklassen, ohne Flag ohne Findings, so dass `R`/`R+A` 0 bleiben), `classes`, `benign`, `language`, `dataset`.
 Positiv: Klasse in `classes`; negativ: `benign`; andere Zeilen fallen heraus. `--rows` wird über sha256 der
 Zeilen-ID in Trainings- und Auswertungshälfte geteilt, sofern `--eval-rows` fehlt. Gelernte Stufen trainieren
 auf der Trainingshälfte; der Arbeitspunkt jeder Stufe hält 1 % FPR auf deren Negativen.
@@ -383,7 +384,7 @@ Stufen ohne gemessene Kosten (`B1`, `B4`, `B5` ohne `--bench-bin`/`--windows`) s
 und bleiben aus der Auswahl.
 
 ```bash
-cargo run --release -q -p patronus-ark-core --example text_facts < rows.jsonl > rows.facts.jsonl
+cargo run --release -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
 cargo build --release -p patronus-ark-core --example text_model_latency
 python3 scripts/l1_threat/ablation.py run --rows rows.facts.jsonl --class exfiltration \
     [--eval-rows EVAL.facts.jsonl] [--b0-predictions PRED] \
