@@ -158,3 +158,13 @@ Offen: Gegen-Lexika `agentcfg.project_rule`/`agentcfg.scoped_allow` (heute schü
 Regex), `ac_decoded`, Geheimhaltung ohne Markup, `env`-Secrets in MCP-Einträgen, YAML-Settings,
 Harvest der SkillSpector-/ATR-/Cisco-YARA-Regeln (default aus, Katalog mit Commit), Punkte/Ablation
 in AC02.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, 100 KiB, Basis ededaf70 gegen AC01, je 2 × 60
+Samples, abwechselnd): deutsche Prosa (Kategorie-Dokumente, nennen `AGENTS.md`, also Träger an)
+Default-Kategorien p50 66,2 → 65,3 ms, p95 95,1 → 89,0 ms (Rauschen; Default unverändert bis auf
+die neuen Anker im geteilten Lexikon); Default + `agent_config_tampering` p95 83,5 → 83,1 ms;
+`agent_config_tampering` allein p50 2,2 → 23,2 ms, p95 2,9 → 34,9 ms (vorher lief keine Regel, jetzt
+die geteilte Vorbereitung und sieben Regexe). Worst Case 100 KiB Agent-Config-Mix (alle Goldens
+der Klasse): allein p95 6,0 → 58,0 ms, Default + AC p95 67,3 → 76,6 ms. Die Kategorie ist opt-in;
+das DLP-Budget betrifft sie nicht. Offen: Kosten der Regexe ohne geteilte Vorbereitung senken
+(z. B. `ac_tamper_request` nur bei Dateinamen-Anker).
