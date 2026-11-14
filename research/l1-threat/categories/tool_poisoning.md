@@ -147,3 +147,9 @@ Lexika: Anker in `anchor_lexicons/tool_poisoning.json` (`toolpoison.sensitive_fi
 (eigene Pfade schützt heute das Pflicht-Parameterwort), YAML-Tool-Listen als Träger, Harvest der
 Cisco-YARA-/ATR-Regeln (default aus, Katalog mit Commit), MCPTox-/Registry-Eval; Punkte/Ablation in
 TP02. Bekannte Grenze: ein Meta-Wort (z. B. „example“) im Satz vor der Anweisung dämpft.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, 100 KiB, Default-Kategorien mit gegen ohne
+`tool_poisoning`, gleiche Binärdatei, 2 × 60 Samples je Fenster): deutsche Prosa (4 Fenster) p50
+71,97 → 71,35 ms, p95 104,2 → 101,6 ms (im Rauschen; ohne Tool-Struktur läuft keine Regex, nur
+die Träger-Marke); Worst Case 100 KiB JSON-Tool-Liste p50 12,64 → 12,98 ms (+2,7 %), p95 17,57 →
+18,13 ms (+3,2 %).
