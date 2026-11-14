@@ -23,6 +23,7 @@ compiled extension.
 | `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 692 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `text_views_l1.jsonl` | 24 | Obfuscated and decoded facts of the normalisation pre-pass (schema v1) |
+| `threat_l1.jsonl` | 150 | Attack-class goldens with class, family, carrier, difficulty tags and known gaps (schema v2) |
 | `text_facts_l1.jsonl` | 24 | Language, carrier, addressee, sinks and counter context of the text facts (schema v1) |
 
 ## Native L1 golden-set contract
@@ -392,6 +393,46 @@ carriers:
 Positives address the model and name a sink; hard negatives (defensive prompts,
 quotes, security documentation, test code, negated rules) carry a counter
 context and a `negative_reason`.
+
+### Threat golden schema v2
+
+`threat_l1.jsonl` covers the eleven attack categories in German and English.
+Every row names its attack class, the attack family of that class (the family
+list is `research/l1-threat/taxonomy.yaml`), the carrier and the difficulty tags:
+
+```json
+{"id": "threat_l1-instruction-injection-pos-02", "suite": "threat_l1", "schema_version": 2,
+ "language": "en", "case_type": "positive", "class": "instruction_injection",
+ "family": "hidden_directive", "carrier": "web", "tags": ["indirect"],
+ "known_gap": true, "text": "...", "provenance": {"origin": "ark_authored", "source": "..."}}
+```
+
+- `class` is one of `instruction_injection` (scanned by the category
+  `injection`), `jailbreak`, `prompt_extraction`, `tool_poisoning`,
+  `agent_config_tampering`, `memory_poisoning`, `exfiltration`,
+  `unsafe_action`, `resource_exhaustion`, `harmful_content` and
+  `toxic_language`.
+- `carrier` is where the text sits: `chat`, `email`, `web`, `document`,
+  `tool_description`, `tool_output`, `agent_config`, `code`, `config`, `log`,
+  `rag_chunk` or `memory`.
+- `tags` are, in this order: `code` (source code, configuration or a test),
+  `indirect` (the text reaches the model through a page, mail, document or
+  tool), `meta` (security documentation or training about the attack),
+  `negated` (the action is forbidden), `obfuscated` (zero-width or other hidden
+  characters, encodings), `quoted` (reported or quoted speech) and
+  `translated` (a German rendering of an English attack shape, written by Ark).
+- `rule_id`, when present, is the rule that must report a positive.
+- `known_gap` marks a positive that no L1 rule of its category detects yet.
+
+`13_l1_golden_eval -- threat` (also part of `all`) scans every row in the
+category of its class: a positive passes when the category reports an attack
+(and the declared rule is among the accepted matches), a hard negative when the
+category stays benign. Known gaps are reported, not gated, and fail the run once
+they pass, so the flag is removed with the detection change that closes them.
+The run prints passed/total and known gaps per class, family, carrier and tag
+for each language. `python3 scripts/l1_threat/taxonomy.py check` verifies that
+every row names a family of its class, a known carrier and a rule its family
+covers.
 
 ## Provenance
 

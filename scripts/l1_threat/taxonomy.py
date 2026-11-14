@@ -20,7 +20,9 @@ Problems reported by ``check``:
   merge that leaves ``status: done`` above ``status: todo`` would reopen the task);
 - a lexicon id that is neither in ``ark-core/src/detectors/anchor_lexicons/*.json`` nor declared
   as planned in the taxonomy (and a planned id that already exists or is declared twice);
-- schema errors (classes, family and lexicon keys, priorities, carriers, baselines, example shapes).
+- schema errors (classes, family and lexicon keys, priorities, carriers, baselines, example shapes);
+- a threat golden (``python/patronus_ark/benchmark_data/threat_l1.jsonl``) whose family is not a
+  family of its class, whose carrier is unknown, or whose rule is not mapped by its family.
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ TAXONOMY_PATH = ROOT / "research" / "l1-threat" / "taxonomy.yaml"
 BACKLOG_PATH = ROOT / "research" / "l1-threat" / "backlog.yaml"
 INJECTION_DIR = ROOT / "ark-core" / "src" / "detectors" / "injection"
 LEXICON_DIR = ROOT / "ark-core" / "src" / "detectors" / "anchor_lexicons"
+GOLDENS_PATH = ROOT / "python" / "patronus_ark" / "benchmark_data" / "threat_l1.jsonl"
 # The threat detector moves from rust/ into ark-core; whichever copy exists is read.
 THREAT_RULE_PATHS = (
     ROOT / "ark-core" / "src" / "detectors" / "threat" / "rules.json",
@@ -274,6 +277,26 @@ def check(
     return problems
 
 
+def load_goldens(path: Path = GOLDENS_PATH) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def golden_problems(taxonomy: dict[str, Any], goldens: list[dict[str, Any]]) -> list[str]:
+    """Return every threat golden whose family, carrier or rule does not match ``taxonomy``."""
+    families = {(class_name, family.get("id")): family for class_name, family in _families(taxonomy)}
+    problems = []
+    for row in goldens:
+        where = f"golden {row.get('id')}"
+        family = families.get((row.get("class"), row.get("family")))
+        if family is None:
+            problems.append(f"{where}: family {row.get('family')} is not a family of class {row.get('class')}")
+        elif row.get("rule_id") and row["rule_id"] not in (family.get("existing_rules") or []):
+            problems.append(f"{where}: rule {row['rule_id']} is not mapped by family {row['class']}.{row['family']}")
+        if row.get("carrier") not in CARRIERS:
+            problems.append(f"{where}: unknown carrier {row.get('carrier')!r}")
+    return problems
+
+
 def summary(taxonomy: dict[str, Any]) -> str:
     lines = ["class                     must should could rules"]
     for name in CLASSES:
@@ -301,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         rules=existing_rule_ids(),
         lexicons=existing_lexicon_ids(),
         tasks=backlog_task_ids(),
-    )
+    ) + golden_problems(taxonomy, load_goldens())
     if args.command == "summary" and not problems:
         print(summary(taxonomy), end="")
         return 0

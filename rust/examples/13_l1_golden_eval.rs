@@ -328,6 +328,141 @@ fn evaluate(
     Ok(())
 }
 
+/// Golden schema v2 for the attack classes: a text, the class and taxonomy family it
+/// belongs to, its carrier and difficulty tags; positives may name the rule that must
+/// report them, and a positive no L1 rule detects yet is a known gap (reported, not gated).
+#[derive(Deserialize)]
+struct ThreatRow {
+    id: String,
+    language: String,
+    case_type: String,
+    class: String,
+    family: String,
+    carrier: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    known_gap: bool,
+    rule_id: Option<String>,
+    text: String,
+}
+
+/// The category that scans a class; `instruction_injection` keeps the category name `injection`.
+fn threat_category(class: &str) -> Result<SecurityCategory, String> {
+    match class {
+        "instruction_injection" => Ok(SecurityCategory::Injection),
+        other => other.parse(),
+    }
+}
+
+/// Gated passed/total and known gaps of one report cell.
+type Cell = (usize, usize, usize);
+
+fn bump(cell: &mut Cell, row: &ThreatRow, passed: bool) {
+    if row.known_gap {
+        cell.2 += 1;
+    } else {
+        cell.0 += usize::from(passed);
+        cell.1 += 1;
+    }
+}
+
+fn evaluate_threat(
+    gateway: &SecurityGateway,
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut rows = Vec::new();
+    for line in BufReader::new(File::open(path)?).lines() {
+        rows.push(serde_json::from_str::<ThreatRow>(&line?)?);
+    }
+    // (axis, value, case_type, language) -> cell
+    let mut report: BTreeMap<(&str, String, String, String), Cell> = BTreeMap::new();
+    let mut gaps_closed = Vec::new();
+    let mut failures = 0;
+    for row in &rows {
+        if row.known_gap && row.case_type != "positive" {
+            return Err(format!("{}: only positives can be known gaps", row.id).into());
+        }
+        let results = gateway.scan_category(threat_category(&row.class)?, &row.text);
+        let detected = results
+            .iter()
+            .any(|result| !matches!(result.class_name.as_str(), "benign" | "safe"));
+        let passed = match row.case_type.as_str() {
+            // A declared rule must be among the accepted matches of the class.
+            "positive" => {
+                detected
+                    && row.rule_id.as_ref().is_none_or(|rule_id| {
+                        results
+                            .iter()
+                            .flat_map(|result| &result.layers)
+                            .filter_map(|layer| layer.details.get("matched_rules"))
+                            .filter_map(|rules| rules.as_array())
+                            .flatten()
+                            .any(|rule| {
+                                rule["rule_id"] == rule_id.as_str()
+                                    && rule.get("accepted").is_none_or(|accepted| accepted == true)
+                            })
+                    })
+            }
+            "hard_negative" => !detected,
+            other => return Err(format!("unknown case_type {other:?} in {}", row.id).into()),
+        };
+        if row.known_gap {
+            if passed {
+                gaps_closed.push(row.id.clone());
+            }
+        } else if !passed {
+            failures += 1;
+            let classes = results
+                .iter()
+                .map(|result| format!("{}={}", result.model, result.class_name))
+                .collect::<Vec<_>>();
+            eprintln!(
+                "{} mismatch id={} class={} family={} rule={:?} results={classes:?}",
+                row.case_type, row.id, row.class, row.family, row.rule_id
+            );
+        }
+        let tags = if row.tags.is_empty() {
+            vec!["plain".to_owned()]
+        } else {
+            row.tags.clone()
+        };
+        let axes = [
+            ("class", vec![row.class.clone()]),
+            ("family", vec![format!("{}.{}", row.class, row.family)]),
+            ("carrier", vec![row.carrier.clone()]),
+            ("tag", tags),
+        ];
+        for (axis, values) in axes {
+            for value in values {
+                let key = (axis, value, row.case_type.clone(), row.language.clone());
+                bump(report.entry(key).or_default(), row, passed);
+            }
+        }
+    }
+    let gated = rows.iter().filter(|row| !row.known_gap).count();
+    println!(
+        "fixture={} rows={} gated_passed={}/{} known_gaps={}",
+        path.display(),
+        rows.len(),
+        gated - failures,
+        gated,
+        rows.len() - gated
+    );
+    println!("threat goldens per axis (case_type language: gated passed/total, known gaps):");
+    for ((axis, value, case_type, language), (passed, total, gaps)) in &report {
+        println!("  {axis:<8} {value:<45} {case_type:<13} {language} {passed}/{total} gaps={gaps}");
+    }
+    if !gaps_closed.is_empty() {
+        // A detection change closed a gap: flip `known_gap` so the row is gated.
+        eprintln!("known gaps now detected, set known_gap=false: {gaps_closed:?}");
+    }
+    if failures > 0 || !gaps_closed.is_empty() {
+        return Err("L1 threat golden evaluation failed".into());
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp],
@@ -338,12 +473,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     gateway.warmup()?;
     let root = Path::new("../python/patronus_ark/benchmark_data");
     let generators = GeneratorSet::load("../python/patronus_ark/dlp_synth/generators.json")?;
-    // Optional suite filter: `pii`, `dlp` or `all` (default).
+    // Optional suite filter: `pii`, `dlp`, `threat` or `all` (default).
     let suite = std::env::args().nth(1).unwrap_or_else(|| "all".into());
-    if !matches!(suite.as_str(), "pii" | "dlp" | "all") {
-        return Err(format!("unknown suite {suite:?}; expected pii, dlp or all").into());
+    if !matches!(suite.as_str(), "pii" | "dlp" | "threat" | "all") {
+        return Err(format!("unknown suite {suite:?}; expected pii, dlp, threat or all").into());
     }
-    if suite != "dlp" {
+    if matches!(suite.as_str(), "pii" | "all") {
         evaluate(
             &gateway,
             &generators,
@@ -359,7 +494,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Vec<_>>(),
         )?;
     }
-    if suite != "pii" {
+    if matches!(suite.as_str(), "dlp" | "all") {
         evaluate(
             &gateway,
             &generators,
@@ -371,6 +506,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|pattern| pattern.name)
                 .collect::<Vec<_>>(),
         )?;
+    }
+    if matches!(suite.as_str(), "threat" | "all") {
+        let mut threat_gateway = SecurityGateway::with_max_level(
+            SecurityCategory::ATTACK_CLASSES.to_vec(),
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        threat_gateway.warmup()?;
+        evaluate_threat(&threat_gateway, &root.join("threat_l1.jsonl"))?;
     }
     Ok(())
 }

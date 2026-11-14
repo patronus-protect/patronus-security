@@ -184,6 +184,36 @@ def test_repository_taxonomy_is_clean():
     assert MODULE.main(["check"]) == 0
 
 
+def golden(**overrides):
+    row = {"id": "threat_l1-x-pos-01", "class": "jailbreak", "family": "jailbreak_core", "carrier": "chat"}
+    row.update(overrides)
+    return row
+
+
+def test_matching_golden_is_clean():
+    rule = {"class": "instruction_injection", "family": "instruction_injection_core",
+            "rule_id": "ark.injection.override.discard_prior"}
+    assert MODULE.golden_problems(minimal_taxonomy(), [golden(), golden(**rule)]) == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"family": "unknown"}, "family unknown is not a family of class jailbreak"),
+        ({"class": "toxic_language"}, "family jailbreak_core is not a family of class toxic_language"),
+        ({"carrier": "webpage"}, "unknown carrier 'webpage'"),
+        ({"rule_id": "ark.injection.override.discard_prior"},
+         "rule ark.injection.override.discard_prior is not mapped by family jailbreak.jailbreak_core"),
+    ],
+)
+def test_mismatched_golden_fails(overrides, message):
+    assert MODULE.golden_problems(minimal_taxonomy(), [golden(**overrides)]) == [f"golden threat_l1-x-pos-01: {message}"]
+
+
+def test_repository_goldens_match_the_taxonomy():
+    assert MODULE.golden_problems(MODULE.load(), MODULE.load_goldens()) == []
+
+
 def test_backlog_task_ids_rejects_duplicate_keys(tmp_path):
     backlog = tmp_path / "backlog.yaml"
     backlog.write_text("tasks:\n  - id: M07\n    status: done\n    status: todo\n", encoding="utf-8")
