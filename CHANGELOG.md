@@ -102,6 +102,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   format from the same inputs is rewritten without `--force`). Each set gets a derived role (decisive, dev, report) from its split, source
   family and commercial-use flag. Only recipes and manifests are in the repository; no data.
   **Detection change:** none; this is evaluation tooling only.
+- Add per-category text models in the same form as the shell-command risk model
+  (`patronus_ark_core::detectors::text::model`): character n-gram TF-IDF of the text plus the `tf1`
+  tokens of its text facts, scored by a logistic regression, with the top contributing features in
+  the explanation. A block keeps either a vocabulary or hashes its features into a fixed number of
+  buckets (32-bit FNV-1a), so a model's size can be capped. The shell-command and text models share
+  one loader and scorer (`detectors::facts_common::model::TfidfLrModel`, loaded with
+  `SHELL_MODEL` or `TEXT_MODEL`); `ShellRiskModel` is replaced by it. `scripts/l1_threat/category_model.py`
+  trains these models and is the reference that the Rust scores match bit for bit; the
+  `text_facts` example adds the facts of each text to training rows. Model files are now read with
+  exact float parsing.
+  **Detection change:** none; no text model is enabled yet. Shell-command risk scores can differ in
+  the last float32 bit of a single feature value for an n-gram repeated more than a thousand times.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
   (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
   policies, in the same form as the shell-command facts: the pattern findings of a text (category,
