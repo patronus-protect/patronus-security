@@ -1857,6 +1857,11 @@ pub struct NativeGates {
     pub resource_exhaustion_mode: ScoreMode,
     pub harmful_content_mode: ScoreMode,
     pub toxic_language_mode: ScoreMode,
+    /// Least repetition count (`500000 times`, `2 million words`) that makes
+    /// an output request a `resource_exhaustion` finding; unset means
+    /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -1878,6 +1883,12 @@ pub fn mode(&self, category: SecurityCategory) -> ScoreMode;
 ```
 
 The `<category>_mode` of a native category; other categories are strict.
+
+```rust
+pub fn resource_exhaustion_count_threshold(&self) -> u64;
+```
+
+The `resource_exhaustion_count_threshold` in effect.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;

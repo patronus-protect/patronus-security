@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (45)
+## Threat rules (50)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -704,6 +704,11 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.tp_shadowing` | `tool_poisoning` | `shadowing` |  |
 | `ark.threat.tp_hidden_markup` | `tool_poisoning` | `hidden_markup` |  |
 | `ark.threat.tp_side_channel_param` | `tool_poisoning` | `side_channel_param` |  |
+| `ark.threat.re_recursive_spawn` | `resource_exhaustion` | `recursive_spawn` |  |
+| `ark.threat.re_unbounded_repeat` | `resource_exhaustion` | `unbounded_repeat` |  |
+| `ark.threat.re_huge_output` | `resource_exhaustion` | `huge_output` |  |
+| `ark.threat.re_tool_flood` | `resource_exhaustion` | `tool_flood` |  |
+| `ark.threat.re_decoy_compute` | `resource_exhaustion` | `decoy_compute` |  |
 
 ## Shell command policies (117) { #shell-command-policies }
 
