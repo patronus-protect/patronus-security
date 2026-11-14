@@ -214,6 +214,7 @@ tasks:
     deps: [X03, M06]  # gold first (owner, 2026-11-13)
 
   - id: E06
+    status: done
     title: Scoreboard gate — TPR@1%/0.1% FPR and AUPRC per class and language, hard-benign FPR, leave-one-dataset-out, native/translated columns, bootstrap CI, delta to base; baseline report research/l1-threat/scoreboard/baseline.md
     type: eval-infra
     deps: [E02, E04, E05, M06]
