@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (40)
+## Threat rules (45)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -699,6 +699,11 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ua_persistence` | `unsafe_action` | `persistence` | RA2 |
 | `ark.threat.ua_untrusted_deserialization` | `unsafe_action` | `unsafe_code` | DS1, DS2 |
 | `ark.threat.ua_unsafe_tls_client` | `unsafe_action` | `unsafe_code` | TM3, SC7 |
+| `ark.threat.tp_sensitive_file_param` | `tool_poisoning` | `sensitive_file_param` |  |
+| `ark.threat.tp_secrecy` | `tool_poisoning` | `secrecy_directive` |  |
+| `ark.threat.tp_shadowing` | `tool_poisoning` | `shadowing` |  |
+| `ark.threat.tp_hidden_markup` | `tool_poisoning` | `hidden_markup` |  |
+| `ark.threat.tp_side_channel_param` | `tool_poisoning` | `side_channel_param` |  |
 
 ## Shell command policies (117) { #shell-command-policies }
 

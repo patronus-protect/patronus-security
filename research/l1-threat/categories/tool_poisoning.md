@@ -123,3 +123,27 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (vergiftete Tool-Listen mit sauberem Zwilling), Seed-Teil der Registry-Einbettung |
 | Hard Negatives | echte Beschreibungen aus der offiziellen MCP-Registry und öffentlichen Function-Calling-Schemas (große Menge, je Lizenz der Quelle) |
 | Lücke | kein natives DE; DE entscheidet `ark_blind` |
+
+## 13. Stand TP01 (2026-11-14)
+
+Fünf Punkte-Regeln im Threat-Detektor (`ark-core/src/detectors/threat/rules.json`, Präfix
+`ark.threat.tp_*`, Kategorie `tool_poisoning`, die jetzt den Threat-Producer hat). Sie laufen nur,
+wenn der Text Tool-Metadaten trägt (Träger `tool_description` aus `text/facts/carrier.rs`, dieselbe
+Marke über `is_tool_metadata`); die Lücken der Regexe überspringen kein `"`, Spannen bleiben also in
+einem JSON-String. Entscheidung wie UA01: Punkte ≥ 50, kein Gegenkontext im Satz (oder, außer
+Verneinung, im Satz davor), bei `requires_context` ein Stützterm.
+
+| Pattern | Regel | Basis | `requires_context` | Besonderheit |
+|---|---|---|---|---|
+| `tp_sensitive_file_param` | `tp_sensitive_file_param` | 45 | nein | Verb + sensibler Pfad + Parameterwort |
+| `tp_secrecy` | `tp_secrecy` | 40 | nein | Verneinung in der eigenen Spanne zählt nicht als Gegenkontext |
+| `tp_shadowing` | `tp_shadowing` | 40 | ja | fremdes Tool (snake_case oder „X tool“/„X-Tool“) + Umleitung/Kopie/Empfänger; nicht „this tool“ und nicht der eigene `"name"` |
+| `tp_hidden_markup` | `tp_hidden_markup` | 30 | ja | Kontext ab der Direktive (der Satzschnitt trennt `<!--` am `!`) |
+| `tp_side_channel_param` | `tp_side_channel_param` | 35 | nein (Abweichung von §4: Validator `format`) | Verlauf/Systemprompt + Seitenkanal-Feld (`sidenote`, `notes`, `metadata`, …; `context` bewusst nicht, Zusammenfassungs-Tools) |
+
+Lexika: Anker in `anchor_lexicons/tool_poisoning.json` (`toolpoison.sensitive_file`, `.secrecy`,
+`.cross_tool`, `.hidden_markup`, `.side_channel`). Offen: `tp_preamble_directive`,
+`tp_model_address`, `tp_decoded`, Gegen-Lexika `toolpoison.usage_doc`/`toolpoison.own_domain`
+(eigene Pfade schützt heute das Pflicht-Parameterwort), YAML-Tool-Listen als Träger, Harvest der
+Cisco-YARA-/ATR-Regeln (default aus, Katalog mit Commit), MCPTox-/Registry-Eval; Punkte/Ablation in
+TP02. Bekannte Grenze: ein Meta-Wort (z. B. „example“) im Satz vor der Anweisung dämpft.

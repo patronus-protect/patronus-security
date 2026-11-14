@@ -52,6 +52,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`tool_poisoning`, on by default) the category now has its own L1 rules
+  for tool and MCP metadata in German and English: tool descriptions, parameter schemas and agent
+  cards that tell the model to read a sensitive file (SSH keys, cloud credentials, kubeconfig,
+  `mcp.json`) into a parameter, to hide a step from the user, to change what another tool does
+  (send extra copies, replace the recipient), to follow a directive hidden in `<IMPORTANT>`-style
+  tags or HTML comments, or to put the conversation or system prompt into a side parameter. The
+  rules (`ark.threat.tp_*`, listed in `matched_rules`) only run on text that carries a tool
+  definition and stay within one description; a reference to the tool itself is not shadowing.
+  Scanner documentation, research notes, test code, tools that name their own paths, ordinary
+  call-order hints and the same instruction in plain text stay benign. Each rule can be switched
+  off in the `rules` map. Before, `tool_poisoning` reported nothing at L1.
+
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
   (German, English, both) and origin (native or translated text): the detection rate at a matched
