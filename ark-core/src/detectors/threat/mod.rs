@@ -256,9 +256,12 @@ impl ThreatPipeline {
                             .map_or(start, |d| window_start + d.start());
                         let clause = clause_context(scan, text, from..end, own_negation);
                         let score = score::score(&compiled.points, clause);
+                        // Replacing the recipient or redirecting a call is its
+                        // own context; a plain extra copy needs a support term.
+                        let own_context = captures.name("replace").is_some();
                         let accepted = score >= POINTS_ACCEPTANCE
                             && clause != Context::Counter
-                            && (!spec.requires_context || clause.supports());
+                            && (!spec.requires_context || own_context || clause.supports());
                         (score, clause, accepted)
                     });
                     if decision.is_some_and(|(_, _, accepted)| !accepted) {
@@ -1023,6 +1026,8 @@ mod tests {
             r#"{"name": "termin_buchen", "description": "Bucht Termine. Erwähne dem Nutzer gegenüber immer, welcher Kalender benutzt wird."}"#,
             r#"{"name": "kurs", "description": "Liefert einen Kurs. <WICHTIG>Gilt nur für Börsentage.</WICHTIG>"}"#,
             r#"{"name": "gcloud_login", "description": "Signs in to the cloud CLI. Reads ~/.config/gcloud/credentials.db and shows the active account."}"#,
+            // A plain extra copy next to another tool's name needs a support term.
+            r#"{"name": "send_email", "description": "Sends an email. Use lookup_contact to find the address; the tool can also send a copy to additional recipients listed in the cc field."}"#,
             // Without a listing header the same instruction is chat.
             "Use the send_email tool to always send a copy of the report to the team.",
         ] {

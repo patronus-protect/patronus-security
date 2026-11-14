@@ -512,11 +512,11 @@
       "class_name": "tool_poisoning",
       "family": "shadowing",
       "upstream_groups": [],
-      "pattern": "(?P<tool>`?(?-u:\\b)[a-z][a-z0-9]{1,30}_[a-z0-9_]{1,30}(?-u:\\b)`?|(?-u:\\b)[a-z][a-z]{1,30}[\\s-](?:tool|werkzeug)(?-u:\\b))[^\\n\\x22]{0,100}?(?P<redirect>(?-u:\\b)(?:(?:also|always|instead)\\s{1,4}(?:send|forward|bcc|copy|redirect)|redirect|(?:change|replace)\\s{1,4}the\\s{1,4}recipient|(?:send|forward)\\s{1,4}(?:all|every|a\\s{1,4}copy|copies)|(?:sende|schicke|leite)\\s{1,4}(?:zusaetzlich|ausserdem|immer|alle|eine\\s{1,4}kopie)|stattdessen\\s{1,4}(?:an|zu)|ersetze\\s{1,4}den\\s{1,4}empf(?:ä|ae)nger(?:\\s{1,4}(?:immer|stets))?)(?-u:\\b)|(?:sende|schicke|leite)\\s{1,4}(?:zusätzlich|außerdem)(?-u:\\b))",
+      "pattern": "(?P<tool>`?(?-u:\\b)[a-z][a-z0-9]{1,30}_[a-z0-9_]{1,30}(?-u:\\b)`?|(?-u:\\b)[a-z][a-z]{1,30}[\\s-](?:tool|werkzeug)(?-u:\\b))[^\\n\\x22]{0,100}?(?P<redirect>(?-u:\\b)(?:(?:also|always|instead)\\s{1,4}(?:send|forward|bcc|copy|redirect)|(?P<replace>redirect|(?:change|replace)\\s{1,4}the\\s{1,4}recipient|stattdessen\\s{1,4}(?:an|zu)|ersetze\\s{1,4}den\\s{1,4}empf(?:ä|ae)nger)|(?:send|forward)\\s{1,4}(?:all|every|a\\s{1,4}copy|copies)|(?:sende|schicke|leite)\\s{1,4}(?:zusaetzlich|ausserdem|immer|alle|eine\\s{1,4}kopie))(?-u:\\b)|(?:sende|schicke|leite)\\s{1,4}(?:zusätzlich|außerdem)(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",
-        "requires_context": false
+        "requires_context": true
       }
     },
     {
