@@ -1,0 +1,113 @@
+[
+  {
+    "id": "agentcfg.file",
+    "description": "Agent-Instruktions- und Konfigurationsdateien und ihre Schlüssel",
+    "en": [],
+    "de": [],
+    "shared": [
+      "agents.md",
+      "claude.md",
+      "gemini.md",
+      "skill.md",
+      ".claude/",
+      ".codex/",
+      ".cursorrules",
+      ".windsurfrules",
+      "settings.json",
+      "config.toml",
+      "mcp.json",
+      "\"command\""
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/agent_config_tampering.md"
+    ]
+  },
+  {
+    "id": "agentcfg.widen",
+    "description": "Freigaben ausweiten: Auto-Approve, alles erlauben, Sandbox aus",
+    "en": [
+      "auto-approve",
+      "autoapprove",
+      "auto_approve",
+      "alwaysallow",
+      "full access",
+      "full-access",
+      "yolo"
+    ],
+    "de": [
+      "vollzugriff",
+      "alle befehle"
+    ],
+    "shared": [
+      "bypasspermissions",
+      "defaultmode",
+      "permissionmode",
+      "permission_mode",
+      "approval_policy",
+      "approvalpolicy",
+      "sandbox_mode",
+      "sandboxmode",
+      "dangerously",
+      "danger-full-access",
+      "\"allow\""
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/agent_config_tampering.md"
+    ]
+  },
+  {
+    "id": "agentcfg.guard_removal",
+    "description": "Schutz-Hooks und Prüfungen entfernen oder abschalten",
+    "en": [
+      "skip"
+    ],
+    "de": [
+      "ueberspringe",
+      "überspringe"
+    ],
+    "shared": [
+      "disableallhooks"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/agent_config_tampering.md"
+    ]
+  },
+  {
+    "id": "agentcfg.persist",
+    "description": "Regel in weitere Agent-Dateien, Repos oder Sitzungen schreiben",
+    "en": [
+      "replicate",
+      "propagate"
+    ],
+    "de": [],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/agent_config_tampering.md"
+    ]
+  },
+  {
+    "id": "agentcfg.hidden_directive",
+    "description": "Versteckte Auszeichnung in Rules-Dateien und Skills",
+    "en": [
+      "<important>",
+      "<system>",
+      "<secret>",
+      "<hidden>",
+      "<instruction"
+    ],
+    "de": [
+      "<wichtig>",
+      "<geheim>",
+      "<versteckt>"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/agent_config_tampering.md"
+    ]
+  }
+]
