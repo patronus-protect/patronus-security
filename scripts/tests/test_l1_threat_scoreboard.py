@@ -291,6 +291,19 @@ def test_cli_score_and_report(split, tmp_path, capsys):
     assert MODULE.main(["score", "--split", str(tmp_path / "nowhere"), "--predictions", str(tmp_path)]) == 2
 
 
+def test_german_rows_of_a_translated_source_set_score_as_translated(tmp_path):
+    # Corpus rows carry no `translated` field; the entity map marks the German part of rtp_lx translated.
+    rows = [row("rtp_lx", 0, ["toxic_language"], language="de"), row("rtp_lx", 1, ["toxic_language"]),
+            row("rtp_lx", 2, benign=True, language="de"), row("rtp_lx", 3, benign=True)]
+    freeze(tmp_path / "train_dev", rows)
+    sets = MODULE.split_sets(tmp_path)
+    fake_predict(sets, tmp_path / "pred")
+    cells = MODULE.score_split(sets, MODULE.ark_predictions(sets, tmp_path / "pred"), bootstrap=False)["gated"]
+    cells = cells["toxic_language"]
+    assert cells["de"]["translated"]["positives"] == 1 and "native" not in cells["de"]
+    assert cells["en"]["native"]["positives"] == 1 and "translated" not in cells["en"]
+
+
 def test_report_adds_the_best_cached_baseline(split, tmp_path):
     sets = MODULE.split_sets(split)
     fake_predict(sets, tmp_path / "pred")

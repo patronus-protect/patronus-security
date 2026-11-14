@@ -12,7 +12,8 @@ ARK runs on L1 only, one category per class (``instruction_injection`` is the ca
 ``injection``); the score of a class is the highest attack confidence ARK reports for it (0 when it
 reports nothing), the verdict is ARK's own decision (any result that is not ``benign``/``safe``, as
 in the golden evaluation). Metrics per class, language (``all``, ``de``, ``en``) and origin (``all``,
-``native``, ``translated``; ``translated`` is the row field of runner and dataset translations):
+``native``, ``translated``; runner translations and the German part of a set marked ``translated`` in
+the entity map, as in ``generators.py``):
 
 - TPR at matched document FPR 1 % and 0.1 % on the benign rows (lowest threshold whose FPR is within
   the target, ``run_baselines.matched_fpr``), with a seeded percentile bootstrap 95 % CI of TPR@1 %
@@ -228,7 +229,9 @@ def predict_split(sets: list[SetFile], out: Path, package: Path | None = None, j
 
 
 def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
-    """``(row, prediction, role)`` of every row; a set without predictions is an error."""
+    """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``); a set
+    without predictions is an error."""
+    translated = GENERATORS.translated_sets(CORPORA.entity_map.load())
     pairs = []
     for entry in sets:
         path = predictions.get(entry.set_id)
@@ -238,7 +241,7 @@ def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[
         for row in BASELINES.read_rows(entry.path):
             if row["id"] not in preds:
                 raise ValueError(f"set {entry.set_id}: no prediction for row {row['id']}")
-            pairs.append((row, preds[row["id"]], entry.role))
+            pairs.append(({**row, "translated": GENERATORS.is_translated(row, translated)}, preds[row["id"]], entry.role))
     return pairs
 
 

@@ -317,7 +317,8 @@ ARK läuft nur auf L1, je Klasse ihre Kategorie (`instruction_injection` heißt 
 ein Ergebnis, das nicht `benign`/`safe` ist (wie im Golden-Eval). Score: das Höchste aus der Konfidenz eines
 solchen Ergebnisses und den Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des
 Injection-Scorers); 0, wenn ARK nichts meldet. Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`,
-`native`, `translated`; Zeilenfeld `translated`):
+`native`, `translated`; Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map als `translated`
+markierten Satzes, wie in `generators.py`):
 
 - TPR bei gleicher Dokument-FPR 1 % und 0,1 % auf den Benign-Zeilen (`run_baselines.matched_fpr`), dazu ein
   Perzentil-Bootstrap-95-%-KI der TPR@1 % (200 Runden, fester Seed; Positive und Negative getrennt gezogen,
