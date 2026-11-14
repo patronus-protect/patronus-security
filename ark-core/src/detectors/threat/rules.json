@@ -488,7 +488,7 @@
       "class_name": "tool_poisoning",
       "family": "sensitive_file_param",
       "upstream_groups": [],
-      "pattern": "(?P<access>(?-u:\\b)(?:read|open|load|include|attach|pass|send|copy|lies|lese|oeffne|lade|uebergib|kopiere|haenge)(?-u:\\b)|(?:öffne|übergib|hänge)(?-u:\\b))[^\\n\\x22]{0,80}?(?P<target>~/\\.ssh(?:/[\\w.-]{1,40})?|(?-u:\\b)(?:id_rsa|id_ed25519|id_ecdsa|id_dsa)(?-u:\\b)|\\.aws/credentials|\\.kube/config|(?-u:\\b)kubeconfig(?-u:\\b)|\\.netrc(?-u:\\b)|\\.gnupg(?-u:\\b)|\\.docker/config\\.json|(?-u:\\b)mcp\\.json(?-u:\\b)|/etc/shadow(?-u:\\b))[^\\n\\x22]{0,120}?(?P<param>(?-u:\\b)(?:parameters?|params?|arguments?|field|feld|sidenote|notes?|notiz(?:en)?|context|kontext|metadata|metadaten)(?-u:\\b))",
+      "pattern": "(?P<access>(?-u:\\b)(?:read|open|load|include|attach|pass|send|copy|lies|lese|oeffne|lade|uebergib|kopiere|haenge)(?-u:\\b)|(?:öffne|übergib|hänge)(?-u:\\b))[^\\n\\x22]{0,80}?(?P<target>~/\\.ssh(?:/[\\w.-]{1,40})?|(?-u:\\b)(?:id_rsa|id_ed25519|id_ecdsa|id_dsa)(?-u:\\b)|\\.aws/credentials|\\.kube/config|(?-u:\\b)kubeconfig(?-u:\\b)|\\.netrc(?-u:\\b)|\\.gnupg(?-u:\\b)|\\.docker/config\\.json|(?-u:\\b)mcp\\.json(?-u:\\b)|/etc/shadow(?-u:\\b)|/credentials(?:\\.json)?(?-u:\\b))[^\\n\\x22]{0,120}?(?P<param>(?-u:\\b)(?:parameters?|params?|arguments?|field|feld|sidenote|notes?|notiz(?:en)?|context|kontext|metadata|metadaten)(?-u:\\b))",
       "points": {
         "base_score": 45,
         "validator": "format",
@@ -500,7 +500,7 @@
       "class_name": "tool_poisoning",
       "family": "secrecy_directive",
       "upstream_groups": [],
-      "pattern": "(?P<directive>(?-u:\\b)(?:do\\s{1,4}not|don't|never|without|sag|sage|ohne)(?-u:\\b))\\s{1,4}(?P<secrecy>(?:tell(?:ing)?|inform(?:ing)?|mention(?:ing)?|notify(?:ing)?|notifying|alert(?:ing)?|reveal(?:ing)?)\\s{1,4}(?:this\\s{1,4}(?:step\\s{1,4})?to\\s{1,4})?the\\s{1,4}user(?-u:\\b)|(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:davon\\s{1,4})?(?:nichts|zu\\s{1,4}(?:informieren|benachrichtigen|fragen))(?-u:\\b))",
+      "pattern": "(?P<directive>(?-u:\\b)(?:do\\s{1,4}not|don't|never|without|sag|sage|ohne|erwähne|erwaehne|verrate)(?-u:\\b))\\s{1,4}(?P<secrecy>(?:tell(?:ing)?|inform(?:ing)?|mention(?:ing)?|notify(?:ing)?|notifying|alert(?:ing)?|reveal(?:ing)?)\\s{1,4}(?:this\\s{1,4}(?:step\\s{1,4})?to\\s{1,4})?the\\s{1,4}user(?-u:\\b)|(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:davon\\s{1,4})?(?:nichts|zu\\s{1,4}(?:informieren|benachrichtigen|fragen))(?-u:\\b)|(?:(?:das|dies|es)\\s{1,4})?(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:gegen(?:ü|ue)ber\\s{1,4})?(?:nicht|nie|niemals)(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",
@@ -512,7 +512,7 @@
       "class_name": "tool_poisoning",
       "family": "shadowing",
       "upstream_groups": [],
-      "pattern": "(?P<tool>`?(?-u:\\b)[a-z][a-z0-9]{1,30}_[a-z0-9_]{1,30}(?-u:\\b)`?|(?-u:\\b)[a-z][a-z]{1,30}[\\s-](?:tool|werkzeug)(?-u:\\b))[^\\n\\x22]{0,100}?(?P<redirect>(?-u:\\b)(?:(?:also|always|instead)\\s{1,4}(?:send|forward|bcc|copy|redirect)|redirect|(?:change|replace)\\s{1,4}the\\s{1,4}recipient|(?:send|forward)\\s{1,4}(?:all|every|a\\s{1,4}copy|copies)|(?:sende|schicke|leite)\\s{1,4}(?:zusaetzlich|ausserdem|immer|alle|eine\\s{1,4}kopie)|stattdessen\\s{1,4}(?:an|zu)|ersetze\\s{1,4}den\\s{1,4}empf(?:ä|ae)nger)(?-u:\\b)|(?:sende|schicke|leite)\\s{1,4}(?:zusätzlich|außerdem)(?-u:\\b))",
+      "pattern": "(?P<tool>`?(?-u:\\b)[a-z][a-z0-9]{1,30}_[a-z0-9_]{1,30}(?-u:\\b)`?|(?-u:\\b)[a-z][a-z]{1,30}[\\s-](?:tool|werkzeug)(?-u:\\b))[^\\n\\x22]{0,100}?(?P<redirect>(?-u:\\b)(?:(?:also|always|instead)\\s{1,4}(?:send|forward|bcc|copy|redirect)|(?P<replace>redirect|(?:change|replace)\\s{1,4}the\\s{1,4}recipient|stattdessen\\s{1,4}(?:an|zu)|ersetze\\s{1,4}den\\s{1,4}empf(?:ä|ae)nger)|(?:send|forward)\\s{1,4}(?:all|every|a\\s{1,4}copy|copies)|(?:sende|schicke|leite)\\s{1,4}(?:zusaetzlich|ausserdem|immer|alle|eine\\s{1,4}kopie))(?-u:\\b)|(?:sende|schicke|leite)\\s{1,4}(?:zusätzlich|außerdem)(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",
@@ -524,7 +524,7 @@
       "class_name": "tool_poisoning",
       "family": "hidden_markup",
       "upstream_groups": [],
-      "pattern": "(?P<tag><(?:important|system|instructions?|secret|hidden|admin)>|<!--)(?P<directive>[^<\\n\\x22]{0,60}?(?-u:\\b)(?:you\\s{1,4}must|you\\s{1,4}should|always|first|before\\s{1,4}(?:using|calling|you)|ignore|du\\s{1,4}musst|musst\\s{1,4}du|immer|zuerst|vorher|bevor\\s{1,4}du|ignoriere)(?-u:\\b))",
+      "pattern": "(?P<tag><(?:important|system|instructions?|secret|hidden|admin|wichtig|anweisung(?:en)?|geheim|versteckt)>|<!--)(?P<directive>[^<\\n\\x22]{0,60}?(?-u:\\b)(?:you\\s{1,4}must|you\\s{1,4}should|always|first|before\\s{1,4}(?:using|calling|you|each\\s{1,4}call|every\\s{1,4}call)|ignore|vor\\s{1,4}jedem\\s{1,4}(?:aufruf|einsatz)|du\\s{1,4}musst|musst\\s{1,4}du|immer|zuerst|vorher|bevor\\s{1,4}du|ignoriere)(?-u:\\b))",
       "points": {
         "base_score": 30,
         "validator": "format",
