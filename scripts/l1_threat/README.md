@@ -372,13 +372,15 @@ auf der Trainingshälfte; der Arbeitspunkt jeder Stufe hält 1 % FPR auf deren N
 
 Je Stufe auf der Auswertungshälfte und Sprache (`all`, `de`, `en`): TPR bei gleicher FPR 1 % und 0,1 %, AUPRC
 (`scoreboard.cell_metrics`), Hard-Benign-FPR am Arbeitspunkt (`scoreboard.is_hard_benign`), RAM-Schätzung des
-Modells (f64-Gewicht + f32-idf je Merkmal, Vokabular-Einträge) und die ms je 100 KiB, die das Modell zu den
+Modells (f64-Gewicht + f32-idf je Merkmal, je Vokabular-Term Map-Eintrag und Kopie in `names`) und die ms je 100 KiB, die das Modell zu den
 Facts hinzufügt (p95 des Beispiels `text_model_latency` auf den 100-KiB-Fenstern von `latency.py`;
 Punkte-Stufen summieren über die Facts und kosten nichts zusätzlich).
 
 Auswahl: unter den Modell-Stufen `B0`, `R+A+L`, `B1`, `B4`, `B5` im Budget (RAM ≤ 2 MB, ≤ 1 ms je 100 KiB
 zusätzlich) die günstigste (ms, dann RAM, dann Stufenreihenfolge), deren TPR@1 % höchstens 1 pp unter der
 besten liegt. `R` und `R+A` sind Vergleichszeilen. `B0` ist der Status quo und kostet nichts zusätzlich.
+Stufen ohne gemessene Kosten (`B1`, `B4`, `B5` ohne `--bench-bin`/`--windows`) stehen unter `untimed`
+und bleiben aus der Auswahl.
 
 ```bash
 cargo run --release -q -p patronus-ark-core --example text_facts < rows.jsonl > rows.facts.jsonl

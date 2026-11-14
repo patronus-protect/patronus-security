@@ -30,7 +30,8 @@ windows, ``--bench-bin``/``--windows``; points stages sum over the facts and add
 Selection (``select``): among the model stages ``B0``, ``R+A+L``, ``B1``, ``B4``, ``B5`` within the
 budget (RAM <= 2 MB, <= 1 ms per 100 KiB added), the cheapest (ms, then RAM, then stage order) whose
 TPR at 1 % FPR is within 1 pp of the best. ``R`` and ``R+A`` are comparison rows only. ``B0`` is the
-status quo and adds no cost.
+status quo and adds no cost. A stage whose cost is unknown (``B1``, ``B4``, ``B5`` without
+``--bench-bin``/``--windows``) is reported as ``untimed`` and left out of the selection.
 
     cargo run -q -p patronus-ark-core --example text_facts < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -89,6 +90,8 @@ MAX_EXTRA_MS = 1.0
 OPERATING_FPR = 0.01
 # Per-entry overhead of a vocabulary or points map entry in the Rust model (hash slot, string header).
 ENTRY_BYTES = 32
+# ``Box<str>`` header of a vocabulary term's clone in the Rust model's ``names`` vector.
+NAME_BYTES = 16
 TOKENS = {"B1": "none", "B4": "words"}
 
 
@@ -185,9 +188,13 @@ class Stage:
 
 
 def model_ram_bytes(document: dict) -> int:
-    """RAM estimate of a loaded ``model.json``: f64 weight + f32 idf per feature, vocabulary entries."""
+    """RAM estimate of a loaded ``model.json``: f64 weight + f32 idf per feature, vocabulary entries.
+
+    The Rust model owns each vocabulary term twice (``into_vocabulary``): as the lookup map key and
+    as a ``Box<str>`` clone in the ``names`` vector.
+    """
     features = len(document["weights"])
-    vocab = sum(len(name.encode("utf-8")) + ENTRY_BYTES
+    vocab = sum(2 * len(name.encode("utf-8")) + ENTRY_BYTES + NAME_BYTES
                 for block in document["blocks"] for name in block.get("vocabulary", {}))
     return features * 12 + vocab
 
@@ -304,17 +311,24 @@ def select(results: list[dict[str, Any]], tolerance_pp: float = TOLERANCE_PP) ->
     """The README's selection rule over the measured stages (see the module docstring)."""
     order = {name: i for i, name in enumerate(MODEL_STAGES)}
     candidates = [r for r in results if r["stage"] in order and _tpr(r) is not None]
-    over = [r["stage"] for r in candidates
-            if (r.get("ram_bytes") or 0) > MAX_RAM_BYTES or (r.get("ms_per_100kib") or 0.0) > MAX_EXTRA_MS]
-    within = [r for r in candidates if r["stage"] not in over]
+
+    def cost(r: dict[str, Any]) -> tuple[float, int]:
+        # B0 is the status quo and adds nothing; the other stages carry their measured cost.
+        return (0.0, 0) if r["stage"] == "B0" else (r["ms_per_100kib"], r["ram_bytes"])
+
+    untimed = [r["stage"] for r in candidates
+               if r["stage"] != "B0" and (r.get("ms_per_100kib") is None or r.get("ram_bytes") is None)]
+    timed = [r for r in candidates if r["stage"] not in untimed]
+    over = [r["stage"] for r in timed if cost(r)[1] > MAX_RAM_BYTES or cost(r)[0] > MAX_EXTRA_MS]
+    within = [r for r in timed if r["stage"] not in over]
     if not within:
-        return {"best": None, "eligible": [], "over_budget": over, "selected": None}
+        return {"best": None, "eligible": [], "over_budget": over, "selected": None, "untimed": untimed}
     best = max(within, key=lambda r: (_tpr(r), -order[r["stage"]]))
     floor = _tpr(best) - tolerance_pp / 100.0 - 1e-12
     eligible = [r for r in within if _tpr(r) >= floor]
-    cheapest = min(eligible, key=lambda r: (r.get("ms_per_100kib") or 0.0, r.get("ram_bytes") or 0, order[r["stage"]]))
+    cheapest = min(eligible, key=lambda r: (*cost(r), order[r["stage"]]))
     return {"best": best["stage"], "eligible": [r["stage"] for r in sorted(eligible, key=lambda r: order[r["stage"]])],
-            "over_budget": over, "selected": cheapest["stage"]}
+            "over_budget": over, "selected": cheapest["stage"], "untimed": untimed}
 
 
 def run_class(train: list[dict], test: list[dict], cls: str, *, predictions: dict[str, dict] | None = None,
@@ -357,7 +371,8 @@ def markdown(reports: list[dict[str, Any]]) -> str:
         lines += [f"## {report['class']}", "",
                   f"Rows: train {report['rows']['train']}, eval {report['rows']['eval']}. "
                   f"Best: {selection['best'] or '–'}; selected: **{selection['selected'] or '–'}**"
-                  + (f"; over budget: {', '.join(selection['over_budget'])}" if selection["over_budget"] else ""),
+                  + (f"; over budget: {', '.join(selection['over_budget'])}" if selection["over_budget"] else "")
+                  + (f"; untimed: {', '.join(selection['untimed'])}" if selection["untimed"] else ""),
                   "",
                   "| Stage | TPR@1 % | TPR@0.1 % | DE TPR@1 % | EN TPR@1 % | AUPRC | hard-benign FPR | ms/100 KiB | RAM KiB |",
                   "|---|---|---|---|---|---|---|---|---|"]
