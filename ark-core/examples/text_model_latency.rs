@@ -30,7 +30,12 @@ fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (model_path, windows_path) = match args.as_slice() {
         [model, windows, ..] => (model, windows),
-        _ => return Err("usage: text_model_latency MODEL.json WINDOWS.jsonl [--tokens tf1|words|none]".into()),
+        _ => {
+            return Err(
+                "usage: text_model_latency MODEL.json WINDOWS.jsonl [--tokens tf1|words|none]"
+                    .into(),
+            )
+        }
     };
     let tokens = match args.iter().position(|a| a == "--tokens") {
         Some(at) => args.get(at + 1).map(String::as_str).unwrap_or(""),
@@ -41,7 +46,8 @@ fn main() -> Result<(), String> {
     }
     let bytes = std::fs::read(model_path).map_err(|e| format!("{model_path}: {e}"))?;
     let model = TfidfLrModel::from_json_slice(&bytes, TEXT_MODEL)?;
-    let windows = std::fs::read_to_string(windows_path).map_err(|e| format!("{windows_path}: {e}"))?;
+    let windows =
+        std::fs::read_to_string(windows_path).map_err(|e| format!("{windows_path}: {e}"))?;
     let mut samples = Vec::new();
     for line in windows.lines().filter(|l| !l.trim().is_empty()) {
         let row: Value = serde_json::from_str(line).map_err(|e| e.to_string())?;

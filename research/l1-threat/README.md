@@ -212,6 +212,21 @@ GermanQuAD (10 729 Zeilen, je Hälfte Train/Test, in-distribution) — Vokabular
 Noch kein Text-Modell eingebaut: welches Modell je Klasse bleibt, entscheidet die Ablation (S05) und das
 Gate; erst dann wird das Gewinner-`model.json` einkompiliert und im Scan-Pfad verdrahtet.
 
+**Stand S05.** Ablation je Klasse: `scripts/l1_threat/ablation.py run` misst `R`, `R+A`, `B0`, `R+A+L`, `B1`,
+`B4`, `B5` auf denselben Zeilen (TPR@1 %/0,1 % je Sprache, AUPRC, Hard-Benign-FPR am Arbeitspunkt, RAM-Schätzung,
+ms je 100 KiB zusätzlich über das Rust-Beispiel `text_model_latency`) und wählt nach der Regel unter
+„Ablationen“. Festlegungen: `R` = höchste Finding-Punkte der Kategorie in den Facts; `R+A` = plus Stützkontext
++25 / Gegenkontext −30 (wie `score.rs`), nur bei Regeltreffer; `R+A+L` = plus gelernte ganzzahlige Punkte je
+Fact-Token (projizierte LR, Gegenkontext ≤ 0, sonst ≥ 0); `B1` = `char_wb`-Vokabular-LR ohne Tokens; `B4` =
+gehashte Zeichen-N-Gramme + `T:`-Wörter ohne Fact-Tokens (2^15 + 2^14 Buckets); `B5` = `R+A` + `B4`-Logit × 10,
+gedeckelt auf 40 Punkte; `B0` aus Scoreboard-Vorhersagen, kostet als Status quo nichts zusätzlich. Facts tragen
+noch keine Kategorie-Findings (kein Aufrufer im Scan-Pfad), daher sind `R`/`R+A` bis zur Verdrahtung der Regeln
+0. Smoke-Lauf (2026-11-14, nur train_dev, keine Entscheidung): `instruction_injection` auf je 4 000 Zeilen SPML +
+Dolly + GermanQuAD, Hash-Hälften: `B1`/`B4` TPR@1 % 99,9 %, `B5` 99,3 %, `R+A+L` 49,0 %; die N-Gramm-Modelle
+kosten in Rust 17–21 ms je 100 KiB (Budget 1 ms) und fallen aus dem Budget, gewählt wäre `R+A+L`. Folge für
+IJ02 ff.: ein N-Gramm-Modell braucht ein Anker-Fenster (README: „Modelle laufen nur dort, wo ein Anker ein
+Fenster geöffnet hat“) oder ein schnelleres Merkmals-Verfahren, sonst gewinnt es die Auswahl nie.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
