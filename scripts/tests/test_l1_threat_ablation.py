@@ -217,6 +217,33 @@ def test_selection_prefers_the_status_quo_on_equal_cost_and_reports_nothing_meas
     assert MODULE.select([measured("R", 0.5)])["selected"] is None
 
 
+def test_selection_withholds_untimed_model_stages_but_keeps_the_free_status_quo():
+    # No --bench-bin/--windows: B1/B4/B5 have no latency; unknown is not zero cost.
+    results = [
+        measured("B0", 0.90, ms=None, ram=None),
+        measured("R+A+L", 0.91, ram=2_000),
+        measured("B1", 0.99, ms=None, ram=10), measured("B4", 0.98, ms=None, ram=10),
+        measured("B5", 0.99, ms=None, ram=10),
+    ]
+    choice = MODULE.select(results)
+    assert choice["untimed"] == ["B1", "B4", "B5"]
+    assert choice["best"] == "R+A+L" and choice["eligible"] == ["B0", "R+A+L"]
+    assert choice["selected"] == "B0"
+    only_untimed = MODULE.select([measured("B4", 0.98, ms=None, ram=10)])
+    assert only_untimed["selected"] is None and only_untimed["untimed"] == ["B4"]
+
+
+def test_model_ram_counts_both_owned_vocabulary_copies():
+    # Rust's into_vocabulary keeps each term as the map key and clones it into `names`.
+    term = "abc"
+    document = {"weights": [0.0], "blocks": [{"vocabulary": {term: 0}}, {"vocabulary": {}}]}
+    names_entry = 16  # Box<str> header in the names vector
+    expected = 12 + 2 * len(term) + MODULE.ENTRY_BYTES + names_entry
+    assert MODULE.model_ram_bytes(document) == expected
+    hashed = {"weights": [0.0] * 4, "blocks": [{"vectorizer": {"n_features": 4}}]}
+    assert MODULE.model_ram_bytes(hashed) == 4 * 12
+
+
 # ── report and CLI ──────────────────────────────────────────────────────────
 
 
@@ -231,6 +258,10 @@ def test_markdown_lists_every_stage_and_the_choice():
     text = MODULE.markdown([report])
     assert "| R |" in text and "| B5 |" in text
     assert "selected: **B5**" in text
+    untimed = [measured("B4", 0.9, ms=None, ram=1024)]
+    report = {"class": CLS, "stages": untimed, "selection": MODULE.select(untimed),
+              "rows": {"train": 10, "eval": 10}}
+    assert "untimed: B4" in MODULE.markdown([report])
 
 
 def test_cli_run_on_rows_with_facts_writes_a_report(tmp_path):
