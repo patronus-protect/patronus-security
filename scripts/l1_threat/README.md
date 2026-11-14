@@ -303,3 +303,50 @@ Heuristik-Zeilen laufen in `--jobs` geforkten Prozessen (etwa 40 s je 3 000 Doku
 Referenzzeilen sind auf langen Texten langsam (ProtectAI v2 rund 1 s je Dokument mit vielen Fenstern).
 
 Tests: `scripts/tests/test_l1_threat_run_baselines.py`.
+
+## Scoreboard und Gate
+
+`scoreboard.py` misst ARK auf den eingefrorenen Korpora eines Splits und vergleicht einen Head mit seiner Base.
+Ein Split ist ein Wurzelverzeichnis; jedes Unterverzeichnis mit eingefrorenem `manifest.json` zählt
+(`DEV/{train_dev,report,generated,translated}`, `HOLDOUT/{holdout,generated}`). Positiv ist eine Zeile für die
+Klassen in `classes` (nur berichtete Klassen zählen nicht), negativ jede `benign`-Zeile. Sätze mit der Rolle
+`report` laufen im eigenen Bereich `report` und gaten nie; alle übrigen (`dev`, `decisive`) bilden den Bereich
+`gated`.
+
+ARK läuft nur auf L1, je Klasse ihre Kategorie (`instruction_injection` heißt `injection`). Urteil einer Klasse:
+ein Ergebnis, das nicht `benign`/`safe` ist (wie im Golden-Eval). Score: das Höchste aus der Konfidenz eines
+solchen Ergebnisses und den Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des
+Injection-Scorers); 0, wenn ARK nichts meldet. Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`,
+`native`, `translated`; Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map als `translated`
+markierten Satzes, wie in `generators.py`):
+
+- TPR bei gleicher Dokument-FPR 1 % und 0,1 % auf den Benign-Zeilen (`run_baselines.matched_fpr`), dazu ein
+  Perzentil-Bootstrap-95-%-KI der TPR@1 % (200 Runden, fester Seed; Positive und Negative getrennt gezogen,
+  Schwelle in jeder Runde neu gewählt);
+- AUPRC (Average Precision der Positiven gegen die Benign-Zeilen, Gleichstände als eine Stufe);
+- Hard-Benign-FPR beim ARK-Urteil: harmlose Doppelgänger (`twin_of`) und die Benign-Zeilen von `notinject`,
+  `or_bench_hard`, `xstest`, `l1_goldens` (`HARD_BENIGN_SETS`);
+- Leave-one-dataset-out (Sprache und Herkunft `all`): TPR@1 % ohne je einen beteiligten Satz, dazu das Minimum
+  und der Satz, dessen Wegfall die TPR senkt.
+
+```bash
+python3 scripts/l1_threat/scoreboard.py predict --split DEV --out PRED      # mit dem installierten patronus_ark
+python3 scripts/l1_threat/scoreboard.py score --split DEV --predictions PRED [--output report.json]
+python3 scripts/l1_threat/scoreboard.py compare --base base.json --head head.json   # Exit 1 bei Regression
+python3 scripts/l1_threat/scoreboard.py report --split DEV --predictions PRED [--baseline-cache CACHE] \
+    --out research/l1-threat/scoreboard/baseline.md
+python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DEV [--holdout HOLDOUT] --cache CACHE
+```
+
+`gate` baut Head und Base (Release-Modul von `python/`, offline, über `ensure_build` des DLP-Scoreboards; gleiche
+Detektor-Quellen teilen einen Build), sagt jeden Satz in einem eigenen Prozess vorher (Cache je Build-Schlüssel,
+Skript-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich `gated` eine Klasse bei TPR@1 % (`all`, `de`, `en`;
+Herkunft `all`) mehr als 0,5 pp verliert oder der Head eine Hard-Benign-Zeile einer Klasse meldet, die die Base
+nicht meldet. Eine Klasse ohne Positive in der Base ist neu, keine Regression. stdout zeigt Dev-Zahlen; der
+Holdout verlässt die Sandbox nur als Urteil mit den Namen fehlschlagender Prüfungen, sein Bericht bleibt unter
+`CACHE/threat-scoreboard/reports/`. Die Latenz prüft der Runner getrennt (`latency.py`, `latency_ab`). Exit 0 =
+bestanden, 1 = Regression, 2 = Fehler. `report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle
+Sätze (je Baseline die zuletzt geschriebene Version) auf denselben Zellen aus und nennt je Zeile die beste.
+Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+
+Tests: `scripts/tests/test_l1_threat_scoreboard.py`.

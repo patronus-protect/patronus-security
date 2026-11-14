@@ -271,6 +271,16 @@ Angriffs-Wahrscheinlichkeit über 512-Token-Fenster. Cache-Schlüssel: SHA-256 d
 `sweep` liefert je Klasse und Sprache die Schwelle bei gleicher FPR (1 %, 0,1 %) und die TPR dazu. Offen: CodeShield
 (eigene Toolchain) und eine genauere pipelock-Extraktion.
 
+**Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
+Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
+Benign-Pool, Bootstrap-95-%-KI der TPR@1 %, AUPRC, Hard-Benign-FPR beim ARK-Urteil (Doppelgänger `twin_of` und
+die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
+werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp TPR@1 %-Verlust
+einer Klasse (`all`, `de`, `en`) oder einer Hard-Benign-Zeile, die nur der Head meldet. Der Holdout erscheint im
+Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
+`latency_ab`. Dev-Stand: [`scoreboard/baseline.md`](scoreboard/baseline.md) (Baselinespalte, sobald deren
+Vorhersagen für Dev im Cache liegen).
+
 ## Herkunft: Regeln, Train, Gold, Holdout
 
 Festgelegt 2026-11-10. Je Kategorie steht die konkrete Belegung in §12 des Kategorie-Dokuments; hier gelten

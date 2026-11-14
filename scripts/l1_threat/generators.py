@@ -686,6 +686,17 @@ def class_templates(r: Any, split: str, dataset: str, label_of: Callable[[list[s
     return rows
 
 
+def translated_sets(emap: dict[str, Any]) -> frozenset[str]:
+    """Sets whose German part is translated (``translated: true`` in the entity map)."""
+    return frozenset(d["id"] for d in emap["datasets"] if d.get("translated"))
+
+
+def is_translated(row: dict[str, Any], translated: frozenset[str]) -> bool:
+    """Corpus rows carry no provenance; the German part of a set in ``translated`` is translated.
+    Rows with explicit provenance (runner translations) keep it."""
+    return bool(row.get("translated")) or (row.get("language") == "de" and row["dataset"] in translated)
+
+
 def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: dict[str, Any],
                    counts: dict[str, int]) -> dict[str, bytes]:
     """``{file: bytes}`` of one generated split; pure function of seed, split, inputs and version."""
@@ -698,11 +709,9 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
     def label_of(classes: list[str]) -> str | None:
         return attack_label(labels, classes)
 
-    # Corpus rows carry no provenance; the German part of a set marked `translated` in the entity map is
-    # translated. Rows with explicit provenance (runner translations) keep it.
-    translated = {d["id"] for d in emap["datasets"] if d.get("translated")}
+    translated = translated_sets(emap)
     usable = [
-        {**row, "translated": bool(row.get("translated")) or (row["language"] == "de" and row["dataset"] in translated)}
+        {**row, "translated": is_translated(row, translated)}
         for row in inputs if row["language"] in LANGUAGES and len(row["text"]) <= MAX_PAYLOAD_CHARS and row["text"].strip()
     ]
     attacks = strata([row for row in usable if not row["benign"] and row["classes"] and label_of(row["classes"])])
