@@ -524,7 +524,7 @@
       "class_name": "tool_poisoning",
       "family": "hidden_markup",
       "upstream_groups": [],
-      "pattern": "(?P<tag><(?:important|system|instructions?|secret|hidden|admin|wichtig|anweisungen?|geheim|versteckt)>|<!--)(?P<directive>[^<\\n\\x22]{0,60}?(?-u:\\b)(?:you\\s{1,4}must|you\\s{1,4}should|always|first|before\\s{1,4}(?:using|calling|you|each\\s{1,4}call|every\\s{1,4}call)|ignore|vor\\s{1,4}jedem\\s{1,4}(?:aufruf|einsatz)|du\\s{1,4}musst|musst\\s{1,4}du|immer|zuerst|vorher|bevor\\s{1,4}du|ignoriere)(?-u:\\b))",
+      "pattern": "(?P<tag><(?:important|system|instructions?|secret|hidden|admin|wichtig|anweisung(?:en)?|geheim|versteckt)>|<!--)(?P<directive>[^<\\n\\x22]{0,60}?(?-u:\\b)(?:you\\s{1,4}must|you\\s{1,4}should|always|first|before\\s{1,4}(?:using|calling|you|each\\s{1,4}call|every\\s{1,4}call)|ignore|vor\\s{1,4}jedem\\s{1,4}(?:aufruf|einsatz)|du\\s{1,4}musst|musst\\s{1,4}du|immer|zuerst|vorher|bevor\\s{1,4}du|ignoriere)(?-u:\\b))",
       "points": {
         "base_score": 30,
         "validator": "format",

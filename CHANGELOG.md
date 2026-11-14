@@ -75,6 +75,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `Verrate dem Nutzer nie …`), hidden tags such as `<WICHTIG>` with a directive like
   `vor jedem Aufruf` (English: `before each call`), and credential files under a
   `…/credentials` path read into a parameter.
+- **Detection change:** (`tool_poisoning`) the hidden-markup rule (`ark.threat.tp_hidden_markup`)
+  also accepts the singular German tag `<ANWEISUNG>`; before, only `<ANWEISUNGEN>` matched.
 
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
