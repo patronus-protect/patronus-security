@@ -63,6 +63,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Scanner documentation, research notes, test code, tools that name their own paths, ordinary
   call-order hints and the same instruction in plain text stay benign. Each rule can be switched
   off in the `rules` map. Before, `tool_poisoning` reported nothing at L1.
+- **Detection change:** (`tool_poisoning`) the shadowing rule (`ark.threat.tp_shadowing`) takes
+  the owning tool from the JSON definition around the finding, independent of key order: a
+  `"name"` after the description counts, and the previous tool's name no longer does.
 
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
