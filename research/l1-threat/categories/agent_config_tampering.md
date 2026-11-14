@@ -129,3 +129,32 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (Rules-Dateien, Settings, `mcp.json`, Diffs), Seed-Teil der Einbettung |
 | Hard Negatives | echte Rules-Dateien und Skills mit strengen Projektregeln, eng gefasste `permissions.allow`, offizielle MCP-Server-Einträge |
 | Lücke | kaum EN-Daten außer MaliciousSkillBench, kein DE |
+
+## 13. Stand AC01 (2026-11-14)
+
+Sieben Punkte-Regeln im Threat-Detektor (`ark-core/src/detectors/threat/rules.json`, Präfix
+`ark.threat.ac_*`, Kategorie `agent_config_tampering`, opt-in). Alle außer `ac_tamper_request`
+laufen nur, wenn der Text eine Agent-Config ist oder nennt (Träger `agent_config` aus
+`text/facts/carrier.rs`, dieselbe Marke über `is_agent_config`; die Marke kennt jetzt auch
+`.claude/`, `.cursor/`, `.codex/`, `.windsurfrules`, die Schlüssel `permissions`, `defaultMode`,
+`disableAllHooks` und Skill-Frontmatter `---/name:/description:`). Entfernte Diff-Zeilen (`-`, im
+Text mit `+++`-Kopf) sind kein Fund. Entscheidung wie TP01/UA01: Punkte ≥ 50, kein Gegenkontext
+im Satz (oder, außer Verneinung, im Satz davor), bei `requires_context` ein Stützterm.
+
+| Pattern | Basis | Validator | `requires_context` | Kern / Abweichung von §4 |
+|---|---|---|---|---|
+| `ac_permission_widening` | 40 | structure | nein | Schlüssel + Wert (`defaultMode: bypassPermissions`, `autoApprove: true/["*"]`, `allow: [… "Bash(*)"/"*"/"Bash"]`, `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `dangerouslySkipPermissions`/`yolo: true`); `never` im eigenen Wert zählt nicht als Verneinung |
+| `ac_guard_removal` | 40 | format | nein | Verb (entfernen/abschalten/überspringen) + Schutz-Hook/-Prüfung; `"disableAllHooks": true`. Die alte Scorer-Regel `agent_guard_removal` bleibt (B0) |
+| `ac_hidden_directive` | 40 | format | nein | `<!--`/Pseudo-Tag + Anrede an KI/Agent/Assistent + Direktive; Kontext ab der Direktive. Geheimhaltung ohne Markup noch nicht |
+| `ac_fetch_run` | 35 | format | ja | Download-Verb + URL + Ausführen-Verb; Stützterm (unbemerkt, ohne Rückfrage …) nötig, sonst Installationshinweis |
+| `ac_mcp_server_injection` | 35 | structure | nein (§4: ja) | `"command"` Shell/Paketstarter + `curl/wget … \| sh` oder Roh-URL-Paket (`.tgz/.whl/.zip/.git`); `mcp-remote <url>` bleibt benign. `env`-Secret-Weitergabe offen |
+| `ac_persistence` | 35 | format | nein (§4: ja) | Schreibverb + „diese Regel/dieser Abschnitt“ + jede/alle + Agent-Dateien/Repos/Sitzungen |
+| `ac_tamper_request` | 35 | format | nein (§4: ja) | Verb + Agent-Datei + Ausweitung (alle Befehle ohne Rückfrage, auto-approve, bypassPermissions, Vollzugriff); ohne Träger |
+
+Lexika: `anchor_lexicons/agent_config_tampering.json` (`agentcfg.file`, `.widen`, `.guard_removal`,
+`.persist`, `.hidden_directive`); Download/Ausführen über die vorhandenen `threat.*`-Anker. Bewusst
+nur unterscheidende Wörter, damit Literale anderer Regeln keine neuen Ankerpunkte bekommen.
+Offen: Gegen-Lexika `agentcfg.project_rule`/`agentcfg.scoped_allow` (heute schützt die Form der
+Regex), `ac_decoded`, Geheimhaltung ohne Markup, `env`-Secrets in MCP-Einträgen, YAML-Settings,
+Harvest der SkillSpector-/ATR-/Cisco-YARA-Regeln (default aus, Katalog mit Commit), Punkte/Ablation
+in AC02.
