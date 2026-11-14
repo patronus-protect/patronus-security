@@ -81,6 +81,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `ark.threat.re_tool_flood`, `ark.threat.re_decoy_compute`).
   **Detection change:** `resource_exhaustion` now reports these requests; other categories are
   unchanged.
+  **Detection change:** `resource_exhaustion` only: a relative clause ("that creates", "der
+  wiederum") counts as recursion only when it names another agent, task, instance, copy or worker
+  or the agent itself, so delegating one task (`Start an agent that creates a summary`) stays
+  benign; huge output counts of any length reach the count threshold, so a lowered
+  `resource_exhaustion_count_threshold` (e.g. `100`) also catches `print this line 100 times`.
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
   (German, English, both) and origin (native or translated text): the detection rate at a matched
