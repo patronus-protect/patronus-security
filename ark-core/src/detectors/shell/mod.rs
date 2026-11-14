@@ -30,6 +30,6 @@ mod vocab;
 
 pub use facts::{Facts, ShellContext};
 pub use kf1::kf1;
-pub use model::{ShellRiskModel, TopFeature, ASK_THRESHOLD, BLOCK_THRESHOLD, SHELL_RISK_CLASS};
+pub use model::{ASK_THRESHOLD, BLOCK_THRESHOLD, SHELL_MODEL, SHELL_RISK_CLASS};
 pub use policies::{Decision, ShellPolicyConfig};
 pub use shell_risk::{ShellConfig, ShellRiskPipeline, ShellVerdict};

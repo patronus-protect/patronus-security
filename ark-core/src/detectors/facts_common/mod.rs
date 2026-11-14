@@ -8,9 +8,12 @@
 //! - [`fields`]: strict reading of a facts document back from JSON.
 //! - [`tokens`]: facts flattened into model tokens (`F:<key>=<value>`) and the
 //!   token list of an analyzer.
+//! - [`model`]: the K26 model form (char_wb TF-IDF + analyzer tokens -> LR)
+//!   shared by the shell-risk model and the text category models.
 //! - [`cedar`]: loading the Cedar schema a facts document is checked against.
 
 pub mod cedar;
 pub(crate) mod fields;
+pub mod model;
 pub mod pyjson;
 pub mod tokens;

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! The K26 shell-risk model: two L2-normalized scikit-learn TF-IDF blocks,
-//! concatenated before a binary logistic regression.
+//! The K26 model form shared by the shell-risk model and the text category
+//! models: two L2-normalized scikit-learn TF-IDF blocks, concatenated before a
+//! binary logistic regression.
 //!
-//! - `char_wb`: `TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5),
+//! - `char_wb`: `TfidfVectorizer(analyzer="char_wb", ngram_range=(min, max),
 //!   lowercase=True, sublinear_tf=True)`.
-//! - `tokens`: the [`kf1`](super::kf1) analyzer (shell tokens, legacy markers
-//!   and `patronus.facts/1` tokens).
+//! - `tokens`: a named token analyzer of the [`ModelForm`] (`kf1` for shell
+//!   commands, `tf1` for texts).
 //!
 //! Scores match scikit-learn's float32 pipeline and scipy's summation order.
-//! The text is never executed.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -16,19 +16,24 @@ use rustc_hash::FxHashMap;
 
 use serde::Deserialize;
 
-use super::pyre::is_py_space;
 use crate::detectors::facts_common::pyjson::py_round;
+use crate::detectors::shell::pyre::is_py_space;
 use crate::EvidenceSpan;
 
-/// Class name of a flagged command and its evidence spans.
-pub const SHELL_RISK_CLASS: &str = "shell_risk";
-/// Threshold of the `ask` decision: 1 % FPR on external agent commands.
-pub const ASK_THRESHOLD: &str = "external_commands_1pct_fpr";
-/// Threshold of the `block` decision: 0.1 % FPR.
-pub const BLOCK_THRESHOLD: &str = "block_0_1pct_fpr";
 const MAX_EVIDENCE_SPANS: usize = 3;
 const EVIDENCE_FEATURES: usize = 8;
 const TOP_FEATURES: usize = 5;
+
+/// What a model of one detector must look like: the token analyzer its
+/// `tokens` block was trained with, the names of its `ask` and `block`
+/// thresholds and the name used in load errors.
+#[derive(Clone, Copy, Debug)]
+pub struct ModelForm {
+    pub label: &'static str,
+    pub analyzer: &'static str,
+    pub ask_threshold: &'static str,
+    pub block_threshold: &'static str,
+}
 
 /// A `format_version: 2` `model.json`.
 #[derive(Deserialize)]
@@ -85,11 +90,13 @@ struct Block {
 }
 
 impl Block {
-    fn load(raw: RawBlock, weight_offset: usize) -> Result<Self, String> {
+    fn load(raw: RawBlock, weight_offset: usize, label: &str) -> Result<Self, String> {
         if raw.feature_dtype != "float32"
             || !matches!(raw.idf_dtype.as_str(), "float32" | "float64")
         {
-            return Err("shell risk blocks use float32 features and float32/64 idf".to_string());
+            return Err(format!(
+                "{label} blocks use float32 features and float32/64 idf"
+            ));
         }
         let cfg = &raw.vectorizer;
         if cfg.sublinear_tf != Some(true)
@@ -97,11 +104,11 @@ impl Block {
             || !matches!(cfg.use_idf, None | Some(true))
         {
             return Err(format!(
-                "unsupported shell risk {} block configuration",
+                "unsupported {label} {} block configuration",
                 raw.kind
             ));
         }
-        validate_vocabulary(&raw.vocabulary, raw.idf.len())?;
+        validate_vocabulary(&raw.vocabulary, raw.idf.len(), label)?;
         let (vocabulary, names) = into_vocabulary(raw.vocabulary);
         Ok(Self {
             vocabulary,
@@ -151,8 +158,8 @@ pub struct TopFeature {
     pub weight: f64,
 }
 
-/// The loaded K26 model: a `char_wb` block plus the `kf1` token block.
-pub struct ShellRiskModel {
+/// A loaded K26-form model: a `char_wb` block plus a token block.
+pub struct TfidfLrModel {
     name: String,
     char_wb: Block,
     char_ngrams: (usize, usize),
@@ -163,31 +170,34 @@ pub struct ShellRiskModel {
     block_cut: f64,
 }
 
-impl ShellRiskModel {
-    /// Parse and validate a `format_version: 2` `model.json` document with
-    /// the `ask` and `block` cuts.
-    pub fn from_json_slice(bytes: &[u8]) -> Result<Self, String> {
+impl TfidfLrModel {
+    /// Parse and validate a `format_version: 2` `model.json` document of the
+    /// given form, with its `ask` and `block` cuts.
+    pub fn from_json_slice(bytes: &[u8], form: ModelForm) -> Result<Self, String> {
+        let label = form.label;
         let file: ModelFile = serde_json::from_slice(bytes)
-            .map_err(|error| format!("invalid shell risk model JSON: {error}"))?;
+            .map_err(|error| format!("invalid {label} model JSON: {error}"))?;
         if file.format_version != 2 {
             return Err(format!(
-                "unsupported shell risk model format_version {}",
+                "unsupported {label} model format_version {}",
                 file.format_version
             ));
         }
         if file.decision_rule != "score > threshold" {
             return Err(format!(
-                "unsupported shell risk decision_rule {}",
+                "unsupported {label} decision_rule {}",
                 file.decision_rule
             ));
         }
-        let [char_wb, tokens]: [RawBlock; 2] = file
-            .blocks
-            .try_into()
-            .map_err(|_| "shell risk model expects a char_wb and a kf1 block".to_string())?;
+        let [char_wb, tokens]: [RawBlock; 2] = file.blocks.try_into().map_err(|_| {
+            format!(
+                "{label} model expects a char_wb and a {} block",
+                form.analyzer
+            )
+        })?;
         let cfg = &char_wb.vectorizer;
         let Some([min_n, max_n]) = cfg.ngram_range else {
-            return Err("shell risk char_wb block is missing ngram_range".to_string());
+            return Err(format!("{label} char_wb block is missing ngram_range"));
         };
         if char_wb.kind != "char_wb"
             || cfg.analyzer.as_deref() != Some("char_wb")
@@ -196,18 +206,21 @@ impl ShellRiskModel {
             || min_n == 0
             || min_n > max_n
         {
-            return Err("unsupported shell risk char_wb block configuration".to_string());
+            return Err(format!("unsupported {label} char_wb block configuration"));
         }
         if tokens.kind != "tokens"
-            || tokens.analyzer_func.as_deref() != Some("kf1")
+            || tokens.analyzer_func.as_deref() != Some(form.analyzer)
             || tokens.vectorizer.analyzer.is_some()
         {
-            return Err("shell risk token block must use the kf1 analyzer".to_string());
+            return Err(format!(
+                "{label} token block must use the {} analyzer",
+                form.analyzer
+            ));
         }
         let total = char_wb.vocabulary.len() + tokens.vocabulary.len();
         if file.weights.len() != total {
             return Err(format!(
-                "shell risk model has {total} block features and {} weights",
+                "{label} model has {total} block features and {} weights",
                 file.weights.len()
             ));
         }
@@ -215,18 +228,18 @@ impl ShellRiskModel {
             file.thresholds
                 .get(name)
                 .copied()
-                .ok_or_else(|| format!("shell risk model has no {name} threshold"))
+                .ok_or_else(|| format!("{label} model has no {name} threshold"))
         };
         let char_features = char_wb.vocabulary.len();
         Ok(Self {
             name: file.name,
-            char_wb: Block::load(char_wb, 0)?,
+            char_wb: Block::load(char_wb, 0, label)?,
             char_ngrams: (min_n, max_n),
-            tokens: Block::load(tokens, char_features)?,
+            tokens: Block::load(tokens, char_features, label)?,
             weights: file.weights,
             intercept: file.intercept,
-            ask_cut: cut(ASK_THRESHOLD)?,
-            block_cut: cut(BLOCK_THRESHOLD)?,
+            ask_cut: cut(form.ask_threshold)?,
+            block_cut: cut(form.block_threshold)?,
         })
     }
 
@@ -242,10 +255,10 @@ impl ShellRiskModel {
 
     /// Nonzero features over the concatenated feature space, in index order:
     /// (global index, L2-normalized TF-IDF value).
-    fn row(&self, text: &str, kf1: impl FnOnce(&mut dyn FnMut(&str))) -> Vec<(usize, f32)> {
+    fn row(&self, text: &str, tokens: impl FnOnce(&mut dyn FnMut(&str))) -> Vec<(usize, f32)> {
         let chars = self.char_wb.tfidf(self.char_counts(text));
         let mut counts = FxHashMap::default();
-        kf1(&mut |token| self.tokens.count(&mut counts, token));
+        tokens(&mut |token| self.tokens.count(&mut counts, token));
         let tokens = self.tokens.tfidf(counts);
         chars
             .into_iter()
@@ -258,16 +271,16 @@ impl ShellRiskModel {
             .collect()
     }
 
-    /// Decision score of `text` (an uncalibrated logit) given its `kf1`
+    /// Decision score of `text` (an uncalibrated logit) given its analyzer
     /// tokens (passed to the visitor), and the top positive feature contributions. `x @ weights +
     /// intercept` in scipy's order: the dot product from zero in index order,
     /// then the intercept.
-    pub(crate) fn score(
+    pub fn score(
         &self,
         text: &str,
-        kf1: impl FnOnce(&mut dyn FnMut(&str)),
+        tokens: impl FnOnce(&mut dyn FnMut(&str)),
     ) -> (f64, Vec<TopFeature>) {
-        let row = self.row(text, kf1);
+        let row = self.row(text, tokens);
         let mut dot = 0.0;
         let mut contributions = Vec::with_capacity(row.len());
         for &(index, value) in &row {
@@ -316,10 +329,10 @@ impl ShellRiskModel {
         }
     }
 
-    /// Evidence spans for the `char_wb` n-grams that push `text` towards the
-    /// risk class. When no n-gram does (the token block or a policy alone
-    /// flags the command), the trimmed command is the one span.
-    pub(crate) fn evidence(&self, text: &str) -> Vec<EvidenceSpan> {
+    /// Evidence spans, labelled `label`, for the `char_wb` n-grams that push
+    /// `text` towards the risk class. When no n-gram does (the token block or
+    /// a policy alone flags the text), the trimmed text is the one span.
+    pub(crate) fn evidence(&self, text: &str, label: &str) -> Vec<EvidenceSpan> {
         let block = &self.char_wb;
         let (min_n, max_n) = self.char_ngrams;
         let mut contributions = block
@@ -332,7 +345,7 @@ impl ShellRiskModel {
         if total <= 0.0 {
             let start = text.len() - text.trim_start().len();
             let end = text.trim_end().len().max(start);
-            return vec![evidence_span(text, start..end, 1.0)];
+            return vec![evidence_span(label, text, start..end, 1.0)];
         }
         contributions.sort_unstable_by(|left, right| right.1.total_cmp(&left.1));
         contributions.truncate(EVIDENCE_FEATURES);
@@ -368,14 +381,19 @@ impl ShellRiskModel {
         regions.sort_unstable_by_key(|(range, _)| range.start);
         regions
             .into_iter()
-            .map(|(range, score)| evidence_span(text, range, score / total))
+            .map(|(range, score)| evidence_span(label, text, range, score / total))
             .collect()
     }
 }
 
-fn evidence_span(source: &str, range: std::ops::Range<usize>, score: f64) -> EvidenceSpan {
+fn evidence_span(
+    label: &str,
+    source: &str,
+    range: std::ops::Range<usize>,
+    score: f64,
+) -> EvidenceSpan {
     EvidenceSpan {
-        label: SHELL_RISK_CLASS.to_string(),
+        label: label.to_string(),
         text: source[range.clone()].to_string(),
         score: score.clamp(0.0, 1.0),
         start_byte: range.start,
@@ -460,20 +478,24 @@ fn into_f32(idf: Vec<f64>) -> Vec<f32> {
 
 /// Check idf length and that vocabulary indices are a permutation of
 /// `0..vocabulary.len()`.
-fn validate_vocabulary(vocabulary: &HashMap<String, u32>, idf_len: usize) -> Result<(), String> {
+fn validate_vocabulary(
+    vocabulary: &HashMap<String, u32>,
+    idf_len: usize,
+    label: &str,
+) -> Result<(), String> {
     let features = vocabulary.len();
     if idf_len != features {
         return Err(format!(
-            "shell risk block has {features} vocabulary entries and {idf_len} idf values"
+            "{label} block has {features} vocabulary entries and {idf_len} idf values"
         ));
     }
     let mut seen = vec![false; features];
     for &index in vocabulary.values() {
         let slot = seen
             .get_mut(index as usize)
-            .ok_or_else(|| format!("shell risk vocabulary index {index} is out of range"))?;
+            .ok_or_else(|| format!("{label} vocabulary index {index} is out of range"))?;
         if std::mem::replace(slot, true) {
-            return Err(format!("shell risk vocabulary index {index} is duplicated"));
+            return Err(format!("{label} vocabulary index {index} is duplicated"));
         }
     }
     Ok(())

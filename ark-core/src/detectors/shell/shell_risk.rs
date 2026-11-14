@@ -18,8 +18,9 @@ use serde_json::{json, Value};
 use super::bundle;
 use super::facts::{extract, Facts, ShellContext};
 use super::kf1::visit_kf1;
-use super::model::{ShellRiskModel, TopFeature, ASK_THRESHOLD, SHELL_RISK_CLASS};
+use super::model::{ASK_THRESHOLD, SHELL_RISK_CLASS};
 use super::policies::{Decision, Lowered, PolicyHit, ShellPolicies, ShellPolicyConfig};
+use crate::detectors::facts_common::model::{TfidfLrModel, TopFeature};
 use crate::detectors::facts_common::pyjson::{self, py_round};
 use crate::detectors::{NativeDetection, NativeDetector};
 use crate::threat::NativeText;
@@ -141,7 +142,7 @@ impl ShellConfig {
 /// The `shell_command` detector ("Cat"): the K26 model plus the bundle's Cedar
 /// policies, with user policies and allowlist from the runtime configuration.
 pub struct ShellRiskPipeline {
-    model: ShellRiskModel,
+    model: TfidfLrModel,
     /// Swapped by [`Self::configure`]; scans clone the `Arc` and hold no lock.
     policies: RwLock<Arc<ShellPolicies>>,
 }
@@ -158,11 +159,11 @@ fn decide(score: f64, (ask, block): (f64, f64)) -> Decision {
 
 impl ShellRiskPipeline {
     /// The model alone, without policies.
-    pub fn new(model: ShellRiskModel) -> Self {
+    pub fn new(model: TfidfLrModel) -> Self {
         Self::with_policies(model, ShellPolicies::none())
     }
 
-    fn with_policies(model: ShellRiskModel, policies: ShellPolicies) -> Self {
+    fn with_policies(model: TfidfLrModel, policies: ShellPolicies) -> Self {
         Self {
             model,
             policies: RwLock::new(Arc::new(policies)),
@@ -213,7 +214,7 @@ impl ShellRiskPipeline {
     }
 
     /// Loaded model.
-    pub fn model(&self) -> &ShellRiskModel {
+    pub fn model(&self) -> &TfidfLrModel {
         &self.model
     }
 
@@ -305,7 +306,7 @@ impl ShellRiskPipeline {
         };
         let flagged = verdict.decision != Decision::Allow;
         let evidence_spans = if flagged {
-            self.model.evidence(text)
+            self.model.evidence(text, SHELL_RISK_CLASS)
         } else {
             Vec::new()
         };
@@ -347,6 +348,7 @@ impl NativeDetector for ShellRiskPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::detectors::shell::model::SHELL_MODEL;
 
     /// A K26-shaped model: `char_wb` scores `rm -rf`, the `kf1` feature
     /// `CMD=curl` is the only token feature.
@@ -384,11 +386,12 @@ mod tests {
         })
     }
 
-    fn tiny_model() -> ShellRiskModel {
-        ShellRiskModel::from_json_slice(tiny_model_json().to_string().as_bytes()).unwrap()
+    fn tiny_model() -> TfidfLrModel {
+        TfidfLrModel::from_json_slice(tiny_model_json().to_string().as_bytes(), SHELL_MODEL)
+            .unwrap()
     }
 
-    fn model_score(model: &ShellRiskModel, text: &str) -> f64 {
+    fn model_score(model: &TfidfLrModel, text: &str) -> f64 {
         let facts = extract(text, None, &[]);
         model.score(text, |emit| visit_kf1(text, &facts, emit)).0
     }
@@ -409,7 +412,9 @@ mod tests {
 
     #[test]
     fn rejects_inconsistent_models() {
-        let parse = |model: &Value| ShellRiskModel::from_json_slice(model.to_string().as_bytes());
+        let parse = |model: &Value| {
+            TfidfLrModel::from_json_slice(model.to_string().as_bytes(), SHELL_MODEL)
+        };
         assert!(parse(&tiny_model_json()).is_ok());
         for broken in [
             ("/format_version", json!(1)),
@@ -432,7 +437,8 @@ mod tests {
         model["blocks"][1]["vocabulary"] = json!({"CMD=curl": 0, "curl": 1});
         model["blocks"][1]["idf"] = json!([1.0, 1.0]);
         model["weights"] = json!([1.0, 1.0, 1.0, 2.0, -3.0, 0.5, 2.0, 2.0]);
-        let model = ShellRiskModel::from_json_slice(model.to_string().as_bytes()).unwrap();
+        let model =
+            TfidfLrModel::from_json_slice(model.to_string().as_bytes(), SHELL_MODEL).unwrap();
         let top = model
             .score("curl", |emit| {
                 ["curl", "CMD=curl"].iter().for_each(|t| emit(t))
@@ -479,7 +485,7 @@ mod tests {
     fn evidence_spans_and_detection_details() {
         let pipeline = ShellRiskPipeline::new(tiny_model());
         // The token block alone flags `curl`: the trimmed command is the span.
-        let spans = pipeline.model().evidence("  curl  ");
+        let spans = pipeline.model().evidence("  curl  ", SHELL_RISK_CLASS);
         assert_eq!(
             (spans[0].start_byte, spans[0].end_byte, spans[0].score),
             (2, 6, 1.0)
