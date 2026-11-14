@@ -6,34 +6,34 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | Decision | Reason |
 |---|---|---|
-| instruction_injection | pending | owner holdout review missing |
-| jailbreak | pending | owner holdout review missing |
-| prompt_extraction | pending | owner holdout review missing |
-| tool_poisoning | pending | owner holdout review missing |
-| agent_config_tampering | pending | owner holdout review missing |
-| memory_poisoning | pending | owner holdout review missing |
-| exfiltration | pending | owner holdout review missing |
-| unsafe_action | pending | owner holdout review missing |
-| resource_exhaustion | pending | owner holdout review missing |
-| harmful_content | no-go | dev: 0 scored rows (needs 50) |
-| toxic_language | no-go | dev: 0 scored rows (needs 50) |
+| instruction_injection | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0% |
+| jailbreak | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0%; holdout holdout/trustairlab_jailbreak: error rate 24.0% |
+| prompt_extraction | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5% |
+| tool_poisoning | go | - |
+| agent_config_tampering | go | - |
+| memory_poisoning | go | - |
+| exfiltration | go | - |
+| unsafe_action | go | - |
+| resource_exhaustion | go | - |
+| harmful_content | no-go | dev: 0 scored rows (needs 50); holdout holdout/jbb_behaviors: error rate 16.0%; holdout holdout/multijail: error rate 52.0%; holdout holdout/xstest: error rate 10.0% |
+| toxic_language | no-go | dev: 0 scored rows (needs 50); holdout holdout/gahd: error rate 10.0%; holdout holdout/hatecheck_en: error rate 8.0% |
 
 ## Rows per class and language
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 0 | 2927 | ? | ? | 2403 | 0 | 524 | ? | ? | ? |
-| jailbreak | 42 | 42 | ? | ? | 0 | 0 | 84 | ? | ? | ? |
-| prompt_extraction | 0 | 15476 | ? | ? | 15000 | 0 | 476 | ? | ? | ? |
-| tool_poisoning | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
-| agent_config_tampering | 42 | 42 | ? | ? | 0 | 0 | 84 | ? | ? | ? |
-| memory_poisoning | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
-| exfiltration | 150 | 150 | ? | ? | 0 | 0 | 300 | ? | ? | ? |
-| unsafe_action | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
-| resource_exhaustion | 42 | 41 | ? | ? | 0 | 0 | 83 | ? | ? | ? |
-| harmful_content | 0 | 0 | ? | ? | 0 | 0 | 0 | ? | ? | ? |
-| toxic_language | 0 | 0 | ? | ? | 0 | 0 | 0 | ? | ? | ? |
-| benign | 11853 | 19359 | ? | ? | 29412 | 0 | 1800 | ? | ? | ? |
+| instruction_injection | 0 | 2927 | 0 | 546 | 2403 | 0 | 524 | 183 | 0 | 363 |
+| jailbreak | 42 | 42 | 0 | 1444 | 0 | 0 | 84 | 692 | 0 | 752 |
+| prompt_extraction | 0 | 15476 | 0 | 716 | 15000 | 0 | 476 | 331 | 0 | 385 |
+| tool_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
+| agent_config_tampering | 42 | 42 | 75 | 75 | 0 | 0 | 84 | 0 | 0 | 150 |
+| memory_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
+| exfiltration | 150 | 150 | 225 | 225 | 0 | 0 | 300 | 0 | 0 | 450 |
+| unsafe_action | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
+| resource_exhaustion | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
+| harmful_content | 0 | 0 | 0 | 614 | 0 | 0 | 0 | 614 | 0 | 0 |
+| toxic_language | 0 | 0 | 6423 | 2098 | 0 | 0 | 0 | 8521 | 0 | 0 |
+| benign | 11853 | 19359 | 23452 | 12192 | 29412 | 0 | 1800 | 40058 | 0 | 2700 |
 
 ## Spot-check dev
 
@@ -56,11 +56,31 @@ Benign pool (dev, scored sets): 0 of 192 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
-Pending: the owner's aggregate review report is not present.
+| Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
+|---|---|---:|---:|---:|---:|---:|---:|
+| generated/carrier_insertion | decisive | 1800 | 52 | 17 | 2 | 36.5% | 0 / 13 |
+| generated/class_templates | decisive | 1500 | 54 | 0 | 0 | 0.0% | 0 / 9 |
+| generated/exfil_lookalikes | decisive | 900 | 50 | 0 | 0 | 0.0% | 0 / 25 |
+| generated/obfuscation_slices | decisive | 1200 | 52 | 16 | 4 | 38.5% | 1 / 13 |
+| holdout/cyberseceval_pi | decisive | 232 | 50 | 32 | 2 | 68.0% | 0 / 0 |
+| holdout/gahd | decisive | 10688 | 50 | 3 | 2 | 10.0% | 3 / 25 |
+| holdout/hatecheck_de | decisive | 2844 | 50 | 1 | 0 | 2.0% | 1 / 25 |
+| holdout/hatecheck_en | decisive | 3153 | 50 | 3 | 1 | 8.0% | 4 / 25 |
+| holdout/jbb_behaviors | decisive | 100 | 50 | 5 | 3 | 16.0% | 0 / 0 |
+| holdout/multijail | decisive | 315 | 50 | 13 | 13 | 52.0% | 0 / 0 |
+| holdout/notinject | decisive | 339 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| holdout/oasst2 | decisive | 14988 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| holdout/or_bench_hard | decisive | 1318 | 50 | 2 | 4 | 12.0% | 6 / 50 |
+| holdout/tensortrust_extraction | decisive | 331 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| holdout/trustairlab_jailbreak | decisive | 643 | 50 | 9 | 3 | 24.0% | 0 / 0 |
+| holdout/wikipedia | decisive | 15000 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| holdout/xstest | decisive | 448 | 50 | 3 | 2 | 10.0% | 0 / 25 |
+
+Benign pool (holdout, scored sets): 15 of 360 reviewed benign rows wrong or unclear.
 
 ## Leakage dev → holdout
 
-Pending: runs in the independent gate, where both splits are readable.
+0 of 55799 holdout rows duplicate one of 59042 dev rows (exact or MinHash).
 
 ## Flagged dev rows
 
