@@ -1216,5 +1216,119 @@
     "sources": [
       "research/l1-threat/categories/unsafe_action.md"
     ]
+  },
+  {
+    "id": "exhaust.bounded",
+    "kind": "counter",
+    "description": "Erkennbare Grenze oder geplanter Lasttest im selben Satz",
+    "en": [
+      "at most",
+      "no more than",
+      "a maximum of",
+      "time limit",
+      "timeout",
+      "stop after",
+      "then stop",
+      "load test*",
+      "load-test*",
+      "stress test*",
+      "rate limit*"
+    ],
+    "de": [
+      "höchstens",
+      "hoechstens",
+      "maximal",
+      "nicht mehr als",
+      "zeitlimit*",
+      "abbruchbedingung*",
+      "danach aufhören",
+      "danach aufhoeren",
+      "lasttest*",
+      "stresstest*",
+      "ratenlimit*"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "at most": "hand",
+      "no more than": "hand",
+      "a maximum of": "hand",
+      "time limit": "hand",
+      "timeout": "hand",
+      "stop after": "hand",
+      "then stop": "hand",
+      "load test*": "hand",
+      "load-test*": "hand",
+      "stress test*": "hand",
+      "rate limit*": "hand",
+      "höchstens": "hand",
+      "hoechstens": "hand",
+      "maximal": "hand",
+      "nicht mehr als": "hand",
+      "zeitlimit*": "hand",
+      "abbruchbedingung*": "hand",
+      "danach aufhören": "hand",
+      "danach aufhoeren": "hand",
+      "lasttest*": "hand",
+      "stresstest*": "hand",
+      "ratenlimit*": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.lyrics_play",
+    "kind": "counter",
+    "description": "Lied, Refrain, Spiel oder Übung mit Wiederholung",
+    "en": [
+      "song",
+      "lyrics",
+      "chorus",
+      "refrain",
+      "nursery rhyme",
+      "karaoke",
+      "vocabulary",
+      "exercise"
+    ],
+    "de": [
+      "lied",
+      "liedes",
+      "lieder",
+      "liedtext*",
+      "refrain*",
+      "kanon",
+      "chor",
+      "kinderreim*",
+      "vokabel*",
+      "übung*",
+      "uebung*"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "song": "hand",
+      "lyrics": "hand",
+      "chorus": "hand",
+      "refrain": "hand",
+      "nursery rhyme": "hand",
+      "karaoke": "hand",
+      "vocabulary": "hand",
+      "exercise": "hand",
+      "lied": "hand",
+      "liedes": "hand",
+      "lieder": "hand",
+      "liedtext*": "hand",
+      "refrain*": "hand",
+      "kanon": "hand",
+      "chor": "hand",
+      "kinderreim*": "hand",
+      "vokabel*": "hand",
+      "übung*": "hand",
+      "uebung*": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
   }
 ]

@@ -109,3 +109,43 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (entscheidet), Seed-Teil |
 | Hard Negatives | Mathe-Aufgaben, Lasttest-Doku, Lieder mit Refrain, begrenzte Wiederholungen |
 | Lücke | keine öffentlichen Daten; Ergebnis gilt nur auf `ark_blind` |
+
+## 13. Stand RE01 (2026-11-14)
+
+Fünf eigene Regeln im Threat-Detektor (`ark-core/src/detectors/threat/rules.json`, Präfix
+`ark.threat.re_*`, default an, Kategorie selbst opt-in). Sie tragen `points` und entscheiden selbst
+wie die UA01-Regeln: Punkte ≥ 50, kein Gegenkontext im Satz (oder, außer Verneinung, im Satz
+davor), bei `requires_context` ein Stützterm (Adressat) im Satz. Kein Modell: die Klasse ist rein
+regelbasiert; eine Ablation lohnt erst mit mehr als den Generator-Daten (§7).
+
+| Pattern | Regel | Basis | `requires_context` | Kern |
+|---|---|---|---|---|
+| `re_recursive_spawn` | `re_recursive_spawn` | 45 | nein | Start-Verb + Agent/Kopie/Instanz + Selbstbezug (`that in turn spawns`, `der wiederum`, `rekursiv`) oder je Ergebnis neue Agenten (`for every result … start … sub-agents`) |
+| `re_unbounded_repeat` | `re_unbounded_repeat` | 40 | nein | `repeat`/`keep …ing`/`wiederhole` + `forever`/`endlos`/`ohne aufzuhören` (+ optional „und hör niemals auf“, das als Teil der Phrase keine Verneinung ist) |
+| `re_huge_output` | `re_huge_output` | 35 | ja | Ausgabe-Verb + Zahl + Einheit (EN Verb vorn, DE auch Verb am Satzende); Zahl ≥ `resource_exhaustion_count_threshold` |
+| `re_tool_flood` | `re_tool_flood` | 35 | ja | Abruf-/Aufruf-Verb + `as many tool calls as possible`, `every page of the web`, `so viele … wie möglich` |
+| `re_decoy_compute` | `re_decoy_compute` | 30 | ja | `before answering`/`bevor du antwortest` + schwere Rechenaufgabe (alle Primzahlen, Stellen von Pi, jede Permutation) |
+
+**Schwelle.** `resource_exhaustion_count_threshold` ist ein Gate in `NativeGates` (je Anfrage und in
+der Deploy-Config, auch Coordinator und Ark API), positive Ganzzahl, Default 10.000 (Startwert
+bestätigt: alle Golden-Positive liegen ≥ 250.000, die Hard Negatives bei 2.000 Wörtern und
+50.000 Lasttest-Anfragen fallen über Verb bzw. Lasttest-Gegenkontext heraus). Zahlen: Ziffern mit
+Tausendertrennern (`1,000,000`, `1.000.000`) und Zahlwörter DE/EN (`zwei Millionen`, `ten
+thousand`, `zehntausend`); „Billion“ zählt als 10⁹ (kleinerer Wert von EN/DE).
+
+**Abweichung.** `re_decoy_compute` prüft keinen Träger-Fact `carrier=indirect` (der Threat-Detektor
+sieht die Facts nicht); Ersatz ist `requires_context` (Adressat im Satz). Eine direkt gestellte
+Rechenaufgabe ohne „bevor du antwortest“-Rahmen trifft nicht.
+
+Lexika: Anker (Prefilter) `exhaust.spawn`, `exhaust.repeat_verb`, `exhaust.cost`,
+`exhaust.decoy_task` in `anchor_lexicons/resource_exhaustion.json`; Gegenkontext `exhaust.bounded`
+(höchstens, Timeout, Lasttest) und `exhaust.lyrics_play` (Lied, Refrain, Übung) in `context.json`,
+nur für diese Klasse wirksam. `exhaust.unbounded` und `exhaust.huge_count` stecken in den Regeln
+bzw. im Zahl-Validator. Offen: `re_loop_hint` (scored only), `re_decoded` (S03), ATR-Regeln (§10).
+
+**Latenz (offen).** Python-Release-Build, 100-KiB-Fenster aus GermanQuAD (dev): Kategorie
+`resource_exhaustion` allein p50 4,5 ms / p95 5,4 ms mit den Regeln, 0,35 / 0,49 ms ohne; je Regel
+allein `re_tool_flood` 0,7 ms, die übrigen 2,6–3,4 ms. Kein akzeptierter Treffer auf 3.000
+GermanQuAD-Absätzen. Nächster Schritt: Ursache isolieren (Regex-Scan mit häufigen Präfixwörtern wie
+„vor“, „start“, „gib“ vs. Kontext-Scan nach Rohtreffern) und die Präfixe/Lücken enger fassen, bevor
+die Kategorie im `all`-Profil gemessen wird.

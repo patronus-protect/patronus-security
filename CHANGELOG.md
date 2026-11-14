@@ -78,6 +78,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - **Detection change:** (`tool_poisoning`) the hidden-markup rule (`ark.threat.tp_hidden_markup`)
   also accepts the singular German tag `<ANWEISUNG>`; before, only `<ANWEISUNGEN>` matched.
 
+- Add rules for the `resource_exhaustion` category (opt-in) in German and English: requests to
+  start agents or copies that start further agents (also one new agent per result), to repeat
+  output forever or without stopping, to output something a huge number of times (digits such as
+  `1,000,000` and number words such as `zwei Millionen`), to make as many tool calls as possible or
+  fetch every page of the web, and decoy computations (all primes up to a huge bound, digits of pi,
+  every permutation) placed before the real answer. A visible bound (at most, timeout, load test),
+  songs and exercises, security documentation, test code and negation keep text benign. The new
+  gate `resource_exhaustion_count_threshold` (Rust `NativeGates`, Python `execution_gates` and
+  Core config, Ark API and coordinator `gates`; default `10000`, must be positive) sets the least
+  count that counts as huge. Each rule toggles through the `rules` map
+  (`ark.threat.re_recursive_spawn`, `ark.threat.re_unbounded_repeat`, `ark.threat.re_huge_output`,
+  `ark.threat.re_tool_flood`, `ark.threat.re_decoy_compute`).
+  **Detection change:** `resource_exhaustion` now reports these requests; other categories are
+  unchanged.
+  **Detection change:** `resource_exhaustion` only: a relative clause ("that creates", "der
+  wiederum") counts as recursion only when it names another agent, task, instance, copy or worker
+  or the agent itself, so delegating one task (`Start an agent that creates a summary`) stays
+  benign; huge output counts of any length reach the count threshold, so a lowered
+  `resource_exhaustion_count_threshold` (e.g. `100`) also catches `print this line 100 times`.
 - Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
   corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
   (German, English, both) and origin (native or translated text): the detection rate at a matched
