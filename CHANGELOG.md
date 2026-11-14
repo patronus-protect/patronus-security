@@ -52,6 +52,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add the threat scoreboard, `scripts/l1_threat/scoreboard.py`. It scans the frozen evaluation
+  corpora with ARK on L1 (each attack class in its own category) and reports, per class, language
+  (German, English, both) and origin (native or translated text): the detection rate at a matched
+  false-positive rate of 1 % and 0.1 % on the benign rows, a bootstrap 95 % confidence interval of
+  the 1 % figure, the area under the precision-recall curve, the false-positive rate of ARK's own
+  verdict on hard benign text (benign look-alikes of attacks and security-adjacent benign sets), and
+  the detection rate with each dataset left out in turn. Report-only datasets are scored separately.
+  `gate` builds a change and its base and fails when a class loses more than 0.5 percentage points
+  at 1 % false positives, or when the change flags a hard benign row that the base did not flag;
+  `report` writes a Markdown report with the best cached baseline per class.
+  **Detection change:** none; this is evaluation tooling only.
 - Add a golden set for the eleven attack categories, `threat_l1.jsonl` (150 rows, German and
   English). Every row names its attack class, the attack family, the carrier the text sits in
   (chat, mail, web page, document, tool description or output, agent configuration, code, config)
