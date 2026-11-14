@@ -325,6 +325,7 @@ def run_class(train: list[dict], test: list[dict], cls: str, *, predictions: dic
         fitted["B0"] = b0_stage(predictions, cls)
     eval_rows = labelled(test, cls)
     results = []
+    timed: dict[int, float] = {}  # B5 scores with the B4 model: one measurement per model
     for name in STAGES:
         stage = fitted.get(name)
         if stage is None:
@@ -335,7 +336,9 @@ def run_class(train: list[dict], test: list[dict], cls: str, *, predictions: dic
         if name == "B0" or stage.model is None:
             result["ms_per_100kib"] = None if name == "B0" else 0.0
         elif bench_bin is not None and windows is not None:
-            result["ms_per_100kib"] = bench(bench_bin, windows, stage)
+            if id(stage.model) not in timed:
+                timed[id(stage.model)] = bench(bench_bin, windows, stage)
+            result["ms_per_100kib"] = timed[id(stage.model)]
         else:
             result["ms_per_100kib"] = None
         results.append(result)

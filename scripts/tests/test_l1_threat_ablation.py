@@ -261,3 +261,20 @@ def test_cli_rejects_an_unknown_class(tmp_path):
     source.write_text("", encoding="utf-8")
     with pytest.raises(SystemExit):
         MODULE.main(["run", "--rows", str(source), "--class", "nope", "--out", str(tmp_path / "x.json")])
+
+
+def test_run_class_times_each_model_once_with_its_token_source(tmp_path):
+    log = tmp_path / "calls.txt"
+    fake = tmp_path / "bench"
+    fake.write_text(
+        "#!/bin/sh\n"
+        f"echo \"$3 $4\" >> {log}\n"
+        "echo '{\"p50_ms\": 0.25, \"p95_ms\": 0.5, \"samples\": 5}'\n", encoding="utf-8")
+    fake.chmod(0o755)
+    windows = tmp_path / "windows.jsonl"
+    windows.write_text('{"text": "x"}\n', encoding="utf-8")
+    rows = toy_rows()
+    report = MODULE.run_class(rows, rows, CLS, bench_bin=fake, windows=windows, buckets=(64, 32), iterations=20)
+    ms = {r["stage"]: r.get("ms_per_100kib") for r in report["stages"]}
+    assert ms == {"R": 0.0, "R+A": 0.0, "B0": None, "R+A+L": 0.0, "B1": 0.5, "B4": 0.5, "B5": 0.5}
+    assert sorted(log.read_text(encoding="utf-8").split("\n")[:-1]) == ["--tokens none", "--tokens words"]
