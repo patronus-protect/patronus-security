@@ -18,9 +18,21 @@ const CARRIERS: [&str; 7] = [
     "webpage",
 ];
 
+/// A plain-text tool listing line, `Tool <snake_case_name>: …`, naming the
+/// tool (`name`) the rest of the line describes.
+macro_rules! tool_listing_header {
+    () => {
+        r"^[ \t]*(?:Tool|Function|Werkzeug|Funktion)[ \t]{1,4}`?(?P<name>[A-Za-z][A-Za-z0-9]{0,40}_[A-Za-z0-9_]{1,40})`?[ \t]*:"
+    };
+}
+
 /// Tool and MCP descriptions (also agent-card skills): JSON keys of a tool
-/// definition.
-const TOOL_DESCRIPTION_MARK: &str = r#""(?:description|inputSchema|input_schema|parameters)"\s*:"#;
+/// definition, or a line of a plain-text tool listing (`tool_listing_header!`).
+const TOOL_DESCRIPTION_MARK: &str = concat!(
+    r#""(?:description|inputSchema|input_schema|parameters)"\s*:|(?m:"#,
+    tool_listing_header!(),
+    ")"
+);
 
 /// One linear pattern per carrier, compiled once into one set.
 static MARKS: LazyLock<RegexSet> = LazyLock::new(|| {
@@ -60,6 +72,20 @@ pub(crate) fn is_tool_metadata(text: &str) -> bool {
     MARK.is_match(text)
 }
 
+/// The tool a plain-text listing line describes, when the line holding `at`
+/// starts with a listing header (`Tool <name>:`).
+pub(crate) fn listing_tool_name(text: &str, at: usize) -> Option<&str> {
+    static HEADER: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(tool_listing_header!()).expect("tool listing header"));
+    let start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+    let end = text[at..].find('\n').map_or(text.len(), |i| at + i);
+    let line = &text[start..end];
+    HEADER
+        .captures(line)
+        .and_then(|captures| captures.name("name"))
+        .map(|name| name.as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,7 +114,21 @@ mod tests {
             assert!(is_tool_metadata(text), "{text}");
             assert!(carriers(text).contains(&"tool_description"), "{text}");
         }
-        for text in ["description: plain prose", "Use the add tool."] {
+        // Plain-text tool listings, one tool per line.
+        for text in [
+            "Tool add_numbers: adds two numbers.",
+            "Tools:\nFunction `get_weather`: returns the forecast.",
+            "Werkzeug summe_zahlen: addiert zwei Zahlen.",
+        ] {
+            assert!(is_tool_metadata(text), "{text}");
+            assert!(carriers(text).contains(&"tool_description"), "{text}");
+        }
+        for text in [
+            "description: plain prose",
+            "Use the add tool.",
+            "Tool support: we answer within a day.",
+            "The tool add_numbers: adds two numbers.",
+        ] {
             assert!(!is_tool_metadata(text), "{text}");
             assert!(!carriers(text).contains(&"tool_description"), "{text}");
         }
