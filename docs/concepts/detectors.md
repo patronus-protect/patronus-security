@@ -72,7 +72,7 @@ The [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-securi
 module provides shared pattern- and obfuscation-detection primitives used internally by several
 injection and DLP detectors. The bounded threat rules of
 [`native:threat_l1`](../reference/threat-l1.md) report under their attack-class category
-(`unsafe_action`, `exfiltration`, `agent_config_tampering`, `harmful_content`); `unsafe_action`
+(`unsafe_action`, `exfiltration`, `tool_poisoning`, `agent_config_tampering`, `harmful_content`); `unsafe_action`
 also has an NTDB L2 stage (see [Categories](categories.md)).
 
 `instruction_override` includes common German imperative variants such as attempts to forget,

@@ -4,8 +4,14 @@
 `ark.threat.*` rule belongs to one attack-class category and runs only when that category is
 selected: most rules report under `unsafe_action` (remote or decoded execution, privileged
 containers, disabled security controls, credential access such as credential files, credential
-stores and cloud metadata endpoints), others under `exfiltration`, `agent_config_tampering` or
-`harmful_content`. `exfiltration` is on by default; the other three are opt-in. Configure, for
+stores and cloud metadata endpoints), others under `exfiltration`, `tool_poisoning`,
+`agent_config_tampering` or `harmful_content`. `exfiltration` and `tool_poisoning` are on by
+default; the other three are opt-in. `tool_poisoning` rules only look at text that carries tool
+or MCP metadata (JSON tool definitions with `description`, `inputSchema` or `parameters`, agent
+cards): an instruction to read a sensitive file into a parameter, to keep something from the
+user, to change what another tool does (extra copies, a new recipient), a hidden `<IMPORTANT>`
+or HTML-comment directive to the model, or a parameter that should collect the conversation or
+system prompt. The same instruction in plain text is left to `injection`. Configure, for
 example, `categories=["unsafe_action", "exfiltration"]` and `max_level="l1"` for an offline
 native scan. Rules support
 English and German prose; command names, API names, paths and JSON/YAML keys keep their

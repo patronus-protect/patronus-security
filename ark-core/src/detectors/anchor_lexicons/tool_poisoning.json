@@ -1,0 +1,105 @@
+[
+  {
+    "id": "toolpoison.sensitive_file",
+    "description": "Sensible Dateien, die eine Tool-Beschreibung in einen Parameter lesen lässt",
+    "en": [],
+    "de": [],
+    "shared": [
+      ".ssh",
+      "id_rsa",
+      "id_ed25519",
+      "id_ecdsa",
+      "id_dsa",
+      ".aws/credentials",
+      ".kube/config",
+      "kubeconfig",
+      ".netrc",
+      ".gnupg",
+      ".docker/config.json",
+      "mcp.json",
+      "/etc/shadow"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/tool_poisoning.md"
+    ]
+  },
+  {
+    "id": "toolpoison.secrecy",
+    "description": "Nutzer als Adressat einer Geheimhaltungs-Direktive",
+    "en": [
+      "user"
+    ],
+    "de": [
+      "nutzer",
+      "anwender"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/tool_poisoning.md"
+    ]
+  },
+  {
+    "id": "toolpoison.cross_tool",
+    "description": "Umleiten, Kopieren oder Ersetzen beim Aufruf eines anderen Tools",
+    "en": [
+      "send",
+      "forward",
+      "bcc",
+      "copy",
+      "redirect",
+      "recipient"
+    ],
+    "de": [
+      "schicke",
+      "leite",
+      "stattdessen",
+      "empf"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/tool_poisoning.md"
+    ]
+  },
+  {
+    "id": "toolpoison.hidden_markup",
+    "description": "Pseudo-Tags und HTML-Kommentare in Tool-Metadaten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "<important>",
+      "<system>",
+      "<instruction",
+      "<secret>",
+      "<hidden>",
+      "<admin>",
+      "<!--"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/tool_poisoning.md"
+    ]
+  },
+  {
+    "id": "toolpoison.side_channel",
+    "description": "Seitenkanal-Parameter für Verlauf oder Systemprompt",
+    "en": [
+      "note",
+      "metadata",
+      "extra",
+      "debug",
+      "annotation"
+    ],
+    "de": [
+      "notiz",
+      "metadaten"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/tool_poisoning.md"
+    ]
+  }
+]
