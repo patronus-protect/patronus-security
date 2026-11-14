@@ -117,6 +117,7 @@ struct RawGates {
     exfiltration_mode: Option<ScoreMode>,
     unsafe_action_mode: Option<ScoreMode>,
     resource_exhaustion_mode: Option<ScoreMode>,
+    resource_exhaustion_count_threshold: Option<std::num::NonZeroU64>,
     harmful_content_mode: Option<ScoreMode>,
     toxic_language_mode: Option<ScoreMode>,
     conditional: Vec<ConditionalGate>,
@@ -440,6 +441,7 @@ impl RawGates {
             &self.exfiltration_mode,
             &self.unsafe_action_mode,
             &self.resource_exhaustion_mode,
+            &self.resource_exhaustion_count_threshold,
             &self.harmful_content_mode,
             &self.toxic_language_mode,
         );
