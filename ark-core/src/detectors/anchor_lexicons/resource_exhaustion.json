@@ -1,0 +1,99 @@
+[
+  {
+    "id": "exhaust.spawn",
+    "description": "Agenten, Instanzen oder Teilaufgaben starten, auch je Ergebnis",
+    "en": [
+      "spawn",
+      "start",
+      "launch",
+      "create",
+      "fork",
+      "for each",
+      "for every"
+    ],
+    "de": [
+      "erzeug",
+      "für jede",
+      "fuer jede"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.repeat_verb",
+    "description": "Wiederholen, weiterschreiben, ausgeben",
+    "en": [
+      "repeat",
+      "keep",
+      "loop",
+      "write",
+      "print",
+      "output",
+      "generate",
+      "say",
+      "produce",
+      "type"
+    ],
+    "de": [
+      "wiederhol",
+      "weiter",
+      "schreib",
+      "gib",
+      "generier",
+      "erzeug",
+      "sag",
+      "tipp",
+      "ausgeb",
+      "ausgibst"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.cost",
+    "description": "Tool-Aufrufe, Abrufe oder Tokens maximieren",
+    "en": [
+      "as many",
+      "every page",
+      "all pages",
+      "every link",
+      "all links",
+      "every url",
+      "all urls",
+      "max"
+    ],
+    "de": [
+      "so viele",
+      "seite",
+      "link",
+      "url"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.decoy_task",
+    "description": "Rechenaufgabe vor der eigentlichen Antwort",
+    "en": [
+      "before"
+    ],
+    "de": [
+      "bevor",
+      "vor"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  }
+]

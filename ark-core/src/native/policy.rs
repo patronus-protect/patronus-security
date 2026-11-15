@@ -3,7 +3,7 @@ use crate::detectors::dlp::dlp::{DEFAULT_ON_DOCUMENT_GROUPS, DLP_PATTERNS, SECRE
 use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
 use crate::SecurityCategory;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, str::FromStr};
+use std::{collections::HashMap, fmt, num::NonZeroU64, str::FromStr};
 
 /// Output mode of a native category (`<category>_mode`). `Strict` is the
 /// default and the pre-score behaviour.
@@ -89,6 +89,9 @@ pub fn default_rule_enabled(rule_id: &str) -> bool {
         })
 }
 
+/// Default least repetition count of a huge output request.
+pub const DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD: u64 = 10_000;
+
 /// Per-call native policy: rule, model, mode and diagnostics gates, shared by
 /// the Core scanner and the full gateway. Missing rule entries use
 /// [`default_rule_enabled`], missing model entries are enabled.
@@ -118,6 +121,11 @@ pub struct NativeGates {
     pub resource_exhaustion_mode: ScoreMode,
     pub harmful_content_mode: ScoreMode,
     pub toxic_language_mode: ScoreMode,
+    /// Least repetition count (`500000 times`, `2 million words`) that makes
+    /// an output request a `resource_exhaustion` finding; unset means
+    /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -164,6 +172,12 @@ impl NativeGates {
         }
     }
 
+    /// The `resource_exhaustion_count_threshold` in effect.
+    pub fn resource_exhaustion_count_threshold(&self) -> u64 {
+        self.resource_exhaustion_count_threshold
+            .map_or(DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD, NonZeroU64::get)
+    }
+
     /// Whether a model or native producer id is enabled.
     pub fn allows_model(&self, id: &str) -> bool {
         self.models.get(id).copied().unwrap_or(true)
@@ -208,6 +222,22 @@ mod tests {
         assert_eq!(gates.pii_mode, ScoreMode::Recall);
         assert_eq!(gates.dlp_mode, ScoreMode::Strict);
         assert!(gates.explain);
+    }
+
+    #[test]
+    fn resource_exhaustion_count_threshold_defaults_and_rejects_zero() {
+        let gates = NativeGates::default();
+        assert_eq!(gates.resource_exhaustion_count_threshold(), 10_000);
+        assert!(!serde_json::to_string(&gates)
+            .unwrap()
+            .contains("count_threshold"));
+        let gates: NativeGates =
+            serde_json::from_str(r#"{"resource_exhaustion_count_threshold":250000}"#).unwrap();
+        assert_eq!(gates.resource_exhaustion_count_threshold(), 250_000);
+        assert!(serde_json::from_str::<NativeGates>(
+            r#"{"resource_exhaustion_count_threshold":0}"#
+        )
+        .is_err());
     }
 
     #[test]

@@ -1690,7 +1690,7 @@ classes:
         - für <jedes Ergebnis> einen <neuen Task> anlegen
         en: [<imperative CALL> <yourself> again for <each result>]
       carriers: [chat, tool_output, tool_description, web, document, email, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.re_recursive_spawn]
       baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: No ARK rule; recursive delegation not covered in DE
     - id: unbounded_repeat
@@ -1707,7 +1707,7 @@ classes:
         de: [<Imperativ WIEDERHOLEN> <Wort/Satz> <endlos>]
         en: ['<imperative REPEAT> <word> <forever, never stop>']
       carriers: [chat, tool_output, web, document, email, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.re_unbounded_repeat]
       baseline_coverage: {atr: partial}
       gap: No ARK rule for repetition attacks
     - id: huge_output
@@ -1724,7 +1724,7 @@ classes:
         de: [<Imperativ SCHREIBEN> <Text> <Zahl über Schwelle> mal]
         en: [<imperative OUTPUT> <number above threshold> <pages>]
       carriers: [chat, tool_output, web, document]
-      existing_rules: []
+      existing_rules: [ark.threat.re_huge_output]
       baseline_coverage: {}
       gap: Number validator for digits and DE/EN number words does not exist
     - id: tool_flood
@@ -1741,7 +1741,7 @@ classes:
         de: [<Imperativ ABRUFEN> <alle Seiten> mit <so vielen Tool-Aufrufen wie möglich>]
         en: [use <as many tool calls as possible> to <fetch every page>]
       carriers: [tool_output, tool_description, web, document, chat]
-      existing_rules: []
+      existing_rules: [ark.threat.re_tool_flood]
       baseline_coverage: {atr: partial}
       gap: No coverage of cost-inflation directives
     - id: decoy_compute
@@ -1758,7 +1758,7 @@ classes:
         de: [<vor der Antwort> zuerst <alle Primzahlen bis Zahl> berechnen]
         en: [<before answering> first <factorise large number>]
       carriers: [tool_output, web, document, email, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.re_decoy_compute]
       baseline_coverage: {}
       gap: Counts only with indirect carrier; nothing covers it today
     - id: loop_hint
@@ -1797,12 +1797,6 @@ classes:
     lexicons:
     - {id: exhaust.unbounded, kind: support, task: RE01, title: 'forever, endlessly, until I say stop'}
     - {id: exhaust.huge_count, kind: support, task: RE01, title: count units for threshold validator}
-    - {id: exhaust.repeat_verb, kind: support, task: RE01, title: 'repeat, output again, keep writing'}
-    - {id: exhaust.spawn, kind: support, task: RE01, title: 'spawn agent/subtask, call yourself'}
-    - {id: exhaust.decoy_task, kind: support, task: RE01, title: 'first compute, factorise, all primes up to'}
-    - {id: exhaust.cost, kind: support, task: RE01, title: 'as many tool calls as possible, every page'}
-    - {id: exhaust.bounded, kind: counter, task: RE01, title: 'explicit limit, timeout, stop condition'}
-    - {id: exhaust.lyrics_play, kind: counter, task: RE01, title: 'games, songs with refrain, exercises'}
 
   harmful_content:
     category: harmful_content

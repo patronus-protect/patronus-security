@@ -17,6 +17,7 @@ use patronus_ark_core::{
         text::extract,
         threat::{facts_findings, ThreatPipeline},
     },
+    native::NativeGates,
     threat::NativeText,
     SecurityCategory,
 };
@@ -29,6 +30,7 @@ fn main() -> io::Result<()> {
         Some(other) => return Err(io::Error::other(format!("unknown argument {other}"))),
     };
     let pipeline = ThreatPipeline::new();
+    let count_threshold = NativeGates::default().resource_exhaustion_count_threshold();
     let mut out = BufWriter::new(io::stdout().lock());
     for (number, line) in io::stdin().lock().lines().enumerate() {
         let line = line?;
@@ -44,7 +46,9 @@ fn main() -> io::Result<()> {
             let prepared = NativeText::new(text);
             SecurityCategory::ATTACK_CLASSES
                 .iter()
-                .map(|&category| pipeline.detect_prepared(&prepared, category, |_| true))
+                .map(|&category| {
+                    pipeline.detect_prepared(&prepared, category, |_| true, count_threshold)
+                })
                 .collect()
         } else {
             Vec::new()

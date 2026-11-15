@@ -89,7 +89,12 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
         parent: None,
         rule: None,
         detect: Box::new(move |prepared, gates| {
-            PIPELINE.detect_prepared(prepared, category, |id| gates.allows_rule(id))
+            PIPELINE.detect_prepared(
+                prepared,
+                category,
+                |id| gates.allows_rule(id),
+                gates.resource_exhaustion_count_threshold(),
+            )
         }),
     });
 }
@@ -182,7 +187,8 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
         }
         SecurityCategory::ToolPoisoning
         | SecurityCategory::AgentConfigTampering
-        | SecurityCategory::HarmfulContent => {
+        | SecurityCategory::HarmfulContent
+        | SecurityCategory::ResourceExhaustion => {
             add_threat_rules(&mut specs, category);
         }
         SecurityCategory::Injection => {

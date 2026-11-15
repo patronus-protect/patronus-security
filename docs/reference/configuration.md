@@ -158,6 +158,9 @@ scanner.set_execution_gates({
   `harmful_content_mode`, `toxic_language_mode`): `strict` (default; the producers' own
   acceptance), `balanced` or `recall` (native evidence scoring below 0.50 or 0.30 is dropped). See
   [Attack-class categories](result-schema.md#attack-class-categories).
+- `resource_exhaustion_count_threshold` — least repetition count (`500000 times`, `2 million
+  words`, `zwei Millionen Wörter`) that makes an output request a `resource_exhaustion` finding;
+  a positive integer, default `10000`. Raise it when users legitimately ask for long outputs.
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.

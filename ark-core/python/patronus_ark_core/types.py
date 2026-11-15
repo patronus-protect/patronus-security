@@ -145,6 +145,7 @@ class ScannerConfig(TypedDict, total=False):
     exfiltration_mode: ScoreMode
     unsafe_action_mode: ScoreMode
     resource_exhaustion_mode: ScoreMode
+    resource_exhaustion_count_threshold: int
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode
     explain: bool

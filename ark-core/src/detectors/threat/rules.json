@@ -542,6 +542,66 @@
         "validator": "format",
         "requires_context": false
       }
+    },
+    {
+      "id": "ark.threat.re_recursive_spawn",
+      "class_name": "resource_exhaustion",
+      "family": "recursive_spawn",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<spawn>(?:spawn|start|launch|create|fork|spawne|starte|startest|erzeuge|erzeugst))(?-u:\\b)[^\\n.;]{0,40}?(?-u:\\b)(?P<agent>(?:(?:sub-?)?agent(?:en|s)?|sub-?tasks?|instances?|instanz(?:en)?|cop(?:y|ies)|kopie(?:n)?|workers?))(?-u:\\b)[^\\n.;]{0,80}?(?-u:\\b)(?P<recursion>(?:(?:(?:that|which|who)\\s{1,4}(?:each\\s{1,4}|also\\s{1,4}|in\\s{1,4}turn\\s{1,4}|again\\s{1,4})?(?:spawns?|starts?|launch(?:es)?|creates?)|(?:der|die|das)\\s{1,4}(?:jeweils\\s{1,4})?(?:wiederum|ebenfalls|erneut|seinerseits|ihrerseits))(?-u:\\b)[^\\n.;]{0,40}?(?-u:\\b)(?:(?:sub-?)?agent(?:en|s)?|sub-?tasks?|instances?|instanz(?:en)?|cop(?:y|ies)|kopie(?:n)?|workers?|itself|themselves|sich\\s{1,4}selbst)|recursively|rekursiv))(?-u:\\b)|(?-u:\\b)(?P<fanout>(?:for\\s{1,4}(?:each|every)\\s{1,4}(?:search\\s{1,4})?(?:result|item|link|page|answer|hit)s?|f(?:ü|ue)r\\s{1,4}jede[nsm]?\\s{1,4}(?:ergebnis|treffer|eintrag|link|seite|antwort)\\w{0,2}))(?-u:\\b)[^\\n.;]{0,40}?(?-u:\\b)(?P<fanout_spawn>(?:spawn|start|launch|create|fork|spawne|starte|startest|erzeuge|erzeugst))(?-u:\\b)[^\\n.;]{0,30}?(?-u:\\b)(?P<fanout_agent>(?:(?:sub-?)?agent(?:en|s)?|instances?|instanz(?:en)?|cop(?:y|ies)|kopie(?:n)?))(?-u:\\b)",
+      "points": {
+        "base_score": 45,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.re_unbounded_repeat",
+      "class_name": "resource_exhaustion",
+      "family": "unbounded_repeat",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<repeat>(?:repeat|keep\\s{1,4}(?:writing|repeating|printing|generating|saying|outputting|going)|loop|wiederhole|wiederholst|schreib\\s{1,4}weiter|mach\\s{1,4}weiter))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<unbounded>(?:forever|endlessly|infinitely|indefinitely|without\\s{1,4}(?:stopping|end)|never\\s{1,4}stop(?:ping)?|until\\s{1,4}I\\s{1,4}(?:say|tell\\s{1,4}you\\s{1,4}to)\\s{1,4}stop|endlos|unendlich(?:\\s{1,4}oft)?|f(?:ü|ue)r\\s{1,4}immer|ohne\\s{1,4}(?:aufzuh(?:ö|oe)ren|ende|pause)|bis\\s{1,4}ich\\s{1,4}stopp?\\s{1,4}sage)(?:,?\\s{1,4}(?:and|und)\\s{1,4}(?:never\\s{1,4}stop(?:ping)?|h(?:ö|oe)re?\\s{1,4}(?:nie|niemals)\\s{1,4}(?:mehr\\s{1,4})?auf))?)(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.re_huge_output",
+      "class_name": "resource_exhaustion",
+      "family": "huge_output",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<verb>(?:repeat|write|print|output|generate|say|produce|type|wiederhole|schreib(?:e|st)?|gib|generiere|erzeuge|sag(?:e|st)?|tippe))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<count>(?:\\d{1,3}(?:[.,' ]\\d{3}){1,4}|\\d{1,15}|(?:(?:\\d{1,3}|a|one|two|three|five|ten|hundred|eine?n?|zwei|drei|f(?:ü|ue)nf|zehn|hundert)[ -]{0,2})?(?:thousand|millions?|billions?|trillions?|tausend|million(?:en)?|milliarden?|billion(?:en)?)))[ -]{0,2}(?P<unit>(?:times|words|pages|lines|tokens|paragraphs|calls|requests|mal|w(?:ö|oe)rter|seiten|zeilen|abs(?:ä|ae)tze|aufrufe|anfragen))(?-u:\\b)|(?-u:\\b)(?P<count_late>(?:\\d{1,3}(?:[.,' ]\\d{3}){1,4}|\\d{1,15}|(?:(?:\\d{1,3}|a|one|two|three|five|ten|hundred|eine?n?|zwei|drei|f(?:ü|ue)nf|zehn|hundert)[ -]{0,2})?(?:thousand|millions?|billions?|trillions?|tausend|million(?:en)?|milliarden?|billion(?:en)?)))[ -]{0,2}(?P<unit_late>(?:times|words|pages|lines|tokens|paragraphs|calls|requests|mal|w(?:ö|oe)rter|seiten|zeilen|abs(?:ä|ae)tze|aufrufe|anfragen))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<verb_late>(?:ausgeben|ausgibst|schreiben|schreibst|wiederholen|wiederholst|generieren|erzeugen|tippen|sagen))(?-u:\\b)",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.re_tool_flood",
+      "class_name": "resource_exhaustion",
+      "family": "tool_flood",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<action>(?:make|call|run|use|send|fetch|crawl|download|query|open|retrieve|mach(?:e|st)?|rufe|nutze|sende|lade|hole|frage|durchsuche))(?-u:\\b)[^\\n.;]{0,40}?(?-u:\\b)(?P<scope>(?:as\\s{1,4}many\\s{1,4}(?:tool\\s{1,4}calls|api\\s{1,4}calls|calls|requests|search\\s{1,4}requests|searches|queries|tokens|pages)\\s{1,4}as\\s{1,4}(?:possible|you\\s{1,4}can)|(?:every|all)\\s{1,4}(?:single\\s{1,4})?(?:pages?|links?|urls?)\\s{1,4}(?:of|on|in)\\s{1,4}(?:the\\s{1,4})?(?:entire\\s{1,4}|whole\\s{1,4})?(?:internet|web)|the\\s{1,4}max(?:imum)?\\s{1,4}(?:number\\s{1,4}of\\s{1,4})?(?:tokens|tool\\s{1,4}calls)|so\\s{1,4}viele\\s{1,4}(?:tool-?aufrufe|api-?aufrufe|aufrufe|anfragen|suchanfragen|suchen|tokens|seiten)\\s{1,4}wie\\s{1,4}(?:m(?:ö|oe)glich|du\\s{1,4}kannst)|(?:jede|alle)\\s{1,4}(?:einzelnen?\\s{1,4})?(?:seiten?|links?|urls?)\\s{1,4}(?:des|im)\\s{1,4}(?:gesamten\\s{1,4}|ganzen\\s{1,4})?(?:internets?|webs?)))(?-u:\\b)",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.re_decoy_compute",
+      "class_name": "resource_exhaustion",
+      "family": "decoy_compute",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<precondition>(?:before\\s{1,4}(?:answering|replying|responding|you\\s{1,4}(?:answer|reply|respond|continue|summari[sz]e))|bevor\\s{1,4}du\\s{1,4}(?:antwortest|fortf(?:ä|ae)hrst|weitermachst|(?:diese[nmrs]?\\s{1,4}\\w{1,20}\\s{1,4})?zusammenfasst)|vor\\s{1,4}(?:deiner|der)\\s{1,4}antwort))(?-u:\\b)[^\\n.;]{0,60}?(?-u:\\b)(?P<task>(?:(?:compute|calculate|enumerate|list|generate|find)\\s{1,4}(?:all|every|each|the\\s{1,4}first)\\s{1,4}[^\\n.;]{0,30}?(?:primes|prime\\s{1,4}numbers|digits\\s{1,4}of\\s{1,4}pi|permutations?|combinations?)|(?:berechne|liste|z(?:ä|ae)hle|ermittle|generiere|finde)\\s{1,4}(?:alle|jede|die\\s{1,4}ersten)\\s{1,4}[^\\n.;]{0,30}?(?:primzahlen|stellen\\s{1,4}von\\s{1,4}pi|permutation(?:en)?|kombination(?:en)?)))(?-u:\\b)",
+      "points": {
+        "base_score": 30,
+        "validator": "format",
+        "requires_context": true
+      }
     }
   ]
 }
