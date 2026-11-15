@@ -928,7 +928,7 @@ classes:
         de: ['<Agent-Config> <Freigabe-Schlüssel>: <alles erlauben ohne Nachfrage>']
         en: ['<agent config> <permission key>: <allow all, skip confirmation>']
       carriers: [agent_config, config]
-      existing_rules: [ark.injection.governance.forged_verified_allow]
+      existing_rules: [ark.injection.governance.forged_verified_allow, ark.threat.ac_permission_widening]
       baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none}
       gap: ARK only has two literal prose rules; no structural check on settings/permissions keys.
     - id: guard_removal
@@ -950,7 +950,7 @@ classes:
         de: [<entferne> die <Sicherheitsprüfungen> in <Agent-Datei>]
         en: [<remove> the <safety checks> in <agent file>]
       carriers: [agent_config, chat, code]
-      existing_rules: [ark.threat.agent_guard_removal]
+      existing_rules: [ark.threat.agent_guard_removal, ark.threat.ac_guard_removal]
       baseline_coverage: {atr: partial, cisco_yara: none, prompt_guard_2: none}
       gap: Today's rule needs a fixed guard word and file name; hook-removal diffs in settings are not seen.
     - id: hidden_directive
@@ -960,14 +960,14 @@ classes:
       task: AC01
       scored_only: false
       shape: AGENT_CONFIG carrier + addressed DIRECTIVE + (secrecy | hidden markup)
-      anchors: [agentcfg.file, secrecy, addressee, injection.hidden_markup, injection.hidden_instruction_target]
+      anchors: [agentcfg.file, agentcfg.hidden_directive, secrecy, addressee, injection.hidden_markup, injection.hidden_instruction_target]
       required_context: []
       negative_context: [agentcfg.project_rule, defensive, meta, quotation, test_code]
       examples:
         de: ['<Rules-Datei> <HTML-Kommentar>: <Direktive an KI>, <ohne dem Nutzer zu sagen>']
         en: ['<rules file> <HTML comment>: <directive to the model>, <silently>']
       carriers: [agent_config]
-      existing_rules: []
+      existing_rules: [ark.threat.ac_hidden_directive]
       baseline_coverage: {atr: partial, cisco_yara: partial}
       gap: No ARK rule is aware of rules/skill carriers; DE missing everywhere.
     - id: fetch_run
@@ -984,7 +984,7 @@ classes:
         de: ['<Skill-Text>: <lade Skript von URL herunter> und <führe es aus>']
         en: ['<skill text>: <download script from URL> and <run it>']
       carriers: [agent_config]
-      existing_rules: []
+      existing_rules: [ark.threat.ac_fetch_run]
       baseline_coverage: {atr: partial, cisco_yara: partial}
       gap: Shell form goes to K26; the prose form in skills is uncovered.
     - id: mcp_server_injection
@@ -1005,7 +1005,7 @@ classes:
         de: [<mcp.json> <Server-Eintrag> mit <Befehl aus fremder Quelle> und <Secret im env>]
         en: [<mcp.json> <server entry> with <command from foreign source> and <secret in env>]
       carriers: [agent_config, config]
-      existing_rules: []
+      existing_rules: [ark.threat.ac_mcp_server_injection]
       baseline_coverage: {cisco_yara: partial, atr: partial}
       gap: The mcp_runtime_risk remainder lives in dlp; no carrier-aware entry check.
     - id: persistence
@@ -1023,7 +1023,7 @@ classes:
         - '<Rules-Datei>: <schreibe diese Regel> in <jede Agent-Datei> <für alle künftigen Sitzungen>'
         en: ['<rules file>: <write this rule> into <every agent file> <for all future sessions>']
       carriers: [agent_config]
-      existing_rules: []
+      existing_rules: [ark.threat.ac_persistence]
       baseline_coverage: {atr: partial}
       gap: Self-propagating config rules are uncovered.
     - id: tamper_request
@@ -1040,7 +1040,7 @@ classes:
         de: ['<ändere> <Agent-Datei> so, dass <alles ohne Nachfrage erlaubt> ist']
         en: [<edit> <agent file> so that <everything is auto-approved>]
       carriers: [chat, email, web, document, tool_output]
-      existing_rules: []
+      existing_rules: [ark.threat.ac_tamper_request]
       baseline_coverage: {atr: partial, prompt_guard_2: none}
       gap: Requests to tamper with agent settings are not detected except the guard-removal literal.
     - id: decoded
@@ -1061,10 +1061,6 @@ classes:
       baseline_coverage: {atr: none, cisco_yara: none}
       gap: No decoding of config values before matching.
     lexicons:
-    - {id: agentcfg.file, kind: support, task: AC01, title: Agent config file names and keys}
-    - {id: agentcfg.widen, kind: support, task: AC01, title: Permission widening phrases and values}
-    - {id: agentcfg.guard_removal, kind: support, task: AC01, title: Removing or disabling hooks and checks}
-    - {id: agentcfg.persist, kind: support, task: AC01, title: Persistence across files and sessions}
     - {id: agentcfg.fetch_run, kind: support, task: AC01, title: Download-and-run phrases}
     - {id: agentcfg.project_rule, kind: counter, task: AC01, title: Ordinary project rules}
     - {id: agentcfg.scoped_allow, kind: counter, task: AC01, title: Narrowly scoped permissions}

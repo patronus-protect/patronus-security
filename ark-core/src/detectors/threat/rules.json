@@ -602,6 +602,90 @@
         "validator": "format",
         "requires_context": true
       }
+    },
+    {
+      "id": "ark.threat.ac_permission_widening",
+      "class_name": "agent_config_tampering",
+      "family": "permission_widening",
+      "upstream_groups": [],
+      "pattern": "(?P<key>\"?(?:defaultMode|permissionMode|permission_mode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:autoApprove|alwaysAllow|auto_approve)\"?\\s{0,4}[:=]\\s{0,4}|\"?(?:approval_policy|approvalPolicy)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:sandbox_mode|sandboxMode)\"?\\s{0,4}[:=]\\s{0,4}\"?|\"?(?:dangerouslySkipPermissions|dangerously_skip_permissions|yolo)\"?\\s{0,4}[:=]\\s{0,4}|\"allow\"\\s{0,4}:\\s{0,4}\\[[^\\]]{0,200}?\")(?P<value>bypassPermissions(?-u:\\b)|true(?-u:\\b)|\\[\\s{0,16}\"\\*\"|never(?-u:\\b)|danger-full-access(?-u:\\b)|(?:\\*|Bash|Bash\\(\\s{0,2}\\*\\s{0,2}\\))\")",
+      "points": {
+        "base_score": 40,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ac_guard_removal",
+      "class_name": "agent_config_tampering",
+      "family": "guard_removal",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:remove|disable|delete|skip|bypass|turn\\s{1,4}off|entferne|deaktiviere|loesche|ueberspringe|umgehe)(?-u:\\b)|(?:lösche|überspringe)(?-u:\\b))[^\\n.!?;]{0,80}?(?P<guard>(?-u:\\b)(?:pre-?commit|pre-?tool-?use|post-?tool-?use|safety|security|guard|protection|schutz|sicherheits)[\\s-]{0,2}hooks?(?-u:\\b)|(?-u:\\b)(?:guardrails|safety\\s{1,4}checks|security\\s{1,4}checks|sicherheitspruefungen|schutzmechanismen)(?-u:\\b)|(?-u:\\b)sicherheitsprüfungen)|(?P<key>\"disableAllHooks\")\\s{0,4}:\\s{0,4}(?P<value>true)(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ac_hidden_directive",
+      "class_name": "agent_config_tampering",
+      "family": "hidden_directive",
+      "upstream_groups": [],
+      "pattern": "(?P<tag><!--|<(?:important|system|secret|hidden|instructions?|wichtig|geheim|versteckt)>)(?P<directive>[^<>\\n]{0,40}?(?-u:\\b)(?:ai|llm|assistant|agent|model|claude|copilot|ki|assistent|modell)(?:[\\s-]{0,2}(?:agent|model|modell))?\\s{0,2}[:,][^<>\\n]{0,80}?(?-u:\\b)(?:you\\s{1,4}must|always|never\\s{1,4}tell|silently|secretly|first|include|upload|send|copy|du\\s{1,4}musst|immer|zuerst|heimlich|unbemerkt|lade|kopiere|sende)(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ac_fetch_run",
+      "class_name": "agent_config_tampering",
+      "family": "fetch_run",
+      "upstream_groups": [],
+      "pattern": "(?P<fetch>(?-u:\\b)(?:download|fetch|curl|wget|lade|hole)(?-u:\\b))[^\\n]{0,60}?(?P<url>https?://[^\\s\"\\x27<>)]{3,200})[^\\n]{0,80}?(?P<execute>(?-u:\\b)(?:run|execute|source|install|fuehre|ausfuehren|starte)(?-u:\\b)|(?:führe|ausführen)(?-u:\\b))",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_mcp_server_injection",
+      "class_name": "agent_config_tampering",
+      "family": "mcp_server_injection",
+      "upstream_groups": [],
+      "pattern": "(?P<command>\"command\"\\s{0,4}:\\s{0,4}\"(?:bash|sh|zsh|cmd|powershell|pwsh|npx|uvx|bunx|pipx|curl|wget)\")[^\\]}]{0,200}?(?P<source>(?:git\\+)?https?://[^\\s\"\\x27]{3,200}\\.(?:tgz|tar\\.gz|whl|zip|git)(?-u:\\b)|(?-u:\\b)(?:curl|wget)(?-u:\\b)[^\"\\]]{0,120}?\\|\\s{0,4}(?:ba|z)?sh(?-u:\\b))",
+      "points": {
+        "base_score": 35,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ac_persistence",
+      "class_name": "agent_config_tampering",
+      "family": "persistence",
+      "upstream_groups": [],
+      "pattern": "(?P<write>(?-u:\\b)(?:copy|write|append|add|insert|paste|replicate|propagate|kopiere|schreibe|fuege|trage)(?-u:\\b)|füge(?-u:\\b))\\s{1,4}(?P<rule>(?:this|these)\\s{1,4}(?:rules?|instructions?|sections?|lines?|blocks?)|diese[nrs]?\\s{1,4}(?:regeln?|anweisungen?|abschnitt|zeilen?|block))(?-u:\\b)[^\\n.!?;]{0,40}?(?P<target>(?-u:\\b)(?:every|all|each|jede[nrs]?|alle)(?-u:\\b)[^\\n.!?;]{0,40}?(?:agents\\.md|claude\\.md|gemini\\.md|\\.cursorrules|skill\\.md|rules[\\s-]{0,2}(?:files?|dateien)|agent[\\s-]{0,2}(?:files?|dateien)|config(?:uration)?\\s{1,4}files?|konfigurationsdateien|repositor(?:y|ies)|repos(?-u:\\b)|projects?(?-u:\\b)|projekte?(?-u:\\b)|sessions?(?-u:\\b)|sitzungen(?-u:\\b)))",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ac_tamper_request",
+      "class_name": "agent_config_tampering",
+      "family": "tamper_request",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:edit|change|modify|update|set|add|write|put|configure|trag|setze|schreibe|bearbeite|konfiguriere|aendere|passe)(?-u:\\b)|ändere(?-u:\\b))[^\\n]{0,60}?(?P<file>\\.claude/[\\w./-]{0,40}|\\.codex/[\\w./-]{0,40}|(?-u:\\b)(?:settings(?:\\.local)?\\.json|agents\\.md|claude\\.md|gemini\\.md|skill\\.md|mcp\\.json|config\\.toml)|\\.cursorrules|\\.windsurfrules)[^\\n]{0,100}?(?P<widen>bypassPermissions|(?-u:\\b)auto-?approved?(?-u:\\b)|(?-u:\\b)(?:all|every)\\s{1,4}commands?(?-u:\\b)[^\\n.;]{0,40}?(?:without\\s{1,4}(?:asking|confirmation|prompting)|auto-?approved?|allowed)|(?-u:\\b)alle\\s{1,4}befehle(?-u:\\b)[^\\n.;]{0,40}?(?:ohne\\s{1,4}(?:r(?:ü|ue)ckfrage|nachfrage|best(?:ä|ae)tigung)|erlaubt)|dangerously|(?-u:\\b)yolo(?-u:\\b)|full[\\s-]access|vollzugriff|sandbox\\s{1,4}(?:off|aus)(?-u:\\b)|danger-full-access)",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": false
+      }
     }
   ]
 }

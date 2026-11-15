@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (50)
+## Threat rules (57)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -709,6 +709,13 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.re_huge_output` | `resource_exhaustion` | `huge_output` |  |
 | `ark.threat.re_tool_flood` | `resource_exhaustion` | `tool_flood` |  |
 | `ark.threat.re_decoy_compute` | `resource_exhaustion` | `decoy_compute` |  |
+| `ark.threat.ac_permission_widening` | `agent_config_tampering` | `permission_widening` |  |
+| `ark.threat.ac_guard_removal` | `agent_config_tampering` | `guard_removal` |  |
+| `ark.threat.ac_hidden_directive` | `agent_config_tampering` | `hidden_directive` |  |
+| `ark.threat.ac_fetch_run` | `agent_config_tampering` | `fetch_run` |  |
+| `ark.threat.ac_mcp_server_injection` | `agent_config_tampering` | `mcp_server_injection` |  |
+| `ark.threat.ac_persistence` | `agent_config_tampering` | `persistence` |  |
+| `ark.threat.ac_tamper_request` | `agent_config_tampering` | `tamper_request` |  |
 
 ## Shell command policies (117) { #shell-command-policies }
 

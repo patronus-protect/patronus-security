@@ -34,11 +34,14 @@ const TOOL_DESCRIPTION_MARK: &str = concat!(
     ")"
 );
 
+/// Agent instruction files (rules files, skills and their frontmatter), agent
+/// settings directories and agent/MCP configuration keys.
+const AGENT_CONFIG_MARK: &str = r#"(?i)\b(?:agents|claude|gemini|skill|copilot-instructions)\.md\b|(?:^|[\s/])\.(?:cursorrules|windsurfrules)\b|(?:^|[\s/"'`])\.(?:claude|cursor|codex)/|\bmcp\.json\b|"(?:mcpServers|autoApprove|hooks|permissions|defaultMode|disableAllHooks)"\s*:|(?m:^\s*allowed-tools\s*:)|\A---\r?\nname:[^\n]{0,80}\r?\ndescription:"#;
+
 /// One linear pattern per carrier, compiled once into one set.
 static MARKS: LazyLock<RegexSet> = LazyLock::new(|| {
     RegexSet::new([
-        // Agent instruction files and agent/MCP configuration keys.
-        r#"(?i)\b(?:agents|claude|gemini|skill|copilot-instructions)\.md\b|(?:^|[\s/])\.cursorrules\b|\bmcp\.json\b|"(?:mcpServers|autoApprove|hooks)"\s*:|(?m:^\s*allowed-tools\s*:)"#,
+        AGENT_CONFIG_MARK,
         // Source code lines and code fences.
         r"(?m)^\s*(?:def |class |import |from [\w.]{1,64} import |function |const |let |fn |pub fn |#include|package )|(?m:^```)",
         // Markdown headings and numbered document parts.
@@ -72,6 +75,14 @@ pub(crate) fn is_tool_metadata(text: &str) -> bool {
     MARK.is_match(text)
 }
 
+/// Whether `text` is or names an agent instruction or configuration file (the
+/// `agent_config` carrier), without running the other carrier marks.
+pub(crate) fn is_agent_config(text: &str) -> bool {
+    static MARK: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(AGENT_CONFIG_MARK).expect("agent config mark"));
+    MARK.is_match(text)
+}
+
 /// The tool a plain-text listing line describes, when the line holding `at`
 /// starts with a listing header (`Tool <name>:`).
 pub(crate) fn listing_tool_name(text: &str, at: usize) -> Option<&str> {
@@ -102,6 +113,30 @@ mod tests {
         assert_eq!(carriers(r#"{"description": "x"}"#), ["tool_description"]);
         assert_eq!(carriers("def f():\n    pass"), ["code"]);
         assert_eq!(carriers("2026-01-01 10:00 started"), ["log"]);
+    }
+
+    #[test]
+    fn agent_config_is_rules_files_skills_and_settings() {
+        for text in [
+            "# CLAUDE.md\nUse pnpm.",
+            ".claude/settings.json\n{}",
+            r#"{"permissions": {"allow": ["Read"]}}"#,
+            "---\nname: pdf-export\ndescription: Exports PDFs\n---\nBody",
+            "Edit the .cursorrules file.",
+            r#"approval_policy in ".codex/config.toml""#,
+        ] {
+            assert!(is_agent_config(text), "{text}");
+            assert!(carriers(text).contains(&"agent_config"), "{text}");
+        }
+        for text in [
+            "Please review the permissions of the shared folder.",
+            "---\ntitle: Notes\n---",
+            "the claude model answers",
+            "see src/.claudeignore.rs",
+        ] {
+            assert!(!is_agent_config(text), "{text}");
+            assert!(!carriers(text).contains(&"agent_config"), "{text}");
+        }
     }
 
     #[test]
