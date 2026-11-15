@@ -79,6 +79,24 @@
     ]
   },
   {
+    "id": "exfil.record",
+    "description": "Geschäftsdaten: Kundenliste, Kundendaten, CRM-Export",
+    "en": [
+      "customer",
+      "client"
+    ],
+    "de": [
+      "kunden"
+    ],
+    "shared": [
+      "crm"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
     "id": "exfil.sink",
     "description": "Senken: URLs und E-Mail-Adressen",
     "en": [],
