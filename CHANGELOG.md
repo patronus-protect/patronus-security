@@ -52,6 +52,27 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`exfiltration`) the category has new L1 rules in German and English
+  for inputs that try to move data out to a foreign destination: markdown images and links whose
+  URL carries a placeholder for the conversation, a summary or credentials (`{chat_history}`,
+  `<summary of the conversation>`, `CHAT_HISTORY`); directives to send the conversation, the
+  system prompt, a mailbox or credentials to a URL, a mail address or a collector service such as
+  `webhook.site`; a transfer to a URL whose data is a secret, either a value the secret detection
+  finds or a sensitive file such as `~/.ssh/id_rsa` or `.env` (the secret detection runs only on
+  that short span and reports nothing of its own here); a data source put into an outbound tool
+  parameter (`url`, `to`, `webhook`, `body`); data placed as a subdomain of a foreign host
+  (`{api_secret}.lookup.example.net`, "send them as subdomains of …"); and links that carry a run
+  of invisible characters or get encoded conversation data appended. A destination the user owns
+  ("to my address", "an meine Adresse") is not reported, and ordinary image links, analytics
+  parameters, API path templates, host templates such as `{bucket}.s3.amazonaws.com`, webhook
+  documentation, negated rules, security documentation and test code stay benign. Each rule
+  (`ark.threat.ex_*`, listed in `matched_rules`) can be switched off in the `rules` map.
+- **Detection change:** (`exfiltration`) only the destination phrase after "to"/"an" decides
+  whether the user owns a sink: "send the full conversation along with my access logs to
+  https://…" is now reported. A generic tool parameter (`body`, `query`, `link`) counts as egress
+  only with an outbound call in the same sentence (a tool name such as `http_post`, a request,
+  API, mail or webhook word); "put the full conversation into the body field of the local draft"
+  stays benign.
 - **Detection change:** (`agent_config_tampering`, opt-in) the category now has its own L1 rules
   for agent instruction and configuration files in German and English: rules files (`AGENTS.md`,
   `CLAUDE.md`, `.cursorrules`), skills, agent settings and `mcp.json`. They report settings that

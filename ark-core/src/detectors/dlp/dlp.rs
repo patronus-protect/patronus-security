@@ -662,6 +662,14 @@ impl Default for DlpPipeline {
 }
 
 impl DlpPipeline {
+    /// The pipeline compiled once per process: every engine and gateway and
+    /// the exfiltration rules (a secret as data source) share its rules.
+    pub fn shared() -> &'static Self {
+        static PIPELINE: std::sync::LazyLock<DlpPipeline> =
+            std::sync::LazyLock::new(DlpPipeline::new);
+        &PIPELINE
+    }
+
     pub fn new() -> Self {
         let mut regexes = Vec::new();
         let mut anchor_gates = Vec::new();

@@ -287,7 +287,10 @@ fn producer_panic_preserves_payload_for_host_failure_policy() {
 #[test]
 fn engines_share_the_pii_and_dlp_pipelines_compiled_once() {
     assert!(std::ptr::eq(pii_pipeline(), pii_pipeline()));
-    assert!(std::ptr::eq(dlp_pipeline(), dlp_pipeline()));
+    assert!(std::ptr::eq(
+        crate::detectors::dlp::dlp::DlpPipeline::shared(),
+        crate::detectors::dlp::dlp::DlpPipeline::shared()
+    ));
     let source = format!("Kontakt: {}@{}", "alice", "example.org");
     let text = NativeText::new(&source);
     let gates = NativeGates::default();

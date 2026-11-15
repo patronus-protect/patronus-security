@@ -1,0 +1,202 @@
+[
+  {
+    "id": "exfil.send_verb",
+    "description": "Senden, hochladen, weiterleiten",
+    "en": [
+      "send",
+      "forward",
+      "upload",
+      "submit",
+      "transmit",
+      "leak",
+      "exfiltrate"
+    ],
+    "de": [
+      "sende",
+      "schick",
+      "leite",
+      "lade",
+      "poste",
+      "maile",
+      "uebermittle",
+      "übermittle",
+      "uebertrage",
+      "übertrage"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.source",
+    "description": "Datenquellen: Verlauf, Systemprompt, Zugangsdaten, Umgebungsvariablen, Postfach",
+    "en": [
+      "conversation",
+      "chat",
+      "transcript",
+      "prompt",
+      "instructions",
+      "environment",
+      "credentials",
+      "password",
+      "secret",
+      "cookie",
+      "inbox",
+      "mailbox"
+    ],
+    "de": [
+      "verlauf",
+      "gespraech",
+      "gespräch",
+      "unterhaltung",
+      "konversation",
+      "nachrichten",
+      "anweisungen",
+      "umgebungsvariablen",
+      "schluessel",
+      "schlüssel",
+      "zugangsdaten",
+      "passwoerter",
+      "passwörter",
+      "kennwoerter",
+      "kennwörter",
+      "geheimnisse",
+      "zugriffstoken",
+      "mails",
+      "kontakte",
+      "dateien",
+      "posteingang",
+      "postfach",
+      "adressbuch",
+      "dateiinhalt"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.sink",
+    "description": "Senken: URLs und E-Mail-Adressen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "http",
+      "mailto:"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.collector",
+    "description": "Bekannte Sammeldienste",
+    "en": [],
+    "de": [],
+    "shared": [
+      "webhook.site",
+      "pastebin",
+      "requestbin",
+      "ngrok",
+      "discord",
+      "telegram"
+    ],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.placeholder",
+    "description": "Platzhalter für Daten in URLs und Hostnamen",
+    "en": [
+      "history",
+      "conversation",
+      "chat",
+      "messages",
+      "secret",
+      "password",
+      "credential",
+      "prompt",
+      "context",
+      "summary",
+      "memory",
+      "email",
+      "encoded"
+    ],
+    "de": [
+      "verlauf",
+      "gespraech",
+      "gespräch",
+      "nachrichten",
+      "zugangsdaten",
+      "passwoerter",
+      "passwörter",
+      "kontext",
+      "zusammenfassung"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.embed",
+    "description": "Daten in URL, Link oder Subdomain einbetten",
+    "en": [
+      "subdomain",
+      "dns",
+      "encoded",
+      "base64",
+      "base-64"
+    ],
+    "de": [
+      "kodiert",
+      "codiert",
+      "verschluesselt",
+      "verschlüsselt",
+      "bild"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.put_verb",
+    "description": "Daten in Parameter, Felder oder Links setzen",
+    "en": [
+      "insert",
+      "include",
+      "paste",
+      "append",
+      "attach",
+      "embed",
+      "encode"
+    ],
+    "de": [
+      "setze",
+      "trage",
+      "schreibe",
+      "fuege",
+      "füge",
+      "uebergib",
+      "übergib",
+      "kopiere",
+      "haenge",
+      "hänge",
+      "kodiere"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  }
+]
