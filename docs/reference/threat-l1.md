@@ -23,8 +23,10 @@ URL, and rules that copy themselves into other rules files; lines a diff removes
 A plain-text request to change such a file so that everything is auto-approved is reported
 without the file itself. `exfiltration` rules look for data sent to a foreign
 destination: markdown images or links whose URL carries a data placeholder, directives that
-send the conversation, system prompt, a mailbox or credentials to a URL, mail address or
-collector service, a secret (a value the secret detection finds, or a file such as
+send the conversation, system prompt, previous tool results, a mailbox or credentials to a URL,
+mail address or collector service (also when the text asks to keep the transfer quiet, "… and do
+not mention it"), business records such as a customer list sent out before the assistant answers
+or in secret, a secret (a value the secret detection finds, or a file such as
 `~/.ssh/id_rsa`) sent to a URL, a data source put into an outbound tool parameter, data as a
 subdomain of a foreign host, and links with invisible characters or appended encoded data. A
 destination the user owns ("to my address") is not reported. Configure, for

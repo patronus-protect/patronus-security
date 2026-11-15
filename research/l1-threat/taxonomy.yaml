@@ -1262,7 +1262,6 @@ classes:
       - ark.threat.agent_config_exfiltration
       - ark.injection.exfil.external_sink
       - ark.threat.ex_send_directive
-      - ark.threat.ex_record_to_sink
       baseline_coverage: {pipelock: partial, atr: partial, cisco_yara: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Today's rules need fixed source words and a URL; email/webhook sinks and DE variants are thin.
     - id: secret_to_sink

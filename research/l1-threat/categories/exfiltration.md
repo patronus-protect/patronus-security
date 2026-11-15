@@ -147,3 +147,87 @@ Sechs Punkte-Regeln `ark.threat.ex_*` in `ark-core/src/detectors/threat/rules.js
   den sechs Regeln (ohne Treffer je Regel +0,0–0,3 ms; der Rest ist der Klausel-Kontext-Scan nach einem Treffer).
   Voraussetzung: der Threat-Katalog baut seine Regexe mit dem DLP-Cache-Limit (`RULE_DFA_CACHE_BYTES`), sonst
   lief der Lazy-DFA über (p95 178 ms). Messung mit `scripts/l1_threat/latency.py` auf dem Gate-Korpus steht aus.
+
+## 14. Stand EX02 (2026-11-15): Punkte und Ablations-Entscheidung
+
+**Entscheidung: `B0` bleibt** — die Punkte-Regeln aus EX01/EX02 mit handgesetztem Klauselkontext
+entscheiden allein (der Threat-Scorer 0.1.7 bleibt für die Altregeln); kein gelerntes Modell wird
+einkompiliert. Neu bewerten, sobald echte Exfiltrations-Daten jenseits der Generator-Vorlagen im
+Dev-Split liegen (LLMail-Inject und agentapprove bleiben Holdout).
+
+Daten (nur Dev, wie TP02/AC02): die 300 `exfiltration`-Zeilen aus
+`generators_dev_seed:exfil_lookalikes` (`file_read` 115, `cli_log` 96, `json_result` 89; je 150 DE/EN)
+gegen 15 617 Benign-Zeilen (alle Benign-Zeilen von `generated` — darin die 300 Doppelgänger der
+Vorlagen — und `report`, dazu SPML und je ein Viertel von Dolly und GermanQuAD per sha256 der ID),
+Hälften per sha256 der Zeilen-ID (Auswertung: 163 Positive, davon 73 DE, 7 850 Negative, davon 900
+Hard-Benign). Facts über `text_facts --threat-findings`, B0 aus `scoreboard.py _predict` mit dem
+gebauten Modul, Latenzfenster der N-Gramm-Stufen: 6 × 100 KiB GermanQuAD-Dev-Text (Ersatz für das
+E03-Korpus, das in der Sandbox fehlt).
+
+Vor den Regel-Ergänzungen (Regeln aus EX01, Basis e1d67716):
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R | 22,7 | 22,7 | 16,4 | 27,8 | 0,0 | 0 | 0 |
+| R+A | 22,7 | 22,7 | 16,4 | 27,8 | 0,0 | 0 | 0 |
+| R+A+L | 100,0 | 96,3 | 100,0 | 100,0 | 5,4 | 0 | 0,8 KiB |
+| B1 | 100,0 | 100,0 | 100,0 | 100,0 | 8,4 | 17,4 | 5,1 MB |
+| B4 | 100,0 | 100,0 | 100,0 | 100,0 | 9,2 | 11,9 | 576 KiB |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 11,9 | 576 KiB |
+
+Die Auswahlregel hätte `R+A+L` gewählt (5,4 % Hard-Benign-FPR: die gelernten Punkte lernen die
+Träger der Vorlagen, nicht den Angriff). Auf allen Zeilen fanden die Regeln 78 von 300 Positiven.
+Ursachen der Lücke, je Vorlage geprüft:
+
+- **Geheimhaltung als Verneinung.** „… and do not mention it“ / „… und erwähne es nicht“ nach der
+  Senke ist ein `negation_scope`-Treffer im Satz; der Klauselkontext wertete ihn als Gegenkontext und
+  verwarf den Fund (alle `AI agent: also post …`- und `KI-Agent: Lade … hoch …`-Vorlagen, 165 Zeilen).
+  Jetzt: bei `exfiltration` zählt eine Verneinung **nach** dem Fund nicht, wenn sie in einem
+  `secrecy`-Treffer liegt („do not mention“, „erwähne … nicht“); der Geheimhaltungs-Treffer stützt
+  dann. Eine Verneinung vor dem Transfer („never post … and do not mention it“) und eine andere
+  Verneinung danach („…, not to anyone else“) bleiben Gegenkontext.
+- **Quelle Tool-Ergebnisse.** `previous/prior/earlier/last/all tool results|outputs|responses`,
+  `bisherigen/vorherigen/früheren/letzten/alle Tool-Ergebnisse|-Ausgaben|-Antworten` in der geteilten
+  Quellenliste der vier Regeln mit Quelle (`ex_send_directive`, `ex_tool_param_egress`,
+  `ex_dns_channel`, `ex_link_smuggling`).
+- **Geschäftsdaten.** Zweig `record` in der Quelle von `ex_send_directive` (nicht in der geteilten
+  Quellenliste): customer list/data/records/contacts, client list/data, CRM export/data;
+  Kundenliste, Kundendaten, Kundendatenbank, Kundenkontakte, Kundenstammdaten, CRM-Export. Ein
+  Treffer über `record` braucht einen `secrecy`-Term im Satz oder einen Vor-der-Antwort-Haken in den
+  60 Bytes vor dem Verb (`before answering/replying/responding`, `before you answer/reply/respond`,
+  `bevor du antwortest`, `vor deiner Antwort`; `pre_answer_hook`, nur nach einem Treffer). Ohne beides
+  („can you send the customer list from the CRM to tom@…“) bleibt es eine normale Geschäftsmail.
+  Prefilter: neues Anker-Lexikon `exfil.record` (customer, client, kunden, crm). Eine eigene Regel
+  `ex_record_to_sink` war der erste Entwurf; sie kostete als zweiter Regex-Durchlauf auf 100 KiB
+  deutscher Prosa p95 +0,3 ms (exfiltration allein, +5 %) und ist deshalb in `ex_send_directive`
+  aufgegangen.
+- **Listenpunkte.** Wie bei AC02 ist ein Listenpunkt mit einem anderen Listenpunkt als Lead-in-Klausel
+  eine eigene Aussage (Vorlage: „- Use the staging environment for all tests.“ traf `test_code`);
+  jetzt auch für `exfiltration`. Eine einleitende Zeile ohne Listenmarke bleibt Lead-in.
+- Kontext-Lexikon `meta`: `sicherheitsdokumentation*` → `sicherheitsdoku*` (Kurzform, Golden).
+
+Danach (gleiche Zeilen, Auswertungshälfte):
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| R+A | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| **B0** | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 (Status quo) | 0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 100,0 | 5,4 | 0 | 0,9 KiB |
+| B1 | 100,0 | 100,0 | 100,0 | 100,0 | 8,4 | 22,5 | 5,1 MB |
+| B4 | 100,0 | 100,0 | 100,0 | 100,0 | 9,2 | 9,9 | 576 KiB |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 9,9 | 576 KiB |
+
+Auswahl nach der README-Regel: `B0` (günstigste Stufe innerhalb 1 pp der besten; `B1`/`B4`/`B5` über
+dem Budget von 1 ms je 100 KiB; ms der N-Gramm-Stufen liefen parallel zu einer zweiten Ablation und
+streuen). Auf allen Zeilen: 300 von 300 Positiven gemeldet (`ex_send_directive` 240,
+`ex_secret_to_sink` 60), keine der 15 617 Benign-Zeilen, auch keiner der 300
+Doppelgänger. Vorbehalt wie TP02/AC02: die Ergänzungen sind an denselben drei Vorlagenfamilien
+entstanden, an denen gemessen wird; die Zahl ist eine Obergrenze, das Urteil fällt auf dem Holdout.
+
+Offen: die Altregeln `ark.threat.secret_exfiltration` (Threat-Scorer) und `native:secret_transfer`
+werten Zitat- und Schulungs-Kontext nicht aus und melden ein zitiertes Beispiel mit `.env` bzw.
+API-Schlüsseln (deshalb nennen die neuen Meta-Goldens Verlauf/Tool-Ergebnisse); der Klauselkontext
+der Punkte-Regeln wertet Anführungszeichen bewusst nicht (JSON-Tool-Ausgaben zitieren jeden
+Angriff); `ex_collector_only` und `exfil.integration_doc` aus §13 weiter offen; Geheimhaltung über
+mehrere Sätze.

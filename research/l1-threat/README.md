@@ -256,6 +256,15 @@ Klauselkontext) in
 Wie bei TP02 hätte die Auswahlregel vor den Regel-Ergänzungen `R+A+L` gewählt (4,9 %
 Hard-Benign-FPR); der Vorschlag Hard-Benign-FPR ≤ 1 % als Zulassungsbedingung einer Stufe gilt weiter.
 
+**Stand EX02.** `exfiltration` behält `B0`; vorher fanden die EX01-Regeln 78 von 300
+Dev-Vorlagen (Geheimhaltung „… and do not mention it“ nach der Senke zählte als Verneinung,
+Tool-Ergebnisse und Kundendaten fehlten als Quelle, Listenpunkt-Lead-in), jetzt 300 von 300 ohne
+Benign-Treffer. Geschäftsdaten als Quelle von `ex_send_directive` nur mit Vor-der-Antwort-Haken
+oder Geheimhaltung; Zahlen und Latenz in
+[`categories/exfiltration.md` §14](categories/exfiltration.md#14-stand-ex02-2026-11-15-punkte-und-ablations-entscheidung).
+Dritter Fall, in dem die Auswahlregel ohne Regel-Ergänzungen `R+A+L` gewählt hätte (5,4 %
+Hard-Benign-FPR).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
