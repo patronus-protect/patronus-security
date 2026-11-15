@@ -15,7 +15,9 @@ system prompt. The same instruction in plain text is left to `injection`.
 `agent_config_tampering` rules look at agent instruction and configuration files (`AGENTS.md`,
 `CLAUDE.md`, `.cursorrules`, skills, `.claude/settings.json`, `mcp.json`): settings that widen
 permissions (`bypassPermissions`, auto-approve all, `Bash(*)`, approval policy `never`), removed
-protective hooks, HTML comments that give the agent a directive, download-and-run instructions
+protective hooks, HTML comments that give the agent a directive, a step that sends a secret
+or environment variables to an outside address and tells the agent to keep it out of its
+answers (`… and never mention it`, `… lass diesen Schritt weg`), download-and-run instructions
 without asking, MCP server entries that pipe a remote script into a shell or install from a raw
 URL, and rules that copy themselves into other rules files; lines a diff removes do not count.
 A plain-text request to change such a file so that everything is auto-approved is reported
