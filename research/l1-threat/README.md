@@ -238,6 +238,17 @@ Angriffsklassen ein; `R`/`R+A`/`R+A+L` sind damit nicht mehr 0. Befund für die 
 die Auswahlregel prüft das nicht — Vorschlag an den Owner: Hard-Benign-FPR ≤ 1 % (M3) als
 Zulassungsbedingung einer Stufe.
 
+**Stand UA02.** `unsafe_action` behält `B0` (heutiger Threat-Scorer: logistisches Modell der
+Altregeln plus Punkte-Regeln mit Klauselkontext); kein gelerntes Modell, der Scorer wird nicht
+ersetzt. Keine der 100 Dev-Vorlagen traf vorher eine Regel; neu `ua_unattended_transfer`
+(Überweisung auf neue Bankverbindung mit Freigabe-Umgehung), ein breiteres Ziel für
+`ua_destructive_request` (alle Dateien im geteilten Ordner) und Freigabe-Umgehungen in
+`unsafe.no_confirm`. Zahlen, Golden-Gegenprobe und Latenz in
+[`categories/unsafe_action.md` §14](categories/unsafe_action.md#14-stand-ua02-2026-11-15-punkte-und-ablations-entscheidung).
+Befund wie TP02: `R+A+L` und N-Gramm-Modelle lernen Vorlagen-Formen (Goldens: R+A+L 6 %
+Hard-Benign-FPR, B1/B4 6,5 % TPR); geteilte Kontext-Prüfung je Treffer (`quoted()`) ist auf langen
+Zeilen quadratisch (Vorschlag H02).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),

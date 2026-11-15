@@ -1020,7 +1020,11 @@
       "without a backup",
       "right away",
       "immediately",
-      "no need to check"
+      "no need to check",
+      "skip the approval",
+      "skip approval",
+      "bypass the approval",
+      "without sign-off"
     ],
     "de": [
       "ohne rückfrage",
@@ -1031,7 +1035,14 @@
       "ohne backup",
       "ohne sicherung",
       "sofort",
-      "umgehend"
+      "umgehend",
+      "überspring die freigabe",
+      "ueberspring die freigabe",
+      "überspringe die freigabe",
+      "ueberspringe die freigabe",
+      "umgehe die freigabe",
+      "ohne freigabe",
+      "ohne genehmigung"
     ],
     "shared": [],
     "cased": [],
@@ -1045,6 +1056,10 @@
       "right away": "hand",
       "immediately": "hand",
       "no need to check": "hand",
+      "skip the approval": "hand",
+      "skip approval": "hand",
+      "bypass the approval": "hand",
+      "without sign-off": "hand",
       "ohne rückfrage": "hand",
       "ohne rueckfrage": "hand",
       "ohne nachfrage": "hand",
@@ -1053,7 +1068,14 @@
       "ohne backup": "hand",
       "ohne sicherung": "hand",
       "sofort": "hand",
-      "umgehend": "hand"
+      "umgehend": "hand",
+      "überspring die freigabe": "hand",
+      "ueberspring die freigabe": "hand",
+      "überspringe die freigabe": "hand",
+      "ueberspringe die freigabe": "hand",
+      "umgehe die freigabe": "hand",
+      "ohne freigabe": "hand",
+      "ohne genehmigung": "hand"
     },
     "sources": [
       "research/l1-threat/categories/unsafe_action.md"

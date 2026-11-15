@@ -165,3 +165,86 @@ Lexika: Anker (Prefilter) in `anchor_lexicons/unsafe_action.json`; Kontext `unsa
 (Stütze) und `unsafe.sandbox`/`unsafe.safe_guard`/`unsafe.own_scope` (Gegen) in `context.json`.
 Offen: `ua_credential_phishing`, `ua_unattended` (über `unauthorized_autonomy` hinaus),
 `ua_destructive_hint`, `ua_decoded` (S03); Punkte/Ablation in UA02.
+
+## 14. Stand UA02 (2026-11-15): Punkte und Ablations-Entscheidung
+
+**Entscheidung: `B0` bleibt** — der heutige Threat-Scorer (logistisches Modell für die
+Altregeln, Punkte-Regeln `ua_*` mit Klauselkontext) entscheidet allein; kein gelerntes Modell
+wird einkompiliert. Neu bewerten, sobald `unsafe_action`-Daten jenseits der Generator-Vorlagen
+im Dev-Split liegen (RedCode, Agent-SafetyBench, AgentDojo sind noch nicht geladen; agentapprove
+und AgentHarm bleiben Holdout).
+
+Daten (nur Dev, wie TP02 §14): die 100 `unsafe_action`-Zeilen aus
+`generators_dev_seed:class_templates` (`chat_request`, `agent_task`, DE + EN; nur vier Formen:
+Ordner ohne Rückfrage löschen, offenen Betrag auf neue IBAN ohne Freigabe überweisen) gegen
+15 482 Benign-Zeilen (alle Benign-Zeilen von `train_dev`, `generated`, `report`, Dolly und
+GermanQuAD je ein Viertel per sha256 der ID), Hälften per sha256 der Zeilen-ID (Eval: 51
+Positive, 4 470 Negative, davon 900 Hard-Benign-Zwillinge). Facts über `text_facts
+--threat-findings`, B0 aus `scoreboard.py _predict` mit dem gebauten Modul, Latenzfenster
+6 × 100 KiB GermanQuAD-Dev-Text. Zweite Auswertung: Training auf allen Dev-Zeilen, Eval auf den
+Threat-Goldens (62 `unsafe_action`-Positive, 150 Hard Negatives aller Klassen).
+
+Vor den Regel-Ergänzungen (Regeln aus UA01; R/R+A ohne `unsafe_action`-Findings):
+
+| Stufe | TPR@1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|
+| R / R+A / B0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0 |
+| R+A+L | 100,0 (TPR@0,1 % 0,0) | 100,0 | 100,0 | 0,0 | 0 | 0,2 KiB |
+| B1 / B4 / B5 | 100,0 | 100,0 | 100,0 | 6,0 / 8,0 / 0,0 | 13,1 / 11,8 / 11,8 | 5,7 MB / 576 KiB |
+
+Keine der 100 Vorlagen-Zeilen traf eine Regel (auch nicht B0): die Auswahlregel hätte `R+A+L`
+gewählt, das nur Vorlagen-Tokens lernt (12 FP auf 4 470 Negativen). Recall deshalb aus Regeln:
+
+- neu `ua_unattended_transfer` (Familie `unattended`, Basis 35, Format, `requires_context`):
+  `transfer|wire|remit|pay|überweise|transferiere|zahle` … (≤ 80 Zeichen, ohne Satzende)
+  `new|changed|different|updated IBAN|bank account|account number` /
+  `neue|geänderte|andere IBAN|Bankverbindung|Kontonummer|Konto`; ohne Freigabe-Umgehung im Satz
+  kein Fund: `support_lexicon: unsafe.no_confirm` lässt nur diesen Stützterm gelten, ein Adressat
+  (`Assistant, …`) oder ein Umfangswort (`all`) allein reicht nicht. Prefilter: die Pflicht-Literale der Regex (Anker-Gate), dokumentiert als Lexikon
+  `unsafe.payment_transfer`. Vor `ü` greift `(?-u:\b)` nicht (Nicht-ASCII-Byte), daher steht die
+  Wortgrenze dort nur vor den ASCII-Formen.
+- `ua_destructive_request`: Ziel `every/all files in the shared/team/company folder|drive|directory`,
+  `alle Dateien im geteilten/gemeinsamen/freigegebenen Ordner|Laufwerk|Verzeichnis`. Wie bei
+  „alle Backups“ zählt das `all/alle` des Ziels als Stützterm (`scope`).
+- `unsafe.no_confirm` (Stütze): `skip (the) approval`, `bypass the approval`, `without sign-off`,
+  `überspring(e) die Freigabe`, `umgehe die Freigabe`, `ohne Freigabe`, `ohne Genehmigung`.
+
+Danach (gleiche Zeilen):
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| R+A | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| **B0** | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 (Status quo) | 0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0,5 KiB |
+| B1 | 100,0 | 100,0 | 100,0 | 100,0 | 6,0 | 22,0 | 5,7 MB |
+| B4 | 100,0 | 100,0 | 100,0 | 100,0 | 8,0 | 10,7 | 576 KiB |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 10,7 | 576 KiB |
+
+Auf den Goldens (Training Dev, Eval Goldens): R/R+A 100 % bei 0 Hard-Benign-FP; B0 100 % mit
+4/150 Hard-Benign-Treffern — alle vier sind `tool_poisoning`-Hard-Negatives (Credential-Datei in
+Prosa bzw. in Doku/Testcode statt in Tool-Metadaten), die die Altregel
+`credential_file_access` ohne Klauselkontext unter `unsafe_action` meldet (zwei davon sind dort
+echte Positive; vor UA02 genauso); R+A+L 9/150 (6 %); B1/B4 6,5 % TPR bei 18 % FPR
+(Vorlagen-Überanpassung); B5 100 % bei 1,3 %, aber über dem Budget.
+
+Auswahl nach der README-Regel: `B0` (günstigste Stufe innerhalb 1 pp der besten; B1/B4/B5 über
+1 ms je 100 KiB). Heutiger Threat-Scorer damit **behalten**, nicht ersetzt: R+A+L bringt auf Dev
+nichts und kostet auf den Goldens Hard-Benign-FP; die gelernten N-Gramm-Modelle verallgemeinern
+nicht über die vier Vorlagen hinaus. Vorbehalt wie TP02: die Regeln sind an denselben
+Vorlagen-Formen entstanden, die Zahl ist eine Obergrenze; das Urteil fällt auf dem Holdout.
+Offen: `ua_credential_phishing`, `ua_unattended` über Überweisungen hinaus, `ua_destructive_hint`,
+`ua_decoded`; verbendständige DE-Form („… auf die neue IBAN überweisen“); Klauselkontext für die
+Altregel `credential_file_access`.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, nur Kategorie `unsafe_action`, Basis-Build
+(`rules.json`/`context.json` von main) gegen Head, je zwei Läufe): 6 × 100 KiB deutsche Prosa
+p50 30,4–33,8 → 30,2–33,0 ms, p95 42,5–50,0 → 38,7–49,3 ms (Rauschen, kein Treffer). Worst Case
+100 KiB Zahlungs-Text in **einer** Zeile mit einer „neue IBAN“-Überweisung je ~380 Byte: p95
+37,8–50,5 → 87,0–99,1 ms. Ursache ist nicht die Regex (gleicher Text ohne Konto-Phrase:
+p95 21,1 → 22,9 ms), sondern die geteilte Kontext-Prüfung je Treffer: der erste Punkte-Treffer
+löst den Kontext-Scan des Texts aus (~10 ms je 100 KiB, einmalig), und `quoted()` in
+`context_lexica.rs` zählt Anführungszeichen ab Zeilenanfang, je Treffer linear in der Zeilenlänge
+(quadratisch bei vielen Treffern in einer Zeile). Mit Zeilenumbrüchen (eine Überweisung je
+Zeile, ~1 400 Treffer): p95 2,4 → 14,7 ms. Gilt für alle Punkte-Regeln; Vorschlag für H02:
+`quoted()` auf ein Fenster um den Treffer begrenzen.

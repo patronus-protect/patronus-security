@@ -93,7 +93,8 @@
       "whole",
       "complete",
       "production",
-      "all"
+      "all",
+      "every"
     ],
     "de": [
       "gesamte",
@@ -173,6 +174,27 @@
     "de": [
       "vollzugriff",
       "vollen"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.payment_transfer",
+    "description": "Überweisung oder Zahlung auf eine neue oder geänderte Bankverbindung",
+    "en": [
+      "transfer",
+      "wire",
+      "remit",
+      "pay"
+    ],
+    "de": [
+      "überweis",
+      "ueberweis",
+      "transferiere",
+      "zahle"
     ],
     "shared": [],
     "sources": [
