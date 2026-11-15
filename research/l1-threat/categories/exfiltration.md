@@ -218,6 +218,9 @@ Danach (gleiche Zeilen, Auswertungshälfte):
 | B4 | 100,0 | 100,0 | 100,0 | 100,0 | 9,2 | 9,9 | 576 KiB |
 | B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 9,9 | 576 KiB |
 
+B0-Vorhersagen und Ablation liefen mit dem Entwurf mit eigener Regel `ex_record_to_sink`; nach dem
+Zusammenlegen sind die Regel-Funde auf allen Zeilen identisch (300 von 300, 0 Benign).
+
 Auswahl nach der README-Regel: `B0` (günstigste Stufe innerhalb 1 pp der besten; `B1`/`B4`/`B5` über
 dem Budget von 1 ms je 100 KiB; ms der N-Gramm-Stufen liefen parallel zu einer zweiten Ablation und
 streuen). Auf allen Zeilen: 300 von 300 Positiven gemeldet (`ex_send_directive` 240,
@@ -231,3 +234,12 @@ API-Schlüsseln (deshalb nennen die neuen Meta-Goldens Verlauf/Tool-Ergebnisse);
 der Punkte-Regeln wertet Anführungszeichen bewusst nicht (JSON-Tool-Ausgaben zitieren jeden
 Angriff); `ex_collector_only` und `exfil.integration_doc` aus §13 weiter offen; Geheimhaltung über
 mehrere Sätze.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, Basis e1d67716 gegen EX02, abwechselnd; das
+E03-Korpus fehlt in der Sandbox): 6 × 100 KiB GermanQuAD-Dev-Prosa, `exfiltration` allein, 6 Runden
+je 100 Samples: p50 4,92 → 5,03 ms, p95 6,75 → 6,80 ms. Mit dem Entwurf als eigene Regel: p95
+6,38 → 6,82 ms (zweiter Regex-Durchlauf), ohne `exfil.record`-Anker p95 +8 %. Default-Kategorien
+(pii, dlp, injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration), 4 Runden je 40
+Samples, Stand vor dem Zusammenlegen: p50 42,2 → 42,3 ms, p95 58,7 → 56,7 ms (Rauschen); Worst Case
+100 KiB Mix aller Exfiltrations-Goldens: `exfiltration` allein p95 87,8 → 72,8 ms, Default p95
+169,7 → 175,6 ms (Rauschen; mehr Funde, früher am Fund-Deckel).
