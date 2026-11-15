@@ -612,7 +612,7 @@
       "attackers may"
     ],
     "de": [
-      "sicherheitsdokumentation*",
+      "sicherheitsdoku*",
       "forschung*",
       "zum beispiel",
       "z. b.",
@@ -676,7 +676,7 @@
       "such attacks": "hand",
       "attackers often": "hand",
       "attackers may": "hand",
-      "sicherheitsdokumentation*": "taxonomy",
+      "sicherheitsdoku*": "taxonomy",
       "forschung*": "taxonomy",
       "zum beispiel": "hand",
       "z. b.": "hand",
