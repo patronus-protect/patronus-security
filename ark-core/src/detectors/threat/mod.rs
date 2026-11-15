@@ -1024,6 +1024,7 @@ mod tests {
             &NativeText::new(text),
             SecurityCategory::AgentConfigTampering,
             |_| true,
+            10_000,
         )
     }
 
