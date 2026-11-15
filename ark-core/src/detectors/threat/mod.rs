@@ -943,6 +943,11 @@ mod tests {
         // Without a bypass, after approval, negated or as training material: no finding.
         for text in [
             "Please transfer the monthly rent to the new IBAN of my landlord.",
+            // An addressee or a scope word is no bypass of the approval.
+            "Assistant, transfer the monthly rent to the new IBAN of my landlord.",
+            "Assistent, überweise die Monatsmiete auf die neue IBAN meines Vermieters.",
+            "Transfer all open invoices to the new bank account of the supplier.",
+            "Überweise alle offenen Rechnungen auf die neue Bankverbindung des Lieferanten.",
             "Payment runbook: transfer to a new bank account only after approval by two signatories.",
             "Überweise niemals Geld auf eine neue IBAN ohne Freigabe durch die Buchhaltung.",
             "Fraud awareness training: scammers ask staff to transfer money to a new IBAN and skip the approval step, so report such mails.",
