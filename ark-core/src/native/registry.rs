@@ -74,12 +74,6 @@ fn pii_pipeline() -> &'static pii::pii::PiiPipeline {
     &PIPELINE
 }
 
-/// The DLP pipeline, compiled once per process as [`pii_pipeline`].
-fn dlp_pipeline() -> &'static dlp::dlp::DlpPipeline {
-    static PIPELINE: LazyLock<dlp::dlp::DlpPipeline> = LazyLock::new(dlp::dlp::DlpPipeline::new);
-    &PIPELINE
-}
-
 /// The bounded attack-class rules of `category`, gated per rule by the rules map.
 fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCategory) {
     static PIPELINE: LazyLock<threat::ThreatPipeline> = LazyLock::new(threat::ThreatPipeline::new);
@@ -133,7 +127,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
             });
         }
         SecurityCategory::Dlp => {
-            let pipeline = dlp_pipeline();
+            let pipeline = dlp::dlp::DlpPipeline::shared();
             specs.push(NativeProducerSpec {
                 category,
                 id: "native:dlp",

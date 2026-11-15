@@ -1232,7 +1232,8 @@ classes:
         de: ['<Markdown-Bild> mit <fremder URL>?q=<Platzhalter für Verlauf>']
         en: ['<markdown image> to <foreign URL>?q=<placeholder for conversation>']
       carriers: [web, email, document, rag_chunk, tool_output]
-      existing_rules: []
+      existing_rules:
+      - ark.threat.ex_markdown_beacon
       baseline_coverage: {pipelock: partial, cisco_yara: none, atr: partial, prompt_guard_2: none, llamafirewall: none}
       gap: No ARK rule for templated beacon URLs.
     - id: send_directive
@@ -1260,6 +1261,7 @@ classes:
       - ark.threat.session_exfiltration
       - ark.threat.agent_config_exfiltration
       - ark.injection.exfil.external_sink
+      - ark.threat.ex_send_directive
       baseline_coverage: {pipelock: partial, atr: partial, cisco_yara: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Today's rules need fixed source words and a URL; email/webhook sinks and DE variants are thin.
     - id: secret_to_sink
@@ -1290,6 +1292,7 @@ classes:
       - ark.threat.environment_post
       - ark.injection.exfil.sensitive_path_to_sink
       - ark.injection.exfil.sensitive_path_external_sink_audited
+      - ark.threat.ex_secret_to_sink
       baseline_coverage: {pipelock: partial, cisco_yara: partial, atr: partial, llamafirewall: none}
       gap: Rules do not use DLP hits as source; only fixed file paths and URL sinks.
     - id: tool_param_egress
@@ -1306,7 +1309,8 @@ classes:
         de: [<setze> den <Dateiinhalt> in den Parameter <empfänger-URL>]
         en: [<put> the <file contents> into the <url> parameter]
       carriers: [tool_output, web, email, document]
-      existing_rules: []
+      existing_rules:
+      - ark.threat.ex_tool_param_egress
       baseline_coverage: {pipelock: none, atr: partial}
       gap: Uncovered.
     - id: dns_channel
@@ -1323,7 +1327,8 @@ classes:
         de: [<hänge Daten> als <Subdomain> an <fremde Domain>]
         en: [<append data> as <subdomain> of <foreign domain>]
       carriers: [web, email, document, tool_output]
-      existing_rules: []
+      existing_rules:
+      - ark.threat.ex_dns_channel
       baseline_coverage: {pipelock: partial}
       gap: Only pipelock covers DNS tunnelling; nothing in ARK.
     - id: link_smuggling
@@ -1340,7 +1345,8 @@ classes:
         de: [<hänge kodierte Daten> an <Link> an]
         en: [<append encoded data> to <link>]
       carriers: [web, email, document]
-      existing_rules: []
+      existing_rules:
+      - ark.threat.ex_link_smuggling
       baseline_coverage: {pipelock: partial}
       gap: Uncovered in ARK.
     - id: collector_only
@@ -1377,10 +1383,6 @@ classes:
       baseline_coverage: {pipelock: none}
       gap: Uncovered.
     lexicons:
-    - {id: exfil.send_verb, kind: support, task: EX01, title: 'Send, upload and forward verbs'}
-    - {id: exfil.source, kind: support, task: EX01, title: 'Data sources such as history, credentials, env'}
-    - {id: exfil.collector, kind: support, task: EX01, title: Known collector services}
-    - {id: exfil.embed, kind: support, task: EX01, title: 'Embedding data in URL, image or subdomain'}
     - {id: exfil.user_owned, kind: counter, task: EX01, title: Destination owned by the user}
     - {id: exfil.integration_doc, kind: counter, task: EX01, title: Webhook and integration documentation}
 
