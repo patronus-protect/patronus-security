@@ -344,7 +344,7 @@
       "upstream_groups": [
         "RA1"
       ],
-      "pattern": "(?-u:\\b)(?P<action>delete|wipe|drop|purge|erase|destroy|truncate|lösche|loesche|lösch|loesch|leere|vernichte|formatiere)(?-u:\\b)[^\\n.;]{0,40}?(?P<target>(?-u:\\b)(?:entire|whole|complete)\\s{1,4}(?:production\\s{1,4})?(?:database|db|cluster|bucket|repository|server)(?-u:\\b)|(?-u:\\b)production\\s{1,4}(?:database|db|cluster|data|bucket|servers?)(?-u:\\b)|(?-u:\\b)all\\s{1,4}(?:the\\s{1,4})?(?:backups|snapshots|databases|customer\\s{1,4}(?:data|records)|user\\s{1,4}accounts|production\\s{1,4}data)(?-u:\\b)|(?-u:\\b)(?:gesamte|komplette|ganze)n?\\s{1,4}(?:produktions)?datenbank|(?-u:\\b)produktions(?:datenbank|daten|cluster|server)\\w{0,4}|(?-u:\\b)alle\\s{1,4}(?:backups|sicherungen|snapshots|datenbanken|kundendaten|nutzerkonten|benutzerkonten)(?-u:\\b))",
+      "pattern": "(?-u:\\b)(?P<action>delete|wipe|drop|purge|erase|destroy|truncate|lösche|loesche|lösch|loesch|leere|vernichte|formatiere)(?-u:\\b)[^\\n.;]{0,40}?(?P<target>(?-u:\\b)(?:entire|whole|complete)\\s{1,4}(?:production\\s{1,4})?(?:database|db|cluster|bucket|repository|server)(?-u:\\b)|(?-u:\\b)production\\s{1,4}(?:database|db|cluster|data|bucket|servers?)(?-u:\\b)|(?-u:\\b)all\\s{1,4}(?:the\\s{1,4})?(?:backups|snapshots|databases|customer\\s{1,4}(?:data|records)|user\\s{1,4}accounts|production\\s{1,4}data)(?-u:\\b)|(?-u:\\b)(?:gesamte|komplette|ganze)n?\\s{1,4}(?:produktions)?datenbank|(?-u:\\b)produktions(?:datenbank|daten|cluster|server)\\w{0,4}|(?-u:\\b)alle\\s{1,4}(?:backups|sicherungen|snapshots|datenbanken|kundendaten|nutzerkonten|benutzerkonten)(?-u:\\b)|(?-u:\\b)(?:all|every)\\s{1,4}(?:the\\s{1,4})?files?\\s{1,4}(?:in|on|from)\\s{1,4}the\\s{1,4}(?:shared|team|company)\\s{1,4}(?:folder|drive|directory)(?-u:\\b)|(?-u:\\b)alle\\s{1,4}dateien\\s{1,4}(?:im|auf\\s{1,4}dem|aus\\s{1,4}dem)\\s{1,4}(?:geteilten|gemeinsamen|freigegebenen|team-?)\\s{0,4}(?:ordner|laufwerk|verzeichnis)(?-u:\\b))",
       "points": {
         "base_score": 35,
         "validator": "format",
@@ -435,6 +435,20 @@
       "pattern": "(?-u:\\b)(?P<action>grant|give|assign|vergib|vergebe|gib|erteile)(?-u:\\b)[^\\n.;]{0,40}?(?P<privilege>(?-u:\\b)admin(?:istrator)?\\s{1,4}(?:rights|privileges|access|role)(?-u:\\b)|(?-u:\\b)root\\s{1,4}(?:access|privileges|rights)(?-u:\\b)|(?-u:\\b)full\\s{1,4}(?:admin\\s{1,4})?access(?-u:\\b)|(?-u:\\b)sudo\\s{1,4}(?:rights|access)(?-u:\\b)|(?-u:\\b)domain\\s{1,4}admin(?-u:\\b)|(?-u:\\b)admin(?:istrator)?-?rechte(?-u:\\b)|(?-u:\\b)root-?rechte(?-u:\\b)|(?-u:\\b)sudo-rechte(?-u:\\b)|(?-u:\\b)vollzugriff(?-u:\\b)|(?-u:\\b)vollen\\s{1,4}zugriff(?-u:\\b))",
       "points": {
         "base_score": 30,
+        "validator": "format",
+        "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.ua_unattended_transfer",
+      "class_name": "unsafe_action",
+      "family": "unattended",
+      "upstream_groups": [
+        "RA1"
+      ],
+      "pattern": "(?P<transfer>(?-u:\\b)(?:transfer|wire|remit|pay|ueberweise|ueberweis|transferiere|zahle)|überweise|überweis)(?-u:\\b)[^\\n.;]{0,80}?(?P<account>(?-u:\\b)(?:new|different|updated|changed)\\s{1,4}(?:iban|bank\\s{1,4}account|account\\s{1,4}number|beneficiary\\s{1,4}account)(?-u:\\b)|(?-u:\\b)(?:neue|andere|geänderte|geaenderte)n?\\s{1,4}(?:iban|bankverbindung|kontonummer|konto)(?-u:\\b))",
+      "points": {
+        "base_score": 35,
         "validator": "format",
         "requires_context": true
       }
