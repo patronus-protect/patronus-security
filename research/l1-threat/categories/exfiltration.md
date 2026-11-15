@@ -143,3 +143,7 @@ Sechs Punkte-Regeln `ark.threat.ex_*` in `ark-core/src/detectors/threat/rules.js
 - Offen: pipelock-Ernte (in `oss_rules.yaml` inventarisiert: External Data Transfer Directive, Markdown Link
   Credential (Value/Follow) Exfiltration, Covert Action Directive) braucht einen default-aus-Schalter im
   Threat-Katalog; `ex_collector_only` (scored_only) und `exfil.integration_doc` folgen mit EX02.
+- Latenz (Release, 100 KiB-Fenster aus deutscher Repo-Prosa, nur `exfiltration`): p95 5,2 ms ohne vs. 8,4 ms mit
+  den sechs Regeln (ohne Treffer je Regel +0,0–0,3 ms; der Rest ist der Klausel-Kontext-Scan nach einem Treffer).
+  Voraussetzung: der Threat-Katalog baut seine Regexe mit dem DLP-Cache-Limit (`RULE_DFA_CACHE_BYTES`), sonst
+  lief der Lazy-DFA über (p95 178 ms). Messung mit `scripts/l1_threat/latency.py` auf dem Gate-Korpus steht aus.
