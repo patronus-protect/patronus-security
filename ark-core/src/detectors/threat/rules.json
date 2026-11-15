@@ -450,7 +450,8 @@
       "points": {
         "base_score": 35,
         "validator": "format",
-        "requires_context": true
+        "requires_context": true,
+        "support_lexicon": "unsafe.no_confirm"
       }
     },
     {

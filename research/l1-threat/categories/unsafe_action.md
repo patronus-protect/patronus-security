@@ -198,8 +198,9 @@ gewählt, das nur Vorlagen-Tokens lernt (12 FP auf 4 470 Negativen). Recall desh
 - neu `ua_unattended_transfer` (Familie `unattended`, Basis 35, Format, `requires_context`):
   `transfer|wire|remit|pay|überweise|transferiere|zahle` … (≤ 80 Zeichen, ohne Satzende)
   `new|changed|different|updated IBAN|bank account|account number` /
-  `neue|geänderte|andere IBAN|Bankverbindung|Kontonummer|Konto`; ohne Stützterm im Satz kein
-  Fund. Prefilter: die Pflicht-Literale der Regex (Anker-Gate), dokumentiert als Lexikon
+  `neue|geänderte|andere IBAN|Bankverbindung|Kontonummer|Konto`; ohne Freigabe-Umgehung im Satz
+  kein Fund: `support_lexicon: unsafe.no_confirm` lässt nur diesen Stützterm gelten, ein Adressat
+  (`Assistant, …`) oder ein Umfangswort (`all`) allein reicht nicht. Prefilter: die Pflicht-Literale der Regex (Anker-Gate), dokumentiert als Lexikon
   `unsafe.payment_transfer`. Vor `ü` greift `(?-u:\b)` nicht (Nicht-ASCII-Byte), daher steht die
   Wortgrenze dort nur vor den ASCII-Formen.
 - `ua_destructive_request`: Ziel `every/all files in the shared/team/company folder|drive|directory`,

@@ -101,7 +101,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   account number (English and German, e.g. `Überweise … auf die neue IBAN`) when the same
   sentence waives the human check: `skip the approval step`, `without approval`, `immediately`,
   `überspring die Freigabe`, `ohne Freigabe`, `ohne Genehmigung`, `sofort`. Without such a phrase,
-  after approval, negated, or in fraud-awareness material nothing is reported. Deleting every file
+  after approval, negated, or in fraud-awareness material nothing is reported; an addressee
+  (`Assistant, transfer …`) or a scope word (`all open invoices`) alone is no such phrase (the
+  rule's new `support_lexicon` admits only `unsafe.no_confirm` terms as its context). Deleting every file
   in a shared folder or team drive (`alle Dateien im geteilten Ordner`) now counts as a broad
   destructive request, under the same conditions as wiping all backups.
 - **Detection change:** (`tool_poisoning`) the hidden-markup rule (`ark.threat.tp_hidden_markup`)

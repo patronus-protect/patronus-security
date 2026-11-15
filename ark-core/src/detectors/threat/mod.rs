@@ -52,13 +52,17 @@ struct Rule {
     #[serde(default)]
     points: Option<PointsSpec>,
 }
-#[derive(Deserialize, Clone, Copy)]
+#[derive(Deserialize)]
 struct PointsSpec {
     base_score: u8,
     validator: Validator,
     /// The clause must hold a support term (addressee, authority, scope,
     /// secrecy, no-confirmation …).
     requires_context: bool,
+    /// Only a support term of this lexicon counts as context
+    /// (`unsafe.no_confirm`: an addressee alone is no approval bypass).
+    #[serde(default)]
+    support_lexicon: Option<String>,
 }
 #[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -95,7 +99,7 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
                     "Threat rules require components"
                 );
                 let anchor_gate = super::anchor_gate::AnchorGate::regex(&rule.pattern, true);
-                let points = match rule.points {
+                let points = match &rule.points {
                     Some(spec) => {
                         assert!((1..=100).contains(&spec.base_score));
                         RulePoints {
@@ -266,7 +270,8 @@ impl ThreatPipeline {
                     if !seen.insert((compiled.rule.id.as_str(), start, end)) {
                         continue;
                     }
-                    let decision = compiled.rule.points.map(|spec| {
+                    let spec = compiled.rule.points.as_ref();
+                    let decision = spec.map(|spec| {
                         let scan =
                             context.get_or_insert_with(|| ContextLexica::shared().scan(text));
                         // A secrecy directive holds its own negation ("do not
@@ -287,8 +292,16 @@ impl ThreatPipeline {
                         let from = captures
                             .name("directive")
                             .map_or(start, |d| window_start + d.start());
-                        let clause =
-                            clause_context(scan, text, from..end, own_negation, category, own);
+                        let support = spec.support_lexicon.as_deref();
+                        let clause = clause_context(
+                            scan,
+                            text,
+                            from..end,
+                            own_negation,
+                            category,
+                            own,
+                            support,
+                        );
                         let score = score::score(&compiled.points, clause);
                         // Replacing the recipient or redirecting a call is its
                         // own context; a plain extra copy needs a support term.
@@ -464,7 +477,7 @@ fn rule_points(rule_id: &str, gate: &super::anchor_gate::AnchorGate) -> RulePoin
 /// any support term. With `own_negation`, a negation inside the span belongs
 /// to the rule's shape and does not count. The `exhaust.*` counters (a visible
 /// bound, a song) only count for `resource_exhaustion`; a term inside `own` is
-/// part of the rule.
+/// part of the rule. With `support`, only a term of that lexicon supports.
 fn clause_context(
     scan: &ContextScan,
     text: &str,
@@ -472,6 +485,7 @@ fn clause_context(
     own_negation: bool,
     category: SecurityCategory,
     own: std::ops::Range<usize>,
+    support: Option<&str>,
 ) -> Context {
     let (start, end) = (span.start, span.end);
     let counts = |hit: &super::context_lexica::Hit| {
@@ -493,7 +507,9 @@ fn clause_context(
     });
     if lead_in_counters || clause.hits.iter().any(counts) {
         Context::Counter
-    } else if clause.hits.iter().any(|hit| hit.kind == Kind::Support) {
+    } else if clause.hits.iter().any(|hit| {
+        hit.kind == Kind::Support && support.is_none_or(|lexicon| hit.lexicon == lexicon)
+    }) {
         Context::Support { gap: 0 }
     } else {
         Context::None
@@ -1523,7 +1539,8 @@ mod tests {
                 0..10,
                 false,
                 SecurityCategory::UnsafeAction,
-                0..0
+                0..0,
+                None
             ),
             Context::Counter
         );
@@ -1534,7 +1551,8 @@ mod tests {
                 0..10,
                 false,
                 SecurityCategory::ResourceExhaustion,
-                0..0
+                0..0,
+                None
             ),
             Context::Counter
         );
