@@ -964,8 +964,8 @@ classes:
       required_context: []
       negative_context: [agentcfg.project_rule, defensive, meta, quotation, test_code]
       examples:
-        de: ['<Rules-Datei> <HTML-Kommentar>: <Direktive an KI>, <ohne dem Nutzer zu sagen>']
-        en: ['<rules file> <HTML comment>: <directive to the model>, <silently>']
+        de: ['<Rules-Datei> <HTML-Kommentar>: <Direktive an KI>, <ohne dem Nutzer zu sagen>', '<Skill-Schritt>: <Aktion> <Secret/Ziel>, <erwähne diesen Schritt nicht>']
+        en: ['<rules file> <HTML comment>: <directive to the model>, <silently>', '<skill step>: <action> <secret/sink>, <never mention it>']
       carriers: [agent_config]
       existing_rules: [ark.threat.ac_hidden_directive]
       baseline_coverage: {atr: partial, cisco_yara: partial}

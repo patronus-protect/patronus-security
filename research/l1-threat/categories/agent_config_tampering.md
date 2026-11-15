@@ -168,3 +168,69 @@ die geteilte Vorbereitung und sieben Regexe). Worst Case 100 KiB Agent-Config-Mi
 der Klasse): allein p95 6,0 → 58,0 ms, Default + AC p95 67,3 → 76,6 ms. Die Kategorie ist opt-in;
 das DLP-Budget betrifft sie nicht. Offen: Kosten der Regexe ohne geteilte Vorbereitung senken
 (z. B. `ac_tamper_request` nur bei Dateinamen-Anker).
+
+## 14. Stand AC02 (2026-11-15): Punkte und Ablations-Entscheidung
+
+**Entscheidung: `B0` bleibt** — die Punkte-Regeln aus AC01/AC02 mit handgesetztem Klauselkontext
+entscheiden allein; kein gelerntes Modell wird einkompiliert. Neu bewerten, sobald echte
+Agent-Config-Angriffe jenseits der Generator-Vorlagen im Dev-Split liegen (MaliciousSkillBench
+bleibt Holdout).
+
+Daten (nur Dev, wie TP02): die 84 `agent_config_tampering`-Zeilen aus
+`generators_dev_seed:class_templates` (`rules_file` 46, `skill_file` 38; je 42 DE/EN) gegen 15 617
+Benign-Zeilen (alle Benign-Zeilen von `train_dev`, `generated`, `report`, Dolly und GermanQuAD je ein
+Viertel per sha256 der ID), Hälften per sha256 der Zeilen-ID (Auswertung: 41 Positive, 7 850
+Negative, davon 900 Hard-Benign). Facts über `text_facts --threat-findings`, B0 aus
+`scoreboard.py predict` mit dem gebauten Modul, Latenzfenster: 6 × 100 KiB GermanQuAD-Dev-Text
+(Ersatz für das E03-Korpus, das in der Sandbox fehlt).
+
+Vor den Regel-Ergänzungen (Regeln aus AC01): `R`/`R+A` 0,0 % TPR@1 % (DE und EN), `R+A+L` 100 % mit
+4,9 % Hard-Benign-FPR, `B1`/`B4`/`B5` 100 % mit 5,9/8,9/2,2 % Hard-Benign-FPR. Die Auswahlregel hätte
+`R+A+L` gewählt; dessen Punkte lernen aber nur Träger-/Vorlagen-Tokens. Ursache der Lücke: beide
+Vorlagenfamilien verstecken einen Schritt **ohne** Markup („… and never mention it in
+explanations“, „… leave this step out of your summary“, „erwähne ihn nie“, „lass diesen Schritt …
+weg“) — in §13 als offen geführt. Recall kommt deshalb aus Regeln:
+
+- `ac_hidden_directive`, zweite Alternative (Komponenten `step`, `sink`, `conceal`): Aktionsverb
+  (add/insert/send/post/upload/copy/forward; füge/sende/schicke/lade/kopiere/leite) → Secret oder
+  fremdes Ziel (URL, `process.env`, `.env`, `~/.ssh`, `~/.aws`, credentials, webhook, geteiltes
+  Laufwerk) → Geheimhaltung, die auf den Schritt zurückverweist (`never mention it/this step`,
+  `leave this (step) out`, `without mentioning`, `keep it to yourself`, `erwähne/verrate
+  ihn/das/diesen Schritt … nie/nicht`, `lass das/diesen Schritt … weg`, `ohne es zu erwähnen`); alles
+  auf einer Zeile, je Lücke ≤ 120 Zeichen. Ohne Rückverweis bleibt eine Datenschutzregel („never
+  mention customer names“) benign. Nur mit Agent-Config-Träger, wie bisher.
+- Klauselkontext (`clause_context`, nur `agent_config_tampering`): ist die Zeile des Funds ein
+  Listenpunkt (`- `, `* `, `+ `, `1. `, `1) `) und die Lead-in-Klausel ein **anderer** Listenpunkt,
+  zählt deren Gegenkontext nicht — jeder Punkt einer Rules-Datei/eines Skills ist eine eigene
+  Anweisung (Vorlage: „1. Use the staging environment for all tests.“ vor dem versteckten Schritt
+  traf den Gegenkontext `test_code`/Testumgebung). Eine einleitende Zeile ohne Listenmarke
+  („Schulungsbeispiel für eine bösartige Regel:“) bleibt Lead-in.
+
+Danach (gleiche Zeilen, Auswertungshälfte):
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| R+A | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| **B0** | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 (Status quo) | 0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 100,0 | 4,9 | 0 | 0,6 KiB |
+| B1 | 100,0 | 100,0 | 100,0 | 100,0 | 5,9 | 28,8 | 5,1 MB |
+| B4 | 100,0 | 100,0 | 100,0 | 100,0 | 8,9 | 27,4 | 576 KiB |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 2,2 | 27,4 | 576 KiB |
+
+Auswahl nach der README-Regel: `B0` (günstigste Stufe innerhalb 1 pp der besten; `B1`/`B4`/`B5` über
+dem Budget von 1 ms je 100 KiB). Auf allen Zeilen: 84 von 84 Positiven gemeldet, keine der 15 617
+Benign-Zeilen. Vorbehalt wie TP02: die Ergänzungen sind an denselben zwei Vorlagenfamilien
+entstanden, an denen gemessen wird; die Zahl ist eine Obergrenze, das Urteil fällt auf dem Holdout.
+Offen: eine einleitende Zeile **ohne** Listenmarke mit Gegenkontext („Write tests with pytest.“
+direkt vor einem Listenpunkt) unterdrückt den Fund weiter; Geheimhaltung über mehrere Zeilen; dazu
+weiter die offenen Punkte aus §13.
+
+Latenz (Release, `rust/dev/l1_latency_workloads.rs`, Basis 31bf2b87 gegen AC02, gleiche Fenster,
+4 Runden je 40 Samples, abwechselnd; das E03-Korpus fehlt in der Sandbox): 6 × 100 KiB deutsche
+Prosa (kein Agent-Config-Träger, die AC-Regeln laufen dort nicht) `agent_config_tampering` allein
+p50 39,8 → 39,4 ms, p95 62,5 → 56,1 ms; Default + AC p50 43,1 → 45,0 ms, p95 64,1 → 65,0 ms
+(Rauschen). Worst Case 100 KiB Agent-Config-Mix (alle Goldens der Klasse): allein p50 47,1 →
+44,4 ms, p95 82,0 → 69,0 ms; Default + AC p50 57,5 → 59,2 ms, p95 76,9 → 81,3 ms (Rauschen; der Head
+meldet im Mix mehr Funde). Zusätzliche Arbeit: eine Alternative in einer schon kompilierten Regex
+und eine Zeilenprüfung nur bei Gegenkontext in der Lead-in-Klausel.

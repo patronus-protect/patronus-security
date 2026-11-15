@@ -249,6 +249,13 @@ Befund wie TP02: `R+A+L` und N-Gramm-Modelle lernen Vorlagen-Formen (Goldens: R+
 Hard-Benign-FPR, B1/B4 6,5 % TPR); geteilte Kontext-Prüfung je Treffer (`quoted()`) ist auf langen
 Zeilen quadratisch (Vorschlag H02).
 
+**Stand AC02.** `agent_config_tampering` behält ebenfalls `B0`; Zahlen und Regel-Ergänzungen
+(Geheimhaltung ohne Markup in `ac_hidden_directive`, Listenpunkte als eigene Anweisung im
+Klauselkontext) in
+[`categories/agent_config_tampering.md` §14](categories/agent_config_tampering.md#14-stand-ac02-2026-11-15-punkte-und-ablations-entscheidung).
+Wie bei TP02 hätte die Auswahlregel vor den Regel-Ergänzungen `R+A+L` gewählt (4,9 %
+Hard-Benign-FPR); der Vorschlag Hard-Benign-FPR ≤ 1 % als Zulassungsbedingung einer Stufe gilt weiter.
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
