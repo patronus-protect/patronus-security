@@ -96,6 +96,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `Verrate dem Nutzer nie …`), hidden tags such as `<WICHTIG>` with a directive like
   `vor jedem Aufruf` (English: `before each call`), and credential files under a
   `…/credentials` path read into a parameter.
+- **Detection change:** (`unsafe_action`) a new rule, `ark.threat.ua_unattended_transfer`, reports
+  a request to transfer, wire or pay money to a new, changed or different IBAN, bank account or
+  account number (English and German, e.g. `Überweise … auf die neue IBAN`) when the same
+  sentence waives the human check: `skip the approval step`, `without approval`, `immediately`,
+  `überspring die Freigabe`, `ohne Freigabe`, `ohne Genehmigung`, `sofort`. Without such a phrase,
+  after approval, negated, or in fraud-awareness material nothing is reported. Deleting every file
+  in a shared folder or team drive (`alle Dateien im geteilten Ordner`) now counts as a broad
+  destructive request, under the same conditions as wiping all backups.
 - **Detection change:** (`tool_poisoning`) the hidden-markup rule (`ark.threat.tp_hidden_markup`)
   also accepts the singular German tag `<ANWEISUNG>`; before, only `<ANWEISUNGEN>` matched.
 

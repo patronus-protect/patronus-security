@@ -4,7 +4,7 @@
 `ark.threat.*` rule belongs to one attack-class category and runs only when that category is
 selected: most rules report under `unsafe_action` (remote or decoded execution, privileged
 containers, disabled security controls, credential access such as credential files, credential
-stores and cloud metadata endpoints), others under `exfiltration`, `tool_poisoning`,
+stores and cloud metadata endpoints, money transfers to a new bank account without approval), others under `exfiltration`, `tool_poisoning`,
 `agent_config_tampering` or `harmful_content`. `exfiltration` and `tool_poisoning` are on by
 default; the other three are opt-in. `tool_poisoning` rules only look at text that carries tool
 or MCP metadata (JSON tool definitions with `description`, `inputSchema` or `parameters`, agent

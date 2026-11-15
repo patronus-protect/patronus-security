@@ -653,7 +653,7 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (57)
+## Threat rules (58)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -696,6 +696,7 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ua_host_root_mount_config` | `unsafe_action` | `container_escape_config` | PE5, TM4 |
 | `ark.threat.ua_compose_privileged` | `unsafe_action` | `container_escape_config` | PE5, TM4 |
 | `ark.threat.ua_privilege_widening` | `unsafe_action` | `privilege_widening` | PE5 |
+| `ark.threat.ua_unattended_transfer` | `unsafe_action` | `unattended` | RA1 |
 | `ark.threat.ua_persistence` | `unsafe_action` | `persistence` | RA2 |
 | `ark.threat.ua_untrusted_deserialization` | `unsafe_action` | `unsafe_code` | DS1, DS2 |
 | `ark.threat.ua_unsafe_tls_client` | `unsafe_action` | `unsafe_code` | TM3, SC7 |
