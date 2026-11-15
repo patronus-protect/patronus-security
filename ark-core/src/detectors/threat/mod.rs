@@ -90,8 +90,11 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
             .into_iter()
             .map(|rule| {
                 assert!(ids.insert(rule.id.clone()), "duplicate Threat rule");
+                // The lazy DFA of a long bounded rule needs room for its
+                // states; a full cache would fall back to a slow search.
                 let regex = RegexBuilder::new(&rule.pattern)
                     .case_insensitive(true)
+                    .dfa_size_limit(super::dlp::prefilter::RULE_DFA_CACHE_BYTES)
                     .build()
                     .expect("valid bounded Threat regex");
                 assert!(
