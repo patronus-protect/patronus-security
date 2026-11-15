@@ -120,3 +120,26 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (Markdown-Beacons, Tool-Parameter, DNS), Seed-Teil der Exfil-Generatoren |
 | Hard Negatives | Webhook- und API-Doku, Mails mit Links, UTM-/Analytics-URLs, Markdown mit normalen Bildern |
 | Lücke | kein natives DE |
+
+## 13. Umsetzung EX01 (Stand 2026-11-15)
+
+Sechs Punkte-Regeln `ark.threat.ex_*` in `ark-core/src/detectors/threat/rules.json`, Prefilter-Anker in
+`anchor_lexicons/exfiltration.json` (`exfil.send_verb`, `exfil.source`, `exfil.sink`, `exfil.collector`,
+`exfil.placeholder`, `exfil.embed`, `exfil.put_verb`):
+
+| Regel | Basis | Validator | Kern |
+|---|---|---|---|
+| `ex_markdown_beacon` | 45 | Structure | `![…](URL…=` bzw. `/` + Platzhalter mit Datenwort (`{chat_history}`, `<summary …>`, `$SECRET`, `[…]`, Großschreibung wie `CHAT_HISTORY`) |
+| `ex_send_directive` | 40 | Format | `send_verb` + `source` + Senke (URL, E-Mail-Adresse, Collector) |
+| `ex_secret_to_sink` | 40 | Structure | `send_verb` … Senke; Quelle zwischen beiden ist ein DLP-Treffer oder ein sensibler Pfad |
+| `ex_tool_param_egress` | 35 | Format | `put_verb` + `source` + „in/als“ + ausgehender Parameter (`url`, `to`, `webhook`, `body` …) |
+| `ex_dns_channel` | 35 | Structure | Platzhalter-Label vor fremdem Host, oder `source` … „als Subdomain(s) von“ Host |
+| `ex_link_smuggling` | 35 | Format | URL mit ≥ 3 unsichtbaren Zeichen (ZW*, Tag-Zeichen) oder „hänge kodierten `source` an jeden Link“ |
+
+- DLP als Quelle: `ex_secret_to_sink` ruft die DLP-Pipeline (jetzt einmal pro Prozess, `DlpPipeline::shared`)
+  nur auf der Spanne zwischen Verb und Senke auf; sie meldet dort nichts Eigenes.
+- `exfil.user_owned` steckt vorerst im Code (`user_owned`: my/our/me, mein*/unser*/mich/mir/uns zwischen
+  Quelle und Senke), noch kein Kontext-Lexikon.
+- Offen: pipelock-Ernte (in `oss_rules.yaml` inventarisiert: External Data Transfer Directive, Markdown Link
+  Credential (Value/Follow) Exfiltration, Covert Action Directive) braucht einen default-aus-Schalter im
+  Threat-Katalog; `ex_collector_only` (scored_only) und `exfil.integration_doc` folgen mit EX02.
