@@ -348,7 +348,7 @@ Angriffs-Wahrscheinlichkeit über 512-Token-Fenster. Cache-Schlüssel: SHA-256 d
 `~/.cache/ark-l1-threat/baselines` (Klone unter `~/.cache/ark-l1-threat/src`), weil die Sandbox `~/ark-threat/cache`
 nicht beschreiben darf; ein späterer Lauf rechnet nur Sätze, die dort für die Version fehlen. Runner-Version 2
 schaltet das feste Padding/Kürzen auf 512 Tokens der Prompt-Guard-2-`tokenizer.json` ab (Version 1 bewertete
-nur die ersten 512 Tokens samt beachtetem Padding). Laufzeit auf 5 Kernen: Prompt Guard 2 22M etwa 30 Dok./s mit
+nur die ersten 512 Tokens samt beachtetem Padding). Laufzeit auf 5 Kernen: Prompt Guard 2 22M etwa 20–25 Dok./s mit
 allen Threads, 86M und ProtectAI v2 ein Mehrfaches langsamer; die volle Dev-Spalte braucht mehrere Läufe.
 
 **Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
