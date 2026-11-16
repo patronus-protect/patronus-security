@@ -229,6 +229,7 @@ tasks:
     deps: [E02, E04, E05, M06]
 
   - id: T01
+    status: done
     title: Dev baseline column — run_baselines.py over the dev split (heuristic rows from the pinned clones, Prompt Guard 2 86M/22M and ProtectAI v2 via ONNX), cached per corpus SHA; baseline.md regenerated with the baseline column and today's ARK numbers
     type: eval-infra
     deps: [E04, E06]
