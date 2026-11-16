@@ -356,6 +356,9 @@ def test_rule_matching():
     assert MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": {"email.retrieved": True}})
     assert not MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": {"email.retrieved": False}})
     assert MODULE.rule_matches({"field": "a.b.c", "equals": 1}, {"a.b": {"c": 1}})
+    # A JSON-encoded intermediate value is decoded on the way (LLMail raw rows).
+    assert MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": '{"email.retrieved": true}'})
+    assert not MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": "not json"})
     assert MODULE.rule_matches({"field": "t", "at_least": 0.5}, {"t": "0.5"})
     assert not MODULE.rule_matches({"field": "t", "at_least": 0.1, "below": 0.5}, {"t": 0.5})
     assert not MODULE.rule_matches({"field": "t", "below": 0.1}, {"t": None})

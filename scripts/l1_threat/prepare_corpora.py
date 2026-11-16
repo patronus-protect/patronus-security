@@ -298,6 +298,12 @@ def _field(record: dict[str, Any], path: str) -> Any:
     value: Any = record
     parts = path.split(".")
     while parts:
+        if isinstance(value, str):
+            # LLMail's raw rows embed the objectives dict as a JSON string.
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return None
         if not isinstance(value, dict):
             return None
         for take in range(len(parts), 0, -1):
