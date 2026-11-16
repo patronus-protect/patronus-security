@@ -293,6 +293,7 @@ tasks:
   # family task depends on E06, so each rule PR is measured (TPR@FPR per class, hard-benign FPR).
   # TRIAGE 2026-W47: data, routing and override near-misses before the injection bundle.
   - id: T02
+    status: done
     title: German dev rows for instruction_injection and prompt_extraction — runner translation worksheet (generators.py translate export/ingest, SPML and Mosscap, hand-check sample) and a cyberseceval_multilingual recipe (MIT, German part marked translated); carrier_insertion and obfuscation_slices then emit German rows
     type: eval-infra
     deps: [M07]

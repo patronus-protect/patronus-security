@@ -493,7 +493,12 @@ nur den Holdout) haben getrennte Seeds und disjunkte Template-Familien. Die DE-�
 (`runner_translations_de`) schreibt der Runner-Agent selbst in ein Arbeitsblatt (`translate export`/`ingest`);
 eine feste Hash-Stichprobe (5 %, mindestens 10 Zeilen) muss als von Hand gegengelesen markiert sein. Jede
 erzeugte Zeile trägt die Spalte `translated` (nativ vs. übersetzt); das Scoreboard (E06) berichtet beide
-getrennt. Daten liegen nur auf der VPS.
+getrennt. Daten liegen nur auf der VPS. T02 (2026-11-16): das Blatt umfasst SPML und Mosscap (je 700 Zeilen,
+SPML halb Angriff, halb Benign), damit `instruction_injection` und `prompt_extraction` je ≥ 300 gewertete deutsche
+Zeilen mit deutschen Benign-Zwillingen haben; dazu der deutsche Teil von CyberSecEval multilingual (MIT,
+maschinenübersetzt, `translated`, Cue-Filter, gegen die übrigen Dev-Sätze dedupliziert; im Gate verwirft das
+Vorbereiten des Holdouts dessen Duplikate). Carrier-Insertion und Obfuskations-Slices erzeugen damit deutsche
+Angriffszeilen (Generator-Version 4, Registry-Generation 6).
 
 ## Reihenfolge
 

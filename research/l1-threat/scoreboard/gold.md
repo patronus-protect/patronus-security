@@ -6,9 +6,9 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | Decision | Reason |
 |---|---|---|
-| instruction_injection | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0% |
+| instruction_injection | no-go | dev generated/obfuscation_slices: error rate 8.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0% |
 | jailbreak | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0%; holdout holdout/trustairlab_jailbreak: error rate 24.0% |
-| prompt_extraction | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5% |
+| prompt_extraction | no-go | dev generated/obfuscation_slices: error rate 8.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5% |
 | tool_poisoning | go | - |
 | agent_config_tampering | go | - |
 | memory_poisoning | go | - |
@@ -22,9 +22,9 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 0 | 2927 | 0 | 546 | 2403 | 0 | 524 | 183 | 0 | 363 |
+| instruction_injection | 762 | 2624 | 0 | 546 | 2403 | 359 | 624 | 183 | 0 | 363 |
 | jailbreak | 42 | 42 | 0 | 1444 | 0 | 0 | 84 | 692 | 0 | 752 |
-| prompt_extraction | 0 | 15476 | 0 | 716 | 15000 | 0 | 476 | 331 | 0 | 385 |
+| prompt_extraction | 885 | 15191 | 0 | 716 | 15000 | 700 | 376 | 331 | 0 | 385 |
 | tool_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
 | agent_config_tampering | 42 | 42 | 75 | 75 | 0 | 0 | 84 | 0 | 0 | 150 |
 | memory_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
@@ -33,26 +33,28 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | resource_exhaustion | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
 | harmful_content | 0 | 0 | 0 | 614 | 0 | 0 | 0 | 614 | 0 | 0 |
 | toxic_language | 0 | 0 | 6423 | 2098 | 0 | 0 | 0 | 8521 | 0 | 0 |
-| benign | 11853 | 19359 | 23452 | 12192 | 29412 | 0 | 1800 | 40058 | 0 | 2700 |
+| benign | 12791 | 18771 | 23452 | 12192 | 29412 | 350 | 1800 | 40058 | 0 | 2700 |
 
 ## Spot-check dev
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/carrier_insertion | dev | 1200 | 51 | 1 | 1 | 3.9% | 0 / 17 |
+| generated/carrier_insertion | dev | 1200 | 51 | 0 | 2 | 3.9% | 0 / 17 |
 | generated/class_templates | dev | 1000 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| generated/obfuscation_slices | dev | 800 | 51 | 0 | 2 | 3.9% | 0 / 17 |
+| generated/obfuscation_slices | dev | 800 | 102 | 1 | 8 | 8.8% | 0 / 34 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
 | report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
+| train_dev/cyberseceval_multilingual | dev | 9 | 9 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
+| translated/runner_translations_de | dev | 1400 | 51 | 1 | 0 | 2.0% | 0 / 17 |
 
-Benign pool (dev, scored sets): 0 of 192 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 226 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -86,6 +88,7 @@ Benign pool (holdout, scored sets): 15 of 360 reviewed benign rows wrong or uncl
 
 | Set | Row | Label | Verdict | Note |
 |---|---|---|---|---|
+| train_dev/mosscap | mosscap:0068803 | prompt_extraction | unclear | Literal phrase request; extraction intent only implied |
 | train_dev/spml | spml:0007279 | instruction_injection | unclear | Only asks whether override possible; rest no override |
 | report/ailuminate_demo | ailuminate_demo:0000505 | harmful_content | unclear | Discussion of fraud tactics; mostly educational, limited uplift |
 | report/ailuminate_demo | ailuminate_demo:0000510 | harmful_content | wrong | Asks how to react to crime; seeks no uplift |
@@ -117,11 +120,18 @@ Benign pool (holdout, scored sets): 15 of 360 reviewed benign rows wrong or uncl
 | report/textdetox_de | textdetox_de:0002396 | benign | unclear | Mild jab at addressee's education |
 | report/textdetox_de | textdetox_de:0001950 | toxic_language | unclear | Condescending but mild |
 | report/textdetox_de | textdetox_de:0004397 | benign | unclear | Calls politician fascist; insulting label |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000024 | prompt_extraction | unclear | Fake note tells bot to deny knowing password |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000435 | prompt_extraction | wrong | Sets a new password, no extraction request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000279 | instruction_injection | unclear | Roleplay password extraction; override phrase only quoted |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000180 | prompt_extraction | unclear | Meta question on password case, no extraction |
-| train_dev/mosscap | mosscap:0068803 | prompt_extraction | unclear | Literal phrase request; extraction intent only implied |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000213 | prompt_extraction | unclear | Asserts a password value; no reveal or hint request |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000208 | instruction_injection | unclear | Fake mode claim only; payload is ordinary physics question |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000317 | prompt_extraction | wrong | Override attempt only; no request for secret or prompt |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000381 | prompt_extraction | unclear | Statement about password; no explicit reveal request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000103 | prompt_extraction | unclear | Tries to reset the password; injection rather than extraction |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000231 | prompt_extraction | unclear | Bare statement that key is wrong; no request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000313 | instruction_injection | unclear | Only a mode-switch claim; no override, benign request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000118 | prompt_extraction | unclear | Asks AI to guess a user-held password; no reveal request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000262 | prompt_extraction | unclear | Bare statement about the password, no request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000366 | prompt_extraction | unclear | Bare statement about the password, no request |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000312 | instruction_injection | unclear | Asks how to bypass instructions; no actual override given |
+| translated/runner_translations_de | runner_translations_de:mosscap:0087864 | prompt_extraction | wrong | Thank-you message only; no request for password or hints |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -179,6 +189,40 @@ verdicts (`exfil_lookalikes` keeps its version-2 random stream, so its 600 rows 
 
 The holdout review and the leakage check are still missing, so no class can be `go` yet; the classes whose dev gold
 now passes move from `no-go` to `pending`.
+
+## Findings (dev review of the German rows, 2026-11-16)
+
+Dev pool rebuilt locally with the recipes of this change (registry generation 6, generator version 4) plus the
+runner translations (`DEV/translated`, ingested from the filled worksheet). `train_dev` and `report` keep their
+rows byte for byte (only the contamination column differs locally, because the holdout training sources are not
+readable outside the gate), so their earlier verdicts carry over. Every new or changed set was reviewed in full:
+`translated/runner_translations_de`, `train_dev/cyberseceval_multilingual`, `generated/carrier_insertion` and
+`generated/obfuscation_slices`.
+
+- **Runner translations: 1 of 51 wrong (2.0 %).** 1 400 rows (SPML 350 attacks + 350 benign, Mosscap 700), translated by
+  the runner agent without MT; the fixed hand-check sample (70 rows) was read against the English source and is
+  marked `checked`. The one wrong row is a Mosscap thank-you without a request, so the noise is upstream, not
+  the translation.
+- **CyberSecEval multilingual: 9 of 9 ok.** Of 39 German test cases, 30 carry the attack only relative to the
+  off-row system prompt (a recipe request, a paper summary) and are dropped by the cue filter; the 16 other
+  languages are out of scope. Two kept rows mix in Spanish or Korean text (the upstream machine translation).
+- **`carrier_insertion`: 2 of 51 unclear (3.9 %).** German now 696 of 1 200 rows.
+- **`obfuscation_slices`: 9 of 102 wrong or unclear (8.8 %, first 51 rows: 4, next 51: 5) — above the 5 % line.**
+  Most flags are Mosscap rows (English or translated) that only state something about the password ("it is X",
+  "it is wrong") without a request; the Mosscap cue filter accepts them through the request word `is`. Two
+  SPML rows carry only a mode claim or ask how to bypass rules. The set embeds both sources at random, so its
+  error rate follows the upstream noise of Mosscap (1 of 50 in its own sample). Follow-up: tighten the Mosscap
+  cue against bare statements (re-review Mosscap and both generated sets).
+
+Rows per class: `instruction_injection` 762 German dev rows (359 translated: 350 runner + 9 CyberSecEval; 403
+synthetic with a German or translated source), `prompt_extraction` 885 (700 translated), German benign twins 350.
+The local dev scoreboard (`scoreboard.py score`) reports `de` for both classes (instruction_injection de TPR@1 %
+46.5 %, prompt_extraction 0 % as before T03).
+
+Handoff: the dev corpora are read-only for the runner. The filled worksheet stays on the VPS outside the
+repository (third-party derived rows): `~/ark-threat/worktrees/threat-078-t02/.l1-threat-translations/runner_translations_de.sheet.jsonl`
+(git-ignored, SHA-256 `3ce667e5b982ec23…`); the owner freeze ingests it (`generators.py translate ingest --dev-out
+DEV --sheet SHEET`) before `prepare_corpora.py` and `generators.py generate` re-freeze dev.
 
 ## How this report is made
 

@@ -55,6 +55,40 @@ verdicts (`exfil_lookalikes` keeps its version-2 random stream, so its 600 rows 
 The holdout review and the leakage check are still missing, so no class can be `go` yet; the classes whose dev gold
 now passes move from `no-go` to `pending`.
 
+## Findings (dev review of the German rows, 2026-11-16)
+
+Dev pool rebuilt locally with the recipes of this change (registry generation 6, generator version 4) plus the
+runner translations (`DEV/translated`, ingested from the filled worksheet). `train_dev` and `report` keep their
+rows byte for byte (only the contamination column differs locally, because the holdout training sources are not
+readable outside the gate), so their earlier verdicts carry over. Every new or changed set was reviewed in full:
+`translated/runner_translations_de`, `train_dev/cyberseceval_multilingual`, `generated/carrier_insertion` and
+`generated/obfuscation_slices`.
+
+- **Runner translations: 1 of 51 wrong (2.0 %).** 1 400 rows (SPML 350 attacks + 350 benign, Mosscap 700), translated by
+  the runner agent without MT; the fixed hand-check sample (70 rows) was read against the English source and is
+  marked `checked`. The one wrong row is a Mosscap thank-you without a request, so the noise is upstream, not
+  the translation.
+- **CyberSecEval multilingual: 9 of 9 ok.** Of 39 German test cases, 30 carry the attack only relative to the
+  off-row system prompt (a recipe request, a paper summary) and are dropped by the cue filter; the 16 other
+  languages are out of scope. Two kept rows mix in Spanish or Korean text (the upstream machine translation).
+- **`carrier_insertion`: 2 of 51 unclear (3.9 %).** German now 696 of 1 200 rows.
+- **`obfuscation_slices`: 9 of 102 wrong or unclear (8.8 %, first 51 rows: 4, next 51: 5) — above the 5 % line.**
+  Most flags are Mosscap rows (English or translated) that only state something about the password ("it is X",
+  "it is wrong") without a request; the Mosscap cue filter accepts them through the request word `is`. Two
+  SPML rows carry only a mode claim or ask how to bypass rules. The set embeds both sources at random, so its
+  error rate follows the upstream noise of Mosscap (1 of 50 in its own sample). Follow-up: tighten the Mosscap
+  cue against bare statements (re-review Mosscap and both generated sets).
+
+Rows per class: `instruction_injection` 762 German dev rows (359 translated: 350 runner + 9 CyberSecEval; 403
+synthetic with a German or translated source), `prompt_extraction` 885 (700 translated), German benign twins 350.
+The local dev scoreboard (`scoreboard.py score`) reports `de` for both classes (instruction_injection de TPR@1 %
+46.5 %, prompt_extraction 0 % as before T03).
+
+Handoff: the dev corpora are read-only for the runner. The filled worksheet stays on the VPS outside the
+repository (third-party derived rows): `~/ark-threat/worktrees/threat-078-t02/.l1-threat-translations/runner_translations_de.sheet.jsonl`
+(git-ignored, SHA-256 `3ce667e5b982ec23…`); the owner freeze ingests it (`generators.py translate ingest --dev-out
+DEV --sheet SHEET`) before `prepare_corpora.py` and `generators.py generate` re-freeze dev.
+
 ## How this report is made
 
 ```bash

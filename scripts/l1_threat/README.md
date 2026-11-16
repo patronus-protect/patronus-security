@@ -99,7 +99,9 @@ Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format
 `parquet` mit UTF-8- und einfachen Ganzzahl-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
 → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
 wenn der Regex `pattern` ohne Groß-/Kleinschreibung im Text trifft; `reason` nennt den Grund, das Manifest zählt
-die übrigen unter `dropped.no_cue`), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
+die übrigen unter `dropped.no_cue`), optional `dedup_against` (andere `train_dev`- oder `report`-Sätze: eine Zeile,
+die eine ihrer Zeilen dupliziert, fällt weg und zählt unter `dropped.cross_set`; für Sätze, die aus denselben
+Prompts übersetzt sind, etwa der deutsche Teil von CyberSecEval multilingual), dazu `commercial` (`true`/`false`/`unknown`; `false` verlangt
 `report_only`) und `training: false` für reine Auswertungssätze (MCPTox, AgentHarm). Lizenz, Split,
 Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Rolle wird abgeleitet:
 `decisive` (Holdout, Familie `neutral`/`ark_blind`), `dev` (`train_dev`), sonst `report`; `commercial: false`
@@ -214,7 +216,8 @@ Jeder Generator hat einen eigenen Zufallsstrom; seine Version (`STREAMS`) steigt
 IDs behält (und sein Gold-Review gültig bleibt).
 
 Übersetzung (`runner_translations_de`): `translate export` zieht je Dev-Satz aus `DEV/train_dev` bis zu
-`--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus) in ein
+`--per-set` englische Zeilen (Angriff und Benign abwechselnd, nie aus einem Holdout-Korpus; `--sets` beschränkt
+das Blatt auf die genannten Sätze, für T02 SPML und Mosscap mit `--per-set 700`) in ein
 Arbeitsblatt; der Runner-Agent trägt seine eigene deutsche Übersetzung in `text` ein (kein externer MT-Dienst)
 und setzt `checked: true` für jede Zeile mit `check: true` (feste Hash-Stichprobe, 5 %, mindestens 10), nachdem
 er sie von Hand gegengelesen hat. `translate ingest` prüft das Blatt (jede Zeile übersetzt, nicht gleich dem
@@ -222,7 +225,7 @@ Original, Stichprobe geprüft) und friert `DEV/translated` ein (`translated: tru
 
 ```bash
 python3 scripts/l1_threat/generators.py generate --dev-out DEV [--holdout-out HOLDOUT] [--holdout-seed-file F] [--force]
-python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set 200]
+python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set 200] [--sets ID ...]
 python3 scripts/l1_threat/generators.py translate ingest --dev-out DEV --sheet SHEET.jsonl [--force]
 python3 scripts/l1_threat/generators.py verify DIR
 ```

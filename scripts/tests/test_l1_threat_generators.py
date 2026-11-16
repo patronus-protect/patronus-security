@@ -274,6 +274,15 @@ def test_translation_sheet_round_trip_marks_translated_rows(roots):
     assert any(not row["translated"] for row in rows)
 
 
+def test_translation_export_limits_the_sheet_to_named_sets(roots):
+    dev, _ = roots
+    rows = MODULE.read_corpus(dev / "train_dev", {"train_dev"})
+    wanted = sorted({row["dataset"] for row in rows})[0]
+    sheet = MODULE.export_sheet(rows, per_set=6, sets=frozenset({wanted}))
+    assert sheet and {row["dataset"] for row in sheet} == {wanted}
+    assert MODULE.export_sheet(rows, per_set=6, sets=frozenset({"no_such_set"})) == []
+
+
 def test_translation_export_refuses_a_holdout_corpus(tmp_path):
     freeze_corpus(tmp_path / "train_dev", "holdout", corpus_rows("ho"), role="decisive")
     with pytest.raises(ValueError, match="split holdout"):

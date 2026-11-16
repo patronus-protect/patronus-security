@@ -175,6 +175,9 @@ def test_check_accepts_fixture(world):
         ("train_set", {"keep": [{"label": "label = other", "pattern": "x", "reason": "r"}]}, "is not a label of the set"),
         ("train_set", {"keep": [{"label": "label = attack", "pattern": "(", "reason": "r"}]}, "pattern does not compile"),
         ("train_set", {"keep": [{"label": "label = attack", "pattern": "x", "reason": " "}]}, "reason must name"),
+        ("train_set", {"dedup_against": ["holdout_set"]}, "must be another train_dev or report set"),
+        ("train_set", {"dedup_against": ["train_set"]}, "must be another train_dev or report set"),
+        ("train_set", {"dedup_against": ["unknown_set"]}, "must be another train_dev or report set"),
     ],
 )
 def test_check_flags(world, dataset_id, change, message):
@@ -282,6 +285,28 @@ def test_keep_drops_rows_of_the_label_without_the_cue(world):
     # Both attack rows lack the cue; the benign rows of the set are untouched.
     assert entry["dropped"] == {"minhash": 1, "no_cue": 2, "out_of_scope": 1}
     assert entry["classes"] == {} and entry["benign"] == 2
+
+
+def test_dedup_against_drops_rows_another_dev_set_holds(world):
+    registry, emap, sources = world
+    registry = copy.deepcopy(registry)
+    emap = copy.deepcopy(emap)
+    (sources / "mirror_set").mkdir()
+    mirror = jsonl([{"text": "What is the capital of France?", "label": "benign"}, {"text": "A row of its own.", "label": "attack"}])
+    (sources / "mirror_set" / "data.jsonl").write_bytes(mirror)
+    emap["datasets"].append(emap_dataset("mirror_set", "train_dev"))
+    registry["datasets"].append(recipe("mirror_set", mirror, dedup_against=["train_set"]))
+    assert MODULE.check(registry, emap) == []
+    files = MODULE.build("train_dev", registry, emap, sources, offline=True, download=no_download)
+    sets = json.loads(files["manifest.json"])["sets"]
+    assert sets["mirror_set"]["dropped"] == {"cross_set": 1} and sets["mirror_set"]["rows"] == 1
+    # The set it is compared against keeps its rows.
+    assert "cross_set" not in sets["train_set"]["dropped"]
+    assert [row["text"] for row in read_rows_bytes(files["mirror_set.jsonl"])] == ["A row of its own."]
+
+
+def read_rows_bytes(data: bytes):
+    return [json.loads(line) for line in data.decode("utf-8").splitlines()]
 
 
 def test_contamination_compares_against_uncapped_training_sources(world):
