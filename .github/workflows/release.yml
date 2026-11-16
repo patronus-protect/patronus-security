@@ -169,6 +169,11 @@ jobs:
           name: sdist
           path: dist/*.tar.gz
 
+  core-python:
+    name: Build Core Python package
+    needs: validate
+    uses: ./.github/workflows/core-python.yml
+
   publish-testpypi:
     name: Publish Python package to TestPyPI
     needs: [wheels, sdist]
@@ -193,7 +198,8 @@ jobs:
 
   publish-crate:
     name: Publish Rust crate
-    needs: [wheels, sdist]
+    # Every package builds and passes its tests before anything is published.
+    needs: [wheels, sdist, core-python]
     runs-on: ubuntu-latest
     if: inputs.channel == 'production'
     environment: release
@@ -229,4 +235,21 @@ jobs:
         with:
           name: sdist
           path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Core is a separate PyPI project; its trusted publisher is this workflow with `release`.
+  publish-core-python:
+    name: Publish Core Python package
+    needs: [core-python, publish-crate]
+    runs-on: ubuntu-latest
+    if: inputs.channel == 'production'
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-python-*
+          path: dist
+          merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
