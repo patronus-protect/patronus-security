@@ -8,7 +8,7 @@ TPR at matched document FPR on the benign rows of the same scope; 95 % CI: perce
 
 Baselines at the same matched FPR on the same benign rows (`scripts/l1_threat/run_baselines.py`): pipelock `r2-d97bee5b5633-f0748f6045a4`, cisco_yara `r2-9ff8fc84b792-88384ac2ff09`, atr `r2-a0b314dfd24e-dbdad268c9c6`, prompt_guard `r2-ce4356bfe714-f334ec70b8e9`, llamafirewall `r2-7e163b68c0af-34204e871afb`, nemo `r2-093ae1fc7b3e-4345056e4244`, vigil `r2-f2b4c134d060-fb4c2190500d`, prompt_guard_2_22m `r2-092823c17a9d`.
 
-Not in the columns: protectai_v2 (`r2-f0ea7f239f76` not cached for ailuminate_demo, dolly_15k, gandalf, germanquad, jackhhao_jailbreak, mosscap, spml, textdetox_de); prompt_guard_2_86m (no cached predictions).
+Not in the columns: protectai_v2 (`r2-f0ea7f239f76` not cached for dolly_15k, germanquad, mosscap, spml); prompt_guard_2_86m (`r2-f307628d0aac` not cached for dolly_15k, germanquad, jackhhao_jailbreak, mosscap, spml, textdetox_de).
 
 ## Gated sets (dev and decisive)
 
