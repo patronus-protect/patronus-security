@@ -80,6 +80,17 @@ Signal 15 (`scored_only`). Kalibriert werden sie je Kategorie in der Aufgabe „
 | `injection_agent_directive` | Anrede an den Agenten in Fremdinhalt + Handlungsverb | 25 | Format | ja | agentic_control_abuse (Teil) |
 | `injection_decoded` | eines der obigen Patterns in einer dekodierten Sicht | wie Quelle | wie Quelle | wie Quelle | encoded_instruction, binary_smuggling |
 
+T04 (TRIAGE 2026-W47, Bucket 1) erweitert `injection_discard_prior` ohne Schwellenänderung um drei
+auditierte Regeln mit kanonischer ID `ark.injection.override.discard_prior`
+(`source_derived_coverage_0_1_6.json`): `override.quantified_prior` (EN: Quantor any/every/each, Possessiv
+your oder Vorzeit-Adjektiv, Objekte directions/guidelines/…, „what you were told“, Fragesatz „can/could/would
+you …“), `override.quantified_prior_de` (DE-Imperativ, sämtliche/jegliche/deine, „alles, was man dir … gesagt
+hat“) und `override.question_prior_de` („kannst du … Anweisungen ignorieren?“). Struktur statt Schwelle:
+Klauselanfang (Satzzeichen, Zeilenanfang, `>` eines HTML-Elements, JSON-Stringwert, „and/und“), gebundenes
+Objekt und ein Klauselende oder eine Fortsetzung mit neuer Bitte; „in Schritt 3“, „about carbs“,
+Verneinung und Zitat fallen heraus. Dev (alle Dateien unter `$ARK_L1_DEV_DATA`, nur `injection`): gemeldete
+Positive 589 → 1 996, Positive mit Kandidat 0,6–1,0 ohne Urteil 898 → 205, Benign/Hard-Benign 0 → 0.
+
 Normalisierungspunkte: Ein Fund, den erst eine normalisierte oder dekodierte Sicht zeigt, bekommt bei
 `injection` ein Plus (Verschleierung ist Verdacht); PII behält ihren Abzug. Dieselbe Konstante, Wert je
 Kategorie.

@@ -689,7 +689,9 @@ mod tests {
 
     fn find_feature_for_upstream(text: &str, upstream_id: &str) -> Option<serde_json::Value> {
         let detection = pipeline().detect(text);
-        detection.details["l1_candidates"]
+        detection
+            .details
+            .get("l1_candidates")?
             .as_array()
             .into_iter()
             .flatten()
@@ -1203,8 +1205,9 @@ mod tests {
             "canonical aliases must count as one rule"
         );
 
+        // The audited quantified_prior alias on the same span makes the canonical rule eligible.
         let feature = features[0];
-        assert_eq!(feature["provenance"]["candidate_only"], true);
+        assert!(feature["provenance"].get("candidate_only").is_none());
         let mut upstream_ids = feature["provenance"]["references"]
             .as_array()
             .into_iter()
@@ -1216,6 +1219,7 @@ mod tests {
         }
         assert!(upstream_ids.contains("PI-001"));
         assert!(upstream_ids.contains("ark-lexicon:override.discard_prior:en-de"));
+        assert!(upstream_ids.contains("ark-composition:override.quantified_prior"));
     }
 
     #[test]
