@@ -40,7 +40,13 @@ Args:
         L3 promote thresholds.
     wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
         (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
-        retain 256/0/1. Validated before gateway construction; applied before warmup.
+        follow the published v2.1 reference, 2048/64/1. Validated before gateway
+        construction; applied before warmup.
+    wolf_model: Dedicated-Wolf model: `base`, `small` (default) or `edge`.
+    wolf_precision: Dedicated-Wolf ONNX export: `auto` (default; uses
+        `PATRONUS_L3_PRECISION`, else `int8_int4_x86` on x86_64 and
+        `int8_int4` elsewhere), `fp32`, `fp16`, `mixed`, `mixed_x86`,
+        `int8_int4` or `int8_int4_x86`.
     l3_strategy: `dedicated` for one L3 model per classifier pipeline or
         `multi` for the shared unified multi-head ONNX model.
     dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -57,6 +63,14 @@ Args:
 ### `wolf_options() -> dict[str, int]`
 
 Effective dedicated-Wolf startup profile; returned as an independent copy.
+
+### `wolf_model() -> str`
+
+Dedicated-Wolf model: `base`, `small` or `edge`.
+
+### `wolf_precision() -> str`
+
+Requested dedicated-Wolf ONNX export, `auto` unless set explicitly.
 
 ### `categories() -> list[str]`
 

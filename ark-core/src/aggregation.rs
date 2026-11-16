@@ -125,7 +125,10 @@ mod tests {
         // inference.py: classwise smoothmax (T=0.1 for several windows), then softmax.
         let windows = [[2.0, -1.5], [-0.5, 3.0], [1.0, 0.25]];
         let pooled = |column: usize| {
-            let maximum = windows.iter().map(|row| row[column]).fold(f64::MIN, f64::max);
+            let maximum = windows
+                .iter()
+                .map(|row| row[column])
+                .fold(f64::MIN, f64::max);
             maximum
                 + 0.1
                     * (windows

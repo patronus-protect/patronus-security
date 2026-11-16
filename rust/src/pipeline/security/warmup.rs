@@ -456,10 +456,18 @@ impl SecurityGateway {
             if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
                 && assets::dedicated_l3_asset(*category).is_some()
-                && !assets::dedicated_l3_assets_present(*category, &base_dir)
+                && !assets::dedicated_l3_assets_present(
+                    *category,
+                    &base_dir,
+                    execution.wolf_selection(),
+                )
             {
                 if allow_download && self.should_download_assets_for(*category) {
-                    assets::download_dedicated_l3_assets(*category, &base_dir)?;
+                    assets::download_dedicated_l3_assets(
+                        *category,
+                        &base_dir,
+                        execution.wolf_selection(),
+                    )?;
                 } else {
                     return Err(format!(
                         "missing {} dedicated L3 assets below {}; downloads disabled",
@@ -473,7 +481,10 @@ impl SecurityGateway {
                 && execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
             {
-                if let Some(asset) = assets::dedicated_l3_asset(*category) {
+                // Core builds Wolf's compact tokenizer with its cache.
+                if let Some(asset) = assets::dedicated_l3_asset(*category)
+                    .filter(|asset| asset.model != assets::WOLF_PIPELINE_MODEL)
+                {
                     assets::prepare_cached_pipeline_model_compact_tokenizer(asset, &base_dir);
                 }
             }
@@ -562,10 +573,10 @@ impl SecurityGateway {
             return Ok(());
         }
         let model = match config.category {
-            SecurityCategory::Injection => {
-                let asset = revision_pinned_l3_asset(config.category)?;
-                ntdb_injection_l3_worker_model(category_dir, asset.revision)?
-            }
+            SecurityCategory::Injection => ntdb_injection_l3_worker_model(
+                category_dir,
+                self.scan_execution().wolf_selection(),
+            )?,
             SecurityCategory::SensitiveDocument => {
                 let asset = revision_pinned_l3_asset(config.category)?;
                 LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
@@ -677,18 +688,24 @@ fn warmup_failure(message: String) -> SecurityFailure {
 
 fn ntdb_injection_l3_worker_model(
     category_dir: &Path,
-    model_sha: &str,
+    wolf: crate::WolfSelection,
 ) -> Result<Option<LazyOnnxTextClassifier>, Box<dyn std::error::Error>> {
     let labels = vec!["benign".to_string(), "attack".to_string()];
-    LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
+    let graphs = patronus_ark_core::wolf::graph_candidates(wolf.model, wolf.precision)?
+        .into_iter()
+        .map(|graph| format!("l3/{graph}"))
+        .collect::<Vec<_>>();
+    let graphs = graphs.iter().map(String::as_str).collect::<Vec<_>>();
+    Ok(LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
         category_dir,
         labels,
-        "wolf-defender-small",
-        dedicated_l3_onnx_paths(),
+        assets::WOLF_PIPELINE_MODEL,
+        &graphs,
         "l3/tokenizer.json",
         256,
-        model_sha,
-    )
+        wolf.model.spec().revision,
+    )?
+    .map(|model| model.with_wolf_selection(wolf)))
 }
 
 fn dedicated_l3_onnx_paths() -> &'static [&'static str] {

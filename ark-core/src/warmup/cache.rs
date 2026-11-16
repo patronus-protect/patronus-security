@@ -433,7 +433,8 @@ mod tests {
     fn unknown_partial_cache_is_rejected_before_any_download() {
         let dir = Directory::new();
         fs::write(dir.0.join("tokenizer.mmbpe"), b"local export").unwrap();
-        let error = prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap_err();
+        let error =
+            prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap_err();
         assert!(error.to_string().contains("unknown provenance"));
         assert_eq!(
             fs::read(dir.0.join("tokenizer.mmbpe")).unwrap(),
@@ -453,10 +454,14 @@ mod tests {
         assert!(!dir.0.join(REVISION).exists());
         dir.complete();
         assert!(!wolf_assets_present(&dir.0, SMALL, WolfPrecision::Fp16).unwrap());
-        assert!(
-            prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &WarmupOptions::default(), None)
-                .is_err()
-        );
+        assert!(prepare_wolf_cache(
+            &dir.0,
+            SMALL,
+            WolfPrecision::Fp16,
+            &WarmupOptions::default(),
+            None
+        )
+        .is_err());
         prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
         assert_eq!(
             fs::read_to_string(dir.0.join(REVISION)).unwrap(),
@@ -482,7 +487,11 @@ mod tests {
         let old_graph = "onnx/int8_int4_embeddings/model.onnx";
         fs::create_dir_all(dir.0.join("onnx/int8_int4_embeddings")).unwrap();
         fs::write(dir.0.join(old_graph), b"previous release").unwrap();
-        fs::write(dir.0.join(REVISION), "142fadc5474163d4c483cb761d5a6b02e3aa1741").unwrap();
+        fs::write(
+            dir.0.join(REVISION),
+            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
+        )
+        .unwrap();
         // Complete files of an older pin are never served as the current model.
         assert!(!wolf_assets_present(&dir.0, SMALL, WolfPrecision::Int8Int4).unwrap());
         establish_origin(&dir.0, SMALL).unwrap();

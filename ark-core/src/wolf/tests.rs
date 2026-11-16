@@ -50,7 +50,8 @@ mod published_model_tests {
     fn published_fp16_default_profile_matches_independent_hf_ort_oracle() {
         let bundle =
             PathBuf::from(std::env::var_os("ARK_WOLF_BUNDLE").expect("set ARK_WOLF_BUNDLE"));
-        let manifest = existing_assets(&bundle, WolfModel::Small, WolfPrecision::Fp16, None).unwrap();
+        let manifest =
+            existing_assets(&bundle, WolfModel::Small, WolfPrecision::Fp16, None).unwrap();
         let model = bundle.join(&manifest.model.path);
         let benign = "Ordinary meeting notes about project planning. ".repeat(300);
         let row: serde_json::Value = serde_json::from_str(
@@ -133,7 +134,10 @@ mod published_model_tests {
                         logits.push([values[0], values[1]]);
                     }
                     let pool = |column: usize| {
-                        let max = logits.iter().map(|row| row[column]).fold(f64::MIN, f64::max);
+                        let max = logits
+                            .iter()
+                            .map(|row| row[column])
+                            .fold(f64::MIN, f64::max);
                         max + 0.1
                             * (logits
                                 .iter()
@@ -350,14 +354,22 @@ mod resource_tests {
             }
         }
         let _cleanup = Cleanup(dir.clone());
-        fs::write(dir.join("onnx/onnx_fp16/model_fp16.onnx"), b"selection-only fixture").unwrap();
+        fs::write(
+            dir.join("onnx/onnx_fp16/model_fp16.onnx"),
+            b"selection-only fixture",
+        )
+        .unwrap();
         fs::write(dir.join("tokenizer.mmbpe"), b"selection-only fixture").unwrap();
         for (labels, accepted) in [
             (r#"{"0":"BENIGN","1":"INJECTION"}"#, true),
             (r#"{"0":"benign","1":"injection"}"#, true),
             (r#"{"0":"INJECTION","1":"BENIGN"}"#, false),
         ] {
-            fs::write(dir.join("config.json"), format!(r#"{{"id2label":{labels}}}"#)).unwrap();
+            fs::write(
+                dir.join("config.json"),
+                format!(r#"{{"id2label":{labels}}}"#),
+            )
+            .unwrap();
             let manifest = existing_assets(&dir, WolfModel::Base, WolfPrecision::Fp16, None);
             assert_eq!(manifest.is_ok(), accepted, "{labels}");
         }

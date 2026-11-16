@@ -1096,6 +1096,15 @@ pub struct ScanExecution {
     defer_l3: bool,
     chunk_overlap_tokens: usize,
     wolf_execution_options: crate::WolfExecutionOptions,
+    wolf_selection: WolfSelection,
+}
+
+/// The Wolf Defender model and ONNX export the dedicated injection L3 loads.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WolfSelection {
+    pub model: crate::WolfModel,
+    pub precision: crate::WolfPrecision,
 }
 
 impl ScanExecution {
@@ -1113,6 +1122,7 @@ impl ScanExecution {
             defer_l3: false,
             chunk_overlap_tokens: 0,
             wolf_execution_options: crate::WolfExecutionOptions::default(),
+            wolf_selection: WolfSelection::default(),
         }
     }
 
@@ -1130,7 +1140,19 @@ impl ScanExecution {
             defer_l3: false,
             chunk_overlap_tokens: 0,
             wolf_execution_options: crate::WolfExecutionOptions::default(),
+            wolf_selection: WolfSelection::default(),
         }
+    }
+
+    /// Choose the Wolf model and export; an unknown `auto` override fails here, not on first use.
+    pub fn set_wolf_selection(&mut self, selection: WolfSelection) -> Result<(), String> {
+        selection.precision.resolve().map_err(|e| e.to_string())?;
+        self.wolf_selection = selection;
+        Ok(())
+    }
+
+    pub fn wolf_selection(&self) -> WolfSelection {
+        self.wolf_selection
     }
 
     /// Configure dedicated Wolf execution using the shared Core validation.

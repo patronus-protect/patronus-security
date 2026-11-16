@@ -10,10 +10,11 @@ mod models;
 mod tests;
 mod windows;
 use crate::WolfExecutionOptions;
+pub use assets::graph_candidates;
 use assets::{asset_manifest, verified_file};
 pub(crate) use assets::{asset_manifest_at, model_paths, precision_order};
 pub use models::{
-    WolfModel, WolfModelSpec, WolfPrecision, MODEL_ENV, PRECISION_ENV, SUPPORT_FILES, WOLF_MODELS,
+    WolfModel, WolfModelSpec, WolfPrecision, PRECISION_ENV, SUPPORT_FILES, WOLF_MODELS,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -260,6 +261,10 @@ impl WolfRunner {
 
     pub fn precision(&self) -> &str {
         &self.manifest.precision
+    }
+
+    pub fn model_id(&self) -> &str {
+        &self.manifest.model_id
     }
 
     pub fn model_path(&self) -> &Path {

@@ -101,8 +101,9 @@ class PublicApiTests(unittest.TestCase):
     def test_wolf_startup_defaults_and_custom_profile_reach_native_gateway(self):
         scanner = SecurityGateway(["pii"], "l1", download_files=False)
         self.assertEqual(scanner.wolf_options, {
-            "window_tokens": 256, "overlap_tokens": 0, "batch_size": 1,
+            "window_tokens": 2048, "overlap_tokens": 64, "batch_size": 1,
         })
+        self.assertEqual((scanner.wolf_model, scanner.wolf_precision), ("small", "auto"))
         profile = {"window_tokens": 32, "overlap_tokens": 4, "batch_size": 2}
         scanner = SecurityGateway(["pii"], "l1", download_files=False, wolf_options=profile)
         profile["batch_size"] = 9
@@ -114,10 +115,21 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(scanner._benchmark_worker_config["wolf_options"], scanner.wolf_options)
         self.assertEqual(scanner._benchmark_gateway_config["wolf_options"], scanner.wolf_options)
 
+    def test_wolf_model_and_precision_reach_the_native_gateway(self):
+        scanner = SecurityGateway(
+            ["pii"], "l1", download_files=False, wolf_model="edge", wolf_precision="int8_int4_x86",
+        )
+        self.assertEqual((scanner.wolf_model, scanner.wolf_precision), ("edge", "int8_int4_x86"))
+        self.assertEqual(scanner._benchmark_worker_config["wolf_model"], "edge")
+        self.assertEqual(scanner._benchmark_gateway_config["wolf_precision"], "int8_int4_x86")
+        for kwargs in [{"wolf_model": "large"}, {"wolf_precision": "int4"}]:
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                SecurityGateway(["pii"], "l1", download_files=False, **kwargs)
+
     def test_wolf_startup_invalid_profile_fails_before_cache_creation(self):
         for profile in [
             {"batch_size": 0}, {"window_tokens": 2},
-            {"overlap_tokens": 254}, {"unknown": 1},
+            {"overlap_tokens": 2046}, {"unknown": 1},
         ]:
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
                 cache = Path(directory) / "not-created.redb"
@@ -151,6 +163,7 @@ class PublicApiTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "captured"):
                     benchmark_worker.main()
             self.assertEqual(factory.call_args.kwargs["wolf_options"], profile)
+            self.assertEqual(factory.call_args.kwargs["wolf_model"], "small")
 
     def test_anchor_explain_is_explicit_and_can_be_reset(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)

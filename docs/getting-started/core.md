@@ -150,11 +150,16 @@ choose a threshold for your deployment; the examples use `0.8`.
 - **Offline and air-gapped:** prepare the bundle in a separate step with
   `warmup::prepare_assets(&config, &options)`, ship the directory, then construct with
   `download: "never"`. See [Offline & air-gapped scanning](../how-to/offline-airgapped.md).
+- **Model:** `model` is `base`, `small` (default) or `edge`: larger is more accurate, smaller is
+  faster.
 - **Long inputs:** window size, overlap and batch size are configurable
-  (`wolf_options` in Python, `WolfExecutionOptions` in Rust). The default is 256 tokens, no
-  overlap, batch 1. Changing them changes the document scores, so recalibrate the threshold.
-- **Precision and backend:** `precision` is `auto`, `fp16` or `int8_int4`; `backend` selects CPU or
-  a GPU execution provider.
+  (`wolf_options` in Python, `WolfExecutionOptions` in Rust). The default follows the published
+  model: 2048 tokens, 64 overlap, batch 1. Changing them changes the document scores, so
+  recalibrate the threshold.
+- **Precision and backend:** `precision` is `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`,
+  `int8_int4` or `int8_int4_x86`. `auto` uses `PATRONUS_L3_PRECISION` when set, otherwise the
+  x86 build on `x86_64` and `int8_int4` elsewhere. `backend` selects CPU or a GPU execution
+  provider.
 
 ## Add Cat for shell commands
 

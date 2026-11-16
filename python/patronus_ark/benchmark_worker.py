@@ -27,6 +27,8 @@ def main():
         ntdb_operating_point=config["ntdb_operating_point"],
         l3_strategy=config["l3_strategy"],
         wolf_options=config.get("wolf_options"),
+        wolf_model=config.get("wolf_model", "small"),
+        wolf_precision=config.get("wolf_precision", "auto"),
     )
     gateway.warmup()
 

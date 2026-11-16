@@ -72,7 +72,7 @@ mod tests {
                 ..Default::default()
             },
             WolfExecutionOptions {
-                overlap_tokens: 254,
+                overlap_tokens: 2046,
                 ..Default::default()
             },
             WolfExecutionOptions {

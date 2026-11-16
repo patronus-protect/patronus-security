@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 
 /// Environment override for [`WolfPrecision::Auto`]; accepts any precision name.
 pub const PRECISION_ENV: &str = "PATRONUS_L3_PRECISION";
-/// Environment override for the default [`WolfModel`].
-pub const MODEL_ENV: &str = "PATRONUS_WOLF_MODEL";
 /// Files every precision needs next to its ONNX graph.
 pub const SUPPORT_FILES: [&str; 3] = ["config.json", "tokenizer.json", "tokenizer_config.json"];
 
@@ -95,17 +93,6 @@ impl WolfModel {
             Self::Base => "base",
             Self::Small => "small",
             Self::Edge => "edge",
-        }
-    }
-
-    /// [`MODEL_ENV`], or Small when it is unset.
-    pub fn from_env() -> Result<Self, ScanError> {
-        match std::env::var(MODEL_ENV) {
-            Ok(value) => Self::ALL
-                .into_iter()
-                .find(|model| model.as_str().eq_ignore_ascii_case(value.trim()))
-                .ok_or_else(|| ScanError::Config(format!("{MODEL_ENV}: unknown Wolf model {value}"))),
-            Err(_) => Ok(Self::default()),
         }
     }
 }

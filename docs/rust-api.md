@@ -12,7 +12,11 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
-pub use patronus_ark_core::{diagnostics, WolfExecutionOptions};
+pub use patronus_ark_core::{
+    diagnostics,
+    wolf::{WolfModel, WolfPrecision},
+    WolfExecutionOptions,
+};
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
@@ -53,7 +57,7 @@ pub use types::{
     SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
     SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult,
+    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
 };
 ```
 
@@ -142,6 +146,12 @@ pub fn set_wolf_execution_options(
 ```
 
 Configure dedicated Wolf windowing and batching for subsequent scans.
+
+```rust
+pub fn set_wolf_selection(&self, selection: crate::WolfSelection) -> Result<(), String>;
+```
+
+Choose the dedicated Wolf model and ONNX export; set before warmup.
 
 ```rust
 pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions);
@@ -1461,10 +1471,20 @@ pub struct ScanExecution {
     defer_l3: bool,
     chunk_overlap_tokens: usize,
     wolf_execution_options: crate::WolfExecutionOptions,
+    wolf_selection: WolfSelection,
 }
 ```
 
 Effective execution state consumed by scan methods and model pipelines.
+
+```rust
+pub struct WolfSelection {
+    pub model: crate::WolfModel,
+    pub precision: crate::WolfPrecision,
+}
+```
+
+The Wolf Defender model and ONNX export the dedicated injection L3 loads.
 
 ```rust
 pub fn new(max_level: SecurityLevel) -> Self;
@@ -1477,6 +1497,18 @@ pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
 ```
 
 Create an execution with explicit gates up to `max_level`.
+
+```rust
+pub fn set_wolf_selection(&mut self, selection: WolfSelection) -> Result<(), String>;
+```
+
+Choose the Wolf model and export; an unknown `auto` override fails here, not on first use.
+
+```rust
+pub fn wolf_selection(&self) -> WolfSelection;
+```
+
+No public documentation is available yet.
 
 ```rust
 pub fn set_wolf_execution_options(
@@ -1915,7 +1947,7 @@ pub struct WolfExecutionOptions {
 ```
 
 Wolf document execution. Sizes count tokens, batches count document windows.
-The defaults preserve the existing 254-content-token inference profile.
+The defaults follow the published v2.1 reference: 2048 positions, 64 overlap.
 
 ```rust
 pub fn validate(self) -> Result<(), ScanError>;
@@ -2023,12 +2055,6 @@ No public documentation is available yet.
 ## Core Asset Preparation And Warmup
 
 ```rust
-pub fn wolf_files(precision: crate::wolf::WolfPrecision) -> &'static [&'static str];
-```
-
-Required files for an official export, also used by Ark's category preparation.
-
-```rust
 pub enum DownloadPolicy {
     #[default]
     Never,
@@ -2102,7 +2128,11 @@ No public documentation is available yet.
 ## Core Asset Cache
 
 ```rust
-pub fn wolf_assets_present(dir: &Path, precision: WolfPrecision) -> Result<bool, ScanError>;
+pub fn wolf_assets_present(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<bool, ScanError>;
 ```
 
 Nonblocking readiness. A cache being prepared, or an unfinished managed cache, is not ready.
@@ -2110,6 +2140,7 @@ Nonblocking readiness. A cache being prepared, or an unfinished managed cache, i
 ```rust
 pub fn prepare_wolf_cache(
     dir: &Path,
+    model: WolfModel,
     precision: WolfPrecision,
     options: &WarmupOptions,
     progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
@@ -2407,20 +2438,11 @@ No public documentation is available yet.
 ## Wolf Defender Runtime
 
 ```rust
-pub enum WolfPrecision {
-    #[default]
-    Auto,
-    Fp16,
-    Int8Int4,
-}
-```
-
-No public documentation is available yet.
-
-```rust
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
     pub threshold: f64,
+    #[serde(default)]
+    pub model: WolfModel,
     #[serde(default)]
     pub precision: WolfPrecision,
     #[serde(default)]
@@ -2519,7 +2541,7 @@ No public documentation is available yet.
 pub struct WolfProgress {
     pub windows: u64,
     pub total_windows: u64,
-    /// Absent before the first inference; otherwise the running SmoothMax logit.
+    /// Absent before the first inference; otherwise the running pooled logit.
     pub document_logit: Option<f64>,
 }
 ```
@@ -2570,6 +2592,12 @@ No public documentation is available yet.
 
 ```rust
 pub fn precision(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn model_id(&self) -> &str;
 ```
 
 No public documentation is available yet.
@@ -2792,15 +2820,20 @@ pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAss
 Return the revision-pinned dedicated L3 bundle for a classifier category.
 
 ```rust
-pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool;
+pub fn dedicated_l3_assets_present(
+    category: SecurityCategory,
+    target_dir: &Path,
+    wolf: crate::WolfSelection,
+) -> bool;
 ```
 
-Check whether a category's dedicated L3 bundle is cached.
+Check whether a category's dedicated L3 bundle is cached; Wolf checks `wolf`'s pin.
 
 ```rust
 pub fn download_dedicated_l3_assets(
     category: SecurityCategory,
     target_dir: &Path,
+    wolf: crate::WolfSelection,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>>;
 ```
 

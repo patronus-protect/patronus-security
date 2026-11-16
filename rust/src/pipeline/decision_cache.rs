@@ -204,6 +204,9 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     for value in [wolf.window_tokens, wolf.overlap_tokens, wolf.batch_size] {
         scope.update(&value.to_le_bytes());
     }
+    let selection = execution.wolf_selection();
+    scope.update(selection.model.as_str().as_bytes());
+    scope.update(selection.precision.as_str().as_bytes());
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),
@@ -384,11 +387,11 @@ mod tests {
         let baseline = ScanExecution::default();
         for options in [
             crate::WolfExecutionOptions {
-                window_tokens: 2048,
+                window_tokens: 256,
                 ..Default::default()
             },
             crate::WolfExecutionOptions {
-                overlap_tokens: 64,
+                overlap_tokens: 0,
                 ..Default::default()
             },
             crate::WolfExecutionOptions {
@@ -398,6 +401,28 @@ mod tests {
         ] {
             let mut changed = baseline.clone();
             changed.set_wolf_execution_options(options).unwrap();
+            assert_ne!(
+                cache_key("injection", "same text", &baseline),
+                cache_key("injection", "same text", &changed)
+            );
+        }
+    }
+
+    #[test]
+    fn cache_key_separates_wolf_models_and_precisions() {
+        let baseline = ScanExecution::default();
+        for selection in [
+            crate::WolfSelection {
+                model: crate::WolfModel::Edge,
+                ..Default::default()
+            },
+            crate::WolfSelection {
+                precision: crate::WolfPrecision::Fp16,
+                ..Default::default()
+            },
+        ] {
+            let mut changed = baseline.clone();
+            changed.set_wolf_selection(selection).unwrap();
             assert_ne!(
                 cache_key("injection", "same text", &baseline),
                 cache_key("injection", "same text", &changed)

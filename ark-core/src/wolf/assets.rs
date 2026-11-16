@@ -121,6 +121,17 @@ pub(crate) fn precision_order(requested: WolfPrecision) -> Result<Vec<WolfPrecis
     Ok(order)
 }
 
+/// Bundle-relative graph paths to try for a request, in preference order.
+pub fn graph_candidates(
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<Vec<&'static str>, ScanError> {
+    Ok(precision_order(precision)?
+        .into_iter()
+        .flat_map(|precision| model_paths(model, precision))
+        .collect())
+}
+
 /// Pick the first requested precision whose export exists locally.
 pub(super) fn existing_assets(
     base: &Path,
