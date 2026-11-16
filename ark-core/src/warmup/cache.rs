@@ -9,7 +9,6 @@ use std::{
 };
 const LOCK: &str = ".patronus-wolf-prepare.lock";
 const PENDING: &str = ".patronus-wolf-pending";
-#[cfg(feature = "download")]
 const REVISION: &str = ".patronus-revision";
 fn asset(e: impl std::fmt::Display) -> ScanError {
     ScanError::Asset(e.to_string())
