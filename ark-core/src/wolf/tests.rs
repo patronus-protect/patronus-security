@@ -345,6 +345,19 @@ mod resource_tests {
         assert_eq!(edge.model.path, edge_x86);
         assert_eq!(edge.model_id, "wolf-defender-edge");
         assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4X86, None).is_err());
+        // A managed marker of another model is never relabelled as the configured one.
+        fs::write(
+            dir.join(".patronus-revision"),
+            WolfModel::Small.spec().revision,
+        )
+        .unwrap();
+        let error = existing_assets(&dir, WolfModel::Base, WolfPrecision::Int8Int4, None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("wolf-defender-small"), "{error}");
+        assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4, None).is_ok());
+        fs::write(dir.join(".patronus-revision"), "local export").unwrap();
+        assert!(existing_assets(&dir, WolfModel::Base, WolfPrecision::Int8Int4, None).is_ok());
     }
 
     #[test]

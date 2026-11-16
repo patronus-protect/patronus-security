@@ -188,6 +188,14 @@ pub(super) fn existing_assets(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => "local".to_owned(),
         Err(error) => return Err(asset(error)),
     };
+    // All models share graph paths, so a managed marker is the only proof of identity.
+    if let Some(owner) = WolfModel::of_revision(&revision).filter(|&owner| owner != model) {
+        return Err(asset(format!(
+            "Wolf bundle holds {}, not the configured {}",
+            owner.spec().id,
+            model.spec().id
+        )));
+    }
     let pad_id = match config.get("pad_token_id").filter(|v| !v.is_null()) {
         Some(value) => value
             .as_u64()

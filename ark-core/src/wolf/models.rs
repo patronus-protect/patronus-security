@@ -37,6 +37,8 @@ pub struct WolfModelSpec {
     pub id: &'static str,
     pub repository: &'static str,
     pub revision: &'static str,
+    /// Earlier pins whose managed caches still identify this model.
+    pub legacy_revisions: &'static [&'static str],
     /// Graph path per precision, in [`WolfPrecision::CONCRETE`] order.
     graphs: [&'static str; 6],
 }
@@ -56,6 +58,7 @@ pub const WOLF_MODELS: [WolfModelSpec; 3] = [
         id: "wolf-defender-base",
         repository: "patronus-studio/wolf-defender-prompt-injection",
         revision: "af0b16a1d40ca246595e48246ccf9f906a52a50e",
+        legacy_revisions: &[],
         graphs: BASE_SMALL_GRAPHS,
     },
     WolfModelSpec {
@@ -63,6 +66,7 @@ pub const WOLF_MODELS: [WolfModelSpec; 3] = [
         id: "wolf-defender-small",
         repository: "patronus-studio/wolf-defender-prompt-injection-small",
         revision: "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
+        legacy_revisions: &["142fadc5474163d4c483cb761d5a6b02e3aa1741"],
         graphs: BASE_SMALL_GRAPHS,
     },
     WolfModelSpec {
@@ -70,6 +74,7 @@ pub const WOLF_MODELS: [WolfModelSpec; 3] = [
         id: "wolf-defender-edge",
         repository: "patronus-studio/wolf-defender-prompt-injection-edge",
         revision: "a65713895aafa398e71f151f50d33449b477b4c9",
+        legacy_revisions: &[],
         graphs: [
             "onnx/onnx_fp32/model.onnx",
             "onnx/onnx_fp16/model_fp16.onnx",
@@ -86,6 +91,14 @@ impl WolfModel {
 
     pub fn spec(self) -> &'static WolfModelSpec {
         &WOLF_MODELS[self as usize]
+    }
+
+    /// The registered model a managed cache's revision marker identifies.
+    pub fn of_revision(revision: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|model| {
+            let spec = model.spec();
+            spec.revision == revision || spec.legacy_revisions.contains(&revision)
+        })
     }
 
     pub fn as_str(self) -> &'static str {
@@ -190,6 +203,14 @@ mod tests {
         assert_eq!(WolfPrecision::parse(" FP16 "), Some(WolfPrecision::Fp16));
         assert!(WolfPrecision::parse("int4").is_none());
         assert_eq!(WolfModel::default().spec().id, "wolf-defender-small");
+        for model in WolfModel::ALL {
+            assert_eq!(WolfModel::of_revision(model.spec().revision), Some(model));
+        }
+        assert_eq!(
+            WolfModel::of_revision("142fadc5474163d4c483cb761d5a6b02e3aa1741"),
+            Some(WolfModel::Small)
+        );
+        assert_eq!(WolfModel::of_revision("local"), None);
     }
 
     #[test]

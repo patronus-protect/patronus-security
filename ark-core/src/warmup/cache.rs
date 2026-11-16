@@ -187,7 +187,13 @@ fn atomic_marker(dir: &Path, name: &str, value: &str) -> Result<(), ScanError> {
 fn has_unknown_files(dir: &Path) -> Result<bool, ScanError> {
     for entry in fs::read_dir(dir).map_err(asset)? {
         let entry = entry.map_err(asset)?;
-        if entry.file_name() == LOCK {
+        // Downloads keep a per-file transport lock next to each asset on purpose.
+        if entry.file_name() == LOCK
+            || entry
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".patronus-download.lock")
+        {
             continue;
         }
         if entry.file_type().map_err(asset)?.is_dir() {
@@ -486,6 +492,10 @@ mod tests {
         let old_graph = "onnx/int8_int4_embeddings/model.onnx";
         fs::create_dir_all(dir.0.join("onnx/int8_int4_embeddings")).unwrap();
         fs::write(dir.0.join(old_graph), b"previous release").unwrap();
+        // Real downloads leave their per-file transport locks behind.
+        for file in [old_graph, "config.json", "tokenizer.json"] {
+            fs::write(dir.0.join(format!("{file}.patronus-download.lock")), b"").unwrap();
+        }
         fs::write(
             dir.0.join(REVISION),
             "142fadc5474163d4c483cb761d5a6b02e3aa1741",
