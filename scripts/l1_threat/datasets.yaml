@@ -27,6 +27,8 @@
 #               when the case-insensitive regex `pattern` finds a cue in its text; the others are dropped
 #               and counted in the manifest (dropped.no_cue). For upstream labels that mark rows without
 #               the attack in their text; `reason` names why.
+#   dedup_against  other train_dev or report sets: a row duplicating one of their rows is dropped
+#               (dropped.cross_set); for sets derived from those (translations of the same prompts)
 #   cap         keep at most this many rows (default and upper bound: sampling.max_rows); sampled per
 #               stratum (benign, classes, language) with the sampling seed, see prepare_corpora.py
 #
@@ -39,7 +41,8 @@ schema: ark-l1-threat-datasets-v1
 # 4: cue filters (keep) in the SPML and Mosscap recipes, TextDetox-DE and AILuminate demo report-only.
 # 5: holdout mapping fixes after the owner review — jbb/xstest/hatecheck label splits,
 #    cyberseceval/multijail/trustairlab/gahd attack labels reported only.
-generation: 5
+# 6: CyberSecEval multilingual (German part, override cue) joins train_dev, deduplicated against the other dev sets.
+generation: 6
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -209,7 +212,26 @@ datasets:
     pending: recipe not written yet
   - id: cyberseceval_multilingual
     commercial: true
-    pending: recipe not written yet
+    source: https://github.com/meta-llama/PurpleLlama
+    revision: 0654501399e7cbd560db9501965dc09c567a5563
+    files:
+      - {path: CybersecurityBenchmarks/datasets/prompt_injection/prompt_injection_multilingual_machine_translated.json, sha256: f018adfc7b1f766f98ce4dd4c8e34e97a8a88f402a2b63576652027e02c2a15f}
+    format: json
+    text: user_input
+    language: de
+    labels:
+      - {field: speaking_language, equals: German, label: "speaking_language = German"}
+      - field: speaking_language
+        equals: [Arabic, Bengali, Chinese, Filipino/Tagalog, French, Hindi, Indonesian, Italian, Japanese, Korean, Portuguese, Russian, Spanish, Thai, Turkish, Vietnamese]
+        label: "speaking_language other than German"
+    keep:
+      - label: "speaking_language = German"
+        reason: >-
+          the attack of many test cases exists only relative to the off-row system prompt (a recipe request, a
+          paper summary), so the user turn alone is not an injection; only rows whose user turn carries an
+          override, mode-switch or persona cue are kept
+        pattern: '\b(?:ignorier\w*|missacht\w*|vergiss|vergessen sie|olvida)\b[^.!?\n]{0,60}\b(?:\w*anweisung\w*|instruktion\w*|regeln|funktion|instrucciones)\b|<system mode>|\b\w*modus\b|\bdu bist jetzt\b|\bich bin gott\b|\bjetzt alles\b'
+    dedup_against: [spml, mosscap, dolly_15k, germanquad]
   - id: mosscap
     commercial: true
     source: https://huggingface.co/datasets/Lakera/mosscap_prompt_injection

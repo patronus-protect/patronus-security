@@ -585,13 +585,16 @@ datasets:
     name: CyberSecEval multilingual prompt injection
     source: github:meta-llama/PurpleLlama CybersecurityBenchmarks/datasets/prompt_injection/prompt_injection_multilingual*.json
     licence: MIT
-    languages: [de, en, fr, es, it, pt]
+    languages: [de]
     translated: true
     split: train_dev
     family: neutral
     labels:
-      - {label: "every test case", classes: [instruction_injection]}
-    note: machine-translated variants of the technique slice; E01 dedups against cyberseceval_pi (holdout)
+      - {label: "speaking_language = German", classes: [instruction_injection]}
+      - {label: "speaking_language other than German", out_of_scope: "only German and English rows are scored and the file has no English part"}
+    note: >-
+      machine-translated variants of the technique slice (16 other languages out of scope); the recipe drops rows that
+      duplicate another dev set, and preparing the holdout in the gate drops holdout rows that duplicate it
   - id: mosscap
     name: Mosscap prompt injection
     source: hf:Lakera/mosscap_prompt_injection

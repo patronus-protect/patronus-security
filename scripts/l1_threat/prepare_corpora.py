@@ -96,7 +96,7 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep"}
+OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against"}
 KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "at_least", "below")
 SHA1 = re.compile(r"[0-9a-f]{40}")
@@ -269,6 +269,9 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
             problems.append(f"{where}: training may only be false")
         if "cap" in entry and not (_positive(entry["cap"]) and entry["cap"] <= (sampling.get("max_rows") or 0)):
             problems.append(f"{where}: cap must be a positive integer up to sampling.max_rows")
+        for other in entry.get("dedup_against") or []:
+            if other == dataset_id or other not in datasets or datasets[other]["split"] == "holdout":
+                problems.append(f"{where}: dedup_against {other!r} must be another train_dev or report set")
         if entry.get("training") is False and dataset["split"] == "train_dev":
             problems.append(f"{where}: an evaluation-only set (training: false) cannot be train_dev")
         kinds = [key for key in ("internal", "pending") if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
@@ -603,6 +606,13 @@ def build(
         rows, dropped = capped_of(dataset_id), Counter(loaded[dataset_id][1])
         rows_before_cap = len(rows_of(dataset_id))
         dropped["cap"] = rows_before_cap - len(rows)
+        # Same split: a set built from others (translations) drops the rows those sets already hold.
+        against = [i for i in entries[dataset_id].get("dedup_against") or [] if is_ready(entries[i])]
+        if against:
+            index = _index((row for i in against for row in capped_of(i)), dedup)
+            kept = [row for row in rows if index.match(row["text"])[0] is None]
+            dropped["cross_set"] = len(rows) - len(kept)
+            rows = kept
         if other is not None:
             kept = [row for row in rows if other.match(row["text"])[0] is None]
             dropped["cross_split"] = len(rows) - len(kept)

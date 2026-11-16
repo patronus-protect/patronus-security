@@ -36,7 +36,7 @@ hand-check sample with ``checked: true``; ``translate ingest`` validates the she
 translated) and its ``template_family``.
 
     python3 scripts/l1_threat/generators.py generate --dev-out DEV [--holdout-out HOLDOUT] [--holdout-seed-file F] [--force]
-    python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set N]
+    python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set N] [--sets ID ...]
     python3 scripts/l1_threat/generators.py translate ingest --dev-out DEV --sheet SHEET.jsonl [--force]
     python3 scripts/l1_threat/generators.py verify DIR
 """
@@ -76,9 +76,10 @@ entity_map = CORPORA.entity_map
 Rng = SYNTH.Rng
 
 SCHEMA = CORPORA.GENERATED_SCHEMA
-# v2: class_templates; v3: jailbreak templates, cue-filtered inputs. A frozen output of a lower version is
-# regenerated without --force.
-GENERATOR_VERSION = 3
+# v2: class_templates; v3: jailbreak templates, cue-filtered inputs; v4: the runner translations of SPML and
+# Mosscap and the German CyberSecEval rows join the inputs (carrier and obfuscation sets get German attack rows).
+# A frozen output of a lower version is regenerated without --force.
+GENERATOR_VERSION = 4
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -823,11 +824,14 @@ def check_sample(ids: list[str]) -> set[str]:
     return set(sorted(ids, key=lambda i: hashlib.sha256(f"{DEV_SEED}/check/{i}".encode("utf-8")).hexdigest())[:size])
 
 
-def export_sheet(rows: list[dict[str, Any]], per_set: int) -> list[dict[str, Any]]:
-    """Worksheet rows: per dev set up to ``per_set`` English rows, attacks and benign rows alternating."""
+def export_sheet(rows: list[dict[str, Any]], per_set: int, sets: frozenset[str] | None = None) -> list[dict[str, Any]]:
+    """Worksheet rows: per dev set (all, or those in ``sets``) up to ``per_set`` English rows, attacks and
+    benign rows alternating."""
     sheet = []
     by_set: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
+        if sets is not None and row["dataset"] not in sets:
+            continue
         if row["language"] == "en" and row["text"].strip() and len(row["text"]) <= MAX_PAYLOAD_CHARS:
             by_set.setdefault(row["dataset"], []).append(row)
     for dataset_id, members in sorted(by_set.items()):
@@ -924,6 +928,7 @@ def main(argv: list[str] | None = None) -> int:
     tr.add_argument("--dev-out", type=Path, required=True)
     tr.add_argument("--sheet", type=Path, required=True)
     tr.add_argument("--per-set", type=int, default=200)
+    tr.add_argument("--sets", nargs="+", help="export only these dev sets (default: every English dev set)")
     tr.add_argument("--force", action="store_true")
     ver = sub.add_parser("verify")
     ver.add_argument("directory", type=Path)
@@ -938,7 +943,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--holdout-seed-file needs --holdout-out")
         return generate(args.dev_out, args.holdout_out, args.holdout_seed_file, entity_map.load(args.entity_map), args.force)
     if args.action == "export":
-        sheet = export_sheet(read_corpus(args.dev_out / "train_dev", {"train_dev"}), args.per_set)
+        sets = frozenset(args.sets) if args.sets else None
+        sheet = export_sheet(read_corpus(args.dev_out / "train_dev", {"train_dev"}), args.per_set, sets)
         args.sheet.write_bytes(CORPORA.BENIGN_CODE._jsonl(sheet))
         print(f"{args.sheet}: {len(sheet)} rows, {sum(row['check'] for row in sheet)} to check by hand")
         return 0
