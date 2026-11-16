@@ -506,8 +506,8 @@ Eval-Split (2 000 `adversarial_harmful`, 210 `adversarial_benign`) aus der ungeg
 `adversarial_harmful` wertet `jailbreak` (2 000 native Zeilen); `harmful_content` ist für diesen Satz nur
 berichtet, weil die verpackten Anfragen auch Kategorien außerhalb der Klasse abdecken. Benign-Zeilen, die die
 Umgehungs-Rahmung selbst tragen (Ablehnung vermeiden, von Regeln/Ethik befreit, unzensierte Persona, Persona-Sperre,
-gefälschtes Update oder Policy, Antwort-Priming, Codesprache, Buchstaben-Abstände, Verharmlosung als „rein hypothetisch“ oder Scherz, Drohung, falsche Zustimmung, benannte
-Jailbreak-Vorlagen), sind nach §2 von [`categories/jailbreak.md`](categories/jailbreak.md) selbst Jailbreak und
+gefälschtes Update oder Policy, Antwort-Priming, Codesprache, Buchstaben-Abstände, Verharmlosung als „rein
+hypothetisch“ oder Scherz, Drohung, falsche Zustimmung, benannte Jailbreak-Vorlagen), sind nach §2 von [`categories/jailbreak.md`](categories/jailbreak.md) selbst Jailbreak und
 fallen per Cue-Filter weg (187 von 210); die übrigen 23 (Rollenspiel- und Fiktionsrahmen um harmlose Bitten) zählen
 im Scoreboard zum Hard-Benign-Pool (`HARD_BENIGN_SETS`). Gegen jackhhao dedupliziert, Grenze 15 000 (Default),
 `generation: 8`. Carrier-Insertion und Obfuskations-Slices betten damit auch WildJailbreak-Angriffe ein.

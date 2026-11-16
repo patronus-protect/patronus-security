@@ -13,6 +13,7 @@
       "train_dev/dolly_15k": 14635,
       "train_dev/germanquad": 11451,
       "train_dev/spml": 3326,
+      "train_dev/wildjailbreak": 23,
       "translated/runner_translations_de": 350
     },
     "exfiltration": {
@@ -22,23 +23,26 @@
       "report/ailuminate_demo": 800
     },
     "instruction_injection": {
-      "generated/carrier_insertion": 379,
-      "generated/obfuscation_slices": 245,
+      "generated/carrier_insertion": 249,
+      "generated/obfuscation_slices": 168,
       "report/gandalf": 998,
       "train_dev/cyberseceval_multilingual": 9,
       "train_dev/spml": 2403,
       "translated/runner_translations_de": 350
     },
     "jailbreak": {
+      "generated/carrier_insertion": 152,
       "generated/class_templates": 84,
-      "report/jackhhao_jailbreak": 544
+      "generated/obfuscation_slices": 109,
+      "report/jackhhao_jailbreak": 544,
+      "train_dev/wildjailbreak": 2000
     },
     "memory_poisoning": {
       "generated/class_templates": 83
     },
     "prompt_extraction": {
-      "generated/carrier_insertion": 221,
-      "generated/obfuscation_slices": 155,
+      "generated/carrier_insertion": 199,
+      "generated/obfuscation_slices": 123,
       "report/gandalf": 998,
       "train_dev/mosscap": 15000,
       "translated/runner_translations_de": 700
@@ -62,20 +66,20 @@
       "en": 42
     },
     "benign": {
-      "de": 12791,
-      "en": 18771
+      "de": 12682,
+      "en": 18903
     },
     "exfiltration": {
       "de": 150,
       "en": 150
     },
     "instruction_injection": {
-      "de": 762,
-      "en": 2624
+      "de": 653,
+      "en": 2526
     },
     "jailbreak": {
       "de": 42,
-      "en": 42
+      "en": 2303
     },
     "memory_poisoning": {
       "de": 42,
@@ -83,7 +87,7 @@
     },
     "prompt_extraction": {
       "de": 885,
-      "en": 15191
+      "en": 15137
     },
     "resource_exhaustion": {
       "de": 42,
@@ -324,38 +328,38 @@
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:carrier_insertion:000213",
+      "id": "runner_translations_de:mosscap:0087864",
       "label": "prompt_extraction",
-      "note": "Asserts a password value; no reveal or hint request",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:carrier_insertion:000208",
-      "label": "instruction_injection",
-      "note": "Fake mode claim only; payload is ordinary physics question",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000317",
-      "label": "prompt_extraction",
-      "note": "Override attempt only; no request for secret or prompt",
-      "set": "generated/obfuscation_slices",
+      "note": "Thank-you message only; no request for password or hints",
+      "set": "translated/runner_translations_de",
       "verdict": "wrong"
     },
     {
-      "id": "generators_dev_seed:obfuscation_slices:000381",
-      "label": "prompt_extraction",
-      "note": "Statement about password; no explicit reveal request",
-      "set": "generated/obfuscation_slices",
+      "id": "wildjailbreak:0002208",
+      "label": "jailbreak",
+      "note": "Fantasy forgery of spell scrolls; harmful goal only implied",
+      "set": "train_dev/wildjailbreak",
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:obfuscation_slices:000103",
+      "id": "generators_dev_seed:carrier_insertion:000390",
       "label": "prompt_extraction",
-      "note": "Tries to reset the password; injection rather than extraction",
-      "set": "generated/obfuscation_slices",
+      "note": "Claims to have set the password rule; no reveal or hint request",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000127",
+      "label": "prompt_extraction",
+      "note": "Asks the model to agree never to share the password; no request",
+      "set": "generated/carrier_insertion",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:carrier_insertion:000033",
+      "label": "instruction_injection",
+      "note": "Fake mode claim only; payload is ordinary physics question",
+      "set": "generated/carrier_insertion",
       "verdict": "unclear"
     },
     {
@@ -364,48 +368,6 @@
       "note": "Bare statement that key is wrong; no request",
       "set": "generated/obfuscation_slices",
       "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000313",
-      "label": "instruction_injection",
-      "note": "Only a mode-switch claim; no override, benign request",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000118",
-      "label": "prompt_extraction",
-      "note": "Asks AI to guess a user-held password; no reveal request",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000262",
-      "label": "prompt_extraction",
-      "note": "Bare statement about the password, no request",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000366",
-      "label": "prompt_extraction",
-      "note": "Bare statement about the password, no request",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000312",
-      "label": "instruction_injection",
-      "note": "Asks how to bypass instructions; no actual override given",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "runner_translations_de:mosscap:0087864",
-      "label": "prompt_extraction",
-      "note": "Thank-you message only; no request for password or hints",
-      "set": "translated/runner_translations_de",
-      "verdict": "wrong"
     }
   ],
   "provenance": {
@@ -413,7 +375,7 @@
       "synthetic": 84
     },
     "benign": {
-      "native": 29412,
+      "native": 29435,
       "synthetic": 1800,
       "translated": 350
     },
@@ -422,18 +384,19 @@
     },
     "instruction_injection": {
       "native": 2403,
-      "synthetic": 624,
+      "synthetic": 417,
       "translated": 359
     },
     "jailbreak": {
-      "synthetic": 84
+      "native": 2000,
+      "synthetic": 345
     },
     "memory_poisoning": {
       "synthetic": 83
     },
     "prompt_extraction": {
       "native": 15000,
-      "synthetic": 376,
+      "synthetic": 322,
       "translated": 700
     },
     "resource_exhaustion": {
@@ -450,13 +413,13 @@
   "sets": {
     "generated/carrier_insertion": {
       "benign_errors": 0,
-      "benign_reviewed": 17,
+      "benign_reviewed": 13,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0392,
-      "reviewed": 51,
+      "error_rate": 0.0577,
+      "reviewed": 52,
       "role": "dev",
       "rows": 1200,
-      "unclear": 2,
+      "unclear": 3,
       "wrong": 0
     },
     "generated/class_templates": {
@@ -483,14 +446,14 @@
     },
     "generated/obfuscation_slices": {
       "benign_errors": 0,
-      "benign_reviewed": 34,
+      "benign_reviewed": 13,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0882,
-      "reviewed": 102,
+      "error_rate": 0.0192,
+      "reviewed": 52,
       "role": "dev",
       "rows": 800,
-      "unclear": 8,
-      "wrong": 1
+      "unclear": 1,
+      "wrong": 0
     },
     "report/ailuminate_demo": {
       "benign_errors": 0,
@@ -588,6 +551,17 @@
       "reviewed": 50,
       "role": "dev",
       "rows": 5729,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "train_dev/wildjailbreak": {
+      "benign_errors": 0,
+      "benign_reviewed": 23,
+      "dataset": "wildjailbreak",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 2023,
       "unclear": 1,
       "wrong": 0
     },

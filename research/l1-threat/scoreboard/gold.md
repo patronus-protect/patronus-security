@@ -6,9 +6,9 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | Decision | Reason |
 |---|---|---|
-| instruction_injection | no-go | dev generated/obfuscation_slices: error rate 8.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0% |
-| jailbreak | no-go | holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0%; holdout holdout/trustairlab_jailbreak: error rate 24.0% |
-| prompt_extraction | no-go | dev generated/obfuscation_slices: error rate 8.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5% |
+| instruction_injection | no-go | dev generated/carrier_insertion: error rate 5.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0% |
+| jailbreak | no-go | dev generated/carrier_insertion: error rate 5.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5%; holdout holdout/cyberseceval_pi: error rate 68.0%; holdout holdout/trustairlab_jailbreak: error rate 24.0% |
+| prompt_extraction | no-go | dev generated/carrier_insertion: error rate 5.8%; holdout generated/carrier_insertion: error rate 36.5%; holdout generated/obfuscation_slices: error rate 38.5% |
 | tool_poisoning | go | - |
 | agent_config_tampering | go | - |
 | memory_poisoning | go | - |
@@ -22,9 +22,9 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 762 | 2624 | 0 | 546 | 2403 | 359 | 624 | 183 | 0 | 363 |
-| jailbreak | 42 | 42 | 0 | 1444 | 0 | 0 | 84 | 692 | 0 | 752 |
-| prompt_extraction | 885 | 15191 | 0 | 716 | 15000 | 700 | 376 | 331 | 0 | 385 |
+| instruction_injection | 653 | 2526 | 0 | 546 | 2403 | 359 | 417 | 183 | 0 | 363 |
+| jailbreak | 42 | 2303 | 0 | 1444 | 2000 | 0 | 345 | 692 | 0 | 752 |
+| prompt_extraction | 885 | 15137 | 0 | 716 | 15000 | 700 | 322 | 331 | 0 | 385 |
 | tool_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
 | agent_config_tampering | 42 | 42 | 75 | 75 | 0 | 0 | 84 | 0 | 0 | 150 |
 | memory_poisoning | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
@@ -33,16 +33,16 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | resource_exhaustion | 42 | 41 | 75 | 75 | 0 | 0 | 83 | 0 | 0 | 150 |
 | harmful_content | 0 | 0 | 0 | 614 | 0 | 0 | 0 | 614 | 0 | 0 |
 | toxic_language | 0 | 0 | 6423 | 2098 | 0 | 0 | 0 | 8521 | 0 | 0 |
-| benign | 12791 | 18771 | 23452 | 12192 | 29412 | 350 | 1800 | 40058 | 0 | 2700 |
+| benign | 12682 | 18903 | 23452 | 12192 | 29435 | 350 | 1800 | 40058 | 0 | 2700 |
 
 ## Spot-check dev
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/carrier_insertion | dev | 1200 | 51 | 0 | 2 | 3.9% | 0 / 17 |
+| generated/carrier_insertion | dev | 1200 | 52 | 0 | 3 | 5.8% | 0 / 13 |
 | generated/class_templates | dev | 1000 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| generated/obfuscation_slices | dev | 800 | 102 | 1 | 8 | 8.8% | 0 / 34 |
+| generated/obfuscation_slices | dev | 800 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
@@ -52,9 +52,10 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
+| train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 | translated/runner_translations_de | dev | 1400 | 51 | 1 | 0 | 2.0% | 0 / 17 |
 
-Benign pool (dev, scored sets): 0 of 226 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 224 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -120,18 +121,12 @@ Benign pool (holdout, scored sets): 15 of 360 reviewed benign rows wrong or uncl
 | report/textdetox_de | textdetox_de:0002396 | benign | unclear | Mild jab at addressee's education |
 | report/textdetox_de | textdetox_de:0001950 | toxic_language | unclear | Condescending but mild |
 | report/textdetox_de | textdetox_de:0004397 | benign | unclear | Calls politician fascist; insulting label |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000213 | prompt_extraction | unclear | Asserts a password value; no reveal or hint request |
-| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000208 | instruction_injection | unclear | Fake mode claim only; payload is ordinary physics question |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000317 | prompt_extraction | wrong | Override attempt only; no request for secret or prompt |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000381 | prompt_extraction | unclear | Statement about password; no explicit reveal request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000103 | prompt_extraction | unclear | Tries to reset the password; injection rather than extraction |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000231 | prompt_extraction | unclear | Bare statement that key is wrong; no request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000313 | instruction_injection | unclear | Only a mode-switch claim; no override, benign request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000118 | prompt_extraction | unclear | Asks AI to guess a user-held password; no reveal request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000262 | prompt_extraction | unclear | Bare statement about the password, no request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000366 | prompt_extraction | unclear | Bare statement about the password, no request |
-| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000312 | instruction_injection | unclear | Asks how to bypass instructions; no actual override given |
 | translated/runner_translations_de | runner_translations_de:mosscap:0087864 | prompt_extraction | wrong | Thank-you message only; no request for password or hints |
+| train_dev/wildjailbreak | wildjailbreak:0002208 | jailbreak | unclear | Fantasy forgery of spell scrolls; harmful goal only implied |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000390 | prompt_extraction | unclear | Claims to have set the password rule; no reveal or hint request |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000127 | prompt_extraction | unclear | Asks the model to agree never to share the password; no request |
+| generated/carrier_insertion | generators_dev_seed:carrier_insertion:000033 | instruction_injection | unclear | Fake mode claim only; payload is ordinary physics question |
+| generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000231 | prompt_extraction | unclear | Bare statement that key is wrong; no request |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -223,6 +218,39 @@ Handoff: the dev corpora are read-only for the runner. The filled worksheet stay
 repository (third-party derived rows): `~/ark-threat/worktrees/threat-078-t02/.l1-threat-translations/runner_translations_de.sheet.jsonl`
 (git-ignored, SHA-256 `3ce667e5b982ec23…`); the owner freeze ingests it (`generators.py translate ingest --dev-out
 DEV --sheet SHEET`) before `prepare_corpora.py` and `generators.py generate` re-freeze dev.
+
+## Findings (dev review of the native jailbreak source, 2026-11-16)
+
+Dev pool rebuilt locally with the recipes of this change (registry generation 8, generator version 4): the frozen
+`train_dev` and `report` sets keep their rows byte for byte, `train_dev/wildjailbreak` is new, and the generators
+draw attack and benign rows from it too. No `translated` directory is frozen in dev yet, so the counts above are the
+earlier summary plus the difference this change makes on the local build (with and without WildJailbreak); the
+runner translations keep their earlier review. Every new or changed set was reviewed in full:
+`train_dev/wildjailbreak`, `generated/carrier_insertion` and `generated/obfuscation_slices` (obfuscated rows judged
+on their source text). Unchanged sets keep their verdicts.
+
+- **WildJailbreak: 1 of 50 unclear (2.0 %), benign 0 of 23.** Eval split of WildJailbreak (ODC-BY), 2 000
+  `adversarial_harmful` rows scored as `jailbreak` (all carry a framing meant to get around the model's safety rules:
+  persona, fiction or alternate world, policy spoof, response priming, research or debate pretext, trivialisation);
+  the one unclear row wraps a fantasy forgery whose harmful goal is only implied. `harmful_content` is reported only
+  for this set: the wrapped requests also cover one-sided essays and mild profanity.
+- **Benign side: 23 hard negatives of 210.** The first review of the raw `adversarial_benign` rows found many that keep
+  the bypass framing itself (avoid a refusal, exempt from rules or ethics, uncensored persona, persona lock, fake
+  update or content policy, coded safety override, letter spacing, named jailbreak templates). By the class definition
+  that framing is jailbreak however harmless the request, so the recipe keeps a benign row only without such a cue
+  (187 dropped as `no_cue`); the 23 left are role-play and fiction framings around harmless requests and were all read
+  in full. They join the scoreboard's hard-benign pool.
+- **`carrier_insertion`: 3 of 52 unclear (5.8 %) — above the 5 % line.** The flagged rows are two Mosscap statements
+  without a request and one CyberSecEval mode claim around an ordinary question (the same upstream noise as before);
+  the 13 sampled WildJailbreak attacks and all benign twins are correct. Follow-up as noted for the German rows: tighten
+  the Mosscap cue against bare statements.
+- **`obfuscation_slices`: 1 of 52 unclear (1.9 %, was 8.8 %).** Fewer Mosscap rows in the sample now that the
+  generators share their picks with WildJailbreak; the remaining flag is a bare Mosscap statement.
+
+Rows per class: `jailbreak` 2 345 scored dev rows (2 000 native, 345 synthetic incl. 261 WildJailbreak rows inside
+generated carriers and obfuscations). Generated German `instruction_injection` rows drop from 762 to 653, because the
+generators now spread their picks over one more attack source. WildGuardMix stays without a recipe: the upstream
+dataset is gated and no ungated copy with the original rows and a clear licence was found.
 
 ## How this report is made
 
