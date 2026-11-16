@@ -6,7 +6,8 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
 ## What a release publishes
 
 - The **Rust crates** `patronus-ark-core` and `patronus-ark` to crates.io, in that order.
-- The **Python wheels** and source distribution to PyPI.
+- The **Python wheels** and source distributions of `patronus-ark` and `patronus-ark-core` to
+  PyPI.
 
 Release preparation does not authorize publication. The release owner reviews the artifacts,
 creates and pushes the release tag, and dispatches publishing; preparing agents stop before
@@ -33,12 +34,13 @@ those steps.
    check. Record any ignored real-model tests separately from the default test results.
 2. **Build artifacts** — `PyO3/maturin-action` builds `abi3-py311` wheels for Linux x86_64,
    macOS ARM64 and x86_64, and Windows x86_64, plus a source distribution. Every wheel is installed and
-   smoke-tested; the source distribution must rebuild into a wheel.
+   smoke-tested; the source distribution must rebuild into a wheel. The Core Python package is
+   built and tested by `core-python.yml`, which the Release workflow calls.
 3. **Publish** — choose one workflow channel:
    - `build` only stores the artifacts;
    - `testpypi` uploads the Python artifacts to TestPyPI;
    - `production` publishes `patronus-ark-core`, then its dependent `patronus-ark` crate,
-     and only then uploads the Python artifacts to PyPI.
+     and only then uploads both Python packages to PyPI.
 
 ## Cutting a release
 
@@ -77,9 +79,8 @@ it) keeps moving while the release is prepared.
    ```
    Pushes to `release/**` build the ARK API and Coordinator images and their versioned
    deployment assets.
-7. The release owner manually runs the Release workflow on that tag. Start with `testpypi`;
-   after installation succeeds, rerun the same tag with `production`. A branch build is not
-   a production release. If publication stops after Core succeeds, inspect the registry state
+7. The release owner manually runs the Release workflow on that tag with `production`. A branch
+   build is not a production release. If publication stops after Core succeeds, inspect the registry state
    before retrying; an already published crate version cannot be replaced.
 8. Merge the release branch back into `main` with a merge commit; keep *Unreleased* entries
    added on `main` meanwhile above the new section.
@@ -89,7 +90,8 @@ it) keeps moving while the release is prepared.
    [`SECURITY.md`](../security.md)).
 
 TestPyPI and PyPI publishing use trusted publishing. Configure the GitHub environments
-`testpypi` and `release` as trusted publishers for `.github/workflows/release.yml`. crates.io
+`testpypi` and `release` as trusted publishers for `.github/workflows/release.yml`, on both PyPI
+projects (`patronus-ark` and `patronus-ark-core`). crates.io
 publishing uses the `CARGO_REGISTRY_TOKEN` secret in the `release` environment.
 
 For a local macOS check before dispatching the workflow:

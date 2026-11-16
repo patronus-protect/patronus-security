@@ -169,8 +169,8 @@ python -m pytest ark-core/python/tests
 
 ## Publishing
 
-Releases go through the `core-python.yml` workflow (Linux, macOS and Windows wheels plus sdist).
-Publishing to PyPI needs a manual dispatch with `publish: true` from the `release` environment,
-using the PyPI trusted publisher for `patronus-ark-core` (owner `patronus-protect`, repository
-`patronus-security`). See
+`core-python.yml` builds and tests the Linux, macOS and Windows wheels plus sdist. The Release
+workflow (`release.yml`, channel `production`) calls it and publishes to PyPI from the `release`
+environment, using the PyPI trusted publisher for `patronus-ark-core` (owner `patronus-protect`,
+repository `patronus-security`, workflow `release.yml`). See
 [PyPI's trusted-publisher guide](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
