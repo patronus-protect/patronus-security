@@ -329,7 +329,8 @@ markierten Satzes, wie in `generators.py`):
   Schwelle in jeder Runde neu gewählt);
 - AUPRC (Average Precision der Positiven gegen die Benign-Zeilen, Gleichstände als eine Stufe);
 - Hard-Benign-FPR beim ARK-Urteil: harmlose Doppelgänger (`twin_of`) und die Benign-Zeilen von `notinject`,
-  `or_bench_hard`, `xstest`, `l1_goldens` (`HARD_BENIGN_SETS`);
+  `or_bench_hard`, `xstest`, `wildjailbreak` (adversarial_benign: Jailbreak-Form ohne schädliche Absicht),
+  `l1_goldens` (`HARD_BENIGN_SETS`);
 - Leave-one-dataset-out (Sprache und Herkunft `all`): TPR@1 % ohne je einen beteiligten Satz, dazu das Minimum
   und der Satz, dessen Wegfall die TPR senkt.
 

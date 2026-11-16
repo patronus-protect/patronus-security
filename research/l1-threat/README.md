@@ -354,7 +354,7 @@ allen Threads, 86M und ProtectAI v2 ein Mehrfaches langsamer; die volle Dev-Spal
 **Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
 Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
 Benign-Pool, Bootstrap-95-%-KI der TPR@1 %, AUPRC, Hard-Benign-FPR beim ARK-Urteil (Doppelgänger `twin_of` und
-die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
+die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, WildJailbreak `adversarial_benign`, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
 werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp TPR@1 %-Verlust
 einer Klasse (`all`, `de`, `en`) oder einer Hard-Benign-Zeile, die nur der Head meldet. Der Holdout erscheint im
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
