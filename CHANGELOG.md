@@ -340,6 +340,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   start of an HTML element or a JSON string value. The request must open a sentence or clause and
   name earlier instructions; negated, quoted and documenting mentions and harmless requests such as
   "ignore the typos in my previous message" stay unreported. The decision threshold is unchanged.
+- **Detection change:** (`injection`) the German "alles, was man dir … gesagt hat" wording now only
+  counts when adverbs ("vorher", "bisher") or the source ("von deinen Entwicklern") stand between
+  "dir" and the verb; topic-scoped advice such as "Vergiss alles, was man dir über Kalorien gesagt
+  hat" stays unreported.
 - Prompt-injection and threat findings now report rule points in each `matched_rules` entry, in the
   same form PII and secret rules use: `rule_score` (base points by rule severity, plus the strength
   of the rule's post-match check, plus 5 points per keyword anchor every match must contain, at most
