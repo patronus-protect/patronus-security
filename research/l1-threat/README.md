@@ -532,4 +532,4 @@ Gebündelt nach der Speed-up-Entscheidung vom 2026-10-21: ein Bündel = ein Lauf
   grünen PRs wie bei PII/DLP.
 - Inhalte im öffentlichen Repo: keine funktionierenden Schadanleitungen, keine Klartext-Slur-Listen
   (Toxizitäts-Lexika gehasht), keine Angriffs-Payloads aus Datensätzen.
-- Montags `TRIAGE` wie bei PII/DLP.
+- Montags `TRIAGE` wie bei PII/DLP; Berichte unter [`triage/`](triage/), neue Aufgaben `Txx` im Backlog mit `source`.
