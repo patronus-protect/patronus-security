@@ -182,7 +182,12 @@ tasks:
   - id: T11
     title: Owner — re-run the holdout gold review on the generation-5 holdout (after the label-mapping fixes of #364) for carrier_insertion and obfuscation_slices and the instruction_injection, jailbreak, prompt_extraction, harmful_content and toxic_language sets; regenerate gold.md go/no-go
     type: eval-infra
-    status: manual
+    # Done through generation 9: three owner review passes (2026-11-16, b, c, d — 1,057 verdicts),
+    # llmail gold narrowed to the executed attack chain (#380), every holdout set behind
+    # instruction_injection, exfiltration, prompt_extraction and toxic_language now passes the 5%
+    # bar; leakage 0. The remaining no-gos are dev-side (T07, T08, and a dev re-review of the
+    # regenerated carrier/obfuscation sets).
+    status: done
     owner: user
     deps: [M06]
     source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 11)"
