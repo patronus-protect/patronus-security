@@ -49,3 +49,6 @@ docs/research/
 
 # Private cloud credentials and local fleet state.
 /.private/
+
+# Filled L1 threat translation worksheets (derived from third-party rows; handed to the owner freeze, never committed)
+.l1-threat-translations/

@@ -68,7 +68,8 @@ def read_pool(directories: list[Path]) -> list[tuple[str, dict[str, Any], list[d
         if problems:
             raise ValueError("\n".join(problems))
         manifest = json.loads((directory / "manifest.json").read_bytes())
-        generated = manifest["schema"] == CORPORA.GENERATED_SCHEMA
+        # The runner translations share the generated schema but are translated rows, not synthetic ones.
+        generated = manifest["schema"] == CORPORA.GENERATED_SCHEMA and "translator" not in manifest
         for name, entry in sorted(manifest["sets"].items()):
             rows = [json.loads(line) for line in (directory / entry["file"]).read_text(encoding="utf-8").split("\n") if line]
             key = f"{directory.name}/{name}"
