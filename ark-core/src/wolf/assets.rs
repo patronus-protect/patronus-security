@@ -1,7 +1,7 @@
 //! Resolve local Wolf exports and validate their integrity metadata.
 use super::{
-    asset, BundleFile, LogitOutput, WolfConfig, WolfManifest, WolfPrecision, CONTENT_TOKENS,
-    SEQUENCE_TOKENS,
+    asset, BundleFile, LogitOutput, WolfConfig, WolfManifest, WolfModel, WolfPrecision,
+    CONTENT_TOKENS, SEQUENCE_TOKENS,
 };
 use crate::ScanError;
 use std::{
@@ -32,11 +32,11 @@ pub(super) fn verified_file(base: &Path, file: &BundleFile) -> Result<PathBuf, S
     Ok(path)
 }
 
-fn validate_manifest(manifest: &WolfManifest) -> Result<(), ScanError> {
+fn validate_manifest(manifest: &WolfManifest, model: WolfModel) -> Result<(), ScanError> {
     if manifest.schema_version != 1
-        || manifest.model_id != "wolf-defender-small"
+        || manifest.model_id != model.spec().id
         || manifest.revision.is_empty()
-        || !matches!(manifest.precision.as_str(), "fp16" | "int8_int4")
+        || !WolfPrecision::parse(&manifest.precision).is_some_and(|p| p != WolfPrecision::Auto)
         || manifest.reference.is_empty()
         || !matches!(
             (manifest.content_tokens, manifest.sequence_tokens),
@@ -58,11 +58,12 @@ fn validate_manifest(manifest: &WolfManifest) -> Result<(), ScanError> {
 }
 
 pub(crate) fn asset_manifest(config: &WolfConfig) -> Result<WolfManifest, ScanError> {
-    asset_manifest_at(&config.bundle_dir, config.precision)
+    asset_manifest_at(&config.bundle_dir, config.model, config.precision)
 }
 
 pub(crate) fn asset_manifest_at(
     bundle_dir: &Path,
+    model: WolfModel,
     precision: WolfPrecision,
 ) -> Result<WolfManifest, ScanError> {
     let manifest_path = bundle_dir.join("wolf.manifest.json");
@@ -72,65 +73,88 @@ pub(crate) fn asset_manifest_at(
                 return Err(asset("Wolf manifest exceeds 1 MiB"));
             }
             let manifest: WolfManifest = serde_json::from_reader(file).map_err(asset)?;
-            validate_manifest(&manifest)?;
+            validate_manifest(&manifest, model)?;
             Some(manifest)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(asset(error)),
     };
-    existing_assets(bundle_dir, precision, supplied_manifest.as_ref())
+    existing_assets(bundle_dir, model, precision, supplied_manifest.as_ref())
 }
 
-pub(crate) fn model_paths(precision: WolfPrecision) -> &'static [&'static str] {
-    match precision {
-        WolfPrecision::Fp16 => &[
-            crate::warmup::WOLF_FP16_FILE,
-            "onnx/fp16/model_fp16.onnx",
-            "model_fp16.onnx",
-        ],
-        WolfPrecision::Int8Int4 => &[
-            crate::warmup::WOLF_QUANTIZED_FILE,
-            "model_int4_embeddings_int8.onnx",
-        ],
-        WolfPrecision::Auto => &[],
+/// The published graph path first, then file names of older local exports.
+pub(crate) fn model_paths(model: WolfModel, precision: WolfPrecision) -> Vec<&'static str> {
+    let legacy: &[&str] = match precision {
+        WolfPrecision::Fp16 => &["onnx/fp16/model_fp16.onnx", "model_fp16.onnx"],
+        WolfPrecision::Int8Int4 => &["model_int4_embeddings_int8.onnx"],
+        _ => &[],
+    };
+    model
+        .spec()
+        .graph(precision)
+        .into_iter()
+        .chain(legacy.iter().copied())
+        .collect()
+}
+
+/// Explicit precisions are strict. `auto` starts with its resolved precision and
+/// falls back to other exports a local bundle may hold, smallest first.
+pub(crate) fn precision_order(requested: WolfPrecision) -> Result<Vec<WolfPrecision>, ScanError> {
+    let first = requested.resolve()?;
+    if requested != WolfPrecision::Auto {
+        return Ok(vec![first]);
     }
-}
-
-pub(crate) fn precision_order(
-    requested: WolfPrecision,
-    prefer_fp16: bool,
-) -> &'static [WolfPrecision] {
-    match requested {
-        WolfPrecision::Fp16 => &[WolfPrecision::Fp16],
-        WolfPrecision::Int8Int4 => &[WolfPrecision::Int8Int4],
-        WolfPrecision::Auto if prefer_fp16 => &[WolfPrecision::Fp16, WolfPrecision::Int8Int4],
-        WolfPrecision::Auto => &[WolfPrecision::Int8Int4, WolfPrecision::Fp16],
+    let mut order = vec![first];
+    for precision in [
+        WolfPrecision::platform_default(),
+        WolfPrecision::Int8Int4,
+        WolfPrecision::Int8Int4X86,
+        WolfPrecision::Fp16,
+        WolfPrecision::Mixed,
+        WolfPrecision::MixedX86,
+        WolfPrecision::Fp32,
+    ] {
+        if !order.contains(&precision) {
+            order.push(precision);
+        }
     }
+    Ok(order)
 }
 
-/// Precision selection preserves the legacy environment preference and available assets.
+/// Bundle-relative graph paths to try for a request, in preference order.
+pub fn graph_candidates(
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<Vec<&'static str>, ScanError> {
+    Ok(precision_order(precision)?
+        .into_iter()
+        .flat_map(|precision| model_paths(model, precision))
+        .collect())
+}
+
+/// Pick the first requested precision whose export exists locally.
 pub(super) fn existing_assets(
     base: &Path,
+    model: WolfModel,
     requested: WolfPrecision,
     supplied: Option<&WolfManifest>,
 ) -> Result<WolfManifest, ScanError> {
-    let prefer_fp16 = std::env::var("PATRONUS_L3_PRECISION")
-        .is_ok_and(|value| value.eq_ignore_ascii_case("fp16"));
-    let priorities = precision_order(requested, prefer_fp16);
     let mut selected = None;
-    for &precision in priorities {
+    for precision in precision_order(requested)? {
         if let Some(manifest) = supplied.filter(|m| m.precision == precision.as_str()) {
             // A supplied contract remains authoritative for its own precision:
             // missing or corrupt declared files must not silently bypass integrity.
             return Ok(manifest.clone());
         }
-        let paths = model_paths(precision);
-        if let Some(path) = paths.iter().find(|path| base.join(path).is_file()) {
-            selected = Some((*path, precision));
+        if let Some(path) = model_paths(model, precision)
+            .into_iter()
+            .find(|path| base.join(path).is_file())
+        {
+            selected = Some((path, precision));
             break;
         }
     }
-    let (model, precision) =
+    let (graph, precision) =
         selected.ok_or_else(|| asset("requested Wolf ONNX precision is unavailable"))?;
     let tokenizer = ["tokenizer.mmbpe", "tokenizer.json"]
         .into_iter()
@@ -147,10 +171,14 @@ pub(super) fn existing_assets(
             .is_some_and(|labels| labels.len() == 1);
     if !scalar {
         if let Some(labels) = config["id2label"].as_object() {
-            if labels.get("0").and_then(|v| v.as_str()) != Some("benign")
-                || labels.get("1").and_then(|v| v.as_str()) != Some("injection")
-                || labels.len() != 2
-            {
+            // v2.1 spells its labels BENIGN/INJECTION; the indices are unchanged.
+            let label = |index: &str, name: &str| {
+                labels
+                    .get(index)
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|v| v.eq_ignore_ascii_case(name))
+            };
+            if !label("0", "benign") || !label("1", "injection") || labels.len() != 2 {
                 return Err(asset("Wolf binary labels must be [benign, injection]"));
             }
         }
@@ -160,6 +188,14 @@ pub(super) fn existing_assets(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => "local".to_owned(),
         Err(error) => return Err(asset(error)),
     };
+    // All models share graph paths, so a managed marker is the only proof of identity.
+    if let Some(owner) = WolfModel::of_revision(&revision).filter(|&owner| owner != model) {
+        return Err(asset(format!(
+            "Wolf bundle holds {}, not the configured {}",
+            owner.spec().id,
+            model.spec().id
+        )));
+    }
     let pad_id = match config.get("pad_token_id").filter(|v| !v.is_null()) {
         Some(value) => value
             .as_u64()
@@ -169,11 +205,11 @@ pub(super) fn existing_assets(
     };
     Ok(WolfManifest {
         schema_version: 1,
-        model_id: "wolf-defender-small".into(),
+        model_id: model.spec().id.into(),
         revision,
         precision: precision.as_str().into(),
         model: BundleFile {
-            path: model.into(),
+            path: graph.into(),
             blake3: String::new(),
         },
         tokenizer: BundleFile {

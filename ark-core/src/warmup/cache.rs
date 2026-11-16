@@ -1,5 +1,5 @@
 use super::*;
-use crate::wolf::WolfPrecision;
+use crate::wolf::{WolfModel, WolfPrecision};
 #[cfg(feature = "download")]
 use std::fs;
 use std::{
@@ -9,7 +9,6 @@ use std::{
 };
 const LOCK: &str = ".patronus-wolf-prepare.lock";
 const PENDING: &str = ".patronus-wolf-pending";
-#[cfg(feature = "download")]
 const REVISION: &str = ".patronus-revision";
 fn asset(e: impl std::fmt::Display) -> ScanError {
     ScanError::Asset(e.to_string())
@@ -53,33 +52,52 @@ fn read_lock(dir: &Path) -> Result<Option<File>, ScanError> {
         Err(e) => Err(asset(e)),
     }
 }
-fn preferred(precision: WolfPrecision) -> &'static [WolfPrecision] {
-    crate::wolf::precision_order(
-        precision,
-        std::env::var("PATRONUS_L3_PRECISION").is_ok_and(|p| p.eq_ignore_ascii_case("fp16")),
-    )
+fn available(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<Option<WolfPrecision>, ScanError> {
+    Ok(crate::wolf::precision_order(precision)?
+        .into_iter()
+        .find(|&p| {
+            crate::wolf::model_paths(model, p)
+                .iter()
+                .any(|file| dir.join(file).is_file())
+        }))
 }
-fn available(dir: &Path, precision: WolfPrecision) -> Option<WolfPrecision> {
-    preferred(precision).iter().copied().find(|&p| {
-        crate::wolf::model_paths(p)
-            .iter()
-            .any(|file| dir.join(file).is_file())
-    })
+/// A managed cache whose marker names another pin holds another model or revision.
+fn other_pin(dir: &Path, model: WolfModel) -> Result<bool, ScanError> {
+    match std::fs::read_to_string(dir.join(REVISION)) {
+        Ok(revision) => Ok(revision.trim() != model.spec().revision),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(asset(e)),
+    }
 }
-fn local_present(dir: &Path, precision: WolfPrecision) -> Result<bool, ScanError> {
+fn local_present(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<bool, ScanError> {
+    if other_pin(dir, model)? {
+        return Ok(false);
+    }
     if !dir.join("wolf.manifest.json").is_file()
-        && (available(dir, precision).is_none()
+        && (available(dir, model, precision)?.is_none()
             || !["tokenizer.mmbpe", "tokenizer.json"]
                 .iter()
                 .any(|p| dir.join(p).is_file()))
     {
         return Ok(false);
     }
-    let manifest = crate::wolf::asset_manifest_at(dir, precision)?;
+    let manifest = crate::wolf::asset_manifest_at(dir, model, precision)?;
     Ok(dir.join(&manifest.model.path).is_file() && dir.join(&manifest.tokenizer.path).is_file())
 }
 /// Nonblocking readiness. A cache being prepared, or an unfinished managed cache, is not ready.
-pub fn wolf_assets_present(dir: &Path, precision: WolfPrecision) -> Result<bool, ScanError> {
+pub fn wolf_assets_present(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<bool, ScanError> {
     let lock = read_lock(dir)?;
     if let Some(lock) = &lock {
         match fs2::FileExt::try_lock_shared(lock) {
@@ -91,11 +109,12 @@ pub fn wolf_assets_present(dir: &Path, precision: WolfPrecision) -> Result<bool,
     if dir.join(PENDING).exists() {
         return Ok(false);
     }
-    local_present(dir, precision)
+    local_present(dir, model, precision)
 }
 /// Prepare a cache without constructing a decision policy, tokenizer or ONNX session.
 pub fn prepare_wolf_cache(
     dir: &Path,
+    model: WolfModel,
     precision: WolfPrecision,
     options: &WarmupOptions,
     progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
@@ -108,7 +127,7 @@ pub fn prepare_wolf_cache(
         if let Some(lock) = &lock {
             wait_lock(lock, false, deadline)?;
         }
-        if !dir.join(PENDING).exists() && local_present(dir, precision)? {
+        if !dir.join(PENDING).exists() && local_present(dir, model, precision)? {
             if let Some(callback) = progress {
                 callback(4, 4);
             }
@@ -128,12 +147,13 @@ pub fn prepare_wolf_cache(
     }
     #[cfg(feature = "download")]
     {
-        download(dir, precision, deadline, progress)
+        download(dir, model, precision, deadline, progress)
     }
 }
 #[cfg(feature = "download")]
-fn pending_origin() -> String {
-    format!("{WOLF_REPOSITORY}\n{WOLF_REVISION}\n")
+fn pending_origin(model: WolfModel) -> String {
+    let spec = model.spec();
+    format!("{}\n{}\n", spec.repository, spec.revision)
 }
 #[cfg(feature = "download")]
 fn atomic_marker(dir: &Path, name: &str, value: &str) -> Result<(), ScanError> {
@@ -167,7 +187,13 @@ fn atomic_marker(dir: &Path, name: &str, value: &str) -> Result<(), ScanError> {
 fn has_unknown_files(dir: &Path) -> Result<bool, ScanError> {
     for entry in fs::read_dir(dir).map_err(asset)? {
         let entry = entry.map_err(asset)?;
-        if entry.file_name() == LOCK {
+        // Downloads keep a per-file transport lock next to each asset on purpose.
+        if entry.file_name() == LOCK
+            || entry
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".patronus-download.lock")
+        {
             continue;
         }
         if entry.file_type().map_err(asset)?.is_dir() {
@@ -181,27 +207,22 @@ fn has_unknown_files(dir: &Path) -> Result<bool, ScanError> {
     Ok(false)
 }
 #[cfg(feature = "download")]
-fn establish_origin(dir: &Path) -> Result<(), ScanError> {
+fn establish_origin(dir: &Path, model: WolfModel) -> Result<(), ScanError> {
     if dir.join("wolf.manifest.json").exists() {
         return Err(asset(
             "prepare the files declared by the supplied Wolf manifest locally",
         ));
+    }
+    if other_pin(dir, model)? {
+        clear_managed(dir)?;
     }
     let revision = match fs::read_to_string(dir.join(REVISION)) {
         Ok(value) => Some(value),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(asset(e)),
     };
-    if revision
-        .as_deref()
-        .is_some_and(|r| r.trim() != WOLF_REVISION)
-    {
-        return Err(asset(
-            "incomplete Wolf cache has a different revision; use a separate empty cache",
-        ));
-    }
     match fs::read_to_string(dir.join(PENDING)) {
-        Ok(value) if value == pending_origin() => return Ok(()),
+        Ok(value) if value == pending_origin(model) => return Ok(()),
         Ok(_) => return Err(asset("Wolf pending cache has an unknown origin")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(asset(e)),
@@ -212,11 +233,35 @@ fn establish_origin(dir: &Path) -> Result<(), ScanError> {
         ));
     }
     // Persist origin before the first asset, so interrupted downloads can safely resume.
-    atomic_marker(dir, PENDING, &pending_origin())
+    atomic_marker(dir, PENDING, &pending_origin(model))
+}
+/// Remove the files a completed managed cache of another pin may hold, revision
+/// marker last, so an upgrade never loads a stale graph or compact tokenizer.
+#[cfg(feature = "download")]
+fn clear_managed(dir: &Path) -> Result<(), ScanError> {
+    let graphs = crate::wolf::WolfModel::ALL.into_iter().flat_map(|model| {
+        crate::wolf::WolfPrecision::CONCRETE
+            .into_iter()
+            .filter_map(move |precision| model.spec().graph(precision))
+    });
+    let generated = ["tokenizer.mmbpe", "tokenizer.mmbpe.meta.json"];
+    for file in graphs
+        .chain(crate::wolf::SUPPORT_FILES)
+        .chain(generated)
+        .chain([REVISION])
+    {
+        match fs::remove_file(dir.join(file)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(asset(e)),
+        }
+    }
+    Ok(())
 }
 #[cfg(feature = "download")]
 fn download(
     dir: &Path,
+    model: WolfModel,
     precision: WolfPrecision,
     deadline: Instant,
     progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
@@ -232,18 +277,25 @@ fn download(
         .map_err(asset)?;
     wait_lock(&lock, true, deadline)?;
     // Recheck after admission: a different process may already have completed this cache.
-    if !dir.join(PENDING).exists() && local_present(dir, precision)? {
+    if !dir.join(PENDING).exists() && local_present(dir, model, precision)? {
         if let Some(callback) = progress {
             callback(4, 4);
         }
         return Ok(());
     }
-    establish_origin(dir)?;
-    let precision = available(dir, precision).unwrap_or(preferred(precision)[0]);
-    let files = wolf_files(precision);
+    establish_origin(dir, model)?;
+    let precision = match available(dir, model, precision)? {
+        Some(precision) => precision,
+        None => precision.resolve()?,
+    };
+    let spec = model.spec();
+    let files = spec
+        .files(precision)
+        .ok_or_else(|| asset("Wolf precision did not resolve to an export"))?;
+    let graph = files[0];
     let present = |file: &str| {
-        if file == WOLF_FP16_FILE || file == WOLF_QUANTIZED_FILE {
-            available(dir, precision).is_some()
+        if file == graph {
+            dir.join(file).is_file()
         } else if file == "tokenizer.json" {
             dir.join("tokenizer.mmbpe").is_file() || dir.join(file).is_file()
         } else {
@@ -259,18 +311,18 @@ fn download(
     } else {
         None
     };
-    for &file in files {
+    for file in files {
         if present(file) {
             continue;
         }
         download_hf_file_with_options(
             token.as_deref(),
-            WOLF_REPOSITORY,
-            WOLF_REVISION,
+            spec.repository,
+            spec.revision,
             file,
             &dir.join(file),
             true,
-            WOLF_MODEL_ID,
+            spec.id,
             &DownloadOptions {
                 timeout: remaining(deadline)?,
             },
@@ -284,16 +336,17 @@ fn download(
     remaining(deadline)?;
     if !dir.join("tokenizer.mmbpe").exists() && dir.join("tokenizer.json").is_file() {
         crate::assets::mmbert_tokenizer::ensure_mmbert_compact_tokenizer(
-            WOLF_MODEL_ID,
+            spec.id,
             &dir.join("tokenizer.json"),
         )
         .map_err(asset)?
         .ok_or_else(|| asset("unsupported Wolf tokenizer"))?;
     }
-    if !local_present(dir, precision)? {
+    // The pin is written last; until then the old marker is gone and PENDING names the origin.
+    if !local_present(dir, model, precision)? {
         return Err(asset("Wolf preparation did not produce complete assets"));
     }
-    atomic_marker(dir, REVISION, WOLF_REVISION)?;
+    atomic_marker(dir, REVISION, spec.revision)?;
     fs::remove_file(dir.join(PENDING)).map_err(asset)?;
     Ok(())
 }
@@ -301,6 +354,8 @@ fn download(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    const SMALL: WolfModel = WolfModel::Small;
+    const FP16: &str = "onnx/onnx_fp16/model_fp16.onnx";
     struct Directory(PathBuf);
     impl Directory {
         fn new() -> Self {
@@ -317,7 +372,7 @@ mod tests {
         fn complete(&self) {
             fs::create_dir_all(self.0.join("onnx/onnx_fp16")).unwrap();
             fs::write(
-                self.0.join(WOLF_FP16_FILE),
+                self.0.join(FP16),
                 include_bytes!("../../tests/fixtures/wolf_synthetic_fp16.onnx"),
             )
             .unwrap();
@@ -362,10 +417,10 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        atomic_marker(&dir.0, PENDING, &pending_origin()).unwrap();
+        atomic_marker(&dir.0, PENDING, &pending_origin(SMALL)).unwrap();
         // An invalid ONNX file proves asset preparation never initializes a session.
-        fs::write(dir.0.join(WOLF_FP16_FILE), b"not a model").unwrap();
-        prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &missing(), None).unwrap();
+        fs::write(dir.0.join(FP16), b"not a model").unwrap();
+        prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
         assert!(dir.0.join("tokenizer.mmbpe").is_file());
         assert!(!dir.0.join(PENDING).exists());
     }
@@ -373,8 +428,8 @@ mod tests {
     fn complete_unmanaged_local_bundle_is_never_relabelled() {
         let dir = Directory::new();
         dir.complete();
-        prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &missing(), None).unwrap();
-        assert!(wolf_assets_present(&dir.0, WolfPrecision::Fp16).unwrap());
+        prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
+        assert!(wolf_assets_present(&dir.0, SMALL, WolfPrecision::Fp16).unwrap());
         assert!(!dir.0.join(REVISION).exists());
         assert!(!dir.0.join(PENDING).exists());
         assert!(!dir.0.join(LOCK).exists());
@@ -383,7 +438,8 @@ mod tests {
     fn unknown_partial_cache_is_rejected_before_any_download() {
         let dir = Directory::new();
         fs::write(dir.0.join("tokenizer.mmbpe"), b"local export").unwrap();
-        let error = prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &missing(), None).unwrap_err();
+        let error =
+            prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap_err();
         assert!(error.to_string().contains("unknown provenance"));
         assert_eq!(
             fs::read(dir.0.join("tokenizer.mmbpe")).unwrap(),
@@ -395,38 +451,70 @@ mod tests {
     #[test]
     fn pending_origin_precedes_files_and_only_complete_cache_gets_revision() {
         let dir = Directory::new();
-        establish_origin(&dir.0).unwrap();
+        establish_origin(&dir.0, SMALL).unwrap();
         assert_eq!(
             fs::read_to_string(dir.0.join(PENDING)).unwrap(),
-            pending_origin()
+            pending_origin(SMALL)
         );
         assert!(!dir.0.join(REVISION).exists());
         dir.complete();
-        assert!(!wolf_assets_present(&dir.0, WolfPrecision::Fp16).unwrap());
-        assert!(
-            prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &WarmupOptions::default(), None)
-                .is_err()
-        );
-        prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &missing(), None).unwrap();
+        assert!(!wolf_assets_present(&dir.0, SMALL, WolfPrecision::Fp16).unwrap());
+        assert!(prepare_wolf_cache(
+            &dir.0,
+            SMALL,
+            WolfPrecision::Fp16,
+            &WarmupOptions::default(),
+            None
+        )
+        .is_err());
+        prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
         assert_eq!(
             fs::read_to_string(dir.0.join(REVISION)).unwrap(),
-            WOLF_REVISION
+            SMALL.spec().revision
         );
         assert!(!dir.0.join(PENDING).exists());
-        assert!(wolf_assets_present(&dir.0, WolfPrecision::Fp16).unwrap());
+        assert!(wolf_assets_present(&dir.0, SMALL, WolfPrecision::Fp16).unwrap());
     }
     #[test]
-    fn legacy_current_pin_can_resume_but_other_origins_cannot() {
+    fn current_pin_can_resume_but_foreign_pending_origins_cannot() {
         let trusted = Directory::new();
-        fs::write(trusted.0.join(REVISION), WOLF_REVISION).unwrap();
+        fs::write(trusted.0.join(REVISION), SMALL.spec().revision).unwrap();
         fs::write(trusted.0.join("config.json"), "{}").unwrap();
-        establish_origin(&trusted.0).unwrap();
+        establish_origin(&trusted.0, SMALL).unwrap();
         let other = Directory::new();
-        fs::write(other.0.join(REVISION), "other-revision").unwrap();
-        assert!(establish_origin(&other.0).is_err());
-        fs::remove_file(other.0.join(REVISION)).unwrap();
         fs::write(other.0.join(PENDING), "unrelated-source").unwrap();
-        assert!(establish_origin(&other.0).is_err());
+        assert!(establish_origin(&other.0, SMALL).is_err());
+    }
+    #[test]
+    fn completed_cache_of_another_pin_is_cleared_before_the_upgrade() {
+        let dir = Directory::new();
+        dir.complete();
+        let old_graph = "onnx/int8_int4_embeddings/model.onnx";
+        fs::create_dir_all(dir.0.join("onnx/int8_int4_embeddings")).unwrap();
+        fs::write(dir.0.join(old_graph), b"previous release").unwrap();
+        // Real downloads leave their per-file transport locks behind.
+        for file in [old_graph, "config.json", "tokenizer.json"] {
+            fs::write(dir.0.join(format!("{file}.patronus-download.lock")), b"").unwrap();
+        }
+        fs::write(
+            dir.0.join(REVISION),
+            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
+        )
+        .unwrap();
+        // Complete files of an older pin are never served as the current model.
+        assert!(!wolf_assets_present(&dir.0, SMALL, WolfPrecision::Int8Int4).unwrap());
+        establish_origin(&dir.0, SMALL).unwrap();
+        for file in [old_graph, FP16, "tokenizer.mmbpe", "config.json", REVISION] {
+            assert!(!dir.0.join(file).exists(), "{file} survived the upgrade");
+        }
+        assert_eq!(
+            fs::read_to_string(dir.0.join(PENDING)).unwrap(),
+            pending_origin(SMALL)
+        );
+        // Another model in the same directory is a different pin as well.
+        fs::write(dir.0.join(REVISION), SMALL.spec().revision).unwrap();
+        assert!(other_pin(&dir.0, WolfModel::Edge).unwrap());
+        assert!(!other_pin(&dir.0, SMALL).unwrap());
     }
     #[test]
     fn offline_preparation_honors_held_bundle_lock() {
@@ -439,18 +527,18 @@ mod tests {
             .open(dir.0.join(LOCK))
             .unwrap();
         fs2::FileExt::lock_exclusive(&lock).unwrap();
-        assert!(!wolf_assets_present(&dir.0, WolfPrecision::Fp16).unwrap());
+        assert!(!wolf_assets_present(&dir.0, SMALL, WolfPrecision::Fp16).unwrap());
         let options = WarmupOptions {
             download_timeout_ms: 30,
             ..Default::default()
         };
         assert!(
-            prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &options, None)
+            prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &options, None)
                 .unwrap_err()
                 .to_string()
                 .contains("deadline")
         );
         drop(lock);
-        prepare_wolf_cache(&dir.0, WolfPrecision::Fp16, &options, None).unwrap();
+        prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &options, None).unwrap();
     }
 }

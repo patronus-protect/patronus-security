@@ -48,6 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             wolf: Some(WolfConfig {
                 bundle_dir: bundle,
                 threshold,
+                model: Default::default(),
                 precision: Default::default(),
                 backend: Default::default(),
                 runtime_options: Default::default(),

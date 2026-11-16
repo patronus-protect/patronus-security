@@ -109,6 +109,7 @@ mod tests {
                 onnx_runtime: Default::default(),
                 l3_strategy: patronus_ark::L3Strategy::Multi,
                 wolf_options: Default::default(),
+                wolf: Default::default(),
             },
             SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false),
         );
@@ -215,6 +216,7 @@ mod tests {
             onnx_runtime: Default::default(),
             l3_strategy: patronus_ark::L3Strategy::Multi,
             wolf_options: Default::default(),
+            wolf: Default::default(),
         };
         let state = AppState::new(
             config,

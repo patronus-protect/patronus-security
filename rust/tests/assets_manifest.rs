@@ -83,11 +83,13 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
         .files
         .contains(&"onnx/onnx_fp16/model_fp16.onnx"));
     assert_eq!(DEDICATED_L3_ASSETS.len(), 7);
+    // Injection is a Wolf slot: Core pins each selectable model, not this table.
+    let injection = dedicated_l3_asset(SecurityCategory::Injection).unwrap();
+    assert!(injection.files.is_empty());
+    for model in patronus_ark::WolfModel::ALL {
+        assert_eq!(model.spec().revision.len(), 40);
+    }
     for (category, revision) in [
-        (
-            SecurityCategory::Injection,
-            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
-        ),
         (
             SecurityCategory::SensitiveDocument,
             "c038771b10b00b8da67d31e2b0280f85e13b808c",
@@ -120,9 +122,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
             .contains(&"onnx/int8_int4_embeddings/model.onnx"));
         if matches!(
             category,
-            SecurityCategory::Injection
-                | SecurityCategory::SensitiveDocument
-                | SecurityCategory::UnsafeAction
+            SecurityCategory::SensitiveDocument | SecurityCategory::UnsafeAction
         ) {
             assert!(asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
         }
@@ -206,18 +206,17 @@ fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
 
 #[test]
 fn l3_model_categories_have_required_l3_assets() {
-    for category in [
-        SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocument,
-    ] {
-        let assets = category_assets(category, SecurityLevel::L3);
-        assert!(
-            assets
-                .iter()
-                .any(|asset| asset.level == SecurityLevel::L3 && asset.required),
-            "{category:?} should include required L3 assets"
-        );
-    }
+    let assets = category_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L3);
+    assert!(assets
+        .iter()
+        .any(|asset| asset.level == SecurityLevel::L3 && asset.required));
+    // Injection L3 is Wolf: Core prepares the configured model in the dedicated slot.
+    assert!(
+        category_assets(SecurityCategory::Injection, SecurityLevel::L3)
+            .iter()
+            .all(|asset| asset.level != SecurityLevel::L3)
+    );
+    assert!(dedicated_l3_asset(SecurityCategory::Injection).is_some());
 
     for category in [
         SecurityCategory::ToolClass,
@@ -497,10 +496,9 @@ mod asset_downloads {
     #[test]
     fn manifest_excludes_legacy_l1_rules_and_keeps_l3_assets() {
         let injection_assets = category_assets(SecurityCategory::Injection, SecurityLevel::L3);
-        assert!(injection_assets.iter().any(|asset| asset.source_path
-            == "onnx/int8_int4_embeddings/model.onnx"
-            && asset.destination_path == "l3/onnx/int8_int4_embeddings/model.onnx"
-            && asset.required));
+        assert!(injection_assets
+            .iter()
+            .all(|asset| !asset.destination_path.starts_with("l3/")));
 
         let tool_assets = category_assets(SecurityCategory::ToolClass, SecurityLevel::L3);
         assert!(tool_assets.is_empty());
@@ -548,21 +546,16 @@ mod asset_downloads {
     #[test]
     fn missing_required_asset_blocks_presence_check() {
         let dir = temp_dir("missing_required");
-        let assets = category_assets(SecurityCategory::Injection, SecurityLevel::L3);
-        for asset in assets
-            .into_iter()
-            .filter(|asset| asset.required && asset.destination_path != "l3/tokenizer.json")
-        {
+        let category = SecurityCategory::SensitiveDocument;
+        let assets = category_assets(category, SecurityLevel::L3);
+        // Every required file except the first one.
+        for asset in assets.into_iter().filter(|asset| asset.required).skip(1) {
             let path = dir.join(asset.destination_path);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, b"test").unwrap();
         }
 
-        assert!(!required_assets_present(
-            SecurityCategory::Injection,
-            SecurityLevel::L3,
-            &dir
-        ));
+        assert!(!required_assets_present(category, SecurityLevel::L3, &dir));
         fs::remove_dir_all(dir).unwrap();
     }
 

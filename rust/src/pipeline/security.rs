@@ -523,6 +523,14 @@ impl SecurityGateway {
             .set_wolf_execution_options(options)
     }
 
+    /// Choose the dedicated Wolf model and ONNX export; set before warmup.
+    pub fn set_wolf_selection(&self, selection: crate::WolfSelection) -> Result<(), String> {
+        self.execution
+            .lock()
+            .expect("execution mutex poisoned")
+            .set_wolf_selection(selection)
+    }
+
     /// Set ONNX Runtime session options for subsequent scans.
     pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions) {
         self.execution

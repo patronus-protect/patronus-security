@@ -1,6 +1,6 @@
 #![cfg(feature = "wolf")]
 use patronus_ark_core::{
-    wolf::{WolfConfig, WolfPrecision},
+    wolf::{WolfConfig, WolfModel, WolfPrecision},
     DownloadPolicy, ScanError, Scanner, ScannerConfig, WarmupOptions,
 };
 use std::{
@@ -124,10 +124,15 @@ fn invalid_scan_policy_is_rejected_before_asset_preparation() {
 #[test]
 #[ignore = "downloads the official FP16 and INT8/INT4 models into fresh temporary caches"]
 fn official_download_warms_both_exports_then_reuses_them_offline() {
-    for precision in [WolfPrecision::Fp16, WolfPrecision::Int8Int4] {
+    let models = WolfModel::ALL.into_iter().flat_map(|model| {
+        [WolfPrecision::Fp16, WolfPrecision::platform_default()].map(|p| (model, p))
+    });
+    for (model, precision) in models {
         let bundle = Bundle::new();
         let mut config = bundle.config();
-        config.wolf.as_mut().unwrap().precision = precision;
+        let wolf = config.wolf.as_mut().unwrap();
+        wolf.model = model;
+        wolf.precision = precision;
         let mut scanner = Scanner::warmup(
             config.clone(),
             WarmupOptions {
@@ -146,8 +151,10 @@ fn official_download_warms_both_exports_then_reuses_them_offline() {
             fs::read_to_string(bundle.0.join(".patronus-revision"))
                 .unwrap()
                 .trim(),
-            patronus_ark_core::warmup::WOLF_REVISION
+            model.spec().revision
         );
+        assert_eq!(first.model_id, model.spec().id);
+        assert_eq!(first.precision, precision.as_str());
         drop(scanner);
         let mut cached = Scanner::warmup(config, WarmupOptions::default()).unwrap();
         let second = cached
