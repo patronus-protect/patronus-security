@@ -230,11 +230,16 @@ def test_page_shows_semantic_entities_only_when_the_snapshot_has_them():
 
 def test_shared_wolf_metadata_is_resolved_in_asset_docs():
     assets = GENERATE_DOCS.parse_assets()
-    wolf = [asset for asset in assets if asset.category == "Injection"]
-    assert wolf and all(asset.repo == "patronus-studio/wolf-defender-prompt-injection-small" for asset in wolf)
+    # Core prepares Wolf L3 per selected model; the manifest lists no injection L3 files.
+    assert not [asset for asset in assets if asset.category == "Injection" and asset.level == "L3"]
     package = next(p for p in GENERATE_DOCS.parse_ntdb_packages() if p.category == "Injection")
+    assert package.repo == "patronus-studio/wolf-defender-prompt-injection-small"
     assert package.revision == "142fadc5474163d4c483cb761d5a6b02e3aa1741"
-    assert "patronus_ark_core::warmup::" not in GENERATE_DOCS.generate_assets_doc(assets, GENERATE_DOCS.load_snapshot())
+    models = "\n".join(GENERATE_DOCS.wolf_model_lines())
+    for repo in ("wolf-defender-prompt-injection", "wolf-defender-prompt-injection-small", "wolf-defender-prompt-injection-edge"):
+        assert f"`patronus-studio/{repo}`" in models
+    page = GENERATE_DOCS.generate_assets_doc(assets, GENERATE_DOCS.load_snapshot())
+    assert "patronus_ark_core::warmup::" not in page and "WOLF_L2_" not in page
 
 
 def test_pii_default_names_the_opt_in_bare_form():
