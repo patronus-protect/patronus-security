@@ -340,6 +340,7 @@ tasks:
   - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03]}
   - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
   - id: T06
+    status: done
     title: Native jailbreak dev source — recipes for wildjailbreak (ODC-BY; adversarial_harmful as jailbreak, adversarial_benign as hard negatives) and the adversarial part of wildguardmix, capped and deduplicated; gold review
     type: eval-infra
     deps: [M07]
