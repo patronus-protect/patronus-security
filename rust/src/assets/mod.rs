@@ -20,4 +20,5 @@ pub(crate) use download::{
 pub use specs::{
     AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST, DEDICATED_L3_ASSETS,
     DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, SHELL_COMMAND_ASSET, UNIFIED_L3_ASSET,
+    WOLF_PIPELINE_MODEL,
 };

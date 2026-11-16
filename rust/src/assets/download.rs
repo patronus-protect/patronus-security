@@ -18,7 +18,7 @@ use super::{
     specs::{
         AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
         DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, SHELL_COMMAND_ASSET,
-        UNIFIED_L3_ASSET,
+        UNIFIED_L3_ASSET, WOLF_PIPELINE_MODEL,
     },
 };
 
@@ -257,31 +257,54 @@ pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAss
         .find(|asset| asset.category == category)
 }
 
-/// Check whether a category's dedicated L3 bundle is cached.
-pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool {
-    dedicated_l3_asset(category)
-        .is_none_or(|asset| pipeline_model_assets_present(asset, target_dir))
+/// Check whether a category's dedicated L3 bundle is cached; Wolf checks `wolf`'s pin.
+pub fn dedicated_l3_assets_present(
+    category: SecurityCategory,
+    target_dir: &Path,
+    wolf: crate::WolfSelection,
+) -> bool {
+    dedicated_l3_asset(category).is_none_or(|asset| {
+        if asset.model == WOLF_PIPELINE_MODEL {
+            patronus_ark_core::warmup::wolf_assets_present(
+                &target_dir.join(asset.destination_path),
+                wolf.model,
+                wolf.precision,
+            )
+            .unwrap_or(false)
+        } else {
+            pipeline_model_assets_present(asset, target_dir)
+        }
+    })
 }
 
 /// Download a category's revision-pinned dedicated L3 bundle when it has one.
 pub fn download_dedicated_l3_assets(
     category: SecurityCategory,
     target_dir: &Path,
+    wolf: crate::WolfSelection,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    dedicated_l3_asset(category)
-        .map(|asset| download_pipeline_model_assets(asset, target_dir, None))
-        .transpose()
+    let Some(asset) = dedicated_l3_asset(category) else {
+        return Ok(None);
+    };
+    if asset.model != WOLF_PIPELINE_MODEL {
+        return download_pipeline_model_assets(asset, target_dir, None).map(Some);
+    }
+    let bundle_dir = target_dir.join(asset.destination_path);
+    patronus_ark_core::warmup::prepare_wolf_cache(
+        &bundle_dir,
+        wolf.model,
+        wolf.precision,
+        &patronus_ark_core::warmup::WarmupOptions {
+            download: patronus_ark_core::warmup::DownloadPolicy::Missing,
+            ..Default::default()
+        },
+        None,
+    )?;
+    Ok(Some(bundle_dir))
 }
 
 fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
     let bundle_dir = target_dir.join(asset.destination_path);
-    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
-        return patronus_ark_core::warmup::wolf_assets_present(
-            &bundle_dir,
-            patronus_ark_core::wolf::WolfPrecision::Auto,
-        )
-        .unwrap_or(false);
-    }
     bundle_revision_matches(&bundle_dir, asset.revision)
         && selected_pipeline_model_files(asset)
             .iter()
@@ -294,29 +317,6 @@ fn download_pipeline_model_assets(
     progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let bundle_dir = target_dir.join(asset.destination_path);
-    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
-        let callback = |completed_files, total_files| {
-            if let Some(progress) = progress {
-                progress(SecurityAssetProgress {
-                    category: asset.category,
-                    model: asset.model.to_owned(),
-                    completed_files,
-                    total_files,
-                });
-            }
-        };
-        patronus_ark_core::warmup::prepare_wolf_cache(
-            &bundle_dir,
-            patronus_ark_core::wolf::WolfPrecision::Auto,
-            &patronus_ark_core::warmup::WarmupOptions {
-                download: patronus_ark_core::warmup::DownloadPolicy::Missing,
-                ..Default::default()
-            },
-            Some(&callback),
-        )?;
-        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
-        return Ok(bundle_dir);
-    }
     let token = hf_token();
     let revision_matches = bundle_revision_matches(&bundle_dir, asset.revision);
     let selected_files = selected_pipeline_model_files(asset);
@@ -359,14 +359,6 @@ fn selected_pipeline_model_files_with_precision(
     asset: PipelineModelAssetSpec,
     fp16: bool,
 ) -> Vec<&'static str> {
-    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
-        let precision = if fp16 {
-            patronus_ark_core::wolf::WolfPrecision::Fp16
-        } else {
-            patronus_ark_core::wolf::WolfPrecision::Int8Int4
-        };
-        return patronus_ark_core::warmup::wolf_files(precision).to_vec();
-    }
     let fp16_path = if asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
         Some("onnx/onnx_fp16/model_fp16.onnx")
     } else if asset.files.contains(&"onnx/fp16/model_fp16.onnx") {
@@ -1213,18 +1205,42 @@ fn download_optional_assets() -> bool {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn wolf_download_selection_respects_both_legacy_precisions() {
-        let asset = *crate::assets::specs::DEDICATED_L3_ASSETS
+    fn wolf_slot_readiness_follows_the_selected_model_and_precision() {
+        use crate::{WolfModel, WolfPrecision, WolfSelection};
+        let root = std::env::temp_dir().join(format!("ark-wolf-slot-{}", std::process::id()));
+        let bundle = root.join("injection/l3");
+        let graph = "onnx/int8_int4_embeddings/model.onnx";
+        fs::create_dir_all(bundle.join("onnx/int8_int4_embeddings")).unwrap();
+        fs::write(bundle.join(graph), b"readiness-only fixture").unwrap();
+        fs::write(bundle.join("tokenizer.mmbpe"), b"readiness-only fixture").unwrap();
+        fs::write(
+            bundle.join("config.json"),
+            r#"{"id2label":{"0":"BENIGN","1":"INJECTION"}}"#,
+        )
+        .unwrap();
+        fs::write(
+            bundle.join(".patronus-revision"),
+            WolfModel::Small.spec().revision,
+        )
+        .unwrap();
+        let ready = |model, precision| {
+            dedicated_l3_assets_present(
+                SecurityCategory::Injection,
+                &root,
+                WolfSelection { model, precision },
+            )
+        };
+        assert!(ready(WolfModel::Small, WolfPrecision::Int8Int4));
+        // Another model or export of the same slot is never served from this cache.
+        assert!(!ready(WolfModel::Edge, WolfPrecision::Int8Int4));
+        assert!(!ready(WolfModel::Small, WolfPrecision::Fp16));
+        // The Small L2 package keeps the revision it was trained with.
+        let l2 = NTDB_L2_PACKAGE_MANIFEST
             .iter()
-            .find(|asset| asset.model == "wolf-defender-small")
+            .find(|asset| asset.model == WOLF_PIPELINE_MODEL)
             .unwrap();
-        let quantized = super::selected_pipeline_model_files_with_precision(asset, false);
-        assert!(quantized.contains(&"onnx/int8_int4_embeddings/model.onnx"));
-        assert!(!quantized.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
-        let fp16 = super::selected_pipeline_model_files_with_precision(asset, true);
-        assert!(fp16.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
-        assert!(!fp16.contains(&"onnx/int8_int4_embeddings/model.onnx"));
-        assert_eq!(asset.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
+        assert_eq!(l2.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
+        let _ = fs::remove_dir_all(root);
     }
     use std::{
         fs,

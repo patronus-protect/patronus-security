@@ -115,7 +115,10 @@ class OnnxRuntimeOptions(TypedDict, total=False):
 class WolfConfig(TypedDict):
     bundle_dir: str
     threshold: float
-    precision: NotRequired[Literal["auto", "fp16", "int8_int4"]]
+    model: NotRequired[Literal["base", "small", "edge"]]
+    precision: NotRequired[
+        Literal["auto", "fp32", "fp16", "mixed", "mixed_x86", "int8_int4", "int8_int4_x86"]
+    ]
     backend: NotRequired[Literal["auto", "cpu", "gpu", "coreml", "core_ml", "cuda", "direct_ml", "tensorrt", "tensor_rt"]]
     runtime_options: NotRequired[OnnxRuntimeOptions]
 

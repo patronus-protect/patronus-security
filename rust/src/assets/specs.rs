@@ -108,14 +108,22 @@ pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
+/// Injection's pipeline slot; it also names the L2 package of the Small repository.
+pub const WOLF_PIPELINE_MODEL: &str = "wolf-defender-small";
+/// The injection L2 package stays on the Small export it was trained with.
+const WOLF_L2_REPOSITORY: &str = "patronus-studio/wolf-defender-prompt-injection-small";
+const WOLF_L2_REVISION: &str = "142fadc5474163d4c483cb761d5a6b02e3aa1741";
+
+/// The injection entry is a slot: Core prepares the Wolf files of the configured
+/// [`crate::WolfSelection`], so its repository, revision and files are not used.
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::Injection,
-        model: "wolf-defender-small",
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: patronus_ark_core::warmup::WOLF_REVISION,
+        model: WOLF_PIPELINE_MODEL,
+        repo: WOLF_L2_REPOSITORY,
+        revision: WOLF_L2_REVISION,
         destination_path: "injection/l3",
-        files: patronus_ark_core::warmup::WOLF_FILES,
+        files: &[],
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::SensitiveDocument,
@@ -201,42 +209,6 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
 
 pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L3,
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: Some(patronus_ark_core::warmup::WOLF_REVISION),
-        source_path: "config.json",
-        destination_path: "l3/config.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L3,
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: Some(patronus_ark_core::warmup::WOLF_REVISION),
-        source_path: "tokenizer.json",
-        destination_path: "l3/tokenizer.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L3,
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: Some(patronus_ark_core::warmup::WOLF_REVISION),
-        source_path: "tokenizer_config.json",
-        destination_path: "l3/tokenizer_config.json",
-        required: false,
-    },
-    AssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L3,
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: Some(patronus_ark_core::warmup::WOLF_REVISION),
-        source_path: "onnx/int8_int4_embeddings/model.onnx",
-        destination_path: "l3/onnx/int8_int4_embeddings/model.onnx",
-        required: true,
-    },
-    AssetSpec {
         category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
         repo: "patronus-studio/orca-sonar-document-classifier",
@@ -278,9 +250,9 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
     NtdbL2PackageAssetSpec {
         category: SecurityCategory::Injection,
         level: SecurityLevel::L2,
-        model: "wolf-defender-small",
-        repo: patronus_ark_core::warmup::WOLF_REPOSITORY,
-        revision: patronus_ark_core::warmup::WOLF_REVISION,
+        model: WOLF_PIPELINE_MODEL,
+        repo: WOLF_L2_REPOSITORY,
+        revision: WOLF_L2_REVISION,
         source_prefix: "l2",
         destination_path: "l2_ntdb/injection_current",
         required: true,

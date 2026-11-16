@@ -31,9 +31,8 @@ mod published_model_tests {
             &reference.tokenizer,
         )
         .unwrap();
-        // These archived references used 256 content tokens. Only the short
-        // dynamic-window logits are profile-independent; long-document values
-        // must be regenerated independently for the 254-content profile.
+        // Short dynamic-window logits are profile-independent; document values
+        // are checked separately against the independent reference oracle below.
         reference
             .parity_cases
             .retain(|case| case.token_ids.len() <= CONTENT_TOKENS);
@@ -44,16 +43,17 @@ mod published_model_tests {
         runner.manifest = reference;
         runner.verify_reference_cases().unwrap();
     }
-    /// Independent 254-content export/tokenization oracle. This is not the
-    /// archived PyTorch 256-content document contract.
+    /// Independent oracle of the published `inference.py` profile (opt-in here):
+    /// 2046-token windows, 64 overlap, classwise SmoothMax, then softmax.
     #[test]
     #[ignore = "requires ARK_WOLF_BUNDLE with local FP16 export and tokenizer.json"]
-    fn published_fp16_254_profile_matches_independent_hf_ort_oracle() {
+    fn published_fp16_reference_profile_matches_independent_hf_ort_oracle() {
         let bundle =
             PathBuf::from(std::env::var_os("ARK_WOLF_BUNDLE").expect("set ARK_WOLF_BUNDLE"));
-        let manifest = existing_assets(&bundle, WolfPrecision::Fp16, None).unwrap();
+        let manifest =
+            existing_assets(&bundle, WolfModel::Small, WolfPrecision::Fp16, None).unwrap();
         let model = bundle.join(&manifest.model.path);
-        let benign = "Ordinary meeting notes about project planning. ".repeat(50);
+        let benign = "Ordinary meeting notes about project planning. ".repeat(300);
         let row: serde_json::Value = serde_json::from_str(
             include_str!("../../tests/fixtures/injection.jsonl")
                 .lines()
@@ -72,7 +72,6 @@ mod published_model_tests {
             tokenizer.with_padding(None);
             let bos = i64::from(tokenizer.token_to_id("<bos>").unwrap());
             let eos = i64::from(tokenizer.token_to_id("<eos>").unwrap());
-            let pad = i64::from(tokenizer.token_to_id("<pad>").unwrap());
             let (mut builder, _) = crate::onnx::configured_session_builder(
                 crate::ExecutionBackend::Cpu,
                 Some(&bundle),
@@ -89,23 +88,32 @@ mod published_model_tests {
                         .unwrap()
                         .get_ids()
                         .to_vec();
-                    assert!(tokens.len() > 254);
+                    assert!(tokens.len() > 2046);
+                    let mut chunks = Vec::new();
+                    let mut start = 0;
+                    loop {
+                        let end = (start + 2046).min(tokens.len());
+                        chunks.push(&tokens[start..end]);
+                        if end == tokens.len() {
+                            break;
+                        }
+                        start = end - 64;
+                    }
                     let mut logits = Vec::new();
-                    for chunk in tokens.chunks(254) {
+                    for chunk in chunks {
                         let mut ids = vec![bos];
                         ids.extend(chunk.iter().map(|&token| i64::from(token)));
                         ids.push(eos);
-                        let mut mask = vec![1_i64; ids.len()];
-                        ids.resize(256, pad);
-                        mask.resize(256, 0);
+                        let width = ids.len();
+                        let mask = vec![1_i64; width];
                         let inputs = vec![
                             (
                                 "input_ids",
-                                Tensor::from_array(([1_usize, 256], ids)).unwrap(),
+                                Tensor::from_array(([1_usize, width], ids)).unwrap(),
                             ),
                             (
                                 "attention_mask",
-                                Tensor::from_array(([1_usize, 256], mask)).unwrap(),
+                                Tensor::from_array(([1_usize, width], mask)).unwrap(),
                             ),
                         ];
                         let outputs = session.run(inputs).unwrap();
@@ -123,25 +131,34 @@ mod published_model_tests {
                                     .collect()
                             };
                         assert_eq!(values.len(), 2);
-                        logits.push(values[1] - values[0]);
+                        logits.push([values[0], values[1]]);
                     }
-                    let max = logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-                    let pooled = max
-                        + 0.1
-                            * ((logits
+                    let pool = |column: usize| {
+                        let max = logits
+                            .iter()
+                            .map(|row| row[column])
+                            .fold(f64::MIN, f64::max);
+                        max + 0.1
+                            * (logits
                                 .iter()
-                                .map(|value| ((value - max) / 0.1).exp())
-                                .sum::<f64>())
-                            .ln()
-                                - (logits.len() as f64).ln());
-                    (tokens, logits.len() as u64, pooled)
+                                .map(|row| ((row[column] - max) / 0.1).exp())
+                                .sum::<f64>()
+                                .ln()
+                                - (logits.len() as f64).ln())
+                    };
+                    (tokens, logits.len() as u64, pool(1) - pool(0))
                 })
                 .collect::<Vec<_>>()
         };
         let mut config = WolfConfig::new(&bundle, 0.8);
         config.precision = WolfPrecision::Fp16;
         config.backend = crate::ExecutionBackend::Cpu;
-        let mut runner = WolfRunner::new(&config).unwrap();
+        let reference_profile = WolfExecutionOptions {
+            window_tokens: 2048,
+            overlap_tokens: 64,
+            batch_size: 1,
+        };
+        let mut runner = WolfRunner::new_with_options(&config, reference_profile).unwrap();
         for (text, (tokens, windows, reference)) in texts.iter().zip(references) {
             let mut actual_tokens = Vec::new();
             runner
@@ -182,27 +199,24 @@ mod published_model_tests {
         fs::create_dir_all(dir.join("onnx/onnx_fp16")).unwrap();
         fs::hard_link(source.join(relative_model), dir.join(relative_model)).unwrap();
         fs::hard_link(source.join("tokenizer.json"), dir.join("tokenizer.json")).unwrap();
+        // v2.1 spells its labels in upper case.
         fs::write(
             dir.join("config.json"),
-            r#"{"id2label":{"0":"benign","1":"injection"},"pad_token_id":0}"#,
+            r#"{"id2label":{"0":"BENIGN","1":"INJECTION"},"pad_token_id":0}"#,
         )
         .unwrap();
-        fs::write(
-            dir.join(".patronus-revision"),
-            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
-        )
-        .unwrap();
+        let revision = WolfModel::Small.spec().revision;
+        fs::write(dir.join(".patronus-revision"), revision).unwrap();
         let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
         let result = runner
             .scan("Hello, please summarize the meeting agenda.")
             .unwrap();
-        assert_eq!(result.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
-        assert!(!result.matched);
-        let expected: f64 = -19.3598575592041;
-        assert!((result.document_logit - expected).abs() < 0.02 + 0.005 * expected.abs());
+        assert_eq!(result.revision, revision);
+        assert_eq!(result.model_id, "wolf-defender-small");
+        assert!(!result.matched && result.attack_probability < 0.5);
         assert!(
             runner
-                .scan(&"Ordinary meeting notes. ".repeat(400))
+                .scan(&"Ordinary meeting notes. ".repeat(2000))
                 .unwrap()
                 .windows
                 > 1
@@ -212,7 +226,7 @@ mod published_model_tests {
         assert!(!dir.join("tokenizer.mmbpe.meta.json").exists());
         assert_eq!(
             fs::read_to_string(dir.join(".patronus-revision")).unwrap(),
-            "142fadc5474163d4c483cb761d5a6b02e3aa1741"
+            revision
         );
     }
 }
@@ -271,23 +285,16 @@ mod progress_tests {
 mod resource_tests {
     use super::*;
     #[test]
-    fn precision_contract_matches_legacy_preference_and_explicit_choices() {
-        assert_eq!(
-            precision_order(WolfPrecision::Auto, false),
-            &[WolfPrecision::Int8Int4, WolfPrecision::Fp16]
-        );
-        assert_eq!(
-            precision_order(WolfPrecision::Auto, true),
-            &[WolfPrecision::Fp16, WolfPrecision::Int8Int4]
-        );
-        assert_eq!(
-            precision_order(WolfPrecision::Fp16, false),
-            &[WolfPrecision::Fp16]
-        );
-        assert_eq!(
-            precision_order(WolfPrecision::Int8Int4, true),
-            &[WolfPrecision::Int8Int4]
-        );
+    fn precision_order_is_strict_for_explicit_choices_and_complete_for_auto() {
+        for precision in WolfPrecision::CONCRETE {
+            assert_eq!(precision_order(precision).unwrap(), vec![precision]);
+        }
+        if std::env::var_os(crate::wolf::PRECISION_ENV).is_none() {
+            let auto = precision_order(WolfPrecision::Auto).unwrap();
+            assert_eq!(auto[0], WolfPrecision::platform_default());
+            assert_eq!(auto.len(), WolfPrecision::CONCRETE.len());
+            assert!(WolfPrecision::CONCRETE.iter().all(|p| auto.contains(p)));
+        }
         assert_eq!(
             serde_json::from_str::<WolfPrecision>("\"int8_int4\"").unwrap(),
             WolfPrecision::Int8Int4
@@ -312,18 +319,77 @@ mod resource_tests {
         )
         .unwrap();
         fs::write(dir.join("tokenizer.mmbpe"), b"selection-only fixture").unwrap();
-        let selected = existing_assets(&dir, WolfPrecision::Int8Int4, None).unwrap();
+        let small = WolfModel::Small;
+        let selected = existing_assets(&dir, small, WolfPrecision::Int8Int4, None).unwrap();
         assert_eq!(selected.model.path, "onnx/int8_int4_embeddings/model.onnx");
         assert_eq!(selected.precision, "int8_int4");
-        assert_eq!(selected.content_tokens, 254);
-        assert_eq!(selected.sequence_tokens, 256);
-        assert!(existing_assets(&dir, WolfPrecision::Fp16, None).is_err());
-        assert_eq!(
-            existing_assets(&dir, WolfPrecision::Auto, None)
-                .unwrap()
-                .precision,
-            "int8_int4"
-        );
+        assert_eq!(selected.model_id, "wolf-defender-small");
+        assert_eq!(selected.content_tokens, CONTENT_TOKENS);
+        assert_eq!(selected.sequence_tokens, SEQUENCE_TOKENS);
+        assert!(existing_assets(&dir, small, WolfPrecision::Fp16, None).is_err());
+        assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4X86, None).is_err());
+        if std::env::var_os(crate::wolf::PRECISION_ENV).is_none() {
+            assert_eq!(
+                existing_assets(&dir, small, WolfPrecision::Auto, None)
+                    .unwrap()
+                    .precision,
+                "int8_int4"
+            );
+        }
+        // Edge keeps its own x86 directory name; the model id follows the configuration.
+        let edge_x86 = "onnx/int8_int4_embeddings_x86_weight_only/model.onnx";
+        fs::create_dir_all(dir.join("onnx/int8_int4_embeddings_x86_weight_only")).unwrap();
+        fs::write(dir.join(edge_x86), b"selection-only fixture").unwrap();
+        let edge =
+            existing_assets(&dir, WolfModel::Edge, WolfPrecision::Int8Int4X86, None).unwrap();
+        assert_eq!(edge.model.path, edge_x86);
+        assert_eq!(edge.model_id, "wolf-defender-edge");
+        assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4X86, None).is_err());
+        // A managed marker of another model is never relabelled as the configured one.
+        fs::write(
+            dir.join(".patronus-revision"),
+            WolfModel::Small.spec().revision,
+        )
+        .unwrap();
+        let error = existing_assets(&dir, WolfModel::Base, WolfPrecision::Int8Int4, None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("wolf-defender-small"), "{error}");
+        assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4, None).is_ok());
+        fs::write(dir.join(".patronus-revision"), "local export").unwrap();
+        assert!(existing_assets(&dir, WolfModel::Base, WolfPrecision::Int8Int4, None).is_ok());
+    }
+
+    #[test]
+    fn upper_case_v2_1_labels_are_accepted_and_others_rejected() {
+        let dir = std::env::temp_dir().join(format!("ark-wolf-labels-{}", std::process::id()));
+        fs::create_dir_all(dir.join("onnx/onnx_fp16")).unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(dir.clone());
+        fs::write(
+            dir.join("onnx/onnx_fp16/model_fp16.onnx"),
+            b"selection-only fixture",
+        )
+        .unwrap();
+        fs::write(dir.join("tokenizer.mmbpe"), b"selection-only fixture").unwrap();
+        for (labels, accepted) in [
+            (r#"{"0":"BENIGN","1":"INJECTION"}"#, true),
+            (r#"{"0":"benign","1":"injection"}"#, true),
+            (r#"{"0":"INJECTION","1":"BENIGN"}"#, false),
+        ] {
+            fs::write(
+                dir.join("config.json"),
+                format!(r#"{{"id2label":{labels}}}"#),
+            )
+            .unwrap();
+            let manifest = existing_assets(&dir, WolfModel::Base, WolfPrecision::Fp16, None);
+            assert_eq!(manifest.is_ok(), accepted, "{labels}");
+        }
     }
 
     #[test]
