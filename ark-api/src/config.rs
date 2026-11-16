@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use patronus_ark::{
     detectors::shell::ShellPolicyConfig, DynamicPiiConfig, L3Strategy, OnnxRuntimeOptions,
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, WolfExecutionOptions,
+    WolfSelection,
 };
 use serde::Deserialize;
 
@@ -61,6 +62,9 @@ struct RawPipeline {
     /// Dedicated Wolf startup defaults, separate from request chunk-overlap options.
     #[serde(default)]
     wolf_options: WolfExecutionOptions,
+    /// Dedicated Wolf model (`base`, `small`, `edge`) and ONNX export.
+    #[serde(default)]
+    wolf: WolfSelection,
     /// Default execution gates applied to every scan unless a key overrides them.
     #[serde(default)]
     gates: Option<ScanGateMatrix>,
@@ -167,6 +171,7 @@ pub struct Config {
     pub onnx_runtime: OnnxRuntimeOptions,
     pub l3_strategy: L3Strategy,
     pub wolf_options: WolfExecutionOptions,
+    pub wolf: WolfSelection,
 }
 
 impl Config {
@@ -175,6 +180,9 @@ impl Config {
         gateway
             .set_wolf_execution_options(self.wolf_options)
             .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
+        gateway
+            .set_wolf_selection(self.wolf)
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf: {error}")))?;
         gateway.set_l3_strategy(self.l3_strategy);
         if let Some(shell_command) = &self.shell_command {
             gateway
@@ -262,6 +270,11 @@ impl RawConfig {
             .wolf_options
             .validate()
             .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
+        self.pipeline
+            .wolf
+            .precision
+            .resolve()
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf: {error}")))?;
         let bind = self
             .server
             .bind
@@ -342,6 +355,7 @@ impl RawConfig {
             onnx_runtime: self.pipeline.onnx_runtime.into_options()?,
             l3_strategy,
             wolf_options: self.pipeline.wolf_options,
+            wolf: self.pipeline.wolf,
         })
     }
 }
@@ -352,6 +366,7 @@ mod tests {
 
     use patronus_ark::{
         detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
+        WolfSelection,
     };
 
     use patronus_ark::ScanGateMatrix;
@@ -406,6 +421,7 @@ mod tests {
             config.wolf_options,
             patronus_ark::WolfExecutionOptions::default()
         );
+        assert_eq!(config.wolf, WolfSelection::default());
     }
 
     #[test]
@@ -415,15 +431,34 @@ mod tests {
         value["pipeline"]["wolf_options"] = serde_json::json!({
             "window_tokens": 32, "overlap_tokens": 4, "batch_size": 2
         });
+        value["pipeline"]["wolf"] = serde_json::json!({"model": "edge", "precision": "mixed_x86"});
         let raw: RawConfig = serde_json::from_value(value).unwrap();
         let config = raw.into_config().unwrap();
         let gateway = SecurityGateway::with_max_level(Vec::new(), SecurityLevel::L1, None, false);
         config.apply_model_defaults(&gateway).unwrap();
         assert_eq!(gateway.l3_strategy(), patronus_ark::L3Strategy::Dedicated);
+        let execution = gateway.distributed_execution();
+        assert_eq!(execution.wolf_execution_options(), config.wolf_options);
         assert_eq!(
-            gateway.distributed_execution().wolf_execution_options(),
-            config.wolf_options
+            execution.wolf_selection(),
+            WolfSelection {
+                model: patronus_ark::WolfModel::Edge,
+                precision: patronus_ark::WolfPrecision::MixedX86,
+            }
         );
+    }
+
+    #[test]
+    fn startup_wolf_selection_rejects_unknown_models_and_precisions() {
+        for wolf in [
+            serde_json::json!({"model": "large"}),
+            serde_json::json!({"precision": "int4"}),
+            serde_json::json!({"model": "small", "quant": "x86"}),
+        ] {
+            let mut value = startup_config();
+            value["pipeline"]["wolf"] = wolf;
+            assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        }
     }
 
     #[test]

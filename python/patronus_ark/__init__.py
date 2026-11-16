@@ -175,7 +175,13 @@ class SecurityGateway:
             L3 promote thresholds.
         wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
             (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
-            retain 256/0/1. Validated before gateway construction; applied before warmup.
+            retain 256/0/1 (the model card's 2048/64 is opt-in). Validated before
+            gateway construction; applied before warmup.
+        wolf_model: Dedicated-Wolf model: `base`, `small` (default) or `edge`.
+        wolf_precision: Dedicated-Wolf ONNX export: `auto` (default; uses
+            `PATRONUS_L3_PRECISION`, else `int8_int4_x86` on x86_64 and
+            `int8_int4` elsewhere), `fp32`, `fp16`, `mixed`, `mixed_x86`,
+            `int8_int4` or `int8_int4_x86`.
         l3_strategy: `dedicated` for one L3 model per classifier pipeline or
             `multi` for the shared unified multi-head ONNX model.
         dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -210,6 +216,8 @@ class SecurityGateway:
         cache_memory_max_bytes: int = 128 * 1024 * 1024,
         *,
         wolf_options: dict[str, int] | None = None,
+        wolf_model: str = "small",
+        wolf_precision: str = "auto",
     ):
         self._categories = list(categories)
         self._max_level = max_level
@@ -228,6 +236,8 @@ class SecurityGateway:
             "ntdb_operating_point": ntdb_operating_point,
             "l3_strategy": l3_strategy,
             "wolf_options": deepcopy(wolf_options),
+            "wolf_model": wolf_model,
+            "wolf_precision": wolf_precision,
             "dynamic_pii_config": deepcopy(dynamic_pii_config),
             "cache_storage_location": cache_storage_location,
             "cache_encryption_key_hex": cache_encryption_key_hex,
@@ -242,6 +252,8 @@ class SecurityGateway:
             "ntdb_operating_point": ntdb_operating_point,
             "l3_strategy": l3_strategy,
             "wolf_options": deepcopy(wolf_options),
+            "wolf_model": wolf_model,
+            "wolf_precision": wolf_precision,
         }
         self.rust_gateway = RustSecurityGateway(
             categories,
@@ -261,12 +273,24 @@ class SecurityGateway:
             cache_memory_max_entries=cache_memory_max_entries,
             cache_memory_max_bytes=cache_memory_max_bytes,
             wolf_options_json=json.dumps(wolf_options) if wolf_options is not None else None,
+            wolf_model=wolf_model,
+            wolf_precision=wolf_precision,
         )
 
     @property
     def wolf_options(self) -> dict[str, int]:
         """Effective dedicated-Wolf startup profile; returned as an independent copy."""
         return dict(self.rust_gateway.wolf_options)
+
+    @property
+    def wolf_model(self) -> str:
+        """Dedicated-Wolf model: `base`, `small` or `edge`."""
+        return self.rust_gateway.wolf_model
+
+    @property
+    def wolf_precision(self) -> str:
+        """Requested dedicated-Wolf ONNX export, `auto` unless set explicitly."""
+        return self.rust_gateway.wolf_precision
 
     @property
     def categories(self) -> list[str]:

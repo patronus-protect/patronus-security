@@ -116,7 +116,7 @@ impl WolfRunner {
         &mut self,
         batch: &[Vec<u32>],
         control: &ScanControl,
-    ) -> Result<Vec<f64>, ScanError> {
+    ) -> Result<Vec<[f64; 2]>, ScanError> {
         control.check()?;
         if batch.is_empty()
             || batch.len() > self.options.batch_size
@@ -192,13 +192,14 @@ impl WolfRunner {
         values
             .chunks_exact(columns)
             .map(|row| {
-                let logit = if columns == 1 {
-                    row[0]
+                // Scalar exports carry the injection logit against an implicit zero.
+                let logits = if columns == 1 {
+                    [0.0, row[0]]
                 } else {
-                    row[1] - row[0]
+                    [row[0], row[1]]
                 };
-                if row.iter().all(|v| v.is_finite()) && logit.is_finite() {
-                    Ok(logit)
+                if logits.iter().all(|v| v.is_finite()) {
+                    Ok(logits)
                 } else {
                     Err(inference("non-finite Wolf logit"))
                 }
@@ -213,14 +214,11 @@ mod tests {
     use crate::wolf::{WolfConfig, WolfPrecision};
 
     #[test]
-    #[ignore = "requires ARK_WOLF_BUNDLE and ARK_WOLF_PRECISION=fp16 or int8_int4"]
+    #[ignore = "requires ARK_WOLF_BUNDLE and ARK_WOLF_PRECISION naming one of its exports"]
     fn local_export_mixed_batch_rows_match_direct_ort() {
         let directory = std::path::PathBuf::from(std::env::var_os("ARK_WOLF_BUNDLE").unwrap());
-        let precision = match std::env::var("ARK_WOLF_PRECISION").unwrap().as_str() {
-            "fp16" => WolfPrecision::Fp16,
-            "int8_int4" => WolfPrecision::Int8Int4,
-            _ => panic!("unknown precision"),
-        };
+        let precision = WolfPrecision::parse(&std::env::var("ARK_WOLF_PRECISION").unwrap())
+            .expect("unknown precision");
         let mut config = WolfConfig::new(&directory, 0.8);
         config.precision = precision;
         config.backend = crate::ExecutionBackend::Cpu;
@@ -285,7 +283,7 @@ mod tests {
             data.iter().map(|v| f64::from(v.to_f32())).collect()
         };
         for (actual, row) in actual.iter().zip(values.as_chunks::<2>().0) {
-            assert!((actual - (row[1] - row[0])).abs() < 1e-6);
+            assert!(actual.iter().zip(row).all(|(a, b)| (a - b).abs() < 1e-6));
         }
     }
 }

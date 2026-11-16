@@ -478,6 +478,7 @@ mod tests {
                 onnx_runtime: patronus_ark::OnnxRuntimeOptions::default(),
                 l3_strategy: patronus_ark::L3Strategy::Multi,
                 wolf_options: Default::default(),
+                wolf: Default::default(),
             },
             key,
         )

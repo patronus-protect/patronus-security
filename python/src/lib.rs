@@ -34,7 +34,7 @@ struct SecurityGateway {
 impl SecurityGateway {
     #[new]
     #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None, wolf_model="small", wolf_precision="auto"))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -53,8 +53,11 @@ impl SecurityGateway {
         cache_memory_max_entries: usize,
         cache_memory_max_bytes: usize,
         wolf_options_json: Option<&str>,
+        wolf_model: &str,
+        wolf_precision: &str,
     ) -> PyResult<Self> {
         let wolf_options = parse_wolf_options_json(wolf_options_json)?;
+        let wolf_selection = parse_wolf_selection(wolf_model, wolf_precision)?;
         if cache_entry_ttl_seconds == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "cache_entry_ttl_seconds must be positive",
@@ -112,6 +115,9 @@ impl SecurityGateway {
                 .set_wolf_execution_options(options)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
         }
+        inner
+            .set_wolf_selection(wolf_selection)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
         }
@@ -336,6 +342,24 @@ impl SecurityGateway {
     }
 
     #[getter]
+    fn wolf_model(&self) -> &'static str {
+        self.inner
+            .distributed_execution()
+            .wolf_selection()
+            .model
+            .as_str()
+    }
+
+    #[getter]
+    fn wolf_precision(&self) -> &'static str {
+        self.inner
+            .distributed_execution()
+            .wolf_selection()
+            .precision
+            .as_str()
+    }
+
+    #[getter]
     fn l3_strategy(&self) -> String {
         self.inner.l3_strategy().as_str().to_string()
     }
@@ -403,6 +427,21 @@ fn hex_nibble(value: u8) -> PyResult<u8> {
             "cache_encryption_key_hex must contain only hex characters",
         )),
     }
+}
+
+fn parse_wolf_selection(model: &str, precision: &str) -> PyResult<patronus_ark::WolfSelection> {
+    let model = patronus_ark::WolfModel::ALL
+        .into_iter()
+        .find(|candidate| candidate.as_str() == model)
+        .ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "wolf_model must be base, small or edge, not {model:?}"
+            ))
+        })?;
+    let precision = patronus_ark::WolfPrecision::parse(precision).ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err(format!("unknown wolf_precision {precision:?}"))
+    })?;
+    Ok(patronus_ark::WolfSelection { model, precision })
 }
 
 fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecutionOptions>> {

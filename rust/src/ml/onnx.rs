@@ -33,6 +33,7 @@ pub struct LazyOnnxTextClassifier {
     ttl: Duration,
     loaded: Option<OnnxTextClassifier>,
     wolf_runner: Option<patronus_ark_core::wolf::WolfRunner>,
+    wolf_selection: crate::WolfSelection,
     loaded_backend: Option<ExecutionBackend>,
     loaded_options: Option<OnnxRuntimeOptions>,
     last_used: Option<Instant>,
@@ -131,6 +132,7 @@ impl LazyOnnxTextClassifier {
             ttl: l3_ttl(),
             loaded: None,
             wolf_runner: None,
+            wolf_selection: crate::WolfSelection::default(),
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
@@ -273,7 +275,8 @@ impl LazyOnnxTextClassifier {
                         .ok_or("invalid Wolf tokenizer path")?
                         .to_path_buf(),
                     threshold,
-                    precision: Default::default(),
+                    model: self.wolf_selection.model,
+                    precision: self.wolf_selection.precision,
                     backend,
                     runtime_options: options,
                 },
@@ -292,7 +295,7 @@ impl LazyOnnxTextClassifier {
         options: OnnxRuntimeOptions,
         execution: crate::WolfExecutionOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if self.model_name == "wolf-defender-small" {
+        if self.model_name == crate::assets::WOLF_PIPELINE_MODEL {
             self.infer_wolf_document_with_progress("", 0.5, backend, options, execution, None)?;
         } else {
             self.ensure_loaded(backend, options)?;
@@ -321,10 +324,22 @@ impl LazyOnnxTextClassifier {
             ttl: self.ttl,
             loaded: None,
             wolf_runner: None,
+            wolf_selection: self.wolf_selection,
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
         }
+    }
+
+    /// Load this slot's Wolf session from `selection` instead of the default export.
+    pub(crate) fn with_wolf_selection(mut self, selection: crate::WolfSelection) -> Self {
+        self.wolf_selection = selection;
+        self
+    }
+
+    /// The Wolf Defender model the loaded session runs, e.g. `wolf-defender-base`.
+    pub fn wolf_model_id(&self) -> Option<&str> {
+        self.wolf_runner.as_ref().map(|runner| runner.model_id())
     }
 
     pub(crate) fn model_sha(&self) -> Option<&str> {

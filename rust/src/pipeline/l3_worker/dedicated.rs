@@ -1445,6 +1445,11 @@ fn infer_l3_chunk(
                 .details
                 .insert("precision".to_string(), serde_json::json!(precision));
         }
+        if let Some(wolf_model) = model.wolf_model_id() {
+            layer
+                .details
+                .insert("wolf_model".to_string(), serde_json::json!(wolf_model));
+        }
         if let Some(provider) = model.execution_provider() {
             layer.details.insert(
                 "execution_provider".to_string(),
@@ -1707,6 +1712,11 @@ fn finish_dedicated_output(
             layer
                 .details
                 .insert("precision".to_string(), serde_json::json!(precision));
+        }
+        if let Some(wolf_model) = model.wolf_model_id() {
+            layer
+                .details
+                .insert("wolf_model".to_string(), serde_json::json!(wolf_model));
         }
         if let Some(provider) = model.execution_provider() {
             layer.details.insert(
