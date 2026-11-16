@@ -352,6 +352,10 @@ def test_role_is_derived(world):
 def test_rule_matching():
     assert MODULE.rule_matches({"label": "x"}, {})
     assert MODULE.rule_matches({"field": "a.b", "equals": [True, "y"]}, {"a": {"b": True}})
+    # Keys containing dots resolve by longest match (LLMail's objectives["email.retrieved"]).
+    assert MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": {"email.retrieved": True}})
+    assert not MODULE.rule_matches({"field": "objectives.email.retrieved", "equals": True}, {"objectives": {"email.retrieved": False}})
+    assert MODULE.rule_matches({"field": "a.b.c", "equals": 1}, {"a.b": {"c": 1}})
     assert MODULE.rule_matches({"field": "t", "at_least": 0.5}, {"t": "0.5"})
     assert not MODULE.rule_matches({"field": "t", "at_least": 0.1, "below": 0.5}, {"t": 0.5})
     assert not MODULE.rule_matches({"field": "t", "below": 0.1}, {"t": None})

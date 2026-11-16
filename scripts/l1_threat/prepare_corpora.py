@@ -293,13 +293,20 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
 
 
 def _field(record: dict[str, Any], path: str) -> Any:
-    if path in record:
-        return record[path]
+    """Value at ``path``, where each step takes the longest key match, so keys containing dots
+    (LLMail's ``objectives["email.retrieved"]``) stay reachable."""
     value: Any = record
-    for part in path.split("."):
-        if not isinstance(value, dict) or part not in value:
+    parts = path.split(".")
+    while parts:
+        if not isinstance(value, dict):
             return None
-        value = value[part]
+        for take in range(len(parts), 0, -1):
+            key = ".".join(parts[:take])
+            if key in value:
+                value, parts = value[key], parts[take:]
+                break
+        else:
+            return None
     return value
 
 
