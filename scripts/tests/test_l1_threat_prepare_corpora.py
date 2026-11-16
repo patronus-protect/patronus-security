@@ -144,6 +144,19 @@ def test_repository_registry_matches_entity_map():
     assert ids == {dataset["id"] for dataset in emap["datasets"]}
 
 
+def test_repository_wildjailbreak_recipe_maps_the_adversarial_eval_split():
+    registry = MODULE.load()
+    entry = next(entry for entry in registry["datasets"] if entry["id"] == "wildjailbreak")
+    dataset = next(dataset for dataset in MODULE.entity_map.load()["datasets"] if dataset["id"] == "wildjailbreak")
+    assert MODULE.is_ready(entry) and entry["format"] == "parquet" and entry["text"] == "prompt"
+    harmful = MODULE.map_labels(entry, dataset, {"prompt": "x", "label": "adversarial_harmful"})
+    assert harmful["classes"] == ["harmful_content", "jailbreak"] and not harmful["benign"]
+    benign = MODULE.map_labels(entry, dataset, {"prompt": "x", "label": "adversarial_benign"})
+    assert benign["benign"] and benign["classes"] == [] and benign["labels"] == ["label = adversarial_benign"]
+    with pytest.raises(ValueError, match="unmapped upstream label"):
+        MODULE.map_labels(entry, dataset, {"prompt": "x", "label": "vanilla_benign"})
+
+
 def test_repository_registry_has_no_holdout_recipe():
     registry = MODULE.load()
     splits = {dataset["id"]: dataset["split"] for dataset in MODULE.entity_map.load()["datasets"]}

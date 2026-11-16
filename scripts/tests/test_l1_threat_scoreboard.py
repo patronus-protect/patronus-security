@@ -163,6 +163,13 @@ def test_score_pairs_cells_by_language_origin_and_hard_benign():
     assert "jailbreak" not in report["gated"] and report["report"] == {}
 
 
+def test_adversarial_benign_jailbreak_lookalikes_are_hard_benign():
+    # WildJailbreak's benign rows are adversarial_benign: jailbreak-shaped prompts without harmful intent.
+    assert MODULE.is_hard_benign(row("wildjailbreak", 0, benign=True))
+    assert not MODULE.is_hard_benign(row("wildjailbreak", 1, ["jailbreak"]))
+    assert not MODULE.is_hard_benign(row("dolly_15k", 0, benign=True))
+
+
 def test_score_pairs_keep_report_only_sets_apart_and_never_flag_them():
     report = MODULE.score_pairs(pairs(role="report"))
     assert report["gated"] == {} and "exfiltration" in report["report"]
