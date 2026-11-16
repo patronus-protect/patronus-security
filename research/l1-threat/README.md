@@ -500,6 +500,20 @@ maschinenübersetzt, `translated`, Cue-Filter, gegen die übrigen Dev-Sätze ded
 Vorbereiten des Holdouts dessen Duplikate). Carrier-Insertion und Obfuskations-Slices erzeugen damit deutsche
 Angriffszeilen (Generator-Version 4, Registry-Generation 6).
 
+**Native Jailbreak-Dev-Quelle (T06, 2026-11-16).** WildJailbreak (ODC-BY) kommt als `train_dev`-Rezept: der
+Eval-Split (2 000 `adversarial_harmful`, 210 `adversarial_benign`) aus der ungegateten ODC-BY-Kopie
+`walledai/WildJailbreak` (Upstream `allenai/wildjailbreak` verlangt Login; Zeilenzahlen wie upstream, SHA-256 gepinnt).
+`adversarial_harmful` wertet `jailbreak` (2 000 native Zeilen); `harmful_content` ist für diesen Satz nur
+berichtet, weil die verpackten Anfragen auch Kategorien außerhalb der Klasse abdecken. Benign-Zeilen, die die
+Umgehungs-Rahmung selbst tragen (Ablehnung vermeiden, von Regeln/Ethik befreit, unzensierte Persona, Persona-Sperre,
+gefälschtes Update oder Policy, Antwort-Priming, Codesprache, Buchstaben-Abstände, Verharmlosung als „rein hypothetisch“ oder Scherz, Drohung, falsche Zustimmung, benannte
+Jailbreak-Vorlagen), sind nach §2 von [`categories/jailbreak.md`](categories/jailbreak.md) selbst Jailbreak und
+fallen per Cue-Filter weg (187 von 210); die übrigen 23 (Rollenspiel- und Fiktionsrahmen um harmlose Bitten) zählen
+im Scoreboard zum Hard-Benign-Pool (`HARD_BENIGN_SETS`). Gegen jackhhao dedupliziert, Grenze 15 000 (Default),
+`generation: 8`. Carrier-Insertion und Obfuskations-Slices betten damit auch WildJailbreak-Angriffe ein.
+WildGuardMix bleibt `pending`: Upstream ist gegated, eine ungegatete Kopie mit den Originalzeilen und klarer Lizenz
+fehlt (Login-Token für den Gate-Abruf oder eine Owner-Kopie im Quell-Cache nötig).
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |

@@ -296,11 +296,12 @@ datasets:
         reason: >-
           adversarial_benign rows apply jailbreak tactics to a harmless request; many of them keep the safety-bypass
           framing itself (avoid a refusal, exempt from rules or ethics, uncensored or uninhibited persona, persona lock,
-          fake update or content policy, response priming, coded language, threat on failure, false consent, named
-          jailbreak templates), which counts as jailbreak however harmless
+          fake update or content policy, response priming, coded language, letter spacing, "purely hypothetical" or
+          joke trivialisation, threat on failure, false consent, named jailbreak templates), which counts as jailbreak
+          however harmless
           the request; only rows without such a framing cue stay as hard negatives (role-play and fiction framing
           around a harmless request)
-        pattern: '\A(?![\s\S]*(?:\brefus|restrict|restrain|\bregulation|\bconstraint|censor|filter|\bno limit|\bwithout limit|\bimmune\b|\bexempt\b|\bethic|\bguideline|\bpolic(?:y|ies)\b|\brules?\b|\bnorms\b|\blegal|\bharm|\bdownplay|\bconsent|\bobedien|\bdetect|illegal|inappropriate|euphemis|metaphor|\bauthority\b|new identity|never revert|original function|content rating|\bdeviat|\bbegin (?:by|with|your)\b|\bstart (?:by|with|your)\b|\bsure,|\bjailbreak|\bdeveloper mode|\bignore\b|\bdisregard|\bcode ?words?|\bcoded\b|\bexplicit|\bgraphic\b|\bpermission|\bauthori[sz]|\bno longer\b|\bunbound|\bfree from\b|\buninhibit|\bchatgpt|\bsydney\b|\bprompt here\b|\bas you are an ai\b|\bupdate|\bdo not respond|\bfail|\blanguage model|\bmode\b|\bpenalt|\bshut ?down|\bconfidential|\bsecret|\bwithout (?:any )?(?:bias|judg)))'
+        pattern: '\A(?![\s\S]*(?:\brefus|restrict|restrain|\bregulation|\bconstraint|censor|filter|\bno limit|\bwithout limit|\bimmune\b|\bexempt\b|\bethic|\bguideline|\bpolic(?:y|ies)\b|\brules?\b|\bnorms\b|\blegal|\bharm|\bdownplay|\bconsent|\bobedien|\bdetect|illegal|inappropriate|euphemis|metaphor|\bauthority\b|\bsafety\b|\boverrid|\bprogrammed\b|\beach letter\b|\bhypothetical|\bjoke\b|new identity|never revert|original function|content rating|\bdeviat|\bbegin (?:by|with|your)\b|\bstart (?:by|with|your)\b|\bsure,|\bjailbreak|\bdeveloper mode|\bignore\b|\bdisregard|\bcode ?words?|\bcoded\b|\bexplicit|\bgraphic\b|\bpermission|\bauthori[sz]|\bno longer\b|\bunbound|\bfree from\b|\buninhibit|\bchatgpt|\bsydney\b|\bprompt here\b|\bas you are an ai\b|\bupdate|\bdo not respond|\bfail|\blanguage model|\bmode\b|\bpenalt|\bshut ?down|\bconfidential|\bsecret|\bwithout (?:any )?(?:bias|judg)))'
     dedup_against: [jackhhao_jailbreak]
   - id: wildguardmix
     commercial: true
