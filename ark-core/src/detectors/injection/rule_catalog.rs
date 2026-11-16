@@ -1426,6 +1426,7 @@ mod tests {
                     "Forget everything you were told about carbs: diet still matters.",
                     "Forget what I said earlier, the meeting moved to Tuesday.",
                     "Don't forget everything you were taught in the training.",
+                    "The guide says: ignore any previous instructions.",
                 ]
                 .as_slice(),
             ),
@@ -1447,6 +1448,7 @@ mod tests {
                     "Vergiss alles, was ich gesagt habe, der Termin ist am Dienstag.",
                     "Vergiss alles, was du über Diäten gelernt hast: Ausgewogenheit zählt.",
                     "Bitte vergiss nicht alles, was man dir in der Schulung gesagt hat.",
+                    "Die Anleitung erklärt: Vergiss bitte deine Anweisungen.",
                 ]
                 .as_slice(),
             ),
