@@ -344,7 +344,12 @@ Klasse = Zahl getroffener Regeln (Näherung: YARA-Bedingungen und ATR-Operatoren
 aus Go-Teilstücken nur teilweise). Prompt Guard 2 läuft als zwei Zeilen (86M, 22M), Score = höchste
 Angriffs-Wahrscheinlichkeit über 512-Token-Fenster. Cache-Schlüssel: SHA-256 der Korpusdatei + Baseline-Version;
 `sweep` liefert je Klasse und Sprache die Schwelle bei gleicher FPR (1 %, 0,1 %) und die TPR dazu. Offen: CodeShield
-(eigene Toolchain) und eine genauere pipelock-Extraktion.
+(eigene Toolchain) und eine genauere pipelock-Extraktion. Dev-Cache (T01): Runner-Läufe schreiben nach
+`~/.cache/ark-l1-threat/baselines` (Klone unter `~/.cache/ark-l1-threat/src`), weil die Sandbox `~/ark-threat/cache`
+nicht beschreiben darf; ein späterer Lauf rechnet nur Sätze, die dort für die Version fehlen. Runner-Version 2
+schaltet das feste Padding/Kürzen auf 512 Tokens der Prompt-Guard-2-`tokenizer.json` ab (Version 1 bewertete
+nur die ersten 512 Tokens samt beachtetem Padding). Laufzeit auf 5 Kernen: Prompt Guard 2 22M etwa 20–25 Dok./s mit
+allen Threads, 86M und ProtectAI v2 ein Mehrfaches langsamer; die volle Dev-Spalte braucht mehrere Läufe.
 
 **Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
 Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
@@ -353,8 +358,9 @@ die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, Goldens) und Leave-one-d
 werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp TPR@1 %-Verlust
 einer Klasse (`all`, `de`, `en`) oder einer Hard-Benign-Zeile, die nur der Head meldet. Der Holdout erscheint im
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
-`latency_ab`. Dev-Stand: [`scoreboard/baseline.md`](scoreboard/baseline.md) (Baselinespalte, sobald deren
-Vorhersagen für Dev im Cache liegen).
+`latency_ab`. Dev-Stand: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
+besten Referenzzeile je Zelle (TPR@1 % / 0,1 %, nur Baselines, die die Klasse bewerten); Baselines ohne
+vollständigen Dev-Cache stehen dort mit Namen und Grund.
 
 ## Herkunft: Regeln, Train, Gold, Holdout
 

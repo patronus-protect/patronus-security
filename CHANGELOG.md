@@ -395,6 +395,13 @@ rules, letter-prefixed passports) and most document classes are opt-in.
 
 ### Fixed in this release
 
+- The threat baseline runner (`scripts/l1_threat/run_baselines.py`) now turns off the fixed padding
+  and truncation to 512 tokens that the Prompt Guard 2 tokenizer files bring. Before, every
+  document was cut to its first 512 tokens and scored together with padding the model attended to.
+  Cached Prompt Guard 2 and ProtectAI v2 predictions from the old runner version are not reused.
+  The threat scoreboard report now shows the best rule-based and the best model-based baseline
+  next to ARK in each row (detection rate at 1 % and 0.1 % false positives) and names every
+  baseline it could not include. **Detection change:** none; this is evaluation tooling only.
 - The Linux x86-64 wheel no longer crashes in `warmup()` for ONNX models; it now needs glibc 2.28
   or newer (`manylinux_2_28`).
 - Model-backed scanners return correct results on x86-64 CPUs without VNNI.

@@ -61,7 +61,7 @@ entity_map = prepare_corpora.entity_map
 generators = prepare_corpora._load_file("_ark_l1_threat_generators", HERE / "generators.py")
 oss_inventory = prepare_corpora._load_file("_ark_l1_threat_oss_inventory", HERE / "oss_inventory.py")
 
-RUNNER_VERSION = "1"
+RUNNER_VERSION = "2"
 PREDICTIONS_SCHEMA = "ark-l1-threat-baseline-predictions-v1"
 SWEEP_SCHEMA = "ark-l1-threat-baseline-sweep-v1"
 DEFAULT_FPRS = (0.01, 0.001)
@@ -195,6 +195,10 @@ class ReferenceBaseline(Baseline):
             from tokenizers import Tokenizer  # baselines venv only
 
             tokenizer = Tokenizer.from_file(str(model_dir / "tokenizer.json"))
+        # Prompt Guard 2 ships a tokenizer.json that pads and truncates to 512 tokens: the windows
+        # below do the cutting, and attended padding would shift the scores.
+        tokenizer.no_padding()
+        tokenizer.no_truncation()
         self.session = session
         self.tokenizer = tokenizer
         self.cls_id = tokenizer.token_to_id("[CLS]")
@@ -255,6 +259,11 @@ def clone_sources(inventory: dict[str, Any], src: Path, baseline_ids: Iterable[s
         if not target.exists():
             subprocess.run(["git", "clone", "--quiet", source["repo"], str(target)], check=True)
         subprocess.run(["git", "-C", str(target), "checkout", "--quiet", source["commit"]], check=True)
+
+
+def baseline_ids(emap: dict[str, Any]) -> list[str]:
+    """Every scoreboard row: the heuristic baselines of the entity map, then the reference runs."""
+    return [b["id"] for b in emap["baselines"] if b["kind"] == "heuristic"] + list(REFERENCE_MODELS)
 
 
 # --- corpora and cache -----------------------------------------------------------------------
@@ -468,13 +477,12 @@ def main(argv: list[str] | None = None) -> int:
 
     emap = entity_map.load()
     inventory = oss_inventory.load()
-    heuristic_ids = [b["id"] for b in emap["baselines"] if b["kind"] == "heuristic"]
     if args.command == "clone":
         clone_sources(inventory, args.src, [b["rules"] for b in emap["baselines"] if b["kind"] == "heuristic"])
         return 0
     if args.command == "run":
         wanted = set(args.baseline) if args.baseline else None
-        unknown = (wanted or set()) - set(heuristic_ids) - set(REFERENCE_MODELS)
+        unknown = (wanted or set()) - set(baseline_ids(emap))
         if unknown:
             parser.error(f"unknown baseline(s): {', '.join(sorted(unknown))}")
         baselines: list[Baseline] = []
@@ -490,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
                     target, ran = predict_set(baseline, set_id, path, sha, args.cache, args.jobs)
                     print(f"{baseline.id} {set_id}: {'computed' if ran else 'cached'} {target}")
         return 0
-    ids = args.baseline or heuristic_ids + list(REFERENCE_MODELS)
+    ids = args.baseline or baseline_ids(emap)
     report = {"schema": SWEEP_SCHEMA, "fprs": args.fpr,
               "baselines": [sweep_baseline(args.corpus, args.cache, b, args.fpr) for b in ids]}
     text = json.dumps(report, indent=1, sort_keys=True) + "\n"

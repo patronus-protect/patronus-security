@@ -304,23 +304,38 @@ def test_german_rows_of_a_translated_source_set_score_as_translated(tmp_path):
     assert cells["en"]["native"]["positives"] == 1 and "translated" not in cells["en"]
 
 
-def test_report_adds_the_best_cached_baseline(split, tmp_path):
+def cache_baseline(cache, baseline_id, version, sets, score, classes=("exfiltration", "tool_poisoning")):
+    for entry in sets:
+        target = MODULE.BASELINES.cache_path(cache, baseline_id, version, entry.set_id, entry.sha256)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        rows = list(MODULE.BASELINES.read_rows(entry.path))
+        target.write_text("".join(json.dumps({"id": r["id"], "scores": {c: score for c in r["classes"]}}) + "\n"
+                                  for r in rows))
+        target.with_suffix(".json").write_text(json.dumps({"corpus_sha256": entry.sha256, "classes": classes}))
+
+
+def test_report_adds_the_best_heuristic_and_reference_baseline(split, tmp_path):
     sets = MODULE.split_sets(split)
     fake_predict(sets, tmp_path / "pred")
     cache = tmp_path / "cache"
-    for entry in sets:
-        target = MODULE.BASELINES.cache_path(cache, "atr", "v1", entry.set_id, entry.sha256)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        rows = list(MODULE.BASELINES.read_rows(entry.path))
-        target.write_text("".join(json.dumps({"id": r["id"], "scores": {c: 1 for c in r["classes"]}}) + "\n"
-                                  for r in rows))
-        target.with_suffix(".json").write_text(json.dumps({"corpus_sha256": entry.sha256}))
+    cache_baseline(cache, "atr", "v1", sets, 1)
+    cache_baseline(cache, "prompt_guard_2_22m", "v1", sets, 0.9)
     (cache / "pipelock").mkdir()  # nothing cached: left out
-    baselines = MODULE.baseline_reports(sets, cache)
-    assert list(baselines) == ["atr"]
+    cache_baseline(cache, "protectai_v2", "v1", sets[:1], 0.9)  # one set only: left out
+    baselines, left_out = MODULE.baseline_reports(sets, cache)
+    assert list(baselines) == ["atr", "prompt_guard_2_22m"]
+    assert left_out["pipelock"] == "no cached predictions" and left_out["vigil"] == "no cached predictions"
+    assert left_out["protectai_v2"].startswith("`v1` not cached for ")
+    assert "atr" not in left_out and "prompt_guard_2_86m" in left_out
     text = MODULE.render_baseline(MODULE.score_split(sets, MODULE.ark_predictions(sets, tmp_path / "pred")),
-                                  baselines, "t")
-    assert "100.0 (atr)" in text
+                                  baselines, "t", left_out)
+    assert "best heuristic TPR@1% / 0.1% | best reference TPR@1% / 0.1% |" in text
+    assert "| 100.0 / 100.0 (atr) | 100.0 / 100.0 (prompt_guard_2_22m) |" in text
+    assert "atr `v1`, prompt_guard_2_22m `v1`." in text
+    assert "Not in the columns: pipelock (no cached predictions);" in text
+    # A baseline that does not score a class is no candidate for its cells.
+    jailbreak = next(line for line in text.splitlines() if line.startswith("| jailbreak | all | all |"))
+    assert jailbreak.endswith("| – | – |")
 
 
 def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(split, tmp_path, monkeypatch, capsys):
