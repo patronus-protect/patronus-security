@@ -46,7 +46,9 @@ schema: ark-l1-threat-datasets-v1
 #    sub-labels and the gahd recipe leave scoring (owner holdout review 2026-11-16).
 # 8: WildJailbreak (adversarial eval split) joins train_dev: native jailbreak rows and jailbreak look-alike
 #    hard negatives.
-generation: 8
+# 9: llmail_inject keeps only submissions with the executed attack chain (exfil.sent) as gold;
+#    the retrieval-only flag proved too weak (owner re-check 2026-11-16, 17.6% error).
+generation: 9
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
