@@ -277,7 +277,8 @@ Verzeichnissen) und gibt je Dokument und Klasse einen Score:
 - Referenzzeilen (ProtectAI v2, Prompt Guard 2 86M und 22M): ONNX-Modell unter `--models`
   (`~/ark-threat/baselines/models`) über onnxruntime und `tokenizers`, ohne torch; Score = höchste
   Wahrscheinlichkeit des Angriffslabels über Fenster von 512 Tokens (höchstens 32 je Dokument), für jede
-  Klasse, auf die die Entity-Map das Label abbildet. Läuft im Baselines-Venv.
+  Klasse, auf die die Entity-Map das Label abbildet. Padding und Kürzung, die eine `tokenizer.json` mitbringt
+  (Prompt Guard 2: fest 512), schaltet der Runner ab; die Fenster schneiden selbst. Läuft im Baselines-Venv.
 
 Vorhersagen werden je Korpusdatei und Baseline-Version einmal berechnet und unter
 `CACHE/<baseline>/<version>/<satz>-<sha12>.jsonl` (+ `.json` mit Metadaten) abgelegt. Schlüssel: SHA-256 der
@@ -346,7 +347,12 @@ nicht meldet. Eine Klasse ohne Positive in der Base ist neu, keine Regression. s
 Holdout verlässt die Sandbox nur als Urteil mit den Namen fehlschlagender Prüfungen, sein Bericht bleibt unter
 `CACHE/threat-scoreboard/reports/`. Die Latenz prüft der Runner getrennt (`latency.py`, `latency_ab`). Exit 0 =
 bestanden, 1 = Regression, 2 = Fehler. `report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle
-Sätze (je Baseline die zuletzt geschriebene Version) auf denselben Zellen aus und nennt je Zeile die beste.
+Sätze (je Baseline die zuletzt geschriebene Version) auf denselben Zellen aus und nennt je Zeile die beste
+Heuristik- und die beste Referenzzeile (nach TPR@1 %, mit TPR@1 % / 0,1 %), dazu die Versionen. Jede erwartete
+Baseline ohne vollständigen Cache steht mit Namen und Grund unter „Not in the columns“ (kein Cache, etwa weil
+der Klon nicht geholt werden konnte, oder die fehlenden Sätze); die übrigen Spalten erscheinen trotzdem.
+Den Cache legt man außerhalb des Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe
+wiederverwenden.
 Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
 
 Tests: `scripts/tests/test_l1_threat_scoreboard.py`.

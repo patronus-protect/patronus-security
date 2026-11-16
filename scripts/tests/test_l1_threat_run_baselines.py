@@ -166,6 +166,12 @@ class FakeTokenizer:
     def token_to_id(self, token):
         return {"[CLS]": 1, "[SEP]": 2}[token]
 
+    def no_padding(self):
+        pass
+
+    def no_truncation(self):
+        pass
+
     def encode(self, text, add_special_tokens=True):
         assert not add_special_tokens
         return FakeEncoding([10 + len(word) for word in text.split()])
@@ -200,6 +206,35 @@ def test_reference_score_is_the_highest_attack_probability_over_windows(tmp_path
     [scored] = base.score(["aa bb hello world"])
     expected = round(1 / (1 + np.exp(-3.0)), 6)
     assert scored["scores"] == {"instruction_injection": expected, "prompt_extraction": expected}
+    assert session.calls == [[1, 12, 12, 2], [1, 15, 15, 2]]
+
+
+class PaddingTokenizer(FakeTokenizer):
+    """Like the Prompt Guard 2 ``tokenizer.json``: pads and truncates to a fixed length until disabled."""
+
+    def __init__(self, length):
+        self.length = length
+
+    def no_padding(self):
+        self.length = None
+
+    def no_truncation(self):
+        self.length = None
+
+    def encode(self, text, add_special_tokens=True):
+        ids = super().encode(text, add_special_tokens).ids
+        if self.length is not None:
+            ids = (ids + [0] * self.length)[:self.length]
+        return FakeEncoding(ids)
+
+
+def test_reference_turns_off_the_padding_and_truncation_a_tokenizer_file_brings(tmp_path):
+    (tmp_path / "model.onnx").write_bytes(b"model")
+    session = FakeSession()
+    base = MODULE.ReferenceBaseline("prompt_guard_2_22m", BASELINES["prompt_guard_2"], tmp_path, 1, session,
+                                    PaddingTokenizer(3))
+    base.window_tokens = 4
+    base.score(["aa bb hello world"])
     assert session.calls == [[1, 12, 12, 2], [1, 15, 15, 2]]
 
 
