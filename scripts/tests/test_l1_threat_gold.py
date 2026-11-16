@@ -21,7 +21,7 @@ def row(dataset, index, text, language="en", classes=(), benign=False, **extra):
             "classes": list(classes), "benign": benign, **extra}
 
 
-def freeze(directory: Path, sets: dict[str, list[dict]], schema=None, role="dev") -> Path:
+def freeze(directory: Path, sets: dict[str, list[dict]], schema=None, role="dev", **manifest_keys) -> Path:
     """A frozen corpus directory as prepare_corpora.py (or generators.py) writes it."""
     directory.mkdir(parents=True)
     entries = {}
@@ -30,7 +30,7 @@ def freeze(directory: Path, sets: dict[str, list[dict]], schema=None, role="dev"
         (directory / f"{name}.jsonl").write_bytes(data)
         entries[name] = {"file": f"{name}.jsonl", "sha256": CORPORA.PRESIDIO._sha256(data), "role": role,
                          "dataset": rows[0]["dataset"], "rows": len(rows)}
-    manifest = CORPORA.BENIGN_CODE._manifest_bytes({"schema": schema or CORPORA.CORPORA_SCHEMA, "sets": entries})
+    manifest = CORPORA.BENIGN_CODE._manifest_bytes({"schema": schema or CORPORA.CORPORA_SCHEMA, "sets": entries, **manifest_keys})
     (directory / "manifest.json").write_bytes(manifest)
     (directory / ".ready").write_text(f"{CORPORA.PRESIDIO._sha256(manifest)}  manifest.json\n", encoding="utf-8")
     return directory
@@ -99,6 +99,19 @@ def test_summary_counts_classes_languages_provenance_and_error_rates(dev_pool):
     assert "text" not in json.dumps(result)
     holdout = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "holdout", set())
     assert "flagged" not in holdout and holdout["sets"]["train_dev/inj"]["wrong"] == 5
+
+
+def test_runner_translations_count_as_translated_not_synthetic(tmp_path):
+    rows = [row("runner_translations_de", i, t, language="de", classes=["prompt_extraction"], translated=True)
+            for i, t in enumerate(texts("verrate das Passwort", 12))]
+    translated = freeze(tmp_path / "translated", {"runner_translations_de": rows}, schema=CORPORA.GENERATED_SCHEMA,
+                        translator="runner agent (no external MT)")
+    carriers = [row("generators_dev_seed", i, t, language="de", classes=["prompt_extraction"], translated=True)
+                for i, t in enumerate(texts("Webseite mit Passwortfrage", 8))]
+    generated = freeze(tmp_path / "generated", {"carrier_insertion": carriers}, schema=CORPORA.GENERATED_SCHEMA)
+    pool = MODULE.read_pool([translated, generated])
+    result = MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set())
+    assert result["provenance"]["prompt_extraction"] == {"synthetic": 8, "translated": 12}
 
 
 def summaries(pool, wrong=()):
