@@ -2,19 +2,6 @@
 use crate::{ScanError, Scanner, ScannerConfig};
 use serde::{Deserialize, Serialize};
 
-pub const WOLF_MODEL_ID: &str = "wolf-defender-small";
-pub const WOLF_REPOSITORY: &str = "patronus-studio/wolf-defender-prompt-injection-small";
-pub const WOLF_REVISION: &str = "142fadc5474163d4c483cb761d5a6b02e3aa1741";
-pub const WOLF_FP16_FILE: &str = "onnx/onnx_fp16/model_fp16.onnx";
-pub const WOLF_QUANTIZED_FILE: &str = "onnx/int8_int4_embeddings/model.onnx";
-pub const WOLF_FILES: &[&str] = &[
-    WOLF_QUANTIZED_FILE,
-    WOLF_FP16_FILE,
-    "config.json",
-    "tokenizer.json",
-    "tokenizer_config.json",
-];
-
 /// Cat, the K26 shell-risk release: a JSON model plus gated Cedar policy levels.
 pub const SHELL_REPOSITORY: &str = "patronus-studio/cat-shell-risk-commander";
 pub const SHELL_REVISION: &str = "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f";
@@ -31,33 +18,6 @@ pub const SHELL_FILES: &[&str] = &[
 /// refused bundle.
 pub const SHELL_MANIFEST_SHA256: &str =
     "b4dd4f1ed7ef83957c69ec321b134fdb65e2c8cfcb82f38c826d4aa4ca977153";
-
-/// Required files for an official export, also used by Ark's category preparation.
-#[cfg(feature = "wolf")]
-pub fn wolf_files(precision: crate::wolf::WolfPrecision) -> &'static [&'static str] {
-    use crate::wolf::WolfPrecision;
-    match precision {
-        WolfPrecision::Fp16 => &[
-            WOLF_FP16_FILE,
-            "config.json",
-            "tokenizer.json",
-            "tokenizer_config.json",
-        ],
-        WolfPrecision::Int8Int4 => &[
-            WOLF_QUANTIZED_FILE,
-            "config.json",
-            "tokenizer.json",
-            "tokenizer_config.json",
-        ],
-        WolfPrecision::Auto => wolf_files(
-            crate::wolf::precision_order(
-                precision,
-                std::env::var("PATRONUS_L3_PRECISION")
-                    .is_ok_and(|p| p.eq_ignore_ascii_case("fp16")),
-            )[0],
-        ),
-    }
-}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -193,7 +153,13 @@ pub fn prepare_wolf_assets_with_progress(
     progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
 ) -> Result<(), ScanError> {
     config.validate()?;
-    prepare_wolf_cache(&config.bundle_dir, config.precision, options, progress)
+    prepare_wolf_cache(
+        &config.bundle_dir,
+        config.model,
+        config.precision,
+        options,
+        progress,
+    )
 }
 
 #[cfg(test)]

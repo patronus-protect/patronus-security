@@ -70,6 +70,7 @@ impl Bundle {
             wolf: Some(WolfConfig {
                 bundle_dir: self.0.clone(),
                 threshold,
+                model: Default::default(),
                 precision: Default::default(),
                 backend: Default::default(),
                 runtime_options: Default::default(),

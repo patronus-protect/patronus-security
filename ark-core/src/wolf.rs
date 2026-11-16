@@ -1,48 +1,37 @@
 //! Offline Wolf inference over existing assets, with optional integrity metadata.
 use crate::{
-    aggregation::SmoothMax, ml::mmbert_tokenizer::MmbertPairTokenizer, ScanControl, ScanError,
+    aggregation::ClassPool, ml::mmbert_tokenizer::MmbertPairTokenizer, ScanControl, ScanError,
 };
 use ort::session::Session;
 mod assets;
 mod inference;
+mod models;
 #[cfg(test)]
 mod tests;
 mod windows;
 use crate::WolfExecutionOptions;
 use assets::{asset_manifest, verified_file};
 pub(crate) use assets::{asset_manifest_at, model_paths, precision_order};
+pub use models::{
+    WolfModel, WolfModelSpec, WolfPrecision, MODEL_ENV, PRECISION_ENV, SUPPORT_FILES, WOLF_MODELS,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-pub const CONTENT_TOKENS: usize = 254;
-pub const SEQUENCE_TOKENS: usize = 256;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WolfPrecision {
-    #[default]
-    Auto,
-    Fp16,
-    Int8Int4,
-}
-impl WolfPrecision {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Fp16 => "fp16",
-            Self::Int8Int4 => "int8_int4",
-        }
-    }
-}
+/// Reference profile of the published v2.1 exports: 2048 positions including BOS/EOS.
+pub const CONTENT_TOKENS: usize = 2046;
+pub const SEQUENCE_TOKENS: usize = 2048;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
     pub threshold: f64,
+    #[serde(default)]
+    pub model: WolfModel,
     #[serde(default)]
     pub precision: WolfPrecision,
     #[serde(default)]
@@ -120,7 +109,7 @@ pub struct WolfResult {
 pub struct WolfProgress {
     pub windows: u64,
     pub total_windows: u64,
-    /// Absent before the first inference; otherwise the running SmoothMax logit.
+    /// Absent before the first inference; otherwise the running pooled logit.
     pub document_logit: Option<f64>,
 }
 pub struct WolfRunner {
@@ -195,7 +184,7 @@ impl WolfRunner {
             || self.manifest.sequence_tokens != SEQUENCE_TOKENS
         {
             // Older optional manifests still verify file integrity, but their
-            // 256-content-token references are not evidence for this profile.
+            // short-window references are not evidence for this profile.
             log::debug!("Wolf references skipped for a different execution profile");
             return Ok(());
         }
@@ -335,7 +324,7 @@ impl WolfRunner {
                 });
             }
         }
-        let mut pool = SmoothMax::default();
+        let mut pool = ClassPool::default();
         let tokenizer = Arc::clone(&self.tokenizer);
         let mut windows = windows::Windows::new(self.options);
         let mut batch = Vec::new();
@@ -384,13 +373,13 @@ impl WolfRunner {
         &mut self,
         batch: &[Vec<u32>],
         control: &ScanControl,
-        pool: &mut SmoothMax,
+        pool: &mut ClassPool,
         total_windows: u64,
         progress: &mut Option<&mut dyn FnMut(WolfProgress)>,
     ) -> Result<(), ScanError> {
-        for logit in self.infer_batch(batch, control)? {
+        for logits in self.infer_batch(batch, control)? {
             control.check()?;
-            pool.push(logit).map_err(inference)?;
+            pool.push(logits).map_err(inference)?;
             if let Some(callback) = progress.as_mut() {
                 callback(WolfProgress {
                     windows: pool.count(),
@@ -402,8 +391,10 @@ impl WolfRunner {
         Ok(())
     }
 
+    /// The injection-minus-benign logit of one window.
     fn infer(&mut self, tokens: &[u32], control: &ScanControl) -> Result<f64, ScanError> {
-        Ok(self.infer_batch(&[tokens.to_vec()], control)?[0])
+        let [benign, injection] = self.infer_batch(&[tokens.to_vec()], control)?[0];
+        Ok(injection - benign)
     }
 }
 fn asset(error: impl std::fmt::Display) -> ScanError {
@@ -445,6 +436,7 @@ impl WolfConfig {
         Self {
             bundle_dir: bundle_dir.into(),
             threshold,
+            model: WolfModel::default(),
             precision: WolfPrecision::default(),
             backend: crate::ExecutionBackend::default(),
             runtime_options: crate::OnnxRuntimeOptions::default(),

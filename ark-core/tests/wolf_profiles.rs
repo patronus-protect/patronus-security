@@ -7,14 +7,11 @@ use patronus_ark_core::{
 use std::{path::PathBuf, time::Instant};
 
 #[test]
-#[ignore = "requires ARK_WOLF_BUNDLE and ARK_WOLF_PRECISION=fp16 or int8_int4"]
+#[ignore = "requires ARK_WOLF_BUNDLE and ARK_WOLF_PRECISION naming one of its exports"]
 fn local_export_window_overlap_batch_parity() {
     let bundle = PathBuf::from(std::env::var_os("ARK_WOLF_BUNDLE").expect("set ARK_WOLF_BUNDLE"));
-    let precision = match std::env::var("ARK_WOLF_PRECISION").unwrap().as_str() {
-        "fp16" => WolfPrecision::Fp16,
-        "int8_int4" => WolfPrecision::Int8Int4,
-        _ => panic!("unknown precision"),
-    };
+    let precision = WolfPrecision::parse(&std::env::var("ARK_WOLF_PRECISION").unwrap())
+        .expect("unknown precision");
     let mut config = WolfConfig::new(bundle, 0.8);
     config.precision = precision;
     config.backend = ExecutionBackend::Cpu;
