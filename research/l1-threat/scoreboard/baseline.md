@@ -6,21 +6,21 @@ Sets: {"dev": ["carrier_insertion", "class_templates", "dolly_15k", "exfil_looka
 
 TPR at matched document FPR on the benign rows of the same scope; 95 % CI: percentile bootstrap (200 rounds) of TPR@1%; hard-benign FPR at ARK's own verdict (look-alike twins and security-adjacent benign sets). `–`: no negatives or no rows in the cell.
 
-Baselines at the same matched FPR on the same benign rows (`scripts/l1_threat/run_baselines.py`): pipelock `r2-d97bee5b5633-f0748f6045a4`, cisco_yara `r2-9ff8fc84b792-88384ac2ff09`, atr `r2-a0b314dfd24e-dbdad268c9c6`, prompt_guard `r2-ce4356bfe714-f334ec70b8e9`, llamafirewall `r2-7e163b68c0af-34204e871afb`, nemo `r2-093ae1fc7b3e-4345056e4244`, vigil `r2-f2b4c134d060-fb4c2190500d`.
+Baselines at the same matched FPR on the same benign rows (`scripts/l1_threat/run_baselines.py`): pipelock `r2-d97bee5b5633-f0748f6045a4`, cisco_yara `r2-9ff8fc84b792-88384ac2ff09`, atr `r2-a0b314dfd24e-dbdad268c9c6`, prompt_guard `r2-ce4356bfe714-f334ec70b8e9`, llamafirewall `r2-7e163b68c0af-34204e871afb`, nemo `r2-093ae1fc7b3e-4345056e4244`, vigil `r2-f2b4c134d060-fb4c2190500d`, prompt_guard_2_22m `r2-092823c17a9d`.
 
-Not in the columns: protectai_v2 (no cached predictions); prompt_guard_2_86m (no cached predictions); prompt_guard_2_22m (`r2-092823c17a9d` not cached for dolly_15k, germanquad, mosscap, spml).
+Not in the columns: protectai_v2 (`r2-f0ea7f239f76` not cached for ailuminate_demo, dolly_15k, gandalf, germanquad, jackhhao_jailbreak, mosscap, spml, textdetox_de); prompt_guard_2_86m (no cached predictions).
 
 ## Gated sets (dev and decisive)
 
 | class | lang | origin | pos | neg | TPR@1% | 95% CI | TPR@0.1% | AUPRC | hard-benign FPR | best heuristic TPR@1% / 0.1% | best reference TPR@1% / 0.1% |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | all | 2927 | 31212 | 44.0 | 42.2–45.8 | 44.0 | 0.488 | 0.0 (0/1800) | 61.9 / 6.8 (prompt_guard) | – |
-| instruction_injection | en | all | 2927 | 19359 | 44.0 | 42.3–45.6 | 44.0 | 0.513 | 0.0 (0/1398) | 61.3 / 48.0 (atr) | – |
-| jailbreak | all | all | 84 | 31212 | 0.0 | 0.0–0.0 | 0.0 | 0.003 | 0.0 (0/1800) | 26.2 / 26.2 (atr) | – |
-| jailbreak | de | all | 42 | 11853 | 0.0 | 0.0–0.0 | 0.0 | 0.004 | 0.0 (0/402) | 0.0 / 0.0 (pipelock) | – |
-| jailbreak | en | all | 42 | 19359 | 0.0 | 0.0–0.0 | 0.0 | 0.002 | 0.0 (0/1398) | 52.4 / 52.4 (atr) | – |
-| prompt_extraction | all | all | 15476 | 31212 | 0.0 | 0.0–0.0 | 0.0 | 0.331 | 0.0 (0/1800) | 3.6 / 3.6 (atr) | – |
-| prompt_extraction | en | all | 15476 | 19359 | 0.0 | 0.0–0.0 | 0.0 | 0.444 | 0.0 (0/1398) | 3.6 / 3.6 (atr) | – |
+| instruction_injection | all | all | 2927 | 31212 | 44.0 | 42.2–45.8 | 44.0 | 0.488 | 0.0 (0/1800) | 61.9 / 6.8 (prompt_guard) | 94.9 / 92.8 (prompt_guard_2_22m) |
+| instruction_injection | en | all | 2927 | 19359 | 44.0 | 42.3–45.6 | 44.0 | 0.513 | 0.0 (0/1398) | 61.3 / 48.0 (atr) | 94.9 / 93.3 (prompt_guard_2_22m) |
+| jailbreak | all | all | 84 | 31212 | 0.0 | 0.0–0.0 | 0.0 | 0.003 | 0.0 (0/1800) | 26.2 / 26.2 (atr) | 76.2 / 76.2 (prompt_guard_2_22m) |
+| jailbreak | de | all | 42 | 11853 | 0.0 | 0.0–0.0 | 0.0 | 0.004 | 0.0 (0/402) | 0.0 / 0.0 (pipelock) | 52.4 / 52.4 (prompt_guard_2_22m) |
+| jailbreak | en | all | 42 | 19359 | 0.0 | 0.0–0.0 | 0.0 | 0.002 | 0.0 (0/1398) | 52.4 / 52.4 (atr) | 100.0 / 100.0 (prompt_guard_2_22m) |
+| prompt_extraction | all | all | 15476 | 31212 | 0.0 | 0.0–0.0 | 0.0 | 0.331 | 0.0 (0/1800) | 3.6 / 3.6 (atr) | 45.1 / 23.5 (prompt_guard_2_22m) |
+| prompt_extraction | en | all | 15476 | 19359 | 0.0 | 0.0–0.0 | 0.0 | 0.444 | 0.0 (0/1398) | 3.6 / 3.6 (atr) | 50.8 / 25.7 (prompt_guard_2_22m) |
 | tool_poisoning | all | all | 83 | 31212 | 100.0 | 100.0–100.0 | 100.0 | 1.000 | 0.0 (0/1800) | 18.1 / 18.1 (pipelock) | – |
 | tool_poisoning | de | all | 42 | 11853 | 100.0 | 100.0–100.0 | 100.0 | 1.000 | 0.0 (0/402) | 0.0 / 0.0 (pipelock) | – |
 | tool_poisoning | en | all | 41 | 19359 | 100.0 | 100.0–100.0 | 100.0 | 1.000 | 0.0 (0/1398) | 36.6 / 36.6 (pipelock) | – |
@@ -60,12 +60,12 @@ Origin `native` is listed only where translated positives exist (otherwise it eq
 
 | class | lang | origin | pos | neg | TPR@1% | 95% CI | TPR@0.1% | AUPRC | hard-benign FPR | best heuristic TPR@1% / 0.1% | best reference TPR@1% / 0.1% |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | all | 998 | 3813 | 30.4 | 27.4–33.1 | 30.4 | 0.448 | – | 39.7 / 39.7 (atr) | – |
-| instruction_injection | en | all | 998 | 1321 | 30.4 | 27.4–33.1 | 30.4 | 0.603 | – | 39.7 / 29.9 (atr) | – |
-| jailbreak | all | all | 544 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.125 | – | 70.0 / 70.0 (atr) | – |
-| jailbreak | en | all | 544 | 1321 | 0.0 | 0.0–0.0 | 0.0 | 0.292 | – | 70.0 / 70.0 (atr) | – |
-| prompt_extraction | all | all | 998 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.207 | – | 22.8 / 2.6 (atr) | – |
-| prompt_extraction | en | all | 998 | 1321 | 0.0 | 0.0–0.0 | 0.0 | 0.430 | – | 22.8 / 2.6 (atr) | – |
+| instruction_injection | all | all | 998 | 3813 | 30.4 | 27.4–33.1 | 30.4 | 0.448 | – | 39.7 / 39.7 (atr) | 98.0 / 96.5 (prompt_guard_2_22m) |
+| instruction_injection | en | all | 998 | 1321 | 30.4 | 27.4–33.1 | 30.4 | 0.603 | – | 39.7 / 29.9 (atr) | 97.7 / 96.5 (prompt_guard_2_22m) |
+| jailbreak | all | all | 544 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.125 | – | 70.0 / 70.0 (atr) | 94.3 / 89.2 (prompt_guard_2_22m) |
+| jailbreak | en | all | 544 | 1321 | 0.0 | 0.0–0.0 | 0.0 | 0.292 | – | 70.0 / 70.0 (atr) | 91.7 / 89.2 (prompt_guard_2_22m) |
+| prompt_extraction | all | all | 998 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.207 | – | 22.8 / 2.6 (atr) | 98.0 / 96.5 (prompt_guard_2_22m) |
+| prompt_extraction | en | all | 998 | 1321 | 0.0 | 0.0–0.0 | 0.0 | 0.430 | – | 22.8 / 2.6 (atr) | 97.7 / 96.5 (prompt_guard_2_22m) |
 | harmful_content | all | all | 800 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.173 | – | 0.4 / 0.4 (atr) | – |
 | harmful_content | en | all | 800 | 1321 | 0.0 | 0.0–0.0 | 0.0 | 0.377 | – | 0.4 / 0.4 (atr) | – |
 | toxic_language | all | all | 2072 | 3813 | 0.0 | 0.0–0.0 | 0.0 | 0.352 | – | 0.0 / 0.0 (atr) | – |
