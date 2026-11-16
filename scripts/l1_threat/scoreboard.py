@@ -434,9 +434,10 @@ def _tpr_of(cell: dict[str, Any] | None, fpr: str) -> float | None:
 
 def _best_baseline(baselines: dict[str, dict[str, Any]], kind: str, scope: str, cls: str, language: str,
                    origin: str) -> str:
-    """``TPR@1% / TPR@0.1% (id)`` of the baseline of one kind with the highest TPR@1 % in the cell."""
+    """``TPR@1% / TPR@0.1% (id)`` of the baseline of one kind with the highest TPR@1 % in the cell, among
+    the baselines that score the class."""
     cells = [(name, b[scope].get(cls, {}).get(language, {}).get(origin)) for name, b in baselines.items()
-             if (name in BASELINES.REFERENCE_MODELS) == (kind == "reference")]
+             if (name in BASELINES.REFERENCE_MODELS) == (kind == "reference") and cls in b["classes"]]
     cells = [(name, cell) for name, cell in cells if _tpr_of(cell, "0.01") is not None]
     if not cells:
         return "–"
@@ -531,7 +532,10 @@ def baseline_reports(sets: list[SetFile], cache: Path) -> tuple[dict[str, dict[s
         if missing:
             left_out[baseline_id] = f"`{version}` not cached for {', '.join(missing)}"
             continue
-        out[baseline_id] = {**score_pairs(load_pairs(sets, found), bootstrap=False), "version": version}
+        classes = sorted({cls for path in found.values()
+                          for cls in json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["classes"]})
+        out[baseline_id] = {**score_pairs(load_pairs(sets, found), bootstrap=False), "version": version,
+                            "classes": classes}
     return out, left_out
 
 
