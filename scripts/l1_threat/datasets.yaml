@@ -288,8 +288,18 @@ datasets:
     text: prompt
     language: en
     labels:
-      - {field: label, equals: adversarial_harmful, label: "label = adversarial_harmful"}
+      - {field: label, equals: adversarial_harmful, label: "label = adversarial_harmful (jailbreak framing)"}
+      - {field: label, equals: adversarial_harmful, label: "label = adversarial_harmful (harmful request)"}
       - {field: label, equals: adversarial_benign, label: "label = adversarial_benign"}
+    keep:
+      - label: "label = adversarial_benign"
+        reason: >-
+          adversarial_benign rows apply jailbreak tactics to a harmless request; many of them keep the safety-bypass
+          framing itself (avoid a refusal, exempt from rules or ethics, uncensored or uninhibited persona, fake update,
+          response priming, threat on failure, named jailbreak templates), which counts as jailbreak however harmless
+          the request; only rows without such a framing cue stay as hard negatives (role-play and fiction framing
+          around a harmless request)
+        pattern: '\A(?![\s\S]*(?:\brefus|\brestrict|\bregulation|\bconstraint|\bcensor|\bfilter|\bno limit|\bwithout limit|\bimmune\b|\bexempt\b|\bethic|\bguideline|\bpolic(?:y|ies)\b|\brules?\b|\bnorms\b|\blegal|\bharm|\bdownplay|\bconsent\b|\bbegin (?:by|with|your)\b|\bstart (?:by|with|your)\b|\bsure,|\bjailbreak|\bdeveloper mode|\bignore\b|\bdisregard|\bcode ?words?|\bcoded\b|\bexplicit|\bgraphic\b|\bpermission|\bauthori[sz]|\bno longer\b|\bunbound|\bfree from\b|\buninhibit|\bchatgpt|\bsydney\b|\bprompt here\b|\bas you are an ai\b|\bupdate|\bdo not respond|\bfail|\blanguage model|\bmode\b|\bpenalt|\bshut ?down|\bconfidential|\bsecret|\bwithout (?:any )?(?:bias|judg)))'
     dedup_against: [jackhhao_jailbreak]
   - id: wildguardmix
     commercial: true
