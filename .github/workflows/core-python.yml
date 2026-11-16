@@ -9,11 +9,8 @@ on:
       - .github/workflows/core-python.yml
       - scripts/bootstrap_python_tls.py
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish built distributions to PyPI
-        type: boolean
-        default: false
+  # The Release workflow builds and tests these distributions, then publishes them.
+  workflow_call:
 
 permissions:
   contents: read
@@ -79,17 +76,3 @@ jobs:
         with:
           name: core-python-sdist
           path: dist/*.tar.gz
-  publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
-    needs: [wheels, sdist]
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: core-python-*
-          path: dist
-          merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@release/v1
