@@ -179,6 +179,15 @@ tasks:
       documents the new row counts; classes that still fail stay listed as not measurable and their
       rule tasks stay blocked
 
+  - id: T11
+    title: Owner — re-run the holdout gold review on the generation-5 holdout (after the label-mapping fixes of #364) for carrier_insertion and obfuscation_slices and the instruction_injection, jailbreak, prompt_extraction, harmful_content and toxic_language sets; regenerate gold.md go/no-go
+    type: eval-infra
+    status: manual
+    owner: user
+    deps: [M06]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 11)"
+    needs_decision: "gold.md still lists instruction_injection, jailbreak and prompt_extraction as no-go from the pre-#364 holdout; should IJ01/PX01/JB01 wait for T11 (M06 rule) or proceed while the review is pending?"
+
   - id: E01
     status: done
     title: Dataset registry + prepare_corpora (split by source, never random — a dataset is train/dev or holdout, never both; pinned revisions, licence/commercial flag, decisive/dev/report role, exact + MinHash dedup within sets, across splits and against known baseline training lists; frozen holdout with SHA manifest)
@@ -218,6 +227,17 @@ tasks:
     title: Scoreboard gate — TPR@1%/0.1% FPR and AUPRC per class and language, hard-benign FPR, leave-one-dataset-out, native/translated columns, bootstrap CI, delta to base; baseline report research/l1-threat/scoreboard/baseline.md
     type: eval-infra
     deps: [E02, E04, E05, M06]
+
+  - id: T01
+    title: Dev baseline column — run_baselines.py over the dev split (heuristic rows from the pinned clones, Prompt Guard 2 86M/22M and ProtectAI v2 via ONNX), cached per corpus SHA; baseline.md regenerated with the baseline column and today's ARK numbers
+    type: eval-infra
+    deps: [E04, E06]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 9)"
+    accept: >-
+      research/l1-threat/scoreboard/baseline.md on main shows per class and language the best heuristic and
+      reference row next to ARK (TPR@1%/0.1% at matched FPR); predictions cached outside the repo keyed by
+      corpus SHA + baseline version, so no later task recomputes them; heuristic clones that the sandbox cannot
+      fetch are listed by name and the reference rows still land; nothing from the holdout is read
 
   # ── S: Engine ─────────────────────────────────────────────────────────
   - id: S02
@@ -270,11 +290,63 @@ tasks:
   # ── Classes: one rule bundle + one points/ablation bundle each ────────
   # Eval first (owner, 2026-11-13): no rule bundle lands before the scoreboard exists — every
   # family task depends on E06, so each rule PR is measured (TPR@FPR per class, hard-benign FPR).
-  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06]}
-  - {id: IJ02, title: "instruction_injection points + ablation decision; today's injection scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [IJ01, S05]}
-  - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01]}
+  # TRIAGE 2026-W47: data, routing and override near-misses before the injection bundle.
+  - id: T02
+    title: German dev rows for instruction_injection and prompt_extraction — runner translation worksheet (generators.py translate export/ingest, SPML and Mosscap, hand-check sample) and a cyberseceval_multilingual recipe (MIT, German part marked translated); carrier_insertion and obfuscation_slices then emit German rows
+    type: eval-infra
+    deps: [M07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 4)"
+    accept: >-
+      dev has >= 300 scored German rows for each of instruction_injection and prompt_extraction (translated
+      column set) plus German benign twins; the scoreboard reports de for both classes; translation by the
+      agent itself (no external MT), sample marked checked; cyberseceval_multilingual deduplicated against the
+      other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
+      review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
+  - id: T03
+    title: Route the legacy ark.injection.* rules that taxonomy.yaml assigns to jailbreak and prompt_extraction into those categories (today both categories return no result; the rules report under injection with sub-labels such as instruction_leak, jailbreak_framing, guardrail_tamper)
+    type: engine
+    deps: [X03]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 2)"
+    accept: >-
+      scan_categories(["jailbreak"]) and (["prompt_extraction"]) report the hits of their mapped rules with
+      the class as category; injection keeps only rules of instruction_injection families; every
+      ark.injection.* rule reports under exactly the class taxonomy.py maps it to (test over the whole
+      catalogue); sub-labels that remain are documented in the result schema; injection goldens unchanged
+      except the moved cases, which move to their class's goldens; scoreboard shows jailbreak and
+      prompt_extraction > 0 where the moved rules fire, no other class loses > 0.5 pp
+  - id: T04
+    title: "instruction_injection override near-misses: quantifier, possessive and object variants (any/every, your/the earlier/above, guidelines/directions/what you were told), question form ('can you ignore …'), German override without object noun ('vergiss alles, was …') — anchors and structure, no threshold change"
+    type: recall-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 1)"
+    accept: >-
+      goldens (>= 5 positives + 5 hard negatives per language) for each variant; on dev the 873 gated
+      positives with an instruction_override candidate between 0.6 and 1.0 and no verdict shrink measurably
+      and the verdict recall of instruction_injection rises, at 0 new hard-benign FP and 0 new benign FP;
+      decision threshold unchanged (no_relax); latency within the L1 rules
+  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06, T02, T04]}
+  - id: T05
+    title: Obfuscated injection and extraction — injection and prompt_extraction rules also read the normalised and decoded views of S03 (homoglyph/leet/spaced via the K06 view, base64/hex/rot13 decoded) with a modifier fact; scoreboard reports obfuscation invariance (source flagged, obfuscated twin flagged)
+    type: recall-fix
+    deps: [IJ01, S03]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 3)"
+    accept: >-
+      on dev obfuscation_slices every obfuscation kind where the clean source row is flagged is flagged
+      obfuscated too (today base64, hex, rot13, homoglyph, leetspeak, spaced: 0); decoded views scanned only
+      behind their existing prefilter (no second full scan of clean text); 0 new benign FP; latency stated
+  - {id: IJ02, title: "instruction_injection points + ablation decision; today's injection scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [IJ01, T05, S05]}
+  - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03]}
   - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
-  - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01]}
+  - id: T06
+    title: Native jailbreak dev source — recipes for wildjailbreak (ODC-BY; adversarial_harmful as jailbreak, adversarial_benign as hard negatives) and the adversarial part of wildguardmix, capped and deduplicated; gold review
+    type: eval-infra
+    deps: [M07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 7)"
+    accept: >-
+      >= 500 scored native jailbreak dev rows from at least one non-template source, adversarial_benign rows in
+      the hard-benign pool of the scoreboard; per-set cap and licence in the manifest; gold.py review <= 5%
+      error; gold.md updated; nothing committed except recipes and manifests
+  - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01, T03, T06]}
   - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
   - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04, E06], status: done}
   - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05], status: done}
@@ -284,12 +356,59 @@ tasks:
   - {id: EX02, title: "exfiltration points + ablation decision", type: scorer, deps: [EX01, S05], status: done}
   - {id: UA01, title: "unsafe_action rules for prose/code/config carriers (credential_access from the former secrets_access rules, destructive/irreversible requests, download-and-run instructions, privilege widening, security-control and logging disablement, persistence, SSRF/unsafe TLS/deserialisation in code, container/K8s config); shell syntax stays with K26", type: new-family, deps: [X04, S02], status: done}
   - {id: UA02, title: "unsafe_action points + ablation decision; today's threat scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [UA01, S05], status: done}
+  # TRIAGE 2026-W47: the template-only classes need native dev rows; legacy rules without clause context.
+  - id: T10
+    title: Native dev rows for the agent classes — AgentDojo recipe (MIT; injection tasks in tool outputs → instruction_injection / exfiltration / unsafe_action by the entity map), licence check of BIPIA, RedCode, Agent-SafetyBench and approve-or-deny DE; re-run the TP02/AC02/EX02/UA02 ablations on the native rows and record whether B0 stays (report only, no rule change)
+    type: eval-infra
+    deps: [EX02, UA02]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 8)"
+    accept: >-
+      at least one native non-template dev source with scored rows for exfiltration and unsafe_action; the
+      category documents get a dated section with the re-run ablation per class (native rows separately from
+      the templates); classes whose decision flips get a follow-up task id in the triage, not a change here
+  - id: T12
+    title: Clause context for the legacy threat rules credential_file_access, secret_exfiltration and native secret_transfer (quoted examples, security documentation, test code and tool-poisoning hard negatives flagged under unsafe_action/exfiltration today)
+    type: precision-fix
+    deps: [UA02, EX02]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 10)"
+    accept: >-
+      regression goldens first (the four tool_poisoning hard negatives from UA02 and the quoted .env/API-key
+      examples from EX02 fail before the fix); 0 hard-benign FP on the threat goldens across categories; dev
+      TPR@1% of unsafe_action and exfiltration unchanged; the points rules' clause context reused, not copied
   - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01]}
   - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}
   - {id: RE01, title: "resource_exhaustion rules (unbounded repetition quantifiers with configurable count threshold resource_exhaustion_count_threshold, recursive spawning, infinite-loop directives, decoy compute tasks in foreign content) + points", type: new-family, deps: [S04], status: done}
-  - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06]}
+  - id: T09
+    title: "resource_exhaustion on dev: RE01 rules hit 0 of 83 dev positives — a direct request counts as addressed (re_huge_output), negated bounds ('do not stop', 'no depth limit', 'ohne Zeitlimit') support instead of damping, German 'eine Million Mal', re-running a search/tool per result as recursion; then points + ablation decision (as TP02) and the open latency item of RE01"
+    type: recall-fix
+    deps: [RE01, S05]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 5)"
+    accept: >-
+      goldens for each new form and its hard negative (lyrics, bounded load test, quoted examples); dev
+      resource_exhaustion TPR@1% > 0 in de and en at 0 hard-benign FP; ablation table in
+      categories/resource_exhaustion.md with the README selection rule; category alone 100 KiB p95 stated
+      against main and not slower
+  - id: T07
+    title: Scored dev source for toxic_language — recipes for nemotron_safety_v3 (CC-BY-4.0, EN + German machine-translated, marked translated) and civil_comments (CC0, EN, capped); licence check of GermEval 2018 train/2019/2021 (unknown stays report_only); gold review
+    type: eval-infra
+    deps: [M07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
+    accept: >-
+      gold.md lists toxic_language as go on dev (>= 50 scored rows per language, every set behind them <= 5%
+      error); no plaintext slur list in the repo (review notes describe, never quote); German rows marked
+      translated where machine-translated; caps and licences in the manifest
+  - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06, T07]}
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05]}
-  - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01]}
+  - id: T08
+    title: Scored dev source for harmful_content — recipes for wildguardmix (ODC-BY, vanilla harmful prompts; benign prompts to the hard-benign pool), the harmful labels of nemotron_safety_v3 and nemotron_content_safety_v2 (CC-BY-4.0), deduplicated against each other; gold review per AILuminate hazard
+    type: eval-infra
+    deps: [T06, T07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
+    accept: >-
+      gold.md lists harmful_content as go on dev (>= 50 scored rows, every set <= 5% error; opinion and
+      discussion prompts without uplift mapped benign or out_of_scope as for the AILuminate demo); hazard
+      subclass per row where the source has one; nothing committed except recipes and manifests
+  - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08]}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
 
   - id: S08
