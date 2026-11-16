@@ -145,8 +145,9 @@ wolf      p(attack)=0.998 matched=true
   `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`, `int8_int4` or `int8_int4_x86`. `auto` takes
   `PATRONUS_L3_PRECISION`, else the x86 build on `x86_64` and `int8_int4` elsewhere. `backend`
   picks the ONNX provider.
-- Long inputs are scored like the published model: 2048-token windows with 64 tokens of overlap,
-  a smooth max per class, then softmax. Change window, overlap and batch with
+- Long inputs are scored over 256-token windows; window scores are pooled per class with a smooth
+  max, then softmax. The published model card uses 2048-token windows with 64 overlap, which
+  costs about 2.5x on long documents. Change window, overlap and batch with
   `WolfExecutionOptions` and `Scanner::new_with_wolf_options` — and recalibrate the threshold
   when you do.
 
@@ -232,7 +233,7 @@ Checks against real Wolf assets are opt-in:
 ```sh
 # FP16 export vs. an independent Hugging Face tokenizer + ONNX Runtime oracle
 ARK_WOLF_BUNDLE=/path/to/bundle cargo test -p patronus-ark-core --features wolf \
-  published_fp16_default_profile_matches_independent_hf_ort_oracle -- --ignored
+  published_fp16_reference_profile_matches_independent_hf_ort_oracle -- --ignored
 # window/overlap/batch profiles (repeat with any other precision, e.g. int8_int4_x86)
 ARK_WOLF_BUNDLE=/path/to/fp16 ARK_WOLF_PRECISION=fp16 \
   cargo test -p patronus-ark-core --features wolf --test wolf_profiles -- --ignored --nocapture

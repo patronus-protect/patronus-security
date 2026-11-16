@@ -2,7 +2,8 @@ use crate::ScanError;
 use serde::{Deserialize, Serialize};
 
 /// Wolf document execution. Sizes count tokens, batches count document windows.
-/// The defaults follow the published v2.1 reference: 2048 positions, 64 overlap.
+/// The defaults keep the 254-content-token profile; the published v2.1 reference
+/// (2048 positions, 64 overlap) is opt-in because long documents cost about 2.5x.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct WolfExecutionOptions {
@@ -17,8 +18,8 @@ pub struct WolfExecutionOptions {
 impl Default for WolfExecutionOptions {
     fn default() -> Self {
         Self {
-            window_tokens: 2048,
-            overlap_tokens: 64,
+            window_tokens: 256,
+            overlap_tokens: 0,
             batch_size: 1,
         }
     }
@@ -72,7 +73,7 @@ mod tests {
                 ..Default::default()
             },
             WolfExecutionOptions {
-                overlap_tokens: 2046,
+                overlap_tokens: 254,
                 ..Default::default()
             },
             WolfExecutionOptions {

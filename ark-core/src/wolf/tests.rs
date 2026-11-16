@@ -32,7 +32,7 @@ mod published_model_tests {
         )
         .unwrap();
         // Short dynamic-window logits are profile-independent; document values
-        // are checked separately against the independent v2.1 oracle below.
+        // are checked separately against the independent reference oracle below.
         reference
             .parity_cases
             .retain(|case| case.token_ids.len() <= CONTENT_TOKENS);
@@ -43,11 +43,11 @@ mod published_model_tests {
         runner.manifest = reference;
         runner.verify_reference_cases().unwrap();
     }
-    /// Independent oracle of the published `inference.py`: 2046-token windows,
-    /// 64 overlap, classwise SmoothMax, then softmax.
+    /// Independent oracle of the published `inference.py` profile (opt-in here):
+    /// 2046-token windows, 64 overlap, classwise SmoothMax, then softmax.
     #[test]
     #[ignore = "requires ARK_WOLF_BUNDLE with local FP16 export and tokenizer.json"]
-    fn published_fp16_default_profile_matches_independent_hf_ort_oracle() {
+    fn published_fp16_reference_profile_matches_independent_hf_ort_oracle() {
         let bundle =
             PathBuf::from(std::env::var_os("ARK_WOLF_BUNDLE").expect("set ARK_WOLF_BUNDLE"));
         let manifest =
@@ -153,7 +153,12 @@ mod published_model_tests {
         let mut config = WolfConfig::new(&bundle, 0.8);
         config.precision = WolfPrecision::Fp16;
         config.backend = crate::ExecutionBackend::Cpu;
-        let mut runner = WolfRunner::new(&config).unwrap();
+        let reference_profile = WolfExecutionOptions {
+            window_tokens: 2048,
+            overlap_tokens: 64,
+            batch_size: 1,
+        };
+        let mut runner = WolfRunner::new_with_options(&config, reference_profile).unwrap();
         for (text, (tokens, windows, reference)) in texts.iter().zip(references) {
             let mut actual_tokens = Vec::new();
             runner
@@ -253,8 +258,7 @@ mod progress_tests {
         .unwrap();
         fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
         let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
-        // Default profile: 2046 content tokens per window, 1982 new tokens per further window.
-        for (tokens, windows) in [(0, 1), (2046, 1), (2047, 2), (4029, 3)] {
+        for (tokens, windows) in [(0, 1), (254, 1), (255, 2), (509, 3)] {
             let text = " a".repeat(tokens);
             let expected = runner.scan(&text).unwrap();
             let mut updates = Vec::new();

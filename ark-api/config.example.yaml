@@ -39,10 +39,10 @@ pipeline:
   # wolf:
   #   model: small
   #   precision: auto
-  # Omitted values follow the published v2.1 reference: 2048/64/1.
+  # Omitted values retain 256/0/1; the model card's 2048/64 is about 2.5x slower on long texts.
   # wolf_options:
-  #   window_tokens: 2048 # Includes BOS/EOS.
-  #   overlap_tokens: 64
+  #   window_tokens: 256 # Includes BOS/EOS.
+  #   overlap_tokens: 0
   #   batch_size: 1
 
   # Optional ONNX Runtime CPU tuning. Defaults are 1/1/false, which avoid

@@ -513,7 +513,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         for profile in [
             serde_json::json!({"batch_size": 0}),
             serde_json::json!({"window_tokens": 2}),
-            serde_json::json!({"overlap_tokens": 2046}),
+            serde_json::json!({"overlap_tokens": 254}),
         ] {
             let mut value = startup_config();
             value["pipeline"]["wolf_options"] = profile;

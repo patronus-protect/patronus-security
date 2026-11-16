@@ -101,7 +101,7 @@ class PublicApiTests(unittest.TestCase):
     def test_wolf_startup_defaults_and_custom_profile_reach_native_gateway(self):
         scanner = SecurityGateway(["pii"], "l1", download_files=False)
         self.assertEqual(scanner.wolf_options, {
-            "window_tokens": 2048, "overlap_tokens": 64, "batch_size": 1,
+            "window_tokens": 256, "overlap_tokens": 0, "batch_size": 1,
         })
         self.assertEqual((scanner.wolf_model, scanner.wolf_precision), ("small", "auto"))
         profile = {"window_tokens": 32, "overlap_tokens": 4, "batch_size": 2}
@@ -129,7 +129,7 @@ class PublicApiTests(unittest.TestCase):
     def test_wolf_startup_invalid_profile_fails_before_cache_creation(self):
         for profile in [
             {"batch_size": 0}, {"window_tokens": 2},
-            {"overlap_tokens": 2046}, {"unknown": 1},
+            {"overlap_tokens": 254}, {"unknown": 1},
         ]:
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
                 cache = Path(directory) / "not-created.redb"

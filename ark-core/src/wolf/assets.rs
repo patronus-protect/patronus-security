@@ -40,7 +40,7 @@ fn validate_manifest(manifest: &WolfManifest, model: WolfModel) -> Result<(), Sc
         || manifest.reference.is_empty()
         || !matches!(
             (manifest.content_tokens, manifest.sequence_tokens),
-            (254, 256) | (256, 258) | (CONTENT_TOKENS, SEQUENCE_TOKENS)
+            (254, 256) | (256, 258)
         )
         || manifest.parity_cases.is_empty()
         || manifest.model.blake3.is_empty()

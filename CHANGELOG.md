@@ -24,17 +24,17 @@ This release changes only the prompt-injection model (Wolf Defender) on top of 0
   name above.
 - **x86 builds by default on x86-64:** `auto` loads the x86 weight-only INT8 export on `x86_64`
   and `int8_int4` elsewhere.
-- **Scoring follows the published model:** long inputs use 2048-token windows with 64 tokens of
-  overlap (previously 256 without overlap), and window scores are pooled per class before the
-  softmax. Short inputs score the same way as before.
+- **Pooling follows the published model:** window scores of long inputs are pooled per class
+  before the softmax. Short inputs score the same way as before. The default window stays at 256
+  tokens without overlap; the model card's 2048 tokens with 64 overlap is available through
+  `wolf_options` and costs about 2.5x on long documents.
 - **Caches update themselves:** a Wolf cache prepared for another model or an older revision is
   replaced on the next preparation instead of being reused. The injection L2 package is unchanged.
 - Ark L3 results report the loaded model in `details.wolf_model`.
 
 ### Breaking
 
-- Wolf document scores change: the model, the default window and the pooling are new. Check your
-  Wolf threshold.
+- Wolf document scores change: the model and the pooling are new. Check your Wolf threshold.
 - Rust: `warmup::WOLF_MODEL_ID`, `WOLF_REPOSITORY`, `WOLF_REVISION`, `WOLF_FILES`,
   `WOLF_FP16_FILE`, `WOLF_QUANTIZED_FILE` and `wolf_files` are replaced by `wolf::WOLF_MODELS`
   and `WolfModel::spec()`. `prepare_wolf_cache` and `wolf_assets_present` take a `WolfModel`;

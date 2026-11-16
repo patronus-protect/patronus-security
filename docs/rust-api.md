@@ -1947,7 +1947,8 @@ pub struct WolfExecutionOptions {
 ```
 
 Wolf document execution. Sizes count tokens, batches count document windows.
-The defaults follow the published v2.1 reference: 2048 positions, 64 overlap.
+The defaults keep the 254-content-token profile; the published v2.1 reference
+(2048 positions, 64 overlap) is opt-in because long documents cost about 2.5x.
 
 ```rust
 pub fn validate(self) -> Result<(), ScanError>;

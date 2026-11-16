@@ -387,11 +387,11 @@ mod tests {
         let baseline = ScanExecution::default();
         for options in [
             crate::WolfExecutionOptions {
-                window_tokens: 256,
+                window_tokens: 2048,
                 ..Default::default()
             },
             crate::WolfExecutionOptions {
-                overlap_tokens: 0,
+                overlap_tokens: 64,
                 ..Default::default()
             },
             crate::WolfExecutionOptions {

@@ -22,9 +22,8 @@ use std::{
     sync::Arc,
 };
 
-/// Reference profile of the published v2.1 exports: 2048 positions including BOS/EOS.
-pub const CONTENT_TOKENS: usize = 2046;
-pub const SEQUENCE_TOKENS: usize = 2048;
+pub const CONTENT_TOKENS: usize = 254;
+pub const SEQUENCE_TOKENS: usize = 256;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

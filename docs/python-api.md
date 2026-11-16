@@ -40,8 +40,8 @@ Args:
         L3 promote thresholds.
     wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
         (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
-        follow the published v2.1 reference, 2048/64/1. Validated before gateway
-        construction; applied before warmup.
+        retain 256/0/1 (the model card's 2048/64 is opt-in). Validated before
+        gateway construction; applied before warmup.
     wolf_model: Dedicated-Wolf model: `base`, `small` (default) or `edge`.
     wolf_precision: Dedicated-Wolf ONNX export: `auto` (default; uses
         `PATRONUS_L3_PRECISION`, else `int8_int4_x86` on x86_64 and
