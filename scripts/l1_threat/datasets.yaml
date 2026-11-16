@@ -44,7 +44,9 @@ schema: ark-l1-threat-datasets-v1
 # 6: CyberSecEval multilingual (German part, override cue) joins train_dev, deduplicated against the other dev sets.
 # 7: llmail_inject keeps only objective-confirmed rows as gold; the jbb and xstest toxic-language
 #    sub-labels and the gahd recipe leave scoring (owner holdout review 2026-11-16).
-generation: 7
+# 8: WildJailbreak (adversarial eval split) joins train_dev: native jailbreak rows and jailbreak look-alike
+#    hard negatives.
+generation: 8
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -277,10 +279,23 @@ datasets:
     pending: recipe not written yet
   - id: wildjailbreak
     commercial: true
-    pending: recipe not written yet
+    # eval split of allenai/wildjailbreak (gated upstream) from an ungated ODC-BY copy (2,000 + 210 rows as upstream)
+    source: https://huggingface.co/datasets/walledai/WildJailbreak
+    revision: 3638a60da2f0b7d5de43d2819031f28956fc4fa8
+    files:
+      - {path: data/train-00000-of-00001.parquet, sha256: c812a20544b2b37ba3077a2ce8f39a55ec45ffb96e28f82212d219c5578c6853}
+    format: parquet
+    text: prompt
+    language: en
+    labels:
+      - {field: label, equals: adversarial_harmful, label: "label = adversarial_harmful"}
+      - {field: label, equals: adversarial_benign, label: "label = adversarial_benign"}
+    dedup_against: [jackhhao_jailbreak]
   - id: wildguardmix
     commercial: true
-    pending: recipe not written yet
+    pending: >-
+      upstream allenai/wildguardmix is gated (no anonymous download); no ungated copy with the original rows and
+      licence was found
   - id: xl_safetybench
     commercial: true
     pending: recipe not written yet

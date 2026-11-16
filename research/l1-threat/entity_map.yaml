@@ -691,10 +691,14 @@ datasets:
     languages: [en]
     split: train_dev
     family: neutral
+    note: >-
+      read from the eval split (2,000 adversarial_harmful, 210 adversarial_benign prompts), fetched from the
+      ungated ODC-BY copy walledai/WildJailbreak (upstream allenai/wildjailbreak is gated); the vanilla train
+      types are not in that split. adversarial_benign rows are jailbreak look-alikes without harmful intent and
+      count as hard negatives on the scoreboard.
     labels:
-      - {label: "data_type = adversarial_harmful", classes: [jailbreak, harmful_content]}
-      - {label: "data_type = vanilla_harmful", classes: [harmful_content]}
-      - {label: "data_type in (vanilla_benign, adversarial_benign)", benign: true}
+      - {label: "label = adversarial_harmful", classes: [jailbreak, harmful_content]}
+      - {label: "label = adversarial_benign", benign: true}
   - id: wildguardmix
     name: WildGuardMix
     source: hf:allenai/wildguardmix
