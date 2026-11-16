@@ -89,6 +89,39 @@ repository (third-party derived rows): `~/ark-threat/worktrees/threat-078-t02/.l
 (git-ignored, SHA-256 `3ce667e5b982ec23…`); the owner freeze ingests it (`generators.py translate ingest --dev-out
 DEV --sheet SHEET`) before `prepare_corpora.py` and `generators.py generate` re-freeze dev.
 
+## Findings (dev review of the native jailbreak source, 2026-11-16)
+
+Dev pool rebuilt locally with the recipes of this change (registry generation 8, generator version 4): the frozen
+`train_dev` and `report` sets keep their rows byte for byte, `train_dev/wildjailbreak` is new, and the generators
+draw attack and benign rows from it too. No `translated` directory is frozen in dev yet, so the counts above are the
+earlier summary plus the difference this change makes on the local build (with and without WildJailbreak); the
+runner translations keep their earlier review. Every new or changed set was reviewed in full:
+`train_dev/wildjailbreak`, `generated/carrier_insertion` and `generated/obfuscation_slices` (obfuscated rows judged
+on their source text). Unchanged sets keep their verdicts.
+
+- **WildJailbreak: 1 of 50 unclear (2.0 %), benign 0 of 23.** Eval split of WildJailbreak (ODC-BY), 2 000
+  `adversarial_harmful` rows scored as `jailbreak` (all carry a framing meant to get around the model's safety rules:
+  persona, fiction or alternate world, policy spoof, response priming, research or debate pretext, trivialisation);
+  the one unclear row wraps a fantasy forgery whose harmful goal is only implied. `harmful_content` is reported only
+  for this set: the wrapped requests also cover one-sided essays and mild profanity.
+- **Benign side: 23 hard negatives of 210.** The first review of the raw `adversarial_benign` rows found many that keep
+  the bypass framing itself (avoid a refusal, exempt from rules or ethics, uncensored persona, persona lock, fake
+  update or content policy, coded safety override, letter spacing, named jailbreak templates). By the class definition
+  that framing is jailbreak however harmless the request, so the recipe keeps a benign row only without such a cue
+  (187 dropped as `no_cue`); the 23 left are role-play and fiction framings around harmless requests and were all read
+  in full. They join the scoreboard's hard-benign pool.
+- **`carrier_insertion`: 3 of 52 unclear (5.8 %) — above the 5 % line.** The flagged rows are two Mosscap statements
+  without a request and one CyberSecEval mode claim around an ordinary question (the same upstream noise as before);
+  the 13 sampled WildJailbreak attacks and all benign twins are correct. Follow-up as noted for the German rows: tighten
+  the Mosscap cue against bare statements.
+- **`obfuscation_slices`: 1 of 52 unclear (1.9 %, was 8.8 %).** Fewer Mosscap rows in the sample now that the
+  generators share their picks with WildJailbreak; the remaining flag is a bare Mosscap statement.
+
+Rows per class: `jailbreak` 2 345 scored dev rows (2 000 native, 345 synthetic incl. 261 WildJailbreak rows inside
+generated carriers and obfuscations). Generated German `instruction_injection` rows drop from 762 to 653, because the
+generators now spread their picks over one more attack source. WildGuardMix stays without a recipe: the upstream
+dataset is gated and no ungated copy with the original rows and a clear licence was found.
+
 ## How this report is made
 
 ```bash

@@ -354,7 +354,7 @@ allen Threads, 86M und ProtectAI v2 ein Mehrfaches langsamer; die volle Dev-Spal
 **Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
 Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
 Benign-Pool, Bootstrap-95-%-KI der TPR@1 %, AUPRC, Hard-Benign-FPR beim ARK-Urteil (Doppelgänger `twin_of` und
-die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
+die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, WildJailbreak `adversarial_benign`, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
 werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp TPR@1 %-Verlust
 einer Klasse (`all`, `de`, `en`) oder einer Hard-Benign-Zeile, die nur der Head meldet. Der Holdout erscheint im
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
@@ -499,6 +499,20 @@ Zeilen mit deutschen Benign-Zwillingen haben; dazu der deutsche Teil von CyberSe
 maschinenübersetzt, `translated`, Cue-Filter, gegen die übrigen Dev-Sätze dedupliziert; im Gate verwirft das
 Vorbereiten des Holdouts dessen Duplikate). Carrier-Insertion und Obfuskations-Slices erzeugen damit deutsche
 Angriffszeilen (Generator-Version 4, Registry-Generation 6).
+
+**Native Jailbreak-Dev-Quelle (T06, 2026-11-16).** WildJailbreak (ODC-BY) kommt als `train_dev`-Rezept: der
+Eval-Split (2 000 `adversarial_harmful`, 210 `adversarial_benign`) aus der ungegateten ODC-BY-Kopie
+`walledai/WildJailbreak` (Upstream `allenai/wildjailbreak` verlangt Login; Zeilenzahlen wie upstream, SHA-256 gepinnt).
+`adversarial_harmful` wertet `jailbreak` (2 000 native Zeilen); `harmful_content` ist für diesen Satz nur
+berichtet, weil die verpackten Anfragen auch Kategorien außerhalb der Klasse abdecken. Benign-Zeilen, die die
+Umgehungs-Rahmung selbst tragen (Ablehnung vermeiden, von Regeln/Ethik befreit, unzensierte Persona, Persona-Sperre,
+gefälschtes Update oder Policy, Antwort-Priming, Codesprache, Buchstaben-Abstände, Verharmlosung als „rein
+hypothetisch“ oder Scherz, Drohung, falsche Zustimmung, benannte Jailbreak-Vorlagen), sind nach §2 von [`categories/jailbreak.md`](categories/jailbreak.md) selbst Jailbreak und
+fallen per Cue-Filter weg (187 von 210); die übrigen 23 (Rollenspiel- und Fiktionsrahmen um harmlose Bitten) zählen
+im Scoreboard zum Hard-Benign-Pool (`HARD_BENIGN_SETS`). Gegen jackhhao dedupliziert, Grenze 15 000 (Default),
+`generation: 8`. Carrier-Insertion und Obfuskations-Slices betten damit auch WildJailbreak-Angriffe ein.
+WildGuardMix bleibt `pending`: Upstream ist gegated, eine ungegatete Kopie mit den Originalzeilen und klarer Lizenz
+fehlt (Login-Token für den Gate-Abruf oder eine Owner-Kopie im Quell-Cache nötig).
 
 ## Reihenfolge
 
