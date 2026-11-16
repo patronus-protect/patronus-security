@@ -317,6 +317,7 @@ tasks:
       except the moved cases, which move to their class's goldens; scoreboard shows jailbreak and
       prompt_extraction > 0 where the moved rules fire, no other class loses > 0.5 pp
   - id: T04
+    status: done
     title: "instruction_injection override near-misses: quantifier, possessive and object variants (any/every, your/the earlier/above, guidelines/directions/what you were told), question form ('can you ignore …'), German override without object noun ('vergiss alles, was …') — anchors and structure, no threshold change"
     type: recall-fix
     deps: [E06]
