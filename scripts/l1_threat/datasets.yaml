@@ -42,7 +42,9 @@ schema: ark-l1-threat-datasets-v1
 # 5: holdout mapping fixes after the owner review — jbb/xstest/hatecheck label splits,
 #    cyberseceval/multijail/trustairlab/gahd attack labels reported only.
 # 6: CyberSecEval multilingual (German part, override cue) joins train_dev, deduplicated against the other dev sets.
-generation: 6
+# 7: llmail_inject keeps only objective-confirmed rows as gold; the jbb and xstest toxic-language
+#    sub-labels and the gahd recipe leave scoring (owner holdout review 2026-11-16).
+generation: 7
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
