@@ -198,7 +198,8 @@ jobs:
 
   publish-crate:
     name: Publish Rust crate
-    needs: [wheels, sdist]
+    # Every package builds and passes its tests before anything is published.
+    needs: [wheels, sdist, core-python]
     runs-on: ubuntu-latest
     if: inputs.channel == 'production'
     environment: release
