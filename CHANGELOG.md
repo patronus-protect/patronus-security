@@ -33,7 +33,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   reports these forms. A rule runs only when its category is selected: callers that select only
   `injection` must add the other categories to keep these detections. Outside `injection`, a
   match inside security documentation, a quotation, test code or a negated sentence is not
-  reported. The L1 rule catalog lists the category of every rule.
+  reported, and these rules add a `native:injection_l1` result only when one of them matches. The L1 rule catalog lists the category of every rule.
 - When no categories are given, the library scanner runs `pii`, `dlp`, `injection`, `jailbreak`,
   `prompt_extraction`, `tool_poisoning` and `exfiltration`; the other six attack categories are
   opt-in. The example and deployment configurations use the same defaults.

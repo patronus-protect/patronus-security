@@ -43,7 +43,8 @@ few catalog rules under `exfiltration`, `memory_poisoning`, `agent_config_tamper
 `unsafe_action`. A rule runs only when its category is selected, and its candidates are scored
 the same way in every category; the result carries the category in `category` and the rule family
 (for example `instruction_leak`) in `class_name`. Outside `injection`, a match inside security
-documentation, a quotation, test code or a negated sentence is not reported.
+documentation, a quotation, test code or a negated sentence is not reported, and the rules add
+a `native:injection_l1` result only when one of them matches.
 
 ### Instruction manipulation
 
