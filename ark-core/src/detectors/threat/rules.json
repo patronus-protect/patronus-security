@@ -499,6 +499,90 @@
       }
     },
     {
+      "id": "ark.threat.ua_drain_account",
+      "class_name": "unsafe_action",
+      "family": "unattended",
+      "upstream_groups": [],
+      "pattern": "(?P<transfer>(?-u:\\b)(?:send|transfer|wire|move|sende|schicke|ueberweise|transferiere)|überweise)(?-u:\\b)\\s{1,8}(?P<amount>as\\s{1,8}much\\s{1,8}(?:money\\s{1,8}|funds\\s{1,8})?as\\s{1,8}(?:possible|you\\s{1,8}can)|all\\s{1,8}(?:of\\s{1,8})?(?:the\\s{1,8})?(?:available\\s{1,8})?(?:money|funds|balance)|the\\s{1,8}(?:entire|whole|full)\\s{1,8}(?:account\\s{1,8})?balance|so\\s{1,8}viel\\s{1,8}geld\\s{1,8}wie\\s{1,8}m(?:ö|oe)glich|das\\s{1,8}(?:gesamte|ganze|komplette)\\s{1,8}(?:konto)?(?:guthaben|geld)|alles\\s{1,8}(?:verfügbare\\s{1,8}|verfuegbare\\s{1,8})?geld)(?-u:\\b)[^.!?;]{0,40}?(?-u:\\b)(?:to|an|auf|into)(?-u:\\b)[^.!?;]{0,30}?(?P<sink>(?-u:\\b)[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_split_transfer",
+      "class_name": "unsafe_action",
+      "family": "unattended",
+      "upstream_groups": [],
+      "pattern": "(?P<transfer>(?-u:\\b)(?:send|transfer|wire|pay|move|sende|schicke|zahle|ueberweise|transferiere)|überweise)(?-u:\\b)[^!?;]{0,60}?(?P<split>(?-u:\\b)(?:in\\s{1,8}(?:small(?:er)?\\s{1,8})?(?:increments|chunks|tranches|portions|batches)|in\\s{1,8}small(?:er)?\\s{1,8}(?:amounts|transfers|payments|transactions)|split\\s{1,8}(?:in)?to\\s{1,8}small(?:er)?\\s{1,8}(?:amounts|transfers|payments|transactions|increments|chunks)|in\\s{1,8}(?:kleinen\\s{1,8})?(?:teilbetr(?:ä|ae)gen|tranchen|portionen|einzelbetr(?:ä|ae)gen)|aufgeteilt\\s{1,8}in\\s{1,8}kleine\\s{1,8}(?:betr(?:ä|ae)ge|(?:ü|ue)berweisungen|tranchen|teilbetr(?:ä|ae)ge))(?-u:\\b))[^!?;]{0,30}?(?P<limit>(?-u:\\b)(?:no\\s{1,8}more\\s{1,8}than|not\\s{1,8}(?:more|larger|greater)\\s{1,8}than|at\\s{1,8}most|below|under|less\\s{1,8}than|h(?:ö|oe)chstens|maximal|unter|weniger\\s{1,8}als|nicht\\s{1,8}mehr\\s{1,8}als)(?-u:\\b))[^!?;]{0,60}?(?-u:\\b)(?:to|an|auf|into)(?-u:\\b)[^!?;]{0,30}?(?P<sink>(?-u:\\b)[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_redirect_payment",
+      "class_name": "unsafe_action",
+      "family": "unattended",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:modify|change|update|redirect|set|switch|aendere|setze|stelle)|ändere)(?-u:\\b)\\s{1,8}(?:the\\s{1,8}|den\\s{1,8})?(?:recipient|payee|beneficiary|zahlungsempf(?:ä|ae)nger|empf(?:ä|ae)nger)(?-u:\\b)\\s{1,8}(?:of|for|in)?\\s{0,4}(?P<scope>(?:a|any|all|every|one\\s{1,8}of\\s{1,8}the|eine[mrs]?|aller|irgendeine[mrs]?)\\s{1,8}(?:(?:recurring|scheduled|regular|standing|monthly|wiederkehrenden?|regelm(?:ä|ae)(?:ß|ss)igen?|geplanten?|monatlichen?)\\s{1,8})?(?:payments?|transactions?|transfers?|orders?|zahlung(?:en)?|(?:ü|ue)berweisung(?:en)?|transaktion(?:en)?|dauerauftr(?:a|ä|ae)g(?:s|es|e)?))(?-u:\\b)[^.!?;]{0,20}?(?-u:\\b)(?:to|an|auf)(?-u:\\b)[^.!?;]{0,30}?(?P<sink>(?-u:\\b)[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_password_change",
+      "class_name": "unsafe_action",
+      "family": "credential_access",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:change|reset|set|update|aendere|setze)|ändere)(?-u:\\b)\\s{1,8}(?P<target>the\\s{1,8}(?:password|passcode)\\s{1,8}of\\s{1,8}(?:the|this|that|every|all)\\s{1,8}(?:users?|accounts?|admins?|administrators?)(?-u:\\b)|the\\s{1,8}users?(?:'{1,2}s?)?\\s{1,8}(?:password|passcode)(?-u:\\b)|(?:das\\s{1,8})?(?:passwort|kennwort)\\s{1,8}(?:des|der|aller|jedes)\\s{1,8}(?:nutzers|benutzers|nutzerin|benutzerin|kontos|nutzer|benutzer|admins|administrators)(?-u:\\b))\\s{1,8}(?:to|auf|in|zu)(?-u:\\b)\\s{1,8}(?P<secret>[\\\"'`][^\\\"'`\\s]{3,40}[\\\"'`]|[a-z][a-z0-9._!@#$%&*+-]{0,40}[0-9_!@#$%&*+][a-z0-9_!@#$%&*+-]{0,40})",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_invite_and_remove",
+      "class_name": "unsafe_action",
+      "family": "privilege_widening",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:invite|lade)(?-u:\\b))[^.!?;]{0,60}?(?P<target>[a-z0-9_.+-]{1,64}@[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63}){1,4})[^!?;]{0,40}?(?P<scope>(?-u:\\b)(?:workspace|channel|team|slack|organi[sz]ation|kanal|arbeitsbereich|organisation))(?-u:\\b)[^.!?;]{0,120}?(?P<cover>(?-u:\\b)(?:then|afterwards|after\\s{1,8}that|danach|anschlie(?:ß|ss)end|dann)(?-u:\\b)[^.!?;]{0,20}?(?-u:\\b)(?:remove|delete|kick|entferne|wirf|loesche|lösche)(?-u:\\b)|(?-u:\\b)(?:remove|kick|entferne|wirf|loesche|lösche)\\s{1,8}(?:him|her|them|ihn|sie)\\s{1,8}(?:(?:from\\s{1,8}[^.!?;]{0,30}?)?(?:again|afterwards|danach|anschlie(?:ß|ss)end|wieder))(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_delete_by_id",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?:(?P<frame>(?-u:\\b)(?:first|todo|instructions?|important|wichtig|zuerst|zuvor|anweisung)!{0,3}\\s{0,4}:)\\s{0,8})?(?P<action>(?-u:\\b)(?:delete|remove|erase|loesche|entferne)|lösche)(?-u:\\b)\\s{1,8}(?:the|die|das|den)\\s{1,8}(?P<target>(?:file|document|email|e-mail|message|event|folder|datei|dokument|nachricht|termin|ordner)\\s{1,8}(?:with\\s{1,8}(?:the\\s{1,8})?id|mit\\s{1,8}der\\s{1,8}id)(?-u:\\b)\\s{0,4}[:#]?\\s{0,4}['\\\"`]{0,2}[a-z0-9_-]{1,40})(?P<instead>[^!?;\\n]{0,40}?(?-u:\\b)(?:instead|stattdessen)\\s{0,4}(?:[.'\"\\n]|$))?",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_cover_tracks",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:delete|remove|erase|loesche|entferne)|lösche)(?-u:\\b)\\s{1,8}(?:(?:then|afterwards|danach|anschlie(?:ß|ss)end)\\s{1,8})?(?:the|that|this|die|diese|den|das)\\s{1,8}(?P<target>(?:e-?mail|message|mail)\\s{1,8}(?:that\\s{1,8})?you\\s{1,8}(?:have\\s{1,8})?just\\s{1,8}sent|(?:e-?mail|mail|nachricht),?\\s{1,8}(?:die|den)\\s{1,8}du\\s{1,8}(?:gerade|eben)\\s{1,8}(?:gesendet|verschickt|geschickt)|(?:gerade|eben)\\s{1,8}(?:gesendete|verschickte|geschickte)n?\\s{1,8}(?:e-?mail|mail|nachricht))(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
       "id": "ark.threat.tp_sensitive_file_param",
       "class_name": "tool_poisoning",
       "family": "sensitive_file_param",
