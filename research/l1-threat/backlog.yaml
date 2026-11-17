@@ -397,6 +397,7 @@ tasks:
       admin docs for inviting users); dev unsafe_action TPR@1% on the AgentDojo rows > 0 at 0 hard-benign FP and
       unchanged on the templates; ablation re-run with native rows apart and the decision recorded
   - id: T15
+    status: done
     title: "Dev recipes for the licence-cleared agent sets: BIPIA (MIT attack texts with e-mail and code contexts only), Agent-SafetyBench (MIT), RedCode (MIT; Bash part handed to shell_command), approve-or-deny (Apache-2.0; German rows machine-generated, marked translated); look for native tool_poisoning / agent_config_tampering rows among them"
     type: eval-infra
     deps: [T10]
