@@ -218,31 +218,120 @@
     ]
   },
   {
-    "id": "exfil.egress_task",
-    "description": "Agentenaufgaben mit Datenabfluss: Zahlung mit Betreff, Nachrichten sammeln und posten, Mail mit Betreff und Text",
+    "id": "exfil.payment",
+    "description": "Zahlung, Überweisung, Transaktion",
     "en": [
       "transaction",
       "payment",
       "transfer",
-      "money",
-      "concatenate",
-      "collect",
-      "gather",
-      "compile",
-      "combine",
-      "merge",
-      "subject"
+      "money"
     ],
     "de": [
       "zahlung",
       "transaktion",
       "ueberweisung",
-      "überweisung",
+      "überweisung"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.account_owner",
+    "description": "Nutzer oder Kunde als Eigentümer der Kontodaten",
+    "en": [
+      "user"
+    ],
+    "de": [
+      "nutzer",
+      "kunde",
+      "kundin",
+      "kontoverlauf",
+      "dauerauftr"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.collect",
+    "description": "Nachrichten sammeln oder zusammenfügen",
+    "en": [
+      "concatenate",
+      "collect",
+      "gather",
+      "compile",
+      "combine",
+      "merge"
+    ],
+    "de": [
       "sammle",
       "verkette",
       "kombiniere",
-      "fasse",
+      "fasse"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.messages",
+    "description": "Nachrichten als gesammelte Daten",
+    "en": [
+      "messages"
+    ],
+    "de": [
+      "nachrichten"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.web_sink",
+    "description": "Website-Senke mit oder ohne URL-Schema",
+    "en": [
+      "http",
+      "www."
+    ],
+    "de": [],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.mail_subject",
+    "description": "Betreff einer Mail",
+    "en": [
+      "subject"
+    ],
+    "de": [
       "betreff"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.identity",
+    "description": "Ausweis-, Karten- und Kontonummern",
+    "en": [
+      "number"
+    ],
+    "de": [
+      "nummer"
     ],
     "shared": [],
     "sources": [

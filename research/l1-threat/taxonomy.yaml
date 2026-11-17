@@ -1251,7 +1251,13 @@ classes:
       - threat.session_history
       - threat.agent_config
       - threat.remote_destination
-      - exfil.egress_task
+      - exfil.payment
+      - exfil.account_owner
+      - exfil.collect
+      - exfil.messages
+      - exfil.web_sink
+      - exfil.mail_subject
+      - exfil.identity
       - exfil.received_code
       required_context: []
       negative_context: [exfil.user_owned, exfil.integration_doc, defensive, meta, quotation, test_code]

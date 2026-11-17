@@ -731,7 +731,7 @@
       "class_name": "exfiltration",
       "family": "send_directive",
       "upstream_groups": [],
-      "pattern": "(?P<transfer>(?-u:\\b)(?:send|make|transfer|wire|sende|t(?:ä|ae)tige|ueberweise)(?-u:\\b)|überweise(?-u:\\b))\\s{1,4}(?:(?:a|an|the|one|eine?|die)\\s{1,4})?(?:(?:new|neue)\\s{1,4})?(?:(?-u:\\b)(?:transaction|payment|transfer|money|zahlung|transaktion|ueberweisung)(?-u:\\b)|überweisung(?-u:\\b))[^.!?;]{0,40}?(?-u:\\b)(?:to|an|auf)(?-u:\\b)\\s{1,4}(?P<sink>[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)[^.!?;]{0,40}?(?-u:\\b)(?:that|which|with|containing|die|mit|deren|dessen)(?-u:\\b)[^!?;]{0,100}?(?P<source>(?-u:\\b)(?:the\\s{1,4}users?(?:'{1,2}s)?|users?'{1,2}s?|transaction\\s{1,4}history|scheduled\\s{1,4}transactions|(?:des|der)\\s{1,4}(?:nutzers|benutzers|nutzerin|benutzerin|kunden|kundin)|transaktionsverlauf|kontoverlauf|dauerauftr(?:ä|ae)ge)(?-u:\\b))",
+      "pattern": "(?P<transfer>(?-u:\\b)(?:send|make|transfer|wire|sende|t(?:ä|ae)tige|ueberweise)(?-u:\\b)|überweise(?-u:\\b))\\s{1,4}(?:(?:a|an|the|one|eine?|die)\\s{1,4})?(?:(?:new|neue)\\s{1,4})?(?:(?-u:\\b)(?:transaction|payment|transfer|money|zahlung|transaktion|ueberweisung)(?-u:\\b)|überweisung(?-u:\\b))[^.!?;]{0,40}?(?-u:\\b)(?:to|an|auf)(?-u:\\b)\\s{1,4}(?P<sink>[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)[^.!?;]{0,40}?(?-u:\\b)(?:that|which|with|containing|die|mit|deren|dessen)(?-u:\\b)[^!?;]{0,100}?(?P<source>(?-u:\\b)(?:the\\s{1,4}users?(?:'{1,2}s)?|users?'{1,2}s?|(?:des|der)\\s{1,4}(?:nutzers|benutzers|nutzerin|benutzerin|kunden|kundin)|kontoverlauf|dauerauftr(?:ä|ae)ge)(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",
