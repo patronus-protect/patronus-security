@@ -41,7 +41,8 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
         assert_ne!(case.en, case.de);
         for text in [&case.en, &case.de] {
             gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-            let result = &injection_l1(&gateway, category, text);
+            let result = &injection_l1(&gateway, category, text)
+                .unwrap_or_else(|| panic!("{}: no rule result: {text}", case.rule_id));
             assert_ne!(
                 result.class_name, "safe",
                 "{}: {text}: {result:?}",
@@ -66,15 +67,18 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
             let mut gates = ScanGateMatrix::all_enabled();
             gates.native.rules.insert(case.rule_id.clone(), false);
             gateway.set_execution_gates(gates);
-            let disabled = injection_l1(&gateway, category, text);
-            assert!(!has_rule(
-                &disabled.layers[0].details["l1_candidates"],
-                &case.rule_id
-            ));
+            assert!(
+                injection_l1(&gateway, category, text).is_none_or(|disabled| !has_rule(
+                    &disabled.layers[0].details["l1_candidates"],
+                    &case.rule_id
+                ))
+            );
         }
         gateway.set_execution_gates(ScanGateMatrix::all_enabled());
         for text in [&case.negative_en, &case.negative_de] {
-            let result = injection_l1(&gateway, category, text);
+            let Some(result) = injection_l1(&gateway, category, text) else {
+                continue;
+            };
             assert!(
                 !has_rule(&result.layers[0].details["l1_candidates"], &case.rule_id),
                 "negative: {text}"
@@ -141,17 +145,17 @@ fn unicode_tag_instructions_have_bilingual_source_evidence_and_safe_emoji() {
     );
 }
 
-/// The aggregated injection L1 result that `category` reports.
+/// The aggregated injection L1 result that `category` reports; outside
+/// injection there is none when no rule of the class left a candidate.
 fn injection_l1(
     gateway: &SecurityGateway,
     category: SecurityCategory,
     text: &str,
-) -> patronus_ark::SecurityScanResult {
+) -> Option<patronus_ark::SecurityScanResult> {
     gateway
         .scan_category(category, text)
         .into_iter()
         .find(|r| r.model == "native:injection_l1")
-        .unwrap()
 }
 
 fn has_rule(candidates: &serde_json::Value, rule: &str) -> bool {

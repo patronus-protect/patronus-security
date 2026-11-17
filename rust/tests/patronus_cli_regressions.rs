@@ -52,11 +52,11 @@ fn check(
         gateway.set_execution_gates(gates);
         let disabled = gateway.scan_category(category, text);
         if injection_rule {
-            let aggregate = disabled
+            // Outside injection a class without any rule candidate has no aggregate.
+            assert!(disabled
                 .iter()
-                .find(|r| r.model == "native:injection_l1")
-                .unwrap_or_else(|| panic!("missing native:injection_l1: {disabled:?}"));
-            assert!(!has_candidate_rule(aggregate, rule));
+                .filter(|r| r.model == "native:injection_l1")
+                .all(|aggregate| !has_candidate_rule(aggregate, rule)));
         } else {
             assert!(!disabled.iter().any(|r| r.class_name == class));
         }
