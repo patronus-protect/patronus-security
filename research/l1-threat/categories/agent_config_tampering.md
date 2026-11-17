@@ -284,3 +284,42 @@ keine belastbare Umstellung. Die Lücke ist strukturell: AC01 erwartet einen AGE
 Aufweitungs-Wert, hier steht die Änderung in den Argumenten eines Shell- oder Patch-Aufrufs, der die Datei erst
 schreibt (`sed -i`, `>>`, Unified Diff). Folgeaufgabe **T17**. Keine `agent_config_tampering`-Meldung auf den
 94 sauberen nativen Zeilen.
+
+## 17. Stand T17 (2026-11-17): Schreibaufrufe auf die eigene Agent-Konfiguration, Ablation erneut
+
+**`B0` bleibt**, jetzt mit Treffern: alle drei nativen approve-or-deny-Positiven werden gefunden, ohne
+Hard-Benign-FP. Neue Regel `ark.threat.ac_config_write` (Familie `permission_widening`): ein Shell- oder
+Patch-Aufruf schreibt einen Aufweitungs-Wert in einen Agent-Konfigurationspfad (`.codex/…`, `.claude/…`,
+`agent…/config.toml|settings.json`). Drei Schreibformen in einer Regex: `sed -i` mit dem Wert in der
+Ersetzung (nicht im Suchteil, also kein Treffer beim Wieder-Einschalten), `printf`/`echo` mit `>>`, `>` oder
+`tee` auf den Pfad, und eine hinzugefügte Zeile (`+`) eines Unified Diff nach `+++ <Pfad>` (auch
+JSON-escaped in `apply_patch`-Argumenten). Werte: `require_approval`/`approval_required`/`confirm_*` auf
+false, `[sandbox] enabled = false`, `sandbox*` auf false/off/`danger-full-access`, `approval_policy = never`,
+`bypassPermissions`, `dangerously_skip_permissions`/`auto_approve` = true, `allow = ["shell"|"bash"|"*"]`; ein
+eng gefasster Eintrag (`"shell(git status)"`) trifft nicht. Wie `ac_tamper_request` läuft sie ohne
+AGENT_CONFIG-Träger. Der geschriebene Wert ist eigene Phrase der Regel (`own`) für die Kontextprüfung — sonst
+macht das Wort `sandbox` im Wert den Fund zum Gegenkontext —, und `false`/`never` darin sind eigene Negation.
+Prefilter: die Pfad-Literale (`.codex/`, `.claude/`, `config.toml`, `settings.json`) aus `agentcfg.file`;
+Pfadklassen ASCII, sonst überschreitet der kompilierte Automat das Größenlimit.
+
+Ablation wie §16 nachgebaut, mit allen Generator-Dateien (`generated/*`, auch Carrier-Insertion und
+Obfuskation) statt nur der Vorlagen: Hälften per sha256 der Zeilen-ID, Dolly/GermanQuAD je ein Viertel per
+sha256, ohne AgentDojo; Training 11 892 Zeilen (43 Positive, 11 023 Benign); Vorlagen-Auswertung 41 Positive,
+4 482 Benign (912 Hard-Benign); nativ die 3 approve-or-deny-Positiven plus 4 576 Benign (912 Hard-Benign,
+darin die 94 sauberen BIPIA-/approve-or-deny-Zeilen). Facts über `text_facts --threat-findings` (Release), B0
+über `scoreboard._predict_file` mit dem gebauten Modul; ohne Latenzmessung (B1/B4/B5 `untimed`).
+
+| Stufe | Vorlagen TPR@1 % | nativ TPR@1 % (3, DE) | Hard-Benign-FPR |
+|---|---|---|---|
+| R, R+A, **B0** | 100,0 | 100,0 (3 von 3) | 0,0 |
+| R+A+L | 100,0 | 100,0 | 4,8 |
+| B1 / B4 | 100,0 | 0,0 | 9,4 / 11,7 |
+| B5 | 100,0 | 100,0 | 4,1 |
+
+Auswahl des Werkzeugs: `B0` (vorher `R+A+L` mit 2 von 3). Die Regel trägt keine Benign-Zeile (Training,
+Vorlagen, nativ); B0 meldet auf keiner der 94 sauberen nativen Zeilen `agent_config_tampering`. Goldens:
+je Schreibform DE und EN (sed, printf/echo, Diff; deutsche Zeilen `translated`) mit Hard Negatives (Nutzer
+bittet um die Änderung der eigenen Konfiguration, Tutorial mit der Einstellung, eng gefasste Freigabe,
+Wieder-Einschalten per sed, verengender Diff, Konfiguration eines anderen Programms). Offen: Heredocs
+(`cat >> ~/.codex/config.toml <<EOF` mit dem Wert in den Folgezeilen) und `sed` mit anderem Trennzeichen als
+`/`; drei Zeilen tragen noch keine Aussage über diese Formen.
