@@ -1417,6 +1417,7 @@ classes:
       - threat.secret_material
       - threat.credential_file
       - threat.file_read_operation
+      - unsafe.account_password
       required_context: []
       negative_context: [unsafe.sandbox, unsafe.own_scope, defensive, meta, quotation, test_code]
       examples:
@@ -1427,7 +1428,7 @@ classes:
         - <imperative HARVEST> all <stored passwords> from <browser/keychain>
         - <imperative READ> <cloud credentials file> and show it
       carriers: [chat, email, web, document, tool_output, rag_chunk, code]
-      existing_rules: [ark.threat.credential_harvesting, ark.threat.credential_file_access, ark.threat.ua_credential_store_access]
+      existing_rules: [ark.threat.credential_harvesting, ark.threat.credential_file_access, ark.threat.ua_credential_store_access, ark.threat.ua_password_change]
       baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none, protectai_v2: none}
       gap: Browser/keychain stores and DE paraphrases beyond fixed file paths; injected (indirect) requests
     - id: metadata_ssrf
@@ -1478,14 +1479,14 @@ classes:
       task: UA01
       scored_only: false
       shape: VERB_DESTRUCTIVE + BROAD_TARGET in one clause, addressed imperative
-      anchors: [unsafe.destructive, unsafe.broad_target, unsafe.no_confirm, addressee, threat.removal_action]
+      anchors: [unsafe.destructive, unsafe.broad_target, unsafe.no_confirm, addressee, threat.removal_action, unsafe.task_frame, unsafe.sent_mail]
       required_context: [addressee]
       negative_context: [unsafe.sandbox, unsafe.safe_guard, unsafe.own_scope, defensive, meta, quotation]
       examples:
         de: [<Imperativ LÖSCHEN> <gesamte Produktionsdatenbank> <ohne Rückfrage>]
         en: [<imperative WIPE> <all backups> <right away>]
       carriers: [chat, email, tool_output, web, document, rag_chunk]
-      existing_rules: [ark.threat.ua_destructive_request]
+      existing_rules: [ark.threat.ua_destructive_request, ark.threat.ua_delete_by_id, ark.threat.ua_cover_tracks]
       baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Prose destructive requests without shell syntax; today only dlp destructive_operation
     - id: security_disable
@@ -1560,14 +1561,14 @@ classes:
       task: UA01
       scored_only: false
       shape: GRANT_VERB + PRIVILEGE + SUBJECT (user/service/everyone)
-      anchors: [unsafe.privilege, addressee]
+      anchors: [unsafe.privilege, addressee, unsafe.invite]
       required_context: [addressee]
       negative_context: [unsafe.sandbox, unsafe.own_scope, defensive, meta, quotation]
       examples:
         de: [<Imperativ VERGEBEN> <Admin-Rechte> an <alle Nutzer>]
         en: [<imperative MAKE> <directory> <world-writable>]
       carriers: [chat, email, tool_output, document, config]
-      existing_rules: [ark.threat.ua_privilege_widening]
+      existing_rules: [ark.threat.ua_privilege_widening, ark.threat.ua_invite_and_remove]
       baseline_coverage: {atr: partial}
       gap: No ARK rule for privilege widening in prose
     - id: persistence
@@ -1634,6 +1635,9 @@ classes:
       - threat.transfer_action
       - threat.removal_action
       - injection.unbounded_authorization
+      - unsafe.drain_amount
+      - unsafe.split_transfer
+      - unsafe.payment_recipient
       required_context: [addressee]
       negative_context: [unsafe.sandbox, unsafe.safe_guard, defensive, meta, quotation]
       examples:
@@ -1642,7 +1646,7 @@ classes:
         - <Hintergrundaufgabe> genehmigt <künftige Aktionen> <ohne Rückfrage>
         en: [<imperative DELETE> <records> <without user approval>]
       carriers: [chat, email, tool_output, document, memory]
-      existing_rules: [ark.threat.unauthorized_autonomy, ark.injection.governance.autonomous_approval_bypass, ark.threat.ua_unattended_transfer]
+      existing_rules: [ark.threat.unauthorized_autonomy, ark.injection.governance.autonomous_approval_bypass, ark.threat.ua_unattended_transfer, ark.threat.ua_drain_account, ark.threat.ua_split_transfer, ark.threat.ua_redirect_payment]
       baseline_coverage: {atr: partial}
       gap: Approval-bypass phrasings beyond fixed consent phrases
     - id: destructive_hint

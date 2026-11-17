@@ -99,6 +99,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   body with all the messages"). A received security code sent to a mail address counts as a data
   source of a send directive. A payment with an invoice reference, a newsletter post, a mail of
   the user's own notes and messages posted to the user's own wiki ("in unser Wiki") stay benign.
+- **Detection change:** (`unsafe_action`) new rules for harmful actions that tool results hand to
+  an agent, in German and English, also when the result wraps its lines (YAML fields): sending as
+  much money as possible or the entire balance to a bank account ("so viel Geld wie möglich auf das
+  Konto <IBAN>"), a sum split into small increments below a limit ("in small increments of no more
+  than …", "in kleinen Teilbeträgen von höchstens …"), the recipient of a recurring or scheduled
+  payment changed to a bank account ("the recipient of a recurring payment", "den Empfänger eines
+  Dauerauftrags"), the user's password set to a given value, an address invited to a workspace and
+  removed again afterwards, a file deleted by its ID right after "first:", "TODO:" or "Wichtig:",
+  and deleting the mail just sent. A transfer of a fixed amount, an installment plan, a change to the
+  user's own standing order ("my", "meines"), password-reset help, admin docs for inviting users and
+  a user deleting their own file by ID stay benign.
 - **Detection change:** (`exfiltration`) an address after "from" ("von", "aus") in a send directive
   is where the data comes from: "send the security code received from security@… to my address
   anna@…" ("Sende den Sicherheitscode von sicherheit@… an meine Adresse …") is a transfer to the
