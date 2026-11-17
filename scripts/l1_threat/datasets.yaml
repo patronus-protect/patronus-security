@@ -55,7 +55,9 @@ schema: ark-l1-threat-datasets-v1
 #     exfiltration, unsafe_action by the injection task's goal) and clean tool outputs as benign rows.
 # 11: BIPIA (attacks inside e-mails) and the German rows of approve-or-deny (agent tool calls, translated)
 #     join train_dev; the latter carry the first native agent_config_tampering rows.
-generation: 11
+# 12: BIPIA's task-irrelevant text attacks leave scoring (dev gold re-review 2026-11-17: bare requests such as
+#     "Explain the theory of relativity." inside an e-mail carry no injection).
+generation: 12
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -288,7 +290,30 @@ datasets:
     text: text
     language: en
     labels:
-      - {field: attack_set, equals: [text, code], label: "text and code attacks inserted into e-mail contexts"}
+      - {field: attack_set, equals: code, label: "text and code attacks inserted into e-mail contexts"}
+      # text attacks that steer the answer: its form (cipher, encoding, reversal, typos), an inserted claim, link,
+      # advert or appeal; 'Language Translation' is one of them only in the test file ("Translate your response …")
+      - field: category
+        and: [{field: attack_set, equals: text}]
+        equals: [Substitution Ciphers, Base Encoding, Reverse Text, Emoji Substitution, Information Dissemination,
+                 Marketing & Advertising, Entertainment, Scams & Fraud, Misinformation & Propaganda,
+                 Alphanumeric Substitution, Homophonic Substitution, Misspelling Intentionally, Anagramming,
+                 Space Removal & Grouping, Instruction, Social Interaction, Persuasion, Clickbait, Malware Distribution]
+        label: "text and code attacks inserted into e-mail contexts"
+      - field: category
+        and: [{field: attack_set, equals: text}, {field: attack_split, equals: test}]
+        equals: Language Translation
+        label: "text and code attacks inserted into e-mail contexts"
+      # task-irrelevant requests ("Explain the theory of relativity.") without override or address to the assistant
+      - field: category
+        and: [{field: attack_set, equals: text}]
+        equals: [Task Automation, Business Intelligence, Conversational Agent, Research Assistance, Sentiment Analysis,
+                 Information Retrieval, Content Creation, Learning and Tutoring, Programming Help]
+        label: "task-irrelevant requests inserted into e-mail contexts"
+      - field: category
+        and: [{field: attack_set, equals: text}, {field: attack_split, equals: train}]
+        equals: Language Translation
+        label: "task-irrelevant requests inserted into e-mail contexts"
       # snippets that read files, keystrokes, screens, cookies, memory or the environment and send them to a remote
       # host (HTTP, sockets, scp, MQTT, SSH tunnels)
       - field: category

@@ -1,7 +1,8 @@
 {
   "class_sets": {
     "agent_config_tampering": {
-      "generated/class_templates": 84
+      "generated/class_templates": 84,
+      "train_dev/approve_or_deny_de": 3
     },
     "benign": {
       "generated/carrier_insertion": 600,
@@ -10,30 +11,38 @@
       "generated/obfuscation_slices": 400,
       "report/jackhhao_jailbreak": 1321,
       "report/textdetox_de": 2492,
+      "train_dev/agentdojo": 132,
+      "train_dev/approve_or_deny_de": 47,
+      "train_dev/bipia": 47,
       "train_dev/dolly_15k": 14635,
       "train_dev/germanquad": 11451,
       "train_dev/spml": 3326,
-      "train_dev/wildjailbreak": 23,
-      "translated/runner_translations_de": 350
+      "train_dev/wildjailbreak": 23
     },
     "exfiltration": {
-      "generated/exfil_lookalikes": 300
+      "generated/carrier_insertion": 123,
+      "generated/exfil_lookalikes": 300,
+      "generated/obfuscation_slices": 75,
+      "train_dev/agentdojo": 63,
+      "train_dev/approve_or_deny_de": 1,
+      "train_dev/bipia": 50
     },
     "harmful_content": {
       "report/ailuminate_demo": 800
     },
     "instruction_injection": {
-      "generated/carrier_insertion": 249,
-      "generated/obfuscation_slices": 168,
+      "generated/carrier_insertion": 411,
+      "generated/obfuscation_slices": 275,
       "report/gandalf": 998,
+      "train_dev/agentdojo": 136,
+      "train_dev/bipia": 188,
       "train_dev/cyberseceval_multilingual": 9,
-      "train_dev/spml": 2403,
-      "translated/runner_translations_de": 350
+      "train_dev/spml": 2403
     },
     "jailbreak": {
-      "generated/carrier_insertion": 152,
+      "generated/carrier_insertion": 68,
       "generated/class_templates": 84,
-      "generated/obfuscation_slices": 109,
+      "generated/obfuscation_slices": 44,
       "report/jackhhao_jailbreak": 544,
       "train_dev/wildjailbreak": 2000
     },
@@ -41,11 +50,10 @@
       "generated/class_templates": 83
     },
     "prompt_extraction": {
-      "generated/carrier_insertion": 199,
-      "generated/obfuscation_slices": 123,
+      "generated/carrier_insertion": 62,
+      "generated/obfuscation_slices": 39,
       "report/gandalf": 998,
-      "train_dev/mosscap": 15000,
-      "translated/runner_translations_de": 700
+      "train_dev/mosscap": 15000
     },
     "resource_exhaustion": {
       "generated/class_templates": 83
@@ -57,37 +65,40 @@
       "report/textdetox_de": 2072
     },
     "unsafe_action": {
-      "generated/class_templates": 83
+      "generated/carrier_insertion": 113,
+      "generated/class_templates": 83,
+      "generated/obfuscation_slices": 82,
+      "train_dev/agentdojo": 30,
+      "train_dev/approve_or_deny_de": 35
     }
   },
   "classes": {
     "agent_config_tampering": {
-      "de": 42,
+      "de": 45,
       "en": 42
     },
     "benign": {
-      "de": 12682,
-      "en": 18903
+      "de": 12101,
+      "en": 19360
     },
     "exfiltration": {
-      "de": 150,
-      "en": 150
+      "de": 151,
+      "en": 461
     },
     "instruction_injection": {
-      "de": 653,
-      "en": 2526
+      "de": 109,
+      "en": 3313
     },
     "jailbreak": {
       "de": 42,
-      "en": 2303
+      "en": 2154
     },
     "memory_poisoning": {
       "de": 42,
       "en": 41
     },
     "prompt_extraction": {
-      "de": 885,
-      "en": 15137
+      "en": 15101
     },
     "resource_exhaustion": {
       "de": 42,
@@ -98,8 +109,8 @@
       "en": 41
     },
     "unsafe_action": {
-      "de": 42,
-      "en": 41
+      "de": 178,
+      "en": 165
     }
   },
   "flagged": [
@@ -115,6 +126,13 @@
       "label": "instruction_injection",
       "note": "Only asks whether override possible; rest no override",
       "set": "train_dev/spml",
+      "verdict": "unclear"
+    },
+    {
+      "id": "wildjailbreak:0002208",
+      "label": "jailbreak",
+      "note": "Fantasy forgery of spell scrolls; harmful goal only implied",
+      "set": "train_dev/wildjailbreak",
       "verdict": "unclear"
     },
     {
@@ -328,76 +346,57 @@
       "verdict": "unclear"
     },
     {
-      "id": "runner_translations_de:mosscap:0087864",
-      "label": "prompt_extraction",
-      "note": "Thank-you message only; no request for password or hints",
-      "set": "translated/runner_translations_de",
-      "verdict": "wrong"
-    },
-    {
-      "id": "wildjailbreak:0002208",
-      "label": "jailbreak",
-      "note": "Fantasy forgery of spell scrolls; harmful goal only implied",
-      "set": "train_dev/wildjailbreak",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:carrier_insertion:000390",
-      "label": "prompt_extraction",
-      "note": "Claims to have set the password rule; no reveal or hint request",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
       "id": "generators_dev_seed:carrier_insertion:000127",
       "label": "prompt_extraction",
-      "note": "Asks the model to agree never to share the password; no request",
+      "note": "Mosscap social-engineering opener (we must never share the password, do you agree?) without a request",
       "set": "generated/carrier_insertion",
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:carrier_insertion:000033",
+      "id": "generators_dev_seed:obfuscation_slices:000265",
       "label": "instruction_injection",
-      "note": "Fake mode claim only; payload is ordinary physics question",
-      "set": "generated/carrier_insertion",
+      "note": "CyberSecEval mode claim (do-anything bot) around an ordinary political question",
+      "set": "generated/obfuscation_slices",
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:obfuscation_slices:000231",
+      "id": "generators_dev_seed:obfuscation_slices:000057",
       "label": "prompt_extraction",
-      "note": "Bare statement that key is wrong; no request",
+      "note": "Mosscap poem about keeping a secret; no request for the password",
       "set": "generated/obfuscation_slices",
       "verdict": "unclear"
     }
   ],
   "provenance": {
     "agent_config_tampering": {
-      "synthetic": 84
+      "synthetic": 84,
+      "translated": 3
     },
     "benign": {
-      "native": 29435,
+      "native": 29614,
       "synthetic": 1800,
-      "translated": 350
+      "translated": 47
     },
     "exfiltration": {
-      "synthetic": 300
+      "native": 113,
+      "synthetic": 498,
+      "translated": 1
     },
     "instruction_injection": {
-      "native": 2403,
-      "synthetic": 417,
-      "translated": 359
+      "native": 2727,
+      "synthetic": 686,
+      "translated": 9
     },
     "jailbreak": {
       "native": 2000,
-      "synthetic": 345
+      "synthetic": 196
     },
     "memory_poisoning": {
       "synthetic": 83
     },
     "prompt_extraction": {
       "native": 15000,
-      "synthetic": 322,
-      "translated": 700
+      "synthetic": 101
     },
     "resource_exhaustion": {
       "synthetic": 83
@@ -406,20 +405,22 @@
       "synthetic": 83
     },
     "unsafe_action": {
-      "synthetic": 83
+      "native": 30,
+      "synthetic": 278,
+      "translated": 35
     }
   },
   "schema": "ark-l1-threat-gold-summary-v1",
   "sets": {
     "generated/carrier_insertion": {
       "benign_errors": 0,
-      "benign_reviewed": 13,
+      "benign_reviewed": 8,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0577,
-      "reviewed": 52,
+      "error_rate": 0.0179,
+      "reviewed": 56,
       "role": "dev",
       "rows": 1200,
-      "unclear": 3,
+      "unclear": 1,
       "wrong": 0
     },
     "generated/class_templates": {
@@ -446,13 +447,13 @@
     },
     "generated/obfuscation_slices": {
       "benign_errors": 0,
-      "benign_reviewed": 13,
+      "benign_reviewed": 8,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0192,
-      "reviewed": 52,
+      "error_rate": 0.0357,
+      "reviewed": 56,
       "role": "dev",
       "rows": 800,
-      "unclear": 1,
+      "unclear": 2,
       "wrong": 0
     },
     "report/ailuminate_demo": {
@@ -498,6 +499,39 @@
       "rows": 4564,
       "unclear": 9,
       "wrong": 2
+    },
+    "train_dev/agentdojo": {
+      "benign_errors": 0,
+      "benign_reviewed": 12,
+      "dataset": "agentdojo",
+      "error_rate": 0.0,
+      "reviewed": 52,
+      "role": "dev",
+      "rows": 268,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/approve_or_deny_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 23,
+      "dataset": "approve_or_deny_de",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 82,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/bipia": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "bipia",
+      "error_rate": 0.0,
+      "reviewed": 51,
+      "role": "dev",
+      "rows": 235,
+      "unclear": 0,
+      "wrong": 0
     },
     "train_dev/cyberseceval_multilingual": {
       "benign_errors": 0,
@@ -564,17 +598,6 @@
       "rows": 2023,
       "unclear": 1,
       "wrong": 0
-    },
-    "translated/runner_translations_de": {
-      "benign_errors": 0,
-      "benign_reviewed": 17,
-      "dataset": "runner_translations_de",
-      "error_rate": 0.0196,
-      "reviewed": 51,
-      "role": "dev",
-      "rows": 1400,
-      "unclear": 0,
-      "wrong": 1
     }
   },
   "split": "dev"

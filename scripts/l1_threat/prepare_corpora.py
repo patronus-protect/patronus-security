@@ -415,8 +415,9 @@ def agentdojo_records(trace: dict[str, Any]) -> Iterable[dict[str, Any]]:
 
 def bipia_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
     """Records of BIPIA's e-mail task: every e-mail of the ``.jsonl`` context files unchanged
-    (``attack_set`` and ``category`` ``none``), then every attack of the ``*_attack_*.json`` files
-    (``{category: [attack, ...]}``; ``attack_set`` ``code`` or ``text`` by the file name) inserted into
+    (``attack_set``, ``category`` and ``attack_split`` ``none``), then every attack of the ``*_attack_*.json``
+    files (``{category: [attack, ...]}``; ``attack_set`` ``code`` or ``text`` and ``attack_split`` ``train`` or
+    ``test`` by the file name, as one category name can mean different groups in the two files) inserted into
     e-mail ``i mod n`` as its own line at the start, in the middle or at the end (``i mod 3``, as BIPIA
     places them), cut to whole lines within ``BIPIA_CONTEXT`` characters on each side so that rows of
     one e-mail stay apart from each other and from the clean e-mail."""
@@ -425,15 +426,15 @@ def bipia_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
         if path.suffix == ".jsonl":
             with path.open(encoding="utf-8") as handle:
                 emails += [json.loads(line)["context"] for line in handle if line.strip()]
-    yield from ({"text": email, "attack_set": "none", "category": "none"} for email in emails)
+    yield from ({"text": email, "attack_set": "none", "category": "none", "attack_split": "none"} for email in emails)
     attacks = [
-        (path.name.split("_")[0], category, attack)
+        (path.name.split("_")[0], path.stem.split("_")[-1], category, attack)
         for path in paths
         if path.suffix == ".json"
         for category, texts in json.loads(path.read_text(encoding="utf-8")).items()
         for attack in texts
     ]
-    for index, (attack_set, category, attack) in enumerate(attacks):
+    for index, (attack_set, attack_split, category, attack) in enumerate(attacks):
         email = emails[index % len(emails)]
         position = index % 3
         if position == 0:
@@ -448,7 +449,7 @@ def bipia_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
             text = before + "\n" + attack
         else:
             text = before + attack + "\n" + after
-        yield {"text": text, "attack_set": attack_set, "category": category}
+        yield {"text": text, "attack_set": attack_set, "category": category, "attack_split": attack_split}
 
 
 def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
