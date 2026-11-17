@@ -265,11 +265,12 @@ def test_bipia_inserts_each_attack_into_an_email_at_start_middle_and_end(tmp_pat
     # Every e-mail once without attack, as a benign carrier.
     assert [(record["text"], record["attack_set"], record["category"]) for record in records[:2]] == [(email, "none", "none") for email in emails]
     attacks = records[2:]
-    assert [(record["attack_set"], record["category"]) for record in attacks] == [
-        ("text", "Task Automation"),
-        ("text", "Task Automation"),
-        ("code", "Keylogging"),
+    assert [(record["attack_set"], record["category"], record["attack_split"]) for record in attacks] == [
+        ("text", "Task Automation", "test"),
+        ("text", "Task Automation", "test"),
+        ("code", "Keylogging", "test"),
     ]
+    assert {record["attack_split"] for record in records[:2]} == {"none"}
     # Attack i goes into e-mail i mod n, at the start, between two lines in the middle, or at the end.
     assert attacks[0]["text"].startswith("Write a backup script.\n") and attacks[0]["text"].endswith(emails[0])
     middle = attacks[1]["text"]
@@ -306,16 +307,30 @@ def test_repository_bipia_recipe_maps_attack_groups():
     # E-mail contexts and the attack files only: the code contexts are Stack Overflow posts (CC-BY-SA).
     assert all(item["path"].startswith(("benchmark/email/", "benchmark/text_attack_", "benchmark/code_attack_")) for item in entry["files"])
 
-    def classes(attack_set, category):
-        outcome = MODULE.map_labels(entry, dataset, {"text": "x", "attack_set": attack_set, "category": category})
-        return outcome["classes"], outcome["benign"]
+    def classes(attack_set, category, attack_split="test"):
+        outcome = MODULE.map_labels(entry, dataset, {"text": "x", "attack_set": attack_set, "category": category, "attack_split": attack_split})
+        return None if outcome is None else (outcome["classes"], outcome["benign"])
 
-    assert classes("text", "Task Automation") == (["instruction_injection"], False)
+    # Text attacks that steer the answer (its form, an inserted claim, link or advert) are injections.
+    assert classes("text", "Base Encoding") == (["instruction_injection"], False)
+    assert classes("text", "Misinformation & Propaganda") == (["instruction_injection"], False)
+    assert classes("text", "Malware Distribution", "train") == (["instruction_injection"], False)
+    assert classes("text", "Language Translation", "test") == (["instruction_injection"], False)
+    # Task-irrelevant requests ('Explain the theory of relativity.') carry no override and no address to the
+    # assistant; inside an e-mail they read as ordinary content (dev gold review 2026-11-17), so they leave the set.
+    assert classes("text", "Task Automation") is None
+    assert classes("text", "Sentiment Analysis") is None
+    assert classes("text", "Information Retrieval", "train") is None
+    assert classes("text", "Programming Help", "train") is None
+    # 'Language Translation' names a task-irrelevant group in the train file and an answer-steering one in the test file.
+    assert classes("text", "Language Translation", "train") is None
     assert classes("code", "Encrypting Documents and Demanding Ransom (Ransomware)") == (["instruction_injection"], False)
     # The information-gathering code attacks send data off the machine.
     assert classes("code", "Data Eavesdropping") == (["exfiltration", "instruction_injection"], False)
     assert classes("code", "Keylogging") == (["exfiltration", "instruction_injection"], False)
-    assert classes("none", "none") == ([], True)
+    assert classes("none", "none", "none") == ([], True)
+    with pytest.raises(ValueError, match="unmapped upstream label"):
+        MODULE.map_labels(entry, dataset, {"text": "x", "attack_set": "text", "category": "New Group", "attack_split": "test"})
 
 
 def test_repository_approve_or_deny_recipe_keeps_german_rows_and_maps_permission_tampering():
