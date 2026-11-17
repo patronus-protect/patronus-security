@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "description": "Category of every ark.injection.* rule that reports outside the injection category, as research/l1-threat/taxonomy.yaml maps it. Rules not listed report under injection.",
-  "rules": {
+  "description": "Category of every ark.injection.* rule that reports outside injection, as research/l1-threat/taxonomy.yaml maps it (checked by scripts/l1_threat/taxonomy.py). Unlisted rules report under injection.",
+  "categories": {
     "ark.injection.cross_tool.override_action": "tool_poisoning",
     "ark.injection.cross_tool.override_then_call": "tool_poisoning",
     "ark.injection.escalation.multi_turn": "jailbreak",

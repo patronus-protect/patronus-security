@@ -30,6 +30,9 @@ INJECTION_CATALOG_PATHS = [
 INJECTION_NATIVE_REGISTRY_PATH = (
     ROOT / "ark-core/src/detectors/injection/rules/ark_native_71ff48e.json"
 )
+INJECTION_RULE_CATEGORIES_PATH = (
+    ROOT / "ark-core/src/detectors/injection/rules/rule_categories.json"
+)
 
 CATEGORY_NAMES = {
     "Injection": "injection",
@@ -709,13 +712,17 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "Injection rule IDs gate versioned catalog entries, native evidence producers, and the structural producer. Several source rules can intentionally share one canonical ID; the table lists each effective gate once.",
         "",
-        "| Rule ID | Family | Description | Source |",
-        "| --- | --- | --- | --- |",
+        "Each rule reports under the category of its attack class: a jailbreak rule under `jailbreak`, a request for the system prompt under `prompt_extraction`, and so on. A rule runs only when its category is selected. The result keeps the rule family as `class_name` (for example `guardrail_tamper` or `instruction_leak`); `category` names the attack class.",
+        "",
+        "| Rule ID | Category | Family | Description | Source |",
+        "| --- | --- | --- | --- | --- |",
     ])
+    rule_categories = json.loads(INJECTION_RULE_CATEGORIES_PATH.read_text())["categories"]
     for rule_id, rule in sorted(injection.items()):
         description = rule["description"].replace("|", "\\|").replace("\n", " ")
+        category = rule_categories.get(rule_id, "injection")
         lines.append(
-            f"| `{rule_id}` | `{rule['family']}` | {description} | `{rule['source']}` |"
+            f"| `{rule_id}` | `{category}` | `{rule['family']}` | {description} | `{rule['source']}` |"
         )
     threat = json.loads((ROOT / "ark-core/src/detectors/threat/rules.json").read_text())["rules"]
     lines.extend([

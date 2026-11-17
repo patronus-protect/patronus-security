@@ -35,6 +35,16 @@ Overlapping signals are merged into candidates and scored by the versioned L1 sc
 accepted candidate creates public evidence spans and a non-safe result. Rejected candidates retain
 their score and evidence in the typed decision contract without becoming findings.
 
+Each rule reports under the category of its attack class, listed per rule in the
+[L1 rule catalog](../reference/l1-rule-catalog.md#injection-rules). The `instruction_leak` rules
+report under `prompt_extraction`; `guardrail_tamper`, `jailbreak_framing` and
+`multi_turn_escalation` under `jailbreak`; `cross_tool_instruction` under `tool_poisoning`; a
+few catalog rules under `exfiltration`, `memory_poisoning`, `agent_config_tampering` or
+`unsafe_action`. A rule runs only when its category is selected, and its candidates are scored
+the same way in every category; the result carries the category in `category` and the rule family
+(for example `instruction_leak`) in `class_name`. Outside `injection`, a match inside security
+documentation, a quotation, test code or a negated sentence is not reported.
+
 ### Instruction manipulation
 
 | Detector | Catches |
@@ -158,7 +168,8 @@ Native detectors are eligible when their category and L1 are enabled; model and 
 narrow that set. To disable a complete detector without changing `max_level`, use an execution
 gate with its `native:<name>` key. To
 disable one stable PII, DLP, or Injection L1 rule while keeping its siblings, use `rules`. Missing
-rule IDs inherit the shared defaults. For Injection, `native:injection_l1` disables the complete native stack;
+rule IDs inherit the shared defaults. For Injection, `native:injection_l1` disables the complete native stack,
+also in the other attack categories its rules report under;
 the former model keys such as `native:instruction_override` still disable only that internal
 producer:
 

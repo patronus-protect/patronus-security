@@ -224,13 +224,13 @@ pub(crate) fn rule_categories() -> &'static HashMap<String, SecurityCategory> {
         #[derive(Deserialize)]
         struct RuleCategories {
             schema_version: u32,
-            rules: HashMap<String, String>,
+            categories: HashMap<String, String>,
         }
         let table: RuleCategories = serde_json::from_str(RULE_CATEGORIES_JSON)
             .expect("embedded injection rule categories must parse");
         assert_eq!(table.schema_version, 1, "unsupported rule category schema");
         table
-            .rules
+            .categories
             .into_iter()
             .map(|(rule, category)| {
                 let category = category
