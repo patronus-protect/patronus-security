@@ -522,8 +522,14 @@ pub(crate) fn counter_context(
     span: std::ops::Range<usize>,
     category: SecurityCategory,
 ) -> bool {
-    let own = span.start..span.start;
-    clause_context(scan, text, span, false, category, own, None) == Context::Counter
+    // A markdown image's `!` ends the clause before it; the context starts after it.
+    let from = span.start + usize::from(text[span.clone()].starts_with('!'));
+    // A negation from the match to its clause end ("you are no longer", "hast
+    // du keine Einschränkungen") is part of the rule's shape, not a negated
+    // sentence; one before the match still counts.
+    let end = scan.at(text, from..span.end).clause.end.max(span.end);
+    // A term inside the match (a `.test` host, "secret") belongs to the rule.
+    clause_context(scan, text, from..end, true, category, from..span.end, None) == Context::Counter
 }
 
 /// Context of a points finding: a counter term (defensive, meta, quotation,

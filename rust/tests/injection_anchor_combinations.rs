@@ -1,9 +1,10 @@
 use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark_core::detectors::injection::signal::rule_category;
 
 #[test]
 fn semantic_anchor_combinations_de_en() {
     let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
+        SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
         None,
         false,
@@ -40,11 +41,10 @@ fn semantic_anchor_combinations_de_en() {
     ];
     for (suffix, en, de, negative_en, negative_de) in cases {
         let id = format!("ark.injection.{suffix}");
+        let category = rule_category(&id);
         for text in [en, de] {
             gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-            let result = gateway
-                .scan_category(SecurityCategory::Injection, text)
-                .remove(0);
+            let result = injection_l1(&gateway, category, text);
             assert_ne!(result.class_name, "safe", "{text}: {:?}", result.layers);
             assert!(
                 has_rule(&result.layers[0].details["l1_candidates"], &id),
@@ -56,16 +56,12 @@ fn semantic_anchor_combinations_de_en() {
             let mut gates = ScanGateMatrix::all_enabled();
             gates.native.rules.insert(id.clone(), false);
             gateway.set_execution_gates(gates);
-            let result = gateway
-                .scan_category(SecurityCategory::Injection, text)
-                .remove(0);
+            let result = injection_l1(&gateway, category, text);
             assert!(!has_rule(&result.layers[0].details["l1_candidates"], &id));
         }
         gateway.set_execution_gates(ScanGateMatrix::all_enabled());
         for text in [negative_en, negative_de] {
-            let result = gateway
-                .scan_category(SecurityCategory::Injection, text)
-                .remove(0);
+            let result = injection_l1(&gateway, category, text);
             assert_eq!(result.class_name, "safe", "{text}: {:?}", result.layers);
         }
     }
@@ -77,29 +73,31 @@ fn semantic_anchor_combinations_de_en() {
         "Ignoriere nicht alles oben.",
         "Deaktiviere keine Sicherheitsfilter.",
     ] {
-        gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-        let enabled = gateway
-            .scan_category(SecurityCategory::Injection, text)
-            .remove(0);
-        let mut gates = ScanGateMatrix::all_enabled();
-        for suffix in [
+        let ids = [
             "override.prior_reference",
             "leak.own_prompt",
             "guardrail.disable_directive",
             "override.ethical_parameters",
-        ] {
-            let id = format!("ark.injection.{suffix}");
+        ]
+        .map(|suffix| format!("ark.injection.{suffix}"));
+        gateway.set_execution_gates(ScanGateMatrix::all_enabled());
+        let enabled: Vec<_> = ids
+            .iter()
+            .map(|id| injection_l1(&gateway, rule_category(id), text))
+            .collect();
+        let mut gates = ScanGateMatrix::all_enabled();
+        for (id, result) in ids.iter().zip(&enabled) {
             assert!(
-                !has_rule(&enabled.layers[0].details["l1_candidates"], &id),
+                !has_rule(&result.layers[0].details["l1_candidates"], id),
                 "{text}"
             );
-            gates.native.rules.insert(id, false);
+            gates.native.rules.insert(id.clone(), false);
         }
         gateway.set_execution_gates(gates);
-        let baseline = gateway
-            .scan_category(SecurityCategory::Injection, text)
-            .remove(0);
-        assert_eq!(enabled.class_name, baseline.class_name, "{text}");
+        for (id, enabled) in ids.iter().zip(&enabled) {
+            let baseline = injection_l1(&gateway, rule_category(id), text);
+            assert_eq!(enabled.class_name, baseline.class_name, "{text}");
+        }
     }
 }
 
@@ -162,6 +160,19 @@ fn override_and_secret_disclosure_compose_with_negation_controls() {
             "{text}"
         );
     }
+}
+
+/// The aggregated injection L1 result that `category` reports.
+fn injection_l1(
+    gateway: &SecurityGateway,
+    category: SecurityCategory,
+    text: &str,
+) -> patronus_ark::SecurityScanResult {
+    gateway
+        .scan_category(category, text)
+        .into_iter()
+        .find(|r| r.model == "native:injection_l1")
+        .unwrap()
 }
 
 fn has_rule(candidates: &serde_json::Value, rule: &str) -> bool {

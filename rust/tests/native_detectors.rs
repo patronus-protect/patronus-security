@@ -769,7 +769,11 @@ fn destructive_operation_keeps_documented_dangerous_commands_actionable() {
 #[test]
 fn injection_l1_covers_every_legacy_pi_pattern_family() {
     let scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
+        vec![
+            SecurityCategory::Injection,
+            SecurityCategory::Jailbreak,
+            SecurityCategory::PromptExtraction,
+        ],
         SecurityLevel::L1,
         None,
         false,
@@ -1028,7 +1032,13 @@ fn injection_l1_covers_every_legacy_pi_pattern_family() {
     ];
 
     for (legacy_rule, text, expected_model) in cases {
-        let results = scanner.scan_category(SecurityCategory::Injection, text);
+        // Producers moved out of injection report under their taxonomy class.
+        let category = match expected_model {
+            "native:instruction_leak" => SecurityCategory::PromptExtraction,
+            "native:jailbreak_framing" => SecurityCategory::Jailbreak,
+            _ => SecurityCategory::Injection,
+        };
+        let results = scanner.scan_category(category, text);
         assert!(
             producer_has_candidate(aggregated_injection_l1(&results), expected_model),
             "{legacy_rule} was not covered by {expected_model}: {results:#?}"

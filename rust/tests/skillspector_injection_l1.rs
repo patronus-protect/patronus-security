@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark_core::detectors::injection::signal::rule_category;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 #[derive(Deserialize)]
@@ -30,17 +31,17 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
         .collect();
     assert_eq!(actual, expected);
     let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
+        SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
         None,
         false,
     );
     for case in cases {
+        let category = rule_category(&case.rule_id);
         assert_ne!(case.en, case.de);
         for text in [&case.en, &case.de] {
             gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-            let results = gateway.scan_category(SecurityCategory::Injection, text);
-            let result = &results[0];
+            let result = &injection_l1(&gateway, category, text);
             assert_ne!(
                 result.class_name, "safe",
                 "{}: {text}: {result:?}",
@@ -65,17 +66,15 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
             let mut gates = ScanGateMatrix::all_enabled();
             gates.native.rules.insert(case.rule_id.clone(), false);
             gateway.set_execution_gates(gates);
-            let disabled = gateway.scan_category(SecurityCategory::Injection, text);
+            let disabled = injection_l1(&gateway, category, text);
             assert!(!has_rule(
-                &disabled[0].layers[0].details["l1_candidates"],
+                &disabled.layers[0].details["l1_candidates"],
                 &case.rule_id
             ));
         }
         gateway.set_execution_gates(ScanGateMatrix::all_enabled());
         for text in [&case.negative_en, &case.negative_de] {
-            let result = gateway
-                .scan_category(SecurityCategory::Injection, text)
-                .remove(0);
+            let result = injection_l1(&gateway, category, text);
             assert!(
                 !has_rule(&result.layers[0].details["l1_candidates"], &case.rule_id),
                 "negative: {text}"
@@ -140,6 +139,19 @@ fn unicode_tag_instructions_have_bilingual_source_evidence_and_safe_emoji() {
         gateway.scan_category(SecurityCategory::Injection, &text)[0].class_name,
         "safe"
     );
+}
+
+/// The aggregated injection L1 result that `category` reports.
+fn injection_l1(
+    gateway: &SecurityGateway,
+    category: SecurityCategory,
+    text: &str,
+) -> patronus_ark::SecurityScanResult {
+    gateway
+        .scan_category(category, text)
+        .into_iter()
+        .find(|r| r.model == "native:injection_l1")
+        .unwrap()
 }
 
 fn has_rule(candidates: &serde_json::Value, rule: &str) -> bool {

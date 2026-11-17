@@ -334,7 +334,11 @@ mod tests {
         );
         // JB-007 reports under jailbreak, the class its canonical rule maps to.
         for (category, text, upstream_id) in [
-            (SecurityCategory::Injection, "abcdefghijklmnopqrst", "EA-003"),
+            (
+                SecurityCategory::Injection,
+                "abcdefghijklmnopqrst",
+                "EA-003",
+            ),
             (SecurityCategory::Jailbreak, "hypothetically", "JB-007"),
         ] {
             let results = gateway.scan_category(category, text);
