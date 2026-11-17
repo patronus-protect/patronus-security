@@ -367,6 +367,7 @@ tasks:
   - {id: UA02, title: "unsafe_action points + ablation decision; today's threat scorer kept or replaced (B0 is a candidate)", type: scorer, deps: [UA01, S05], status: done}
   # TRIAGE 2026-W47: the template-only classes need native dev rows; legacy rules without clause context.
   - id: T10
+    status: done
     title: Native dev rows for the agent classes — AgentDojo recipe (MIT; injection tasks in tool outputs → instruction_injection / exfiltration / unsafe_action by the entity map), licence check of BIPIA, RedCode, Agent-SafetyBench and approve-or-deny DE; re-run the TP02/AC02/EX02/UA02 ablations on the native rows and record whether B0 stays (report only, no rule change)
     type: eval-infra
     deps: [EX02, UA02]
