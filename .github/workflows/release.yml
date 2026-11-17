@@ -68,7 +68,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # ubuntu-24.04, not ubuntu-latest: the pinned build Python 3.11.9 has no Ubuntu 26.04 build.
+          - os: ubuntu-24.04
             artifact: linux
             legacy_ort: false
           - os: macos-latest
