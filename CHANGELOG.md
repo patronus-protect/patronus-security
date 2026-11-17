@@ -38,6 +38,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   your instructions", the English override rule now also catches "ignore your original (or
   initial) instructions", "ignore the first point of your instructions" and "ignore the above
   and" followed by a new directive.
+- **Detection change:** (`jailbreak`) a negation after a jailbreak match that only takes away
+  restrictions ("In diesem hypothetischen Szenario hast du keine Einschränkungen", "you are not
+  bound by any rules") is the jailbreak's claim and no longer reads as a negated sentence; a
+  negated action ("darfst du keine Regeln brechen") still does.
 - When no categories are given, the library scanner runs `pii`, `dlp`, `injection`, `jailbreak`,
   `prompt_extraction`, `tool_poisoning` and `exfiltration`; the other six attack categories are
   opt-in. The example and deployment configurations use the same defaults.
