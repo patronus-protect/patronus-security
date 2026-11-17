@@ -44,11 +44,7 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
         [
             "native:injection_rule_catalog",
             "native:injection_structural",
-            "native:cross_tool_instruction",
-            "native:instruction_leak",
             "native:encoded_instruction",
-            "native:multi_turn_escalation",
-            "native:guardrail_tamper",
             "native:tool_output_instruction",
             "native:hidden_html_instruction",
             "native:unicode_confusable",
@@ -56,7 +52,6 @@ fn registry_keeps_category_order_and_all_outer_gate_combinations() {
             "native:agentic_control_abuse",
             "native:binary_smuggling",
             "native:instruction_override",
-            "native:jailbreak_framing",
             "native:covert_instruction",
             "native:instruction_boundary",
             "native:authority_escalation",
@@ -111,6 +106,7 @@ fn action_detectors_live_in_their_attack_classes() {
         ids(SecurityCategory::UnsafeAction),
         [
             "native:threat_l1",
+            "native:injection_rule_catalog",
             "native:sensitive_material",
             "native:mcp_runtime_risk",
             "native:destructive_operation",
@@ -118,15 +114,38 @@ fn action_detectors_live_in_their_attack_classes() {
     );
     assert_eq!(
         ids(SecurityCategory::Exfiltration),
-        ["native:threat_l1", "native:secret_transfer"]
+        [
+            "native:threat_l1",
+            "native:injection_rule_catalog",
+            "native:secret_transfer"
+        ]
     );
-    for category in [
-        SecurityCategory::ToolPoisoning,
-        SecurityCategory::AgentConfigTampering,
-        SecurityCategory::HarmfulContent,
-    ] {
-        assert_eq!(ids(category), ["native:threat_l1"]);
-    }
+    assert_eq!(
+        ids(SecurityCategory::ToolPoisoning),
+        [
+            "native:threat_l1",
+            "native:injection_rule_catalog",
+            "native:cross_tool_instruction"
+        ]
+    );
+    assert_eq!(
+        ids(SecurityCategory::AgentConfigTampering),
+        ["native:threat_l1", "native:injection_rule_catalog"]
+    );
+    assert_eq!(ids(SecurityCategory::HarmfulContent), ["native:threat_l1"]);
+    assert_eq!(
+        ids(SecurityCategory::Jailbreak),
+        [
+            "native:injection_rule_catalog",
+            "native:multi_turn_escalation",
+            "native:guardrail_tamper",
+            "native:jailbreak_framing"
+        ]
+    );
+    assert_eq!(
+        ids(SecurityCategory::PromptExtraction),
+        ["native:injection_rule_catalog", "native:instruction_leak"]
+    );
     for category in super::super::NATIVE_CATEGORIES {
         assert!(engine
             .producers(category)
@@ -348,5 +367,50 @@ fn attack_class_mode_drops_evidence_below_its_score_floor() {
         assert_eq!(balanced.result.confidence, 1.0 - strict.result.confidence);
         assert_eq!(balanced.details["accepted"], false);
         assert_eq!(balanced.details["score"], strict.details["score"]);
+    }
+}
+
+#[test]
+fn every_injection_rule_reports_under_exactly_its_taxonomy_class() {
+    use crate::detectors::injection::{rule_catalog::InjectionRuleCatalogPipeline, signal};
+    let engine = NativeEngine::new(&crate::native::NATIVE_CATEGORIES);
+    let mut routed = Vec::new();
+    for category in crate::native::NATIVE_CATEGORIES {
+        for id in InjectionRuleCatalogPipeline::for_category(category).rule_ids() {
+            assert_eq!(signal::rule_category(id), category, "{id}");
+            routed.push(id.to_owned());
+        }
+        for producer in engine.producers(category).iter().filter(|p| p.scored()) {
+            if let Some(rule) = producer.rule {
+                assert_eq!(signal::rule_category(rule), category, "{rule}");
+                routed.push(rule.to_owned());
+            }
+        }
+    }
+    // Each catalogue, native and structural rule runs once, in exactly one class.
+    let catalog = InjectionRuleCatalogPipeline::new();
+    let mut expected = catalog
+        .rule_ids()
+        .into_iter()
+        .map(str::to_owned)
+        .chain(signal::native_rule_ids().map(str::to_owned))
+        .chain(["ark.injection.structure.override_sensitive_disclosure".to_owned()])
+        .collect::<Vec<_>>();
+    routed.sort();
+    expected.sort();
+    assert_eq!(routed, expected);
+    // The table names no rule that does not exist and no rule that stays in injection.
+    for (rule, category) in signal::rule_categories() {
+        assert!(routed.contains(rule), "unknown rule {rule}");
+        assert_ne!(*category, SecurityCategory::Injection, "{rule}");
+    }
+    for category in [
+        SecurityCategory::Jailbreak,
+        SecurityCategory::PromptExtraction,
+    ] {
+        assert!(
+            engine.producers(category).iter().any(|p| p.scored()),
+            "{category:?} has no rules"
+        );
     }
 }

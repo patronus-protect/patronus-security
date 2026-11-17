@@ -11,9 +11,29 @@ fn candidates_from_result(
 ) -> Vec<patronus_ark_core::injection_l1::ProducerCandidate> {
     patronus_ark_core::injection_l1::candidates_from_result(&result.clone().into())
 }
+#[cfg(test)]
 pub(super) fn aggregate(text: &str, results: Vec<SecurityScanResult>) -> SecurityScanResult {
-    patronus_ark_core::injection_l1::aggregate(text, results.into_iter().map(Into::into).collect())
-        .into()
+    patronus_ark_core::injection_l1::aggregate(
+        crate::SecurityCategory::Injection,
+        text,
+        results.into_iter().map(Into::into).collect(),
+    )
+    .into()
+}
+
+pub(super) fn category_results(
+    category: crate::SecurityCategory,
+    text: &str,
+    results: Vec<(bool, SecurityScanResult)>,
+) -> Vec<SecurityScanResult> {
+    let results = results
+        .into_iter()
+        .map(|(scored, result)| (scored, result.into()))
+        .collect();
+    patronus_ark_core::injection_l1::category_results(category, text, results)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 #[cfg(test)]
 mod tests {
@@ -405,7 +425,7 @@ mod tests {
         .iter()
         .flat_map(candidates_from_result)
         .collect::<Vec<_>>();
-        let mut acceptance_spans = merge_candidates(text, candidates)
+        let mut acceptance_spans = merge_candidates(SecurityCategory::Injection, text, candidates)
             .iter()
             .map(|(candidate, _, _, _)| acceptance_bounds(candidate).unwrap())
             .collect::<Vec<_>>();
@@ -447,7 +467,8 @@ mod tests {
                 .iter()
                 .flat_map(candidates_from_result)
                 .collect::<Vec<_>>();
-            let (candidate, _, _, _) = merge_candidates(text, candidates).remove(0);
+            let (candidate, _, _, _) =
+                merge_candidates(SecurityCategory::Injection, text, candidates).remove(0);
             assert_eq!(candidate.rule_severities["rule.same"], "critical");
             assert_eq!(candidate.max_severity, "critical");
         }

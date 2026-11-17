@@ -5,12 +5,12 @@ use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::signal::{detection_from_signals, InjectionReference, InjectionSignal};
+use super::signal::{detection_from_signals, rule_category, InjectionReference, InjectionSignal};
 use super::token_relations::{OrderedRelationDefinition, OrderedTokenRelation};
 use crate::detectors::evidence::L1Match;
 use crate::detectors::score::{score, severity_rank, Context, RulePoints, ValidatorStrength};
 use crate::detectors::NativeDetection;
-use crate::EvaluationResult;
+use crate::{EvaluationResult, SecurityCategory};
 
 const CATALOG_JSONS: [(&str, &str); 6] = [
     (
@@ -100,6 +100,13 @@ struct RuleDefinition {
     points: RulePoints,
 }
 
+impl RuleDefinition {
+    /// The id the rules map and the category table use.
+    fn rule_id(&self) -> &str {
+        self.canonical_id.as_deref().unwrap_or(&self.id)
+    }
+}
+
 #[derive(Debug)]
 struct CompiledCatalog {
     catalog: RuleCatalog,
@@ -115,7 +122,41 @@ pub struct InjectionRuleCatalogPipeline {
 }
 
 impl InjectionRuleCatalogPipeline {
+    /// Every catalogue rule, whatever category it reports under.
     pub fn new() -> Self {
+        Self::compile(|_| true)
+    }
+
+    /// Only the rules that report under `category` (see [`rule_category`]); the
+    /// others are not compiled, so a category pays only for its own rules.
+    pub fn for_category(category: SecurityCategory) -> Self {
+        Self::compile(|rule| rule_category(rule.rule_id()) == category)
+    }
+
+    /// Whether any rule reports under this pipeline's category.
+    pub fn is_empty(&self) -> bool {
+        self.catalogs
+            .iter()
+            .all(|compiled| compiled.regexes.is_empty() && compiled.ordered_relations.is_empty())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn rule_ids(&self) -> Vec<&str> {
+        self.catalogs
+            .iter()
+            .flat_map(|compiled| {
+                let rules = &compiled.catalog.rules;
+                compiled
+                    .regexes
+                    .iter()
+                    .map(|(index, _, _)| *index)
+                    .chain(compiled.ordered_relations.iter().map(|(index, _)| *index))
+                    .map(|index| rules[index].rule_id())
+            })
+            .collect()
+    }
+
+    fn compile(selected: impl Fn(&RuleDefinition) -> bool) -> Self {
         let catalogs = CATALOG_JSONS
             .into_iter()
             .map(|(embedded_file, catalog_json)| {
@@ -126,6 +167,7 @@ impl InjectionRuleCatalogPipeline {
                     .rules
                     .iter()
                     .enumerate()
+                    .filter(|(_, rule)| selected(rule))
                     .filter_map(|(index, rule)| {
                         rule.pattern.as_deref().map(|pattern| (index, pattern))
                     })
@@ -147,6 +189,7 @@ impl InjectionRuleCatalogPipeline {
                     .rules
                     .iter()
                     .enumerate()
+                    .filter(|(_, rule)| selected(rule))
                     .filter_map(|(index, rule)| {
                         rule.ordered_relation
                             .as_ref()
@@ -236,7 +279,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, regex, prefilter) in &compiled.regexes {
                 let gate = &compiled.anchor_gates[*rule_index];
                 let rule = &compiled.catalog.rules[*rule_index];
-                if !allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id))
+                if !allows_rule(rule.rule_id())
                     || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
                 {
                     continue;
@@ -252,7 +295,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, relation) in &compiled.ordered_relations {
                 let rule = &compiled.catalog.rules[*rule_index];
                 let gate = &compiled.anchor_gates[*rule_index];
-                if !allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id))
+                if !allows_rule(rule.rule_id())
                     || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
                 {
                     continue;
@@ -270,7 +313,7 @@ impl InjectionRuleCatalogPipeline {
                 for (rule_index, regex, _) in &compiled.regexes {
                     let gate = &compiled.anchor_gates[*rule_index];
                     let rule = &compiled.catalog.rules[*rule_index];
-                    if !allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id))
+                    if !allows_rule(rule.rule_id())
                         || (!gate.is_unconditional() && !gate.allows(decoded_view.anchors()))
                     {
                         continue;
@@ -308,8 +351,7 @@ impl InjectionRuleCatalogPipeline {
     where
         F: Fn(&str) -> bool,
     {
-        matches
-            .retain(|(_, rule, _)| allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id)));
+        matches.retain(|(_, rule, _)| allows_rule(rule.rule_id()));
         if matches.is_empty() {
             return safe_detection();
         }

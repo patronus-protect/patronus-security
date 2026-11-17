@@ -258,15 +258,14 @@ impl Scanner {
                         }
                         other => other,
                     })?;
-                outputs.push(measure(category, producer.id(), text, outcome));
+                outputs.push((
+                    producer.scored(),
+                    measure(category, producer.id(), text, outcome),
+                ));
             }
-            if category == SecurityCategory::Injection {
-                if !outputs.is_empty() {
-                    results.push(crate::injection_l1::aggregate(text, outputs));
-                }
-            } else {
-                results.extend(outputs);
-            }
+            results.extend(crate::injection_l1::category_results(
+                category, text, outputs,
+            ));
         }
         control.check()?;
         let secrets = crate::post_prediction::dlp_secret_ranges(

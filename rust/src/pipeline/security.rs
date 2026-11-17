@@ -1260,25 +1260,25 @@ impl SecurityGateway {
                 .iter()
                 .filter(|producer| producer.enabled(gates))
                 .map(|producer| {
-                    run_measured_l1_detector(category, producer.id(), text.len(), || {
-                        native_engine_scan_result(
-                            category,
-                            producer.id(),
-                            text,
-                            self.native_engine
-                                .run_producer(producer, prepared, gates, &control),
-                            execution,
-                        )
-                    })
+                    let result =
+                        run_measured_l1_detector(category, producer.id(), text.len(), || {
+                            native_engine_scan_result(
+                                category,
+                                producer.id(),
+                                text,
+                                self.native_engine
+                                    .run_producer(producer, prepared, gates, &control),
+                                execution,
+                            )
+                        });
+                    (producer.scored(), result)
                 })
                 .collect::<Vec<_>>();
-            if category == SecurityCategory::Injection {
-                if !native_results.is_empty() {
-                    results.push(injection_l1::aggregate(text, native_results));
-                }
-            } else {
-                results.extend(native_results);
-            }
+            results.extend(injection_l1::category_results(
+                category,
+                text,
+                native_results,
+            ));
         }
         match category {
             SecurityCategory::ShellCommand => {

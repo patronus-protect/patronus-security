@@ -513,6 +513,19 @@ fn rule_points(rule_id: &str, gate: &super::anchor_gate::AnchorGate) -> RulePoin
     RulePoints::for_severity("high", strength, gate.required_anchors())
 }
 
+/// Whether a counter term sets `span` apart as for the class's own points
+/// rules (see [`clause_context`]); the `ark.injection.*` rules that report
+/// under another attack class pass this check before they are scored.
+pub(crate) fn counter_context(
+    scan: &ContextScan,
+    text: &str,
+    span: std::ops::Range<usize>,
+    category: SecurityCategory,
+) -> bool {
+    let own = span.start..span.start;
+    clause_context(scan, text, span, false, category, own, None) == Context::Counter
+}
+
 /// Context of a points finding: a counter term (defensive, meta, quotation,
 /// test code, negation, sandbox, safeguard, own scope) in its clause, or a
 /// counter term other than negation in the lead-in clause before it, outranks

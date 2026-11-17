@@ -4,11 +4,14 @@ use std::time::Instant;
 
 use serde::Serialize;
 
+use crate::detectors::context_lexica::ContextLexica;
 use crate::detectors::injection::candidate::L1Candidate;
 use crate::detectors::injection::scorer::{score_candidate, scorer_config};
+use crate::detectors::threat::counter_context;
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
     DecisionResult, DecisionTerminality, EvidenceSpan, LabelScore, LayerResult, NativeResult,
+    SecurityCategory,
 };
 
 pub const MODEL: &str = "native:injection_l1";
@@ -32,7 +35,32 @@ struct ScoredL1Candidate {
     score_version: String,
 }
 
-pub fn aggregate(text: &str, producer_results: Vec<NativeResult>) -> NativeResult {
+/// One category's producer results: the producers of `ark.injection.*` rules
+/// (`scored`) merge into one scored decision, the others pass through unchanged.
+pub fn category_results(
+    category: SecurityCategory,
+    text: &str,
+    outputs: Vec<(bool, NativeResult)>,
+) -> Vec<NativeResult> {
+    let (scored, direct): (Vec<_>, Vec<_>) = outputs.into_iter().partition(|(scored, _)| *scored);
+    let mut results = direct
+        .into_iter()
+        .map(|(_, result)| result)
+        .collect::<Vec<_>>();
+    if !scored.is_empty() {
+        let scored = scored.into_iter().map(|(_, result)| result).collect();
+        results.push(aggregate(category, text, scored));
+    }
+    results
+}
+
+/// Merges and scores the candidates of the `ark.injection.*` rule producers of
+/// `category` into one decision.
+pub fn aggregate(
+    category: SecurityCategory,
+    text: &str,
+    producer_results: Vec<NativeResult>,
+) -> NativeResult {
     let mut metrics = crate::diagnostics::PhaseMetricScope::new("l1_aggregation_detail", "");
     let aggregation_started = Instant::now();
     let producer_duration_ms: f64 = producer_results
@@ -58,13 +86,22 @@ pub fn aggregate(text: &str, producer_results: Vec<NativeResult>) -> NativeResul
         .collect::<Vec<_>>();
     let all_producers_failed =
         !producer_results.is_empty() && producer_errors.len() == producer_results.len();
-    let candidates = producer_results
+    let mut candidates = producer_results
         .iter()
         .flat_map(candidates_from_result)
         .collect::<Vec<_>>();
+    // Outside `injection` the rules meet the negative context of their class:
+    // documentation, quotation, test code or negation around the match.
+    if category != SecurityCategory::Injection && !candidates.is_empty() {
+        let scan = ContextLexica::shared().scan(text);
+        candidates.retain(|entry| {
+            let span = entry.candidate.start_byte..entry.candidate.end_byte;
+            !counter_context(&scan, text, span, category)
+        });
+    }
     metrics.checkpoint("read_candidates", "");
     let config = scorer_config();
-    let scored = merge_candidates(text, candidates)
+    let scored = merge_candidates(category, text, candidates)
         .into_iter()
         .map(
             |(candidate, producers, eligible_producer_count, class_name)| {
@@ -178,7 +215,7 @@ pub fn aggregate(text: &str, producer_results: Vec<NativeResult>) -> NativeResul
 
     metrics.checkpoint("decision_evidence_labels", "");
     NativeResult {
-        category: "injection".to_string(),
+        category: category.as_str().to_string(),
         class_name,
         confidence,
         level: "L1".to_string(),
@@ -206,6 +243,7 @@ pub fn candidates_from_result(result: &NativeResult) -> Vec<ProducerCandidate> {
 }
 
 pub fn merge_candidates(
+    category: SecurityCategory,
     text: &str,
     mut candidates: Vec<ProducerCandidate>,
 ) -> Vec<(L1Candidate, Vec<String>, usize, String)> {
@@ -281,7 +319,7 @@ pub fn merge_candidates(
     });
     groups
         .into_iter()
-        .map(|group| merge_group(text, group))
+        .map(|group| merge_group(category, text, group))
         .collect()
 }
 
@@ -307,6 +345,7 @@ fn acceptance_bounds_for_group(group: &[ProducerCandidate]) -> Option<(usize, us
 }
 
 fn merge_group(
+    category: SecurityCategory,
     text: &str,
     group: Vec<ProducerCandidate>,
 ) -> (L1Candidate, Vec<String>, usize, String) {
@@ -413,11 +452,11 @@ fn merge_group(
                 .and_then(|entry| entry.candidate.families.first())
                 .cloned()
         })
-        .unwrap_or_else(|| "injection".to_string());
+        .unwrap_or_else(|| category.as_str().to_string());
     (
         L1Candidate {
-            candidate_id: format!("injection:l1:{start_byte}:{end_byte}"),
-            category: "injection".to_string(),
+            candidate_id: format!("{}:l1:{start_byte}:{end_byte}", category.as_str()),
+            category: category.as_str().to_string(),
             start_byte,
             end_byte,
             start_char: text[..start_byte].chars().count(),
