@@ -19,10 +19,12 @@
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
 #   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns) |
-#               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py)
+#               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
+#               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #   text        record field holding the text; `language` a fixed code or `language_field`
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
-#               field matches every row; `label` is the upstream label of entity_map.yaml. Every
+#               field matches every row; `and` [{field, equals | at_least | below}] adds conditions on other
+#               fields that must all hold; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
 #   keep        cue filters [{label, pattern, reason}]: a row carrying the upstream `label` is kept only
 #               when the case-insensitive regex `pattern` finds a cue in its text; the others are dropped
@@ -51,7 +53,9 @@ schema: ark-l1-threat-datasets-v1
 #    the retrieval-only flag proved too weak (owner re-check 2026-11-16, 17.6% error).
 # 10: AgentDojo run traces join train_dev: native injection payloads in tool outputs (instruction_injection,
 #     exfiltration, unsafe_action by the injection task's goal) and clean tool outputs as benign rows.
-generation: 10
+# 11: BIPIA (attacks inside e-mails) and the German rows of approve-or-deny (agent tool calls, translated)
+#     join train_dev; the latter carry the first native agent_config_tampering rows.
+generation: 11
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -269,7 +273,30 @@ datasets:
     pending: recipe not written yet
   - id: bipia
     commercial: true
-    pending: recipe not written yet (MIT attack texts with the e-mail and code contexts only; see entity_map.yaml)
+    # MIT attack texts inside the MIT e-mail contexts; the code contexts are Stack Overflow posts (CC-BY-SA-4.0)
+    # and stay out. 100 e-mails as benign rows, 250 attacks (150 text, 100 code) each inside one e-mail.
+    source: https://github.com/microsoft/BIPIA
+    revision: a004b69ec0dd446e0afd461d98cb5e96e120a5d0
+    files:
+      - {path: benchmark/email/test.jsonl, sha256: 217b403faaa1d0cb12c24892bea39f4a0b9e2819919ac7e2b902006e28278cdb}
+      - {path: benchmark/email/train.jsonl, sha256: 82207193cb8ce06713eeb7c33ca0716446613512e2ad9303b302ba14d425ddd4}
+      - {path: benchmark/text_attack_test.json, sha256: 75750e7b4e8b34e8f9d88d89b357aeaaf02bd07f9e493ccd37eda74a0cd7c7f8}
+      - {path: benchmark/text_attack_train.json, sha256: 63f95d3e67eac4178cdabdbdaf192cd05f2b6ed0702b578f1d30d556e5155670}
+      - {path: benchmark/code_attack_test.json, sha256: 892545c5aaec0645b1ded65dc7816b3d70e9ef4eadcba2301a7a3db93676b6e0}
+      - {path: benchmark/code_attack_train.json, sha256: fe515080b6da2b5c0b67ca7ba2a3b3c2ce57c48f45733c475ebc813cba118484}
+    format: bipia
+    text: text
+    language: en
+    labels:
+      - {field: attack_set, equals: [text, code], label: "text and code attacks inserted into e-mail contexts"}
+      # snippets that read files, keystrokes, screens, cookies, memory or the environment and send them to a remote
+      # host (HTTP, sockets, scp, MQTT, SSH tunnels)
+      - field: category
+        equals: [Data Eavesdropping, Traffic Analysis, Keylogging, Screen Scraping, Introduce System Fingerprinting,
+                 Cookie Theft, Memory Scanning, Dumpster Diving, Environment Variable Analysis,
+                 Device and Driver Enumeration]
+        label: "attacks of the information-gathering group (e.g. data eavesdropping)"
+      - {field: attack_set, equals: none, label: "clean context"}
   - id: agentdojo
     commercial: true
     # Run traces of the v1 suites (gpt-4o-2024-05-13 pipeline; MIT like the repository): per suite, injection
@@ -581,7 +608,28 @@ datasets:
     pending: recipe not written yet
   - id: approve_or_deny_de
     commercial: true
-    pending: recipe not written yet (German rows machine-generated, marked translated)
+    # The evaluation split (3,000 items, 82 German); `text` is the set's own rendering of call, request and history.
+    source: https://huggingface.co/datasets/ProCreations/approve-or-deny
+    revision: a38b625913dd46ca9702063f1597c979e6ace34e
+    files:
+      - {path: test.parquet, sha256: 13607db717323399fb394885fdbf80663e5262b219683361c79e148853bc2ec1}
+    format: parquet
+    text: text
+    language: de
+    labels:
+      - {field: label, equals: deny, and: [{field: lang, equals: German}], label: "deny"}
+      - {field: label, equals: approve, and: [{field: lang, equals: German}], label: "approve"}
+      - field: category
+        equals: self_permission_tamper
+        and: [{field: lang, equals: German}, {field: label, equals: deny}]
+        label: "category = self_permission_tamper (deny)"
+      - field: category
+        equals: credential_exfiltration
+        and: [{field: lang, equals: German}, {field: label, equals: deny}]
+        label: "category = credential_exfiltration (deny)"
+      - field: lang
+        equals: [English, Japanese, Korean, Italian, French, Russian, Spanish, Mandarin Chinese, Hindi, Portuguese]
+        label: "lang other than German"
   - id: ailuminate_demo
     commercial: true
     source: https://github.com/mlcommons/ailuminate

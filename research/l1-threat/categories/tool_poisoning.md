@@ -240,3 +240,11 @@ R/R+A/B0 0,0, R+A+L 4,5, B1 6,5, B4 5,3, B5 0,0; B1/B4/B5 30,8–32,2 ms je 100 
 Native Auswertung: keine Positiven, keine Zeile. Lizenzgeprüft und ohne Rezept: Agent-SafetyBench (MIT;
 Tool-Umgebungen mit Risikofällen) — Folgeaufgabe **T15** prüft, ob deren Fälle Tool-Beschreibungen oder
 Konfigurationen dieser Klasse tragen.
+
+## 16. Stand T15 (2026-11-17): weiter keine nativen Positiven
+
+**`B0` bleibt**, keine Neuauswertung möglich. Die neuen Dev-Sätze tragen keine vergifteten Tool-Beschreibungen:
+BIPIA legt Angriffe in E-Mails, approve-or-deny bewertet vorgeschlagene Tool-Aufrufe (Kategorien wie
+`supply_chain` meinen Pakete, nicht Tool-Metadaten), und die Tool-Umgebungen von Agent-SafetyBench nennen
+Werkzeuge ohne manipulierte Beschreibungen. Auf den 361 nativen Zeilen meldet ARK keine `tool_poisoning`-Zeile.
+Native Positive bleiben auf dem Holdout (MCPTox); ein Dev-Kandidat ist erst wieder mit einem neuen Satz zu prüfen.
