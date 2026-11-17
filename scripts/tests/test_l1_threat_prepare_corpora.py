@@ -569,6 +569,20 @@ def test_rule_matching():
     assert not MODULE.rule_matches(rule, {"label": "approve", "lang": "German", "n": 2})
 
 
+def test_parquet_reader_loads_fields_only_an_and_condition_names():
+    # ``language`` appears only inside ``and``: the column projection must still load it.
+    entry = {
+        "format": "parquet",
+        "text": "generated_text",
+        "files": [{"path": "scripts/fixtures/l1_corpora/gretel_v1_test.parquet"}],
+        "labels": [
+            {"field": "document_type", "equals": "Wire Transfer Form", "and": [{"field": "language", "equals": "English"}], "label": "x"}
+        ],
+    }
+    first = next(iter(MODULE.read_records(entry, ROOT)))
+    assert first["language"] == "English" and MODULE.rule_matches(entry["labels"][0], first)
+
+
 def test_deduper_exact_and_near():
     index = MODULE.Deduper({"shingle_chars": 5, "permutations": 64, "bands": 16, "threshold": 0.8, "seed": "t"})
     index.add(LONG)

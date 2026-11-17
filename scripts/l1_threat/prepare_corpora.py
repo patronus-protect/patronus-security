@@ -455,8 +455,9 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
     if entry["format"] == "bipia":
         yield from bipia_records([root / item["path"] for item in entry["files"]])
         return
+    conditions = [condition for rule in entry["labels"] for condition in (rule, *rule.get("and", []))]
     columns = sorted(
-        {entry["text"].split(".")[0], *(rule["field"].split(".")[0] for rule in entry["labels"] if "field" in rule)}
+        {entry["text"].split(".")[0], *(condition["field"].split(".")[0] for condition in conditions if "field" in condition)}
         | ({entry["language_field"]} if "language_field" in entry else set())
     )
     for item in entry["files"]:
