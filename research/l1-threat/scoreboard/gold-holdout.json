@@ -1,0 +1,358 @@
+{
+  "class_sets": {
+    "agent_config_tampering": {
+      "generated/class_templates": 125
+    },
+    "benign": {
+      "generated/carrier_insertion": 900,
+      "generated/class_templates": 750,
+      "generated/exfil_lookalikes": 450,
+      "generated/obfuscation_slices": 600,
+      "holdout/hatecheck_de": 845,
+      "holdout/hatecheck_en": 991,
+      "holdout/notinject": 339,
+      "holdout/oasst2": 14988,
+      "holdout/or_bench_hard": 1318,
+      "holdout/wikipedia": 15000,
+      "holdout/xstest": 249
+    },
+    "exfiltration": {
+      "generated/exfil_lookalikes": 450,
+      "holdout/llmail_inject": 11711
+    },
+    "harmful_content": {
+      "holdout/jbb_behaviors": 50,
+      "holdout/xstest": 174
+    },
+    "instruction_injection": {
+      "holdout/llmail_inject": 11711
+    },
+    "jailbreak": {
+      "generated/class_templates": 125
+    },
+    "memory_poisoning": {
+      "generated/class_templates": 125
+    },
+    "prompt_extraction": {
+      "generated/carrier_insertion": 900,
+      "generated/obfuscation_slices": 600,
+      "holdout/tensortrust_extraction": 331
+    },
+    "resource_exhaustion": {
+      "generated/class_templates": 125
+    },
+    "tool_poisoning": {
+      "generated/class_templates": 125
+    },
+    "toxic_language": {
+      "holdout/hatecheck_de": 1999,
+      "holdout/hatecheck_en": 2162
+    },
+    "unsafe_action": {
+      "generated/class_templates": 125
+    }
+  },
+  "classes": {
+    "agent_config_tampering": {
+      "de": 63,
+      "en": 62
+    },
+    "benign": {
+      "ar": 8,
+      "ca": 121,
+      "cs": 2,
+      "da": 4,
+      "de": 17191,
+      "en": 12125,
+      "eo": 38,
+      "es": 2805,
+      "eu": 21,
+      "fi": 21,
+      "fr": 461,
+      "he": 4,
+      "hu": 14,
+      "id": 2,
+      "it": 102,
+      "ja": 98,
+      "ko": 3,
+      "nl": 10,
+      "pl": 53,
+      "pt-BR": 314,
+      "ru": 1742,
+      "th": 207,
+      "tr": 4,
+      "uk-UA": 120,
+      "vi": 19,
+      "zh": 941
+    },
+    "exfiltration": {
+      "de": 225,
+      "en": 11936
+    },
+    "harmful_content": {
+      "en": 224
+    },
+    "instruction_injection": {
+      "en": 11711
+    },
+    "jailbreak": {
+      "de": 63,
+      "en": 62
+    },
+    "memory_poisoning": {
+      "de": 63,
+      "en": 62
+    },
+    "prompt_extraction": {
+      "en": 1831
+    },
+    "resource_exhaustion": {
+      "de": 63,
+      "en": 62
+    },
+    "tool_poisoning": {
+      "de": 63,
+      "en": 62
+    },
+    "toxic_language": {
+      "de": 1999,
+      "en": 2162
+    },
+    "unsafe_action": {
+      "de": 63,
+      "en": 62
+    }
+  },
+  "provenance": {
+    "agent_config_tampering": {
+      "synthetic": 125
+    },
+    "benign": {
+      "native": 33730,
+      "synthetic": 2700
+    },
+    "exfiltration": {
+      "native": 11711,
+      "synthetic": 450
+    },
+    "harmful_content": {
+      "native": 224
+    },
+    "instruction_injection": {
+      "native": 11711
+    },
+    "jailbreak": {
+      "synthetic": 125
+    },
+    "memory_poisoning": {
+      "synthetic": 125
+    },
+    "prompt_extraction": {
+      "native": 331,
+      "synthetic": 1500
+    },
+    "resource_exhaustion": {
+      "synthetic": 125
+    },
+    "tool_poisoning": {
+      "synthetic": 125
+    },
+    "toxic_language": {
+      "native": 4161
+    },
+    "unsafe_action": {
+      "synthetic": 125
+    }
+  },
+  "schema": "ark-l1-threat-gold-summary-v1",
+  "sets": {
+    "generated/carrier_insertion": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "generators_holdout_seed",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 1800,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "generated/class_templates": {
+      "benign_errors": 0,
+      "benign_reviewed": 8,
+      "dataset": "generators_holdout_seed",
+      "error_rate": 0.0,
+      "reviewed": 56,
+      "role": "decisive",
+      "rows": 1500,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "generated/exfil_lookalikes": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "generators_holdout_seed",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 900,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "generated/obfuscation_slices": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "generators_holdout_seed",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 1200,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/cyberseceval_pi": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "cyberseceval_pi",
+      "error_rate": 0.58,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 232,
+      "unclear": 2,
+      "wrong": 27
+    },
+    "holdout/hatecheck_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "hatecheck_de",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 2844,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/hatecheck_en": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "hatecheck_en",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 3153,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/jbb_behaviors": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "jbb_behaviors",
+      "error_rate": 0.1,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 60,
+      "unclear": 3,
+      "wrong": 2
+    },
+    "holdout/llmail_inject": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "llmail_inject",
+      "error_rate": 0.0467,
+      "reviewed": 150,
+      "role": "decisive",
+      "rows": 11711,
+      "unclear": 7,
+      "wrong": 0
+    },
+    "holdout/multijail": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "multijail",
+      "error_rate": 0.52,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 315,
+      "unclear": 13,
+      "wrong": 13
+    },
+    "holdout/notinject": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "notinject",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 339,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/oasst2": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "oasst2",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 14988,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/or_bench_hard": {
+      "benign_errors": 6,
+      "benign_reviewed": 50,
+      "dataset": "or_bench_hard",
+      "error_rate": 0.12,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 1318,
+      "unclear": 4,
+      "wrong": 2
+    },
+    "holdout/tensortrust_extraction": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "tensortrust_extraction",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 331,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/trustairlab_jailbreak": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "trustairlab_jailbreak",
+      "error_rate": 0.24,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 643,
+      "unclear": 3,
+      "wrong": 9
+    },
+    "holdout/wikipedia": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "wikipedia",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 15000,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/xstest": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "xstest",
+      "error_rate": 0.0392,
+      "reviewed": 51,
+      "role": "decisive",
+      "rows": 448,
+      "unclear": 2,
+      "wrong": 0
+    }
+  },
+  "split": "holdout"
+}

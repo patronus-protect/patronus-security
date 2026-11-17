@@ -1,0 +1,99 @@
+{
+  "dedup": {
+    "bands": 16,
+    "permutations": 64,
+    "seed": "ark-l1-threat-e01-v1",
+    "shingle_chars": 5,
+    "threshold": 0.8
+  },
+  "dev_rows": 61074,
+  "leaked": 0,
+  "schema": "ark-l1-threat-gold-leakage-v1",
+  "sets": {
+    "generated/carrier_insertion": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 1800
+    },
+    "generated/class_templates": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 1500
+    },
+    "generated/exfil_lookalikes": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 900
+    },
+    "generated/obfuscation_slices": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 1200
+    },
+    "holdout/cyberseceval_pi": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 232
+    },
+    "holdout/hatecheck_de": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 2844
+    },
+    "holdout/hatecheck_en": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 3153
+    },
+    "holdout/jbb_behaviors": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 60
+    },
+    "holdout/llmail_inject": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 11711
+    },
+    "holdout/multijail": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 315
+    },
+    "holdout/notinject": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 339
+    },
+    "holdout/oasst2": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 14988
+    },
+    "holdout/or_bench_hard": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 1318
+    },
+    "holdout/tensortrust_extraction": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 331
+    },
+    "holdout/trustairlab_jailbreak": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 643
+    },
+    "holdout/wikipedia": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 15000
+    },
+    "holdout/xstest": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 448
+    }
+  }
+}

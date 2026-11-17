@@ -309,6 +309,37 @@ tasks:
       agent itself (no external MT), sample marked checked; cyberseceval_multilingual deduplicated against the
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
+  # Go-flip priority (owner, 2026-11-17): the class no-gos in gold.md are dev-side now (holdout
+  # validated through generation 9). T16, T07 and T08 come first because every blocked rule family
+  # (IJ01, JB01, PX01, TX01, HC01) waits on them; the runner unblocks nothing itself, the owner
+  # unblocks a family once gold.md shows its class as go.
+  - id: T16
+    title: Dev gold re-review after the generation-10 re-freeze — gold.py dev review of every dev set whose rows changed since the last gold-dev.json (at least the regenerated generated/carrier_insertion and generated/obfuscation_slices, which block instruction_injection, jailbreak and prompt_extraction at 5.8%), then re-render gold.md from gold-dev.json, the committed counts-only research/l1-threat/scoreboard/gold-holdout.json and gold-leakage.json
+    type: eval-infra
+    deps: [M07]
+    accept: >-
+      gold-dev.json and gold.md on main re-rendered with `gold.py render --dev gold-dev.json --holdout
+      gold-holdout.json --leakage gold-leakage.json --notes gold-notes.md`; every reviewed dev set at the
+      5% bar or its failure named with the abstract error pattern; a set that still fails gets its fix
+      (generator template or recipe filter) in the same task, not a lower bar
+  - id: T07
+    title: Scored dev source for toxic_language — recipes for nemotron_safety_v3 (CC-BY-4.0, EN + German machine-translated, marked translated) and civil_comments (CC0, EN, capped); licence check of GermEval 2018 train/2019/2021 (unknown stays report_only); gold review
+    type: eval-infra
+    deps: [M07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
+    accept: >-
+      gold.md lists toxic_language as go on dev (>= 50 scored rows per language, every set behind them <= 5%
+      error); no plaintext slur list in the repo (review notes describe, never quote); German rows marked
+      translated where machine-translated; caps and licences in the manifest
+  - id: T08
+    title: Scored dev source for harmful_content — recipes for wildguardmix (ODC-BY, vanilla harmful prompts; benign prompts to the hard-benign pool), the harmful labels of nemotron_safety_v3 and nemotron_content_safety_v2 (CC-BY-4.0), deduplicated against each other; gold review per AILuminate hazard
+    type: eval-infra
+    deps: [T06, T07]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
+    accept: >-
+      gold.md lists harmful_content as go on dev (>= 50 scored rows, every set <= 5% error; opinion and
+      discussion prompts without uplift mapped benign or out_of_scope as for the AILuminate demo); hazard
+      subclass per row where the source has one; nothing committed except recipes and manifests
   - id: T03
     title: Route the legacy ark.injection.* rules that taxonomy.yaml assigns to jailbreak and prompt_extraction into those categories (today both categories return no result; the rules report under injection with sub-labels such as instruction_leak, jailbreak_framing, guardrail_tamper)
     type: engine
@@ -427,26 +458,8 @@ tasks:
       resource_exhaustion TPR@1% > 0 in de and en at 0 hard-benign FP; ablation table in
       categories/resource_exhaustion.md with the README selection rule; category alone 100 KiB p95 stated
       against main and not slower
-  - id: T07
-    title: Scored dev source for toxic_language — recipes for nemotron_safety_v3 (CC-BY-4.0, EN + German machine-translated, marked translated) and civil_comments (CC0, EN, capped); licence check of GermEval 2018 train/2019/2021 (unknown stays report_only); gold review
-    type: eval-infra
-    deps: [M07]
-    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
-    accept: >-
-      gold.md lists toxic_language as go on dev (>= 50 scored rows per language, every set behind them <= 5%
-      error); no plaintext slur list in the repo (review notes describe, never quote); German rows marked
-      translated where machine-translated; caps and licences in the manifest
   - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06, T07]}
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05]}
-  - id: T08
-    title: Scored dev source for harmful_content — recipes for wildguardmix (ODC-BY, vanilla harmful prompts; benign prompts to the hard-benign pool), the harmful labels of nemotron_safety_v3 and nemotron_content_safety_v2 (CC-BY-4.0), deduplicated against each other; gold review per AILuminate hazard
-    type: eval-infra
-    deps: [T06, T07]
-    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 6)"
-    accept: >-
-      gold.md lists harmful_content as go on dev (>= 50 scored rows, every set <= 5% error; opinion and
-      discussion prompts without uplift mapped benign or out_of_scope as for the AILuminate demo); hazard
-      subclass per row where the source has one; nothing committed except recipes and manifests
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08]}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
 
