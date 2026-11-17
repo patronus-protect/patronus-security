@@ -310,10 +310,10 @@ tasks:
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
   # Go-flip priority (owner, 2026-11-17): the class no-gos in gold.md are dev-side now (holdout
-  # validated through generation 9). T16, T07 and T08 come first because every blocked rule family
+  # validated through generation 9). T20, T07 and T08 come first because every blocked rule family
   # (IJ01, JB01, PX01, TX01, HC01) waits on them; the runner unblocks nothing itself, the owner
   # unblocks a family once gold.md shows its class as go.
-  - id: T16
+  - id: T20
     title: Dev gold re-review after the generation-10 re-freeze — gold.py dev review of every dev set whose rows changed since the last gold-dev.json (at least the regenerated generated/carrier_insertion and generated/obfuscation_slices, which block instruction_injection, jailbreak and prompt_extraction at 5.8%), then re-render gold.md from gold-dev.json, the committed counts-only research/l1-threat/scoreboard/gold-holdout.json and gold-leakage.json
     type: eval-infra
     deps: [M07]
