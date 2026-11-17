@@ -44,7 +44,8 @@ fn semantic_anchor_combinations_de_en() {
         let category = rule_category(&id);
         for text in [en, de] {
             gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-            let result = injection_l1(&gateway, category, text);
+            let result = injection_l1(&gateway, category, text)
+                .unwrap_or_else(|| panic!("{text}: no {category:?} rule result"));
             assert_ne!(result.class_name, "safe", "{text}: {:?}", result.layers);
             assert!(
                 has_rule(&result.layers[0].details["l1_candidates"], &id),
@@ -56,13 +57,14 @@ fn semantic_anchor_combinations_de_en() {
             let mut gates = ScanGateMatrix::all_enabled();
             gates.native.rules.insert(id.clone(), false);
             gateway.set_execution_gates(gates);
-            let result = injection_l1(&gateway, category, text);
-            assert!(!has_rule(&result.layers[0].details["l1_candidates"], &id));
+            assert!(injection_l1(&gateway, category, text)
+                .is_none_or(|result| !has_rule(&result.layers[0].details["l1_candidates"], &id)));
         }
         gateway.set_execution_gates(ScanGateMatrix::all_enabled());
         for text in [negative_en, negative_de] {
-            let result = injection_l1(&gateway, category, text);
-            assert_eq!(result.class_name, "safe", "{text}: {:?}", result.layers);
+            if let Some(result) = injection_l1(&gateway, category, text) {
+                assert_eq!(result.class_name, "safe", "{text}: {:?}", result.layers);
+            }
         }
     }
     // Existing native rules already flag some negated directives. The new
@@ -88,7 +90,9 @@ fn semantic_anchor_combinations_de_en() {
         let mut gates = ScanGateMatrix::all_enabled();
         for (id, result) in ids.iter().zip(&enabled) {
             assert!(
-                !has_rule(&result.layers[0].details["l1_candidates"], id),
+                result
+                    .as_ref()
+                    .is_none_or(|result| !has_rule(&result.layers[0].details["l1_candidates"], id)),
                 "{text}"
             );
             gates.native.rules.insert(id.clone(), false);
@@ -96,7 +100,11 @@ fn semantic_anchor_combinations_de_en() {
         gateway.set_execution_gates(gates);
         for (id, enabled) in ids.iter().zip(&enabled) {
             let baseline = injection_l1(&gateway, rule_category(id), text);
-            assert_eq!(enabled.class_name, baseline.class_name, "{text}");
+            assert_eq!(
+                enabled.as_ref().map(|r| &r.class_name),
+                baseline.as_ref().map(|r| &r.class_name),
+                "{text}"
+            );
         }
     }
 }
@@ -162,17 +170,17 @@ fn override_and_secret_disclosure_compose_with_negation_controls() {
     }
 }
 
-/// The aggregated injection L1 result that `category` reports.
+/// The aggregated injection L1 result that `category` reports; outside
+/// injection there is none when no rule of the class left a candidate.
 fn injection_l1(
     gateway: &SecurityGateway,
     category: SecurityCategory,
     text: &str,
-) -> patronus_ark::SecurityScanResult {
+) -> Option<patronus_ark::SecurityScanResult> {
     gateway
         .scan_category(category, text)
         .into_iter()
         .find(|r| r.model == "native:injection_l1")
-        .unwrap()
 }
 
 fn has_rule(candidates: &serde_json::Value, rule: &str) -> bool {
