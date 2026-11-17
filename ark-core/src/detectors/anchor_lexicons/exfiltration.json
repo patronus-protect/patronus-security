@@ -216,5 +216,62 @@
       "ark-core/src/detectors/threat/rules.json",
       "research/l1-threat/categories/exfiltration.md"
     ]
+  },
+  {
+    "id": "exfil.egress_task",
+    "description": "Agentenaufgaben mit Datenabfluss: Zahlung mit Betreff, Nachrichten sammeln und posten, Mail mit Betreff und Text",
+    "en": [
+      "transaction",
+      "payment",
+      "transfer",
+      "money",
+      "concatenate",
+      "collect",
+      "gather",
+      "compile",
+      "combine",
+      "merge",
+      "subject"
+    ],
+    "de": [
+      "zahlung",
+      "transaktion",
+      "ueberweisung",
+      "überweisung",
+      "sammle",
+      "verkette",
+      "kombiniere",
+      "fasse",
+      "betreff"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
+  },
+  {
+    "id": "exfil.received_code",
+    "description": "Empfangene Sicherheitscodes als Datenquelle",
+    "en": [
+      "security",
+      "verification",
+      "login",
+      "one-time",
+      "2fa",
+      "authentication"
+    ],
+    "de": [
+      "sicherheits",
+      "anmelde",
+      "einmal",
+      "bestaetigungs",
+      "bestätigungs"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/exfiltration.md"
+    ]
   }
 ]

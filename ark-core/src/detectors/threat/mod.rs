@@ -731,8 +731,8 @@ fn pre_answer_hook(window: &str, at: usize) -> bool {
 /// owner. An owner word before it ("along with my logs to") describes the
 /// data, not the destination.
 fn user_owned(text: &str) -> bool {
-    const TO: [&str; 9] = [
-        "to", "into", "onto", "an", "auf", "nach", "zu", "zum", "zur",
+    const TO: [&str; 10] = [
+        "to", "into", "onto", "an", "auf", "in", "nach", "zu", "zum", "zur",
     ];
     const OWNER: [&str; 17] = [
         "my", "our", "me", "myself", "mine", "mich", "mir", "mein", "meine", "meinen", "meinem",

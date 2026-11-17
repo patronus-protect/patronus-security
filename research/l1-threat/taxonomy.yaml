@@ -1251,6 +1251,8 @@ classes:
       - threat.session_history
       - threat.agent_config
       - threat.remote_destination
+      - exfil.egress_task
+      - exfil.received_code
       required_context: []
       negative_context: [exfil.user_owned, exfil.integration_doc, defensive, meta, quotation, test_code]
       examples:
@@ -1262,6 +1264,9 @@ classes:
       - ark.threat.agent_config_exfiltration
       - ark.injection.exfil.external_sink
       - ark.threat.ex_send_directive
+      - ark.threat.ex_payment_subject
+      - ark.threat.ex_collect_and_post
+      - ark.threat.ex_mail_body
       baseline_coverage: {pipelock: partial, atr: partial, cisco_yara: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Today's rules need fixed source words and a URL; email/webhook sinks and DE variants are thin.
     - id: secret_to_sink
