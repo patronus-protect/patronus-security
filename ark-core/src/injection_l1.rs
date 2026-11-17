@@ -37,6 +37,8 @@ struct ScoredL1Candidate {
 
 /// One category's producer results: the producers of `ark.injection.*` rules
 /// (`scored`) merge into one scored decision, the others pass through unchanged.
+/// Outside `injection` that decision joins only when a rule left a candidate or a
+/// producer failed; a class without a match keeps the verdicts of its own detectors.
 pub fn category_results(
     category: SecurityCategory,
     text: &str,
@@ -49,9 +51,23 @@ pub fn category_results(
         .collect::<Vec<_>>();
     if !scored.is_empty() {
         let scored = scored.into_iter().map(|(_, result)| result).collect();
-        results.push(aggregate(category, text, scored));
+        let result = aggregate(category, text, scored);
+        if category == SecurityCategory::Injection || reports_candidates_or_errors(&result) {
+            results.push(result);
+        }
     }
     results
+}
+
+fn reports_candidates_or_errors(result: &NativeResult) -> bool {
+    result.layers.iter().any(|layer| {
+        layer.details.contains_key("producer_errors")
+            || layer
+                .details
+                .get("l1_candidates")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|candidates| !candidates.is_empty())
+    })
 }
 
 /// Merges and scores the candidates of the `ark.injection.*` rule producers of
