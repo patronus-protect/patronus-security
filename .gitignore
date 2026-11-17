@@ -52,3 +52,5 @@ docs/research/
 
 # Filled L1 threat translation worksheets (derived from third-party rows; handed to the owner freeze, never committed)
 .l1-threat-translations/
+# Local gold review pool and sheets (dataset text; never committed)
+.l1-threat-gold/

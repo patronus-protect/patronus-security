@@ -553,6 +553,17 @@ Gold-Stichprobe je Satz (20 Zeilen, Seed 1515; bei approve-or-deny alle 4 Zeilen
 0 von 20 falsch gelabelt in beiden Sätzen. Bei BIPIA tragen einige Zeilen nur einen dünnen Träger (E-Mails, die
 upstream mit einer Zeile „The Mercury T“ abbrechen); das Label bleibt richtig.
 
+**Dev-Gold-Nachprüfung (T20, 2026-11-17).** `gold.py` über jeden seit der letzten `gold-dev.json` geänderten
+Dev-Satz (AgentDojo, BIPIA, approve-or-deny neu; Carrier-Insertion und Obfuskations-Slices betten sie jetzt ein),
+Details in [`scoreboard/gold-notes.md`](scoreboard/gold-notes.md). BIPIA lag bei 9,8 %: bloße aufgabenfremde Bitten
+(„Explain the theory of relativity.“) in einer E-Mail tragen weder Override noch Ansprache des Assistenten. Das
+Rezept wertet BIPIAs aufgabenfremde Gruppen nicht mehr (Label außerhalb des Scopes; „Language Translation“ nur in der
+Train-Datei, daher trägt jeder Datensatz `attack_split`), `generation: 12`. Danach liegt jeder gewertete Dev-Satz
+bei ≤ 5 % (Carrier-Insertion 1,8 %, Obfuskations-Slices 3,6 %, AgentDojo, BIPIA, approve-or-deny 0 %), und
+`instruction_injection`, `jailbreak` und `prompt_extraction` sind dev-seitig go. Die Runner-Übersetzungen
+(`translated/`) liegen im eingefrorenen Dev-Pool nicht vor und fehlen daher in der Zusammenfassung, bis eine
+Owner-Freeze das Arbeitsblatt einliest.
+
 Nicht vorbereitet: **Agent-SafetyBench** — von 1 265 nicht erfüllbaren Fällen trägt die Anweisung meist keinen
 Angriff (das Risiko steckt in der Tool-Umgebung, z. B. „bestelle 50 Kartons Milch“, „schalte nicht benötigte
 Systeme ab“); als Eingabe-Positive verfehlt der Satz die 5-%-Gold-Grenze deutlich, nur die Code-Untergruppe
