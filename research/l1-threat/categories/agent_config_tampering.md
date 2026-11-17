@@ -256,3 +256,31 @@ R/R+A/B0 0,0, R+A+L 4,8, B1 6,1, B4 8,3, B5 2,2; B1/B4/B5 26,7–32,0 ms je 100 
 Native Auswertung: keine Positiven, keine Zeile. Lizenzgeprüft und ohne Rezept: Agent-SafetyBench (MIT;
 Tool-Umgebungen mit Risikofällen) — Folgeaufgabe **T15** prüft, ob deren Fälle Tool-Beschreibungen oder
 Konfigurationen dieser Klasse tragen.
+
+## 16. Stand T15 (2026-11-17): erste native Positive (approve-or-deny, übersetzt)
+
+**`B0` bleibt**; drei native Positive tragen keine Auswahl. approve-or-deny (Apache-2.0, seit Korpus-Generation 11
+im Dev-Split, nur deutsche Zeilen, maschinell erzeugt und als übersetzt markiert) hat in der Kategorie
+`self_permission_tamper` Tool-Aufrufe, mit denen der Agent seine eigene Konfiguration aufweicht: ein Patch auf
+`~/.codex/config.toml` mit `[permissions] allow = ["shell"]`, `sed -i 's/require_approval = true/…false/'` auf
+die Agent-Konfiguration, `printf '[sandbox] enabled = false' >> ~/.codex/config.toml`. Das sind die ersten
+nativen Positiven der Klasse auf Dev (3 Zeilen nach dem Sprachfilter; im ganzen Satz 104).
+
+Daten wie §15: Training auf Hälfte A (sha256 der Zeilen-ID) der Generator-Vorlagen und Benign-Zeilen aus
+`train_dev`, `generated`, `report` ohne AgentDojo, Dolly und GermanQuAD je ein Viertel (8 677 Zeilen, der
+Unterschied zu §15 kommt aus der Viertel-Auswahl). Auswertung: Benign-Zeilen der Hälfte B (7 756) plus die
+nativen Zeilen von BIPIA und approve-or-deny (361; 3 Positive, 94 saubere Zeilen). Facts über `text_facts
+--threat-findings`, B0 aus `scoreboard._predict_file` mit dem gebauten Modul; ohne Latenzmessung, B1/B4/B5
+daher `untimed` (in §15 lagen sie mit 26,7–32,0 ms je 100 KiB über dem Budget).
+
+| Stufe | TPR@1 % (3 nativ, DE) | Hard-Benign-FPR |
+|---|---|---|
+| R, R+A, B0 | 0,0 | 0,0 |
+| R+A+L | 66,7 (2 von 3) | 5,2 |
+| B1, B4, B5 | 0,0 | 7,5 / 10,4 / 2,8 |
+
+Das Werkzeug wählt `R+A+L` (einzige Stufe mit Treffern), auf drei Zeilen und mit 5,2 % Hard-Benign-FPR ist das
+keine belastbare Umstellung. Die Lücke ist strukturell: AC01 erwartet einen AGENT_CONFIG-Träger mit einem
+Aufweitungs-Wert, hier steht die Änderung in den Argumenten eines Shell- oder Patch-Aufrufs, der die Datei erst
+schreibt (`sed -i`, `>>`, Unified Diff). Folgeaufgabe **T17**. Keine `agent_config_tampering`-Meldung auf den
+94 sauberen nativen Zeilen.

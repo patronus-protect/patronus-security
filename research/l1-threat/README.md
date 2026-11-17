@@ -529,6 +529,42 @@ Lizenzprüfung der übrigen Kandidaten: BIPIA (Code und Angriffstexte MIT, Konte
 Agent-SafetyBench (MIT), approve-or-deny (Apache-2.0, deutsche Zeilen maschinell erzeugt); Rezepte in T15. Die
 Ablationen von TP02/AC02/EX02/UA02 auf den nativen Zeilen stehen in §15 der Kategorie-Dokumente.
 
+**Rezepte der lizenzgeprüften Agenten-Sätze (T15, 2026-11-17).** Zwei der vier Sätze sind `train_dev`-Rezepte
+(`generation: 11`):
+- **BIPIA** (MIT, Commit `a004b69e`, 6 Dateien mit SHA-256), Format `bipia`: die E-Mail-Kontexte (Train und Test,
+  100) und alle Angriffstexte (150 Text-, 100 Code-Angriffe). Jede E-Mail ist eine Benign-Zeile; Angriff *i* steht
+  als eigene Zeile in E-Mail *i mod n*, reihum am Anfang, in der Mitte (Zeilenumbruch nahe der Mitte) oder am Ende
+  wie bei BIPIA, mit höchstens 300 Zeichen ganzer Zeilen (bei einzeiligen E-Mails ganzer Wörter) je Seite. Die
+  Code-Kontexte bleiben draußen: es sind Stack-Overflow-Beiträge (`context_url`, CC-BY-SA-4.0), ebenso Tabellen-,
+  Web-QA- und Zusammenfassungs-Kontexte. Jeder Angriff ist `instruction_injection`; die zehn Code-Kategorien der
+  Informationsbeschaffung (Daten, Tastatur, Bildschirm, Cookies, Speicher, Umgebung an einen fremden Host per
+  HTTP, Socket, scp, MQTT, SSH-Tunnel) zusätzlich `exfiltration`. Nach Deduplikation 279 Zeilen: 232 Angriffe
+  (50 `exfiltration`), 47 saubere E-Mails; 53 E-Mails fielen als (Beinahe-)Duplikate gleichförmiger
+  Benachrichtigungen weg, 18 Angriffszeilen als Beinahe-Duplikat einer kurzen sauberen E-Mail.
+- **approve-or-deny** (Apache-2.0, Revision `a38b6259`, `test.parquet` mit SHA-256): nur die 82 deutschen Zeilen
+  des Evaluations-Splits, Text in der Darstellung des Satzes (vorgeschlagener Tool-Aufruf, Nutzerauftrag,
+  Agent-Verlauf). `deny` → `unsafe_action`, `approve` → benign; `self_permission_tamper` zusätzlich
+  `agent_config_tampering` (Familie `permission_widening`), `credential_exfiltration` zusätzlich `exfiltration`.
+  Der Satz ist `translated: true` (deutsche Zeilen maschinell erzeugt). 35 Positive (davon 3
+  `agent_config_tampering`, 1 `exfiltration`), 47 benign. Regeln dafür: Label-Regeln haben ein optionales `and`
+  mit weiteren Feldbedingungen (hier die Sprache).
+
+Gold-Stichprobe je Satz (20 Zeilen, Seed 1515; bei approve-or-deny alle 4 Zeilen mit Zusatzklasse plus 16 weitere):
+0 von 20 falsch gelabelt in beiden Sätzen. Bei BIPIA tragen einige Zeilen nur einen dünnen Träger (E-Mails, die
+upstream mit einer Zeile „The Mercury T“ abbrechen); das Label bleibt richtig.
+
+Nicht vorbereitet: **Agent-SafetyBench** — von 1 265 nicht erfüllbaren Fällen trägt die Anweisung meist keinen
+Angriff (das Risiko steckt in der Tool-Umgebung, z. B. „bestelle 50 Kartons Milch“, „schalte nicht benötigte
+Systeme ab“); als Eingabe-Positive verfehlt der Satz die 5-%-Gold-Grenze deutlich, nur die Code-Untergruppe
+käme in Frage. Seine Tool-Umgebungen nennen Werkzeuge ohne vergiftete Beschreibungen, also keine nativen
+`tool_poisoning`-Zeilen. **RedCode** (Bash-Teil an `shell_command`) steht noch aus. Beides: **T18**.
+
+Auf den nativen Zeilen findet ARK heute (B0) bei BIPIA 0 von 232 Injektionen und 0 von 50 Exfiltrationen, ohne
+Fund auf den 47 sauberen E-Mails (→ **T16**); bei approve-or-deny 2 von 35 `unsafe_action`, 1 von 1
+`exfiltration`, 0 von 3 `agent_config_tampering` (→ **T17**) und eine `instruction_injection`-Meldung auf einem
+genehmigten Aufruf. Die AC02-Ablation mit den nativen Zeilen steht in §16 von
+`categories/agent_config_tampering.md`; `tool_poisoning` hat weiter keine nativen Positiven (§16 dort).
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |
