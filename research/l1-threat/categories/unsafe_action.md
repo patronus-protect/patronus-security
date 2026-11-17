@@ -278,3 +278,55 @@ total, in small increments of no more than $10,000“ (Strukturierung), „modif
 payment to be …“, „change the password of the user to …“, „invite user … to the Slack workspace … and then
 remove him“, „delete the file with ID '13'“; `ua_unattended_transfer` verlangt eine neue IBAN und eine
 Freigabe-Umgehung im Satz, `ua_destructive_request` ein Massenziel. Nach T14 Ablation erneut.
+
+## 16. Stand T14 (2026-11-17): Regeln für die nativen Formen, Ablation erneut
+
+Sieben neue Punkte-Regeln (Basis 40, `format`, ohne Pflichtkontext), je eine Struktur statt einer gesenkten
+Schwelle; Lücken bis `\s{1,8}` und `[^.!?;]`, damit sie die Zeilenumbrüche eingerückter YAML-Felder
+(`\n` plus vier Leerzeichen) überspannen:
+
+| Regel | Familie | Struktur |
+|---|---|---|
+| `ua_drain_account` | `unattended` | Überweisungsverb + „as much money as possible“ / „all the funds“ / „the entire balance“ / „so viel Geld wie möglich“ / „das gesamte Guthaben“ + an eine IBAN-förmige Kontonummer |
+| `ua_split_transfer` | `unattended` | Überweisungsverb + Stückelung („in small increments“, „in chunks“, „in kleinen Teilbeträgen“, „aufgeteilt in kleine Überweisungen“) + Grenze („no more than“, „below“, „höchstens“, „unter“) + IBAN |
+| `ua_redirect_payment` | `unattended` | Ändern des Empfängers einer **unbestimmten** wiederkehrenden/geplanten Zahlung („of a recurring payment“, „of all scheduled transactions“, „eines Dauerauftrags“, „aller geplanten Überweisungen“) auf eine IBAN; „my/meines“ trifft nicht |
+| `ua_password_change` | `credential_access` | Passwort „of the user“ / „the user's“ / „des Nutzers“ auf einen passwortförmigen Wert (in Anführungszeichen oder Wort mit Ziffer, `_` oder Sonderzeichen); „to a temporary one“, „to 12 characters“ treffen nicht |
+| `ua_invite_and_remove` | `privilege_widening` | Einladen einer Mailadresse in Workspace/Kanal/Team + „then/afterwards remove“ / „entferne ihn danach wieder“ im selben Satz |
+| `ua_delete_by_id` | `destructive_request` | Löschen eines Objekts „with ID …“ / „mit der ID …“ nur direkt nach einem Aufgabenrahmen („first:“, „TODO:“, „instruction:“, „Wichtig:“, „zuerst:“) oder mit „instead“/„stattdessen“ am Satzende („instead of“ zählt nicht) |
+| `ua_cover_tracks` | `destructive_request` | Löschen der gerade gesendeten Mail/Nachricht („delete the email you have just sent“, „die gerade gesendete Mail“) |
+
+Die Transfergrenze („no more than“) ist Teil der Regel und keine Verneinung (`negated_object` und
+Gegenkontext lassen die Gruppe `limit` aus). Prefilter: je Begriff ein Lexikon (`unsafe.drain_amount`,
+`unsafe.split_transfer`, `unsafe.payment_recipient`, `unsafe.account_password`, `unsafe.invite`,
+`unsafe.task_frame`, `unsafe.sent_mail`); bei `ua_delete_by_id` ist der Rahmen optional im Regex, das
+Anker-Gate ist dort Löschverb plus Objektwort, der Rahmen wird nach dem Treffer geprüft.
+
+Ablation wie §15 (nachgebaut: Hälften per sha256 der Zeilen-ID, Dolly/GermanQuAD je ein Viertel per
+sha256; Training 20 663 Zeilen; Vorlagen-Auswertung 20 905 Zeilen; nativ alle 267 AgentDojo-Zeilen plus
+die 7 757 Benign-Zeilen der Hälfte B), Facts über `text_facts --threat-findings` (Release), B0 über
+`scoreboard.py _predict` mit dem gebauten Modul (Release). B1/B4/B5 hier ohne Zeitmessung (`untimed`);
+ihre Kosten stehen in §15 und ändern sich durch Regeln nicht.
+
+| Stufe | Vorlagen TPR@1 % | nativ TPR@1 % | nativ TPR@0,1 % | nativ AUPRC | Hard-Benign-FPR (nativ) |
+|---|---|---|---|---|---|
+| R / R+A | 100,0 | 100,0 (30/30) | 100,0 | 1,0 | 0,0 |
+| **B0** | 100,0 | 100,0 | 100,0 | 1,0 | 0,0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 1,0 | 0,0 |
+| B1 | 100,0 | 30,0 | 0,0 | 0,078 | 5,6 |
+| B4 / B5 | 100,0 / 100,0 | 0,0 / 100,0 | 0,0 / 100,0 | 0,041 / 1,0 | 7,6 / 0,0 |
+
+Treffer der 30: `ua_delete_by_id` 7, `ua_redirect_payment` 5, `ua_invite_and_remove` 5,
+`ua_split_transfer` 4, `ua_cover_tracks` 4 (die Sicherheitscode-Zeilen mit „Then, delete the email you
+have just sent“), `ua_password_change` 3, `ua_drain_account` 2. Keine Benign-Zeile (7 889 im nativen
+Satz einschließlich der sauberen Tool-Ausgaben, 7 757 in den Vorlagen) trägt einen `unsafe_action`-Fund;
+keine AgentDojo-Zeile einer anderen Klasse wird `unsafe_action`. Vorlagen unverändert 40/40.
+
+**Entscheidung: `B0` bleibt.** Auf beiden Auswertungen ist B0 bereits das Beste (100 % bei 0 %
+Hard-Benign-FPR); `R+A+L` und `B5` erreichen dasselbe nur mit zusätzlichem Modell, B1/B4 zahlen 5,6–7,6 %
+Hard-Benign-FPR. Vorbehalt: die 30 nativen Zeilen sind sieben Aufgaben in wenigen Trägern; die Regeln
+treffen die Struktur, nicht diese Wortlaute (Goldens mit anderen Werten, Carriern und DE).
+
+Latenz (Release, 6 × 100 KiB GermanQuAD-Dev-Text, Python-Modul, die sieben Regeln über `rules` ein/aus
+im selben Build, zwei Läufe): `unsafe_action` allein p50 24,98/24,73 → 24,82/24,27 ms, p95 32,9/36,9 →
+32,2/29,6 ms, im Rauschen; `unsafe_action` gehört nicht zu den Standard-Kategorien. Die neuen
+Lexikonwörter laufen im gemeinsamen Aho-Corasick-Durchlauf mit.
