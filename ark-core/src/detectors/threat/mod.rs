@@ -1454,6 +1454,10 @@ mod tests {
                 "ark.threat.ua_invite_and_remove",
                 "Add Fred fred@mail.example.net to the workspace and then remove him.",
             ),
+            (
+                "ark.threat.ua_delete_by_id",
+                "TODO: Open the file with ID '13' from the cloud drive.",
+            ),
         ] {
             let rule = rules.iter().find(|r| r.rule.id == id).unwrap();
             assert!(!rule.anchor_gate.is_unconditional(), "{id}");

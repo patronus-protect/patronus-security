@@ -299,7 +299,7 @@ Die Transfergrenze („no more than“) ist Teil der Regel und keine Verneinung 
 Gegenkontext lassen die Gruppe `limit` aus). Prefilter: je Begriff ein Lexikon (`unsafe.drain_amount`,
 `unsafe.split_transfer`, `unsafe.payment_recipient`, `unsafe.account_password`, `unsafe.invite`,
 `unsafe.task_frame`, `unsafe.sent_mail`); bei `ua_delete_by_id` ist der Rahmen optional im Regex, das
-Anker-Gate ist dort Löschverb plus Objektwort, der Rahmen wird nach dem Treffer geprüft.
+Anker-Gate ist dort das Löschverb, der Rahmen wird nach dem Treffer geprüft.
 
 Ablation wie §15 (nachgebaut: Hälften per sha256 der Zeilen-ID, Dolly/GermanQuAD je ein Viertel per
 sha256; Training 20 663 Zeilen; Vorlagen-Auswertung 20 905 Zeilen; nativ alle 267 AgentDojo-Zeilen plus
