@@ -310,6 +310,7 @@ tasks:
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
   - id: T03
+    status: done
     title: Route the legacy ark.injection.* rules that taxonomy.yaml assigns to jailbreak and prompt_extraction into those categories (today both categories return no result; the rules report under injection with sub-labels such as instruction_leak, jailbreak_framing, guardrail_tamper)
     type: engine
     deps: [X03]
