@@ -90,7 +90,9 @@ READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
 LAYOUT = {"train_dev": ("dev", "train_dev"), "report": ("dev", "report"), "holdout": ("holdout", "holdout")}
-FORMATS = ("jsonl", "json", "csv", "parquet")
+FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace")
+# Carrier characters kept on each side of an AgentDojo payload (whole lines only).
+AGENTDOJO_CONTEXT = 300
 SPLITS = entity_map.SPLITS
 INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
@@ -336,6 +338,52 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     return number >= rule.get("at_least", float("-inf")) and number < rule.get("below", float("inf"))
 
 
+def _alnum_key(text: str) -> tuple[str, list[int]]:
+    """Letters and digits of ``text``, case-folded, with the offset of each; ``\\n``/``\\t`` escapes are skipped."""
+    key, offsets, i = [], [], 0
+    while i < len(text):
+        if text[i] == "\\" and text[i + 1 : i + 2] in ("n", "t"):
+            i += 2
+            continue
+        if text[i].isalnum():
+            folded = text[i].casefold()
+            key.append(folded)
+            offsets.extend([i] * len(folded))
+        i += 1
+    return "".join(key), offsets
+
+
+def agentdojo_records(trace: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    """Records of one AgentDojo run trace; ``task`` is ``suite/injection task`` (``suite/none`` without
+    attack), ``attack_type`` the attack template (``none`` without attack).
+
+    With an attack, each tool output holding a payload gives the payload as rendered there (YAML folding,
+    quote doubling and escapes; found by its letters and digits) inside its native carrier, cut to whole
+    lines within ``AGENTDOJO_CONTEXT`` characters on each side: the full output would make attack rows
+    near-duplicates of the clean outputs of the same user task. Without an attack, every non-empty tool
+    output is a record."""
+    payloads = [key for key, _ in map(_alnum_key, trace["injections"].values()) if key]
+    task = f"{trace['suite_name']}/{trace['injection_task_id'] or 'none'}"
+    for message in trace["messages"]:
+        text = message.get("content") if message.get("role") == "tool" else None
+        if not isinstance(text, str) or not text.strip():
+            continue
+        if payloads:
+            key, offsets = _alnum_key(text)
+            spans = [(offsets[found], offsets[found + len(payload) - 1] + 1) for payload in payloads if (found := key.find(payload)) >= 0]
+            if not spans:
+                continue
+            start, end = min(spans)
+            before = text[max(0, start - AGENTDOJO_CONTEXT) : start]
+            after = text[end : end + AGENTDOJO_CONTEXT]
+            if start > AGENTDOJO_CONTEXT:
+                before = before.partition("\n")[2]
+            if end + AGENTDOJO_CONTEXT < len(text):
+                after = after.rpartition("\n")[0]
+            text = before + text[start:end] + after
+        yield {"text": text, "task": task, "attack_type": trace["attack_type"] or "none"}
+
+
 def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
     columns = sorted(
         {entry["text"].split(".")[0], *(rule["field"].split(".")[0] for rule in entry["labels"] if "field" in rule)}
@@ -351,6 +399,8 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
             if not isinstance(data, list):
                 raise ValueError(f"{path}: format json expects a list of records")
             yield from data
+        elif entry["format"] == "agentdojo_trace":
+            yield from agentdojo_records(json.loads(path.read_text(encoding="utf-8")))
         elif entry["format"] == "csv":
             csv.field_size_limit(sys.maxsize)
             with path.open(encoding="utf-8", newline="") as handle:

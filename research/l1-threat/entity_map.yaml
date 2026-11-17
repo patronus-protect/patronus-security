@@ -644,6 +644,11 @@ datasets:
     languages: [en]
     split: train_dev
     family: neutral
+    note: >-
+      read from the run traces in the repository (runs/, gpt-4o-2024-05-13 pipeline, v1 suites banking, slack,
+      travel, workspace): the tool outputs that carry an attack's payload, and every tool output of the user
+      tasks run without attack. Injection tasks that only make the agent visit a link, send a harmless mail,
+      create an event or book a hotel stay instruction_injection alone.
     labels:
       - {label: "injection task text in tool output", classes: [instruction_injection], family: tool_result_directive}
       - {label: "injection task goal sends data to an attacker address", classes: [exfiltration]}
