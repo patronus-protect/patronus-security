@@ -334,7 +334,7 @@ impl ThreatPipeline {
                             scan,
                             text,
                             from..end,
-                            own_negation,
+                            own_negation.then_some(end),
                             category,
                             own,
                             support,
@@ -522,20 +522,24 @@ pub(crate) fn counter_context(
     span: std::ops::Range<usize>,
     category: SecurityCategory,
 ) -> bool {
-    // A markdown image's `!` ends the clause before it; the context starts after it.
-    let from = span.start + usize::from(text[span.clone()].starts_with('!'));
-    // A negation from the match to its clause end ("you are no longer", "hast
-    // du keine Einschränkungen") is part of the rule's shape, not a negated
-    // sentence; one before the match still counts.
-    let end = scan.at(text, from..span.end).clause.end.max(span.end);
-    // A term inside the match (a `.test` host, "secret") belongs to the rule.
-    clause_context(scan, text, from..end, true, category, from..span.end, None) == Context::Counter
+    // A term or negation inside the match (a `.test` host, "you are no
+    // longer") belongs to the rule's shape; the clause around it decides.
+    let own = span.clone();
+    clause_context(
+        scan,
+        text,
+        span.clone(),
+        Some(span.end),
+        category,
+        own,
+        None,
+    ) == Context::Counter
 }
 
 /// Context of a points finding: a counter term (defensive, meta, quotation,
 /// test code, negation, sandbox, safeguard, own scope) in its clause, or a
 /// counter term other than negation in the lead-in clause before it, outranks
-/// any support term. With `own_negation`, a negation inside the span belongs
+/// any support term. With `own_negation`, a negation from the span start to that end belongs
 /// to the rule's shape and does not count. The `exhaust.*` counters (a visible
 /// bound, a song) only count for `resource_exhaustion`; a term inside `own` is
 /// part of the rule. With `support`, only a term of that lexicon supports.
@@ -547,7 +551,7 @@ fn clause_context(
     scan: &ContextScan,
     text: &str,
     span: std::ops::Range<usize>,
-    own_negation: bool,
+    own_negation: Option<usize>,
     category: SecurityCategory,
     own: std::ops::Range<usize>,
     support: Option<&str>,
@@ -572,10 +576,9 @@ fn clause_context(
             && (category == SecurityCategory::ResourceExhaustion
                 || !hit.lexicon.starts_with("exhaust."))
             && !(own.start <= hit.range.start && hit.range.end <= own.end)
-            && !(own_negation
-                && hit.lexicon == "negation_scope"
-                && start <= hit.range.start
-                && hit.range.end <= end)
+            && !(hit.lexicon == "negation_scope"
+                && own_negation
+                    .is_some_and(|own_end| start <= hit.range.start && hit.range.end <= own_end))
             && !secrecy_tail(hit)
     };
     let lead_in_counters = scan.before(text, span).is_some_and(|before| {
@@ -2271,7 +2274,7 @@ mod tests {
                 &scan,
                 text,
                 0..10,
-                false,
+                None,
                 SecurityCategory::UnsafeAction,
                 0..0,
                 None
@@ -2283,7 +2286,7 @@ mod tests {
                 &scan,
                 text,
                 0..10,
-                false,
+                None,
                 SecurityCategory::ResourceExhaustion,
                 0..0,
                 None
