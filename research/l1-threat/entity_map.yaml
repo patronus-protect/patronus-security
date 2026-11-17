@@ -629,7 +629,11 @@ datasets:
   - id: bipia
     name: BIPIA
     source: github:microsoft/BIPIA
-    licence: unknown
+    licence: MIT (code and attack texts); contexts mixed
+    note: >-
+      licence check 2026-11-17 (commit a004b69e): repository MIT; the table contexts come from WikiTableQuestions
+      (CC-BY-SA-4.0, NOTICE.md), the web-QA and summarization contexts are not redistributed (generated locally
+      from NewsQA/XSum, own terms). A recipe takes the MIT attack texts with the e-mail and code contexts only.
     languages: [en]
     split: train_dev
     family: neutral
@@ -644,6 +648,11 @@ datasets:
     languages: [en]
     split: train_dev
     family: neutral
+    note: >-
+      read from the run traces in the repository (runs/, gpt-4o-2024-05-13 pipeline, v1 suites banking, slack,
+      travel, workspace): the tool outputs that carry an attack's payload, and every tool output of the user
+      tasks run without attack. Injection tasks that only make the agent visit a link, send a harmless mail,
+      create an event or book a hotel stay instruction_injection alone.
     labels:
       - {label: "injection task text in tool output", classes: [instruction_injection], family: tool_result_directive}
       - {label: "injection task goal sends data to an attacker address", classes: [exfiltration]}
@@ -663,7 +672,7 @@ datasets:
   - id: agent_safetybench
     name: Agent-SafetyBench
     source: github:thu-coai/Agent-SafetyBench
-    licence: unknown
+    licence: MIT
     languages: [en]
     split: train_dev
     family: neutral
@@ -677,7 +686,7 @@ datasets:
   - id: redcode
     name: RedCode
     source: github:AI-secure/RedCode
-    licence: unknown
+    licence: MIT
     languages: [en]
     split: train_dev
     family: neutral
@@ -740,7 +749,10 @@ datasets:
   - id: approve_or_deny_de
     name: ProCreations approve-or-deny
     source: hf:ProCreations/approve-or-deny
-    licence: unknown
+    licence: Apache-2.0
+    note: >-
+      licence check 2026-11-17 (revision a38b6259): Apache-2.0 per the dataset card; the non-English languages are
+      machine-generated, so German rows count as translated, not native.
     languages: [de]
     split: train_dev
     family: neutral

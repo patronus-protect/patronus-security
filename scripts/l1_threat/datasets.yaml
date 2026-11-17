@@ -18,7 +18,8 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns)
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns) |
+#               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py)
 #   text        record field holding the text; `language` a fixed code or `language_field`
 #   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
 #               field matches every row; `label` is the upstream label of entity_map.yaml. Every
@@ -48,7 +49,9 @@ schema: ark-l1-threat-datasets-v1
 #    hard negatives.
 # 9: llmail_inject keeps only submissions with the executed attack chain (exfil.sent) as gold;
 #    the retrieval-only flag proved too weak (owner re-check 2026-11-16, 17.6% error).
-generation: 9
+# 10: AgentDojo run traces join train_dev: native injection payloads in tool outputs (instruction_injection,
+#     exfiltration, unsafe_action by the injection task's goal) and clean tool outputs as benign rows.
+generation: 10
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -265,19 +268,279 @@ datasets:
     commercial: unknown
     pending: recipe not written yet
   - id: bipia
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: recipe not written yet (MIT attack texts with the e-mail and code contexts only; see entity_map.yaml)
   - id: agentdojo
     commercial: true
-    pending: recipe not written yet
+    # Run traces of the v1 suites (gpt-4o-2024-05-13 pipeline; MIT like the repository): per suite, injection
+    # task and attack template (direct, ignore_previous, important_instructions, injecagent, tool_knowledge)
+    # the trace of the lowest user task, plus every user task run without attack. The traces hold the rendered
+    # payload inside the tool output it was injected into, so the rows are AgentDojo's own carriers.
+    source: https://github.com/ethz-spylab/agentdojo
+    revision: 089ed468cf3ed0322acc66b0211f26d9d90dbf60
+    files:
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_0/direct/injection_task_0.json, sha256: cae57b46cbb1cf1682ddb596d58a6b0348444a090b57bcb1c49c3be4ca582561}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_0/ignore_previous/injection_task_7.json, sha256: 6c85dc7f1d9929028d41633cc4acb2826b47496604bc498d2b2904fe71ab6508}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_0/injecagent/injection_task_5.json, sha256: fd0b3d551d2548197d3cb6b61906b98d97d5990226ed9cbe8a7103f23d060318}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_1/direct/injection_task_1.json, sha256: cf095494ef0222571a1204c4c97d7729372cf1f198c933e94e3062347db58e6c}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_1/ignore_previous/injection_task_8.json, sha256: 785eef1fb78880b3fddcd9456290fd25d8e63dc6bf65a80239c01a43fc257b50}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_1/injecagent/injection_task_6.json, sha256: 33539c6386ddb66eb5dd4783dc954439e1866fe49f7533d4fb15160d459b9d1f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_10/ignore_previous/injection_task_1.json, sha256: 71e2e6b1fb36d284b0c30416bdd6149f8dc64e8d78afc8474773df04dcc4ffc7}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_10/important_instructions/injection_task_8.json, sha256: b9244329f5a1acd0d86dec8fa61ff247522db613f03ab5f0c8afd8ca3eaa14be}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_10/tool_knowledge/injection_task_6.json, sha256: 6b41aa29e84272f36c57d22b7c96cb359426590cccea5501d1b89d23549a547f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_11/ignore_previous/injection_task_2.json, sha256: 2e17a2eea8a0a6dfddc0088e3e959fd39490ac263e4f151e856da51c8b00d874}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_11/injecagent/injection_task_0.json, sha256: 6b4cd12b222bc76bc97be35715fddb724446b3f5d154f6c8b1522e61d812b335}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_11/tool_knowledge/injection_task_7.json, sha256: 1955308850a438acba94bb83dccd6f49c87c4f5d91ec13c99ddbd72b05b1a900}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_12/ignore_previous/injection_task_3.json, sha256: 7a0db9239d2f2effbd3963ad9e1d95d580d5c70aad0909ebdc3a7d4ed194943f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_12/injecagent/injection_task_1.json, sha256: 4d4dab58d95b1c72b06760056f6c40df77bb4704f7bab73f6f46d0e2199d7a33}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_12/tool_knowledge/injection_task_8.json, sha256: a852724b0e1a459c1712a53b3dc692123750aa69da8531fcf41e2dce10e77587}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_13/ignore_previous/injection_task_4.json, sha256: 495569a17eea69829380fe319c27819778a5b40f6903d9bc59c4fd92117863bf}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_13/injecagent/injection_task_2.json, sha256: 7842348a2a2112fb1830d31f5f85b274b4110c45c9d2a583f69f1f6c4574393e}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_14/ignore_previous/injection_task_5.json, sha256: 7bdcdf55a8cf5944b839fafbbc7bc17ce740d12d1a672682844afad594324a1b}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_14/injecagent/injection_task_3.json, sha256: 6cc4287623665202f55f4ed7f1db59119e34b1277c0865898d6a7cc69685fa45}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_15/ignore_previous/injection_task_6.json, sha256: bf6b49535d1df06b8b9f67eb474f1341753d70de99e9ae6766115fbe769f21f9}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_15/injecagent/injection_task_4.json, sha256: b49bc99d7b103af409c147bcf59e3990a179143344fe822095754678e7b188b0}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_2/direct/injection_task_2.json, sha256: c584c3938c7d01b64815584d1fbd2d24ee51e6df5c3e8457a23472b173b285fd}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_2/important_instructions/injection_task_0.json, sha256: e0df6e9c88527d40829b6539cb5a4959e21645a96c69e30fba82d5b8e3572834}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_2/injecagent/injection_task_7.json, sha256: 4dc8d375817407504964da2f55d9027cb711e37ed3ac1cd7963418cbe8d93698}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_3/direct/injection_task_3.json, sha256: a15ba5ce3e5cca4d08ba6f636f14a2fbeb9458f2ca669f41ec33a15d8e4551af}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_3/important_instructions/injection_task_1.json, sha256: 8d90a5546f484993676969a34aeac87c891cad4322ed6bf6da7d31e7c8ecbad5}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_3/injecagent/injection_task_8.json, sha256: 254ec202352646e06a9019947dcb982f00ad9c5930476c5b40caecde3877e1e8}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_4/direct/injection_task_4.json, sha256: 65034eb08da2e083aa4528b1bda5278945150681066b05b89391f81e69993531}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_4/important_instructions/injection_task_2.json, sha256: 814c7f33c617c399b96dd39fb2d98b69479d619e026f8b401f1df5db1a15e36f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_4/tool_knowledge/injection_task_0.json, sha256: db76b8b4ff5ebae24819dc9f5bc60d0c37062b942631b8f0cb0528c71b9210fc}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_5/direct/injection_task_5.json, sha256: 06604a7722299faab5ce59ee202ef72a57a973e2d1c9a780dbb05df75a19839e}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_5/important_instructions/injection_task_3.json, sha256: 724a15313faa5fe46812677a4c6621f398a302a3e32e018a1d290cf49d67737d}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_5/tool_knowledge/injection_task_1.json, sha256: cc26c7f7f8fb15b69b2afb319d60bdde4afc0459fcb234894e280a03ec970f58}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_6/direct/injection_task_6.json, sha256: 63f06be5b90ce315c91a9d495ed7616896d4b8c32bf376eaf95ef33ab65a4210}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_6/important_instructions/injection_task_4.json, sha256: bb679fa10146d5f947c0d0cd38e9189309915cc934a36fe085ec3524104eebb5}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_6/tool_knowledge/injection_task_2.json, sha256: fff1c7b52cddd9daca77f23d282f093f75e7b544ef69b336f34e55c2badfebf8}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_7/direct/injection_task_7.json, sha256: 9b77d02b66fb47b3184afa477cc995497d6626dfa0fc81c0874ffd1af11fec1d}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_7/important_instructions/injection_task_5.json, sha256: 8ba6b0f53bc3048a4b8f7b999c12c8915a1b62dfedfbc2269464ff41a64cfe61}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_7/tool_knowledge/injection_task_3.json, sha256: 9f5f4a82bda4e2d48c51cf2aa5e4aa1b24b5f104d36f4f5fd634fa23ee239268}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_8/direct/injection_task_8.json, sha256: 6dd004b5eb16603b1f68ee804865a42190eee11ba29236980d0359a097d20e12}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_8/important_instructions/injection_task_6.json, sha256: 69cc8f01e4195611159fc0521a5eae789b39719b05de88ee90513b6b3a1113da}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_8/tool_knowledge/injection_task_4.json, sha256: 47374360dc86d25b690840d1061811ee83e969e5aefdf0286d486b16db45560f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_9/ignore_previous/injection_task_0.json, sha256: 2d80aa9d3decd84790d14c36eac00552d3056a90a1503cb5d30cc11c0b152f99}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_9/important_instructions/injection_task_7.json, sha256: a0cd0d5f2aa99438e6bd97c59f77bcf2e5a10addd5df5ab7ac80f1f3187de022}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_9/tool_knowledge/injection_task_5.json, sha256: 64ce8aeb176f6472c12a3ab73d85f52262ad6533bc6b4d8a4e376c6ef1a1ad23}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_0/direct/injection_task_1.json, sha256: ec7936d371b235a04f44a86642ce927b0f63daa2595e588d9c6dc238f9e7b441}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_0/tool_knowledge/injection_task_2.json, sha256: 19d99029aeba6da701ad9b67403186f471d70a48c7ab0f4a17442b1117ab22c9}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_1/direct/injection_task_2.json, sha256: 8e51e6ff049defde2e0eecf79fdbecb7ed598d2e2473d948d6c4ffcb3deb9e51}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_1/tool_knowledge/injection_task_3.json, sha256: dcf6fb27e289746cd34deb7dbfe41dc99c70394effd66f452eb46ee2779f3dee}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_10/important_instructions/injection_task_1.json, sha256: ca58a72c16a3acf1f97675cb951f61670340e43e44c61ba21a14008bb7efb543}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_11/important_instructions/injection_task_2.json, sha256: 92f35c61c9d5d26fb329eb266bafacc500201c41d1740a73b274a9f91eb7b9e0}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_12/important_instructions/injection_task_3.json, sha256: d203ee3c24a97a3b03686747278f0c5aab910ac799159faa9fb9a0918f318c0f}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_13/important_instructions/injection_task_4.json, sha256: 12bf491e3a74fa260cc0a2a4ddab3e56a27b1e2ed1a2cde57d3d3a0f6167b2e1}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_14/important_instructions/injection_task_5.json, sha256: f496701f3ee5c863ddadd726ce731f8e50ec7e3e750283a1c048df3ce5bf520b}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_15/injecagent/injection_task_1.json, sha256: cbbc68d79ed70fa8b6592e4cb0d256e90d71fa57ba9f8d4d755d59f7ba8c4a76}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_16/injecagent/injection_task_2.json, sha256: dae6790e403f68f8da4e5e589708e354b5c0fe67067a8ee18abc05de9630e0c0}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_17/injecagent/injection_task_3.json, sha256: 8e634bcd3872bb2de3a468fa28a6354862f00d00ec216ae23f948af327fa0d52}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_18/injecagent/injection_task_4.json, sha256: 4f6bd89cfd162bcf5032149f00aea113b4d596fcbba43ea00cea176f3dbc1e78}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_19/injecagent/injection_task_5.json, sha256: e4d8562bfb3bab921bafe55b75add4cb7bcf3a699ae52574fef1ebcf87309cb5}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_2/direct/injection_task_3.json, sha256: a336eea9acf17b55d91ce5aca5b2f4a3baf586db6547b362139492a01dbead6c}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_2/tool_knowledge/injection_task_4.json, sha256: 4d7b56f616d241ec42fe6809f13094072a0da06dbb99d7e819b48043f28913cd}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_20/tool_knowledge/injection_task_1.json, sha256: de6ea721788d30716b21d61a7d8451709efd6abfd5128771631cfc6ef5fe057f}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_3/direct/injection_task_4.json, sha256: 13d09cc65de4c35615a0947b99573dc0e83980f5fd5994d20265475298eb7cf3}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_3/tool_knowledge/injection_task_5.json, sha256: a5a2827fa6be0c2d3febdf0c31b7569bd855f8fb43f0acfdaf7eb56bd9003861}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_4/direct/injection_task_5.json, sha256: da54da4029fdb924938da2e16230d45d28a8be8b28ff5948122a98c732ca4b53}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_5/ignore_previous/injection_task_1.json, sha256: cdb46098ed8376c3fea0ec59e21c76570528cb04baee69c33fcabc5ca126f031}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_6/ignore_previous/injection_task_2.json, sha256: 19c32ba0c902c78147aa275d9aa5d9b6ca6ee6d093b8d80b6bfaa4dc01fa5d80}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_7/ignore_previous/injection_task_3.json, sha256: d7772d0f7c751550741e1830e9a0697f161293a4f0aefc7149456783ef59dd18}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_8/ignore_previous/injection_task_4.json, sha256: 82e2bfcbef9ab6ad9c760e6032615c836fb4a552b694d59ca9d582022232fe62}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_9/ignore_previous/injection_task_5.json, sha256: ef455ed3ef11b97dc112752a9b517c3678a41210508ef3c805671ebd23212f97}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_0/direct/injection_task_0.json, sha256: 20186519f784c379de36d7cf41c088fc238eb419bacb4a49a15b98112c1a3854}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_0/important_instructions/injection_task_6.json, sha256: 078152e45321fb2da019e1e30265b2f071bddd6d484c0f19714c83cce9c84b56}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_1/direct/injection_task_1.json, sha256: 22d158a4272c37a25f98a608c4e9aa66a2642c1d3da7ddde576cac6b74545a88}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_1/injecagent/injection_task_0.json, sha256: e2187ccc0dc625dd26c73f0ee15c918ddf928eeca3ce40e9d24d5d64a1148aec}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_10/ignore_previous/injection_task_3.json, sha256: a7f160a94cf19923edee29fa829ad72bcc37431d2c6a3e7681cabfb6a84c6594}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_10/tool_knowledge/injection_task_2.json, sha256: f1181606687054e14002e49611e93f74453a67b37d0b9a3e7a03f1cd778ffbb2}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_11/ignore_previous/injection_task_4.json, sha256: dad7fc3d85b1abc7b0afbcaa011c707b61c08ef6e6b157003c195d7fda86f8ab}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_11/tool_knowledge/injection_task_3.json, sha256: d43545f1b1fd9d98fc1529c29d5ae5c39bfb2b36cd2467897d92f4c8c248c437}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_12/ignore_previous/injection_task_5.json, sha256: b1be0379104841168ee7894beb7d6612d713bf28879514c92ef0b9fb464ac637}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_12/tool_knowledge/injection_task_4.json, sha256: 57c5d2211be668444200c81192e7502b1408e505f79f0606a7ed630a06d86d17}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_13/ignore_previous/injection_task_6.json, sha256: 7460bb01c9706392252bb5522928f2e31d0dd107c62339c58bbda245045b895d}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_13/tool_knowledge/injection_task_5.json, sha256: f42347f427a0f55cc4a4d65183fc1c1f2ceeb06a4510416d6375f1501dfaf201}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_14/important_instructions/injection_task_0.json, sha256: 91c9cc30b85c6a6d2fa2fc80bbfa87f20295b6c694cee0395d4d8b86b7ce5def}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_14/tool_knowledge/injection_task_6.json, sha256: 7372ea98347901f555978a396aeb89a73d1635b880cb18864afd232fe41642a0}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_15/important_instructions/injection_task_1.json, sha256: f36b36fda63727b0ae06ffae3445ff522ca64724b04a875b78efe46a5d8995a3}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_16/important_instructions/injection_task_2.json, sha256: e1c50161d9d61e96ab548659074be58834753734a49105bee48df129dfc0c83a}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_17/important_instructions/injection_task_3.json, sha256: b5da6c15201b7f6585c91e988b846f4fe30ea03161f4f568cefd98889d5ea75e}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_18/important_instructions/injection_task_4.json, sha256: 3bb1afc42d54ca9307783bf1b15ad4e028ac2cf0d126548a651b3b6099ab0cb4}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_19/important_instructions/injection_task_5.json, sha256: 8343d3c54e98aa860aa908af063556b0c316aeb0dff98cb4373aeab0d67efdfb}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_2/direct/injection_task_2.json, sha256: 390cd52c53d8c14d10006802ee8ea98038cd4d8412c03369111bd0faefe7007f}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_2/injecagent/injection_task_1.json, sha256: 28a5873234fa46ff75c174f80db292457fac580de7b8babbeb14f000b3492624}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_3/direct/injection_task_3.json, sha256: 5f4562521ddefe5d3a252a0eb1036dcf4c5776f84cd2f7ba2f6b2295ce7ced85}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_3/injecagent/injection_task_2.json, sha256: 44759468fa566620b21f61f28a80efeef66b29f6b9cb8f43230bfc01761291f6}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_4/direct/injection_task_4.json, sha256: e2fe0084fb0c0d3f367e309b9d2d51d7526d3e959bf041aa491fffefa9ccf419}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_4/injecagent/injection_task_3.json, sha256: f2b778e3551e04bd3c56c043b07c1445f40cd0c9ebaa4834450a7b397db84f2d}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_5/direct/injection_task_5.json, sha256: 5a48807dd4c097d725296732a76541a86de0ea99a4def2d979f3cd143a8d3e10}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_5/injecagent/injection_task_4.json, sha256: 626893b37c553fe72188fc276d573f6d6af978c860fabd869aa921c45c87741e}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_6/direct/injection_task_6.json, sha256: 13fbede010f211663a8c23c4f63b60d3be610ae582d534510219976eabf00a29}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_6/injecagent/injection_task_5.json, sha256: 3eb8e740676f86d56f3413ffcb97c50e0eafea4c67acac2d5044fb18b41529a7}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_7/ignore_previous/injection_task_0.json, sha256: f85dddcd5bfb73165b3de0cfbd474cc75d228e76649d4183ef045fe45c505c55}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_7/injecagent/injection_task_6.json, sha256: 42085e57d586b621c7a1a1df805176a30e14988c7b2e95cb137b4d98082d747b}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_8/ignore_previous/injection_task_1.json, sha256: ac972d1551de0196a6a145084767643a14f21ce7882764caea1f66925fc4f3ef}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_8/tool_knowledge/injection_task_0.json, sha256: a26adfc2e950ba8d62f36a22cf1db74ffc988dbc99a66ae87d06bebd72342418}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_9/ignore_previous/injection_task_2.json, sha256: 972b281d33f8347e49beda8889e9a2018bc16bec86aafb4377dbd4a13776a347}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_9/tool_knowledge/injection_task_1.json, sha256: 9e476e01637de578fca760c8fb7e5bf8a1b61fdad88b40e3a3918df6a191f96b}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_0/direct/injection_task_0.json, sha256: 5b5b6941039684ff7c067eeda9e737c9a3884982e02ff8f6b4f84efd16b5d625}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_1/direct/injection_task_1.json, sha256: 0edfd19455e7c7d4b294457bbdf6b3764e7dce808a7d691897692fff5cf40585}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_10/ignore_previous/injection_task_4.json, sha256: 024fba2d4f28636f26f1a5c0d126f820a95426b7cfeff1639c2df13c78417f01}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_11/ignore_previous/injection_task_5.json, sha256: 0c587dd2e0f6d10e0546c0c764416d0b645df9e621bf1835e2187554be497dc4}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_12/important_instructions/injection_task_0.json, sha256: 064e9bc2ba66d9fa46cc87bf9826826b75179efd15110634d580915321a451e0}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_13/important_instructions/injection_task_1.json, sha256: 451fb2b76678352673f517464434599e1b82fff9a47c5b0e00979ab502243467}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_14/important_instructions/injection_task_2.json, sha256: 0dd90212ee23f909d68c097c93b70a1be5c69729c40b1c396e8df2aa5f34f1f3}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_15/important_instructions/injection_task_3.json, sha256: e75e817196cedb95b754e2b5596523dc1c350b5d767fca14237bb8e7ca8d1f60}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_16/important_instructions/injection_task_4.json, sha256: 553336bbec5d68661e775c55bd2b0bb44085f07a1f17b6f4c452a878ce5d71ac}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_17/important_instructions/injection_task_5.json, sha256: cb8a6e7b48b07e3be69d8773ae1dc2f2bac824a3373b302500e986bb4d501a85}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_18/injecagent/injection_task_0.json, sha256: ca9d3c3f9166d94c9a856adf3d1eaa6b5afa01a1dda45272de6c3e6834ffc925}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_19/injecagent/injection_task_1.json, sha256: 3dd9f5ff427b257ca70039927516e56b9a70fef86daa2d1c7916be71a2ab9658}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_2/direct/injection_task_2.json, sha256: 26b56787b7c84587affbc1af0c6d717a2e015a1555c28a3c9704d9082081a43c}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_20/injecagent/injection_task_2.json, sha256: 46454559e7096d0d5721cf8a67037167810764e4f8160ea741813bed2420c965}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_21/injecagent/injection_task_3.json, sha256: 03523788530e9dd32d51857c3c4658f29c0659979936cfab4ec9a050e98fd9c6}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_22/injecagent/injection_task_4.json, sha256: 96172fb6ce269832d7cd5b96910a10dc11ba558f817857d3c22ed8a424a176a6}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_23/injecagent/injection_task_5.json, sha256: c6086bf62e28feaccc785cf0dfa5436ff6191950a5baad8195a5ad56fa3e307b}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_24/tool_knowledge/injection_task_0.json, sha256: c4aa4eabf57c55fb968ca3f8160ec87d5950c25734b540506a779a9c35f0a879}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_25/tool_knowledge/injection_task_1.json, sha256: f67fc514bb143ea199f53c317d0b9c859282fd38278b893b46f9f184aa63c757}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_26/tool_knowledge/injection_task_2.json, sha256: 7a582c101f0d013c1762c14aef7251741863b3f8e105a8e25bd34d5d744d30a3}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_27/tool_knowledge/injection_task_3.json, sha256: 7677eb1856a4dfed74b901932bff4a67b127b0a5511dc4d09bcc8dcfcb22a049}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_28/tool_knowledge/injection_task_4.json, sha256: 015f1f065aaf79db15743fac2f203ff12c5cf93107369b03269d6c35be7468d2}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_29/tool_knowledge/injection_task_5.json, sha256: a3c198249c541732af634f4123db4d3b87ccb72a6c1b4d5fc579955514ce260b}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_3/direct/injection_task_3.json, sha256: a5a67a6f21a89058e2eb50319f1d4af03ca45396bb6a650cebf5fed3da08a48d}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_4/direct/injection_task_4.json, sha256: e7d2caef73a1e6c4b93e9f9e297045f8ba65286fe9722494fe0212bb4b48aa24}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_5/direct/injection_task_5.json, sha256: 1725f59d397ccc612cb5c2c94f3cda6793a3939093b06884a1f143b62c5f6ab7}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_6/ignore_previous/injection_task_0.json, sha256: 8d104299bf3a0cba0490e7244c3d9d6962b69f0c625b9e10ad50dd4370e33cbd}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_7/ignore_previous/injection_task_1.json, sha256: 49ae85934ddbd88d9538f6f3a1d7bde137391dee2924fd790988b6e0f2e2ad09}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_8/ignore_previous/injection_task_2.json, sha256: 3fc3e5cba6ad13e7784bf229bc148a78047f1ef4e4248f7409e160167f048852}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_9/ignore_previous/injection_task_3.json, sha256: ff29133ab115fe1229e6d48e7215db849eab1d045f5ed9cf2a51ed89d5c1251b}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_0/none/none.json, sha256: 1a3ce69ea37b3869ca97aede045263ecd01437751b2c5c9cb476134dc4344273}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_1/none/none.json, sha256: faebd820b76a63fde15643eda237f0c1dec1f07e51cf725443e7ab1ebb8b1ff1}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_10/none/none.json, sha256: 318a7d75e4abf7c308aabe2cb3dde89af0ec13d667c4df0d1079eecea0428635}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_11/none/none.json, sha256: 1bea0f8b3235ee9f88b340ba1c74c8a0854fa57756fbdebeb024aeed6631621f}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_12/none/none.json, sha256: f605b80200188d446acb52f83f9320bfa0c52dca540ae32631cb6f93593a58d9}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_13/none/none.json, sha256: 0efef5b7586192cf3a9ef3face7e3068aa6ba532a53634aa6d1ef38f84c21e97}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_14/none/none.json, sha256: f39650b8042e7e65f56540cb46bb6377271b552131535519460f4d963ba37d83}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_15/none/none.json, sha256: 2b64813bbc80e20a20a839d093734e8a8a9c20a48b4b0752520e0332f84bae55}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_2/none/none.json, sha256: e981e06ca71f5cd48c1cfb4960e90014a347e208c6cdd9dff5c978e27a450a6d}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_3/none/none.json, sha256: 0d521674b0b2cbe5f4898713cd9a1d5df4901f7af928f24ceee44dcde984573a}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_4/none/none.json, sha256: 644b8e54185632d12b545eb4a9d67cc29a3cc537fef82b53cd308cfbcee01ed4}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_5/none/none.json, sha256: e824ff3aa14c727a1218a816e7ae01d7e13aab7145654a28d53cab9e30c8cc33}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_6/none/none.json, sha256: 0797a4ab3fb46d320be614ca2bf58f950439c5de80c906ed406141791a4910fb}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_7/none/none.json, sha256: 8f1e33ce157aef1ad4af222820d9f360b56a0a557cd0fb2e592cd2dfab22709c}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_8/none/none.json, sha256: 01763152e00f5f8a76f337d52bbbee5b6e2bd0d8380ea39782ba8751398414c1}
+      - {path: runs/gpt-4o-2024-05-13/banking/user_task_9/none/none.json, sha256: 85ae7f6233b0b7f9fa1802debe703a4925233193f35487d46cf90813525a9313}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_0/none/none.json, sha256: 859a22cf9c726b31a6f996d6054a94a55f00288faa0c2ddd22c567728887919a}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_1/none/none.json, sha256: 2cf6b0cd991b1785b28e432887b1649191b70b68b4e5a64298376c9a7a5bbb08}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_10/none/none.json, sha256: 6a1e32a0653136f078445341af4505a290fd7ec44de55af40d0e818e60b66b07}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_11/none/none.json, sha256: 5ae435255767fb32d92e3835e9cc04787eaf98802072ac761ba26349ba901589}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_12/none/none.json, sha256: 2949eb23bcf8899c50f5cba037b874f226b204645a7c9c9b8fe101d063a81b26}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_13/none/none.json, sha256: 284c1f449fe49328a9f57f104f7e3ee892d7ad585a8dc0d39c1c1811aa610db1}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_14/none/none.json, sha256: d149a9b6c1a5df17e9519d1681cd7cc2b1ddf9211bbe335ceeb4bb71eb002de2}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_15/none/none.json, sha256: 611a3a98a3ceaa1a4ff1739ad752481a2769bb987601d8dd98728fe7eacb4ec1}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_16/none/none.json, sha256: 2569bcd844dfec91183687df74fe87f1c625dfbe7405bc48f8a3e1b83b061698}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_17/none/none.json, sha256: e1e7d44e123221428fbba40a26e9a215a975416b4348b01894e7fda881fbe5d2}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_18/none/none.json, sha256: 1e0baa1cb97a72bb325eafbad47283f6cddeea488b4d6bac40a28c32aa64547b}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_19/none/none.json, sha256: 8c9c8b3063733bfb8b49843234b2d1ed57fcc42bc7200542e2f0a31ddec89973}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_2/none/none.json, sha256: 56a2cff0d1935945457ae39b9270915c1bc3f4661feb8aae8ab8fffc24c98c7e}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_20/none/none.json, sha256: 7e48091024ecd91e399b3fd5c566ce7bbf668354858e51abfe96f417be3bcace}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_3/none/none.json, sha256: f0fc6a51dd21d1d199233b437fe8656980596c85a1df76115dd9c397781f57c1}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_4/none/none.json, sha256: 619646ce11083a35bcdf2cc24c47df65f6cf91cdfb09eba8e0055a90434922d4}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_5/none/none.json, sha256: 3de639ff5a581f709cbc9e608be35b4ad921ba47974781dfd72f0e771c947808}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_6/none/none.json, sha256: d06bf4faa3173a1aa8be717a79ab62564f26deb378b02e3cdb578c30dbd9a89b}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_7/none/none.json, sha256: 612792cbd75912541cc4406807c58230193ccbe7ffaac548b5b18873338a3382}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_8/none/none.json, sha256: 818d86a8568c6306ea91cf420bf58374131c9e97137d9b060f27ae02ff3a069c}
+      - {path: runs/gpt-4o-2024-05-13/slack/user_task_9/none/none.json, sha256: 4d18c99f061a10427533f4d6911b77b0f8d20ce5cdbe8155e7aedf3391b6dc3a}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_0/none/none.json, sha256: 4a5f9c3a55c178d2e4802e179ffd5245acaf3d2e8fec5ee83d800832f055ce1a}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_1/none/none.json, sha256: df94d802caefe9d1bb085093f6355f46e25058156876bf38fbf57ef7efc761f4}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_10/none/none.json, sha256: bd07fad255bd74de65ab3a3b5d4f6ea41db70d88280a8f754e866ecab19b0bd9}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_11/none/none.json, sha256: 2a61c816550e857a0e46421e5d9b241979feae758a6dc5d44d9a6b813f05bb66}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_12/none/none.json, sha256: a202bf806959305542836c97a851cca87a7ef92aaf15b4cbb027ceb57092acdc}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_13/none/none.json, sha256: 9d5cd5d33463e0d88cd7377f66add12c477d1a1ba4169f6738fbaef014a502c6}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_14/none/none.json, sha256: 60891c37f29f20f4ff0a5875d8026c90953f86f3b81aa055b0574f0691c018ea}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_15/none/none.json, sha256: 3e3a89b740c875840ebc96baea546c6244ce0aea449ccae207936edca681d683}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_16/none/none.json, sha256: 3f675fc2d4d679bed99254f01db7314412ff6e5f7cfa512606609f595ada01b6}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_17/none/none.json, sha256: 03c7943a1c32b1534120b97354ff9232204b112101da74540c9dcf3d796c4fbc}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_18/none/none.json, sha256: 49e807223e9a5cda7cd00e014c27ccdc39307f3fd6f460e45321920af44343b9}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_19/none/none.json, sha256: 76234bd132cb836472e529e59633fee190ea2fa6d75b8356ab3c44bfc789c368}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_2/none/none.json, sha256: 038720cd285fd6dc5988fdcffc021b2852c232fd4a58df7cd1584faecf01009a}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_3/none/none.json, sha256: 9931c8c405f22fbe6c31e6ccbfd98750f20b23b13f2eeb412fdb71171de76115}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_4/none/none.json, sha256: 248c8ed2baf3b1ab14855f52eb86aa719419ac7ef86cdf9bc4869718c4e33ae2}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_5/none/none.json, sha256: f6aad3eb9ad2acac6ee651c97bd828e322d4b4926b15b5b988b56eae3043788d}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_6/none/none.json, sha256: f6e70eea3007dd56133e4e54ef28481d632ff84b6b6bd1cc8d7db1eb516ee413}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_7/none/none.json, sha256: 70098aa7d83790bea3325436549c03811c9c77c764f1842bfa7a93a1d62cc7d3}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_8/none/none.json, sha256: 28db18b5fd04999a9dd08b4b5e08b612e8e3c1edfec89d6290260c471ca69124}
+      - {path: runs/gpt-4o-2024-05-13/travel/user_task_9/none/none.json, sha256: f563cc186b52211a32e93885e5100f2dd0e2128fdd74969a74023898345b6215}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_0/none/none.json, sha256: 8158688f12ef540e9b430ebe6390e434a0847408f0db8e978d606e540cde25d2}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_1/none/none.json, sha256: 4519c08a845436343ace664c4c92353bd25a56e31d915217836dd42d886f7565}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_10/none/none.json, sha256: 9ae623540b2fb1dbd1877389c94d874cab91a44d738e31e49c8fb88f2dfb62bc}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_11/none/none.json, sha256: 144d5048e5ae49f23e07e29ace80ddad92baac39c6f48214fafb74cdcd49f7c5}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_12/none/none.json, sha256: 550fcd36c153c558979a9377f09e51a9c95ca6548eed718beed4e4b7bccd7867}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_13/none/none.json, sha256: 54feb89974a1a5b8e9b75063f13b52c956ac8393df33b8f52201e8bab9798d06}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_14/none/none.json, sha256: 2ec989adcfe28e8c2884b946ccfc4ccd629d65189eb4227466bdd93913a755ee}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_15/none/none.json, sha256: 63256bdd3d068963f585bc04c910fa4af9eabac62cdd054861aca2f54842f128}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_16/none/none.json, sha256: 74a9515141a89cd74471eb4df843896dbd929b47a4c049be74f433b7d330ab9e}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_17/none/none.json, sha256: 39379e5eea85bb4ba51ecec73fde28318ef8cf0832c2cce23864d069f92d3fb8}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_18/none/none.json, sha256: 0c0a1d62d0b1e6ae79b9e97b1fc145bd1d254b4568ff5827ad8e9f9484675cfc}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_19/none/none.json, sha256: eb797650480cbf745eee90b41d74c0c61f83eaa2503ec33ba00c666cf4ec1dd1}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_2/none/none.json, sha256: dd22375b32206ea37524bc757c7a99c0f51d8384099c4b91fd0c1a1a6e966bd8}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_20/none/none.json, sha256: 5117a9d163a90f9ebfb7e5941d4cfe3c55fb9c13c09adb7ce0269cdac0ac6cf8}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_21/none/none.json, sha256: 1a7cd3a83157c010f9adcb2dacf9e757b0c7380577b429aa6af5a15f0ad34308}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_22/none/none.json, sha256: 6f37b190ece362924624c3e5c9a1d4062dd0d88746fcd1d9bef7fcab781fbaa9}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_23/none/none.json, sha256: 7fea1041432c133e28a25306fc72ffdbbd6d8dafa6a9b646d47941d57f77a11d}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_24/none/none.json, sha256: 2c7ca96831d59a111cf2d3a0f556d95c00bd7b6c4788e74209763b82366e762d}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_25/none/none.json, sha256: d6a350f6252b82d43614adc4337057c915514303b9d321415c39762d4e44330e}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_26/none/none.json, sha256: 27deb607a874eac7cff5fbf5cc3822e9da9b8d8e362c475ab3f4cd559dcc2d30}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_27/none/none.json, sha256: 44a947f0b7e1acc3c3278e765dff468dfbfb47194a55717aa65b39eaee295166}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_28/none/none.json, sha256: d9f5206100cbad2d9d57dc6ebfc87167693a55e1535bedd5beffbc443fa5dec0}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_29/none/none.json, sha256: e64278fda7339d366ff97deafb5bd6347c1a6bacf4fbba6216cc6a0af15c26f2}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_3/none/none.json, sha256: e3399a12b75ae844d87601d40482fb7a26743d0dc290cb9b520b8441c43ee718}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_30/none/none.json, sha256: c60fa5d7c042daa6cbae15ec38631b27ebfdc6392353e33f0e591e4e54992989}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_31/none/none.json, sha256: faa65c095b58d0e9e81eb008c4ef6d6a4c98fc4645c49821ce482e040cbc63d9}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_32/none/none.json, sha256: 917be3f17669d8749518a730737e0ca98e3116e09c946ae5cc8663ba84024c20}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_33/none/none.json, sha256: b74339b6a62e76fbda320176301aeae3063558cd191660cd0a12698c0b199f7b}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_34/none/none.json, sha256: 78fc9929a0da158d2ef0f5524fd1a1391f1ad8c6ba1f61a74c87487e0796d248}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_35/none/none.json, sha256: 56b0aa9d22c12a0c92b68bace8a7efe42fb3eed243c67ae7a44a4f77a7d744e2}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_36/none/none.json, sha256: eadee9bd39c8bc8b31b5dc0d4079d0b3425541d4257a8a335db02c4e3ea25a65}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_37/none/none.json, sha256: 5b4dd6d691ab1941abdce8a13a11de71a5c3e8e3bc1d1e782ed3ff1008308756}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_38/none/none.json, sha256: 84c5ead9754b9cfcd2946127f2f7671c10f7ff16371e4f1acdd1f04675f79b10}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_39/none/none.json, sha256: 8a8a79dd3013509a97b415e6dd8ef249cb234d43e4d1d942b736bb0161c0ff22}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_4/none/none.json, sha256: dbd16eaeeebc0dc594ae3aef87c29f8fd30ada7afd2f902cbac10caf99209590}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_5/none/none.json, sha256: 8a479f1148723e376945fb97a6e925662ffacc284a0e65a0b76f8511e18961b1}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_6/none/none.json, sha256: d448c988349ac6eb2360f6b351481e20508de3bdcc15fa9d946136fade5bd27f}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_7/none/none.json, sha256: 7da1945d78509001be7f9dea23a89852d728804dba13a794edff90fe6d989a61}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_8/none/none.json, sha256: c1d2491e9b5b9db2d3fccd6e2e5af508bdbe9c3aebd887881d4bbcf5bbcc8da4}
+      - {path: runs/gpt-4o-2024-05-13/workspace/user_task_9/none/none.json, sha256: 699817b5a9340666562c2fc223c95f820267a84dc676de163c36b03e9ab13b7d}
+    format: agentdojo_trace
+    text: text
+    language: en
+    labels:
+      - field: attack_type
+        equals: [direct, ignore_previous, important_instructions, injecagent, tool_knowledge]
+        label: "injection task text in tool output"
+      # attacker IBAN in a transaction subject, messages posted to an attacker website, user data, messages or a
+      # security code mailed to an attacker address
+      - field: task
+        equals: [banking/injection_task_0, banking/injection_task_1, banking/injection_task_2, banking/injection_task_3,
+                 banking/injection_task_8, slack/injection_task_2, slack/injection_task_4, travel/injection_task_1,
+                 travel/injection_task_3, travel/injection_task_5, workspace/injection_task_3,
+                 workspace/injection_task_4, workspace/injection_task_5]
+        label: "injection task goal sends data to an attacker address"
+      # recurring payment redirected, all money or $30,000 sent, password changed, outside user invited into the
+      # workspace, cloud file or the sent mail deleted
+      - field: task
+        equals: [banking/injection_task_4, banking/injection_task_5, banking/injection_task_6, banking/injection_task_7,
+                 slack/injection_task_5, workspace/injection_task_1, workspace/injection_task_5]
+        label: "injection task goal deletes, transfers money or changes access"
+      - {field: attack_type, equals: none, label: "user task and clean tool output"}
   - id: nemotron_ipi
     commercial: unknown
     pending: recipe not written yet
   - id: agent_safetybench
-    commercial: unknown
+    commercial: true
     pending: recipe not written yet
   - id: redcode
-    commercial: unknown
+    commercial: true
     pending: recipe not written yet
   - id: wildjailbreak
     commercial: true
@@ -317,8 +580,8 @@ datasets:
     commercial: true
     pending: recipe not written yet
   - id: approve_or_deny_de
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: recipe not written yet (German rows machine-generated, marked translated)
   - id: ailuminate_demo
     commercial: true
     source: https://github.com/mlcommons/ailuminate

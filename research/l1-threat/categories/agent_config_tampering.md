@@ -234,3 +234,25 @@ p50 39,8 → 39,4 ms, p95 62,5 → 56,1 ms; Default + AC p50 43,1 → 45,0 ms, p
 44,4 ms, p95 82,0 → 69,0 ms; Default + AC p50 57,5 → 59,2 ms, p95 76,9 → 81,3 ms (Rauschen; der Head
 meldet im Mix mehr Funde). Zusätzliche Arbeit: eine Alternative in einer schon kompilierten Regex
 und eine Zeilenprüfung nur bei Gegenkontext in der Lead-in-Klausel.
+
+## 15. Stand T10 (2026-11-17): Ablation mit nativen Dev-Zeilen (AgentDojo)
+
+**`B0` bleibt**, unverändert gegenüber AC02; die Entscheidung ist auf nativen Positiven weiter nicht prüfbar.
+AgentDojo (MIT, seit Korpus-Generation 10 im Dev-Split) enthält Angriffe in Tool-**Ausgaben**, keine
+vergifteten Tool-Beschreibungen und keine Agent-Konfigurationen; native Positive dieser Klasse gibt es auf Dev
+weiterhin nicht (MCPTox bleibt Holdout). Was die nativen Zeilen hier zeigen, sind Negative: auf den 132 sauberen
+AgentDojo-Tool-Ausgaben und den 135 Angriffszeilen anderer Klassen meldet ARK keine `agent_config_tampering`-Zeile.
+
+Daten: Training auf der Hälfte A (sha256 der Zeilen-ID) aller Dev-Zeilen ohne AgentDojo (Generator-Vorlagen
+plus Benign-Zeilen von `train_dev`, `generated`, `report`; Dolly und GermanQuAD je ein Viertel, wie EX02/UA02
+§14), 8 007 Zeilen. Zwei Auswertungen auf derselben Hälfte B der Benign-Zeilen (7 788 Negative, davon 912
+Hard-Benign): **Vorlagen** = Positive der Hälfte B aus den Generatoren; **nativ** = alle AgentDojo-Zeilen
+(63 `exfiltration`-, 30 `unsafe_action`-Positive, nur EN; 132 saubere Tool-Ausgaben als zusätzliche Negative).
+Gelernte Stufen sehen keine AgentDojo-Zeile. Facts über `text_facts --threat-findings`, B0 aus
+`scoreboard._predict_file` mit dem gebauten Modul (Release), Latenz auf 6 × 100 KiB GermanQuAD-Dev-Text.
+
+Vorlagen (Hälfte B, unverändert zu AC02): R, R+A, **B0**, R+A+L, B1, B4, B5 je 100 % TPR@1 %; Hard-Benign-FPR
+R/R+A/B0 0,0, R+A+L 4,8, B1 6,1, B4 8,3, B5 2,2; B1/B4/B5 26,7–32,0 ms je 100 KiB (über dem Budget). Auswahl: `B0`.
+Native Auswertung: keine Positiven, keine Zeile. Lizenzgeprüft und ohne Rezept: Agent-SafetyBench (MIT;
+Tool-Umgebungen mit Risikofällen) — Folgeaufgabe **T15** prüft, ob deren Fälle Tool-Beschreibungen oder
+Konfigurationen dieser Klasse tragen.
