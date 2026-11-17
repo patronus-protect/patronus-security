@@ -99,6 +99,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   body with all the messages"). A received security code sent to a mail address counts as a data
   source of a send directive. A payment with an invoice reference, a newsletter post, a mail of
   the user's own notes and messages posted to the user's own wiki ("in unser Wiki") stay benign.
+- **Detection change:** (`exfiltration`) an address after "from" ("von", "aus") in a send directive
+  is where the data comes from: "send the security code received from security@… to my address
+  anna@…" ("Sende den Sicherheitscode von sicherheit@… an meine Adresse …") is a transfer to the
+  user and stays silent, while a foreign recipient after the sender is still reported.
 - **Detection change:** (`agent_config_tampering`, opt-in) the category now has its own L1 rules
   for agent instruction and configuration files in German and English: rules files (`AGENTS.md`,
   `CLAUDE.md`, `.cursorrules`), skills, agent settings and `mcp.json`. They report settings that
