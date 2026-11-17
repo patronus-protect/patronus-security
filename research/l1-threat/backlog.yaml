@@ -314,6 +314,7 @@ tasks:
   # (IJ01, JB01, PX01, TX01, HC01) waits on them; the runner unblocks nothing itself, the owner
   # unblocks a family once gold.md shows its class as go.
   - id: T20
+    status: done
     title: Dev gold re-review after the generation-10 re-freeze — gold.py dev review of every dev set whose rows changed since the last gold-dev.json (at least the regenerated generated/carrier_insertion and generated/obfuscation_slices, which block instruction_injection, jailbreak and prompt_extraction at 5.8%), then re-render gold.md from gold-dev.json, the committed counts-only research/l1-threat/scoreboard/gold-holdout.json and gold-leakage.json
     type: eval-infra
     deps: [M07]
