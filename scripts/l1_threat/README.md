@@ -96,7 +96,8 @@ Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 
 [`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
 Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
-`parquet` mit UTF-8- und einfachen Ganzzahl-Spalten), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
+`parquet` mit UTF-8- und einfachen Ganzzahl-Spalten, `agentdojo_trace`: ein AgentDojo-Lauf je Datei, Zeilen sind die
+Tool-Ausgaben mit der Payload samt höchstens 300 Zeichen Träger je Seite bzw. ohne Angriff jede Tool-Ausgabe), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
 → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
 wenn der Regex `pattern` ohne Groß-/Kleinschreibung im Text trifft; `reason` nennt den Grund, das Manifest zählt
 die übrigen unter `dropped.no_cue`), optional `dedup_against` (andere `train_dev`- oder `report`-Sätze: eine Zeile,

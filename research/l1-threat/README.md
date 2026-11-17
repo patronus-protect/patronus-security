@@ -514,6 +514,21 @@ im Scoreboard zum Hard-Benign-Pool (`HARD_BENIGN_SETS`). Gegen jackhhao dedupliz
 WildGuardMix bleibt `pending`: Upstream ist gegated, eine ungegatete Kopie mit den Originalzeilen und klarer Lizenz
 fehlt (Login-Token für den Gate-Abruf oder eine Owner-Kopie im Quell-Cache nötig).
 
+**Native Dev-Zeilen der Agenten-Klassen (T10, 2026-11-17).** AgentDojo (MIT) kommt als `train_dev`-Rezept aus
+den Lauf-Traces des Repos (`runs/`, Pipeline `gpt-4o-2024-05-13`, Suites v1 banking/slack/travel/workspace, Commit
+gepinnt, 232 Dateien mit SHA-256): je Suite, Injection-Task und Angriffs-Vorlage (`direct`, `ignore_previous`,
+`important_instructions`, `injecagent`, `tool_knowledge`) ein Trace, User-Tasks reihum verteilt, dazu alle Läufe
+ohne Angriff. Format `agentdojo_trace`: eine Zeile ist die Payload so, wie sie in der Tool-Ausgabe steht (YAML-
+Faltung, verdoppelte Quotes, Repr-Escapes; gefunden über ihre Buchstaben und Ziffern), mit höchstens 300 Zeichen
+ganzer Zeilen ihres Trägers je Seite; die volle Ausgabe machte Angriffszeilen zu MinHash-Duplikaten der sauberen
+Ausgabe desselben User-Tasks. Jede Angriffszeile ist `instruction_injection`; nach dem Ziel des Injection-Tasks
+zusätzlich `exfiltration` (Daten an Angreifer-IBAN, -Adresse oder -Website) oder `unsafe_action` (Geld bewegt,
+Passwort geändert, Fremde eingeladen, Dateien gelöscht). Nach Deduplikation 135 Angriffszeilen (63
+`exfiltration`, 30 `unsafe_action`) und 132 saubere Tool-Ausgaben als Benign, nur EN; `generation: 10`.
+Lizenzprüfung der übrigen Kandidaten: BIPIA (Code und Angriffstexte MIT, Kontexte gemischt), RedCode (MIT),
+Agent-SafetyBench (MIT), approve-or-deny (Apache-2.0, deutsche Zeilen maschinell erzeugt); Rezepte in T15. Die
+Ablationen von TP02/AC02/EX02/UA02 auf den nativen Zeilen stehen in §15 der Kategorie-Dokumente.
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |

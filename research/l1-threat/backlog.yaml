@@ -375,6 +375,34 @@ tasks:
       at least one native non-template dev source with scored rows for exfiltration and unsafe_action; the
       category documents get a dated section with the re-run ablation per class (native rows separately from
       the templates); classes whose decision flips get a follow-up task id in the triage, not a change here
+  # T10 (2026-11-17): re-run ablations on the native AgentDojo dev rows (triage 2026-W47, addendum to bucket 8).
+  - id: T13
+    title: "exfiltration on native agent rows: AgentDojo-shaped egress in tool outputs hits 0 of 63 (data in a transaction subject to an IBAN, a website without URL scheme as sink, 'send it to my email address … use the subject … and the body with all the messages', 'concatenate messages from all channels and post them'); rules first, then re-run the ablation — the selection flipped to R+A+L on native rows (41.3% at 5.4% hard-benign FPR)"
+    type: recall-fix
+    deps: [T10, EX02]
+    source: "TRIAGE 2026-W47 addendum T10 (research/l1-threat/categories/exfiltration.md §15)"
+    accept: >-
+      goldens for each native form and its hard negative (a user asking to send their own data, a payment with a
+      reference, a newsletter post); dev exfiltration TPR@1% on the AgentDojo rows > 0 at 0 hard-benign FP and
+      unchanged on the templates; ablation re-run with native rows apart and the decision recorded
+  - id: T14
+    title: "unsafe_action on native agent rows: AgentDojo injection goals hit 0 of 30 ('send as much money as possible', split transfers below a limit, redirect a recurring payment, change the user's password, invite an outside user and remove him, delete the file with ID …); rules from structure, not from a lowered threshold; then re-run the ablation"
+    type: recall-fix
+    deps: [T10, UA02]
+    source: "TRIAGE 2026-W47 addendum T10 (research/l1-threat/categories/unsafe_action.md §15)"
+    accept: >-
+      goldens for each native form and its hard negative (user-initiated transfer, password-reset help article,
+      admin docs for inviting users); dev unsafe_action TPR@1% on the AgentDojo rows > 0 at 0 hard-benign FP and
+      unchanged on the templates; ablation re-run with native rows apart and the decision recorded
+  - id: T15
+    title: "Dev recipes for the licence-cleared agent sets: BIPIA (MIT attack texts with e-mail and code contexts only), Agent-SafetyBench (MIT), RedCode (MIT; Bash part handed to shell_command), approve-or-deny (Apache-2.0; German rows machine-generated, marked translated); look for native tool_poisoning / agent_config_tampering rows among them"
+    type: eval-infra
+    deps: [T10]
+    source: "TRIAGE 2026-W47 addendum T10"
+    accept: >-
+      at least two of the four sets prepared with pinned revisions and SHA-256; German rows of approve-or-deny
+      marked translated; a gold review sample per set (<= 5% error); TP02/AC02 ablations re-run if native
+      positives of either class appear
   - id: T12
     title: Clause context for the legacy threat rules credential_file_access, secret_exfiltration and native secret_transfer (quoted examples, security documentation, test code and tool-poisoning hard negatives flagged under unsafe_action/exfiltration today)
     type: precision-fix

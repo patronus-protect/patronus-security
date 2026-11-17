@@ -268,8 +268,8 @@ datasets:
     commercial: unknown
     pending: recipe not written yet
   - id: bipia
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: recipe not written yet (MIT attack texts with the e-mail and code contexts only; see entity_map.yaml)
   - id: agentdojo
     commercial: true
     # Run traces of the v1 suites (gpt-4o-2024-05-13 pipeline; MIT like the repository): per suite, injection
@@ -537,10 +537,10 @@ datasets:
     commercial: unknown
     pending: recipe not written yet
   - id: agent_safetybench
-    commercial: unknown
+    commercial: true
     pending: recipe not written yet
   - id: redcode
-    commercial: unknown
+    commercial: true
     pending: recipe not written yet
   - id: wildjailbreak
     commercial: true
@@ -580,8 +580,8 @@ datasets:
     commercial: true
     pending: recipe not written yet
   - id: approve_or_deny_de
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: recipe not written yet (German rows machine-generated, marked translated)
   - id: ailuminate_demo
     commercial: true
     source: https://github.com/mlcommons/ailuminate
