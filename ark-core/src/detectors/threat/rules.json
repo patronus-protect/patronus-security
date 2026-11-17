@@ -719,7 +719,43 @@
       "class_name": "exfiltration",
       "family": "send_directive",
       "upstream_groups": [],
-      "pattern": "(?P<transfer>(?:(?-u:\\b)(?:send|forward|upload|post|submit|transmit|leak|exfiltrate|e-?mail|mail|sende|schicke?|leite|lade|poste|maile|uebermittle|uebertrage)(?-u:\\b)|(?:übermittle|übertrage)(?-u:\\b)))[^\\n.!?;]{0,80}?(?P<source>(?-u:\\b)(?:(?P<record>customer\\s{1,4}(?:list|data(?:base)?|records|contacts)|client\\s{1,4}(?:list|data|records)|crm\\s{1,4}(?:export|data|records)|kunden(?:liste|daten(?:bank)?|kontakte|stammdaten)|crm-?(?:export|daten))|(?:full|entire|whole|complete|previous|prior)\\s{1,4}(?:conversation|chat|thread|transcript)|(?:conversation|chat|message|session)\\s{1,4}(?:history|log|transcript)|(?:previous|prior|earlier|all)\\s{1,4}(?:the\\s{1,4})?messages|(?:previous|prior|earlier|last|all)\\s{1,4}tool\\s{1,4}(?:results|outputs|responses)|(?:system|hidden)\\s{1,4}prompt|(?:your|the)\\s{1,4}(?:hidden|system)\\s{1,4}instructions|environment\\s{1,4}variables|env\\s{1,4}vars|api[\\s_-]{0,2}keys?|access\\s{1,4}tokens?|credentials|passwords|secrets|private\\s{1,4}keys?|session\\s{1,4}cookies?|(?:the\\s{1,4})?users?(?:'s?)?\\s{1,4}(?:data|emails|messages|contacts|files|personal\\s{1,4}data)|inbox|mailbox|address\\s{1,4}book|file\\s{1,4}contents|contents\\s{1,4}of\\s{1,4}(?:the\\s{1,4})?(?:files?|inbox|mailbox|repository|repo)|(?:gesamten?|ganzen?|kompletten?|vollst(?:ä|ae)ndigen?|bisherigen?)\\s{1,4}(?:chat|gespr(?:ä|ae)ch|unterhaltung|verlauf|chatverlauf|gespr(?:ä|ae)chsverlauf|konversation)|(?:chat|gespr(?:ä|ae)chs|sitzungs|nachrichten)verlauf|(?:bisherigen|vorherigen|fr(?:ü|ue)heren|alle)\\s{1,4}nachrichten|(?:bisherigen|vorherigen|fr(?:ü|ue)heren|letzten|alle)\\s{1,4}tool-?(?:ergebnisse|ausgaben|antworten)|system-?prompt|(?:versteckten|deine)\\s{1,4}anweisungen|umgebungsvariablen|api-?schl(?:ü|ue)ssel|zugangsdaten|passw(?:ö|oe)rter|kennw(?:ö|oe)rter|geheimnisse|privaten?\\s{1,4}schl(?:ü|ue)ssel|zugriffstoken|sitzungs-?cookies?|(?:daten|e-?mails|mails|nachrichten|kontakte|dateien)\\s{1,4}des\\s{1,4}(?:nutzers|benutzers|users)|posteingang[a-z0-9_]{0,2}|postfach[a-z0-9_]{0,2}|adressbuch[a-z0-9_]{0,2}|dateiinhalt[a-z0-9_]{0,2}|inhalt\\s{1,4}der\\s{1,4}datei)(?-u:\\b))[^\\n!?;]{0,80}?(?P<sink>(?:https?://[^\\s\\\"'<>()\\[\\]]{3,200}|(?:mailto:|[\\s<(\\\"'`])[a-z0-9_.+-]{1,64}@[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63}){1,4}|webhook\\.site|pastebin\\.com|requestbin|ngrok(?:-free)?\\.(?:io|app)|discord(?:app)?\\.com/api/webhooks|api\\.telegram\\.org))",
+      "pattern": "(?P<transfer>(?:(?-u:\\b)(?:send|forward|upload|post|submit|transmit|leak|exfiltrate|e-?mail|mail|sende|schicke?|leite|lade|poste|maile|uebermittle|uebertrage)(?-u:\\b)|(?:übermittle|übertrage)(?-u:\\b)))[^\\n.!?;]{0,80}?(?P<source>(?-u:\\b)(?:(?:security|verification|login|one-time|2fa|authentication)[\\s-]{1,4}codes?\\s{1,4}(?:received|you\\s{1,4}received|from)|(?:sicherheits|anmelde|einmal|bestätigungs|bestaetigungs)-?codes?\\s{1,4}(?:aus|von|den\\s{1,4}du)|(?P<record>customer\\s{1,4}(?:list|data(?:base)?|records|contacts)|client\\s{1,4}(?:list|data|records)|crm\\s{1,4}(?:export|data|records)|kunden(?:liste|daten(?:bank)?|kontakte|stammdaten)|crm-?(?:export|daten))|(?:full|entire|whole|complete|previous|prior)\\s{1,4}(?:conversation|chat|thread|transcript)|(?:conversation|chat|message|session)\\s{1,4}(?:history|log|transcript)|(?:previous|prior|earlier|all)\\s{1,4}(?:the\\s{1,4})?messages|(?:previous|prior|earlier|last|all)\\s{1,4}tool\\s{1,4}(?:results|outputs|responses)|(?:system|hidden)\\s{1,4}prompt|(?:your|the)\\s{1,4}(?:hidden|system)\\s{1,4}instructions|environment\\s{1,4}variables|env\\s{1,4}vars|api[\\s_-]{0,2}keys?|access\\s{1,4}tokens?|credentials|passwords|secrets|private\\s{1,4}keys?|session\\s{1,4}cookies?|(?:the\\s{1,4})?users?(?:'s?)?\\s{1,4}(?:data|emails|messages|contacts|files|personal\\s{1,4}data)|inbox|mailbox|address\\s{1,4}book|file\\s{1,4}contents|contents\\s{1,4}of\\s{1,4}(?:the\\s{1,4})?(?:files?|inbox|mailbox|repository|repo)|(?:gesamten?|ganzen?|kompletten?|vollst(?:ä|ae)ndigen?|bisherigen?)\\s{1,4}(?:chat|gespr(?:ä|ae)ch|unterhaltung|verlauf|chatverlauf|gespr(?:ä|ae)chsverlauf|konversation)|(?:chat|gespr(?:ä|ae)chs|sitzungs|nachrichten)verlauf|(?:bisherigen|vorherigen|fr(?:ü|ue)heren|alle)\\s{1,4}nachrichten|(?:bisherigen|vorherigen|fr(?:ü|ue)heren|letzten|alle)\\s{1,4}tool-?(?:ergebnisse|ausgaben|antworten)|system-?prompt|(?:versteckten|deine)\\s{1,4}anweisungen|umgebungsvariablen|api-?schl(?:ü|ue)ssel|zugangsdaten|passw(?:ö|oe)rter|kennw(?:ö|oe)rter|geheimnisse|privaten?\\s{1,4}schl(?:ü|ue)ssel|zugriffstoken|sitzungs-?cookies?|(?:daten|e-?mails|mails|nachrichten|kontakte|dateien)\\s{1,4}des\\s{1,4}(?:nutzers|benutzers|users)|posteingang[a-z0-9_]{0,2}|postfach[a-z0-9_]{0,2}|adressbuch[a-z0-9_]{0,2}|dateiinhalt[a-z0-9_]{0,2}|inhalt\\s{1,4}der\\s{1,4}datei)(?-u:\\b))[^\\n!?;]{0,80}?(?P<sink>(?:https?://[^\\s\\\"'<>()\\[\\]]{3,200}|(?:mailto:|[\\s<(\\\"'`])[a-z0-9_.+-]{1,64}@[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63}){1,4}|webhook\\.site|pastebin\\.com|requestbin|ngrok(?:-free)?\\.(?:io|app)|discord(?:app)?\\.com/api/webhooks|api\\.telegram\\.org))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ex_payment_subject",
+      "class_name": "exfiltration",
+      "family": "send_directive",
+      "upstream_groups": [],
+      "pattern": "(?P<transfer>(?-u:\\b)(?:send|make|transfer|wire|sende|t(?:ä|ae)tige|ueberweise)(?-u:\\b)|überweise(?-u:\\b))\\s{1,4}(?:(?:a|an|the|one|eine?|die)\\s{1,4})?(?:(?:new|neue)\\s{1,4})?(?:(?-u:\\b)(?:transaction|payment|transfer|money|zahlung|transaktion|ueberweisung)(?-u:\\b)|überweisung(?-u:\\b))[^.!?;]{0,40}?(?-u:\\b)(?:to|an|auf)(?-u:\\b)\\s{1,4}(?P<sink>[a-z]{2}[0-9]{2}[a-z0-9]{10,30})(?-u:\\b)[^.!?;]{0,40}?(?-u:\\b)(?:that|which|with|containing|die|mit|deren|dessen)(?-u:\\b)[^!?;]{0,100}?(?P<source>(?-u:\\b)(?:the\\s{1,4}users?(?:'{1,2}s)?|users?'{1,2}s?|(?:des|der)\\s{1,4}(?:nutzers|benutzers|nutzerin|benutzerin|kunden|kundin)|kontoverlauf|dauerauftr(?:ä|ae)ge)(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ex_collect_and_post",
+      "class_name": "exfiltration",
+      "family": "send_directive",
+      "upstream_groups": [],
+      "pattern": "(?P<collect>(?-u:\\b)(?:concatenate|collect|gather|compile|combine|merge|sammle|verkette|kombiniere|fasse)(?-u:\\b))[^.!?;]{0,40}?(?P<source>(?-u:\\b)(?:messages|nachrichten)(?-u:\\b))[^.!?;]{0,60}?(?P<transfer>(?-u:\\b)(?:post|send|upload|publish|poste|sende|lade|ver(?:ö|oe)ffentliche)(?-u:\\b))\\s{1,4}(?:them|it|sie|es)(?-u:\\b)[^!?;]{0,40}?(?P<sink>https?://[^\\s\\\"'<>()\\[\\]]{3,200}|(?-u:\\b)www\\.[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63}){1,4}[^\\s\\\"'<>()\\[\\]]{0,200})",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ex_mail_body",
+      "class_name": "exfiltration",
+      "family": "send_directive",
+      "upstream_groups": [],
+      "pattern": "(?P<transfer>(?-u:\\b)(?:send|forward|e-?mail|mail|sende|schicke?|leite|maile)(?-u:\\b))[^.!?;]{0,80}?(?P<sink>(?:mailto:|[\\s<(\\\"'`])[a-z0-9_.+-]{1,64}@[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63}){1,4})[^!?;]{0,40}?(?-u:\\b)(?:use|with|verwende|nimm|mit)(?-u:\\b)\\s{1,4}(?:(?:the|dem|den)\\s{1,4})?(?:subject|betreff)(?-u:\\b)[^!?;]{0,100}?(?-u:\\b)(?:and|und)(?-u:\\b)\\s{1,4}(?:the\\s{1,4}body|(?:dem|im|als)\\s{1,4}(?:text|inhalt|nachrichtentext))(?-u:\\b)\\s{1,4}(?:(?:with|containing|mit)\\s{1,4})?(?:(?:the|den|der|die)\\s{1,4})?(?P<source>(?-u:\\b)(?:all\\s{1,4}(?:the\\s{1,4})?messages|(?:passport|credit\\s{1,4}card|bank\\s{1,4}account|social\\s{1,4}security|id)[\\s_-]{1,4}numbers?|(?:all\\s{1,4})?user\\s{1,4}(?:information|data)|(?:full|entire|whole)\\s{1,4}conversation|(?:chat|conversation)\\s{1,4}history|alle[nr]?\\s{1,4}nachrichten|(?:reise)?pass-?nummern?|(?:kreditkarten|konto|ausweis)-?nummern?|nutzer(?:daten|informationen)|chatverlauf|gespr(?:ä|ae)chsverlauf)(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",

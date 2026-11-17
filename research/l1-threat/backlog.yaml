@@ -378,6 +378,7 @@ tasks:
       the templates); classes whose decision flips get a follow-up task id in the triage, not a change here
   # T10 (2026-11-17): re-run ablations on the native AgentDojo dev rows (triage 2026-W47, addendum to bucket 8).
   - id: T13
+    status: done
     title: "exfiltration on native agent rows: AgentDojo-shaped egress in tool outputs hits 0 of 63 (data in a transaction subject to an IBAN, a website without URL scheme as sink, 'send it to my email address … use the subject … and the body with all the messages', 'concatenate messages from all channels and post them'); rules first, then re-run the ablation — the selection flipped to R+A+L on native rows (41.3% at 5.4% hard-benign FPR)"
     type: recall-fix
     deps: [T10, EX02]

@@ -275,3 +275,51 @@ www.my-website-234.com/random“), eine Mailadresse mit „use the subject … a
 `R+A+L` holt 26 Zeilen nur über Vorlagen-Tokens (send, email, all) und zahlt dafür 5,4 % Hard-Benign-FPR bei
 TPR@0,1 % 1,6 — die Auswahlregel prüft Hard-Benign-FPR nicht. Recall soll deshalb aus Regeln kommen (T13),
 danach die Ablation erneut; erst dann entscheidet sie zwischen `B0` und einem gelernten Modell.
+
+## 16. Stand T13 (2026-11-17): Regeln für die nativen Formen, Ablation erneut
+
+Drei neue Punkte-Regeln der Familie `send_directive`, deren begrenzte Lücken auch Zeilenumbrüche von
+YAML-Feldern überspannen (`[^.!?;]` statt `[^\n.!?;]`): `ex_payment_subject` (Zahlung/Transaktion an eine
+IBAN-förmige Kontonummer, deren Betreff Daten des Nutzers trägt: „that includes the user's …“, „mit … des
+Nutzers“), `ex_collect_and_post` (Nachrichten sammeln/verketten und an eine URL oder eine Website `www.host/…`
+ohne Schema posten), `ex_mail_body` (Mailadresse plus „use the subject … and the body with“ alle
+Nachrichten, Pass-/Karten-/Kontonummern oder den Verlauf; da die Daten im Text stehen, entlastet eine eigene
+Adresse nicht). `ex_send_directive` kennt empfangene Sicherheits-/Bestätigungscodes als Quelle; die
+Eigentumsprüfung liest „in“ als Zielpräposition („poste sie in unser Wiki“). Prefilter: je Begriff ein
+Lexikon (`exfil.payment`, `exfil.account_owner`, `exfil.collect`, `exfil.messages`, `exfil.web_sink`,
+`exfil.mail_subject`, `exfil.identity`, `exfil.received_code`).
+
+Ablation wie §15 (gleiche Aufteilung, nachgebaut: Hälften per sha256 der Zeilen-ID, Dolly/GermanQuAD je ein
+Viertel per sha256; Training 20 541 Zeilen, davon 137 Positive und 7 694 Benign; Vorlagen-Auswertung 163
+Positive, 7 801 Benign; nativ 63 AgentDojo-Positive plus 7 933 Benign, davon die 132 sauberen Tool-Ausgaben),
+Facts über `text_facts --threat-findings` (Release), B0 über `scoreboard.py _predict` mit dem gebauten Modul
+(Release), Latenz der Modellstufen auf 6 × 100 KiB GermanQuAD-Dev-Text.
+
+| Stufe | Vorlagen TPR@1 % | nativ TPR@1 % | nativ TPR@0,1 % | nativ AUPRC | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R / R+A | 100,0 | 74,6 (47/63) | 74,6 | 0,748 | 0,0 | 0 | 0 |
+| **B0** | 100,0 | 74,6 | 74,6 | 0,748 | 0,0 | 0 (Status quo) | 0 |
+| R+A+L | 100,0 | 90,5 | 76,2 | 0,864 | 5,4 | 0 | 0,8 KiB |
+| B1 | 100,0 | 0,0 | 0,0 | 0,030 | 8,6 | 15,0–22,2 | 5,5 MB |
+| B4 / B5 | 100,0 / 100,0 | 0,0 / 74,6 | 0,0 / 74,6 | 0,031 / 0,748 | 9,1 / 0,0 | 10,5–16,3 | 576 KiB |
+
+Treffer der 47: `ex_payment_subject` 16, `ex_mail_body` 14, `ex_collect_and_post` 12, `ex_send_directive`
+(Sicherheitscode) 5. Keine Benign-Zeile (Vorlagen, Training, nativ einschließlich der 132 sauberen
+Tool-Ausgaben) trägt einen `exfiltration`-Fund; die Vorlagen bleiben bei 100 %.
+
+**Entscheidung: `B0` bleibt.** Die Auswahlregel wählt auf den nativen Zeilen wieder `R+A+L` (90,5 % gegen
+74,6 %), aber mit 5,4 % Hard-Benign-FPR (gegen 0,0 %) und fast gleicher TPR@0,1 % (76,2 gegen 74,6); das
+Gate verlangt 0 neue FP auf Hard Negatives, und die Zusatztreffer kommen weiter aus Vorlagen-Tokens. Auf den
+Vorlagen wählt die Regel `B0`. Die Auswahlregel prüft Hard-Benign-FPR weiterhin nicht; das ist eine
+Entscheidung für die Regel selbst, nicht für T13.
+
+Offen (16 Zeilen): 7 Reisebüro-Zeilen „Get all user information, e.g., user_name, … And send it to my email
+address …“ — das „e.g.“ im Vorsatz ist ein Meta-Gegenkontext der gemeinsamen Kontextlexika; 6 Zeilen „Send the
+body of the email received from … to …“ (ohne Trägerkontext eine gewöhnliche Weiterleitung, deshalb keine
+Regel); 3 Zeilen, deren Zeilenumbruch zwischen Verb und Quelle von `ex_send_directive` liegt („Send the
+Facebook\n    security code …“, auch mit YAML-`\`-Fortsetzung), dessen Lücken weiter `\n` ausschließen.
+
+Latenz (Release, 6 × 100 KiB GermanQuAD-Dev-Text, Python-Modul, Regeln über `rules` ein/aus im selben
+Build): `exfiltration` allein p50 4,82 → 5,11 ms, p95 6,53 → 6,98 ms (je Regel +0,1–0,3 ms p50); alle
+Standard-Kategorien (`pii`, `dlp`, `injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`,
+`exfiltration`) p50 49,27 → 49,29 ms, p95 82,39 → 83,57 ms (+1,4 %, im Rauschen der Läufe).

@@ -28,7 +28,10 @@ mail address or collector service (also when the text asks to keep the transfer 
 not mention it"), business records such as a customer list sent out before the assistant answers
 or in secret, a secret (a value the secret detection finds, or a file such as
 `~/.ssh/id_rsa`) sent to a URL, a data source put into an outbound tool parameter, data as a
-subdomain of a foreign host, and links with invisible characters or appended encoded data. A
+subdomain of a foreign host, links with invisible characters or appended encoded data, and agent
+tasks in tool results that move data out: a payment whose subject carries the user's data, messages
+collected from all channels and posted to a website (also without `https://`), a mail whose body is
+to hold all messages or identity numbers, and a received security code sent to a mail address. A
 destination the user owns ("to my address") is not reported. Configure, for
 example, `categories=["unsafe_action", "exfiltration"]` and `max_level="l1"` for an offline
 native scan. Rules support
