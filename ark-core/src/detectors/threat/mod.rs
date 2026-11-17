@@ -1717,9 +1717,13 @@ mod tests {
             "-  \"defaultMode\": \"bypass",
             "+  \"defaultMode\": \"bypass",
         );
+        // The added line is also a write of the widening into the file.
         assert_eq!(
             points_rules(&detect_agent_config(&added)),
-            ["ark.threat.ac_permission_widening"]
+            [
+                "ark.threat.ac_permission_widening",
+                "ark.threat.ac_config_write"
+            ]
         );
         // A YAML list item outside a diff is a config line.
         assert!(!removed_diff_line("- a\n", 0));
@@ -1727,6 +1731,13 @@ mod tests {
 
     #[test]
     fn shell_and_patch_calls_that_widen_the_agent_config() {
+        let (_, rules) = catalog();
+        let rule = rules
+            .iter()
+            .find(|r| r.rule.id == "ark.threat.ac_config_write")
+            .unwrap();
+        // The agent config path literals gate the regex.
+        assert!(!rule.anchor_gate.is_unconditional());
         for text in [
             "tool: shell\nargs: sed -i 's/require_approval = true/require_approval = false/' ~/.config/ops_agent/config.toml",
             "tool: shell\nargs: {\"cmd\": [\"bash\", \"-c\", \"printf '\\\\n[sandbox]\\\\nenabled = false\\\\n' >> ~/.codex/config.toml\"]}",
