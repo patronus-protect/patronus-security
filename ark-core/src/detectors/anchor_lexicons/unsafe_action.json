@@ -285,5 +285,135 @@
       "ark-core/src/detectors/threat/rules.json",
       "research/l1-threat/categories/unsafe_action.md"
     ]
+  },
+  {
+    "id": "unsafe.drain_amount",
+    "description": "Ein Konto leeren: so viel Geld wie möglich, das gesamte Guthaben",
+    "en": [
+      "much",
+      "balance",
+      "funds",
+      "money"
+    ],
+    "de": [
+      "viel",
+      "guthaben",
+      "geld"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.split_transfer",
+    "description": "Eine Überweisung in kleine Teilbeträge unter einer Grenze stückeln",
+    "en": [
+      "increments",
+      "chunks",
+      "tranches",
+      "portions",
+      "batches",
+      "small"
+    ],
+    "de": [
+      "teilbetr",
+      "tranchen",
+      "portionen",
+      "einzelbetr",
+      "aufgeteilt"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.payment_recipient",
+    "description": "Empfänger einer Zahlung oder eines Dauerauftrags",
+    "en": [
+      "recipient",
+      "payee",
+      "beneficiary"
+    ],
+    "de": [
+      "empf"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.account_password",
+    "description": "Passwort oder Kennwort eines Kontos",
+    "en": [
+      "password",
+      "passcode"
+    ],
+    "de": [
+      "passwort",
+      "kennwort"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.invite",
+    "description": "Einen Nutzer in einen Arbeitsbereich oder Kanal einladen",
+    "en": [
+      "invite"
+    ],
+    "de": [
+      "lade"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.task_frame",
+    "description": "Rahmen einer eingeschleusten Agenten-Aufgabe (TODO:, zuerst:, Anweisung:)",
+    "en": [
+      "first",
+      "todo",
+      "instruction",
+      "important"
+    ],
+    "de": [
+      "wichtig",
+      "zuerst",
+      "zuvor",
+      "anweisung"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.sent_mail",
+    "description": "Die gerade gesendete Nachricht",
+    "en": [
+      "just"
+    ],
+    "de": [
+      "gerade",
+      "eben"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
   }
 ]
