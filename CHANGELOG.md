@@ -52,6 +52,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`agent_config_tampering`, opt-in) a new rule
+  (`ark.threat.ac_config_write`) reports a shell or patch call that writes a permission widening
+  into an agent's own configuration (`~/.codex/`, `.claude/`, or a `config.toml`/`settings.json`
+  in an agent directory): an in-place `sed -i` replacement that sets `require_approval` to false,
+  a `printf`/`echo` that appends `[sandbox] enabled = false` or `approval_policy = "never"` with
+  `>>` or `tee`, or an added line of a unified diff with `allow = ["shell"]` or
+  `bypassPermissions`. It needs no agent-config carrier, so it also reports such a call inside a
+  proposed tool call or an agent log. A call that switches a guard back on, a scoped allow entry
+  (`"shell(git status)"`), a diff that removes the widening, another program's configuration, and
+  a request or tutorial that only shows the setting stay benign.
 - **Detection change:** (`exfiltration`) the category has new L1 rules in German and English
   for inputs that try to move data out to a foreign destination: markdown images and links whose
   URL carries a placeholder for the conversation, a summary or credentials (`{chat_history}`,
