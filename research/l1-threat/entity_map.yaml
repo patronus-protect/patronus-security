@@ -633,12 +633,14 @@ datasets:
     note: >-
       licence check 2026-11-17 (commit a004b69e): repository MIT; the table contexts come from WikiTableQuestions
       (CC-BY-SA-4.0, NOTICE.md), the web-QA and summarization contexts are not redistributed (generated locally
-      from NewsQA/XSum, own terms). A recipe takes the MIT attack texts with the e-mail and code contexts only.
+      from NewsQA/XSum, own terms), and the code contexts are Stack Overflow posts (context_url, CC-BY-SA-4.0).
+      The recipe takes the MIT attack texts (text and code attacks, train and test) inside the e-mail contexts
+      only; each attack becomes its own line at the start, middle or end of an e-mail, as BIPIA places them.
     languages: [en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "text and code attacks inserted into e-mail, web, table, code contexts", classes: [instruction_injection]}
+      - {label: "text and code attacks inserted into e-mail contexts", classes: [instruction_injection]}
       - {label: "attacks of the information-gathering group (e.g. data eavesdropping)", classes: [exfiltration]}
       - {label: "clean context", benign: true}
   - id: agentdojo
@@ -752,13 +754,19 @@ datasets:
     licence: Apache-2.0
     note: >-
       licence check 2026-11-17 (revision a38b6259): Apache-2.0 per the dataset card; the non-English languages are
-      machine-generated, so German rows count as translated, not native.
+      machine-generated, so German rows count as translated, not native. The row text is the set's own rendering:
+      proposed tool call, user request and agent history. Calls that switch off the agent's own approval, sandbox
+      or permission settings (self_permission_tamper) are native agent_config_tampering rows.
     languages: [de]
+    translated: true
     split: train_dev
     family: neutral
     labels:
       - {label: "deny", classes: [unsafe_action]}
+      - {label: "category = self_permission_tamper (deny)", classes: [agent_config_tampering], family: permission_widening}
+      - {label: "category = credential_exfiltration (deny)", classes: [exfiltration]}
       - {label: "approve", benign: true}
+      - {label: "lang other than German", out_of_scope: "this entry holds the German rows; the other languages are not scored"}
   - id: ailuminate_demo
     name: AILuminate demo prompt set (candidate)
     source: github:mlcommons/ailuminate

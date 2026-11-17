@@ -90,9 +90,11 @@ READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
 LAYOUT = {"train_dev": ("dev", "train_dev"), "report": ("dev", "report"), "holdout": ("holdout", "holdout")}
-FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace")
+FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace", "bipia")
 # Carrier characters kept on each side of an AgentDojo payload (whole lines only).
 AGENTDOJO_CONTEXT = 300
+# E-mail characters kept on each side of a BIPIA attack (whole lines only).
+BIPIA_CONTEXT = 300
 SPLITS = entity_map.SPLITS
 INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
@@ -154,22 +156,40 @@ def _check_rule(where: str, rule: Any, labels: set[str]) -> list[str]:
     if not isinstance(rule, dict):
         return [f"{where}: label rule is not a mapping"]
     problems = []
-    unknown = set(rule) - {"field", "label", *RULE_OPS}
+    unknown = set(rule) - {"field", "label", "and", *RULE_OPS}
     if unknown:
         problems.append(f"{where}: unknown rule keys {sorted(unknown)}")
     if rule.get("label") not in labels:
         problems.append(f"{where}: label {rule.get('label')!r} is not a label of the set in entity_map.yaml")
+    if "and" in rule:
+        if not isinstance(rule["and"], list) or not rule["and"]:
+            problems.append(f"{where}: and must be a non-empty list of conditions")
+        else:
+            for index, condition in enumerate(rule["and"]):
+                if not isinstance(condition, dict) or set(condition) - {"field", *RULE_OPS}:
+                    problems.append(f"{where} and[{index}]: a condition holds only field and one of {RULE_OPS}")
+                elif "field" not in condition:
+                    problems.append(f"{where} and[{index}]: {[op for op in RULE_OPS if op in condition]} without field")
+                else:
+                    problems.extend(_check_condition(f"{where} and[{index}]", condition))
     ops = [op for op in RULE_OPS if op in rule]
     if "field" in rule:
-        if not isinstance(rule["field"], str) or not ops:
-            problems.append(f"{where}: a rule with field needs a string field and one of {RULE_OPS}")
-        if "equals" in rule and len(ops) > 1:
-            problems.append(f"{where}: equals cannot be combined with at_least/below")
-        for op in ("at_least", "below"):
-            if op in rule and (isinstance(rule[op], bool) or not isinstance(rule[op], (int, float))):
-                problems.append(f"{where}: {op} must be a number")
+        problems.extend(_check_condition(where, rule))
     elif ops:
         problems.append(f"{where}: {ops} without field")
+    return problems
+
+
+def _check_condition(where: str, rule: dict[str, Any]) -> list[str]:
+    problems = []
+    ops = [op for op in RULE_OPS if op in rule]
+    if not isinstance(rule["field"], str) or not ops:
+        problems.append(f"{where}: a rule with field needs a string field and one of {RULE_OPS}")
+    if "equals" in rule and len(ops) > 1:
+        problems.append(f"{where}: equals cannot be combined with at_least/below")
+    for op in ("at_least", "below"):
+        if op in rule and (isinstance(rule[op], bool) or not isinstance(rule[op], (int, float))):
+            problems.append(f"{where}: {op} must be a number")
     return problems
 
 
@@ -323,6 +343,8 @@ def _text_value(value: Any) -> str:
 
 
 def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
+    if not all(rule_matches(condition, record) for condition in rule.get("and") or []):
+        return False
     if "field" not in rule:
         return True
     value = _field(record, rule["field"])
@@ -336,6 +358,18 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     except (TypeError, ValueError):
         return False
     return number >= rule.get("at_least", float("-inf")) and number < rule.get("below", float("inf"))
+
+
+def _cut_to_lines(before: str, after: str, limit: int) -> tuple[str, str]:
+    """``before`` and ``after`` cut to their last and first ``limit`` characters, at whole lines when cut
+    (at whole words when the kept part holds no line break)."""
+    if len(before) > limit:
+        before = before[-limit:]
+        before = before.partition("\n")[2] if "\n" in before else before.partition(" ")[2]
+    if len(after) > limit:
+        after = after[:limit]
+        after = after.rpartition("\n")[0] if "\n" in after else after.rpartition(" ")[0]
+    return before, after
 
 
 def _alnum_key(text: str) -> tuple[str, list[int]]:
@@ -374,17 +408,53 @@ def agentdojo_records(trace: dict[str, Any]) -> Iterable[dict[str, Any]]:
             if not spans:
                 continue
             start, end = min(spans)
-            before = text[max(0, start - AGENTDOJO_CONTEXT) : start]
-            after = text[end : end + AGENTDOJO_CONTEXT]
-            if start > AGENTDOJO_CONTEXT:
-                before = before.partition("\n")[2]
-            if end + AGENTDOJO_CONTEXT < len(text):
-                after = after.rpartition("\n")[0]
+            before, after = _cut_to_lines(text[:start], text[end:], AGENTDOJO_CONTEXT)
             text = before + text[start:end] + after
         yield {"text": text, "task": task, "attack_type": trace["attack_type"] or "none"}
 
 
+def bipia_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
+    """Records of BIPIA's e-mail task: every e-mail of the ``.jsonl`` context files unchanged
+    (``attack_set`` and ``category`` ``none``), then every attack of the ``*_attack_*.json`` files
+    (``{category: [attack, ...]}``; ``attack_set`` ``code`` or ``text`` by the file name) inserted into
+    e-mail ``i mod n`` as its own line at the start, in the middle or at the end (``i mod 3``, as BIPIA
+    places them), cut to whole lines within ``BIPIA_CONTEXT`` characters on each side so that rows of
+    one e-mail stay apart from each other and from the clean e-mail."""
+    emails = []
+    for path in paths:
+        if path.suffix == ".jsonl":
+            with path.open(encoding="utf-8") as handle:
+                emails += [json.loads(line)["context"] for line in handle if line.strip()]
+    yield from ({"text": email, "attack_set": "none", "category": "none"} for email in emails)
+    attacks = [
+        (path.name.split("_")[0], category, attack)
+        for path in paths
+        if path.suffix == ".json"
+        for category, texts in json.loads(path.read_text(encoding="utf-8")).items()
+        for attack in texts
+    ]
+    for index, (attack_set, category, attack) in enumerate(attacks):
+        email = emails[index % len(emails)]
+        position = index % 3
+        if position == 0:
+            split = 0
+        elif position == 2:
+            split = len(email)
+        else:
+            breaks = [i + 1 for i, char in enumerate(email) if char == "\n"] or [len(email) // 2]
+            split = min(breaks, key=lambda i: abs(i - len(email) // 2))
+        before, after = _cut_to_lines(email[:split], email[split:], BIPIA_CONTEXT)
+        if position == 2:
+            text = before + "\n" + attack
+        else:
+            text = before + attack + "\n" + after
+        yield {"text": text, "attack_set": attack_set, "category": category}
+
+
 def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
+    if entry["format"] == "bipia":
+        yield from bipia_records([root / item["path"] for item in entry["files"]])
+        return
     columns = sorted(
         {entry["text"].split(".")[0], *(rule["field"].split(".")[0] for rule in entry["labels"] if "field" in rule)}
         | ({entry["language_field"]} if "language_field" in entry else set())

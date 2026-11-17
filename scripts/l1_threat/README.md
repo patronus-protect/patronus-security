@@ -97,8 +97,11 @@ Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 [`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
 Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
 `parquet` mit UTF-8- und einfachen Ganzzahl-Spalten, `agentdojo_trace`: ein AgentDojo-Lauf je Datei, Zeilen sind die
-Tool-Ausgaben mit der Payload samt höchstens 300 Zeichen Träger je Seite bzw. ohne Angriff jede Tool-Ausgabe), Textfeld, Sprache und Label-Regeln (`field` + `equals`/`at_least`/`below`
-→ Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
+Tool-Ausgaben mit der Payload samt höchstens 300 Zeichen Träger je Seite bzw. ohne Angriff jede Tool-Ausgabe; `bipia`:
+BIPIA-E-Mails und Angriffsdateien zusammen, jede E-Mail ohne Angriff und jeder Angriff als eigene Zeile am Anfang, in
+der Mitte oder am Ende einer E-Mail mit höchstens 300 Zeichen ganzer Zeilen bzw. Wörter je Seite), Textfeld, Sprache und
+Label-Regeln (`field` + `equals`/`at_least`/`below`, optional `and` mit weiteren Bedingungen auf anderen Feldern, die alle
+gelten müssen → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
 wenn der Regex `pattern` ohne Groß-/Kleinschreibung im Text trifft; `reason` nennt den Grund, das Manifest zählt
 die übrigen unter `dropped.no_cue`), optional `dedup_against` (andere `train_dev`- oder `report`-Sätze: eine Zeile,
 die eine ihrer Zeilen dupliziert, fällt weg und zählt unter `dropped.cross_set`; für Sätze, die aus denselben
