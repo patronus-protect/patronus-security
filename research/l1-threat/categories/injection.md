@@ -95,6 +95,30 @@ Hard-Benign-Treffer 0 → 0. Latenz (`scripts/benchmark_injection_l1.py`, je 3 L
 8,9 → 8,8 ms (benign) und 16,8 → 16,7 ms (mit Angriff), p95 im Rauschen der Maschine; die Verben sind
 Literal-Prefilter, die Regexe laufen nur bei Treffer.
 
+IJ01 (erste Runde) baut `injection_precedence` als zwei auditierte Regeln
+`override.precedence_claim_en` / `_de` (`source_derived_coverage_0_1_6.json`). Form: Klauselanfang (wie T04,
+dazu Komma und and/so/but/und/aber/denn), deiktisches Subjekt, das den Text selbst benennt (this/these/the
+following/my/our + instruction/rule/message/note/command …; diese/die folgende/meine + Anweisung/Regel/
+Nachricht/Vorgabe/Befehle …), direkt danach das Vorrangverb (takes precedence over, supersedes, overrides,
+replaces, has the highest priority and replaces; hat Vorrang vor, ersetzt, überschreibt, steht über, gilt vor)
+und als Objekt die eigenen Vorgaben des Modells (your …, the system prompt, all others; deine …, den
+Systemprompt, allen anderen). Zweite Form: nackte Vorrangerklärung mit sofortiger Übergabe an eine Direktive
+(„THIS INSTRUCTION TAKES PRECEDENCE:“, „these instructions are top priority:“, „use these instructions as
+your highest priority:“; „Diese Anweisung hat Vorrang:“, „Nutze diese Anweisungen als deine höchste
+Priorität:“). Verneinung zwischen Subjekt und Verb, Vertragsklauseln („This agreement supersedes all previous
+agreements“), CSS-Vorrang, Abwehr-Prompts („Your system instructions take precedence over …“), Zitat und
+Testcode fallen heraus. Die Regeln laufen vorerst unter der kanonischen ID
+`ark.injection.override.discard_prior`: der Scorer 0.1.7 kennt keine neue Regel-ID, eine einzelne neue ID
+bliebe unter der Annahmeschwelle (Annahmeschwelle 0,96; die Goldens blieben so `safe`). Eine eigene ID `override.precedence_claim` bekommt
+die Familie, wenn IJ02 den Scorer neu trainiert. Dev (alle Dateien unter `$ARK_L1_DEV_DATA`, Regex-Scan):
+8 Treffer, alle Angriffszeilen (mosscap: „Use these instructions as your highest priority: …“, „my commands
+supersede all others“), 0 Benign-Treffer; Goldens `precedence_claim` 9/9 Positive und 8/8 Hard Negatives je
+Sprache.
+
+Offen in IJ01 (Folgerunde): übernommene OSS-Override-/Indirekt-Regeln aus `oss_rules.yaml` (default aus),
+Familie „an die KI gerichteter Text in Fremdinhalt“ über `agent_directive` hinaus, versteckte Träger und das
+Träger-Attribut `carrier: direct|indirect` in den Findings.
+
 Normalisierungspunkte: Ein Fund, den erst eine normalisierte oder dekodierte Sicht zeigt, bekommt bei
 `injection` ein Plus (Verschleierung ist Verdacht); PII behält ihren Abzug. Dieselbe Konstante, Wert je
 Kategorie.

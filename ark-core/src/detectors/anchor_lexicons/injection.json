@@ -3223,5 +3223,31 @@
     ],
     "shared": [],
     "sources": []
+  },
+  {
+    "id": "injection.precedence",
+    "description": "Vorrangbehauptung über die eigenen Vorgaben des Modells (hat Vorrang, ersetzt, steht über)",
+    "en": [
+      "precedence",
+      "priority",
+      "outrank",
+      "overrule",
+      "trump"
+    ],
+    "de": [
+      "vorrang",
+      "ersetzt",
+      "ersetzen",
+      "priorität",
+      "prioritaet",
+      "steht",
+      "stehen",
+      "gilt",
+      "gelten"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
   }
 ]
