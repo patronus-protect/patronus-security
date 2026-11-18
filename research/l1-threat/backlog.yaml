@@ -309,6 +309,41 @@ tasks:
       agent itself (no external MT), sample marked checked; cyberseceval_multilingual deduplicated against the
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
+  # Owner, 2026-11-18 (plan review): most detection moves into models; rule rounds stall on the semantic
+  # classes (IJ01 +0, JB01 +3.9 at dev TPR@1%). The gate reports the deciding metric TPR at 0.1% FPR first,
+  # the full-stack numbers come next, then the scorer candidates (incl. fastText-style) per class.
+  - id: E08
+    title: Scoreboard gate on the deciding metric — the gate summary, PR tables and the regression check report TPR at 0.1% FPR per class (and language) next to TPR at 1% FPR; the holdout verdict checks the 0.1% values too
+    type: eval-infra
+    deps: [E06]
+    accept: >-
+      `scoreboard.py gate` and `compare` print and check TPR@0.1% FPR (base -> head, CI) for every class;
+      a 0.1% regression beyond tolerance fails the gate like a 1% one; unit tests cover the new columns;
+      the runner's PR table shows both values
+  - id: S09
+    title: fastText-style scorer candidates in the S04 pipeline — supervised fastText-type models (word and char n-gram hashing embeddings, averaged, linear softmax per class; optional quantised) trained on train_dev only, Python reference + Rust inference with exact parity goldens, L1 budget measured
+    type: scorer
+    deps: [S04, E08]
+    accept: >-
+      candidate family available to every class's scorer task next to B0 / K26-like / hashed; model size and
+      ms per 100 KiB reported; DLP latency budget (100 KiB p95 <= 10 ms) holds for the shipped set; parity
+      goldens in CI; dev TPR@0.1% and @1% per class for the fastText-type candidate in the PR
+  - id: JB02
+    title: jailbreak scorer — choose among the S04 and S09 candidates (B0, K26-like, hashed, fastText-type) by dev TPR@0.1% FPR within the L1 budget; rules from JB01 stay as the precise layer
+    type: scorer
+    deps: [JB01, S05, S09]
+    accept: >-
+      target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
+      regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
+      reachable value
+  - id: PX02
+    title: prompt_extraction scorer — choose among the S04 and S09 candidates by dev TPR@0.1% FPR within the L1 budget; PX01 rules stay as the precise layer
+    type: scorer
+    deps: [PX01, S05, S09]
+    accept: >-
+      target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
+      regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
+      reachable value
   # Owner, 2026-11-18 (decision a): L1 stays the fast pre-filter (IJ02: no in-budget candidate reaches 80);
   # the injection gap is closed by the full stack. The deciding metric is TPR at 0.1% FPR.
   - id: E07
@@ -414,7 +449,6 @@ tasks:
       obfuscated too (today base64, hex, rot13, homoglyph, leetspeak, spaced: 0); decoded views scanned only
       behind their existing prefilter (no second full scan of clean text); 0 new benign FP; latency stated
   - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03]}
-  - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
   - id: T06
     status: done
     title: Native jailbreak dev source — recipes for wildjailbreak (ODC-BY; adversarial_harmful as jailbreak, adversarial_benign as hard negatives) and the adversarial part of wildguardmix, capped and deduplicated; gold review
@@ -426,7 +460,6 @@ tasks:
       the hard-benign pool of the scoreboard; per-set cap and licence in the manifest; gold.py review <= 5%
       error; gold.md updated; nothing committed except recipes and manifests
   - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01, T03, T06], status: done}
-  - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
   - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04, E06], status: done}
   - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05], status: done}
   - {id: AC01, title: "agent_config_tampering rules (skills, AGENTS.md/CLAUDE.md/.cursorrules, mcp.json, hooks: hidden directives, auto-approve/permission widening, fetch-and-run in skill text) incl. SkillSpector/ATR harvest", type: new-family, deps: [TP01], status: done}
