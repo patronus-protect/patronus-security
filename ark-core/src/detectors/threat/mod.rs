@@ -394,9 +394,9 @@ impl ThreatPipeline {
                             || (record && pre_answer_hook(window, m.start()))
                             || !unbounded.is_empty()
                             || (compiled.rule.id == "ark.threat.re_huge_output"
-                                && captures
-                                    .name("verb")
-                                    .is_some_and(|verb| sentence_initial(text, window_start + verb.start())));
+                                && captures.name("verb").is_some_and(|verb| {
+                                    sentence_initial(text, window_start + verb.start())
+                                }));
                         let accepted = score >= POINTS_ACCEPTANCE
                             && clause != Context::Counter
                             && (!(spec.requires_context || record)
