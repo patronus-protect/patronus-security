@@ -597,17 +597,7 @@
       "description": "Claims that this text takes precedence over, supersedes or replaces the model's own instructions",
       "adaptation": "EN clause-initial deictic subject (this/these/the following instruction, rule, message, note) directly followed by a precedence verb and the model's own instructions (your …, the system prompt, all others), or a bare priority grant (takes precedence:, use these instructions as your highest priority:) that hands over to a directive at once; negation between subject and verb, other subjects and objects without 'your' stay unmatched.",
       "pattern": "(?:^|[.!?;>\\n]\\s*|,\\s*|\\b(?:and|so|but|und|aber|denn)\\s+|\\b(?:assistant|assistants|ai|agent|agents|bot|chatbot|model|llm|system|note|notice|important|task|answer|reply|a|question|warning|ki|assistent|assistenten|agenten?|modell|hinweis|notiz|wichtig|achtung|aufgabe|antwort|frage|warnung)\\s*:\\s*|\\\"\\s*:\\s*\\\")(?:(?:(?:(?:this|these|my|our)\\s+(?:(?:new|updated|latest|following|current)\\s+)?|the\\s+(?:following|below|new|updated|latest)\\s+)(?P<io_subject>instructions?|rules?|messages?|directives?|notes?|text|requests?|tasks?|commands?|orders?|prompts?)(?:\\s+(?:below|here))?|the\\s+(?:instructions?|rules?|messages?|directives?|notes?|text|requests?|tasks?|commands?|orders?|prompts?)\\s+below)\\s+(?:(?:hereby|now|always|also)\\s+)?(?:(?P<io_precedence>(?:takes?|has|have)\\s+(?:(?:absolute|top|full|the\\s+highest|highest|the\\s+top)\\s+)?(?:precedence|priority)\\s+over|(?:has|have)\\s+(?:the\\s+)?(?:highest|top|absolute|maximum|first)\\s+priority\\s+and\\s+(?:supersedes?|overrides?|replaces?|overrules?)|supersedes?|overrides?|outranks?|replaces?|overrules?|trumps?|(?:is|are)\\s+more\\s+important\\s+than)\\s+(?:(?:(?:all|any|every|each)\\s+(?:of\\s+)?)?(?:your|the\\s+assistant's|the\\s+model's)\\s+(?:(?:previous|prior|earlier|original|initial|existing|current|other|own|system|safety|developer|default|old)\\s+){0,2}(?P<io_target>instructions?|guidelines?|rules?|directives?|system\\s+prompts?|prompts?|polic(?:y|ies)|programming|constraints?|restrictions?|system\\s+instructions?|configuration)|the\\s+system\\s+(?:prompt|instructions?|message)|(?:all|any)\\s+other\\s+(?:instructions|commands|directives|orders)|all\\s+others)\\b|(?P<io_priority_grant>(?:takes?|has|have)\\s+(?:absolute\\s+|top\\s+|full\\s+)?(?:precedence|priority)|(?:is|are)\\s+(?:(?:your|the|of\\s+the)\\s+)?(?:highest|top|absolute|maximum|first)\\s+priority)\\s*[:!])|(?P<io_priority_use>(?:use|treat|take|follow)\\s+(?:these|this|the\\s+following)\\s+(?:instructions?|rules?|commands?|directives?)\\s+as\\s+(?:your\\s+)?(?:new\\s+)?(?:highest|top|absolute|maximum|first)\\s+priority)\\s*[:!.])",
-      "required_literals_any": [
-        "precedence",
-        "priority",
-        "supersede",
-        "override",
-        "outrank",
-        "replace",
-        "overrule",
-        "trump",
-        "important"
-      ]
+      "required_pattern": "(?-u:preceden|priorit|supersed|overrid|outrank|replac|overrul|trump|importan)"
     },
     {
       "id": "ark.injection.override.precedence_claim_de",
@@ -622,18 +612,7 @@
       "description": "German: claims that this text has priority over, replaces or overrides the model's own instructions",
       "adaptation": "DE clause-initial deictic subject (diese/die folgende Anweisung, Regel, Nachricht, Notiz) directly followed by 'hat Vorrang vor', 'ersetzt', 'überschreibt', 'steht über' or 'gilt vor' and the model's own instructions (deine …, den Systemprompt, allen anderen), or a bare priority grant (hat Vorrang:, nutze diese Anweisungen als deine höchste Priorität:) that hands over to a directive at once.",
       "pattern": "(?:^|[.!?;>\\n]\\s*|,\\s*|\\b(?:and|so|but|und|aber|denn)\\s+|\\b(?:assistant|assistants|ai|agent|agents|bot|chatbot|model|llm|system|note|notice|important|task|answer|reply|a|question|warning|ki|assistent|assistenten|agenten?|modell|hinweis|notiz|wichtig|achtung|aufgabe|antwort|frage|warnung)\\s*:\\s*|\\\"\\s*:\\s*\\\")(?:(?:(?:diese|dieser|dieses|meine|unsere|folgende)\\s+(?:(?:neue|neuen|aktuelle|aktuellen|folgende|folgenden)\\s+)?|die\\s+(?:folgenden?|neuen?|nachstehenden?|aktuellen?)\\s+)(?P<io_subject>anweisung(?:en)?|regel(?:n)?|nachricht(?:en)?|vorgabe(?:n)?|aufgabe(?:n)?|notiz(?:en)?|direktive(?:n)?|befehle?|text|hinweise?|instruktion(?:en)?)\\s+(?:(?:ab\\s+sofort|jetzt|immer|nun)\\s+)?(?:(?P<io_precedence>(?:hat|haben)\\s+(?:(?:ab\\s+sofort|jetzt|immer|nun)\\s+)?(?:(?:absoluten|obersten|unbedingten)\\s+)?vorrang\\s+vor|(?:hat|haben)\\s+(?:die\\s+)?(?:höchste|hoechste|oberste|absolute)\\s+(?:priorität|prioritaet)\\s+und\\s+(?:ersetzt|ersetzen|überschreibt|überschreiben|ueberschreibt|ueberschreiben)|ersetzt|ersetzen|überschreibt|überschreiben|ueberschreibt|ueberschreiben|steht\\s+über|stehen\\s+über|steht\\s+ueber|stehen\\s+ueber|gilt\\s+vor|gelten\\s+vor)\\s+(?:(?:(?:alle|allen|sämtliche|sämtlichen|saemtliche|saemtlichen|jegliche|jeglichen)\\s+)?(?:dein|deine|deinen|deinem|deiner|deines)\\s+(?:(?:vorherigen?|bisherigen?|früheren?|frueheren?|ursprünglichen?|urspruenglichen?|eigenen?|aktuellen?|alten?|sonstigen?|übrigen?|uebrigen?)\\s+){0,2}(?P<io_target>anweisung(?:en)?|regel(?:n)?|vorgabe(?:n)?|richtlinie(?:n)?|system-?prompts?|systemanweisung(?:en)?|programmierung|einschränkung(?:en)?|einschraenkung(?:en)?|instruktion(?:en)?|befehlen?)|(?:den|dem)\\s+system-?prompt|allen\\s+anderen(?:\\s+(?:anweisungen|befehlen|vorgaben))?)\\b|(?P<io_priority_grant>(?:hat|haben)\\s+(?:(?:absoluten|obersten|unbedingten)\\s+)?vorrang|(?:hat|haben)\\s+(?:die\\s+)?(?:höchste|hoechste|oberste|absolute)\\s+(?:priorität|prioritaet)|(?:ist|sind)\\s+(?:(?:deine|die)\\s+)?(?:höchste|hoechste|oberste|absolute)\\s+(?:priorität|prioritaet))\\s*[:!])|(?P<io_priority_use>(?:nutze|verwende|behandle|nimm|befolge)\\s+(?:diese|die\\s+folgenden)\\s+(?:anweisung(?:en)?|regeln?|befehle|vorgaben?)\\s+als\\s+(?:deine\\s+)?(?:neue\\s+)?(?:höchste|hoechste|oberste|absolute)\\s+(?:priorität|prioritaet))\\s*[:!.])",
-      "required_literals_any": [
-        "vorrang",
-        "ersetz",
-        "überschreib",
-        "ueberschreib",
-        "steht",
-        "stehen",
-        "gilt",
-        "gelten",
-        "priorität",
-        "prioritaet"
-      ]
+      "required_pattern": "(?-u:vorrang|ersetz|berschreib|steht|stehen|gilt|gelten|priorit)"
     }
   ]
 }
