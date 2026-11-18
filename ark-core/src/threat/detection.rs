@@ -3,6 +3,7 @@
 use super::{obfuscation::*, patterns::*, util::text_windows};
 use super::{prepared::WINDOW_BYTES, NativeText};
 use crate::detectors::evidence::{L1Component, L1Match, MatchText};
+use crate::detectors::text_views::decode::rot13_decode_text;
 use aho_corasick::AhoCorasick;
 use regex::Regex;
 
@@ -537,7 +538,12 @@ fn visible_character(c: char) -> Option<char> {
 fn encoded_matches(prepared: &NativeText<'_>) -> Vec<L1Match> {
     let text = prepared.text();
     let mut matches = Vec::new();
+    // Behind a `ROT13` marker every window is decoded below, prose or not.
+    let rot13_marker = prepared.lower().text.contains("rot13");
     for view in prepared.hidden() {
+        if rot13_marker && view.kind == "rot13" {
+            continue;
+        }
         let decoded = view.text.text();
         for evidence in regex_matches(
             view.text.lower(),
@@ -568,6 +574,9 @@ fn encoded_matches(prepared: &NativeText<'_>) -> Vec<L1Match> {
         }
         if source_text.contains("\\u") {
             variants.push(("unicode_escape", slash_unicode_decode_lossy(source_text)));
+        }
+        if rot13_marker && source_text.to_lowercase().contains("rot13") {
+            variants.push(("rot13", rot13_decode_text(source_text)));
         }
         for (kind, decoded) in variants {
             let local = MatchText::lower(&decoded);
