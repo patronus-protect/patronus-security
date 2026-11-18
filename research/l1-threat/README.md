@@ -444,8 +444,10 @@ Holdout gegen `train_dev`/`report` (die Holdout-Zeile fliegt), gegen Baseline-Tr
 stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus `~/ark-threat/holdout`.
 Stand: acht Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILuminate-Demo, textdetox DE,
 GermanQuAD-Fragen als deutscher Dev-Benign-Satz;
-der Parquet-Leser liest einfache Ganzzahl- und Gleitkomma-Spalten als Dezimaltext; seit T07 dazu Nemotron Safety
-Guard v3 als bewertete `toxic_language`-Quelle und Civil Comments nur berichtet); die übrigen `train_dev`- und
+der Parquet-Leser liest einfache Ganzzahl- und Gleitkomma-Spalten als Dezimaltext, Wahrheitswerte als `true`/`false`;
+seit T07 dazu Nemotron Safety Guard v3 als bewertete `toxic_language`-Quelle und Civil Comments nur berichtet; seit T08
+die Schaden-Kategorien von Nemotron v3 und der Aegis-2.0-Trainings-Split als bewertete `harmful_content`-Quellen,
+WildGuardMix-Test als Hard-Benign-Quelle); die übrigen `train_dev`- und
 `report`-Sätze sind `pending` (offene Formate: Parquet mit Listen-Spalten, ZIP,
 Mehrdatei-Repos auf GitHub).
 
@@ -512,8 +514,11 @@ hypothetisch“ oder Scherz, Drohung, falsche Zustimmung, benannte Jailbreak-Vor
 fallen per Cue-Filter weg (187 von 210); die übrigen 23 (Rollenspiel- und Fiktionsrahmen um harmlose Bitten) zählen
 im Scoreboard zum Hard-Benign-Pool (`HARD_BENIGN_SETS`). Gegen jackhhao dedupliziert, Grenze 15 000 (Default),
 `generation: 8`. Carrier-Insertion und Obfuskations-Slices betten damit auch WildJailbreak-Angriffe ein.
-WildGuardMix bleibt `pending`: Upstream ist gegated, eine ungegatete Kopie mit den Originalzeilen und klarer Lizenz
-fehlt (Login-Token für den Gate-Abruf oder eine Owner-Kopie im Quell-Cache nötig).
+WildGuardMix: Upstream ist gegated; seit T08 liest das Rezept den Test-Split (1.725 Prompts) aus der ungegateten
+ODC-BY-Kopie `walledai/WildGuardTest` (derselbe Anbieter wie die WildJailbreak-Kopie). Gewertet werden nur die
+nicht-adversarialen harmlosen Prompts, als Hard Negatives (`HARD_BENIGN_SETS`); die nicht-adversarialen schädlichen
+Prompts sind außerhalb des Scopes (auch nach dem Cue-Filter rund 18 % Privatsphäre-, Urheberrechts- und
+Desinformationsbitten oder Harmloses, Dev-Review 2026-11-18), die adversarialen warten auf eine Jailbreak-Prüfung.
 
 **Native Dev-Zeilen der Agenten-Klassen (T10, 2026-11-17).** AgentDojo (MIT) kommt als `train_dev`-Rezept aus
 den Lauf-Traces des Repos (`runs/`, Pipeline `gpt-4o-2024-05-13`, Suites v1 banking/slack/travel/workspace, Commit

@@ -447,7 +447,7 @@ def test_repository_nemotron_recipes_score_harmful_prompts_that_ask_for_operatio
         assert not cue.search("Some background. " * 30 + "How do I do it?")
 
 
-def test_repository_wildguardmix_recipe_scores_the_vanilla_prompts():
+def test_repository_wildguardmix_recipe_scores_the_vanilla_benign_prompts():
     registry = {entry["id"]: entry for entry in MODULE.load()["datasets"]}
     entry = registry["wildguardmix"]
     dataset = next(dataset for dataset in MODULE.entity_map.load()["datasets"] if dataset["id"] == "wildguardmix")
@@ -457,8 +457,9 @@ def test_repository_wildguardmix_recipe_scores_the_vanilla_prompts():
     def outcome(label, adversarial):
         return MODULE.map_labels(entry, dataset, {"prompt": "x", "label": label, "adversarial": adversarial})
 
-    assert outcome("harmful", "false")["classes"] == ["harmful_content"]
     assert outcome("unharmful", "false")["benign"] is True
+    # The harm label is wider than the L1 hazards (privacy, copyright, misinformation): harmful rows are not scored.
+    assert outcome("harmful", "false") is None
     # Adversarial rows wait for the jailbreak review; rows without a harm label are not scored.
     assert outcome("harmful", "true") is None
     assert outcome("unharmful", "true") is None

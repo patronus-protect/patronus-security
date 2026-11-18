@@ -141,12 +141,15 @@ def snappy_decompress(data: bytes) -> bytes:
 # Enough for the pinned Gretel shards: flat optional/required BYTE_ARRAY columns, PLAIN and
 # (RLE_|PLAIN_)DICTIONARY pages, data page v1 and v2, UNCOMPRESSED or SNAPPY; plain INT32/INT64
 # columns (no logical type, e.g. label columns) are read as decimal strings, FLOAT and DOUBLE columns
-# (rater scores) as the shortest decimal that round-trips at their precision. Anything else is
+# (rater scores) as the shortest decimal that round-trips at their precision, BOOLEAN columns as
+# "true"/"false" (PLAIN or RLE). Anything else is
 # rejected rather than misread; the source SHA-256 pins the files it has to read.
 # Physical types read: Parquet type id -> fixed width in bytes (None: length-prefixed byte array).
 PARQUET_TYPES = {1: 4, 2: 8, 4: 4, 5: 8, 6: None}
 # Floating-point types: Parquet type id -> struct format.
 PARQUET_FLOATS = {4: "<f", 5: "<d"}
+PARQUET_BOOLEAN = 0
+BOOLEAN_TEXT = (b"false", b"true")
 
 
 def _float_text(value: float, fmt: str) -> str:
@@ -247,7 +250,11 @@ def _rle_hybrid(data: bytes, bit_width: int, count: int) -> list[int]:
 
 
 def _plain_values(data: bytes, count: int, physical: int) -> list[bytes]:
-    """PLAIN values: byte arrays as they are, little-endian integers and floats as decimal ASCII."""
+    """PLAIN values: byte arrays as they are, little-endian integers and floats as decimal ASCII, booleans as true/false."""
+    if physical == PARQUET_BOOLEAN:
+        if (count + 7) // 8 > len(data):
+            raise ValueError("truncated PLAIN booleans")
+        return [BOOLEAN_TEXT[(data[i // 8] >> (i % 8)) & 1] for i in range(count)]
     width = PARQUET_TYPES[physical]
     if width is not None:
         if count * width > len(data):
@@ -319,6 +326,9 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, physical: i
         present = sum(levels)
         if encoding == 0:
             decoded = _plain_values(body, present, physical)
+        elif encoding == 3 and physical == PARQUET_BOOLEAN:  # RLE booleans, 4-byte length prefix
+            size = int.from_bytes(body[:4], "little")
+            decoded = [BOOLEAN_TEXT[bit] for bit in _rle_hybrid(body[4 : 4 + size], 1, present)]
         elif encoding in (2, 8):
             if dictionary is None or not body:
                 raise ValueError("dictionary-encoded Parquet page without a dictionary")
@@ -336,7 +346,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, physical: i
 
 
 def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> list[dict[str, str | None]]:
-    """Rows of the requested top-level UTF-8 (or plain integer or floating-point) columns of a Parquet file, nulls as ``None``."""
+    """Rows of the requested top-level UTF-8 (or plain integer, floating-point or boolean) columns of a Parquet file, nulls as ``None``."""
     data = path.read_bytes()
     if len(data) < 12 or data[:4] != b"PAR1" or data[-4:] != b"PAR1":
         raise ValueError(f"{path} is not a Parquet file")
@@ -362,9 +372,9 @@ def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> li
         element = leaves.get(column)
         if element is None:
             raise ValueError(f"{path}: no top-level column {column!r}")
-        number = element.get(1) in (1, 2, *PARQUET_FLOATS) and 6 not in element and 10 not in element
+        number = element.get(1) in (PARQUET_BOOLEAN, 1, 2, *PARQUET_FLOATS) and 6 not in element and 10 not in element
         if not (element.get(1) == 6 or number) or element.get(3) == 2:
-            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY, plain integer or floating-point column")
+            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY, plain integer, floating-point or boolean column")
     result: dict[str, list[bytes | None]] = {column: [] for column in columns}
     for row_group in metadata[4]:
         for chunk in row_group[1]:

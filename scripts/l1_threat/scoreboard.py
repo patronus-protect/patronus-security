@@ -86,9 +86,9 @@ TOLERANCE_PP = 0.5
 BOOTSTRAP = 200
 BOOTSTRAP_SEED = 20261114
 # Benign sets of security-adjacent text (trigger words, seemingly harmful prompts, jailbreak-shaped
-# prompts without harmful intent, hard-negative goldens); together with the generated look-alike twins
+# prompts without harmful intent, harmless requests that sound risky, hard-negative goldens); together with the generated look-alike twins
 # they make up the hard-benign pool.
-HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "l1_goldens"})
+HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens"})
 BENIGN_CLASSES = frozenset({"benign", "safe"})
 JOBS = 4
 
