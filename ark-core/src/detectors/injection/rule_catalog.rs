@@ -606,10 +606,18 @@ fn literal_prefilter(rule: &RuleDefinition) -> Option<Regex> {
     // No word boundaries or context wildcards: the engine can search literal
     // alternatives efficiently, including on non-ASCII input. Keep the same
     // Unicode case folding as the final regex (e.g. s/ſ and k/K).
+    // A space in a literal stands for the rule's `\s+`, so tabs, line breaks and
+    // repeated spaces between the words still pass.
     let pattern = rule
         .required_literals_any
         .iter()
-        .map(|literal| regex::escape(literal))
+        .map(|literal| {
+            literal
+                .split(' ')
+                .map(regex::escape)
+                .collect::<Vec<_>>()
+                .join(r"\s+")
+        })
         .collect::<Vec<_>>()
         .join("|");
     Some(
