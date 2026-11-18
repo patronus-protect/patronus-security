@@ -22,8 +22,9 @@
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #   text        record field holding the text; `language` a fixed code or `language_field`
-#   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
-#               field matches every row; `and` [{field, equals | at_least | below}] adds conditions on other
+#   labels      rules {field, equals (value or list) | contains (value or list) | at_least | below, label}; a rule
+#               without field matches every row; `contains` reads the field as a comma-separated list and needs
+#               one of the given items in it; `and` [{field, equals | contains | at_least | below}] adds conditions on other
 #               fields that must all hold; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
 #   keep        cue filters [{label, pattern, reason}]: a row carrying the upstream `label` is kept only
@@ -57,7 +58,9 @@ schema: ark-l1-threat-datasets-v1
 #     join train_dev; the latter carry the first native agent_config_tampering rows.
 # 12: BIPIA's task-irrelevant text attacks leave scoring (dev gold re-review 2026-11-17: bare requests such as
 #     "Explain the theory of relativity." inside an e-mail carry no injection).
-generation: 12
+# 13: toxic_language gets scored dev sources: Nemotron Safety Guard v3 (human-labelled prompts, EN and the
+#     machine-translated DE part) and Civil Comments (test split, clear rater bands, capped).
+generation: 13
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -224,7 +227,29 @@ datasets:
     pending: recipe not written yet
   - id: nemotron_safety_v3
     commercial: true
-    pending: recipe not written yet
+    # Test split of the EN part and of the machine-translated DE part (the same prompts); the text is the user prompt.
+    source: https://huggingface.co/datasets/nvidia/Nemotron-Safety-Guard-Dataset-v3
+    revision: a3f7ecb3433d1933701a83f18de16c36934a7f51
+    files:
+      - {path: en/test.jsonl, sha256: 1d6d9c67281e4e6335a006013fa48011ca1c8160db9d4824a24426c903a2ed97}
+      - {path: de/test.jsonl, sha256: c38a40b3ac3b7a2caadda70f05d654ecb31af1445db02ea0ae1f761a81939614}
+    format: jsonl
+    text: prompt
+    language_field: language
+    labels:
+      # Only the human-labelled part (tags generic and adapted) is scored; violated_categories lists every category
+      # of the conversation, so a toxic category counts only on a prompt labelled unsafe.
+      - field: violated_categories
+        contains: [Hate/Identity Hate, Harassment, Profanity]
+        and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
+        label: "category in (Hate/Identity Hate, Harassment, Profanity)"
+      - field: violated_categories
+        contains: Threat
+        and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
+        label: "category = Threat"
+      - {field: prompt_label, equals: safe, and: [{field: tag, equals: [generic, adapted]}], label: "safe"}
+      - {field: prompt_label, equals: unsafe, label: "prompt_label = unsafe without a toxic_language category"}
+      - {field: tag, equals: jailbreaking, label: "tag = jailbreaking"}
   - id: cyberseceval_multilingual
     commercial: true
     source: https://github.com/meta-llama/PurpleLlama
@@ -672,8 +697,10 @@ datasets:
     commercial: true
     pending: recipe not written yet
   - id: germeval2018_train
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: >-
+      CC-BY-4.0; the upstream repository also holds the holdout test split, so the recipe comes from the holdout
+      setup (--overlay)
   - id: germeval2019
     commercial: unknown
     pending: recipe not written yet
@@ -694,7 +721,20 @@ datasets:
       - {field: toxic, equals: "0", label: "toxic = 0"}
   - id: civil_comments
     commercial: true
-    pending: recipe not written yet
+    # Test split; toxicity is the share of raters who called the comment toxic.
+    source: https://huggingface.co/datasets/google/civil_comments
+    revision: f2970eb3a55777454c94069077cc8d9b5866312d
+    files:
+      - {path: data/test-00000-of-00001.parquet, sha256: 410f803ff161e7c4ba005db7de5b444cac413f4861bf056b0fd69d670d75aa08}
+    format: parquet
+    text: text
+    language: en
+    labels:
+      - {field: toxicity, at_least: 0.8, label: "toxicity >= 0.8"}
+      - {field: toxicity, below: 0.1, label: "toxicity < 0.1"}
+      - {field: toxicity, at_least: 0.1, below: 0.8, label: "0.1 <= toxicity < 0.8"}
+    # 97,320 comments; the cap keeps the benign pool from being dominated by one forum.
+    cap: 6000
   - id: dolly_15k
     commercial: true
     source: https://huggingface.co/datasets/databricks/databricks-dolly-15k

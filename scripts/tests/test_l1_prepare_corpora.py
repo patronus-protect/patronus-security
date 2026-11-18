@@ -79,11 +79,14 @@ def test_parquet_reader_reads_plain_integer_columns_as_decimal_strings(shard):
 
 
 @pytest.mark.parametrize("shard", ("scores_v1_test.parquet", "scores_v2_test.parquet"))
-def test_parquet_reader_reads_double_columns_as_round_trip_decimals(shard):
-    # toxicity: optional double, plain pages over three row groups in v1, dictionary pages and data page v2 in v2.
-    rows = MODULE.read_parquet_columns(FIXTURES / shard, ["text", "toxicity"])
-    assert [row["toxicity"] for row in rows] == ["0.0", "0.125", None, "0.5", "0.875", "1.0", "-0.0", "0.1", "0.5", "0.125"]
-    assert rows[7] == {"text": "comment 7", "toxicity": "0.1"}
+def test_parquet_reader_reads_float_columns_as_shortest_round_trip_decimals(shard):
+    # Optional float (toxicity) and double (rating): plain pages over three row groups in v1, dictionary
+    # pages and data page v2 in v2. A float32 0.1 reads as "0.1", not as its double expansion.
+    rows = MODULE.read_parquet_columns(FIXTURES / shard, ["text", "toxicity", "rating"])
+    expected = ["0.0", "0.125", None, "0.5", "0.875", "1.0", "-0.0", "0.1", "0.5", "0.3"]
+    assert [row["toxicity"] for row in rows] == expected
+    assert [row["rating"] for row in rows] == expected
+    assert rows[7] == {"text": "comment 7", "toxicity": "0.1", "rating": "0.1"}
 
 
 def test_parquet_reader_rejects_nested_columns():
