@@ -859,6 +859,8 @@ mod tests {
                         compiled.regexes.iter().map(|(_, regex, _)| regex.as_str()),
                     )
                     .case_insensitive(true)
+                    // The union of all catalog regexes outgrows the 10 MiB default.
+                    .size_limit(64 << 20)
                     .build()
                     .unwrap()
                 })
