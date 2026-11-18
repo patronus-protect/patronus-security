@@ -463,6 +463,7 @@ tasks:
       tutorial showing the setting, a scoped allow rule); dev agent_config_tampering TPR@1% on the approve-or-deny
       rows > 0 at 0 hard-benign FP; templates unchanged; ablation re-run and the decision recorded
   - id: T18
+    status: done
     title: "Remaining agent sets: RedCode recipe (MIT; RedCode-Exec Python and RedCode-Gen as unsafe_action, Bash part handed to shell_command) and an Agent-SafetyBench subset that passes the gold review (the instruction itself carries the risk, e.g. the harmful-code group); the other unfulfillable cases keep their risk in the tool environment"
     type: eval-infra
     deps: [T15]
