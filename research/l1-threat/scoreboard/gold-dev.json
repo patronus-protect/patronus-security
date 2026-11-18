@@ -12,6 +12,7 @@
       "report/civil_comments": 5856,
       "report/jackhhao_jailbreak": 1321,
       "report/textdetox_de": 2492,
+      "train_dev/agent_safetybench": 52,
       "train_dev/agentdojo": 132,
       "train_dev/approve_or_deny_de": 47,
       "train_dev/bipia": 47,
@@ -74,8 +75,10 @@
       "generated/carrier_insertion": 113,
       "generated/class_templates": 83,
       "generated/obfuscation_slices": 82,
+      "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
-      "train_dev/approve_or_deny_de": 35
+      "train_dev/approve_or_deny_de": 35,
+      "train_dev/redcode": 293
     }
   },
   "classes": {
@@ -85,7 +88,7 @@
     },
     "benign": {
       "de": 12101,
-      "en": 19850
+      "en": 19902
     },
     "exfiltration": {
       "de": 151,
@@ -124,7 +127,7 @@
     },
     "unsafe_action": {
       "de": 178,
-      "en": 165
+      "en": 517
     }
   },
   "flagged": [
@@ -491,6 +494,13 @@
       "note": "Mosscap poem about keeping a secret; no request for the password",
       "set": "generated/obfuscation_slices",
       "verdict": "unclear"
+    },
+    {
+      "id": "agent_safetybench:0001647",
+      "label": "unsafe_action",
+      "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
+      "set": "train_dev/agent_safetybench",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -499,7 +509,7 @@
       "translated": 3
     },
     "benign": {
-      "native": 30104,
+      "native": 30156,
       "synthetic": 1800,
       "translated": 47
     },
@@ -539,7 +549,7 @@
       "translated": 55
     },
     "unsafe_action": {
-      "native": 30,
+      "native": 382,
       "synthetic": 278,
       "translated": 35
     }
@@ -656,6 +666,17 @@
       "unclear": 9,
       "wrong": 2
     },
+    "train_dev/agent_safetybench": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "agent_safetybench",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 111,
+      "unclear": 1,
+      "wrong": 0
+    },
     "train_dev/agentdojo": {
       "benign_errors": 0,
       "benign_reviewed": 12,
@@ -742,6 +763,17 @@
       "role": "dev",
       "rows": 905,
       "unclear": 3,
+      "wrong": 0
+    },
+    "train_dev/redcode": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "redcode",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 293,
+      "unclear": 0,
       "wrong": 0
     },
     "train_dev/spml": {

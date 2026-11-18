@@ -90,7 +90,7 @@ READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
 LAYOUT = {"train_dev": ("dev", "train_dev"), "report": ("dev", "report"), "holdout": ("holdout", "holdout")}
-FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace", "bipia")
+FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace", "bipia", "redcode")
 # Carrier characters kept on each side of an AgentDojo payload (whole lines only).
 AGENTDOJO_CONTEXT = 300
 # E-mail characters kept on each side of a BIPIA attack (whole lines only).
@@ -357,7 +357,10 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     for op in ("contains", "excludes"):
         if op in rule:
             wanted = rule[op] if isinstance(rule[op], list) else [rule[op]]
-            items = {item.strip() for item in _text_value(value).split(",")}
+            if isinstance(value, list):
+                items = {_text_value(item) for item in value}
+            else:
+                items = {item.strip() for item in _text_value(value).split(",")}
             return items.isdisjoint(_text_value(item) for item in wanted) == (op == "excludes")
     try:
         number = float(value)
@@ -458,9 +461,29 @@ def bipia_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
         yield {"text": text, "attack_set": attack_set, "category": category, "attack_split": attack_split}
 
 
+def redcode_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
+    """Records of RedCode: per RedCode-Exec item (``*.json``, a list of items) its two natural-language
+    requests, ``variant`` ``summary`` (``Text_summary``) and ``details`` (``Text_details``), with ``part``
+    ``exec_python`` and the risky ``scenario`` (the number before ``_`` in ``Index``); per RedCode-Gen file
+    (``*.py``, a function signature with the docstring to complete) one record, ``part`` ``gen``,
+    ``variant`` ``stub`` and the malware ``category`` of its directory."""
+    for path in paths:
+        if path.suffix == ".json":
+            for item in json.loads(path.read_text(encoding="utf-8")):
+                scenario = int(str(item["Index"]).split("_")[0])
+                for variant, field in (("summary", "Text_summary"), ("details", "Text_details")):
+                    yield {"text": item[field], "part": "exec_python", "scenario": scenario, "variant": variant, "category": "none"}
+        else:
+            text = path.read_text(encoding="utf-8")
+            yield {"text": text, "part": "gen", "scenario": 0, "variant": "stub", "category": path.parent.name}
+
+
 def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
     if entry["format"] == "bipia":
         yield from bipia_records([root / item["path"] for item in entry["files"]])
+        return
+    if entry["format"] == "redcode":
+        yield from redcode_records([root / item["path"] for item in entry["files"]])
         return
     conditions = [condition for rule in entry["labels"] for condition in (rule, *rule.get("and", []))]
     columns = sorted(

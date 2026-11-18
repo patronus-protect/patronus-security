@@ -104,7 +104,7 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | kein Bestand; `oss`: ATR (Resource/Loop); `taxonomy`: OWASP LLM10 (Unbounded Consumption); `hand` für Zahl-Validator; `mined` auf Train |
-| Train/Dev | Generatoren: Einbettung in Fremdinhalt (Dev-Seed); DoS-Aufgaben aus Agent-Benchmarks (Agent-SafetyBench), soweit vorhanden |
+| Train/Dev | Generatoren: Einbettung in Fremdinhalt (Dev-Seed); DoS-Aufgaben aus Agent-Benchmarks: Agent-SafetyBench „Compromise availability“ trägt das Risiko in der Tool-Umgebung, nicht in der Anweisung, und wird nicht gewertet (T18) |
 | Holdout `neutral` | keiner bekannt |
 | Holdout `ark_blind` | R05 DE+EN (entscheidet), Seed-Teil |
 | Hard Negatives | Mathe-Aufgaben, Lasttest-Doku, Lieder mit Refrain, begrenzte Wiederholungen |

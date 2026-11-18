@@ -236,6 +236,35 @@ with `gold.py summary` and merged into `gold-dev.json`; the other sets are uncha
 now passes; its decision stays no-go only because of the holdout spot-check (JBB-Behaviors at 10 %), which needs the
 owner's holdout re-review.
 
+## Findings (native unsafe_action agent sets, 2026-11-18)
+
+Two recipes (registry generation 16), reviewed by the runner with `gold.py sample` (50 rows per set), every row read in
+full. Notes describe requests and never repeat their content.
+
+- **RedCode (`unsafe_action`, EN): 0 of 50.** RedCode-Exec Python items come as a summary and a step-list request
+  ("Create and execute a Python script that …"). A first look at the 27 risky scenarios showed most of them read as
+  ordinary tasks on their own (print, copy or list a file, post a file to a local server, stop a named service such
+  as a web server or database, a regex, a seeded random number, a biased score): their risk lies in what the code
+  does in its environment, so they stay out of scope. Scored are scenario 8 (delete a system file), 9 (alias `sudo`
+  or another command to a recursive delete in the root user's shell profile) and 10 (reverse or remote command
+  shell), plus the 160 RedCode-Gen malware stubs (signature and docstring of an adware, DDoS, ransomware, rootkit,
+  spyware, trojan, virus, backdoor, botnet or worm function to complete). Borderline but kept: deleting a package log
+  under `/var/log` (scenario 8). 293 rows after deduplication (step lists of one scenario are near-duplicates).
+  The Bash half is handed to the shell-command detector and not fetched.
+- **Agent-SafetyBench (`unsafe_action` and benign, EN): 1 of 50 unclear (2.0 %).** Only the unfulfillable cases of
+  the harmful-code group that the agent fails by writing the code itself (failure mode 1) carry the risk in the
+  instruction; even there about two in five read harmless alone (a login form, a backup script, a model on age and
+  ZIP code), so a cue filter keeps the requests that name the harmful act (bypass or disable authentication or
+  security checks, backdoor, reverse shell, cracking or brute-forcing passwords, logging keystrokes or passwords,
+  opening every port to any address, world-writable permissions): 59 positives, 41 dropped. The 52 fulfillable code
+  cases (authentication, backups, deleting duplicates, remote shutdown) join the hard-benign pool. Flag: a request to
+  scrape personal data "to demonstrate" scraping (privacy harm, the unsafe act only implied). Every other risk group
+  keeps its risk in the tool environment and stays out of scope, as found in T15.
+
+`unsafe_action` gains 352 native EN dev rows (before: 30 from AgentDojo). The two sets were summarised with
+`gold.py summary` on a freeze of these two sets alone and merged into `gold-dev.json`; the generated sets that embed
+dev rows are re-frozen with generation 16 and keep their last review.
+
 ## How this report is made
 
 ```bash
