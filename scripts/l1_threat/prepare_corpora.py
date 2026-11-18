@@ -100,7 +100,7 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against"}
+OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against", "records"}
 KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "contains", "excludes", "at_least", "below")
 LIST_OPS = ("equals", "contains", "excludes")
@@ -215,6 +215,8 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
             problems.append(f"{where}: file {path!r} needs a SHA-256")
     if entry["format"] not in FORMATS:
         problems.append(f"{where}: format must be one of {FORMATS}")
+    if "records" in entry and (entry["format"] != "json" or not isinstance(entry["records"], str) or not entry["records"]):
+        problems.append(f"{where}: records needs format json and a field path ('.' for one record per file)")
     if ("language" in entry) == ("language_field" in entry):
         problems.append(f"{where}: exactly one of language / language_field")
     rules = entry["labels"]
@@ -497,8 +499,13 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
                 yield from (json.loads(line) for line in handle if line.strip())
         elif entry["format"] == "json":
             data = json.loads(path.read_text(encoding="utf-8"))
+            # `records`: where the records sit in the document; "." makes the whole document one record.
+            if entry.get("records") == ".":
+                data = [data]
+            elif "records" in entry:
+                data = _field(data, entry["records"])
             if not isinstance(data, list):
-                raise ValueError(f"{path}: format json expects a list of records")
+                raise ValueError(f"{path}: format json expects a list of records (or `records` naming one)")
             yield from data
         elif entry["format"] == "agentdojo_trace":
             yield from agentdojo_records(json.loads(path.read_text(encoding="utf-8")))
