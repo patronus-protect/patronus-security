@@ -89,6 +89,16 @@ def test_parquet_reader_reads_float_columns_as_shortest_round_trip_decimals(shar
     assert rows[7] == {"text": "comment 7", "toxicity": "0.1", "rating": "0.1"}
 
 
+@pytest.mark.parametrize("shard", ("flags_v1_test.parquet", "flags_v2_test.parquet"))
+def test_parquet_reader_reads_boolean_columns_as_true_false(shard):
+    # Optional boolean (WildGuardMix's adversarial flag): bit-packed PLAIN pages over two row groups in v1,
+    # RLE pages in data page v2; a null stays None.
+    rows = MODULE.read_parquet_columns(FIXTURES / shard, ["text", "adversarial"])
+    flags = [True, False, None, True, True, False, False, False, True, False, True]
+    assert [row["adversarial"] for row in rows] == [None if flag is None else str(flag).lower() for flag in flags]
+    assert rows[8] == {"text": "prompt 8", "adversarial": "true"}
+
+
 def test_parquet_reader_rejects_nested_columns():
     with pytest.raises(ValueError, match="no top-level column 'pii_types'"):
         MODULE.read_parquet_columns(FIXTURES / "gretel_v1_test.parquet", ["pii_types"])
