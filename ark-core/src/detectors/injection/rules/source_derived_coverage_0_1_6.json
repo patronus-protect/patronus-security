@@ -586,7 +586,7 @@
     },
     {
       "id": "ark.injection.override.precedence_claim_en",
-      "canonical_id": "ark.injection.override.precedence_claim",
+      "canonical_id": "ark.injection.override.discard_prior",
       "upstream_id": "ark-composition:override.precedence_claim",
       "family": "instruction_override",
       "severity": "high",
@@ -611,7 +611,7 @@
     },
     {
       "id": "ark.injection.override.precedence_claim_de",
-      "canonical_id": "ark.injection.override.precedence_claim",
+      "canonical_id": "ark.injection.override.discard_prior",
       "upstream_id": "ark-composition:override.precedence_claim_de",
       "family": "instruction_override",
       "severity": "high",
