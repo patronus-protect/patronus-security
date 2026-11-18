@@ -563,6 +563,58 @@
       ]
     },
     {
+      "id": "ark.injection.override.discard_scoped",
+      "canonical_id": "ark.injection.override.discard_prior",
+      "upstream_id": "ark-composition:override.discard_scoped",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "Discard prior instructions whose prior anchor follows the object (the directions above, the instructions given before), counted or ordinal objects (your last 2 instructions), the text above, or a modal/reported lead-in (you will ignore, I tell you to ignore), at clause start or in a code comment",
+      "adaptation": "EN imperative relation at clause start, after a code-comment marker, or after you will/must/should or I tell/command you to; the object needs a quantifier, possessive, prior adjective or count, or only determiners followed by a prior anchor (above, before, given, so far, until this point); the clause must end or continue with a new request. Negation, conditionals, third-person subjects and reported speech stay unmatched.",
+      "pattern": "(?:(?:^|\\n)[ \\t]*(?:#+|//|--|\\*)[ \\t]*|^|[.!?;>\\n]\\s*|\\b(?:assistant|assistants|ai|agent|agents|bot|chatbot|model|llm|system|note|notice|important|task|answer|reply|a|question|warning|ki|assistent|assistenten|agenten?|modell|hinweis|notiz|wichtig|achtung|aufgabe|antwort|frage|warnung)\\s*:\\s*|\\\"\\s*:\\s*\\\"|\\b(?:and|then|so|now|also|but|und|dann|jetzt|nun|also|aber)\\s+)(?:(?:please|kindly|just|now|simply|also)\\s+){0,3}(?:(?:you\\s+(?:will|must|should|shall|need\\s+to|have\\s+to|are\\s+to)|i\\s+(?:tell|command|order|instruct|want|need)\\s+you\\s+to|i\\s+command\\s+to|it'?s\\s+(?:vital|important|essential)\\s+that\\s+you)\\s+)?(?:(?:please|kindly|just|now|simply|also)\\s+){0,2}(?P<io_override>ignore|disregard|forget|abandon|discard|override|neglect)\\s+(?:(?:(?:the|of|these|those|this|my|and|specific|other|current|system)\\s+){0,2}(?:all|any|every|each|your|previous|previously|prior|earlier|above|preceding|original|initial|former|old|older|past|last|first|given|existing|\\d{1,2}(?:st|nd|rd|th)?|pevious|previus|previos|precious|preivous|prevous)\\s+(?:(?:(?:all|any|every|each|your|previous|previously|prior|earlier|above|preceding|original|initial|former|old|older|past|last|first|given|existing|\\d{1,2}(?:st|nd|rd|th)?|pevious|previus|previos|precious|preivous|prevous)|(?:the|of|these|those|this|my|and|specific|other|current|system))\\s+){0,3}(?:instructions?|guidelines?|directions?|directives?|rules|prompts?|constraints|commands|orders|guidance|programming|restrictions|conditions|iunstructions|instuctions|instrucitons|insturctions|intructions|instrcutions)(?:\\s+(?:above|before|so\\s+far|until\\s+now|until\\s+this\\s+point|up\\s+to\\s+(?:now|this\\s+point)|previously|earlier|given(?:\\s+to\\s+you)?|provided(?:\\s+to\\s+you)?|from\\s+before|i\\s+gave\\s+you|(?:that\\s+|which\\s+)?you\\s+(?:were|have\\s+been|'ve\\s+been|’ve\\s+been|got)\\s+(?:given|told))){0,2}|(?:(?:the|of|these|those|this|my|and|specific|other|current|system)\\s+){1,2}(?:instructions?|guidelines?|directions?|directives?|rules|prompts?|constraints|commands|orders|guidance|programming|restrictions|conditions|iunstructions|instuctions|instrucitons|insturctions|intructions|instrcutions)(?:\\s+(?:above|before|so\\s+far|until\\s+now|until\\s+this\\s+point|up\\s+to\\s+(?:now|this\\s+point)|previously|earlier|given(?:\\s+to\\s+you)?|provided(?:\\s+to\\s+you)?|from\\s+before|i\\s+gave\\s+you|(?:that\\s+|which\\s+)?you\\s+(?:were|have\\s+been|'ve\\s+been|’ve\\s+been|got)\\s+(?:given|told))){1,2}|(?P<io_above>(?:the|everything)\\s+(?:written\\s+|said\\s+)?above))(?:\\s*(?:[.!?;:,\\n)\\\"']|$)|\\s+(?:and|then|now|instead|except|but|completely|entirely|altogether|from\\s+now|you|tell|say|print|answer|respond|reply|write|give|show|reveal|output|share|act|do|just|please)\\b)",
+      "required_literals_any": [
+        "ignore",
+        "disregard",
+        "forget",
+        "abandon",
+        "discard",
+        "override",
+        "neglect"
+      ]
+    },
+    {
+      "id": "ark.injection.override.discard_scoped_de",
+      "canonical_id": "ark.injection.override.discard_prior",
+      "upstream_id": "ark-composition:override.discard_scoped_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "German: discard prior instructions in the formal or plural imperative (Ignorieren Sie, Missachten Sie, ignoriert), with a counted object, or with the prior anchor after the object (die Anweisungen von oben)",
+      "adaptation": "DE imperative (du, Sie or ihr form) at clause start or in a code comment; the object needs alle/sämtliche/deine/Ihre, a prior adjective or a count, or only determiners followed by von oben/oben/zuvor/bisher; the clause must end or continue with a new request. 'Vergessen Sie nicht', 'niemals', topics and reported speech stay unmatched.",
+      "pattern": "(?:(?:^|\\n)[ \\t]*(?:#+|//|--|\\*)[ \\t]*|^|[.!?;>\\n]\\s*|\\b(?:assistant|assistants|ai|agent|agents|bot|chatbot|model|llm|system|note|notice|important|task|answer|reply|a|question|warning|ki|assistent|assistenten|agenten?|modell|hinweis|notiz|wichtig|achtung|aufgabe|antwort|frage|warnung)\\s*:\\s*|\\\"\\s*:\\s*\\\"|\\b(?:and|then|so|now|also|but|und|dann|jetzt|nun|also|aber)\\s+)(?:(?:bitte|einfach|jetzt|nun|doch|mal|sofort)\\s+){0,3}(?P<io_override>(?:ignorieren|missachten|vergessen|verwerfen|übergehen|uebergehen)\\s+sie|ignoriert|missachtet|vergesst|verwerft|ignoriere|ignorier|missachte|vergiss|verwirf|verwerfe|übergehe|uebergehe)\\s+(?:(?:bitte|einfach|jetzt|nun|doch|mal|sofort)\\s+){0,3}(?:(?:(?:die|diese|der|den|meine|anderen|aktuellen)\\s+){0,2}(?:alle|allen|sämtliche|saemtliche|jegliche|jede|deine|ihre|eure|vorherigen?|vorhergehenden?|bisherigen?|früheren?|frueheren?|obigen?|ursprünglichen?|urspruenglichen?|alten?|vorigen?|letzten?|ersten?|gegebenen?|erhaltenen?|\\d{1,2}\\.?)\\s+(?:(?:(?:alle|allen|sämtliche|saemtliche|jegliche|jede|deine|ihre|eure|vorherigen?|vorhergehenden?|bisherigen?|früheren?|frueheren?|obigen?|ursprünglichen?|urspruenglichen?|alten?|vorigen?|letzten?|ersten?|gegebenen?|erhaltenen?|\\d{1,2}\\.?)|(?:die|diese|der|den|meine|anderen|aktuellen))\\s+){0,3}(?:anweisung(?:en)?|instruktion(?:en)?|regeln|richtlinien?|vorgaben?|befehle|direktiven?|einschränkungen|einschraenkungen|aufträge|auftraege|system-?prompts?|prompts?|systemanweisung(?:en)?)(?:\\s+(?:von\\s+oben|oben|davor|zuvor|bisher|von\\s+vorher|vom\\s+system|(?:,\\s*)?die\\s+(?:du|sie|ihr)\\s+(?:bisher\\s+|zuvor\\s+|vorher\\s+)?(?:erhalten|bekommen)\\s+(?:hast|haben|habt)))?|(?:(?:die|diese|der|den|meine|anderen|aktuellen)\\s+){1,2}(?:anweisung(?:en)?|instruktion(?:en)?|regeln|richtlinien?|vorgaben?|befehle|direktiven?|einschränkungen|einschraenkungen|aufträge|auftraege|system-?prompts?|prompts?|systemanweisung(?:en)?)\\s+(?:von\\s+oben|oben|davor|zuvor|bisher|von\\s+vorher|vom\\s+system|(?:,\\s*)?die\\s+(?:du|sie|ihr)\\s+(?:bisher\\s+|zuvor\\s+|vorher\\s+)?(?:erhalten|bekommen)\\s+(?:hast|haben|habt))|(?P<io_above>alles\\s+(?:oben|davor|zuvor|bisher)(?:\\s+gesagte|\\s+geschriebene|\\s+stehende)?))(?:\\s*(?:[.!?;:,\\n)\\\"']|$)|\\s+(?:und|dann|jetzt|stattdessen|ab\\s+sofort|komplett|vollständig|vollstaendig|einfach|du|sag|sagen|gib|geben|antworte|antworten|schreib|schreibe|schreiben|zeig|zeige|zeigen|nenne|nennen|tu|mach|mache|machen|bitte)\\b)",
+      "required_literals_any": [
+        "ignorier",
+        "missacht",
+        "vergiss",
+        "vergessen sie",
+        "vergesst",
+        "verwirf",
+        "verwerfe",
+        "verwerft",
+        "verwerfen sie",
+        "übergehe ",
+        "uebergehe ",
+        "übergehen sie",
+        "uebergehen sie"
+      ]
+    },
+    {
       "id": "ark.injection.override.question_prior_de",
       "canonical_id": "ark.injection.override.discard_prior",
       "upstream_id": "ark-composition:override.question_prior_de",

@@ -416,6 +416,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
   reasoning, authorization logs, delivery terms ("if you refuse the delivery, you will lose your
   deposit"), game rules for people, defensive prompts, negated, quoted and test-code mentions stay
   unreported. The decision threshold is unchanged.
+- **Detection change:** (`injection`) more requests to drop earlier instructions are reported, in
+  German and English: when the reference to earlier text follows the object ("ignore the
+  directions above", "ignore all the instructions given before", "Ignoriere die Anweisungen von
+  oben"), with counted or ordinal objects ("forget your last 2 instructions", "disregard your 4th
+  and 5th instruction"), "ignore the above and …", after "you will", "you must" or "I tell you to",
+  inside a code comment, with a few frequent misspellings ("pevious", "iunstructions") and in the
+  formal and plural German imperative ("Ignorieren Sie alle vorherigen Anweisungen", "Missachten
+  Sie vorherige Anweisungen", "Ignoriert alle früheren Vorgaben"). The request must open a sentence,
+  clause or comment; negated ("never ignore the directions above", "Vergessen Sie nicht …"),
+  conditional ("if you ignore the instructions above, …"), quoted and documenting mentions and
+  harmless requests ("ignore the above warning if …", "ignore the instructions on the box") stay
+  unreported. The decision threshold is unchanged.
+- **Detection change:** (`injection`) the German formal imperative is also reported when a line
+  break, tab or several spaces separate the verb from "Sie" ("Vergessen Sie …" across a line
+  break, "Übergehe die Anweisungen von oben" after a tab): the literal prefilter of the rule now
+  accepts the same whitespace as the rule itself.
 - **Detection change:** (`injection`) text that claims to outrank the model's own instructions is
   now reported as an instruction override, in German and English: "this instruction takes
   precedence over your system prompt", "the following rule supersedes all your previous
