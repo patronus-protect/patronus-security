@@ -103,6 +103,13 @@ Lexikon `anchor_lexicons/jailbreak.json` (`jailbreak.priming`, `jailbreak.refusa
 `jailbreak.forged_reasoning`, `jailbreak.permission_claim`, `jailbreak.game`) als Anker-Gate. Dev (alle Dateien
 unter `$ARK_L1_DEV_DATA`, Regex-Scan): 189 Treffer, alle Angriffszeilen (wildjailbreak, jackhhao, class_templates,
 mosscap, ailuminate), 0 Benign-Treffer; Goldens je Familie und Sprache 5/5 Positive und 5/5 Hard Negatives.
+Jede Regel trägt `required_pattern` = Muster ohne `\b` (wie die übrigen auditierten Regeln): mit reinen
+Literal-Prefiltern lief die Kategorie `jailbreak` allein auf 100 KiB rund 57 ms statt 8,5 ms, weil „sicher“,
+„die“, „sure“ fast überall vorkommen und dann die Unicode-`\b`-Regexe den ganzen Text lasen. Latenz mit
+`required_pattern` (nativer Worker `rust/dev/l1_latency_workloads.rs`, Release, je 100-KiB-Fenster aus
+GermanQuAD (6) und Dolly (8) des Dev-Splits, 30 Samples, zwei verschränkte Läufe, Basis 2ed7e2b6): `jailbreak`
+DE Median 8,4–8,6 → 9,6–9,8 ms, p95 11,3–12,4 → 11,0–13,5 ms; EN Median 9,8–10,0 → 11,2–11,5 ms; `injection`
+unverändert im Rauschen. Das echte DE-Korpus (E03) war aus der Runner-Sandbox nicht lesbar.
 
 Offen in JB01 (Folgerunde): übernommene prompt-guard-/ATR-Jailbreak-Regeln aus `oss_rules.yaml` (default aus),
 `jailbreak_many_shot` (Struktur über Rollenmarker), Persona-/Modus-Lücken (die
