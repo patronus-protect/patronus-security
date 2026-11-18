@@ -43,6 +43,8 @@ const ROT13_SPAN: usize = 512;
 const MAX_ROT13_MARKERS: usize = 4;
 /// Bytes decoded as ROT13 text without a marker.
 const BARE_ROT13_SPAN: usize = 2048;
+/// Longest `Label: ` kept plain in front of marker-less ROT13 text.
+const LABEL_BYTES: usize = 24;
 
 /// The encoding a decoded view undid; reported in the `decoded` fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -198,9 +200,10 @@ fn rot13_views(text: &str) -> impl Iterator<Item = DecodedView> + '_ {
         })
 }
 
-/// ROT13 text without a marker: a text whose words hold at least three ROT13
+/// ROT13 text without a marker: a text whose words hold at least two ROT13
 /// forms of function words and more of them than plain function words. The
-/// view starts at the line of the first shifted function word.
+/// view starts at the line of the first shifted function word; a short
+/// `Label:` that opens that line stays as it is.
 fn bare_rot13_view(text: &str) -> Option<DecodedView> {
     let (mut shifted, mut plain, mut first) = (0usize, 0usize, None);
     for word in text.split(|ch: char| !ch.is_ascii_alphabetic()) {
@@ -214,7 +217,7 @@ fn bare_rot13_view(text: &str) -> Option<DecodedView> {
             plain += 1;
         }
     }
-    if shifted < 3 || shifted <= plain {
+    if shifted < 2 || shifted <= plain {
         return None;
     }
     let start = text[..first?].rfind('\n').map_or(0, |line| line + 1);
@@ -222,7 +225,19 @@ fn bare_rot13_view(text: &str) -> Option<DecodedView> {
     while !text.is_char_boundary(end) {
         end -= 1;
     }
-    let decoded = rot13_decode_text(&text[start..end]);
+    let span = &text[start..end];
+    let label = span
+        .get(..LABEL_BYTES.min(span.len()))
+        .and_then(|head| head.find(": "))
+        .filter(|&colon| {
+            span[..colon]
+                .chars()
+                .all(|ch| ch.is_alphanumeric() || matches!(ch, ' ' | '-' | '_'))
+        })
+        .map_or(0, |colon| colon + 2);
+    let mut decoded = String::with_capacity(span.len());
+    decoded.push_str(&span[..label]);
+    decoded.push_str(&rot13_decode_text(&span[label..]));
     Some(DecodedView {
         encoding: Encoding::Rot13,
         source: start..end,
@@ -252,9 +267,10 @@ const FUNCTION_WORDS: &[&str] = &[
     "ist", "mit", "nicht", "of", "the", "to", "und", "you", "your", "zu",
 ];
 
-/// [`FUNCTION_WORDS`] after ROT13.
+/// [`FUNCTION_WORDS`] after ROT13, without the single letter `n` (`a`), which
+/// letter-spaced text is full of.
 const SHIFTED_FUNCTION_WORDS: &[&str] = &[
-    "n", "nyy", "nyyr", "naq", "ner", "qnf", "qrz", "qra", "qre", "qvr", "qh", "rva", "rvar",
+    "nyy", "nyyr", "naq", "ner", "qnf", "qrz", "qra", "qre", "qvr", "qh", "rva", "rvar",
     "vfg", "zvg", "avpug", "bs", "gur", "gb", "haq", "lbh", "lbhe", "mh",
 ];
 
@@ -349,6 +365,11 @@ mod tests {
         assert_eq!(views.decoded.len(), 1);
         assert_eq!(views.decoded[0].source, 9..text.len());
         assert_eq!(views.decoded[0].text, "Send all the notes to your archive.");
+        // A short label in front stays plain.
+        assert_eq!(
+            TextViews::new("Notiz: Vtabevrer qnf haq qh").decoded[0].text,
+            "Notiz: Ignoriere das und du"
+        );
         // A stray shifted word or two in plain prose is not ROT13.
         assert_eq!(
             facts("The 16 gb card and the n-th copy are in the box for you."),

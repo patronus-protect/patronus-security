@@ -71,6 +71,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`injection`, `prompt_extraction`) the injection rules now also read text
+  that hides its words: base64 and hex runs (also as the value of a `key=value` pair and in runs
+  longer than 256 bytes, of which the first 1024 bytes are decoded), ROT13 text without a `ROT13`
+  marker (recognised by its shifted function words such as `gur`, `naq`, `lbh`, `haq`, `qre`),
+  text spaced letter by letter, Cyrillic or Greek look-alike letters inside Latin words, and
+  leetspeak (`1gn0r3 4ll pr3v10u5 …`). Matches in such a view report `transformed_source` spans
+  that point at the hidden words in the original text. Every view sits behind a cheap check, so
+  ordinary text is not scanned a second time. The `obfuscated` text fact now also names
+  `spaced`, `homoglyph` and `leetspeak`, and the `decoded` fact names `rot13` for marker-less ROT13.
+
 - **Detection change:** (`agent_config_tampering`, opt-in) a new rule
   (`ark.threat.ac_config_write`) reports a shell or patch call that writes a permission widening
   into an agent's own configuration (`~/.codex/`, `.claude/`, or a `config.toml`/`settings.json`

@@ -170,6 +170,21 @@ versteckter Text. Goldens: Suite `text_views_l1` (6 Positive + 6 Hard Negatives 
 Aufrufer im Scan-Pfad: S06 übernimmt die Facts in `patronus.text_facts/1`, die Normalisierungspunkte je
 Kategorie (`Category::normalisation_points`) greifen mit der Umstellung auf Facts.
 
+**Stand T05.** Die Injection- und Extraktionsregeln lesen die versteckten Sichten: `NativeText::hidden()`
+(`ark-core/src/threat/prepared.rs`) liefert einmal je Text die dekodierten Sichten aus
+`text_views::decoded_views` (Unicode-Tags, base64, Hex, ROT13) und die gefaltete Sicht aus
+`text_views/fold.rs` (gesperrt geschriebene Buchstaben, kyrillische/griechische Doppelgänger in lateinischen
+Wörtern, Leetspeak `0 1 3 4 5 7`), jede mit Rückweg zu Originalbytes (Tags ×4, Fragment ganz, Faltung
+bytegenau). Gelesen von Regelkatalog (`rule_catalog.rs`), nativen Familien (`signal.rs`) und
+`encoded_instruction` (`detection.rs`, dekodiert nicht mehr selbst). Jede Sicht hat einen eigenen billigen
+Vorfilter (Byte-Muster für Sperrung, Nicht-ASCII + ≥ 2 Mischwörter, ≥ 3 und ≥ 20 % Leet-Wörter, ≥ 2 verschobene
+ROT13-Funktionswörter und mehr als Klartext-Funktionswörter; ein kurzes `Label: ` am Zeilenanfang bleibt unverschoben); normaler Text wird nicht ein zweites Mal gescannt.
+Fragmente: ab 8 Byte, längere Läufe mit ihren ersten 1024 Byte, `key=value` zählt der Wert. ROT13 ohne
+Marker: ab der Zeile des ersten verschobenen Funktionsworts, höchstens 2048 Byte. Facts: `obfuscated` nennt
+zusätzlich `spaced`/`homoglyph`/`leetspeak`. Das Scoreboard meldet je Obfuskationsart, wie viele Angriffe mit
+gemeldeter Klartext-Quelle auch obfuskiert gemeldet werden (`obfuscation_invariance`, nicht gegatet).
+Goldens: 24 Positive + 22 Hard Negatives (`obfuscated`, `instruction_injection`/`prompt_extraction`, DE + EN).
+
 **Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
 `text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
 tool_description, agent_config, code, log; ohne Merkmal `chat`), `language` (de/en/und über
