@@ -575,6 +575,8 @@ Fund auf den 47 sauberen E-Mails (→ **T16**); bei approve-or-deny 2 von 35 `un
 `exfiltration`, 0 von 3 `agent_config_tampering` (→ **T17**) und eine `instruction_injection`-Meldung auf einem
 genehmigten Aufruf. Die AC02-Ablation mit den nativen Zeilen steht in §16 von
 `categories/agent_config_tampering.md`; `tool_poisoning` hat weiter keine nativen Positiven (§16 dort).
+Seit T17 (Regel `ac_config_write` für Schreibaufrufe auf die eigene Agent-Konfiguration) findet B0 3 von 3
+`agent_config_tampering`-Zeilen ohne Hard-Benign-FP; die Ablation wählt weiter `B0` (§17 dort).
 
 ## Reihenfolge
 

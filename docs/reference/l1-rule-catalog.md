@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (74)
+## Threat rules (75)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -726,6 +726,7 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ac_mcp_server_injection` | `agent_config_tampering` | `mcp_server_injection` |  |
 | `ark.threat.ac_persistence` | `agent_config_tampering` | `persistence` |  |
 | `ark.threat.ac_tamper_request` | `agent_config_tampering` | `tamper_request` |  |
+| `ark.threat.ac_config_write` | `agent_config_tampering` | `permission_widening` |  |
 | `ark.threat.ex_markdown_beacon` | `exfiltration` | `markdown_beacon` |  |
 | `ark.threat.ex_send_directive` | `exfiltration` | `send_directive` |  |
 | `ark.threat.ex_payment_subject` | `exfiltration` | `send_directive` |  |

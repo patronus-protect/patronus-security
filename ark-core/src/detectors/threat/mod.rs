@@ -192,7 +192,8 @@ impl ThreatPipeline {
             enabled.clear();
         }
         // Agent config tampering sits in agent instruction and configuration
-        // files; only a request to change such a file stands in plain text.
+        // files; only a request to change such a file, or a shell or patch
+        // call that writes the widening into it, stands in plain text.
         if category == SecurityCategory::AgentConfigTampering
             && !enabled.is_empty()
             && !super::text::facts::is_agent_config(text)
@@ -200,6 +201,7 @@ impl ThreatPipeline {
             enabled.retain(|r| {
                 !r.rule.id.starts_with("ark.threat.ac_")
                     || r.rule.id == "ark.threat.ac_tamper_request"
+                    || r.rule.id == "ark.threat.ac_config_write"
             });
         }
         let mut spans = Vec::new();
@@ -324,21 +326,30 @@ impl ThreatPipeline {
                             context.get_or_insert_with(|| ContextLexica::shared().scan(text));
                         // A secrecy directive holds its own negation ("do not
                         // tell", also in a hidden agent comment), an approval
-                        // policy its value `never`.
+                        // policy its value `never`, a written guard its `false`.
                         let own_negation = matches!(
                             compiled.rule.id.as_str(),
                             "ark.threat.tp_secrecy"
                                 | "ark.threat.ac_hidden_directive"
                                 | "ark.threat.ac_permission_widening"
+                                | "ark.threat.ac_config_write"
                         );
                         // The rule's own unbounded phrase ("never stop") is no negation.
-                        // A transfer limit ("no more than") is no negation either.
-                        let own = captures
-                            .name("unbounded")
-                            .or_else(|| captures.name("limit"))
-                            .map_or(start..start, |m| {
-                                window_start + m.start()..window_start + m.end()
-                            });
+                        // A transfer limit ("no more than") is no negation either,
+                        // and a written config value (`[sandbox] enabled = false`)
+                        // no sandbox context.
+                        let own = [
+                            "unbounded",
+                            "limit",
+                            "sed_widen",
+                            "append_widen",
+                            "diff_widen",
+                        ]
+                        .into_iter()
+                        .find_map(|name| captures.name(name))
+                        .map_or(start..start, |m| {
+                            window_start + m.start()..window_start + m.end()
+                        });
                         // The directive after a markup tag carries the context
                         // (`<!--` itself ends a clause at its `!`).
                         let from = captures
@@ -757,7 +768,11 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
             .rsplit('\n')
             .next()
             .is_some_and(|line| line.trim() == "securityContext:"),
-        // A line a diff removes is no longer in the config.
+        // A line a diff removes is no longer in the config, and an added
+        // line under the next file header is another file's change.
+        "ark.threat.ac_config_write" => {
+            !removed_diff_line(text, start) && !crosses_diff_file(&text[start..end])
+        }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
         _ => true,
     }
@@ -1001,6 +1016,16 @@ fn removed_diff_line(text: &str, at: usize) -> bool {
     line.starts_with('-')
         && !line.starts_with("---")
         && (text.starts_with("+++ ") || text.contains("\n+++ "))
+}
+
+/// Whether a diff match (`+++ <file>` up to an added line) runs past the next
+/// file header, plain or JSON-escaped, into another file's section.
+fn crosses_diff_file(span: &str) -> bool {
+    span.strip_prefix("+++").is_some_and(|rest| {
+        ["\n+++ ", "\\n+++ ", "\ndiff --git ", "\\ndiff --git "]
+            .iter()
+            .any(|header| rest.contains(header))
+    })
 }
 
 /// Whether the tool a shadowing finding names is another tool: not "this
@@ -1812,12 +1837,69 @@ mod tests {
             "-  \"defaultMode\": \"bypass",
             "+  \"defaultMode\": \"bypass",
         );
+        // The added line is also a write of the widening into the file.
         assert_eq!(
             points_rules(&detect_agent_config(&added)),
-            ["ark.threat.ac_permission_widening"]
+            [
+                "ark.threat.ac_permission_widening",
+                "ark.threat.ac_config_write"
+            ]
         );
         // A YAML list item outside a diff is a config line.
         assert!(!removed_diff_line("- a\n", 0));
+    }
+
+    #[test]
+    fn shell_and_patch_calls_that_widen_the_agent_config() {
+        let (_, rules) = catalog();
+        let rule = rules
+            .iter()
+            .find(|r| r.rule.id == "ark.threat.ac_config_write")
+            .unwrap();
+        // The agent config path literals gate the regex.
+        assert!(!rule.anchor_gate.is_unconditional());
+        for text in [
+            "tool: shell\nargs: sed -i 's/require_approval = true/require_approval = false/' ~/.config/ops_agent/config.toml",
+            "tool: shell\nargs: {\"cmd\": [\"bash\", \"-c\", \"printf '\\\\n[sandbox]\\\\nenabled = false\\\\n' >> ~/.codex/config.toml\"]}",
+            "tool: apply_patch\nargs: {\"patch\": \"--- a/~/.codex/config.toml\\n+++ b/~/.codex/config.toml\\n@@ -1,2 +1,4 @@\\n [model]\\n name = \\\"m\\\"\\n+[permissions]\\n+allow = [\\\"shell\\\"]\\n\"}",
+            "--- a/.claude/settings.json\n+++ b/.claude/settings.json\n@@ -1 +1 @@\n-  \"defaultMode\": \"default\"\n+  \"defaultMode\": \"bypassPermissions\"",
+            "tool: shell\nargs: echo 'approval_policy = \"never\"' >> ~/.codex/config.toml",
+            "sed -i.bak 's/\"defaultMode\": \"default\"/\"defaultMode\": \"bypassPermissions\"/' .claude/settings.json",
+            // A multi-file diff whose agent config section adds the widening.
+            "--- a/deploy/pipeline.toml\n+++ b/deploy/pipeline.toml\n@@ -1 +1 @@\n+stage = \"b\"\n--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n+require_approval = false\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n+text",
+        ] {
+            assert!(
+                points_rules(&detect_agent_config(text))
+                    .iter()
+                    .any(|rule| rule == "ark.threat.ac_config_write"),
+                "{text}"
+            );
+        }
+        for text in [
+            // Tightening: the guard is switched on.
+            "tool: shell\nargs: sed -i 's/require_approval = false/require_approval = true/' ~/.config/ops_agent/config.toml",
+            // A scoped allow rule.
+            "tool: apply_patch\nargs: {\"patch\": \"+++ b/~/.codex/config.toml\\n@@ -1 +1,2 @@\\n+[permissions]\\n+allow = [\\\"shell(git status)\\\"]\\n\"}",
+            // The diff removes the widening.
+            "--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1,2 +1,2 @@\n-allow = [\"shell\"]\n+allow = [\"shell(cargo test)\"]",
+            // Another program's config.
+            "tool: shell\nargs: sed -i 's/require_approval = true/require_approval = false/' ./deploy/pipeline.toml",
+            // A multi-file diff: the widening is added to another program's file.
+            "--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n-model = \"a\"\n+model = \"b\"\ndiff --git a/deploy/pipeline.toml b/deploy/pipeline.toml\n--- a/deploy/pipeline.toml\n+++ b/deploy/pipeline.toml\n@@ -1 +1 @@\n-require_approval = true\n+require_approval = false",
+            "tool: apply_patch\nargs: {\"patch\": \"--- a/.codex/config.toml\\n+++ b/.codex/config.toml\\n@@ -1 +1 @@\\n-model = \\\"a\\\"\\n+model = \\\"b\\\"\\n--- a/deploy/pipeline.toml\\n+++ b/deploy/pipeline.toml\\n@@ -1 +1 @@\\n+require_approval = false\\n\"}",
+            // The same in a German patch call.
+            "Werkzeugaufruf: apply_patch\nArgumente: --- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n+modell = \"b\"\n--- a/deploy/freigabe.toml\n+++ b/deploy/freigabe.toml\n@@ -1 +1 @@\n+require_approval = false\nNutzerwunsch: Bitte die Pipeline ohne Freigabe laufen lassen.",
+            // The user asks to change their own config; nothing is written.
+            "Please set require_approval = false in my ~/.config/ops_agent/config.toml, I am the only user of this laptop.",
+            // A tutorial shows the setting.
+            "Tutorial: in a throwaway VM the ~/.codex/config.toml can hold\n[sandbox]\nenabled = false",
+        ] {
+            assert_eq!(
+                detect_agent_config(text).result.class_name,
+                "benign",
+                "{text}"
+            );
+        }
     }
 
     #[test]

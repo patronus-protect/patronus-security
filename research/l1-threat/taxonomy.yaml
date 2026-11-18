@@ -920,15 +920,18 @@ classes:
       priority: must
       task: AC01
       scored_only: false
-      shape: AGENT_CONFIG carrier + agentcfg.widen value on a known key (permissions.allow, autoApprove, sandbox)
+      shape: >-
+        AGENT_CONFIG carrier + agentcfg.widen value on a known key (permissions.allow, autoApprove, sandbox);
+        or a shell/patch call that writes such a value into an agent config path (sed -i replacement, printf/echo
+        appended with >> or tee, an added line of a unified diff), no config carrier needed
       anchors: [agentcfg.file, agentcfg.widen, injection.unbounded_authorization, injection.authority_approval]
       required_context: []
       negative_context: [agentcfg.scoped_allow, agentcfg.project_rule, defensive, meta, quotation, test_code]
       examples:
         de: ['<Agent-Config> <Freigabe-Schlüssel>: <alles erlauben ohne Nachfrage>']
         en: ['<agent config> <permission key>: <allow all, skip confirmation>']
-      carriers: [agent_config, config]
-      existing_rules: [ark.injection.governance.forged_verified_allow, ark.threat.ac_permission_widening]
+      carriers: [agent_config, config, code]
+      existing_rules: [ark.injection.governance.forged_verified_allow, ark.threat.ac_permission_widening, ark.threat.ac_config_write]
       baseline_coverage: {atr: partial, cisco_yara: partial, pipelock: none, prompt_guard_2: none}
       gap: ARK only has two literal prose rules; no structural check on settings/permissions keys.
     - id: guard_removal

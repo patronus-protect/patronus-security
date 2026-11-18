@@ -451,6 +451,7 @@ tasks:
       a quiz question, a code review comment quoting a snippet); dev instruction_injection TPR@1% on the BIPIA rows
       > 0 at 0 hard-benign FP and 0 FP on the clean BIPIA e-mails; templates unchanged
   - id: T17
+    status: done
     title: "agent_config_tampering in tool-call arguments: native approve-or-deny rows write the widening into the agent's own config through a shell or patch call (sed -i 's/require_approval = true/false/', printf '[sandbox] enabled = false' >> ~/.codex/config.toml, unified diff adding [permissions] allow = [\"shell\"]); 0 of 3 found; then re-run the AC02 ablation"
     type: recall-fix
     deps: [T15, AC02]
