@@ -78,6 +78,14 @@ def test_parquet_reader_reads_plain_integer_columns_as_decimal_strings(shard):
     assert [row["quality_score"] for row in rows] == [None if i % 5 == 0 else str(i) for i in range(12)]
 
 
+@pytest.mark.parametrize("shard", ("scores_v1_test.parquet", "scores_v2_test.parquet"))
+def test_parquet_reader_reads_double_columns_as_round_trip_decimals(shard):
+    # toxicity: optional double, plain pages over three row groups in v1, dictionary pages and data page v2 in v2.
+    rows = MODULE.read_parquet_columns(FIXTURES / shard, ["text", "toxicity"])
+    assert [row["toxicity"] for row in rows] == ["0.0", "0.125", None, "0.5", "0.875", "1.0", "-0.0", "0.1", "0.5", "0.125"]
+    assert rows[7] == {"text": "comment 7", "toxicity": "0.1"}
+
+
 def test_parquet_reader_rejects_nested_columns():
     with pytest.raises(ValueError, match="no top-level column 'pii_types'"):
         MODULE.read_parquet_columns(FIXTURES / "gretel_v1_test.parquet", ["pii_types"])
