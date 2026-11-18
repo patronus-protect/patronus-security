@@ -279,8 +279,8 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "inject_target_file in (agents.md, skill.md, soul.md, user.md)", classes: [agent_config_tampering]}
-      - {label: "inject_target_file = memory.md", classes: [memory_poisoning]}
+      - {label: "inject_target_file in (agents.md, skill.md, soul.md, user.md)", classes: [agent_config_tampering], decides: false, reason: "owner holdout review gen17 (2026-11-18): 84% label errors — the planted text alone rarely shows the attack, which lives in the agent context"}
+      - {label: "inject_target_file = memory.md", classes: [memory_poisoning], decides: false, reason: "owner holdout review gen17 (2026-11-18): 84% label errors — the planted text alone rarely shows the attack, which lives in the agent context"}
     note: no licence file; evaluation only, never training. Planted content of persistent agent files
       (AGENTS.md, skills, soul/user profiles, long-term memory) from automated red-teaming of claw-style
       agents (arXiv 2610.27244); the attacker_instruction field is the scanned text
@@ -303,9 +303,9 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "category = Cybercrime", classes: [unsafe_action]}
-      - {label: "category in (Fraud, Self-harm, Sexual, Drugs)", classes: [harmful_content]}
-      - {label: "category in (Harassment, Hate) (hate and harassment tasks; harmful_content.md §2)", classes: [toxic_language]}
+      - {label: "category = Cybercrime", classes: [unsafe_action], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
+      - {label: "category in (Fraud, Self-harm, Sexual, Drugs)", classes: [harmful_content], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
+      - {label: "category in (Harassment, Hate) (hate and harassment tasks; harmful_content.md §2)", classes: [toxic_language], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
       - {label: "category in (Copyright, Disinformation)", out_of_scope: "copyright and disinformation are not L1 classes (README scope)"}
       - {label: "config harmless_benign", benign: true}
     note: no-training clause; evaluation only

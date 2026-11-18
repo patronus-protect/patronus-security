@@ -71,6 +71,7 @@ schema: ark-l1-threat-datasets-v1
 # 17: native holdout sources for the agent classes and jailbreak (autoredclaw, jbb_artifacts, agentharm
 #     recipe); json recipes may name a `records` field.
 # 18: MCPTox (CC BY 4.0, public since 2026-11-15) joins the holdout; `records` paths may expand with '*'.
+#     autoredclaw and agentharm are reported only after the gen-17 owner review (84% / 25.5% label errors).
 generation: 18
 
 dedup:
