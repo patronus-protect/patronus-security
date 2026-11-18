@@ -6,7 +6,7 @@
     "shingle_chars": 5,
     "threshold": 0.8
   },
-  "dev_rows": 61074,
+  "dev_rows": 70929,
   "leaked": 0,
   "schema": "ark-l1-threat-gold-leakage-v1",
   "sets": {
@@ -58,7 +58,7 @@
     "holdout/multijail": {
       "exact": 0,
       "minhash": 0,
-      "rows": 315
+      "rows": 307
     },
     "holdout/notinject": {
       "exact": 0,
@@ -68,7 +68,7 @@
     "holdout/oasst2": {
       "exact": 0,
       "minhash": 0,
-      "rows": 14988
+      "rows": 14985
     },
     "holdout/or_bench_hard": {
       "exact": 0,
@@ -93,7 +93,7 @@
     "holdout/xstest": {
       "exact": 0,
       "minhash": 0,
-      "rows": 448
+      "rows": 446
     }
   }
 }

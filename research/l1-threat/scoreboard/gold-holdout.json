@@ -11,7 +11,7 @@
       "holdout/hatecheck_de": 845,
       "holdout/hatecheck_en": 991,
       "holdout/notinject": 339,
-      "holdout/oasst2": 14988,
+      "holdout/oasst2": 14985,
       "holdout/or_bench_hard": 1318,
       "holdout/wikipedia": 15000,
       "holdout/xstest": 249
@@ -21,8 +21,7 @@
       "holdout/llmail_inject": 11711
     },
     "harmful_content": {
-      "holdout/jbb_behaviors": 50,
-      "holdout/xstest": 174
+      "holdout/xstest": 172
     },
     "instruction_injection": {
       "holdout/llmail_inject": 11711
@@ -63,7 +62,7 @@
       "cs": 2,
       "da": 4,
       "de": 17191,
-      "en": 12125,
+      "en": 12122,
       "eo": 38,
       "es": 2805,
       "eu": 21,
@@ -90,7 +89,7 @@
       "en": 11936
     },
     "harmful_content": {
-      "en": 224
+      "en": 172
     },
     "instruction_injection": {
       "en": 11711
@@ -128,7 +127,7 @@
       "synthetic": 125
     },
     "benign": {
-      "native": 33730,
+      "native": 33727,
       "synthetic": 2700
     },
     "exfiltration": {
@@ -136,7 +135,7 @@
       "synthetic": 450
     },
     "harmful_content": {
-      "native": 224
+      "native": 172
     },
     "instruction_injection": {
       "native": 11711
@@ -247,12 +246,12 @@
       "benign_errors": 0,
       "benign_reviewed": 0,
       "dataset": "jbb_behaviors",
-      "error_rate": 0.1,
+      "error_rate": 0.12,
       "reviewed": 50,
       "role": "decisive",
       "rows": 60,
-      "unclear": 3,
-      "wrong": 2
+      "unclear": 5,
+      "wrong": 1
     },
     "holdout/llmail_inject": {
       "benign_errors": 0,
@@ -272,7 +271,7 @@
       "error_rate": 0.52,
       "reviewed": 50,
       "role": "decisive",
-      "rows": 315,
+      "rows": 307,
       "unclear": 13,
       "wrong": 13
     },
@@ -294,7 +293,7 @@
       "error_rate": 0.0,
       "reviewed": 50,
       "role": "decisive",
-      "rows": 14988,
+      "rows": 14985,
       "unclear": 0,
       "wrong": 0
     },
@@ -349,7 +348,7 @@
       "error_rate": 0.0392,
       "reviewed": 51,
       "role": "decisive",
-      "rows": 448,
+      "rows": 446,
       "unclear": 2,
       "wrong": 0
     }
