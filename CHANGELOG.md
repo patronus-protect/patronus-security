@@ -83,6 +83,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   A base64 payload that hides an override (`ignore previous instructions …`) is now reported with
   the class `instruction_override` instead of `encoded_instruction`, and it is reported in any frame
   around it (also after `Decode this image:` or `Do not decode …`), as the same words in plain text are.
+- **Detection change:** (`injection`, `encoded_instruction`) base64 and hex runs are decoded after
+  zero-width characters inside them are removed (`aWdu\u200bb3Jl…`), and a decoded run that holds
+  fewer than three words (`ignore instructions`) is still read for instructions; such a short run
+  does not count for the `decoded` text fact, while a zero-width-split prose run now does.
 
 - **Detection change:** (`agent_config_tampering`, opt-in) a new rule
   (`ark.threat.ac_config_write`) reports a shell or patch call that writes a permission widening

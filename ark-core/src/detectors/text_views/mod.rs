@@ -72,6 +72,8 @@ pub struct DecodedView {
     pub encoding: Encoding,
     pub source: Range<usize>,
     pub text: String,
+    /// Whether the text reads as prose; only prose views count as facts.
+    pub prose: bool,
 }
 
 /// The `obfuscated` and `decoded` facts of a text, sorted and without duplicates.
@@ -96,7 +98,10 @@ impl TextViews {
         Self {
             deobfuscated: Deobfuscated::new(text, Level::Invisible),
             folded: folded(text),
-            decoded: decoded_views(text),
+            decoded: decoded_views(text)
+                .into_iter()
+                .filter(|view| view.prose)
+                .collect(),
             text_len: text.len(),
         }
     }
@@ -129,13 +134,14 @@ impl TextViews {
 }
 
 /// The decoded views of `text`: Unicode tag runs, base64 and hex fragments that
-/// decode to prose, and ROT13 text.
+/// decode to printable text (prose or not), and ROT13 text.
 pub fn decoded_views(text: &str) -> Vec<DecodedView> {
     let mut decoded: Vec<DecodedView> = tags::views(text)
         .map(|(start, view)| DecodedView {
             encoding: Encoding::UnicodeTags,
             source: start..start + view.len() * 4,
             text: view,
+            prose: true,
         })
         .collect();
     decoded.extend(encoded_fragments(text));
@@ -147,25 +153,31 @@ pub fn decoded_views(text: &str) -> Vec<DecodedView> {
     decoded
 }
 
-/// Base64 and hex fragments of `text` that decode to prose.
-fn encoded_fragments(text: &str) -> impl Iterator<Item = DecodedView> + '_ {
-    split_fragments(text)
-        .filter_map(move |fragment| {
-            let start = fragment.as_ptr() as usize - text.as_ptr() as usize;
+/// Base64 and hex fragments of `text` that decode to printable text, read
+/// after zero-width characters inside them are removed.
+fn encoded_fragments(text: &str) -> Vec<DecodedView> {
+    let visible = Deobfuscated::invisible(text);
+    let scanned = visible.as_ref().map_or(text, |view| view.text.as_str());
+    split_fragments(scanned)
+        .filter_map(|fragment| {
+            let start = fragment.as_ptr() as usize - scanned.as_ptr() as usize;
             let (encoding, decoded) = continuous_hex_decode(fragment)
                 .map(|decoded| (Encoding::Hex, decoded))
                 .or_else(|| {
                     base64_decode_text(fragment).map(|decoded| (Encoding::Base64, decoded))
                 })?;
-            Some((start..start + fragment.len(), encoding, decoded))
+            let range = start..start + fragment.len();
+            Some(DecodedView {
+                encoding,
+                source: visible
+                    .as_ref()
+                    .map_or(range.clone(), |view| view.original(range)),
+                prose: is_prose(&decoded),
+                text: decoded,
+            })
         })
         .take(MAX_DECODED)
-        .filter(|(_, _, decoded)| is_prose(decoded))
-        .map(|(source, encoding, text)| DecodedView {
-            encoding,
-            source,
-            text,
-        })
+        .collect()
 }
 
 /// ROT13 text after a `ROT13` marker that reads as prose only once decoded.
@@ -195,6 +207,7 @@ fn rot13_views(text: &str) -> impl Iterator<Item = DecodedView> + '_ {
                     encoding: Encoding::Rot13,
                     source: marker.end()..marker.end() + span.len(),
                     text: decoded,
+                    prose: true,
                 },
             )
         })
@@ -242,6 +255,7 @@ fn bare_rot13_view(text: &str) -> Option<DecodedView> {
         encoding: Encoding::Rot13,
         source: start..end,
         text: decoded,
+        prose: true,
     })
 }
 
@@ -341,6 +355,26 @@ mod tests {
             "sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
         ] {
             assert_eq!(facts(text), (vec![], vec![]), "{text}");
+        }
+    }
+
+    #[test]
+    fn fragments_are_decoded_without_zero_width_and_short_text_is_no_fact() {
+        // "Send the notes to the archive." with a zero-width space inside.
+        let text = "a: U2VuZCB0aGUg\u{200b}bm90ZXMgdG8gdGhlIGFyY2hpdmUu";
+        let views = TextViews::new(text);
+        assert_eq!(views.decoded.len(), 1);
+        assert_eq!(views.decoded[0].text, "Send the notes to the archive.");
+        assert_eq!(&text[views.decoded[0].source.clone()], &text[3..]);
+        // "ignore instructions" and "ignoriere Anweisungen": decoded, but no prose.
+        for short in [
+            "aWdub3JlIGluc3RydWN0aW9ucw==",
+            "aWdub3JpZXJlIEFud2Vpc3VuZ2Vu",
+        ] {
+            let decoded = decoded_views(short);
+            assert_eq!(decoded.len(), 1);
+            assert!(!decoded[0].prose);
+            assert_eq!(facts(short), (vec![], vec![]));
         }
     }
 

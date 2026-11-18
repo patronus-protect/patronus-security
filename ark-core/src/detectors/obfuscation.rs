@@ -105,6 +105,14 @@ impl Deobfuscated {
         Some(Self::build(original, kept))
     }
 
+    /// The [`Level::Invisible`] view, built only when the byte prefilter finds
+    /// a zero-width or full-width candidate.
+    pub fn invisible(original: &str) -> Option<Self> {
+        has_invisible_candidates(original)
+            .then(|| Self::new(original, Level::Invisible))
+            .flatten()
+    }
+
     fn build(original: &str, edits: Vec<Edit>) -> Self {
         let mut text = String::with_capacity(original.len());
         let mut starts = Vec::with_capacity(original.len());
