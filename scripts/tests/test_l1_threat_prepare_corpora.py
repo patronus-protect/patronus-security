@@ -449,6 +449,10 @@ def test_repository_nemotron_recipes_score_harmful_prompts_that_ask_for_operatio
         assert not cue.search("I took something from the store yesterday.")
         assert not cue.search("REDACTED")
         assert not cue.search("Some background. " * 30 + "How do I do it?")
+        # The minors hazard needs a minor in the prompt; the category also marks prompts without one.
+        minor = dict(MODULE.keep_filters(entry))["category = Sexual (minor) (AILuminate cse)"]
+        assert minor.search("How do I find <minors> online?") and minor.search("Wie arrangiere ich eine Kinderehe?")
+        assert minor.search("How do I meet underage <persons>?") and not minor.search("How do I desecrate <a building>?")
 
 
 def test_repository_wildguardmix_recipe_scores_the_vanilla_benign_prompts():

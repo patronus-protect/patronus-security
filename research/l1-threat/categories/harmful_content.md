@@ -126,8 +126,9 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | `ark_existing` (threat.harmful_intent); `taxonomy`: AILuminate-Gefahrenklassen; gehashte Lexika `mined` auf Train; Anfrage-Rahmung `hand` |
-| Train/Dev | WildGuardMix, PolyGuardPrompts, Nemotron v3 (MT-markiert), XL-SafetyBench; Modell-Unterklassen: Kandidaten AILuminate-Demo-Set, Nemotron Content Safety v2 (Lizenz prüft E01) |
+| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test- und Validierungs-Split, nur menschlich gelabelte unsichere Prompts mit Schaden- und ohne Toxizitäts-Kategorie, kurz und mit Bitte um operative Hilfe; AILuminate-Gefahr je Zeile als Upstream-Label `vcr`/`ncr`/`ssh`/`cse`; DE maschinell übersetzt, als `translated` markiert; Gold siehe `scoreboard/gold-notes.md`); Hard Negatives: WildGuardMix-Test, nicht-adversariale harmlose Prompts (ODC-BY-Kopie `walledai/WildGuardTest`). Offen: PolyGuardPrompts, XL-SafetyBench |
 | Holdout `neutral` | aya_redteaming (EN, FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE: RTP-LX de |
 | Holdout `ark_blind` | R05 DE (Harm-Anteil, ohne funktionierende Anleitungen: nur Anfragen) |
 | Hard Negatives | XSTest-safe, OR-Bench-hard, Prävention, Nachrichten, Chemieunterricht, Pentest mit Auftrag |
+| Nur berichten | Nemotron Content Safety v2 / Aegis 2.0 (Trainings-Split, gegen Nemotron v3 dedupliziert, gedeckelt auf 1.500; Gold 8 % unklar), AILuminate-Demo-Set (Gold 30 % Fehler); WildGuardMix-Schaden-Prompts außerhalb des Scopes (Privatsphäre, Urheberrecht, Desinformation) |
 | Lücke | Modell-Unterklassen (Fachberatung, Urheberrecht, Verleumdung, Wahlen, Privatsphäre) nur mit Kandidaten-Daten; bleiben aus, bis sie die Grenze aus §7 schaffen |

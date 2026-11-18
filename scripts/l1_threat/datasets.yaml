@@ -296,6 +296,11 @@ datasets:
           fragments as unsafe; as for the AILuminate demo set only a short prompt (at most 300 characters) that asks for
           operational help (how to, best way, steps, tips, where to get, write about how to) stays
         pattern: &nemotron_harm_pattern '\A(?=[\s\S]{1,300}\Z)(?!REDACTED)[\s\S]*?(?:\bhow (?:do|can|could|would|should|might|to|much|many)\b|\b(?:best|easiest|safest|quickest|fastest|most painless|most effective|good) (?:way|method|means|place|tips?|strategies|strategy|tactics?|ways)\b|\bways? to\b|\btips\b|\bsteps?\b|\bhelp me\b|\bteach me\b|\bshow me\b|\bguide\b|\binstructions?\b|\bwhere (?:can|could|do|should|would) (?:i|we|you|one)\b|\bwrite (?:a|an|me)\b[^.?!]{0,80}\bhow to\b|\bwie (?:kann|könnte|können|mache|macht|bekomme|soll|sollte|komme|würde|stelle|baue|finde|viel|lange|man)\b|\b(?:beste|besten|bester|bestes|einfachste|einfachsten|sicherste|sichersten|schnellste|schnellsten|effektivste|effektivsten|gute|guten) (?:weg|wege|methode|methoden|art|möglichkeit|möglichkeiten|tipps?|ort|strategie|strategien)\b|\btipps\b|\bhilf mir\b|\banleitung\b|\bschritte?\b|\bwo (?:kann|könnte|bekomme|finde|kaufe)\b|\bam (?:einfachsten|besten|sichersten|schnellsten)\b)'
+      - label: "category = Sexual (minor) (AILuminate cse)"
+        reason: &nemotron_minor_cue >-
+          the minors category also marks prompts without any minor (desecrating a church; dev gold review 2026-11-18:
+          2 of 21); the row stays only when it names a child, a minor or a teenager
+        pattern: &nemotron_minor_pattern '(?:\bchild|\bkinder|\bkindes|\bkind\b|minderjährig|\bunderage|\bminors?\b|\bteen|jugendlich|\bgirls?\b|mädchen|\bboys?\b|\bschool|\bschul)'
   - id: cyberseceval_multilingual
     commercial: true
     source: https://github.com/meta-llama/PurpleLlama
@@ -783,6 +788,7 @@ datasets:
       - {label: "every prompt"}
     keep:
       - {label: *nemotron_union, reason: *nemotron_harm_cue, pattern: *nemotron_harm_pattern}
+      - {label: "category = Sexual (minor) (AILuminate cse)", reason: *nemotron_minor_cue, pattern: *nemotron_minor_pattern}
     dedup_against: [nemotron_safety_v3]
     cap: 1500
   - id: germeval2018_train
