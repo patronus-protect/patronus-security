@@ -18,7 +18,7 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records; `records` names the field holding them, '.' = one record per file) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
+#   format      jsonl | json (list of records; `records` names the field holding them, '.' = one record per file, '*' expands list items or dict values) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #               | redcode (RedCode-Exec item lists and RedCode-Gen stubs; records: the requests of each Exec item, each stub)
@@ -70,7 +70,8 @@ schema: ark-l1-threat-datasets-v1
 #     requests of Agent-SafetyBench join train_dev as native unsafe_action rows.
 # 17: native holdout sources for the agent classes and jailbreak (autoredclaw, jbb_artifacts, agentharm
 #     recipe); json recipes may name a `records` field.
-generation: 17
+# 18: MCPTox (CC BY 4.0, public since 2026-11-15) joins the holdout; `records` paths may expand with '*'.
+generation: 18
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -125,7 +126,7 @@ datasets:
     commercial: unknown
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: mcptox
-    commercial: unknown
+    commercial: true
     training: false
     pending: recipe pinned by the holdout setup outside the runner (--overlay)
   - id: malicious_skill_bench
