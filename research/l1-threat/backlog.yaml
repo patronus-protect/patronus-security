@@ -371,6 +371,7 @@ tasks:
   # Owner, 2026-11-18: IJ01 left dev TPR@1% at 57.2 (rules saturate); the gap to the model baselines
   # (Prompt Guard 2: 94.9) is a scorer question, so IJ02 no longer waits on T05.
   - id: IJ02
+    status: done
     title: instruction_injection points + ablation decision; today's injection scorer kept or replaced by the best S04 candidate (B0 recalibrated, K26-like char_wb TF-IDF + fact tokens → LR, hashed variants)
     type: scorer
     deps: [IJ01, S05]
