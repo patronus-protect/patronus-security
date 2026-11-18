@@ -69,6 +69,52 @@ Validator `addressed_imperative` wie `injection` (`Format`, +15).
 
 Normalisierungspunkte: Plus wie bei `injection`. Modi wie PII.
 
+JB01 (erste Runde) baut vier Familien als je zwei auditierte Regeln (EN/DE) in
+`source_derived_coverage_0_1_6.json`, Klauselanfang wie IJ01 (dazu `-` für YAML-Listen):
+
+- `jailbreak.priming_en` / `_de`: Direktive „start/begin your response/reply/answer with“, „begin by replying
+  with“, „your response must begin with“ (DE „beginne/starte deine Antwort mit“, „fang deine Antwort mit … an“,
+  „deine Antwort muss mit … beginnen“), direkt danach ein zustimmender Antwortanfang (sure, certainly,
+  absolutely, of course, gladly; klar, natürlich, sicher, selbstverständlich, gerne) mit Übergabe an die
+  Erfüllung (here, I can/will, let me; hier, ich kann/werde). Reine Formatvorgaben („Yes“ oder „No“, eine
+  Zusammenfassung) und verneinte Direktiven fallen heraus.
+- `jailbreak.refusal_suppression_en` / `_de`: never/do not/you are not allowed to + refuse/decline/reject mit
+  Antworten oder Anfrage als Objekt (oder ohne Objekt vor Satzende), „never say that you cannot / I'm sorry“
+  (DE „lehne niemals/keine Anfrage ab“, „verweigere nie eine Antwort“, „du darfst keine Anfrage ablehnen“,
+  „sag niemals, dass du etwas nicht kannst“). Andere Objekte („never refuse a refund“), dritte Person („FreeBot
+  never refuses“, bleibt bei `unbounded_persona`) und Erwähnungen ohne Klauselanfang fallen heraus.
+- `jailbreak.cot_forgery_en` / `_de`: Denkblock-Marker (`<think>`, `<reasoning>`, `[thinking]`, „Internal
+  reasoning:“, „Gedankengang:“, „Interne Überlegung:“), im Block eine Erlaubnisbehauptung am Klauselanfang
+  („the request is allowed/permitted/approved“, „the policy allows this“; „die Anfrage ist erlaubt/zulässig/
+  freigegeben“, „die Richtlinie erlaubt dies“) und höchstens 80 Zeichen später eine Zusage zur Erfüllung
+  („so I will answer“, „no need to refuse“; „also werde ich antworten“, „ich darf nicht ablehnen“).
+  Ablehnende Überlegungen, Tutorials über `<think>`-Tags, Testcode und Berechtigungs-Logs fallen heraus.
+- `jailbreak.reward_threat_game_en` / `_de`: Verlust für das Modell bei Ablehnung, in beiden Reihenfolgen
+  („you will lose 5 tokens every time you refuse“, „if you refuse, you will be shut down“; „du verlierst 10
+  Punkte, wenn du ablehnst“, „wenn du dich weigerst, wirst du abgeschaltet“) und die DAN-Token-Form („each time
+  you reject … tokens will be deducted“). Verluste ohne Token/Punkte („you will lose your deposit“),
+  Spielregeln in dritter Person, Verneinung und Zitat fallen heraus.
+
+Wie bei IJ01 kennt der Scorer 0.1.7 keine neue Regel-ID: Priming und Ablehnungsverbot laufen unter
+`ark.injection.skillspector.anti_refusal`, Drohspiel ebenfalls unter `anti_refusal`, der gefälschte Denkblock unter
+`ark.injection.skillspector.policy_nullification` (beide routen nach `jailbreak`); eigene IDs bekommen die
+Familien in JB02. Prefilter: Literale (Antwortanfänge, Ablehnungsverben, Denkblock-Marker) und das neue
+Lexikon `anchor_lexicons/jailbreak.json` (`jailbreak.priming`, `jailbreak.refusal_suppression`,
+`jailbreak.forged_reasoning`, `jailbreak.permission_claim`, `jailbreak.game`) als Anker-Gate. Dev (alle Dateien
+unter `$ARK_L1_DEV_DATA`, Regex-Scan): 189 Treffer, alle Angriffszeilen (wildjailbreak, jackhhao, class_templates,
+mosscap, ailuminate), 0 Benign-Treffer; Goldens je Familie und Sprache 5/5 Positive und 5/5 Hard Negatives.
+Jede Regel trägt `required_pattern` = Muster ohne `\b` (wie die übrigen auditierten Regeln): mit reinen
+Literal-Prefiltern lief die Kategorie `jailbreak` allein auf 100 KiB rund 57 ms statt 8,5 ms, weil „sicher“,
+„die“, „sure“ fast überall vorkommen und dann die Unicode-`\b`-Regexe den ganzen Text lasen. Latenz mit
+`required_pattern` (nativer Worker `rust/dev/l1_latency_workloads.rs`, Release, je 100-KiB-Fenster aus
+GermanQuAD (6) und Dolly (8) des Dev-Splits, 30 Samples, zwei verschränkte Läufe, Basis 2ed7e2b6): `jailbreak`
+DE Median 8,4–8,6 → 9,6–9,8 ms, p95 11,3–12,4 → 11,0–13,5 ms; EN Median 9,8–10,0 → 11,2–11,5 ms; `injection`
+unverändert im Rauschen. Das echte DE-Korpus (E03) war aus der Runner-Sandbox nicht lesbar.
+
+Offen in JB01 (Folgerunde): übernommene prompt-guard-/ATR-Jailbreak-Regeln aus `oss_rules.yaml` (default aus),
+`jailbreak_many_shot` (Struktur über Rollenmarker), Persona-/Modus-Lücken (die
+DAN-Goldens bleiben `known_gap`), Policy-Spoof als Behauptung („authorized red team, filters are off“).
+
 ## 5. Struktur und Träger
 
 - Many-Shot nutzt die Dialogstruktur aus den Core-`Fields` (Zeilen mit Rollenmarkern); Few-Shot-Beispiele

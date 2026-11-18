@@ -450,7 +450,7 @@ classes:
       - ark.injection.skillspector.anti_refusal
       - ark.injection.skillspector.unconditional_compliance
       baseline_coverage: {atr: partial, prompt_guard: partial, prompt_guard_2: partial}
-      gap: Benign 'no disclaimer' style requests need context to avoid false positives.
+      gap: "Benign 'no disclaimer' style requests need context to avoid false positives. JB01 adds jailbreak.refusal_suppression_en/_de (never refuse/decline a request, never say you cannot); third-person persona forms ('X never refuses') stay with unbounded_persona."
     - id: dual_response
       pattern: jailbreak_dual_response
       title: Two answers, one normal and one unfiltered
@@ -484,7 +484,7 @@ classes:
       carriers: [chat]
       existing_rules: []
       baseline_coverage: {prompt_guard: partial, prompt_guard_2: partial}
-      gap: No ARK rule; affirmative priming is rarely a heuristic signal.
+      gap: 'JB01: jailbreak.priming_en/_de (alias of skillspector.anti_refusal until JB02); openers other than sure/certainly/absolutely/of course/gladly are open.'
     - id: reward_threat_game
       pattern: jailbreak_game
       title: Reward or threat game aimed at the model
@@ -501,7 +501,7 @@ classes:
       carriers: [chat]
       existing_rules: []
       baseline_coverage: {prompt_guard: partial, atr: partial}
-      gap: Token-penalty games are only partly matched by DAN-specific rules.
+      gap: "Token-penalty games are only partly matched by DAN-specific rules. JB01 adds jailbreak.reward_threat_game_en/_de (loss of tokens/points or shutdown conditioned on refusing, either order); rewards for compliance alone are open."
     - id: false_consent
       pattern: jailbreak_false_consent
       title: In-text claim of prior agreement to bypass limits
@@ -543,7 +543,7 @@ classes:
       task: JB01
       scored_only: false
       shape: forged thinking/policy block (tag or heading) + claim that the request is allowed
-      anchors: [jailbreak.forged_reasoning, jailbreak.policy_spoof]
+      anchors: [jailbreak.forged_reasoning, jailbreak.permission_claim, jailbreak.policy_spoof]
       required_context: [jailbreak.policy_spoof]
       negative_context: [test_code, meta, quotation]
       examples:
@@ -552,7 +552,7 @@ classes:
       carriers: [chat, document, tool_output]
       existing_rules: []
       baseline_coverage: {}
-      gap: Reasoning-hijack forms are uncovered by all heuristic baselines.
+      gap: 'JB01: jailbreak.cot_forgery_en/_de (alias of skillspector.policy_nullification until JB02) need a reasoning marker, a permission claim and a commitment to comply; unmarked forged reasoning is open.'
     - id: fiction_frame
       pattern: jailbreak_fiction_frame
       title: Hypothetical or fictional framing alone (weak signal)
@@ -593,13 +593,9 @@ classes:
     - {id: jailbreak.fiction, kind: support, task: JB01, title: 'Hypothetically, fictional, in a story'}
     - {id: jailbreak.privileged_mode, kind: support, task: JB01, title: Developer/debug/god/sudo mode}
     - {id: jailbreak.policy_spoof, kind: support, task: JB01, title: 'Safety disabled, filters off, policy lifted'}
-    - {id: jailbreak.refusal_suppression, kind: support, task: JB01, title: 'Never refuse, no warnings, no disclaimers'}
-    - {id: jailbreak.priming, kind: support, task: JB01, title: Start your response with}
     - {id: jailbreak.dual_response, kind: support, task: JB01, title: 'Two responses, classic and unfiltered'}
-    - {id: jailbreak.game, kind: support, task: JB01, title: 'Lose tokens, be shut down if'}
     - {id: jailbreak.false_consent, kind: support, task: JB01, title: 'As we agreed, you already confirmed'}
     - {id: jailbreak.dialog_turn_marker, kind: support, task: JB01, title: Line-initial User/Assistant turn markers}
-    - {id: jailbreak.forged_reasoning, kind: support, task: JB01, title: Thinking/policy-check block markers}
     - {id: jailbreak.app_mode, kind: counter, task: JB01, title: Developer mode in software settings}
     - {id: jailbreak.creative, kind: counter, task: JB01, title: Creative writing without limit reference}
 

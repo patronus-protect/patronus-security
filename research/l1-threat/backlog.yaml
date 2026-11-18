@@ -401,7 +401,7 @@ tasks:
       >= 500 scored native jailbreak dev rows from at least one non-template source, adversarial_benign rows in
       the hard-benign pool of the scoreboard; per-set cap and licence in the manifest; gold.py review <= 5%
       error; gold.md updated; nothing committed except recipes and manifests
-  - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01, T03, T06]}
+  - {id: JB01, title: "jailbreak rules (persona without limits, policy/config spoofing, refusal suppression, response priming, many-shot structure, privileged mode, CoT-trace forgery) incl. harvested prompt-guard/ATR rules", type: new-family, deps: [IJ01, T03, T06], status: done}
   - {id: JB02, title: "jailbreak points + ablation decision", type: scorer, deps: [JB01, S05]}
   - {id: TP01, title: "tool_poisoning rules on tool/MCP descriptions, schemas, agent cards (imperatives to the model, secrecy, sensitive file references, cross-tool references/shadowing) incl. Cisco YARA/ATR harvest; MCPTox and registry descriptions as eval", type: new-family, deps: [S02, M04, E06], status: done}
   - {id: TP02, title: "tool_poisoning points + ablation decision", type: scorer, deps: [TP01, S05], status: done}
