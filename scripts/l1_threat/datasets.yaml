@@ -18,7 +18,7 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns) |
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8, plain integer and floating-point columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #   text        record field holding the text; `language` a fixed code or `language_field`

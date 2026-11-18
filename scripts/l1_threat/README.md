@@ -96,7 +96,7 @@ Tests: `scripts/tests/test_l1_threat_entity_map.py`.
 
 [`datasets.yaml`](datasets.yaml) sagt je Datensatz aus `entity_map.yaml`, wie er geholt und gelesen wird:
 Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format (`jsonl`, `json`, `csv`,
-`parquet` mit UTF-8- und einfachen Ganzzahl-Spalten, `agentdojo_trace`: ein AgentDojo-Lauf je Datei, Zeilen sind die
+`parquet` mit UTF-8-, einfachen Ganzzahl- und Gleitkomma-Spalten, `agentdojo_trace`: ein AgentDojo-Lauf je Datei, Zeilen sind die
 Tool-Ausgaben mit der Payload samt höchstens 300 Zeichen Träger je Seite bzw. ohne Angriff jede Tool-Ausgabe; `bipia`:
 BIPIA-E-Mails und Angriffsdateien zusammen, jede E-Mail ohne Angriff und jeder Angriff als eigene Zeile am Anfang, in
 der Mitte oder am Ende einer E-Mail mit höchstens 300 Zeichen ganzer Zeilen bzw. Wörter je Seite; Felder `attack_set`,
