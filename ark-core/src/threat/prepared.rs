@@ -83,16 +83,18 @@ impl<'a> NativeText<'a> {
                 .into_iter()
                 .map(|view| HiddenView {
                     kind: view.encoding.as_str(),
-                    stride: (view.encoding == Encoding::UnicodeTags).then_some(4),
-                    source: view.source,
-                    text: Self::from_text(Cow::Owned(view.text)),
+                    origin: if view.encoding == Encoding::UnicodeTags {
+                        Origin::Tags(view.source.start)
+                    } else {
+                        Origin::Whole(view.source)
+                    },
+                    text: Self::from_text(Cow::Owned(view.text.clone())),
                 })
                 .collect();
             views.extend(text_views::fold::folded(text).map(|folded| HiddenView {
                 kind: folded.kinds[0].as_str(),
-                stride: None,
-                source: 0..text.len(),
-                text: Self::from_text(Cow::Owned(folded.text)),
+                text: Self::from_text(Cow::Owned(folded.text.clone())),
+                origin: Origin::Folded(folded),
             }));
             views
         })
@@ -103,21 +105,27 @@ impl<'a> NativeText<'a> {
 pub struct HiddenView<'a> {
     /// The encoding or the first fold the view undid.
     pub kind: &'static str,
-    /// Original bytes per view byte (Unicode tags: 4); `None` maps every view
-    /// range to the whole source.
-    stride: Option<usize>,
-    source: Range<usize>,
+    origin: Origin,
     pub text: NativeText<'a>,
+}
+
+/// How a view range maps back to original bytes.
+enum Origin {
+    /// Unicode tags from this offset: four original bytes per view byte.
+    Tags(usize),
+    /// A decoded fragment: every view range maps to the whole fragment.
+    Whole(Range<usize>),
+    /// The folded view with its byte map.
+    Folded(text_views::fold::Folded),
 }
 
 impl HiddenView<'_> {
     /// Original byte range of the view range `range`.
     pub fn source(&self, range: Range<usize>) -> Range<usize> {
-        match self.stride {
-            Some(stride) => {
-                self.source.start + range.start * stride..self.source.start + range.end * stride
-            }
-            None => self.source.clone(),
+        match &self.origin {
+            Origin::Tags(start) => start + range.start * 4..start + range.end * 4,
+            Origin::Whole(source) => source.clone(),
+            Origin::Folded(folded) => folded.original(range),
         }
     }
 }

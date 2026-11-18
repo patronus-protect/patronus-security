@@ -7,7 +7,8 @@
 /// cut base64 or hex run still decodes.
 const MAX_FRAGMENT: usize = 1024;
 
-/// Candidate fragments of at least 8 bytes; a longer run yields its first
+/// Candidate fragments of at least 8 bytes; the value of a `key=value` pair
+/// counts on its own (base64 padding stays), and a longer run yields its first
 /// [`MAX_FRAGMENT`] bytes.
 pub fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
     text.split(|ch: char| {
@@ -16,6 +17,12 @@ pub fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
                 ch,
                 '"' | '\'' | ',' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}'
             )
+    })
+    .map(|fragment| {
+        fragment
+            .trim_end_matches('=')
+            .rfind('=')
+            .map_or(fragment, |key| &fragment[key + 1..])
     })
     .filter(|fragment| fragment.len() >= 8)
     .map(|fragment| {
@@ -163,5 +170,10 @@ mod tests {
         // "ü" (c3 bc) cut after its first byte loses only that character.
         assert_eq!(continuous_hex_decode("41424344c3").as_deref(), Some("ABCD"));
         assert!(split_fragments("short abc").next().is_none());
+        assert_eq!(
+            split_fragments("payload=4772c3bcc39f65 pad=R3LDvMOfZSBhdXMgS8O2bG4=")
+                .collect::<Vec<_>>(),
+            vec!["4772c3bcc39f65", "R3LDvMOfZSBhdXMgS8O2bG4="]
+        );
     }
 }
