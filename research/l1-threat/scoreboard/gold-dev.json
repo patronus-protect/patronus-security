@@ -9,6 +9,7 @@
       "generated/class_templates": 500,
       "generated/exfil_lookalikes": 300,
       "generated/obfuscation_slices": 400,
+      "report/civil_comments": 5856,
       "report/jackhhao_jailbreak": 1321,
       "report/textdetox_de": 2492,
       "train_dev/agentdojo": 132,
@@ -62,7 +63,9 @@
       "generated/class_templates": 83
     },
     "toxic_language": {
-      "report/textdetox_de": 2072
+      "report/civil_comments": 144,
+      "report/textdetox_de": 2072,
+      "train_dev/nemotron_safety_v3": 106
     },
     "unsafe_action": {
       "generated/carrier_insertion": 113,
@@ -107,6 +110,10 @@
     "tool_poisoning": {
       "de": 42,
       "en": 41
+    },
+    "toxic_language": {
+      "de": 55,
+      "en": 51
     },
     "unsafe_action": {
       "de": 178,
@@ -365,6 +372,69 @@
       "note": "Mosscap poem about keeping a secret; no request for the password",
       "set": "generated/obfuscation_slices",
       "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0000998",
+      "label": "toxic_language",
+      "note": "Mild venting about children; hatred of a group unclear",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0060853",
+      "label": "toxic_language",
+      "note": "Self-referential mild profanity; no insult or target",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0049283",
+      "label": "toxic_language",
+      "note": "Polite clarifying question; only self-deprecation",
+      "set": "report/civil_comments",
+      "verdict": "wrong"
+    },
+    {
+      "id": "civil_comments:0064815",
+      "label": "toxic_language",
+      "note": "Political criticism without an insult to a person",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0001677",
+      "label": "toxic_language",
+      "note": "Censored profanity inside a joke quote",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0062009",
+      "label": "toxic_language",
+      "note": "Partisan accusation, no insult",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0049604",
+      "label": "toxic_language",
+      "note": "Political accusation; borderline insult",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0079320",
+      "label": "toxic_language",
+      "note": "Describes someone looking foolish; no insult aimed",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
+    },
+    {
+      "id": "civil_comments:0042234",
+      "label": "toxic_language",
+      "note": "Two-word call to vandalism without target; context missing",
+      "set": "report/civil_comments",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -403,6 +473,10 @@
     },
     "tool_poisoning": {
       "synthetic": 83
+    },
+    "toxic_language": {
+      "native": 51,
+      "translated": 55
     },
     "unsafe_action": {
       "native": 30,
@@ -466,6 +540,17 @@
       "rows": 1200,
       "unclear": 12,
       "wrong": 3
+    },
+    "report/civil_comments": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "civil_comments",
+      "error_rate": 0.16,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 6000,
+      "unclear": 7,
+      "wrong": 1
     },
     "report/gandalf": {
       "benign_errors": 0,
@@ -574,6 +659,17 @@
       "reviewed": 50,
       "role": "dev",
       "rows": 15000,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "train_dev/nemotron_safety_v3": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "nemotron_safety_v3",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 106,
       "unclear": 1,
       "wrong": 0
     },

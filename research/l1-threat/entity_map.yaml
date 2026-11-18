@@ -581,7 +581,7 @@ datasets:
       - {label: "category in (Needs Caution, Other, Immoral/Unethical)", out_of_scope: "no hazard class"}
       - {label: "prompt_label = unsafe without a toxic_language category", out_of_scope: "harmful_content rows stay unscored until their per-hazard gold review"}
       - {label: "tag = jailbreaking", out_of_scope: "jailbreak templates labelled by an LLM jury; neither a toxic prompt nor a clean benign one"}
-      - {label: "safe", benign: true}
+      - {label: "safe", out_of_scope: "prompt-only labels pass group stereotypes and injection templates as safe (dev gold review 2026-11-18: 3 of 25 wrong or unclear); the benign pool comes from cleaner sets"}
     translated: true
     note: the German part is machine-translated
   - id: cyberseceval_multilingual
@@ -851,13 +851,16 @@ datasets:
     source: hf:google/civil_comments
     licence: CC0-1.0
     languages: [en]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
       - {label: "toxicity >= 0.8", classes: [toxic_language]}
       - {label: "toxicity < 0.1", benign: true}
       - {label: "0.1 <= toxicity < 0.8", out_of_scope: "ambiguous rater band (civil criticism and sarcasm up to 0.8)"}
-    note: test split, capped; scored dev rows and training of the self-trained n-gram baselines
+    note: >-
+      test split, capped; reported only since the dev gold review (2026-11-18: 8 of 50 wrong or unclear at >= 0.8,
+      positives without any insult up to 0.9, insulting nicknames below 0.1); training of the self-trained n-gram
+      baselines
   - id: dolly_15k
     name: databricks-dolly-15k
     source: hf:databricks/databricks-dolly-15k

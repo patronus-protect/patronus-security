@@ -107,8 +107,8 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | kein Bestand; gehashtes Lexikon `mined` auf Train (Häufigkeit/Kontrast) plus permissiv lizenzierte Wortlisten (Lizenz je Quelle in TX01); Gruppenbezeichnungen `hand` |
-| Train/Dev | GermEval 2018 (Train-Split), 2019, 2021, textdetox-de, Civil Comments/Jigsaw (nur Baseline-Training) |
+| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test-Split, nur menschlich gelabelte Prompts; DE maschinell übersetzt, als `translated` markiert), Civil Comments (Test-Split, Toxizität ≥ 0,8 / < 0,1, gedeckelt auf 6.000); GermEval 2018 Train-Split (CC-BY-4.0, Rezept über das Holdout-Setup, weil dasselbe Repo den Test-Split hält) |
 | Holdout `neutral` | DE: GermEval 2018 (Test-Split), GAHD, HateCheck-DE, chatmod-bench; EN: HateCheck-EN, Measuring Hate Speech, RTP-LX en |
 | Holdout `ark_blind` | nicht nötig (genug `neutral`) |
 | Hard Negatives | HateCheck-Gegenrede und -Zitate, GAHD-Kontrastpaare, Moderationsfälle |
-| Nur berichten | GermEval 2025 (GPL), GerMS-AT (NC), MT-Moderationssätze |
+| Nur berichten | GermEval 2019 und 2021 (keine Lizenz gefunden, Prüfung 2026-11-18), textdetox-de (Gold 22 % Fehler), GermEval 2025 (GPL), GerMS-AT (NC), MT-Moderationssätze |

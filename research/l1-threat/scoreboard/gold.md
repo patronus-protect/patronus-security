@@ -16,7 +16,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | unsafe_action | go | - |
 | resource_exhaustion | go | - |
 | harmful_content | no-go | dev: 0 scored rows (needs 50); holdout holdout/jbb_behaviors: error rate 10.0% |
-| toxic_language | no-go | dev: 0 scored rows (needs 50) |
+| toxic_language | go | - |
 
 ## Rows per class and language
 
@@ -32,7 +32,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | unsafe_action | 178 | 165 | 63 | 62 | 30 | 35 | 278 | 0 | 0 | 125 |
 | resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
 | harmful_content | 0 | 0 | 0 | 224 | 0 | 0 | 0 | 224 | 0 | 0 |
-| toxic_language | 0 | 0 | 1999 | 2162 | 0 | 0 | 0 | 4161 | 0 | 0 |
+| toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
 | benign | 12101 | 19360 | 17191 | 12125 | 29614 | 47 | 1800 | 33730 | 0 | 2700 |
 
 ## Spot-check dev
@@ -44,6 +44,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
 | generated/obfuscation_slices | dev | 800 | 56 | 0 | 2 | 3.6% | 0 / 8 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
+| report/civil_comments | report | 6000 | 50 | 1 | 7 | 16.0% | 0 / 25 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
 | report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
@@ -54,6 +55,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
+| train_dev/nemotron_safety_v3 | dev | 106 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 
@@ -127,6 +129,15 @@ Benign pool (holdout, scored sets): 6 of 350 reviewed benign rows wrong or uncle
 | generated/carrier_insertion | generators_dev_seed:carrier_insertion:000127 | prompt_extraction | unclear | Mosscap social-engineering opener (we must never share the password, do you agree?) without a request |
 | generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000265 | instruction_injection | unclear | CyberSecEval mode claim (do-anything bot) around an ordinary political question |
 | generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000057 | prompt_extraction | unclear | Mosscap poem about keeping a secret; no request for the password |
+| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0000998 | toxic_language | unclear | Mild venting about children; hatred of a group unclear |
+| report/civil_comments | civil_comments:0060853 | toxic_language | unclear | Self-referential mild profanity; no insult or target |
+| report/civil_comments | civil_comments:0049283 | toxic_language | wrong | Polite clarifying question; only self-deprecation |
+| report/civil_comments | civil_comments:0064815 | toxic_language | unclear | Political criticism without an insult to a person |
+| report/civil_comments | civil_comments:0001677 | toxic_language | unclear | Censored profanity inside a joke quote |
+| report/civil_comments | civil_comments:0062009 | toxic_language | unclear | Partisan accusation, no insult |
+| report/civil_comments | civil_comments:0049604 | toxic_language | unclear | Political accusation; borderline insult |
+| report/civil_comments | civil_comments:0079320 | toxic_language | unclear | Describes someone looking foolish; no insult aimed |
+| report/civil_comments | civil_comments:0042234 | toxic_language | unclear | Two-word call to vandalism without target; context missing |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -294,6 +305,36 @@ dev rows of `prompt_extraction` come back with that ingest.
 All scored dev sets are now at or below 5 %; `instruction_injection`, `jailbreak` and `prompt_extraction` are no
 longer blocked on the dev side. The leakage count is the gate's last run (dev pool of generation 9); it is renewed
 by the next gate run, which also re-freezes dev with the BIPIA fix (generation 12).
+
+## Findings (toxic_language dev sources, 2026-11-18)
+
+Two new recipes (registry generation 13), reviewed by the runner, every row read in full. Review notes describe the
+content and never quote it; no insult or slur from the data is written here.
+
+- **Nemotron Safety Guard v3 (`toxic_language`, EN + machine-translated DE, marked translated): 1 of 50 unclear
+  (2 %).** The first draft (every human-labelled prompt with a hate, harassment, profanity or threat category) failed
+  badly: about 40 % of 25 sampled toxic rows were not toxic language, because the categories label the whole
+  conversation (the response, or a harmful request such as a kidnapping plan) and long jailbreak templates carry them
+  too. Prompts labelled safe were also noisy (3 of 25: group stereotypes, an instruction-override template). The recipe
+  now keeps a toxic row only when the prompt is short (at most 300 characters) and names the toxic act itself
+  (insults or slurs asked for or aimed at someone, racist or sexist jokes, stories or names asked for, open hatred, a
+  group called inferior); questions about racism or about what a slur means do not count. Safe prompts and the LLM-jury
+  jailbreaking part are out of scope; unsafe prompts without a toxic category wait for the harmful_content review.
+  Test and validation splits together leave 106 rows (51 EN, 55 DE); outside the sample about 4 of the remaining 56
+  are doubtful as well (trivia about curse words, mild venting), so the set sits near 4 %. Most rows are requests for
+  insults against a group or person, so scores on it say little about hate speech in running text.
+- **Civil Comments (`toxic_language`, EN): 8 of 50 wrong or unclear (16 %), benign 0 of 25: reported only.** Even at
+  a rater share of at least 0.8 many positives carry no insult (partisan accusations, a polite question, a joke quote);
+  a look at the band above 0.9 showed the same kind of rows, and insulting nicknames occur below 0.1. The recipe stays
+  (test split, capped at 6,000 rows) for the report and for baseline training.
+- **GermEval licence check.** GermEval 2018 ships a CC-BY-4.0 licence file; its repository also holds the holdout test
+  split, so its training-split recipe comes from the holdout setup, not from the runner. GermEval 2019 and 2021 carry
+  no licence (repository and task site): reported only.
+
+`toxic_language` reaches 51 EN and 55 DE scored dev rows, all from Nemotron (DE translated, no native German dev rows
+yet). The other dev sets are unchanged by generation 13 (Nemotron contributes no benign rows and `toxic_language` is
+not a generator class), so their verdicts stand; the two new sets were summarised with `gold.py summary` and added to
+`gold-dev.json`.
 
 ## How this report is made
 
