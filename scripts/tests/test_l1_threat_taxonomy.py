@@ -242,3 +242,27 @@ def test_main_fails_on_broken_taxonomy(tmp_path, capsys):
     path.write_text(yaml.safe_dump(taxonomy, allow_unicode=True))
     assert MODULE.main(["check", "--taxonomy", str(path)]) == 1
     assert "unknown lexicon id jailbreak.not_declared" in capsys.readouterr().err
+
+
+def test_routing_matches_the_taxonomy_class_of_each_injection_rule():
+    taxonomy = {"classes": {
+        "instruction_injection": {"category": "injection", "families": [
+            {"id": "a", "existing_rules": ["ark.injection.override.discard_prior"]}]},
+        "jailbreak": {"category": "jailbreak", "families": [
+            {"id": "b", "existing_rules": ["ark.injection.guardrail.tamper", "ark.threat.x"]}]},
+    }}
+    assert MODULE.routing_problems(taxonomy, {"ark.injection.guardrail.tamper": "jailbreak"}) == []
+    assert MODULE.routing_problems(taxonomy, {}) == [
+        "rule category of ark.injection.guardrail.tamper: detector reports injection, taxonomy maps jailbreak"]
+    assert MODULE.routing_problems(taxonomy, {
+        "ark.injection.guardrail.tamper": "jailbreak",
+        "ark.injection.override.discard_prior": "jailbreak",
+        "ark.injection.gone": "exfiltration",
+    }) == [
+        "rule category of ark.injection.gone: not an ark.injection.* rule of the taxonomy",
+        "rule category of ark.injection.override.discard_prior: detector reports jailbreak, taxonomy maps injection",
+    ]
+
+
+def test_repository_rule_categories_match_the_taxonomy():
+    assert MODULE.routing_problems(MODULE.load(), MODULE.load_rule_categories()) == []

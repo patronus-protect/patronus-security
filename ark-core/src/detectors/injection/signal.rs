@@ -8,9 +8,10 @@ use serde_json::{json, Value};
 use super::candidate::candidates_from_signals;
 use crate::detectors::score::{RulePoints, ValidatorStrength};
 use crate::detectors::NativeDetection;
-use crate::{EvaluationResult, EvidenceSpan};
+use crate::{EvaluationResult, EvidenceSpan, SecurityCategory};
 
 const ARK_NATIVE_REGISTRY_JSON: &str = include_str!("rules/ark_native_71ff48e.json");
+const RULE_CATEGORIES_JSON: &str = include_str!("rules/rule_categories.json");
 use crate::detectors::evidence::{L1Component, L1Match};
 
 #[derive(Debug, Clone)]
@@ -205,6 +206,45 @@ pub fn detection_from_signals(
 
 pub fn native_registry_id() -> &'static str {
     &native_registry().registry_id
+}
+
+/// The category an `ark.injection.*` rule reports under: the attack class the
+/// threat taxonomy assigns to its family; every unlisted rule stays `injection`.
+pub fn rule_category(rule_id: &str) -> SecurityCategory {
+    rule_categories()
+        .get(rule_id)
+        .copied()
+        .unwrap_or(SecurityCategory::Injection)
+}
+
+/// The rules that report outside `injection`, parsed once.
+pub(crate) fn rule_categories() -> &'static HashMap<String, SecurityCategory> {
+    static CATEGORIES: OnceLock<HashMap<String, SecurityCategory>> = OnceLock::new();
+    CATEGORIES.get_or_init(|| {
+        #[derive(Deserialize)]
+        struct RuleCategories {
+            schema_version: u32,
+            categories: HashMap<String, String>,
+        }
+        let table: RuleCategories = serde_json::from_str(RULE_CATEGORIES_JSON)
+            .expect("embedded injection rule categories must parse");
+        assert_eq!(table.schema_version, 1, "unsupported rule category schema");
+        table
+            .categories
+            .into_iter()
+            .map(|(rule, category)| {
+                let category = category
+                    .parse()
+                    .unwrap_or_else(|_| panic!("unknown category {category} for {rule}"));
+                (rule, category)
+            })
+            .collect()
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn native_rule_ids() -> impl Iterator<Item = &'static str> {
+    native_registry().rules.iter().map(|rule| rule.id.as_str())
 }
 
 pub fn native_rule_id(model: &str) -> &'static str {

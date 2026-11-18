@@ -22,7 +22,9 @@ Problems reported by ``check``:
   as planned in the taxonomy (and a planned id that already exists or is declared twice);
 - schema errors (classes, family and lexicon keys, priorities, carriers, baselines, example shapes);
 - a threat golden (``python/patronus_ark/benchmark_data/threat_l1.jsonl``) whose family is not a
-  family of its class, whose carrier is unknown, or whose rule is not mapped by its family.
+  family of its class, whose carrier is unknown, or whose rule is not mapped by its family;
+- an ``ark.injection.*`` rule whose category in the detector's ``rule_categories.json`` is not the
+  category of the class that maps it (unlisted rules report under ``injection``).
 """
 
 from __future__ import annotations
@@ -43,6 +45,8 @@ ROOT = HERE.parents[1]
 TAXONOMY_PATH = ROOT / "research" / "l1-threat" / "taxonomy.yaml"
 BACKLOG_PATH = ROOT / "research" / "l1-threat" / "backlog.yaml"
 INJECTION_DIR = ROOT / "ark-core" / "src" / "detectors" / "injection"
+# Category of every ark.injection.* rule that reports outside injection, read by the detector.
+RULE_CATEGORIES_PATH = INJECTION_DIR / "rules" / "rule_categories.json"
 LEXICON_DIR = ROOT / "ark-core" / "src" / "detectors" / "anchor_lexicons"
 GOLDENS_PATH = ROOT / "python" / "patronus_ark" / "benchmark_data" / "threat_l1.jsonl"
 # The threat detector moves from rust/ into ark-core; whichever copy exists is read.
@@ -128,6 +132,8 @@ def existing_rule_ids(root: Path = ROOT) -> set[str]:
     injection_dir = root / INJECTION_DIR.relative_to(ROOT)
     ids: set[str] = set()
     for path in sorted((injection_dir / "rules").glob("*.json")):
+        if path.name == RULE_CATEGORIES_PATH.name:
+            continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         for rule in payload.get("rules", []):
             ids.add(rule.get("canonical_id") or rule["id"])
@@ -277,6 +283,33 @@ def check(
     return problems
 
 
+def load_rule_categories(path: Path = RULE_CATEGORIES_PATH) -> dict[str, str]:
+    return json.loads(path.read_text(encoding="utf-8"))["categories"]
+
+
+def routing_problems(taxonomy: dict[str, Any], categories: dict[str, str]) -> list[str]:
+    """Return every ark.injection.* rule whose detector category differs from its taxonomy class.
+
+    ``categories`` is the detector's table of rules that report outside ``injection``; a rule
+    the taxonomy keeps in ``instruction_injection`` must not be listed.
+    """
+    expected = {
+        rule: (taxonomy["classes"][class_name] or {}).get("category", class_name)
+        for class_name, family in _families(taxonomy)
+        for rule in family.get("existing_rules") or []
+        if rule.startswith("ark.injection.")
+    }
+    problems = []
+    for rule in sorted(set(expected) | set(categories)):
+        want = expected.get(rule)
+        have = categories.get(rule, "injection")
+        if want is None:
+            problems.append(f"rule category of {rule}: not an ark.injection.* rule of the taxonomy")
+        elif want != have:
+            problems.append(f"rule category of {rule}: detector reports {have}, taxonomy maps {want}")
+    return problems
+
+
 def load_goldens(path: Path = GOLDENS_PATH) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -324,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         rules=existing_rule_ids(),
         lexicons=existing_lexicon_ids(),
         tasks=backlog_task_ids(),
-    ) + golden_problems(taxonomy, load_goldens())
+    ) + golden_problems(taxonomy, load_goldens()) + routing_problems(taxonomy, load_rule_categories())
     if args.command == "summary" and not problems:
         print(summary(taxonomy), end="")
         return 0

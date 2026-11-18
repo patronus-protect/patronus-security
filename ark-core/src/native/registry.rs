@@ -8,6 +8,8 @@ use crate::{
 };
 use std::sync::LazyLock;
 
+const INJECTION_L1: &str = crate::injection_l1::MODEL;
+
 type Detect = Box<dyn Fn(&NativeText<'_>, &NativeGates) -> NativeDetection + Send + Sync>;
 
 /// An opaque producer and its shared outer gates. Pipeline state lives with the spec.
@@ -25,6 +27,12 @@ impl NativeProducerSpec {
     }
     pub fn category(&self) -> SecurityCategory {
         self.category
+    }
+
+    /// Whether this producer reports `ark.injection.*` rules, whose candidates
+    /// the injection L1 scorer merges into one decision per category.
+    pub fn scored(&self) -> bool {
+        self.parent == Some(INJECTION_L1)
     }
 
     /// Parent/model/required-rule gates, independent of host level or conditional gates.
@@ -93,6 +101,123 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
     });
 }
 
+/// The `ark.injection.*` rules that report under `category`, scored together
+/// by the injection L1 aggregation; [`signal::rule_category`] routes each rule
+/// to the attack class the threat taxonomy assigns it.
+fn add_injection_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCategory) {
+    macro_rules! add {
+        ($ty:path, $id:literal, $rule:expr) => {{
+            let pipeline = <$ty>::new();
+            specs.push(NativeProducerSpec {
+                category,
+                id: $id,
+                parent: Some(INJECTION_L1),
+                rule: Some($rule),
+                detect: Box::new(move |prepared, _gates| pipeline.detect_prepared(prepared)),
+            });
+        }};
+    }
+    let catalog = rule_catalog::InjectionRuleCatalogPipeline::for_category(category);
+    if !catalog.is_empty() {
+        specs.push(NativeProducerSpec {
+            category,
+            id: "native:injection_rule_catalog",
+            parent: Some(INJECTION_L1),
+            rule: None,
+            detect: Box::new(move |prepared, gates| {
+                catalog.detect_prepared(prepared, |id| gates.allows_rule(id))
+            }),
+        });
+    }
+    macro_rules! injection {
+        ($ty:path, $id:literal) => {
+            injection!($ty, $id, signal::native_rule_id($id));
+        };
+        ($ty:path, $id:literal, $rule:expr) => {
+            if signal::rule_category($rule) == category {
+                add!($ty, $id, $rule);
+            }
+        };
+    }
+    injection!(
+        structural::InjectionStructuralPipeline,
+        "native:injection_structural",
+        "ark.injection.structure.override_sensitive_disclosure"
+    );
+    injection!(
+        cross_tool_instruction::CrossToolInstructionPipeline,
+        "native:cross_tool_instruction"
+    );
+    injection!(
+        instruction_leak::InstructionLeakPipeline,
+        "native:instruction_leak"
+    );
+    injection!(
+        encoded_instruction::EncodedInstructionPipeline,
+        "native:encoded_instruction"
+    );
+    injection!(
+        multi_turn_escalation::MultiTurnEscalationPipeline,
+        "native:multi_turn_escalation"
+    );
+    injection!(
+        guardrail_tamper::GuardrailTamperPipeline,
+        "native:guardrail_tamper"
+    );
+    injection!(
+        tool_output_instruction::ToolOutputInstructionPipeline,
+        "native:tool_output_instruction"
+    );
+    injection!(
+        hidden_html_instruction::HiddenHtmlInstructionPipeline,
+        "native:hidden_html_instruction"
+    );
+    injection!(
+        unicode_confusable::UnicodeConfusablePipeline,
+        "native:unicode_confusable"
+    );
+    injection!(
+        zero_width_obfuscation::ZeroWidthObfuscationPipeline,
+        "native:zero_width_obfuscation"
+    );
+    injection!(
+        agentic_control_abuse::AgenticControlAbusePipeline,
+        "native:agentic_control_abuse"
+    );
+    injection!(
+        binary_smuggling::BinarySmugglingPipeline,
+        "native:binary_smuggling"
+    );
+    injection!(
+        instruction_override::InstructionOverridePipeline,
+        "native:instruction_override"
+    );
+    injection!(
+        jailbreak_framing::JailbreakFramingPipeline,
+        "native:jailbreak_framing"
+    );
+    injection!(
+        covert_instruction::CovertInstructionPipeline,
+        "native:covert_instruction"
+    );
+    injection!(
+        instruction_boundary::InstructionBoundaryPipeline,
+        "native:instruction_boundary"
+    );
+    injection!(
+        authority_escalation::AuthorityEscalationPipeline,
+        "native:authority_escalation"
+    );
+    injection!(
+        tool_call_injection::ToolCallInjectionPipeline,
+        "native:tool_call_injection"
+    );
+    injection!(
+        output_manipulation::OutputManipulationPipeline,
+        "native:output_manipulation"
+    );
+}
+
 /// Producers of one native category; see [`super::NATIVE_CATEGORIES`].
 pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
     let mut specs = Vec::new();
@@ -151,6 +276,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
         }
         SecurityCategory::UnsafeAction => {
             add_threat_rules(&mut specs, category);
+            add_injection_rules(&mut specs, category);
             add!(
                 dlp::sensitive_material::SensitiveMaterialPipeline,
                 "native:sensitive_material",
@@ -172,6 +298,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
         }
         SecurityCategory::Exfiltration => {
             add_threat_rules(&mut specs, category);
+            add_injection_rules(&mut specs, category);
             add!(
                 dlp::secret_transfer::SecretTransferPipeline,
                 "native:secret_transfer",
@@ -179,111 +306,16 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                 Some("dlp_secret_transfer")
             );
         }
-        SecurityCategory::ToolPoisoning
-        | SecurityCategory::AgentConfigTampering
-        | SecurityCategory::HarmfulContent
-        | SecurityCategory::ResourceExhaustion => {
+        SecurityCategory::Injection
+        | SecurityCategory::Jailbreak
+        | SecurityCategory::PromptExtraction
+        | SecurityCategory::MemoryPoisoning => add_injection_rules(&mut specs, category),
+        SecurityCategory::ToolPoisoning | SecurityCategory::AgentConfigTampering => {
             add_threat_rules(&mut specs, category);
+            add_injection_rules(&mut specs, category);
         }
-        SecurityCategory::Injection => {
-            let pipeline = rule_catalog::InjectionRuleCatalogPipeline::new();
-            specs.push(NativeProducerSpec {
-                category,
-                id: "native:injection_rule_catalog",
-                parent: Some("native:injection_l1"),
-                rule: None,
-                detect: Box::new(move |prepared, gates| {
-                    pipeline.detect_prepared(prepared, |id| gates.allows_rule(id))
-                }),
-            });
-            add!(
-                structural::InjectionStructuralPipeline,
-                "native:injection_structural",
-                Some("native:injection_l1"),
-                Some("ark.injection.structure.override_sensitive_disclosure")
-            );
-            macro_rules! injection {
-                ($ty:path, $id:literal) => {
-                    add!(
-                        $ty,
-                        $id,
-                        Some("native:injection_l1"),
-                        Some(signal::native_rule_id($id))
-                    );
-                };
-            }
-            injection!(
-                cross_tool_instruction::CrossToolInstructionPipeline,
-                "native:cross_tool_instruction"
-            );
-            injection!(
-                instruction_leak::InstructionLeakPipeline,
-                "native:instruction_leak"
-            );
-            injection!(
-                encoded_instruction::EncodedInstructionPipeline,
-                "native:encoded_instruction"
-            );
-            injection!(
-                multi_turn_escalation::MultiTurnEscalationPipeline,
-                "native:multi_turn_escalation"
-            );
-            injection!(
-                guardrail_tamper::GuardrailTamperPipeline,
-                "native:guardrail_tamper"
-            );
-            injection!(
-                tool_output_instruction::ToolOutputInstructionPipeline,
-                "native:tool_output_instruction"
-            );
-            injection!(
-                hidden_html_instruction::HiddenHtmlInstructionPipeline,
-                "native:hidden_html_instruction"
-            );
-            injection!(
-                unicode_confusable::UnicodeConfusablePipeline,
-                "native:unicode_confusable"
-            );
-            injection!(
-                zero_width_obfuscation::ZeroWidthObfuscationPipeline,
-                "native:zero_width_obfuscation"
-            );
-            injection!(
-                agentic_control_abuse::AgenticControlAbusePipeline,
-                "native:agentic_control_abuse"
-            );
-            injection!(
-                binary_smuggling::BinarySmugglingPipeline,
-                "native:binary_smuggling"
-            );
-            injection!(
-                instruction_override::InstructionOverridePipeline,
-                "native:instruction_override"
-            );
-            injection!(
-                jailbreak_framing::JailbreakFramingPipeline,
-                "native:jailbreak_framing"
-            );
-            injection!(
-                covert_instruction::CovertInstructionPipeline,
-                "native:covert_instruction"
-            );
-            injection!(
-                instruction_boundary::InstructionBoundaryPipeline,
-                "native:instruction_boundary"
-            );
-            injection!(
-                authority_escalation::AuthorityEscalationPipeline,
-                "native:authority_escalation"
-            );
-            injection!(
-                tool_call_injection::ToolCallInjectionPipeline,
-                "native:tool_call_injection"
-            );
-            injection!(
-                output_manipulation::OutputManipulationPipeline,
-                "native:output_manipulation"
-            );
+        SecurityCategory::HarmfulContent | SecurityCategory::ResourceExhaustion => {
+            add_threat_rules(&mut specs, category);
         }
         _ => {}
     }

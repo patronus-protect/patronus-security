@@ -593,65 +593,67 @@ These rules use the shared source-bound component contract and emit finding span
 
 Injection rule IDs gate versioned catalog entries, native evidence producers, and the structural producer. Several source rules can intentionally share one canonical ID; the table lists each effective gate once.
 
-| Rule ID | Family | Description | Source |
-| --- | --- | --- | --- |
-| `ark.injection.agentic.control_abuse` | `agentic_control_abuse` | Native producer gate for native:agentic_control_abuse. | `ark-native-injection-71ff48e` |
-| `ark.injection.authority.claim` | `authority_escalation` | Claim to be developer/admin | `prompt-armor-complete-95e532e` |
-| `ark.injection.authority.escalation` | `authority_escalation` | Native producer gate for native:authority_escalation. | `ark-native-injection-71ff48e` |
-| `ark.injection.authority.fake_system_asset_transfer` | `authority_escalation` | Uses a fake system or administrator authority marker to mandate a concrete crypto-asset transfer | `source-derived-coverage-0.1.6` |
-| `ark.injection.boundary.delimited_replacement_action` | `instruction_boundary` | Uses a synthetic delimiter boundary before a replacement instruction and action | `source-derived-p0-0.1.6` |
-| `ark.injection.boundary.delimiter` | `instruction_boundary` | Native producer gate for native:instruction_boundary. | `ark-native-injection-71ff48e` |
-| `ark.injection.boundary.fake_system` | `instruction_boundary` | Fake system prompt injection | `prompt-armor-complete-95e532e` |
-| `ark.injection.boundary.persona_directive` | `instruction_boundary` | Forged system-role boundary followed by an unsafe persona directive | `source-derived-coverage-0.1.6` |
-| `ark.injection.covert.execution` | `covert_instruction` | Native producer gate for native:covert_instruction. | `ark-native-injection-71ff48e` |
-| `ark.injection.cross_tool.override_action` | `cross_tool_instruction` | Native producer gate for native:cross_tool_instruction. | `ark-native-injection-71ff48e` |
-| `ark.injection.cross_tool.override_then_call` | `cross_tool_instruction` | Overrides the user or prior instructions in order to invoke another tool | `source-derived-coverage-0.1.6` |
-| `ark.injection.escalation.multi_turn` | `multi_turn_escalation` | Native producer gate for native:multi_turn_escalation. | `ark-native-injection-71ff48e` |
-| `ark.injection.escalation.prior_bypass_agreement` | `multi_turn_escalation` | Claims prior agreement to bypass active safety restrictions | `source-derived-coverage-0.1.6` |
-| `ark.injection.exfil.external_sink` | `cross_tool_instruction` | Send data to external URL/email | `prompt-armor-complete-95e532e` |
-| `ark.injection.exfil.sensitive_path_external_sink_audited` | `cross_tool_instruction` | Reads a sensitive credential path and transfers it to an explicit external network destination | `source-derived-p0-0.1.6` |
-| `ark.injection.exfil.sensitive_path_to_sink` | `cross_tool_instruction` | Reads a sensitive credential path and directs its contents to an output or transfer sink | `source-derived-p0-0.1.6` |
-| `ark.injection.guardrail.disable_directive` | `guardrail_tamper` | Imperative bypass of explicit safety controls | `source-derived-coverage-0.1.6` |
-| `ark.injection.guardrail.tamper` | `guardrail_tamper` | Native producer gate for native:guardrail_tamper. | `ark-native-injection-71ff48e` |
-| `ark.injection.identity.reassign` | `jailbreak_framing` | Identity reassignment | `prompt-armor-complete-95e532e` |
-| `ark.injection.jailbreak.dual_response` | `jailbreak_framing` | Dual response mode (classic DAN pattern) | `prompt-armor-complete-95e532e` |
-| `ark.injection.jailbreak.framing` | `jailbreak_framing` | Native producer gate for native:jailbreak_framing. | `ark-native-injection-71ff48e` |
-| `ark.injection.jailbreak.game_framing` | `jailbreak_framing` | Game-based jailbreak opening | `prompt-armor-complete-95e532e` |
-| `ark.injection.jailbreak.named_mode` | `jailbreak_framing` | Known jailbreak persona names | `prompt-armor-complete-95e532e` |
-| `ark.injection.jailbreak.remove_constraints` | `jailbreak_framing` | Bypass restrictions/safety | `prompt-armor-complete-95e532e` |
-| `ark.injection.leak.hidden_instructions` | `instruction_leak` | Native producer gate for native:instruction_leak. | `ark-native-injection-71ff48e` |
-| `ark.injection.leak.own_prompt` | `instruction_leak` | Disclosure of the assistant own prompt | `source-derived-coverage-0.1.6` |
-| `ark.injection.leak.system_instructions` | `instruction_leak` | Request to reveal system prompt | `prompt-armor-complete-95e532e` |
-| `ark.injection.leak.system_prompt_extraction` | `instruction_leak` | Directly requests disclosure of the assistant's system or initialization instructions | `source-derived-coverage-0.1.6` |
-| `ark.injection.obfuscation.binary_smuggling` | `binary_smuggling` | Native producer gate for native:binary_smuggling. | `ark-native-injection-71ff48e` |
-| `ark.injection.obfuscation.decode_for_instructions` | `encoded_instruction` | Directs decoding an opaque message specifically to obtain instructions | `source-derived-coverage-0.1.6` |
-| `ark.injection.obfuscation.decode_request` | `encoded_instruction` | Encoded message decode request | `prompt-armor-complete-95e532e` |
-| `ark.injection.obfuscation.decode_then_execute` | `encoded_instruction` | Directs the model to decode an encoded payload and execute or follow it | `source-derived-p0-0.1.6` |
-| `ark.injection.obfuscation.encoded_instruction` | `encoded_instruction` | Native producer gate for native:encoded_instruction. | `ark-native-injection-71ff48e` |
-| `ark.injection.obfuscation.encoded_instruction_payload` | `encoded_instruction` | Requests decoding of a supplied payload containing an instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
-| `ark.injection.obfuscation.escaped_instruction_payload` | `encoded_instruction` | Requests decoding a Unicode-escaped instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
-| `ark.injection.obfuscation.hidden_html` | `hidden_html_instruction` | Native producer gate for native:hidden_html_instruction. | `ark-native-injection-71ff48e` |
-| `ark.injection.obfuscation.steganographic` | `encoded_instruction` | Acrostic/steganographic instruction | `prompt-armor-complete-95e532e` |
-| `ark.injection.obfuscation.unicode_confusable` | `unicode_confusable` | Native producer gate for native:unicode_confusable. | `ark-native-injection-71ff48e` |
-| `ark.injection.obfuscation.zero_width` | `zero_width_obfuscation` | Native producer gate for native:zero_width_obfuscation. | `ark-native-injection-71ff48e` |
-| `ark.injection.output.forced_marker` | `output_manipulation` | Native producer gate for native:output_manipulation. | `ark-native-injection-71ff48e` |
-| `ark.injection.output.ignore_then_fixed_output` | `output_manipulation` | Overrides surrounding instructions and restricts the response to attacker-chosen output | `source-derived-coverage-0.1.6` |
-| `ark.injection.override.authority_issued_replacement` | `instruction_override` | Claims that an authority issued replacement instructions and demands an action | `source-derived-p0-0.1.6` |
-| `ark.injection.override.discard_prior` | `instruction_override` | Ignore previous instructions pattern | `prompt-armor-complete-95e532e` |
-| `ark.injection.override.ethical_parameters` | `instruction_override` | Reset existing ethical constraints | `source-derived-coverage-0.1.6` |
-| `ark.injection.override.hierarchy` | `instruction_override` | Native producer gate for native:instruction_override. | `ark-native-injection-71ff48e` |
-| `ark.injection.override.hierarchy_then_direct_action` | `instruction_override` | Discards an instruction-hierarchy constraint and immediately requests a replacement action | `source-derived-coverage-0.1.6` |
-| `ark.injection.override.obfuscated_discard` | `instruction_override` | Ignore what I said before (incl. typos) | `prompt-armor-complete-95e532e` |
-| `ark.injection.override.prior_reference` | `instruction_override` | Override an explicit prior-context reference | `source-derived-coverage-0.1.6` |
-| `ark.injection.override.replacement_directive` | `instruction_override` | New instructions declaration | `prompt-armor-complete-95e532e` |
-| `ark.injection.skillspector.anti_refusal` | `jailbreak_framing` | Explicit bilingual instruction-boundary violation: anti_refusal | `ark-skillspector-derived-0.1.7` |
-| `ark.injection.skillspector.memory_reset` | `instruction_override` | Explicit bilingual instruction-boundary violation: memory_reset | `ark-skillspector-derived-0.1.7` |
-| `ark.injection.skillspector.persistent_override` | `multi_turn_escalation` | Explicit bilingual instruction-boundary violation: persistent_override | `ark-skillspector-derived-0.1.7` |
-| `ark.injection.skillspector.policy_nullification` | `guardrail_tamper` | Explicit bilingual instruction-boundary violation: policy_nullification | `ark-skillspector-derived-0.1.7` |
-| `ark.injection.skillspector.unconditional_compliance` | `jailbreak_framing` | Explicit bilingual instruction-boundary violation: unconditional_compliance | `ark-skillspector-derived-0.1.7` |
-| `ark.injection.structure.override_sensitive_disclosure` | `instruction_override` | Structural override plus sensitive-disclosure relationship. | `native structural producer` |
-| `ark.injection.tool_call.injected` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
-| `ark.injection.tool_output.override` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
+Each rule reports under the category of its attack class: a jailbreak rule under `jailbreak`, a request for the system prompt under `prompt_extraction`, and so on. A rule runs only when its category is selected. The result keeps the rule family as `class_name` (for example `guardrail_tamper` or `instruction_leak`); `category` names the attack class.
+
+| Rule ID | Category | Family | Description | Source |
+| --- | --- | --- | --- | --- |
+| `ark.injection.agentic.control_abuse` | `injection` | `agentic_control_abuse` | Native producer gate for native:agentic_control_abuse. | `ark-native-injection-71ff48e` |
+| `ark.injection.authority.claim` | `injection` | `authority_escalation` | Claim to be developer/admin | `prompt-armor-complete-95e532e` |
+| `ark.injection.authority.escalation` | `injection` | `authority_escalation` | Native producer gate for native:authority_escalation. | `ark-native-injection-71ff48e` |
+| `ark.injection.authority.fake_system_asset_transfer` | `injection` | `authority_escalation` | Uses a fake system or administrator authority marker to mandate a concrete crypto-asset transfer | `source-derived-coverage-0.1.6` |
+| `ark.injection.boundary.delimited_replacement_action` | `injection` | `instruction_boundary` | Uses a synthetic delimiter boundary before a replacement instruction and action | `source-derived-p0-0.1.6` |
+| `ark.injection.boundary.delimiter` | `injection` | `instruction_boundary` | Native producer gate for native:instruction_boundary. | `ark-native-injection-71ff48e` |
+| `ark.injection.boundary.fake_system` | `injection` | `instruction_boundary` | Fake system prompt injection | `prompt-armor-complete-95e532e` |
+| `ark.injection.boundary.persona_directive` | `injection` | `instruction_boundary` | Forged system-role boundary followed by an unsafe persona directive | `source-derived-coverage-0.1.6` |
+| `ark.injection.covert.execution` | `injection` | `covert_instruction` | Native producer gate for native:covert_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.cross_tool.override_action` | `tool_poisoning` | `cross_tool_instruction` | Native producer gate for native:cross_tool_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.cross_tool.override_then_call` | `tool_poisoning` | `cross_tool_instruction` | Overrides the user or prior instructions in order to invoke another tool | `source-derived-coverage-0.1.6` |
+| `ark.injection.escalation.multi_turn` | `jailbreak` | `multi_turn_escalation` | Native producer gate for native:multi_turn_escalation. | `ark-native-injection-71ff48e` |
+| `ark.injection.escalation.prior_bypass_agreement` | `jailbreak` | `multi_turn_escalation` | Claims prior agreement to bypass active safety restrictions | `source-derived-coverage-0.1.6` |
+| `ark.injection.exfil.external_sink` | `exfiltration` | `cross_tool_instruction` | Send data to external URL/email | `prompt-armor-complete-95e532e` |
+| `ark.injection.exfil.sensitive_path_external_sink_audited` | `exfiltration` | `cross_tool_instruction` | Reads a sensitive credential path and transfers it to an explicit external network destination | `source-derived-p0-0.1.6` |
+| `ark.injection.exfil.sensitive_path_to_sink` | `exfiltration` | `cross_tool_instruction` | Reads a sensitive credential path and directs its contents to an output or transfer sink | `source-derived-p0-0.1.6` |
+| `ark.injection.guardrail.disable_directive` | `jailbreak` | `guardrail_tamper` | Imperative bypass of explicit safety controls | `source-derived-coverage-0.1.6` |
+| `ark.injection.guardrail.tamper` | `jailbreak` | `guardrail_tamper` | Native producer gate for native:guardrail_tamper. | `ark-native-injection-71ff48e` |
+| `ark.injection.identity.reassign` | `jailbreak` | `jailbreak_framing` | Identity reassignment | `prompt-armor-complete-95e532e` |
+| `ark.injection.jailbreak.dual_response` | `jailbreak` | `jailbreak_framing` | Dual response mode (classic DAN pattern) | `prompt-armor-complete-95e532e` |
+| `ark.injection.jailbreak.framing` | `jailbreak` | `jailbreak_framing` | Native producer gate for native:jailbreak_framing. | `ark-native-injection-71ff48e` |
+| `ark.injection.jailbreak.game_framing` | `jailbreak` | `jailbreak_framing` | Game-based jailbreak opening | `prompt-armor-complete-95e532e` |
+| `ark.injection.jailbreak.named_mode` | `jailbreak` | `jailbreak_framing` | Known jailbreak persona names | `prompt-armor-complete-95e532e` |
+| `ark.injection.jailbreak.remove_constraints` | `jailbreak` | `jailbreak_framing` | Bypass restrictions/safety | `prompt-armor-complete-95e532e` |
+| `ark.injection.leak.hidden_instructions` | `prompt_extraction` | `instruction_leak` | Native producer gate for native:instruction_leak. | `ark-native-injection-71ff48e` |
+| `ark.injection.leak.own_prompt` | `prompt_extraction` | `instruction_leak` | Disclosure of the assistant own prompt | `source-derived-coverage-0.1.6` |
+| `ark.injection.leak.system_instructions` | `prompt_extraction` | `instruction_leak` | Request to reveal system prompt | `prompt-armor-complete-95e532e` |
+| `ark.injection.leak.system_prompt_extraction` | `prompt_extraction` | `instruction_leak` | Directly requests disclosure of the assistant's system or initialization instructions | `source-derived-coverage-0.1.6` |
+| `ark.injection.obfuscation.binary_smuggling` | `injection` | `binary_smuggling` | Native producer gate for native:binary_smuggling. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.decode_for_instructions` | `injection` | `encoded_instruction` | Directs decoding an opaque message specifically to obtain instructions | `source-derived-coverage-0.1.6` |
+| `ark.injection.obfuscation.decode_request` | `injection` | `encoded_instruction` | Encoded message decode request | `prompt-armor-complete-95e532e` |
+| `ark.injection.obfuscation.decode_then_execute` | `injection` | `encoded_instruction` | Directs the model to decode an encoded payload and execute or follow it | `source-derived-p0-0.1.6` |
+| `ark.injection.obfuscation.encoded_instruction` | `injection` | `encoded_instruction` | Native producer gate for native:encoded_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.encoded_instruction_payload` | `injection` | `encoded_instruction` | Requests decoding of a supplied payload containing an instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
+| `ark.injection.obfuscation.escaped_instruction_payload` | `injection` | `encoded_instruction` | Requests decoding a Unicode-escaped instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
+| `ark.injection.obfuscation.hidden_html` | `injection` | `hidden_html_instruction` | Native producer gate for native:hidden_html_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.steganographic` | `injection` | `encoded_instruction` | Acrostic/steganographic instruction | `prompt-armor-complete-95e532e` |
+| `ark.injection.obfuscation.unicode_confusable` | `injection` | `unicode_confusable` | Native producer gate for native:unicode_confusable. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.zero_width` | `injection` | `zero_width_obfuscation` | Native producer gate for native:zero_width_obfuscation. | `ark-native-injection-71ff48e` |
+| `ark.injection.output.forced_marker` | `injection` | `output_manipulation` | Native producer gate for native:output_manipulation. | `ark-native-injection-71ff48e` |
+| `ark.injection.output.ignore_then_fixed_output` | `injection` | `output_manipulation` | Overrides surrounding instructions and restricts the response to attacker-chosen output | `source-derived-coverage-0.1.6` |
+| `ark.injection.override.authority_issued_replacement` | `injection` | `instruction_override` | Claims that an authority issued replacement instructions and demands an action | `source-derived-p0-0.1.6` |
+| `ark.injection.override.discard_prior` | `injection` | `instruction_override` | Ignore previous instructions pattern | `prompt-armor-complete-95e532e` |
+| `ark.injection.override.ethical_parameters` | `jailbreak` | `instruction_override` | Reset existing ethical constraints | `source-derived-coverage-0.1.6` |
+| `ark.injection.override.hierarchy` | `injection` | `instruction_override` | Native producer gate for native:instruction_override. | `ark-native-injection-71ff48e` |
+| `ark.injection.override.hierarchy_then_direct_action` | `injection` | `instruction_override` | Discards an instruction-hierarchy constraint and immediately requests a replacement action | `source-derived-coverage-0.1.6` |
+| `ark.injection.override.obfuscated_discard` | `injection` | `instruction_override` | Ignore what I said before (incl. typos) | `prompt-armor-complete-95e532e` |
+| `ark.injection.override.prior_reference` | `injection` | `instruction_override` | Override an explicit prior-context reference | `source-derived-coverage-0.1.6` |
+| `ark.injection.override.replacement_directive` | `injection` | `instruction_override` | New instructions declaration | `prompt-armor-complete-95e532e` |
+| `ark.injection.skillspector.anti_refusal` | `jailbreak` | `jailbreak_framing` | Explicit bilingual instruction-boundary violation: anti_refusal | `ark-skillspector-derived-0.1.7` |
+| `ark.injection.skillspector.memory_reset` | `memory_poisoning` | `instruction_override` | Explicit bilingual instruction-boundary violation: memory_reset | `ark-skillspector-derived-0.1.7` |
+| `ark.injection.skillspector.persistent_override` | `memory_poisoning` | `multi_turn_escalation` | Explicit bilingual instruction-boundary violation: persistent_override | `ark-skillspector-derived-0.1.7` |
+| `ark.injection.skillspector.policy_nullification` | `jailbreak` | `guardrail_tamper` | Explicit bilingual instruction-boundary violation: policy_nullification | `ark-skillspector-derived-0.1.7` |
+| `ark.injection.skillspector.unconditional_compliance` | `jailbreak` | `jailbreak_framing` | Explicit bilingual instruction-boundary violation: unconditional_compliance | `ark-skillspector-derived-0.1.7` |
+| `ark.injection.structure.override_sensitive_disclosure` | `injection` | `instruction_override` | Structural override plus sensitive-disclosure relationship. | `native structural producer` |
+| `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
+| `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
 ## Threat rules (74)
 

@@ -11,9 +11,29 @@ fn candidates_from_result(
 ) -> Vec<patronus_ark_core::injection_l1::ProducerCandidate> {
     patronus_ark_core::injection_l1::candidates_from_result(&result.clone().into())
 }
+#[cfg(test)]
 pub(super) fn aggregate(text: &str, results: Vec<SecurityScanResult>) -> SecurityScanResult {
-    patronus_ark_core::injection_l1::aggregate(text, results.into_iter().map(Into::into).collect())
-        .into()
+    patronus_ark_core::injection_l1::aggregate(
+        crate::SecurityCategory::Injection,
+        text,
+        results.into_iter().map(Into::into).collect(),
+    )
+    .into()
+}
+
+pub(super) fn category_results(
+    category: crate::SecurityCategory,
+    text: &str,
+    results: Vec<(bool, SecurityScanResult)>,
+) -> Vec<SecurityScanResult> {
+    let results = results
+        .into_iter()
+        .map(|(scored, result)| (scored, result.into()))
+        .collect();
+    patronus_ark_core::injection_l1::category_results(category, text, results)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 #[cfg(test)]
 mod tests {
@@ -307,16 +327,21 @@ mod tests {
     #[test]
     fn prompt_armor_candidate_only_rules_ea003_and_jb007_score_zero() {
         let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::Injection],
+            vec![SecurityCategory::Injection, SecurityCategory::Jailbreak],
             SecurityLevel::L1,
             None,
             false,
         );
-        for (text, upstream_id) in [
-            ("abcdefghijklmnopqrst", "EA-003"),
-            ("hypothetically", "JB-007"),
+        // JB-007 reports under jailbreak, the class its canonical rule maps to.
+        for (category, text, upstream_id) in [
+            (
+                SecurityCategory::Injection,
+                "abcdefghijklmnopqrst",
+                "EA-003",
+            ),
+            (SecurityCategory::Jailbreak, "hypothetically", "JB-007"),
         ] {
-            let results = gateway.scan_category(SecurityCategory::Injection, text);
+            let results = gateway.scan_category(category, text);
             let result = results
                 .iter()
                 .find(|result| result.model == MODEL)
@@ -405,7 +430,7 @@ mod tests {
         .iter()
         .flat_map(candidates_from_result)
         .collect::<Vec<_>>();
-        let mut acceptance_spans = merge_candidates(text, candidates)
+        let mut acceptance_spans = merge_candidates(SecurityCategory::Injection, text, candidates)
             .iter()
             .map(|(candidate, _, _, _)| acceptance_bounds(candidate).unwrap())
             .collect::<Vec<_>>();
@@ -447,7 +472,8 @@ mod tests {
                 .iter()
                 .flat_map(candidates_from_result)
                 .collect::<Vec<_>>();
-            let (candidate, _, _, _) = merge_candidates(text, candidates).remove(0);
+            let (candidate, _, _, _) =
+                merge_candidates(SecurityCategory::Injection, text, candidates).remove(0);
             assert_eq!(candidate.rule_severities["rule.same"], "critical");
             assert_eq!(candidate.max_severity, "critical");
         }

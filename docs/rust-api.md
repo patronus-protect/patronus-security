@@ -1961,6 +1961,13 @@ pub fn category(&self) -> SecurityCategory;
 No public documentation is available yet.
 
 ```rust
+pub fn scored(&self) -> bool;
+```
+
+Whether this producer reports `ark.injection.*` rules, whose candidates
+the injection L1 scorer merges into one decision per category.
+
+```rust
 pub fn enabled(&self, gates: &NativeGates) -> bool;
 ```
 
