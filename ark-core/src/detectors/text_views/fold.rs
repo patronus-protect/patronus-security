@@ -6,8 +6,8 @@
 //! Each fold runs only behind its own cheap gate, so ordinary text costs one
 //! byte pass per fold and no copy:
 //!
-//! - `spaced`: at least [`MIN_SPACED`] single characters each followed by one
-//!   space, and per line most space-separated pieces one character long;
+//! - `spaced`: at least [`MIN_SPACED`] single letters each followed by one
+//!   space, and per line most space-separated pieces single letters;
 //! - `homoglyph`: non-ASCII text with at least two words that mix ASCII letters
 //!   with look-alike letters;
 //! - `leetspeak`: at least [`MIN_LEET`] words, and two fifths of all words, that mix
@@ -118,7 +118,12 @@ fn unspace(text: &str) -> Option<Out> {
     let bytes = text.as_bytes();
     let candidates = bytes
         .windows(4)
-        .filter(|w| w[0] != b' ' && w[1] == b' ' && w[2] != b' ' && w[3] == b' ')
+        .filter(|w| {
+            !matches!(w[0], b' ' | b'0'..=b'9')
+                && w[1] == b' '
+                && !matches!(w[2], b' ' | b'0'..=b'9')
+                && w[3] == b' '
+        })
         .count();
     if candidates < MIN_SPACED {
         return None;
@@ -132,10 +137,9 @@ fn unspace(text: &str) -> Option<Out> {
         }
         let pieces = line.split(' ').filter(|piece| !piece.is_empty());
         let (single, total) = pieces.fold((0usize, 0usize), |(single, total), piece| {
-            (
-                single + usize::from(piece.chars().nth(1).is_none()),
-                total + 1,
-            )
+            let mut chars = piece.chars();
+            let letter = chars.next().is_some_and(char::is_alphabetic) && chars.next().is_none();
+            (single + usize::from(letter), total + 1)
         });
         if single < MIN_SPACED / 2 || single * 5 < total * 4 {
             out.push_str(line, line_start);
@@ -307,6 +311,7 @@ mod tests {
             "2026-11-18 INFO model=gpt4 codec=h264 res=4K build=v1.3.7 ok",
             "sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
             "a b c",
+            "Tabelle: 1 2 3 4 5 6 7 8 9 10 11 12\n2 4 6 8 10 12 14 16 18 20",
             "Café, Grüße und Straße – ganz normal.",
         ] {
             assert_eq!(fold(text), None, "{text}");
