@@ -368,15 +368,6 @@ tasks:
       and the verdict recall of instruction_injection rises, at 0 new hard-benign FP and 0 new benign FP;
       decision threshold unchanged (no_relax); latency within the L1 rules
   - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06, T02, T04], status: done}
-  - id: T05
-    title: Obfuscated injection and extraction — injection and prompt_extraction rules also read the normalised and decoded views of S03 (homoglyph/leet/spaced via the K06 view, base64/hex/rot13 decoded) with a modifier fact; scoreboard reports obfuscation invariance (source flagged, obfuscated twin flagged)
-    type: recall-fix
-    deps: [IJ01, S03]
-    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 3)"
-    accept: >-
-      on dev obfuscation_slices every obfuscation kind where the clean source row is flagged is flagged
-      obfuscated too (today base64, hex, rot13, homoglyph, leetspeak, spaced: 0); decoded views scanned only
-      behind their existing prefilter (no second full scan of clean text); 0 new benign FP; latency stated
   # Owner, 2026-11-18: IJ01 left dev TPR@1% at 57.2 (rules saturate); the gap to the model baselines
   # (Prompt Guard 2: 94.9) is a scorer question, so IJ02 no longer waits on T05.
   - id: IJ02
@@ -389,6 +380,15 @@ tasks:
       and justified); DLP latency budget holds (100 KiB p95 <= 10 ms) and the latency A/B is in the PR;
       if no candidate reaches 80 within budget, the PR states the best reachable value instead of
       lowering the bar
+  - id: T05
+    title: Obfuscated injection and extraction — injection and prompt_extraction rules also read the normalised and decoded views of S03 (homoglyph/leet/spaced via the K06 view, base64/hex/rot13 decoded) with a modifier fact; scoreboard reports obfuscation invariance (source flagged, obfuscated twin flagged)
+    type: recall-fix
+    deps: [IJ01, S03]
+    source: "TRIAGE 2026-W47 (research/l1-threat/triage/2026-W47.md, bucket 3)"
+    accept: >-
+      on dev obfuscation_slices every obfuscation kind where the clean source row is flagged is flagged
+      obfuscated too (today base64, hex, rot13, homoglyph, leetspeak, spaced: 0); decoded views scanned only
+      behind their existing prefilter (no second full scan of clean text); 0 new benign FP; latency stated
   - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03]}
   - {id: PX02, title: "prompt_extraction points + ablation decision", type: scorer, deps: [PX01, S05]}
   - id: T06
