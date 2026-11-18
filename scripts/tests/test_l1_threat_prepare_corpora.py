@@ -201,6 +201,19 @@ def test_json_records_field_reads_nested_lists_and_single_documents(tmp_path):
         list(MODULE.read_records(wrong, tmp_path))
 
 
+def test_json_records_star_expands_list_items_and_dict_values(tmp_path):
+    # MCPTox: a list of servers, each a dict {tool id: tool}.
+    doc = [{"FS_1": {"tool_content": "a"}, "FS_2": {"tool_content": "b"}}, {"Map_1": {"tool_content": "c"}}]
+    (tmp_path / "tools.json").write_text(json.dumps(doc), encoding="utf-8")
+    entry = {"format": "json", "text": "tool_content", "labels": [], "records": "*.*", "files": [{"path": "tools.json"}]}
+    assert [r["tool_content"] for r in MODULE.read_records(entry, tmp_path)] == ["a", "b", "c"]
+    # A field step after an expansion follows the field in every expanded node.
+    nested = {"servers": [{"tools": [{"t": "x"}]}, {"tools": [{"t": "y"}, {"t": "z"}]}]}
+    (tmp_path / "servers.json").write_text(json.dumps(nested), encoding="utf-8")
+    entry = {"format": "json", "text": "t", "labels": [], "records": "servers.*.tools.*", "files": [{"path": "servers.json"}]}
+    assert [r["t"] for r in MODULE.read_records(entry, tmp_path)] == ["x", "y", "z"]
+
+
 def test_records_needs_format_json_and_a_path():
     labels = {"l"}
     base = {"source": "https://huggingface.co/datasets/o/r", "revision": "a" * 40,

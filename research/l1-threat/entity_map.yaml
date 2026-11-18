@@ -237,16 +237,17 @@ datasets:
       - {label: "0.1 <= toxicity < 0.5", out_of_scope: "ambiguous machine score band, neither gold nor benign"}
   - id: mcptox
     name: MCPTox
-    source: MCPTox benchmark (poisoned MCP tool descriptions)
-    licence: unknown
+    source: github:zhiqiangwang4/MCPTox-Benchmark pure_tool.json
+    licence: CC-BY-4.0
     languages: [en]
     split: holdout
     family: neutral
     labels:
-      - {label: "poisoned tool, paradigm explicit_trigger_function_hijacking or implicit_trigger_function_hijacking", classes: [tool_poisoning]}
-      - {label: "poisoned tool, paradigm implicit_trigger_parameter_tampering", classes: [tool_poisoning], family: side_channel_param}
+      - {label: "poisoned tool, paradigm Template-1 or Template-2 (explicit or implicit trigger, function hijacking)", classes: [tool_poisoning]}
+      - {label: "poisoned tool, paradigm Template-3 (implicit trigger, parameter tampering)", classes: [tool_poisoning], family: side_channel_param}
       - {label: "clean tool description of the same server", benign: true}
-    note: no licence file; evaluation only, never training
+    note: 485 poisoned tool descriptions of 45 real MCP servers (paper arXiv 2508.14925, AAAI 2026); data
+      CC BY 4.0 since the official release of 2026-11-15 (attribution in the scoreboard); holdout only
   - id: malicious_skill_bench
     name: MaliciousSkillBench
     source: MaliciousSkillBench (agent skills)
@@ -278,8 +279,8 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "inject_target_file in (agents.md, skill.md, soul.md, user.md)", classes: [agent_config_tampering]}
-      - {label: "inject_target_file = memory.md", classes: [memory_poisoning]}
+      - {label: "inject_target_file in (agents.md, skill.md, soul.md, user.md)", classes: [agent_config_tampering], decides: false, reason: "owner holdout review gen17 (2026-11-18): 84% label errors — the planted text alone rarely shows the attack, which lives in the agent context"}
+      - {label: "inject_target_file = memory.md", classes: [memory_poisoning], decides: false, reason: "owner holdout review gen17 (2026-11-18): 84% label errors — the planted text alone rarely shows the attack, which lives in the agent context"}
     note: no licence file; evaluation only, never training. Planted content of persistent agent files
       (AGENTS.md, skills, soul/user profiles, long-term memory) from automated red-teaming of claw-style
       agents (arXiv 2610.27244); the attacker_instruction field is the scanned text
@@ -302,9 +303,9 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "category = Cybercrime", classes: [unsafe_action]}
-      - {label: "category in (Fraud, Self-harm, Sexual, Drugs)", classes: [harmful_content]}
-      - {label: "category in (Harassment, Hate) (hate and harassment tasks; harmful_content.md §2)", classes: [toxic_language]}
+      - {label: "category = Cybercrime", classes: [unsafe_action], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
+      - {label: "category in (Fraud, Self-harm, Sexual, Drugs)", classes: [harmful_content], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
+      - {label: "category in (Harassment, Hate) (hate and harassment tasks; harmful_content.md §2)", classes: [toxic_language], decides: false, reason: "owner holdout review gen17 (2026-11-18): 25.5% label errors (agent tasks whose prompt alone does not carry the mapped class)"}
       - {label: "category in (Copyright, Disinformation)", out_of_scope: "copyright and disinformation are not L1 classes (README scope)"}
       - {label: "config harmless_benign", benign: true}
     note: no-training clause; evaluation only

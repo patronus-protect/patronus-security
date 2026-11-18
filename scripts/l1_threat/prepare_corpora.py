@@ -216,7 +216,7 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
     if entry["format"] not in FORMATS:
         problems.append(f"{where}: format must be one of {FORMATS}")
     if "records" in entry and (entry["format"] != "json" or not isinstance(entry["records"], str) or not entry["records"]):
-        problems.append(f"{where}: records needs format json and a field path ('.' for one record per file)")
+        problems.append(f"{where}: records needs format json and a field path ('.' for one record per file, '*' to expand)")
     if ("language" in entry) == ("language_field" in entry):
         problems.append(f"{where}: exactly one of language / language_field")
     rules = entry["labels"]
@@ -480,6 +480,24 @@ def redcode_records(paths: list[Path]) -> Iterable[dict[str, Any]]:
             yield {"text": text, "part": "gen", "scenario": 0, "variant": "stub", "category": path.parent.name}
 
 
+def _records(document: Any, path: str) -> Any:
+    """The records a json recipe's `records` path names: "." is the whole document as one record, a
+    dotted field path the list at that field, and a `*` step expands list items or dict values (MCPTox
+    nests tools as servers -> {tool id: tool}, read with "*.*")."""
+    if path == ".":
+        return [document]
+    if "*" not in path.split("."):
+        return _field(document, path)
+    nodes = [document]
+    for step in path.split("."):
+        if step == "*":
+            nodes = [child for node in nodes
+                     for child in (node.values() if isinstance(node, dict) else node if isinstance(node, list) else ())]
+        else:
+            nodes = [_field(node, step) for node in nodes if isinstance(node, dict)]
+    return nodes
+
+
 def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
     if entry["format"] == "bipia":
         yield from bipia_records([root / item["path"] for item in entry["files"]])
@@ -499,11 +517,8 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
                 yield from (json.loads(line) for line in handle if line.strip())
         elif entry["format"] == "json":
             data = json.loads(path.read_text(encoding="utf-8"))
-            # `records`: where the records sit in the document; "." makes the whole document one record.
-            if entry.get("records") == ".":
-                data = [data]
-            elif "records" in entry:
-                data = _field(data, entry["records"])
+            if "records" in entry:
+                data = _records(data, entry["records"])
             if not isinstance(data, list):
                 raise ValueError(f"{path}: format json expects a list of records (or `records` naming one)")
             yield from data
