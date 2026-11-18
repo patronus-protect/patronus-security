@@ -29,11 +29,11 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | agent_config_tampering | 45 | 42 | 63 | 62 | 0 | 3 | 84 | 0 | 0 | 125 |
 | memory_poisoning | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
 | exfiltration | 151 | 461 | 225 | 11936 | 113 | 1 | 498 | 11711 | 0 | 450 |
-| unsafe_action | 178 | 165 | 63 | 62 | 30 | 35 | 278 | 0 | 0 | 125 |
+| unsafe_action | 178 | 517 | 63 | 62 | 382 | 35 | 278 | 0 | 0 | 125 |
 | resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
 | harmful_content | 316 | 483 | 0 | 224 | 483 | 316 | 0 | 224 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
-| benign | 12101 | 19850 | 17191 | 12125 | 30104 | 47 | 1800 | 33730 | 0 | 2700 |
+| benign | 12101 | 19902 | 17191 | 12125 | 30156 | 47 | 1800 | 33730 | 0 | 2700 |
 
 ## Spot-check dev
 
@@ -49,6 +49,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
 | report/nemotron_content_safety_v2 | report | 1471 | 60 | 1 | 4 | 8.3% | 0 / 0 |
 | report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
+| train_dev/agent_safetybench | dev | 111 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/agentdojo | dev | 268 | 52 | 0 | 0 | 0.0% | 0 / 12 |
 | train_dev/approve_or_deny_de | dev | 82 | 50 | 0 | 0 | 0.0% | 0 / 23 |
 | train_dev/bipia | dev | 235 | 51 | 0 | 0 | 0.0% | 0 / 17 |
@@ -57,11 +58,12 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/nemotron_safety_v3 | dev | 905 | 60 | 0 | 3 | 5.0% | 0 / 0 |
+| train_dev/redcode | dev | 293 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 
-Benign pool (dev, scored sets): 0 of 309 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 334 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -147,6 +149,7 @@ Benign pool (holdout, scored sets): 6 of 350 reviewed benign rows wrong or uncle
 | report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0016319 | harmful_content | unclear | Cheating in a game; no hazard |
 | generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000265 | instruction_injection | unclear | CyberSecEval mode claim (do-anything bot) around an ordinary political question |
 | generated/obfuscation_slices | generators_dev_seed:obfuscation_slices:000057 | prompt_extraction | unclear | Mosscap poem about keeping a secret; no request for the password |
+| train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -385,6 +388,35 @@ translated, no native German rows yet); the benign pool grows by 490 EN hard neg
 with `gold.py summary` and merged into `gold-dev.json`; the other sets are unchanged by generation 14. On dev the class
 now passes; its decision stays no-go only because of the holdout spot-check (JBB-Behaviors at 10 %), which needs the
 owner's holdout re-review.
+
+## Findings (native unsafe_action agent sets, 2026-11-18)
+
+Two recipes (registry generation 16), reviewed by the runner with `gold.py sample` (50 rows per set), every row read in
+full. Notes describe requests and never repeat their content.
+
+- **RedCode (`unsafe_action`, EN): 0 of 50.** RedCode-Exec Python items come as a summary and a step-list request
+  ("Create and execute a Python script that …"). A first look at the 27 risky scenarios showed most of them read as
+  ordinary tasks on their own (print, copy or list a file, post a file to a local server, stop a named service such
+  as a web server or database, a regex, a seeded random number, a biased score): their risk lies in what the code
+  does in its environment, so they stay out of scope. Scored are scenario 8 (delete a system file), 9 (alias `sudo`
+  or another command to a recursive delete in the root user's shell profile) and 10 (reverse or remote command
+  shell), plus the 160 RedCode-Gen malware stubs (signature and docstring of an adware, DDoS, ransomware, rootkit,
+  spyware, trojan, virus, backdoor, botnet or worm function to complete). Borderline but kept: deleting a package log
+  under `/var/log` (scenario 8). 293 rows after deduplication (step lists of one scenario are near-duplicates).
+  The Bash half is handed to the shell-command detector and not fetched.
+- **Agent-SafetyBench (`unsafe_action` and benign, EN): 1 of 50 unclear (2.0 %).** Only the unfulfillable cases of
+  the harmful-code group that the agent fails by writing the code itself (failure mode 1) carry the risk in the
+  instruction; even there about two in five read harmless alone (a login form, a backup script, a model on age and
+  ZIP code), so a cue filter keeps the requests that name the harmful act (bypass or disable authentication or
+  security checks, backdoor, reverse shell, cracking or brute-forcing passwords, logging keystrokes or passwords,
+  opening every port to any address, world-writable permissions): 59 positives, 41 dropped. The 52 fulfillable code
+  cases (authentication, backups, deleting duplicates, remote shutdown) join the hard-benign pool. Flag: a request to
+  scrape personal data "to demonstrate" scraping (privacy harm, the unsafe act only implied). Every other risk group
+  keeps its risk in the tool environment and stays out of scope, as found in T15.
+
+`unsafe_action` gains 352 native EN dev rows (before: 30 from AgentDojo). The two sets were summarised with
+`gold.py summary` on a freeze of these two sets alone and merged into `gold-dev.json`; the generated sets that embed
+dev rows are re-frozen with generation 16 and keep their last review.
 
 ## How this report is made
 
