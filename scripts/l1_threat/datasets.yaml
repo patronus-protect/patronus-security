@@ -18,13 +18,14 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8, plain integer and floating-point columns) |
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #   text        record field holding the text; `language` a fixed code or `language_field`
-#   labels      rules {field, equals (value or list) | contains (value or list) | at_least | below, label}; a rule
-#               without field matches every row; `contains` reads the field as a comma-separated list and needs
-#               one of the given items in it; `and` [{field, equals | contains | at_least | below}] adds conditions on other
+#   labels      rules {field, equals (value or list) | contains (value or list) | excludes (value or list) | at_least |
+#               below, label}; a rule without field matches every row; `contains` reads the field as a comma-separated
+#               list and needs one of the given items in it, `excludes` needs none of them; `and` [{field, equals |
+#               contains | excludes | at_least | below}] adds conditions on other
 #               fields that must all hold; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
 #   keep        cue filters [{label, pattern, reason}]: a row carrying the upstream `label` is kept only
@@ -60,7 +61,10 @@ schema: ark-l1-threat-datasets-v1
 #     "Explain the theory of relativity." inside an e-mail carry no injection).
 # 13: toxic_language gets a scored dev source: Nemotron Safety Guard v3 (human-labelled prompts that name the toxic
 #     act, EN and the machine-translated DE part); Civil Comments (test split, capped) is reported only.
-generation: 13
+# 14: harmful_content gets a scored dev source: the harmful categories of Nemotron Safety Guard v3 (prompts that ask
+#     for operational help, AILuminate hazard per row); the Aegis 2.0 training split, deduplicated against it, is
+#     reported only; the vanilla benign prompts of the WildGuardMix test split count as hard negatives.
+generation: 14
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -250,8 +254,28 @@ datasets:
         contains: Threat
         and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
         label: "category = Threat"
+      # harmful_content: a harmful category on a prompt labelled unsafe and no toxic one (a row with both is scored
+      # for toxic_language only, behind its own cue); adult sexual content alone is not scored. The union label holds
+      # the cue; one label per category names the AILuminate hazard of the row.
+      - field: violated_categories
+        contains: &nemotron_harm [Violence, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity, Suicide and Self Harm, Sexual (minor)]
+        and: &nemotron_harm_only
+          - {field: violated_categories, excludes: &nemotron_toxic [Hate/Identity Hate, Harassment, Profanity, Threat]}
+          - {field: prompt_label, equals: unsafe}
+          - {field: tag, equals: [generic, adapted]}
+        label: &nemotron_union "harmful category without a toxic one"
+      - {field: violated_categories, contains: Violence, and: *nemotron_harm_only, label: "category = Violence (AILuminate vcr)"}
+      - {field: violated_categories, contains: Criminal Planning/Confessions, and: *nemotron_harm_only, label: "category = Criminal Planning/Confessions (AILuminate ncr)"}
+      - {field: violated_categories, contains: Guns and Illegal Weapons, and: *nemotron_harm_only, label: "category = Guns and Illegal Weapons (AILuminate vcr)"}
+      - {field: violated_categories, contains: Controlled/Regulated Substances, and: *nemotron_harm_only, label: "category = Controlled/Regulated Substances (AILuminate ncr)"}
+      - {field: violated_categories, contains: Fraud/Deception, and: *nemotron_harm_only, label: "category = Fraud/Deception (AILuminate ncr)"}
+      - {field: violated_categories, contains: Malware, and: *nemotron_harm_only, label: "category = Malware (AILuminate ncr)"}
+      - {field: violated_categories, contains: Manipulation, and: *nemotron_harm_only, label: "category = Manipulation (AILuminate ncr)"}
+      - {field: violated_categories, contains: Illegal Activity, and: *nemotron_harm_only, label: "category = Illegal Activity (AILuminate ncr)"}
+      - {field: violated_categories, contains: Suicide and Self Harm, and: *nemotron_harm_only, label: "category = Suicide and Self Harm (AILuminate ssh)"}
+      - {field: violated_categories, contains: Sexual (minor), and: *nemotron_harm_only, label: "category = Sexual (minor) (AILuminate cse)"}
       - {field: prompt_label, equals: safe, label: "safe"}
-      - {field: prompt_label, equals: unsafe, label: "prompt_label = unsafe without a toxic_language category"}
+      - {field: prompt_label, equals: unsafe, label: "prompt_label = unsafe without a scored category"}
       - {field: tag, equals: jailbreaking, label: "tag = jailbreaking"}
     keep:
       - label: "category in (Hate/Identity Hate, Harassment, Profanity)"
@@ -266,6 +290,17 @@ datasets:
       - label: "category = Threat"
         reason: *nemotron_toxic_cue
         pattern: *nemotron_toxic_pattern
+      - label: *nemotron_union
+        reason: &nemotron_harm_cue >-
+          prompt labels mark opinion and discussion prompts, statistics questions, confessions and conversation
+          fragments as unsafe; as for the AILuminate demo set only a short prompt (at most 300 characters) that asks for
+          operational help (how to, best way, steps, tips, where to get, write about how to) stays
+        pattern: &nemotron_harm_pattern '\A(?=[\s\S]{1,300}\Z)(?!REDACTED)[\s\S]*?(?:\bhow (?:do|can|could|would|should|might|to|much|many)\b|\b(?:best|easiest|safest|quickest|fastest|most painless|most effective|good) (?:way|method|means|place|tips?|strategies|strategy|tactics?|ways)\b|\bways? to\b|\btips\b|\bsteps?\b|\bhelp me\b|\bteach me\b|\bshow me\b|\bguide\b|\binstructions?\b|\bwhere (?:can|could|do|should|would) (?:i|we|you|one)\b|\bwrite (?:a|an|me)\b[^.?!]{0,80}\bhow to\b|\bwie (?:kann|könnte|können|mache|macht|bekomme|soll|sollte|komme|würde|stelle|baue|finde|viel|lange|man)\b|\b(?:beste|besten|bester|bestes|einfachste|einfachsten|sicherste|sichersten|schnellste|schnellsten|effektivste|effektivsten|gute|guten) (?:weg|wege|methode|methoden|art|möglichkeit|möglichkeiten|tipps?|ort|strategie|strategien)\b|\btipps\b|\bhilf mir\b|\banleitung\b|\bschritte?\b|\bwo (?:kann|könnte|bekomme|finde|kaufe)\b|\bam (?:einfachsten|besten|sichersten|schnellsten)\b)'
+      - label: "category = Sexual (minor) (AILuminate cse)"
+        reason: &nemotron_minor_cue >-
+          the minors category also marks prompts without any minor (desecrating a church; dev gold review 2026-11-18:
+          2 of 21); the row stays only when it names a child, a minor or a teenager
+        pattern: &nemotron_minor_pattern '(?:\bchild|\bkinder|\bkindes|\bkind\b|minderjährig|\bunderage|\bminors?\b|\bteen|jugendlich|\bgirls?\b|mädchen|\bboys?\b|\bschool|\bschul)'
   - id: cyberseceval_multilingual
     commercial: true
     source: https://github.com/meta-llama/PurpleLlama
@@ -663,9 +698,21 @@ datasets:
     dedup_against: [jackhhao_jailbreak]
   - id: wildguardmix
     commercial: true
-    pending: >-
-      upstream allenai/wildguardmix is gated (no anonymous download); no ungated copy with the original rows and
-      licence was found
+    # Test split of allenai/wildguardmix (gated upstream) from an ungated ODC-BY copy (1,725 rows as upstream).
+    # Only the vanilla benign prompts are scored (hard negatives); see the entity map for the harmful ones.
+    source: https://huggingface.co/datasets/walledai/WildGuardTest
+    revision: dc2c3d069957e7089865fc328a955a82c4c94b65
+    files:
+      - {path: data/train-00000-of-00001.parquet, sha256: a7d0c55c5cfd05b061f89a200fa7ccf31f9c8876830b45cd4be567170716bd69}
+    format: parquet
+    text: prompt
+    language: en
+    labels:
+      - {field: label, equals: harmful, and: [{field: adversarial, equals: false}], label: "prompt_harm_label = harmful, adversarial = false"}
+      - {field: label, equals: harmful, and: [{field: adversarial, equals: true}], label: "prompt_harm_label = harmful, adversarial = true"}
+      - {field: label, equals: unharmful, and: [{field: adversarial, equals: false}], label: "prompt_harm_label = unharmful, adversarial = false"}
+      - {field: label, equals: unharmful, and: [{field: adversarial, equals: true}], label: "prompt_harm_label = unharmful, adversarial = true"}
+      - {label: "every prompt"}
   - id: xl_safetybench
     commercial: true
     pending: recipe not written yet
@@ -711,7 +758,39 @@ datasets:
       - {field: hazard, equals: [spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm], label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)"}
   - id: nemotron_content_safety_v2
     commercial: true
-    pending: recipe not written yet
+    # Training split (reported only): the test and validation splits are the English test and validation prompts of
+    # nemotron_safety_v3 (dropped against it below); the text is the user prompt, labels as there.
+    source: https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-2.0
+    revision: d86bb8bedff51d25ac834ab7838f1cc61acb7a2c
+    files:
+      - {path: train.json, sha256: 154fba82c71d9fa73abd2ca5588a198e693ddc816c83444df180a22f613e02f6}
+    format: json
+    text: prompt
+    language: en
+    labels:
+      - field: violated_categories
+        contains: *nemotron_harm
+        and: &aegis_harm_only
+          - {field: violated_categories, excludes: *nemotron_toxic}
+          - {field: prompt_label, equals: unsafe}
+          - {field: prompt_label_source, equals: human}
+        label: *nemotron_union
+      - {field: violated_categories, contains: Violence, and: *aegis_harm_only, label: "category = Violence (AILuminate vcr)"}
+      - {field: violated_categories, contains: Criminal Planning/Confessions, and: *aegis_harm_only, label: "category = Criminal Planning/Confessions (AILuminate ncr)"}
+      - {field: violated_categories, contains: Guns and Illegal Weapons, and: *aegis_harm_only, label: "category = Guns and Illegal Weapons (AILuminate vcr)"}
+      - {field: violated_categories, contains: Controlled/Regulated Substances, and: *aegis_harm_only, label: "category = Controlled/Regulated Substances (AILuminate ncr)"}
+      - {field: violated_categories, contains: Fraud/Deception, and: *aegis_harm_only, label: "category = Fraud/Deception (AILuminate ncr)"}
+      - {field: violated_categories, contains: Malware, and: *aegis_harm_only, label: "category = Malware (AILuminate ncr)"}
+      - {field: violated_categories, contains: Manipulation, and: *aegis_harm_only, label: "category = Manipulation (AILuminate ncr)"}
+      - {field: violated_categories, contains: Illegal Activity, and: *aegis_harm_only, label: "category = Illegal Activity (AILuminate ncr)"}
+      - {field: violated_categories, contains: Suicide and Self Harm, and: *aegis_harm_only, label: "category = Suicide and Self Harm (AILuminate ssh)"}
+      - {field: violated_categories, contains: Sexual (minor), and: *aegis_harm_only, label: "category = Sexual (minor) (AILuminate cse)"}
+      - {label: "every prompt"}
+    keep:
+      - {label: *nemotron_union, reason: *nemotron_harm_cue, pattern: *nemotron_harm_pattern}
+      - {label: "category = Sexual (minor) (AILuminate cse)", reason: *nemotron_minor_cue, pattern: *nemotron_minor_pattern}
+    dedup_against: [nemotron_safety_v3]
+    cap: 1500
   - id: germeval2018_train
     commercial: true
     pending: >-

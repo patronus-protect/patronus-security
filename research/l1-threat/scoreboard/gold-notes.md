@@ -195,6 +195,47 @@ yet). The other dev sets are unchanged by generation 13 (Nemotron contributes no
 not a generator class), so their verdicts stand; the two new sets were summarised with `gold.py summary` and added to
 `gold-dev.json`.
 
+## Findings (harmful_content dev sources, 2026-11-18)
+
+Three recipes (registry generation 14), reviewed by the runner, every row read in full. Notes describe requests and
+never repeat their content.
+
+- **Nemotron Safety Guard v3 (now `harmful_content` and `toxic_language`, EN + machine-translated DE, marked
+  translated): 3 of 60 unclear (5.0 %, at the line).** The categories label the whole conversation, so prompts labelled
+  unsafe include opinion and discussion questions, statistics, confessions and conversation fragments (first look at
+  60 raw rows). A harmful row is a human-labelled prompt labelled unsafe with a harmful category and no toxic one
+  (a row with both stays `toxic_language` only, behind its own cue, so the 106 toxic rows are unchanged), short (at most
+  300 characters) and asking for operational help (how to, best way, steps, tips, where to get, "write … about how to";
+  German equivalents), as for the AILuminate demo set. Adult sexual content alone is not scored (dating questions).
+  Each row names its AILuminate hazard as an upstream label: Violence and Guns → `vcr`, Criminal Planning, Regulated
+  Substances, Fraud, Malware, Manipulation, Illegal Activity → `ncr`, Suicide and Self Harm → `ssh`, Sexual (minor)
+  → `cse`. Sample (30 harmful, 30 toxic): harmful 2 unclear (a binge-drinking question, sabotage of a marriage, both
+  `ncr`), toxic 1 unclear (the venting row flagged before). Per hazard, read beyond the sample: `ssh` all 11 rows, 1
+  unclear (a garbled German translation); `cse` all 21 rows, 2 wrong (church desecration under the minors category;
+  the minors label now needs a child, minor or teenager in the prompt, which drops both); `vcr` 25 of 106 EN rows, 1
+  unclear (an opinion on culling wild animals). Scored: 799 harmful rows (483 EN, 316 DE translated).
+- **Aegis 2.0 / Nemotron Content Safety v2 (`harmful_content`, EN): 5 of 60 wrong or unclear (8.3 %): reported
+  only.** Its test and validation splits are Nemotron v3's English prompts, so the recipe reads the training split
+  (human prompt labels, same cue and hazards), deduplicated against Nemotron v3 and capped at 1 500. Even behind the
+  cue the rows hold self-defence by a victim, video-game crafting, game cheating, drinking unnoticed and
+  context-free fragments (a first draw before the minors cue also showed an advocacy question and a lawful-sounding
+  disposal question).
+- **WildGuardMix test split (benign, EN): 0 of 60.** From the ungated ODC-BY copy `walledai/WildGuardTest` (upstream
+  is gated). The 490 vanilla harmless prompts (help lines, history, games, harmless verbs such as "kill a process") join
+  the hard-benign pool. The vanilla harmful prompts stay out of scope: even behind the cue about 18 % of 142 are
+  privacy, copyright or misinformation requests or harmless (beating the competition, recreating a painting). The
+  adversarial rows wait for a jailbreak review.
+- **`obfuscation_slices`: 2 of 56 unclear (3.6 %).** WildGuardMix benign rows enter its benign pool (48 of 400 benign
+  rows); the classes are unchanged. The flags are the two source rows flagged before (a do-anything-bot claim around a
+  political question, a poem about a secret). The other generated sets are byte-identical to the previous
+  generation.
+
+`harmful_content` reaches 483 EN and 316 DE scored dev rows, all from Nemotron v3 (DE
+translated, no native German rows yet); the benign pool grows by 490 EN hard negatives. The four sets were summarised
+with `gold.py summary` and merged into `gold-dev.json`; the other sets are unchanged by generation 14. On dev the class
+now passes; its decision stays no-go only because of the holdout spot-check (JBB-Behaviors at 10 %), which needs the
+owner's holdout re-review.
+
 ## How this report is made
 
 ```bash

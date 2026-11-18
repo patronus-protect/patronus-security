@@ -334,6 +334,7 @@ tasks:
       error); no plaintext slur list in the repo (review notes describe, never quote); German rows marked
       translated where machine-translated; caps and licences in the manifest
   - id: T08
+    status: done
     title: Scored dev source for harmful_content — recipes for wildguardmix (ODC-BY, vanilla harmful prompts; benign prompts to the hard-benign pool), the harmful labels of nemotron_safety_v3 and nemotron_content_safety_v2 (CC-BY-4.0), deduplicated against each other; gold review per AILuminate hazard
     type: eval-infra
     deps: [T06, T07]

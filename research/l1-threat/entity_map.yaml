@@ -573,13 +573,21 @@ datasets:
     labels:
       - {label: "category in (Hate/Identity Hate, Harassment, Profanity)", classes: [toxic_language]}
       - {label: "category = Threat", classes: [toxic_language], family: threat}
-      - {label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)", classes: [harmful_content]}
-      - {label: "category = Suicide and Self Harm", classes: [harmful_content], family: self_harm_intent}
-      - {label: "category = Sexual (minor)", classes: [harmful_content], family: child_safety}
+      - {label: "harmful category without a toxic one", classes: [harmful_content]}
+      - {label: "category = Violence (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Criminal Planning/Confessions (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Guns and Illegal Weapons (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Controlled/Regulated Substances (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Fraud/Deception (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Malware (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Manipulation (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Illegal Activity (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Suicide and Self Harm (AILuminate ssh)", classes: [harmful_content], family: self_harm_intent}
+      - {label: "category = Sexual (minor) (AILuminate cse)", classes: [harmful_content], family: child_safety}
       - {label: "category in (PII/Privacy, Unauthorized Advice, Copyright/Trademark/Plagiarism, High Risk Gov Decision Making)", classes: [harmful_content], decides: false, reason: "model-only subclasses of harmful_content (privacy, specialized advice, ip, elections), off until they pass the TPR floor"}
       - {label: "category = Political/Misinformation/Conspiracy", out_of_scope: "disinformation is not an L1 class (README scope)"}
       - {label: "category in (Needs Caution, Other, Immoral/Unethical)", out_of_scope: "no hazard class"}
-      - {label: "prompt_label = unsafe without a toxic_language category", out_of_scope: "harmful_content rows stay unscored until their per-hazard gold review"}
+      - {label: "prompt_label = unsafe without a scored category", out_of_scope: "adult sexual content, model-only, disinformation and catch-all categories, and rows carrying both a toxic and a harmful category, which count for toxic_language only"}
       - {label: "tag = jailbreaking", out_of_scope: "jailbreak templates labelled by an LLM jury; neither a toxic prompt nor a clean benign one"}
       - {label: "safe", out_of_scope: "prompt-only labels pass group stereotypes and injection templates as safe (dev gold review 2026-11-18: 3 of 25 wrong or unclear); the benign pool comes from cleaner sets"}
     translated: true
@@ -728,9 +736,18 @@ datasets:
     split: train_dev
     family: neutral
     labels:
-      - {label: "prompt_harm_label = harmful, adversarial = true", classes: [jailbreak, harmful_content]}
-      - {label: "prompt_harm_label = harmful, adversarial = false", classes: [harmful_content]}
-      - {label: "prompt_harm_label = unharmful", benign: true}
+      - label: "prompt_harm_label = harmful, adversarial = false"
+        out_of_scope: >-
+          the harm label is wider than the L1 hazards: even among short requests for operational help about 18 % are
+          privacy, copyright or misinformation requests or harmless (beating the competition, recreating a painting)
+          (dev review 2026-11-18); harmful_content positives come from the Nemotron sets
+      - {label: "prompt_harm_label = unharmful, adversarial = false", benign: true}
+      - {label: "prompt_harm_label = harmful, adversarial = true", out_of_scope: "jailbreak-wrapped requests; scored once a jailbreak review covers them"}
+      - {label: "prompt_harm_label = unharmful, adversarial = true", out_of_scope: "jailbreak tactics around a harmless request often keep the bypass framing (as in WildJailbreak)"}
+      - {label: "every prompt", out_of_scope: "rows without a harm label"}
+    note: >-
+      test split (1,725 prompts) from the ungated ODC-BY copy walledai/WildGuardTest; only the vanilla benign prompts
+      are scored, as hard negatives
   - id: xl_safetybench
     name: XL-SafetyBench
     source: XL-SafetyBench (DE/FR/ES jailbreaks, synthetic)
@@ -788,12 +805,26 @@ datasets:
     source: hf:nvidia/Aegis-AI-Content-Safety-Dataset-2.0
     licence: CC-BY-4.0
     languages: [en]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
-      - {label: "violated categories of the Aegis 2.0 taxonomy", classes: [harmful_content, toxic_language]}
-      - {label: "safe", benign: true}
-    note: same category scheme as nemotron_safety_v3; E01 dedups the two
+      - {label: "harmful category without a toxic one", classes: [harmful_content]}
+      - {label: "category = Violence (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Criminal Planning/Confessions (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Guns and Illegal Weapons (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Controlled/Regulated Substances (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Fraud/Deception (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Malware (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Manipulation (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Illegal Activity (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Suicide and Self Harm (AILuminate ssh)", classes: [harmful_content], family: self_harm_intent}
+      - {label: "category = Sexual (minor) (AILuminate cse)", classes: [harmful_content], family: child_safety}
+      - {label: "every prompt", out_of_scope: "safe prompts, LLM-labelled prompts and the other categories; toxic_language and the benign pool come from nemotron_safety_v3 and cleaner sets"}
+    note: >-
+      same category scheme as nemotron_safety_v3, whose English test and validation prompts are this set's test and
+      validation splits; only the training split is read, deduplicated against nemotron_safety_v3 and capped. Reported
+      only since the dev gold review (2026-11-18: 5 of 60 wrong or unclear behind the same cue as nemotron_safety_v3:
+      self-defence by a victim, video-game crafting, game cheating, drinking unnoticed, a fragment without context)
   - id: germeval2018_train
     name: GermEval 2018 (training split)
     source: GermEval 2018 shared task, official training release

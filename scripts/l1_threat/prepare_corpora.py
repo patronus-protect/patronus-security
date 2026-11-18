@@ -102,7 +102,8 @@ ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
 OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against"}
 KEEP_KEYS = {"label", "pattern", "reason"}
-RULE_OPS = ("equals", "contains", "at_least", "below")
+RULE_OPS = ("equals", "contains", "excludes", "at_least", "below")
+LIST_OPS = ("equals", "contains", "excludes")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # Mersenne prime 2^31 - 1: a * h + b stays below 2^63 for a, b, h < P (int64 without overflow).
@@ -185,8 +186,8 @@ def _check_condition(where: str, rule: dict[str, Any]) -> list[str]:
     ops = [op for op in RULE_OPS if op in rule]
     if not isinstance(rule["field"], str) or not ops:
         problems.append(f"{where}: a rule with field needs a string field and one of {RULE_OPS}")
-    if ("equals" in rule or "contains" in rule) and len(ops) > 1:
-        problems.append(f"{where}: equals and contains cannot be combined with at_least/below or each other")
+    if any(op in rule for op in LIST_OPS) and len(ops) > 1:
+        problems.append(f"{where}: equals, contains and excludes cannot be combined with at_least/below or each other")
     for op in ("at_least", "below"):
         if op in rule and (isinstance(rule[op], bool) or not isinstance(rule[op], (int, float))):
             problems.append(f"{where}: {op} must be a number")
@@ -353,10 +354,11 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     if "equals" in rule:
         wanted = rule["equals"] if isinstance(rule["equals"], list) else [rule["equals"]]
         return _text_value(value) in {_text_value(item) for item in wanted}
-    if "contains" in rule:
-        wanted = rule["contains"] if isinstance(rule["contains"], list) else [rule["contains"]]
-        items = {item.strip() for item in _text_value(value).split(",")}
-        return not items.isdisjoint(_text_value(item) for item in wanted)
+    for op in ("contains", "excludes"):
+        if op in rule:
+            wanted = rule[op] if isinstance(rule[op], list) else [rule[op]]
+            items = {item.strip() for item in _text_value(value).split(",")}
+            return items.isdisjoint(_text_value(item) for item in wanted) == (op == "excludes")
     try:
         number = float(value)
     except (TypeError, ValueError):

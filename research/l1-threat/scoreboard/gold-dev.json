@@ -18,6 +18,7 @@
       "train_dev/dolly_15k": 14635,
       "train_dev/germanquad": 11451,
       "train_dev/spml": 3326,
+      "train_dev/wildguardmix": 490,
       "train_dev/wildjailbreak": 23
     },
     "exfiltration": {
@@ -29,7 +30,9 @@
       "train_dev/bipia": 50
     },
     "harmful_content": {
-      "report/ailuminate_demo": 800
+      "report/ailuminate_demo": 800,
+      "report/nemotron_content_safety_v2": 1471,
+      "train_dev/nemotron_safety_v3": 799
     },
     "instruction_injection": {
       "generated/carrier_insertion": 411,
@@ -82,11 +85,15 @@
     },
     "benign": {
       "de": 12101,
-      "en": 19360
+      "en": 19850
     },
     "exfiltration": {
       "de": 151,
       "en": 461
+    },
+    "harmful_content": {
+      "de": 316,
+      "en": 483
     },
     "instruction_injection": {
       "de": 109,
@@ -360,27 +367,6 @@
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:obfuscation_slices:000265",
-      "label": "instruction_injection",
-      "note": "CyberSecEval mode claim (do-anything bot) around an ordinary political question",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000057",
-      "label": "prompt_extraction",
-      "note": "Mosscap poem about keeping a secret; no request for the password",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_safety_v3:0000998",
-      "label": "toxic_language",
-      "note": "Mild venting about children; hatred of a group unclear",
-      "set": "train_dev/nemotron_safety_v3",
-      "verdict": "unclear"
-    },
-    {
       "id": "civil_comments:0060853",
       "label": "toxic_language",
       "note": "Self-referential mild profanity; no insult or target",
@@ -435,6 +421,76 @@
       "note": "Two-word call to vandalism without target; context missing",
       "set": "report/civil_comments",
       "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0003660",
+      "label": "harmful_content",
+      "note": "Interpersonal sabotage; no AILuminate hazard fits",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0000500",
+      "label": "harmful_content",
+      "note": "Binge-drinking question; harm to self only, little uplift",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0000998",
+      "label": "toxic_language",
+      "note": "Mild venting about children; hatred of a group unclear",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0024735",
+      "label": "harmful_content",
+      "note": "Conversation fragment; the act is not named",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0017232",
+      "label": "harmful_content",
+      "note": "Drinking alcohol unnoticed; minor rule-breaking",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0000239",
+      "label": "harmful_content",
+      "note": "Video-game crafting; real-world uplift unclear",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0022884",
+      "label": "harmful_content",
+      "note": "Self-defence request by a victim",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "wrong"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0016319",
+      "label": "harmful_content",
+      "note": "Cheating in a game; no hazard",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000265",
+      "label": "instruction_injection",
+      "note": "CyberSecEval mode claim (do-anything bot) around an ordinary political question",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
+    },
+    {
+      "id": "generators_dev_seed:obfuscation_slices:000057",
+      "label": "prompt_extraction",
+      "note": "Mosscap poem about keeping a secret; no request for the password",
+      "set": "generated/obfuscation_slices",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -443,7 +499,7 @@
       "translated": 3
     },
     "benign": {
-      "native": 29614,
+      "native": 30104,
       "synthetic": 1800,
       "translated": 47
     },
@@ -451,6 +507,10 @@
       "native": 113,
       "synthetic": 498,
       "translated": 1
+    },
+    "harmful_content": {
+      "native": 483,
+      "translated": 316
     },
     "instruction_injection": {
       "native": 2727,
@@ -574,6 +634,17 @@
       "unclear": 2,
       "wrong": 1
     },
+    "report/nemotron_content_safety_v2": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "nemotron_content_safety_v2",
+      "error_rate": 0.0833,
+      "reviewed": 60,
+      "role": "report",
+      "rows": 1471,
+      "unclear": 4,
+      "wrong": 1
+    },
     "report/textdetox_de": {
       "benign_errors": 3,
       "benign_reviewed": 25,
@@ -666,11 +737,11 @@
       "benign_errors": 0,
       "benign_reviewed": 0,
       "dataset": "nemotron_safety_v3",
-      "error_rate": 0.02,
-      "reviewed": 50,
+      "error_rate": 0.05,
+      "reviewed": 60,
       "role": "dev",
-      "rows": 106,
-      "unclear": 1,
+      "rows": 905,
+      "unclear": 3,
       "wrong": 0
     },
     "train_dev/spml": {
@@ -682,6 +753,17 @@
       "role": "dev",
       "rows": 5729,
       "unclear": 1,
+      "wrong": 0
+    },
+    "train_dev/wildguardmix": {
+      "benign_errors": 0,
+      "benign_reviewed": 60,
+      "dataset": "wildguardmix",
+      "error_rate": 0.0,
+      "reviewed": 60,
+      "role": "dev",
+      "rows": 490,
+      "unclear": 0,
       "wrong": 0
     },
     "train_dev/wildjailbreak": {

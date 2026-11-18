@@ -170,6 +170,12 @@ def test_adversarial_benign_jailbreak_lookalikes_are_hard_benign():
     assert not MODULE.is_hard_benign(row("dolly_15k", 0, benign=True))
 
 
+def test_vanilla_benign_wildguardmix_prompts_are_hard_benign():
+    # WildGuardMix's vanilla unharmful prompts are harmless requests that sound risky (killing a process, a heist film).
+    assert MODULE.is_hard_benign(row("wildguardmix", 0, benign=True))
+    assert not MODULE.is_hard_benign(row("wildguardmix", 1, ["harmful_content"]))
+
+
 def test_score_pairs_keep_report_only_sets_apart_and_never_flag_them():
     report = MODULE.score_pairs(pairs(role="report"))
     assert report["gated"] == {} and "exfiltration" in report["report"]

@@ -6,7 +6,8 @@ Handwritten rows, no upstream data. The two shards cover what the pure-Python re
 prepare_corpora.py must handle in the pinned Gretel files (pyarrow 14 writer, Snappy,
 optional flat byte-array columns, dictionary and plain pages, several row groups) plus
 data page v2 and nulls. Two more shards hold optional float and double columns (rater scores such
-as Civil Comments' toxicity) in plain and dictionary pages. Needs pyarrow, which the gate venv deliberately does not have:
+as Civil Comments' toxicity) in plain and dictionary pages, two more an optional boolean column (WildGuardMix's
+adversarial flag) in plain and RLE pages. Needs pyarrow, which the gate venv deliberately does not have:
 
     .venv/bin/python scripts/fixtures/l1_corpora/make_gretel_fixture.py
 """
@@ -77,8 +78,20 @@ def write_scores() -> None:
     pq.write_table(table, HERE / "scores_v2_test.parquet", compression="snappy", data_page_version="2.0")
 
 
+# Flags of the flag shards: more than eight values (bit packing crosses a byte), runs and one null.
+FLAGS = [True, False, None, True, True, False, False, False, True, False, True]
+
+
+def write_flags() -> None:
+    schema = pa.schema([("text", pa.string()), ("adversarial", pa.bool_())])
+    table = pa.Table.from_pylist([{"text": f"prompt {index}", "adversarial": flag} for index, flag in enumerate(FLAGS)], schema=schema)
+    pq.write_table(table, HERE / "flags_v1_test.parquet", compression="snappy", use_dictionary=False, row_group_size=6)
+    pq.write_table(table, HERE / "flags_v2_test.parquet", compression="snappy", data_page_version="2.0", use_dictionary=False)
+
+
 def main() -> None:
     write_scores()
+    write_flags()
     first = pa.Table.from_pylist(rows(0))
     second = rows(1)
     second[3]["document_type"] = None
