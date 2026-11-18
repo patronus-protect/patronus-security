@@ -61,9 +61,9 @@ schema: ark-l1-threat-datasets-v1
 #     "Explain the theory of relativity." inside an e-mail carry no injection).
 # 13: toxic_language gets a scored dev source: Nemotron Safety Guard v3 (human-labelled prompts that name the toxic
 #     act, EN and the machine-translated DE part); Civil Comments (test split, capped) is reported only.
-# 14: harmful_content gets scored dev sources: the harmful categories of Nemotron Safety Guard v3 (prompts that ask
-#     for operational help), the Aegis 2.0 training split deduplicated against it, and the vanilla prompts of the
-#     WildGuardMix test split (benign ones count as hard negatives).
+# 14: harmful_content gets a scored dev source: the harmful categories of Nemotron Safety Guard v3 (prompts that ask
+#     for operational help, AILuminate hazard per row); the Aegis 2.0 training split, deduplicated against it, is
+#     reported only; the vanilla benign prompts of the WildGuardMix test split count as hard negatives.
 generation: 14
 
 dedup:
