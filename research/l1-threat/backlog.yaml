@@ -313,6 +313,7 @@ tasks:
   # classes (IJ01 +0, JB01 +3.9 at dev TPR@1%). The gate reports the deciding metric TPR at 0.1% FPR first,
   # the full-stack numbers come next, then the scorer candidates (incl. fastText-style) per class.
   - id: E08
+    status: done
     title: Scoreboard gate on the deciding metric — the gate summary, PR tables and the regression check report TPR at 0.1% FPR per class (and language) next to TPR at 1% FPR; the holdout verdict checks the 0.1% values too
     type: eval-infra
     deps: [E06]
