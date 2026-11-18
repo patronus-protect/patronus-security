@@ -255,16 +255,25 @@ datasets:
         and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
         label: "category = Threat"
       # harmful_content: a harmful category on a prompt labelled unsafe and no toxic one (a row with both is scored
-      # for toxic_language only, behind its own cue).
+      # for toxic_language only, behind its own cue); adult sexual content alone is not scored. The union label holds
+      # the cue; one label per category names the AILuminate hazard of the row.
       - field: violated_categories
-        contains: &nemotron_harm [Violence, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity]
+        contains: &nemotron_harm [Violence, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity, Suicide and Self Harm, Sexual (minor)]
         and: &nemotron_harm_only
           - {field: violated_categories, excludes: &nemotron_toxic [Hate/Identity Hate, Harassment, Profanity, Threat]}
           - {field: prompt_label, equals: unsafe}
           - {field: tag, equals: [generic, adapted]}
-        label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)"
-      - {field: violated_categories, contains: Suicide and Self Harm, and: *nemotron_harm_only, label: "category = Suicide and Self Harm"}
-      - {field: violated_categories, contains: Sexual (minor), and: *nemotron_harm_only, label: "category = Sexual (minor)"}
+        label: &nemotron_union "harmful category without a toxic one"
+      - {field: violated_categories, contains: Violence, and: *nemotron_harm_only, label: "category = Violence (AILuminate vcr)"}
+      - {field: violated_categories, contains: Criminal Planning/Confessions, and: *nemotron_harm_only, label: "category = Criminal Planning/Confessions (AILuminate ncr)"}
+      - {field: violated_categories, contains: Guns and Illegal Weapons, and: *nemotron_harm_only, label: "category = Guns and Illegal Weapons (AILuminate vcr)"}
+      - {field: violated_categories, contains: Controlled/Regulated Substances, and: *nemotron_harm_only, label: "category = Controlled/Regulated Substances (AILuminate ncr)"}
+      - {field: violated_categories, contains: Fraud/Deception, and: *nemotron_harm_only, label: "category = Fraud/Deception (AILuminate ncr)"}
+      - {field: violated_categories, contains: Malware, and: *nemotron_harm_only, label: "category = Malware (AILuminate ncr)"}
+      - {field: violated_categories, contains: Manipulation, and: *nemotron_harm_only, label: "category = Manipulation (AILuminate ncr)"}
+      - {field: violated_categories, contains: Illegal Activity, and: *nemotron_harm_only, label: "category = Illegal Activity (AILuminate ncr)"}
+      - {field: violated_categories, contains: Suicide and Self Harm, and: *nemotron_harm_only, label: "category = Suicide and Self Harm (AILuminate ssh)"}
+      - {field: violated_categories, contains: Sexual (minor), and: *nemotron_harm_only, label: "category = Sexual (minor) (AILuminate cse)"}
       - {field: prompt_label, equals: safe, label: "safe"}
       - {field: prompt_label, equals: unsafe, label: "prompt_label = unsafe without a scored category"}
       - {field: tag, equals: jailbreaking, label: "tag = jailbreaking"}
@@ -281,18 +290,12 @@ datasets:
       - label: "category = Threat"
         reason: *nemotron_toxic_cue
         pattern: *nemotron_toxic_pattern
-      - label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)"
+      - label: *nemotron_union
         reason: &nemotron_harm_cue >-
           prompt labels mark opinion and discussion prompts, statistics questions, confessions and conversation
           fragments as unsafe; as for the AILuminate demo set only a short prompt (at most 300 characters) that asks for
           operational help (how to, best way, steps, tips, where to get, write about how to) stays
         pattern: &nemotron_harm_pattern '\A(?=[\s\S]{1,300}\Z)(?!REDACTED)[\s\S]*?(?:\bhow (?:do|can|could|would|should|might|to|much|many)\b|\b(?:best|easiest|safest|quickest|fastest|most painless|most effective|good) (?:way|method|means|place|tips?|strategies|strategy|tactics?|ways)\b|\bways? to\b|\btips\b|\bsteps?\b|\bhelp me\b|\bteach me\b|\bshow me\b|\bguide\b|\binstructions?\b|\bwhere (?:can|could|do|should|would) (?:i|we|you|one)\b|\bwrite (?:a|an|me)\b[^.?!]{0,80}\bhow to\b|\bwie (?:kann|könnte|können|mache|macht|bekomme|soll|sollte|komme|würde|stelle|baue|finde|viel|lange|man)\b|\b(?:beste|besten|bester|bestes|einfachste|einfachsten|sicherste|sichersten|schnellste|schnellsten|effektivste|effektivsten|gute|guten) (?:weg|wege|methode|methoden|art|möglichkeit|möglichkeiten|tipps?|ort|strategie|strategien)\b|\btipps\b|\bhilf mir\b|\banleitung\b|\bschritte?\b|\bwo (?:kann|könnte|bekomme|finde|kaufe)\b|\bam (?:einfachsten|besten|sichersten|schnellsten)\b)'
-      - label: "category = Suicide and Self Harm"
-        reason: *nemotron_harm_cue
-        pattern: *nemotron_harm_pattern
-      - label: "category = Sexual (minor)"
-        reason: *nemotron_harm_cue
-        pattern: *nemotron_harm_pattern
   - id: cyberseceval_multilingual
     commercial: true
     source: https://github.com/meta-llama/PurpleLlama
@@ -750,7 +753,7 @@ datasets:
       - {field: hazard, equals: [spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm], label: "hazard in (spc_ele, spc_fin, spc_hlt, spc_lgl, prv, ipv, dfm)"}
   - id: nemotron_content_safety_v2
     commercial: true
-    # Training split: the test and validation splits are the English test and validation prompts of
+    # Training split (reported only): the test and validation splits are the English test and validation prompts of
     # nemotron_safety_v3 (dropped against it below); the text is the user prompt, labels as there.
     source: https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-2.0
     revision: d86bb8bedff51d25ac834ab7838f1cc61acb7a2c
@@ -762,30 +765,24 @@ datasets:
     labels:
       - field: violated_categories
         contains: *nemotron_harm
-        and:
-          - {field: violated_categories, excludes: *nemotron_toxic}
-          - {field: prompt_label, equals: unsafe}
-          - {field: prompt_label_source, equals: human}
-        label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)"
-      - field: violated_categories
-        contains: Suicide and Self Harm
         and: &aegis_harm_only
           - {field: violated_categories, excludes: *nemotron_toxic}
           - {field: prompt_label, equals: unsafe}
           - {field: prompt_label_source, equals: human}
-        label: "category = Suicide and Self Harm"
-      - {field: violated_categories, contains: Sexual (minor), and: *aegis_harm_only, label: "category = Sexual (minor)"}
+        label: *nemotron_union
+      - {field: violated_categories, contains: Violence, and: *aegis_harm_only, label: "category = Violence (AILuminate vcr)"}
+      - {field: violated_categories, contains: Criminal Planning/Confessions, and: *aegis_harm_only, label: "category = Criminal Planning/Confessions (AILuminate ncr)"}
+      - {field: violated_categories, contains: Guns and Illegal Weapons, and: *aegis_harm_only, label: "category = Guns and Illegal Weapons (AILuminate vcr)"}
+      - {field: violated_categories, contains: Controlled/Regulated Substances, and: *aegis_harm_only, label: "category = Controlled/Regulated Substances (AILuminate ncr)"}
+      - {field: violated_categories, contains: Fraud/Deception, and: *aegis_harm_only, label: "category = Fraud/Deception (AILuminate ncr)"}
+      - {field: violated_categories, contains: Malware, and: *aegis_harm_only, label: "category = Malware (AILuminate ncr)"}
+      - {field: violated_categories, contains: Manipulation, and: *aegis_harm_only, label: "category = Manipulation (AILuminate ncr)"}
+      - {field: violated_categories, contains: Illegal Activity, and: *aegis_harm_only, label: "category = Illegal Activity (AILuminate ncr)"}
+      - {field: violated_categories, contains: Suicide and Self Harm, and: *aegis_harm_only, label: "category = Suicide and Self Harm (AILuminate ssh)"}
+      - {field: violated_categories, contains: Sexual (minor), and: *aegis_harm_only, label: "category = Sexual (minor) (AILuminate cse)"}
       - {label: "every prompt"}
     keep:
-      - label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)"
-        reason: *nemotron_harm_cue
-        pattern: *nemotron_harm_pattern
-      - label: "category = Suicide and Self Harm"
-        reason: *nemotron_harm_cue
-        pattern: *nemotron_harm_pattern
-      - label: "category = Sexual (minor)"
-        reason: *nemotron_harm_cue
-        pattern: *nemotron_harm_pattern
+      - {label: *nemotron_union, reason: *nemotron_harm_cue, pattern: *nemotron_harm_pattern}
     dedup_against: [nemotron_safety_v3]
     cap: 1500
   - id: germeval2018_train

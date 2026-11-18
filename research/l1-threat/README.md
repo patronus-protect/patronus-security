@@ -446,8 +446,8 @@ Stand: acht Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILumin
 GermanQuAD-Fragen als deutscher Dev-Benign-Satz;
 der Parquet-Leser liest einfache Ganzzahl- und Gleitkomma-Spalten als Dezimaltext, Wahrheitswerte als `true`/`false`;
 seit T07 dazu Nemotron Safety Guard v3 als bewertete `toxic_language`-Quelle und Civil Comments nur berichtet; seit T08
-die Schaden-Kategorien von Nemotron v3 und der Aegis-2.0-Trainings-Split als bewertete `harmful_content`-Quellen,
-WildGuardMix-Test als Hard-Benign-Quelle); die übrigen `train_dev`- und
+die Schaden-Kategorien von Nemotron v3 als bewertete `harmful_content`-Quelle, der Aegis-2.0-Trainings-Split nur
+berichtet, WildGuardMix-Test als Hard-Benign-Quelle); die übrigen `train_dev`- und
 `report`-Sätze sind `pending` (offene Formate: Parquet mit Listen-Spalten, ZIP,
 Mehrdatei-Repos auf GitHub).
 

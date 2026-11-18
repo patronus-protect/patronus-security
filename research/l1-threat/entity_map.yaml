@@ -573,13 +573,21 @@ datasets:
     labels:
       - {label: "category in (Hate/Identity Hate, Harassment, Profanity)", classes: [toxic_language]}
       - {label: "category = Threat", classes: [toxic_language], family: threat}
-      - {label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)", classes: [harmful_content]}
-      - {label: "category = Suicide and Self Harm", classes: [harmful_content], family: self_harm_intent}
-      - {label: "category = Sexual (minor)", classes: [harmful_content], family: child_safety}
+      - {label: "harmful category without a toxic one", classes: [harmful_content]}
+      - {label: "category = Violence (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Criminal Planning/Confessions (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Guns and Illegal Weapons (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Controlled/Regulated Substances (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Fraud/Deception (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Malware (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Manipulation (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Illegal Activity (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Suicide and Self Harm (AILuminate ssh)", classes: [harmful_content], family: self_harm_intent}
+      - {label: "category = Sexual (minor) (AILuminate cse)", classes: [harmful_content], family: child_safety}
       - {label: "category in (PII/Privacy, Unauthorized Advice, Copyright/Trademark/Plagiarism, High Risk Gov Decision Making)", classes: [harmful_content], decides: false, reason: "model-only subclasses of harmful_content (privacy, specialized advice, ip, elections), off until they pass the TPR floor"}
       - {label: "category = Political/Misinformation/Conspiracy", out_of_scope: "disinformation is not an L1 class (README scope)"}
       - {label: "category in (Needs Caution, Other, Immoral/Unethical)", out_of_scope: "no hazard class"}
-      - {label: "prompt_label = unsafe without a scored category", out_of_scope: "model-only, disinformation and catch-all categories, and rows carrying both a toxic and a harmful category, which count for toxic_language only"}
+      - {label: "prompt_label = unsafe without a scored category", out_of_scope: "adult sexual content, model-only, disinformation and catch-all categories, and rows carrying both a toxic and a harmful category, which count for toxic_language only"}
       - {label: "tag = jailbreaking", out_of_scope: "jailbreak templates labelled by an LLM jury; neither a toxic prompt nor a clean benign one"}
       - {label: "safe", out_of_scope: "prompt-only labels pass group stereotypes and injection templates as safe (dev gold review 2026-11-18: 3 of 25 wrong or unclear); the benign pool comes from cleaner sets"}
     translated: true
@@ -797,16 +805,26 @@ datasets:
     source: hf:nvidia/Aegis-AI-Content-Safety-Dataset-2.0
     licence: CC-BY-4.0
     languages: [en]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
-      - {label: "category in (Violence, Sexual, Criminal Planning/Confessions, Guns and Illegal Weapons, Controlled/Regulated Substances, Fraud/Deception, Malware, Manipulation, Illegal Activity)", classes: [harmful_content]}
-      - {label: "category = Suicide and Self Harm", classes: [harmful_content], family: self_harm_intent}
-      - {label: "category = Sexual (minor)", classes: [harmful_content], family: child_safety}
+      - {label: "harmful category without a toxic one", classes: [harmful_content]}
+      - {label: "category = Violence (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Criminal Planning/Confessions (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Guns and Illegal Weapons (AILuminate vcr)", classes: [harmful_content]}
+      - {label: "category = Controlled/Regulated Substances (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Fraud/Deception (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Malware (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Manipulation (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Illegal Activity (AILuminate ncr)", classes: [harmful_content]}
+      - {label: "category = Suicide and Self Harm (AILuminate ssh)", classes: [harmful_content], family: self_harm_intent}
+      - {label: "category = Sexual (minor) (AILuminate cse)", classes: [harmful_content], family: child_safety}
       - {label: "every prompt", out_of_scope: "safe prompts, LLM-labelled prompts and the other categories; toxic_language and the benign pool come from nemotron_safety_v3 and cleaner sets"}
     note: >-
       same category scheme as nemotron_safety_v3, whose English test and validation prompts are this set's test and
-      validation splits; only the training split is read, deduplicated against nemotron_safety_v3
+      validation splits; only the training split is read, deduplicated against nemotron_safety_v3 and capped. Reported
+      only since the dev gold review (2026-11-18: 5 of 60 unclear behind the same cue as nemotron_safety_v3: petty
+      rule-breaking, a lawful-sounding disposal question, a fragment without context)
   - id: germeval2018_train
     name: GermEval 2018 (training split)
     source: GermEval 2018 shared task, official training release
