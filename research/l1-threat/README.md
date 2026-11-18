@@ -184,6 +184,12 @@ Marker: ab der Zeile des ersten verschobenen Funktionsworts, höchstens 2048 Byt
 zusätzlich `spaced`/`homoglyph`/`leetspeak`. Das Scoreboard meldet je Obfuskationsart, wie viele Angriffe mit
 gemeldeter Klartext-Quelle auch obfuskiert gemeldet werden (`obfuscation_invariance`, nicht gegatet).
 Goldens: 24 Positive + 22 Hard Negatives (`obfuscated`, `instruction_injection`/`prompt_extraction`, DE + EN).
+Dev (`obfuscation_slices`, Quelle gemeldet → obfuskiert gemeldet): base64 16/16, hex 8/8, rot13 13/14,
+homoglyph 13/13, leetspeak 15/15, spaced 9/9 (vorher je 0); keine obfuskierte Benign-Zwillingszeile gemeldet.
+**Offen:** L1-Latenz 100 KiB (12 deutsche Dev-Fenster, Python-Gateway, A/B gegen die Basis): p50 unverändert
+(89 vs. 88 ms), p95 etwa 1,8× (321 vs. 171 ms) — mindestens ein normales Fenster öffnet noch eine Sicht über
+den ganzen Text (Ziffern-Tabellen für `spaced` sind schon ausgeschlossen); Kandidaten: Leetspeak-/ROT13-Tor,
+lange Fragmente. Muss vor dem Merge auf ≤ +5 % zurück (Sichten auf die geänderten Abschnitte begrenzen).
 
 **Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
 `text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
