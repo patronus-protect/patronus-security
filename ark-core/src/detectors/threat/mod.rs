@@ -662,7 +662,11 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
             .rsplit('\n')
             .next()
             .is_some_and(|line| line.trim() == "securityContext:"),
-        // A line a diff removes is no longer in the config.
+        // A line a diff removes is no longer in the config, and an added
+        // line under the next file header is another file's change.
+        "ark.threat.ac_config_write" => {
+            !removed_diff_line(text, start) && !crosses_diff_file(&text[start..end])
+        }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
         _ => true,
     }
@@ -906,6 +910,16 @@ fn removed_diff_line(text: &str, at: usize) -> bool {
     line.starts_with('-')
         && !line.starts_with("---")
         && (text.starts_with("+++ ") || text.contains("\n+++ "))
+}
+
+/// Whether a diff match (`+++ <file>` up to an added line) runs past the next
+/// file header, plain or JSON-escaped, into another file's section.
+fn crosses_diff_file(span: &str) -> bool {
+    span.strip_prefix("+++").is_some_and(|rest| {
+        ["\n+++ ", "\\n+++ ", "\ndiff --git ", "\\ndiff --git "]
+            .iter()
+            .any(|header| rest.contains(header))
+    })
 }
 
 /// Whether the tool a shadowing finding names is another tool: not "this
@@ -1745,6 +1759,8 @@ mod tests {
             "--- a/.claude/settings.json\n+++ b/.claude/settings.json\n@@ -1 +1 @@\n-  \"defaultMode\": \"default\"\n+  \"defaultMode\": \"bypassPermissions\"",
             "tool: shell\nargs: echo 'approval_policy = \"never\"' >> ~/.codex/config.toml",
             "sed -i.bak 's/\"defaultMode\": \"default\"/\"defaultMode\": \"bypassPermissions\"/' .claude/settings.json",
+            // A multi-file diff whose agent config section adds the widening.
+            "--- a/deploy/pipeline.toml\n+++ b/deploy/pipeline.toml\n@@ -1 +1 @@\n+stage = \"b\"\n--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n+require_approval = false\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n+text",
         ] {
             assert!(
                 points_rules(&detect_agent_config(text))
@@ -1762,6 +1778,11 @@ mod tests {
             "--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1,2 +1,2 @@\n-allow = [\"shell\"]\n+allow = [\"shell(cargo test)\"]",
             // Another program's config.
             "tool: shell\nargs: sed -i 's/require_approval = true/require_approval = false/' ./deploy/pipeline.toml",
+            // A multi-file diff: the widening is added to another program's file.
+            "--- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n-model = \"a\"\n+model = \"b\"\ndiff --git a/deploy/pipeline.toml b/deploy/pipeline.toml\n--- a/deploy/pipeline.toml\n+++ b/deploy/pipeline.toml\n@@ -1 +1 @@\n-require_approval = true\n+require_approval = false",
+            "tool: apply_patch\nargs: {\"patch\": \"--- a/.codex/config.toml\\n+++ b/.codex/config.toml\\n@@ -1 +1 @@\\n-model = \\\"a\\\"\\n+model = \\\"b\\\"\\n--- a/deploy/pipeline.toml\\n+++ b/deploy/pipeline.toml\\n@@ -1 +1 @@\\n+require_approval = false\\n\"}",
+            // The same in a German patch call.
+            "Werkzeugaufruf: apply_patch\nArgumente: --- a/.codex/config.toml\n+++ b/.codex/config.toml\n@@ -1 +1 @@\n+modell = \"b\"\n--- a/deploy/freigabe.toml\n+++ b/deploy/freigabe.toml\n@@ -1 +1 @@\n+require_approval = false\nNutzerwunsch: Bitte die Pipeline ohne Freigabe laufen lassen.",
             // The user asks to change their own config; nothing is written.
             "Please set require_approval = false in my ~/.config/ops_agent/config.toml, I am the only user of this laptop.",
             // A tutorial shows the setting.

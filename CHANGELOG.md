@@ -62,6 +62,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   proposed tool call or an agent log. A call that switches a guard back on, a scoped allow entry
   (`"shell(git status)"`), a diff that removes the widening, another program's configuration, and
   a request or tutorial that only shows the setting stay benign.
+- **Detection change:** (`agent_config_tampering`, opt-in) `ark.threat.ac_config_write` reads an
+  added diff line only within the agent config file's own section: in a multi-file diff, a
+  widening such as `require_approval = false` added under the next file header (another
+  program's `deploy/pipeline.toml`) no longer counts as a write into the agent config.
 - **Detection change:** (`exfiltration`) the category has new L1 rules in German and English
   for inputs that try to move data out to a foreign destination: markdown images and links whose
   URL carries a placeholder for the conversation, a summary or credentials (`{chat_history}`,
