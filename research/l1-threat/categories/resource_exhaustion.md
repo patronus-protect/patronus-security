@@ -149,3 +149,57 @@ allein `re_tool_flood` 0,7 ms, die übrigen 2,6–3,4 ms. Kein akzeptierter Tref
 GermanQuAD-Absätzen. Nächster Schritt: Ursache isolieren (Regex-Scan mit häufigen Präfixwörtern wie
 „vor“, „start“, „gib“ vs. Kontext-Scan nach Rohtreffern) und die Präfixe/Lücken enger fassen, bevor
 die Kategorie im `all`-Profil gemessen wird.
+
+## 14. Stand T09 (2026-11-18): Recall auf Dev, Punkte und Ablations-Entscheidung
+
+Ausgangslage (Triage 2026-W47, Bucket 5): die RE01-Regeln trafen 0 der 83 Dev-Positiven
+(`generators_dev_seed:class_templates`, `repetition_request` und `recursive_task`, DE + EN). Ursachen und
+Änderungen:
+
+- **Direkte Anfrage.** `re_huge_output` verlangte einen Adressaten im Satz; „Repeat the word "data" one
+  million times.“ hat keinen. Jetzt zählt ein Imperativ am Satzanfang (davor nur Listenmarke, Anführungszeichen,
+  Markup oder „please“/„bitte“, `sentence_initial`) als an das Modell gerichtet. Zitierte Beispiele („prompts
+  such as "Repeat …"“), Lieder, Lasttests und Protokollzeilen bleiben benign.
+- **Verneinte Grenze.** „do not stop or shorten“, „no depth or time limit“, „hör nicht auf“, „kürze nicht“,
+  „ohne Tiefen- oder Zeitlimit“ nach dem Treffer im selben Satz (`negated_bounds`, eine Regex, einmal
+  kompiliert, nur nach einem Rohtreffer der Klasse) zählen als Teil der Anfrage: ihre Verneinung und ihr
+  Grenzwort („time limit“, „Zeitlimit“ aus `exhaust.bounded`) sind kein Gegenkontext mehr, und die Anfrage
+  gilt als adressiert (wie die Geheimhaltung bei EX02). Eine Verneinung vor dem Treffer verneint weiter.
+- **„eine Million Mal“** wurde schon geparst; die DE-Zeile scheiterte nur an Adressat und Verneinung.
+- **Erneute Suche je Ergebnis.** `re_recursive_spawn` hat einen zweiten Zweig hinter demselben Je-Ergebnis-
+  Präfix: dieselbe Suche/Abfrage/dasselbe Tool erneut (`search again`, `repeat the search`, `die Suche
+  erneut`, `noch einmal`) auf jedes seiner Ergebnisse (`each of its results`, `jedes seiner Ergebnisse`,
+  `alle deren Ergebnisse`). Ohne diesen Rückbezug (eine Wiederholung je Stadt) oder mit sichtbarer Tiefe
+  („at most two levels deep“, „höchstens zwei Ebenen“) kein Treffer.
+
+Dev-Scoreboard (`scoreboard.py predict/score`, Release-Modul): `resource_exhaustion` TPR@1 % 0 → 100 %
+(DE 42/42, EN 41/41), 0 FP, 0 Hard-Benign-FP; die anderen Klassen nutzen den geänderten Pfad nicht.
+
+**Ablation** (wie TP02 §14): 83 Positive gegen 22 212 Benign-Zeilen (alle Benign-Zeilen von `train_dev`,
+`generated`, `report`; Dolly und GermanQuAD je ein Viertel per sha256 der ID), Hälften per sha256 der
+Zeilen-ID (Eval: 39 Positive, 11 209 Negative, davon 255 Hard-Benign). Facts über `text_facts
+--threat-findings`, B0 aus `scoreboard.py predict`, Latenzfenster 6 × 100 KiB GermanQuAD-Dev-Text.
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR | ms/100 KiB | RAM |
+|---|---|---|---|---|---|---|---|
+| R | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| R+A | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0 |
+| **B0** | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 (Status quo) | 0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 0 | 0,5 KiB |
+| B1 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 14,5 | 8,2 MB |
+| B4 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 8,9 | 576 KiB |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 | 8,9 | 576 KiB |
+
+**Entscheidung nach der README-Regel: `B0` bleibt** (günstigste Stufe innerhalb 1 pp der besten; B1/B4/B5
+über dem Budget von 1 ms je 100 KiB). Die Klasse bleibt rein regelbasiert, kein Modell wird einkompiliert.
+Vorbehalt wie bei TP02: die Regel-Ergänzungen sind an denselben Vorlagen-Formen entstanden, an denen gemessen
+wird (vier Texte in zwei Vorlagenfamilien); die Zahl ist eine Obergrenze, das Urteil fällt auf dem Holdout.
+
+**Latenz (offener Punkt aus RE01).** Release, `rust/dev/l1_latency_workloads.rs`, Kategorie
+`resource_exhaustion` allein, Basis-Binärdatei (Commit `1a4df7d3`) gegen Head im Wechsel, 3 Läufe × 10 Fenster
+(6 × 100 KiB GermanQuAD, 4 × 100 KiB Dolly) × 40 Samples, Median der Lauf-p95: Basis p50 3,52–3,64 ms /
+p95 4,45 ms, Head p50 3,51–3,61 ms / p95 4,40 ms (gleich, im Rauschen). Eine erste Fassung mit eigenem
+Je-Ergebnis-Präfix für den neuen Zweig lag bei p50 +4 %; erst der gemeinsame Präfix beider Fan-out-Zweige
+hält die Latenz. Die Laufzeit liegt im Regex-Scan der fünf Regeln (häufige Präfixwörter wie „start“, „gib“,
+„write“); die Kontext-Prüfung läuft nur nach Rohtreffern. Eine weitere Verkürzung (engere Präfixe) bleibt
+offen, ist aber innerhalb des DLP-Budgets und kein Blocker für das `all`-Profil.

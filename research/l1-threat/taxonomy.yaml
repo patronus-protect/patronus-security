@@ -1698,7 +1698,7 @@ classes:
       priority: must
       task: RE01
       scored_only: false
-      shape: SPAWN_VERB + AGENT/SUBTASK + self-reference or per-result multiplication
+      shape: SPAWN_VERB + AGENT/SUBTASK + self-reference or per-result multiplication, or per result the same search/tool again on each of its results (T09)
       anchors: [exhaust.spawn, addressee, injection.delegation_action, injection.delegation_target]
       required_context: []
       negative_context: [exhaust.bounded, defensive, meta, quotation, test_code]
@@ -1736,7 +1736,7 @@ classes:
       scored_only: false
       shape: REPEAT/OUTPUT_VERB + NUMBER >= resource_exhaustion_count_threshold + UNIT (times/words/pages/calls)
       anchors: [exhaust.repeat_verb, exhaust.huge_count, addressee]
-      required_context: [addressee]
+      required_context: [addressee]  # or a sentence-initial imperative or a negated bound (T09)
       negative_context: [exhaust.bounded, exhaust.lyrics_play, test_code, meta]
       examples:
         de: [<Imperativ SCHREIBEN> <Text> <Zahl über Schwelle> mal]

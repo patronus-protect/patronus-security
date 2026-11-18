@@ -506,6 +506,7 @@ tasks:
   - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}
   - {id: RE01, title: "resource_exhaustion rules (unbounded repetition quantifiers with configurable count threshold resource_exhaustion_count_threshold, recursive spawning, infinite-loop directives, decoy compute tasks in foreign content) + points", type: new-family, deps: [S04], status: done}
   - id: T09
+    status: done
     title: "resource_exhaustion on dev: RE01 rules hit 0 of 83 dev positives — a direct request counts as addressed (re_huge_output), negated bounds ('do not stop', 'no depth limit', 'ohne Zeitlimit') support instead of damping, German 'eine Million Mal', re-running a search/tool per result as recursion; then points + ablation decision (as TP02) and the open latency item of RE01"
     type: recall-fix
     deps: [RE01, S05]
