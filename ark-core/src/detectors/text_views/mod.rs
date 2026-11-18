@@ -270,8 +270,8 @@ const FUNCTION_WORDS: &[&str] = &[
 /// [`FUNCTION_WORDS`] after ROT13, without the single letter `n` (`a`), which
 /// letter-spaced text is full of.
 const SHIFTED_FUNCTION_WORDS: &[&str] = &[
-    "nyy", "nyyr", "naq", "ner", "qnf", "qrz", "qra", "qre", "qvr", "qh", "rva", "rvar",
-    "vfg", "zvg", "avpug", "bs", "gur", "gb", "haq", "lbh", "lbhe", "mh",
+    "nyy", "nyyr", "naq", "ner", "qnf", "qrz", "qra", "qre", "qvr", "qh", "rva", "rvar", "vfg",
+    "zvg", "avpug", "bs", "gur", "gb", "haq", "lbh", "lbhe", "mh",
 ];
 
 fn is_function_word(word: &str, list: &[&str]) -> bool {

@@ -10,7 +10,7 @@
 //!   space, and per line most space-separated pieces one character long;
 //! - `homoglyph`: non-ASCII text with at least two words that mix ASCII letters
 //!   with look-alike letters;
-//! - `leetspeak`: at least [`MIN_LEET`] words, and a fifth of all words, that mix
+//! - `leetspeak`: at least [`MIN_LEET`] words, and two fifths of all words, that mix
 //!   letters with the digits `0 1 3 4 5 7`.
 use std::ops::Range;
 
@@ -225,7 +225,7 @@ fn unleet(text: &str) -> Option<Out> {
     let (leet, total) = words(text).fold((0usize, 0usize), |(leet, total), word| {
         (leet + usize::from(is_leet_word(word)), total + 1)
     });
-    if leet < MIN_LEET || leet * 5 < total {
+    if leet < MIN_LEET || leet * 5 < total * 2 {
         return None;
     }
     let mut out = Out::with_capacity(text.len());
@@ -304,6 +304,7 @@ mod tests {
             "Please summarise the attached report for the team.",
             "Привет! Как дела? Это обычное сообщение от коллеги.",
             "Order 4711 ships on 2026-11-18 with 3 boxes and a A4 printer.",
+            "2026-11-18 INFO model=gpt4 codec=h264 res=4K build=v1.3.7 ok",
             "sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
             "a b c",
             "Café, Grüße und Straße – ganz normal.",

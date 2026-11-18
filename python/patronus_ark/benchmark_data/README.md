@@ -367,8 +367,9 @@ carrier (`chat`, `email`, `webpage`, `document`, `tool_description`,
 ```
 
 `expected_facts.obfuscated` lists what the pre-pass undoes (`zero_width`,
-`full_width`, `defanged`, `unicode_tags`), `expected_facts.decoded` the encodings
-that hid prose (`base64`, `hex`, `rot13`, `unicode_tags`). Hard negatives have
+`full_width`, `defanged`, `unicode_tags`, and the folds `spaced`, `homoglyph`,
+`leetspeak`), `expected_facts.decoded` the encodings that hid prose (`base64`,
+`hex`, `rot13`, `unicode_tags`). Hard negatives have
 both lists empty and a `negative_reason`. The generator computes every encoded
 form from a plain sentence.
 
