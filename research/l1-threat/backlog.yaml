@@ -309,6 +309,18 @@ tasks:
       agent itself (no external MT), sample marked checked; cyberseceval_multilingual deduplicated against the
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
+  # Owner, 2026-11-18: the generation-18 holdout review (MCPTox labels pass at 4.0%) found the generated
+  # carrier_insertion (25.0%) and obfuscation_slices (9.6%) sets failing because tool_poisoning payloads
+  # were placed into non-tool carriers; this blocks jailbreak, prompt_extraction and tool_poisoning in gold.md.
+  - id: M08
+    title: Generators — tool_poisoning payloads only in tool-metadata carriers (JSON tool definition, MCP tools/list entry, 'Tool <name>:' listing line — forms the tool_description carrier mark in ark-core/src/detectors/text/facts/carrier.rs recognises), never in mail, forum, invoice, search-result, code-comment or attachment carriers; obfuscation slices of tool_poisoning payloads keep that wrapper; dev and holdout template families stay disjoint
+    type: eval-infra
+    deps: [M07]
+    accept: >-
+      generators.py places every tool_poisoning payload in a tool-metadata carrier and every other class in
+      the existing carriers; unit tests pin the carrier choice per class; generator version bumped so the next
+      gate re-generates dev; the dev re-review of carrier_insertion and obfuscation_slices passes the 5% bar;
+      the owner regenerates and re-reviews the holdout side
   # Go-flip priority (owner, 2026-11-17): the class no-gos in gold.md are dev-side now (holdout
   # validated through generation 9). T20, T07 and T08 come first because every blocked rule family
   # (IJ01, JB01, PX01, TX01, HC01) waits on them; the runner unblocks nothing itself, the owner
