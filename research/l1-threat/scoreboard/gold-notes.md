@@ -165,6 +165,36 @@ All scored dev sets are now at or below 5 %; `instruction_injection`, `jailbreak
 longer blocked on the dev side. The leakage count is the gate's last run (dev pool of generation 9); it is renewed
 by the next gate run, which also re-freezes dev with the BIPIA fix (generation 12).
 
+## Findings (toxic_language dev sources, 2026-11-18)
+
+Two new recipes (registry generation 13), reviewed by the runner, every row read in full. Review notes describe the
+content and never quote it; no insult or slur from the data is written here.
+
+- **Nemotron Safety Guard v3 (`toxic_language`, EN + machine-translated DE, marked translated): 1 of 50 unclear
+  (2 %).** The first draft (every human-labelled prompt with a hate, harassment, profanity or threat category) failed
+  badly: about 40 % of 25 sampled toxic rows were not toxic language, because the categories label the whole
+  conversation (the response, or a harmful request such as a kidnapping plan) and long jailbreak templates carry them
+  too. Prompts labelled safe were also noisy (3 of 25: group stereotypes, an instruction-override template). The recipe
+  now keeps a toxic row only when the prompt is short (at most 300 characters) and names the toxic act itself
+  (insults or slurs asked for or aimed at someone, racist or sexist jokes, stories or names asked for, open hatred, a
+  group called inferior); questions about racism or about what a slur means do not count. Safe prompts and the LLM-jury
+  jailbreaking part are out of scope; unsafe prompts without a toxic category wait for the harmful_content review.
+  Test and validation splits together leave 106 rows (51 EN, 55 DE); outside the sample about 4 of the remaining 56
+  are doubtful as well (trivia about curse words, mild venting), so the set sits near 4 %. Most rows are requests for
+  insults against a group or person, so scores on it say little about hate speech in running text.
+- **Civil Comments (`toxic_language`, EN): 8 of 50 wrong or unclear (16 %), benign 0 of 25: reported only.** Even at
+  a rater share of at least 0.8 many positives carry no insult (partisan accusations, a polite question, a joke quote);
+  a look at the band above 0.9 showed the same kind of rows, and insulting nicknames occur below 0.1. The recipe stays
+  (test split, capped at 6,000 rows) for the report and for baseline training.
+- **GermEval licence check.** GermEval 2018 ships a CC-BY-4.0 licence file; its repository also holds the holdout test
+  split, so its training-split recipe comes from the holdout setup, not from the runner. GermEval 2019 and 2021 carry
+  no licence (repository and task site): reported only.
+
+`toxic_language` reaches 51 EN and 55 DE scored dev rows, all from Nemotron (DE translated, no native German dev rows
+yet). The other dev sets are unchanged by generation 13 (Nemotron contributes no benign rows and `toxic_language` is
+not a generator class), so their verdicts stand; the two new sets were summarised with `gold.py summary` and added to
+`gold-dev.json`.
+
 ## How this report is made
 
 ```bash

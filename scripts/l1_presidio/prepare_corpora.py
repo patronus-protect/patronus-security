@@ -140,10 +140,24 @@ def snappy_decompress(data: bytes) -> bytes:
 # ── minimal Parquet reader ───────────────────────────────────────────────────
 # Enough for the pinned Gretel shards: flat optional/required BYTE_ARRAY columns, PLAIN and
 # (RLE_|PLAIN_)DICTIONARY pages, data page v1 and v2, UNCOMPRESSED or SNAPPY; plain INT32/INT64
-# columns (no logical type, e.g. label columns) are read as decimal strings. Anything else
-# is rejected rather than misread; the source SHA-256 pins the files it has to read.
+# columns (no logical type, e.g. label columns) are read as decimal strings, FLOAT and DOUBLE columns
+# (rater scores) as the shortest decimal that round-trips at their precision. Anything else is
+# rejected rather than misread; the source SHA-256 pins the files it has to read.
 # Physical types read: Parquet type id -> fixed width in bytes (None: length-prefixed byte array).
-PARQUET_TYPES = {1: 4, 2: 8, 6: None}
+PARQUET_TYPES = {1: 4, 2: 8, 4: 4, 5: 8, 6: None}
+# Floating-point types: Parquet type id -> struct format.
+PARQUET_FLOATS = {4: "<f", 5: "<d"}
+
+
+def _float_text(value: float, fmt: str) -> str:
+    """Shortest decimal that reads back to the same ``fmt`` value (float32 0.1 is "0.1", not "0.10000000149")."""
+    if fmt == "<d":
+        return repr(value)
+    for digits in range(1, 10):
+        text = repr(float(f"{value:.{digits}g}"))
+        if struct.pack(fmt, float(text)) == struct.pack(fmt, value):
+            return text
+    return repr(value)
 
 
 class _Thrift:
@@ -232,11 +246,15 @@ def _rle_hybrid(data: bytes, bit_width: int, count: int) -> list[int]:
     return values[:count]
 
 
-def _plain_values(data: bytes, count: int, width: int | None) -> list[bytes]:
-    """PLAIN values: byte arrays as they are, little-endian integers as decimal ASCII."""
+def _plain_values(data: bytes, count: int, physical: int) -> list[bytes]:
+    """PLAIN values: byte arrays as they are, little-endian integers and floats as decimal ASCII."""
+    width = PARQUET_TYPES[physical]
     if width is not None:
         if count * width > len(data):
-            raise ValueError("truncated PLAIN integers")
+            raise ValueError("truncated PLAIN numbers")
+        if physical in PARQUET_FLOATS:
+            fmt = PARQUET_FLOATS[physical]
+            return [_float_text(value, fmt).encode("ascii") for (value,) in struct.iter_unpack(fmt, data[: count * width])]
         return [
             str(int.from_bytes(data[i * width : (i + 1) * width], "little", signed=True)).encode("ascii") for i in range(count)
         ]
@@ -261,7 +279,7 @@ def _decompress(codec: int, data: bytes) -> bytes:
     raise ValueError(f"unsupported Parquet codec {codec}")
 
 
-def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, width: int | None) -> list[bytes | None]:
+def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, physical: int) -> list[bytes | None]:
     codec, total = meta[4], meta[5]
     pos = meta.get(11) or meta[9]
     dictionary: list[bytes] | None = None
@@ -276,7 +294,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, width: int 
         payload = data[start : start + compressed_size]
         pos = start + compressed_size
         if page_type == 2:
-            dictionary = _plain_values(_decompress(codec, payload), header[7][1], width)
+            dictionary = _plain_values(_decompress(codec, payload), header[7][1], physical)
             continue
         if page_type == 0:
             page = _decompress(codec, payload)
@@ -300,7 +318,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, width: int 
             continue  # index pages carry no values
         present = sum(levels)
         if encoding == 0:
-            decoded = _plain_values(body, present, width)
+            decoded = _plain_values(body, present, physical)
         elif encoding in (2, 8):
             if dictionary is None or not body:
                 raise ValueError("dictionary-encoded Parquet page without a dictionary")
@@ -318,7 +336,7 @@ def _column_chunk(data: bytes, meta: dict[int, Any], optional: bool, width: int 
 
 
 def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> list[dict[str, str | None]]:
-    """Rows of the requested top-level UTF-8 (or plain integer) columns of a Parquet file, nulls as ``None``."""
+    """Rows of the requested top-level UTF-8 (or plain integer or floating-point) columns of a Parquet file, nulls as ``None``."""
     data = path.read_bytes()
     if len(data) < 12 or data[:4] != b"PAR1" or data[-4:] != b"PAR1":
         raise ValueError(f"{path} is not a Parquet file")
@@ -344,16 +362,16 @@ def read_parquet_columns(path: Path, columns: list[str] | tuple[str, ...]) -> li
         element = leaves.get(column)
         if element is None:
             raise ValueError(f"{path}: no top-level column {column!r}")
-        integer = element.get(1) in (1, 2) and 6 not in element and 10 not in element
-        if not (element.get(1) == 6 or integer) or element.get(3) == 2:
-            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY or plain integer column")
+        number = element.get(1) in (1, 2, *PARQUET_FLOATS) and 6 not in element and 10 not in element
+        if not (element.get(1) == 6 or number) or element.get(3) == 2:
+            raise ValueError(f"{path}: column {column!r} is not a flat BYTE_ARRAY, plain integer or floating-point column")
     result: dict[str, list[bytes | None]] = {column: [] for column in columns}
     for row_group in metadata[4]:
         for chunk in row_group[1]:
             meta = chunk[3]
             name = b".".join(meta[3]).decode("utf-8")
             if name in result:
-                result[name].extend(_column_chunk(data, meta, leaves[name].get(3) == 1, PARQUET_TYPES[leaves[name][1]]))
+                result[name].extend(_column_chunk(data, meta, leaves[name].get(3) == 1, leaves[name][1]))
     rows = metadata[3]
     for column, values in result.items():
         if len(values) != rows:

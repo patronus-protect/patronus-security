@@ -444,8 +444,9 @@ Holdout gegen `train_dev`/`report` (die Holdout-Zeile fliegt), gegen Baseline-Tr
 stehen als `pending` im Repo und kommen beim Holdout-Setup über `--overlay` aus `~/ark-threat/holdout`.
 Stand: acht Rezepte fertig (SPML, mosscap, dolly-15k, jackhhao, gandalf, AILuminate-Demo, textdetox DE,
 GermanQuAD-Fragen als deutscher Dev-Benign-Satz;
-der Parquet-Leser liest einfache Ganzzahl-Spalten als Dezimaltext); die übrigen `train_dev`- und
-`report`-Sätze sind `pending` (offene Formate: Parquet mit Gleitkomma- oder Listen-Spalten, ZIP,
+der Parquet-Leser liest einfache Ganzzahl- und Gleitkomma-Spalten als Dezimaltext; seit T07 dazu Nemotron Safety
+Guard v3 als bewertete `toxic_language`-Quelle und Civil Comments nur berichtet); die übrigen `train_dev`- und
+`report`-Sätze sind `pending` (offene Formate: Parquet mit Listen-Spalten, ZIP,
 Mehrdatei-Repos auf GitHub).
 
 **Registry v2 (M05).** Kein Satz dominiert den Pool: Nach dem Dedup behält jeder Satz höchstens 15 000

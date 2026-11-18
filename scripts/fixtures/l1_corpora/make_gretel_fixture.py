@@ -5,7 +5,8 @@
 Handwritten rows, no upstream data. The two shards cover what the pure-Python reader of
 prepare_corpora.py must handle in the pinned Gretel files (pyarrow 14 writer, Snappy,
 optional flat byte-array columns, dictionary and plain pages, several row groups) plus
-data page v2 and nulls. Needs pyarrow, which the gate venv deliberately does not have:
+data page v2 and nulls. Two more shards hold optional float and double columns (rater scores such
+as Civil Comments' toxicity) in plain and dictionary pages. Needs pyarrow, which the gate venv deliberately does not have:
 
     .venv/bin/python scripts/fixtures/l1_corpora/make_gretel_fixture.py
 """
@@ -62,7 +63,22 @@ def rows(variant: int) -> list[dict]:
     return out
 
 
+# Rater scores of the score shards: binary fractions, a negative zero, decimals without an exact binary
+# value and one null; ``toxicity`` is a float column (as in Civil Comments), ``rating`` a double column.
+SCORES = [0.0, 0.125, None, 0.5, 0.875, 1.0, -0.0, 0.1, 0.5, 0.3]
+
+
+def write_scores() -> None:
+    schema = pa.schema([("text", pa.string()), ("toxicity", pa.float32()), ("rating", pa.float64())])
+    table = pa.Table.from_pylist(
+        [{"text": f"comment {index}", "toxicity": score, "rating": score} for index, score in enumerate(SCORES)], schema=schema
+    )
+    pq.write_table(table, HERE / "scores_v1_test.parquet", compression="snappy", use_dictionary=False, row_group_size=4)
+    pq.write_table(table, HERE / "scores_v2_test.parquet", compression="snappy", data_page_version="2.0")
+
+
 def main() -> None:
+    write_scores()
     first = pa.Table.from_pylist(rows(0))
     second = rows(1)
     second[3]["document_type"] = None

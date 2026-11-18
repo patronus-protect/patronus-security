@@ -579,7 +579,9 @@ datasets:
       - {label: "category in (PII/Privacy, Unauthorized Advice, Copyright/Trademark/Plagiarism, High Risk Gov Decision Making)", classes: [harmful_content], decides: false, reason: "model-only subclasses of harmful_content (privacy, specialized advice, ip, elections), off until they pass the TPR floor"}
       - {label: "category = Political/Misinformation/Conspiracy", out_of_scope: "disinformation is not an L1 class (README scope)"}
       - {label: "category in (Needs Caution, Other, Immoral/Unethical)", out_of_scope: "no hazard class"}
-      - {label: "safe", benign: true}
+      - {label: "prompt_label = unsafe without a toxic_language category", out_of_scope: "harmful_content rows stay unscored until their per-hazard gold review"}
+      - {label: "tag = jailbreaking", out_of_scope: "jailbreak templates labelled by an LLM jury; neither a toxic prompt nor a clean benign one"}
+      - {label: "safe", out_of_scope: "prompt-only labels pass group stereotypes and injection templates as safe (dev gold review 2026-11-18: 3 of 25 wrong or unclear); the benign pool comes from cleaner sets"}
     translated: true
     note: the German part is machine-translated
   - id: cyberseceval_multilingual
@@ -795,34 +797,42 @@ datasets:
   - id: germeval2018_train
     name: GermEval 2018 (training split)
     source: GermEval 2018 shared task, official training release
-    licence: unknown
+    licence: CC-BY-4.0
     languages: [de]
     split: train_dev
     family: neutral
     labels:
       - {label: "coarse OFFENSE", classes: [toxic_language]}
       - {label: "coarse OTHER", benign: true}
+    note: >-
+      licence file LICENSE.md/LICENSE.md (CC-BY-4.0) in github:uds-lsv/GermEval-2018-Data at 9877472d; the same
+      repository holds the holdout test split, so its recipe is pinned by the holdout setup, not by the runner
   - id: germeval2019
     name: GermEval 2019 task 2
     source: GermEval 2019 shared task
     licence: unknown
     languages: [de]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
       - {label: "coarse OFFENSE", classes: [toxic_language]}
       - {label: "coarse OTHER", benign: true}
-    note: its training data contains the GermEval 2018 test tweets; E01 removes them (exact + MinHash) against germeval2018_test
+    note: >-
+      its training data contains the GermEval 2018 test tweets; E01 removes them (exact + MinHash) against
+      germeval2018_test. Reported only: no licence on the task site or with the data (checked 2026-11-18)
   - id: germeval2021
     name: GermEval 2021 toxic comments
     source: GermEval 2021 shared task
     licence: unknown
     languages: [de]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
       - {label: "Sub1_Toxic = 1", classes: [toxic_language]}
       - {label: "Sub1_Toxic = 0", benign: true}
+    note: >-
+      reported only: github:germeval2021toxic/SharedTask (fa5dca39) and the task site carry no licence (checked
+      2026-11-18)
   - id: textdetox_de
     name: textdetox multilingual toxicity, German
     source: hf:textdetox/multilingual_toxicity_dataset (de)
@@ -841,13 +851,16 @@ datasets:
     source: hf:google/civil_comments
     licence: CC0-1.0
     languages: [en]
-    split: train_dev
-    family: neutral
+    split: report
+    family: report_only
     labels:
-      - {label: "toxicity >= 0.5", classes: [toxic_language]}
+      - {label: "toxicity >= 0.8", classes: [toxic_language]}
       - {label: "toxicity < 0.1", benign: true}
-      - {label: "0.1 <= toxicity < 0.5", out_of_scope: "ambiguous rater band"}
-    note: training of the self-trained n-gram baselines and the toxicity model only
+      - {label: "0.1 <= toxicity < 0.8", out_of_scope: "ambiguous rater band (civil criticism and sarcasm up to 0.8)"}
+    note: >-
+      test split, capped; reported only since the dev gold review (2026-11-18: 8 of 50 wrong or unclear at >= 0.8,
+      positives without any insult up to 0.9, insulting nicknames below 0.1); training of the self-trained n-gram
+      baselines
   - id: dolly_15k
     name: databricks-dolly-15k
     source: hf:databricks/databricks-dolly-15k

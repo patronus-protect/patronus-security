@@ -18,12 +18,13 @@
 #               through --overlay and never live in the repository
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records) | csv | parquet (UTF-8 and plain integer columns) |
+#   format      jsonl | json (list of records) | csv | parquet (UTF-8, plain integer and floating-point columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #   text        record field holding the text; `language` a fixed code or `language_field`
-#   labels      rules {field, equals (value or list) | at_least | below, label}; a rule without
-#               field matches every row; `and` [{field, equals | at_least | below}] adds conditions on other
+#   labels      rules {field, equals (value or list) | contains (value or list) | at_least | below, label}; a rule
+#               without field matches every row; `contains` reads the field as a comma-separated list and needs
+#               one of the given items in it; `and` [{field, equals | contains | at_least | below}] adds conditions on other
 #               fields that must all hold; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
 #   keep        cue filters [{label, pattern, reason}]: a row carrying the upstream `label` is kept only
@@ -57,7 +58,9 @@ schema: ark-l1-threat-datasets-v1
 #     join train_dev; the latter carry the first native agent_config_tampering rows.
 # 12: BIPIA's task-irrelevant text attacks leave scoring (dev gold re-review 2026-11-17: bare requests such as
 #     "Explain the theory of relativity." inside an e-mail carry no injection).
-generation: 12
+# 13: toxic_language gets a scored dev source: Nemotron Safety Guard v3 (human-labelled prompts that name the toxic
+#     act, EN and the machine-translated DE part); Civil Comments (test split, capped) is reported only.
+generation: 13
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -224,7 +227,45 @@ datasets:
     pending: recipe not written yet
   - id: nemotron_safety_v3
     commercial: true
-    pending: recipe not written yet
+    # Test and validation splits of the EN part and of the machine-translated DE part (the same prompts); the text
+    # is the user prompt.
+    source: https://huggingface.co/datasets/nvidia/Nemotron-Safety-Guard-Dataset-v3
+    revision: a3f7ecb3433d1933701a83f18de16c36934a7f51
+    files:
+      - {path: en/test.jsonl, sha256: 1d6d9c67281e4e6335a006013fa48011ca1c8160db9d4824a24426c903a2ed97}
+      - {path: en/valid.jsonl, sha256: 04dc2c80edd0bd19b6eda6cc86d9949f42221af0706fbf2608a824e019e68cd1}
+      - {path: de/test.jsonl, sha256: c38a40b3ac3b7a2caadda70f05d654ecb31af1445db02ea0ae1f761a81939614}
+      - {path: de/valid.jsonl, sha256: 9d2bb7d9b99bb88617f9068211d67e36a0423ff1cf042c378830e7a1209595b2}
+    format: jsonl
+    text: prompt
+    language_field: language
+    labels:
+      # Only the human-labelled part (tags generic and adapted) is scored; violated_categories lists every category
+      # of the conversation, so a toxic category counts only on a prompt labelled unsafe.
+      - field: violated_categories
+        contains: [Hate/Identity Hate, Harassment, Profanity]
+        and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
+        label: "category in (Hate/Identity Hate, Harassment, Profanity)"
+      - field: violated_categories
+        contains: Threat
+        and: [{field: prompt_label, equals: unsafe}, {field: tag, equals: [generic, adapted]}]
+        label: "category = Threat"
+      - {field: prompt_label, equals: safe, label: "safe"}
+      - {field: prompt_label, equals: unsafe, label: "prompt_label = unsafe without a toxic_language category"}
+      - {field: tag, equals: jailbreaking, label: "tag = jailbreaking"}
+    keep:
+      - label: "category in (Hate/Identity Hate, Harassment, Profanity)"
+        reason: &nemotron_toxic_cue >-
+          the categories label the whole conversation, so many prompts carry them for the response or for a harmful
+          request (kidnapping, a fake threat), and long jailbreak templates carry them too (dev gold review 2026-11-18:
+          about 40 % of the toxic rows wrong or unclear); only short prompts (at most 300 characters) that name the toxic
+          act themselves stay: insults or slurs asked for or aimed at someone, racist or sexist jokes, stories or
+          names asked for, open hatred, claims that a group is inferior; questions about racism or about what a slur
+          means do not count
+        pattern: &nemotron_toxic_pattern '\A(?=[\s\S]{1,300}\Z)(?![\s\S]*\b(?:what|wofür)\b[^?]{0,60}\b(?:slur|schimpfwort)\b[^?]{0,10}\?)[\s\S]*?(?:\binsult|beleidig|\bslurs?\b|schimpfw|\b(?:racist|sexist|rassistisch\w*|sexistisch\w*) (?:jokes?|story|stories|songs?|names?|things?|witze?|geschichten?|lieder?|sprüche?)\b|\bi hate\b|\bich hasse\b|\binferior\b|unterlegen\b|minderwertig)'
+      - label: "category = Threat"
+        reason: *nemotron_toxic_cue
+        pattern: *nemotron_toxic_pattern
   - id: cyberseceval_multilingual
     commercial: true
     source: https://github.com/meta-llama/PurpleLlama
@@ -672,8 +713,10 @@ datasets:
     commercial: true
     pending: recipe not written yet
   - id: germeval2018_train
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    pending: >-
+      CC-BY-4.0; the upstream repository also holds the holdout test split, so the recipe comes from the holdout
+      setup (--overlay)
   - id: germeval2019
     commercial: unknown
     pending: recipe not written yet
@@ -694,7 +737,20 @@ datasets:
       - {field: toxic, equals: "0", label: "toxic = 0"}
   - id: civil_comments
     commercial: true
-    pending: recipe not written yet
+    # Test split; toxicity is the share of raters who called the comment toxic.
+    source: https://huggingface.co/datasets/google/civil_comments
+    revision: f2970eb3a55777454c94069077cc8d9b5866312d
+    files:
+      - {path: data/test-00000-of-00001.parquet, sha256: 410f803ff161e7c4ba005db7de5b444cac413f4861bf056b0fd69d670d75aa08}
+    format: parquet
+    text: text
+    language: en
+    labels:
+      - {field: toxicity, at_least: 0.8, label: "toxicity >= 0.8"}
+      - {field: toxicity, below: 0.1, label: "toxicity < 0.1"}
+      - {field: toxicity, at_least: 0.1, below: 0.8, label: "0.1 <= toxicity < 0.8"}
+    # 97,320 comments; reported only (rater noise above the gold bar), capped so it does not dominate the report.
+    cap: 6000
   - id: dolly_15k
     commercial: true
     source: https://huggingface.co/datasets/databricks/databricks-dolly-15k

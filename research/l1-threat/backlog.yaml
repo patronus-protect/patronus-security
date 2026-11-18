@@ -324,6 +324,7 @@ tasks:
       5% bar or its failure named with the abstract error pattern; a set that still fails gets its fix
       (generator template or recipe filter) in the same task, not a lower bar
   - id: T07
+    status: done
     title: Scored dev source for toxic_language — recipes for nemotron_safety_v3 (CC-BY-4.0, EN + German machine-translated, marked translated) and civil_comments (CC0, EN, capped); licence check of GermEval 2018 train/2019/2021 (unknown stays report_only); gold review
     type: eval-infra
     deps: [M07]
