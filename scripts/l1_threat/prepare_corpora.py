@@ -90,7 +90,7 @@ READY = ".ready"
 OVERLAY_FILE = "datasets.overlay.yaml"
 # Output directory of each split: (DEV or HOLDOUT, subdirectory).
 LAYOUT = {"train_dev": ("dev", "train_dev"), "report": ("dev", "report"), "holdout": ("holdout", "holdout")}
-FORMATS = ("jsonl", "json", "csv", "parquet", "agentdojo_trace", "bipia", "redcode")
+FORMATS = ("jsonl", "json", "text", "csv", "parquet", "agentdojo_trace", "bipia", "redcode")
 # Carrier characters kept on each side of an AgentDojo payload (whole lines only).
 AGENTDOJO_CONTEXT = 300
 # E-mail characters kept on each side of a BIPIA attack (whole lines only).
@@ -102,8 +102,8 @@ ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
 OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against", "records"}
 KEEP_KEYS = {"label", "pattern", "reason"}
-RULE_OPS = ("equals", "contains", "excludes", "at_least", "below")
-LIST_OPS = ("equals", "contains", "excludes")
+RULE_OPS = ("equals", "contains", "excludes", "matches", "at_least", "below")
+LIST_OPS = ("equals", "contains", "excludes", "matches")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # Mersenne prime 2^31 - 1: a * h + b stays below 2^63 for a, b, h < P (int64 without overflow).
@@ -191,6 +191,11 @@ def _check_condition(where: str, rule: dict[str, Any]) -> list[str]:
     for op in ("at_least", "below"):
         if op in rule and (isinstance(rule[op], bool) or not isinstance(rule[op], (int, float))):
             problems.append(f"{where}: {op} must be a number")
+    if "matches" in rule:
+        try:
+            re.compile(rule["matches"])
+        except (re.error, TypeError):
+            problems.append(f"{where}: matches must be a regular expression")
     return problems
 
 
@@ -356,6 +361,9 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     if "equals" in rule:
         wanted = rule["equals"] if isinstance(rule["equals"], list) else [rule["equals"]]
         return _text_value(value) in {_text_value(item) for item in wanted}
+    if "matches" in rule:
+        # A regular expression searched in the field's text (e.g. a label encoded in a file path).
+        return re.search(rule["matches"], _text_value(value)) is not None
     for op in ("contains", "excludes"):
         if op in rule:
             wanted = rule[op] if isinstance(rule[op], list) else [rule[op]]
@@ -522,6 +530,9 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
             if not isinstance(data, list):
                 raise ValueError(f"{path}: format json expects a list of records (or `records` naming one)")
             yield from data
+        elif entry["format"] == "text":
+            # One record per file: its whole UTF-8 text and its path (e.g. one SKILL.md per skill).
+            yield {"text": path.read_text(encoding="utf-8"), "path": item["path"]}
         elif entry["format"] == "agentdojo_trace":
             yield from agentdojo_records(json.loads(path.read_text(encoding="utf-8")))
         elif entry["format"] == "csv":

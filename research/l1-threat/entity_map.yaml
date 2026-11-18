@@ -284,6 +284,40 @@ datasets:
     note: no licence file; evaluation only, never training. Planted content of persistent agent files
       (AGENTS.md, skills, soul/user profiles, long-term memory) from automated red-teaming of claw-style
       agents (arXiv 2610.27244); the attacker_instruction field is the scanned text
+  - id: malskillbench
+    name: MalSkillBench (runtime-verified malicious agent skills)
+    source: github:lxyeternal/MalSkillBench Dataset/Skills
+    licence: unknown
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "malware skill, attack type PI or MIXED (instructions in SKILL.md, alone or with code)", classes: [agent_config_tampering]}
+      - {label: "malware skill, attack type CI (malicious code in the skill's code blocks)", classes: [unsafe_action]}
+      - {label: "benign skill (most-downloaded public skills)", benign: true}
+    note: no licence file; evaluation only, never training. Every malicious skill was loaded by a real
+      coding agent in a sandbox and kept only if its observed behaviour matched the label (arXiv
+      2606.07131); only the SKILL.md files are used, not the bundled third-party prompt sets
+  - id: memform
+    name: MemForm (memory formation poisoning), poisoned memory
+    source: github:opanhw/memform-code outputs/*_item_audit/accepted_cases.jsonl
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "poisoned memory text of an accepted case", classes: [memory_poisoning]}
+    note: the poisoned_condition memory text of each accepted case; its clean twin is memform_clean
+  - id: memform_clean
+    name: MemForm, clean memory twins
+    source: github:opanhw/memform-code outputs/*_item_audit/accepted_cases.jsonl
+    licence: MIT
+    languages: [en]
+    split: holdout
+    family: neutral
+    labels:
+      - {label: "clean memory text of an accepted case", benign: true}
+    note: the clean_condition memory text of the same cases (hard negatives for memory_poisoning)
   - id: jbb_artifacts
     name: JailbreakBench attack artifacts
     source: github:JailbreakBench/artifacts attack-artifacts

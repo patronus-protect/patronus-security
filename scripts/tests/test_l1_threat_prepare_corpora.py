@@ -214,6 +214,28 @@ def test_json_records_star_expands_list_items_and_dict_values(tmp_path):
     assert [r["t"] for r in MODULE.read_records(entry, tmp_path)] == ["x", "y", "z"]
 
 
+def test_text_format_reads_one_record_per_file_with_its_path(tmp_path):
+    # MalSkillBench: one SKILL.md per skill, the label sits in the directory name.
+    (tmp_path / "a__PI_B10").mkdir()
+    (tmp_path / "a__PI_B10" / "SKILL.md").write_text("# skill a\nbody", encoding="utf-8")
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "SKILL.md").write_text("# skill b", encoding="utf-8")
+    entry = {"format": "text", "text": "text", "labels": [],
+             "files": [{"path": "a__PI_B10/SKILL.md"}, {"path": "b/SKILL.md"}]}
+    assert list(MODULE.read_records(entry, tmp_path)) == [
+        {"text": "# skill a\nbody", "path": "a__PI_B10/SKILL.md"}, {"text": "# skill b", "path": "b/SKILL.md"}]
+
+
+def test_matches_searches_a_regular_expression_in_the_field():
+    rule = {"field": "path", "matches": r"__(PI|MIXED)_B\d+/"}
+    assert MODULE.rule_matches(rule, {"path": "malware/000-x__PI_B10/SKILL.md"})
+    assert MODULE.rule_matches(rule, {"path": "malware/001-y__MIXED_B3/SKILL.md"})
+    assert not MODULE.rule_matches(rule, {"path": "malware/002-z__CI_B1/SKILL.md"})
+    assert not MODULE.rule_matches(rule, {"other": "x"})
+    assert MODULE._check_condition("x", {"field": "path", "matches": "("})
+    assert not MODULE._check_condition("x", {"field": "path", "matches": "__PI_"})
+
+
 def test_records_needs_format_json_and_a_path():
     labels = {"l"}
     base = {"source": "https://huggingface.co/datasets/o/r", "revision": "a" * 40,
