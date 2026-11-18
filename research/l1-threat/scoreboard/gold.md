@@ -15,7 +15,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | exfiltration | go | - |
 | unsafe_action | go | - |
 | resource_exhaustion | go | - |
-| harmful_content | no-go | holdout holdout/jbb_behaviors: error rate 10.0% |
+| harmful_content | go | - |
 | toxic_language | go | - |
 
 ## Rows per class and language
@@ -31,9 +31,9 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | exfiltration | 151 | 461 | 225 | 11936 | 113 | 1 | 498 | 11711 | 0 | 450 |
 | unsafe_action | 178 | 517 | 63 | 62 | 382 | 35 | 278 | 0 | 0 | 125 |
 | resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
-| harmful_content | 316 | 483 | 0 | 224 | 483 | 316 | 0 | 224 | 0 | 0 |
+| harmful_content | 316 | 483 | 0 | 172 | 483 | 316 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
-| benign | 12101 | 19902 | 17191 | 12125 | 30156 | 47 | 1800 | 33730 | 0 | 2700 |
+| benign | 12101 | 19902 | 17191 | 12122 | 30156 | 47 | 1800 | 33727 | 0 | 2700 |
 
 ## Spot-check dev
 
@@ -76,22 +76,22 @@ Benign pool (dev, scored sets): 0 of 334 reviewed benign rows wrong or unclear.
 | holdout/cyberseceval_pi | decisive | 232 | 50 | 27 | 2 | 58.0% | 0 / 0 |
 | holdout/hatecheck_de | decisive | 2844 | 50 | 0 | 0 | 0.0% | 0 / 25 |
 | holdout/hatecheck_en | decisive | 3153 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| holdout/jbb_behaviors | decisive | 60 | 50 | 2 | 3 | 10.0% | 0 / 0 |
+| holdout/jbb_behaviors | decisive | 60 | 50 | 1 | 5 | 12.0% | 0 / 0 |
 | holdout/llmail_inject | decisive | 11711 | 150 | 0 | 7 | 4.7% | 0 / 0 |
-| holdout/multijail | decisive | 315 | 50 | 13 | 13 | 52.0% | 0 / 0 |
+| holdout/multijail | decisive | 307 | 50 | 13 | 13 | 52.0% | 0 / 0 |
 | holdout/notinject | decisive | 339 | 50 | 0 | 0 | 0.0% | 0 / 50 |
-| holdout/oasst2 | decisive | 14988 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| holdout/oasst2 | decisive | 14985 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | holdout/or_bench_hard | decisive | 1318 | 50 | 2 | 4 | 12.0% | 6 / 50 |
 | holdout/tensortrust_extraction | decisive | 331 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | holdout/trustairlab_jailbreak | decisive | 643 | 50 | 9 | 3 | 24.0% | 0 / 0 |
 | holdout/wikipedia | decisive | 15000 | 50 | 0 | 0 | 0.0% | 0 / 50 |
-| holdout/xstest | decisive | 448 | 51 | 0 | 2 | 3.9% | 0 / 17 |
+| holdout/xstest | decisive | 446 | 51 | 0 | 2 | 3.9% | 0 / 17 |
 
 Benign pool (holdout, scored sets): 6 of 350 reviewed benign rows wrong or unclear.
 
 ## Leakage dev → holdout
 
-0 of 56782 holdout rows duplicate one of 61074 dev rows (exact or MinHash).
+0 of 56769 holdout rows duplicate one of 70929 dev rows (exact or MinHash).
 
 ## Flagged dev rows
 
