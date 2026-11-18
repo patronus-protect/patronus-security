@@ -1,0 +1,95 @@
+[
+  {
+    "id": "jailbreak.priming",
+    "description": "Zustimmender Antwortanfang, den eine Vorgabe dem Modell vorschreibt (Sure, here is / Klar, hier ist)",
+    "en": [
+      "sure",
+      "certainly",
+      "absolutely",
+      "course",
+      "gladly"
+    ],
+    "de": [
+      "klar",
+      "natürlich",
+      "natuerlich",
+      "sicher",
+      "selbstverständlich",
+      "selbstverstaendlich",
+      "gern"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/jailbreak.md"
+    ]
+  },
+  {
+    "id": "jailbreak.refusal_suppression",
+    "description": "Ablehnen, verweigern oder sagen, dass man nicht kann (Ziel eines Ablehnungsverbots)",
+    "en": [
+      "refus",
+      "declin",
+      "reject",
+      "say"
+    ],
+    "de": [
+      "lehn",
+      "verweiger",
+      "sag"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/jailbreak.md"
+    ]
+  },
+  {
+    "id": "jailbreak.forged_reasoning",
+    "description": "Marker eines Denk- oder Begründungsblocks (<think>, Reasoning:, Gedankengang:)",
+    "en": [
+      "think",
+      "reasoning",
+      "thought",
+      "scratchpad",
+      "chain",
+      "monologue"
+    ],
+    "de": [
+      "überlegung",
+      "ueberlegung",
+      "gedanke",
+      "denkprozess",
+      "begründung",
+      "begruendung"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/jailbreak.md"
+    ]
+  },
+  {
+    "id": "jailbreak.permission_claim",
+    "description": "Behauptung, die Anfrage sei erlaubt oder freigegeben (allowed, permitted / erlaubt, zulässig)",
+    "en": [
+      "allow",
+      "permit",
+      "approved",
+      "compliant",
+      "authori"
+    ],
+    "de": [
+      "erlaubt",
+      "erlauben",
+      "zulässig",
+      "zulaessig",
+      "freigegeben",
+      "genehmigt",
+      "gestattet",
+      "richtlinienkonform",
+      "unbedenklich"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/jailbreak.md"
+    ]
+  }
+]

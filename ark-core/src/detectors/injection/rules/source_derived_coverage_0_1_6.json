@@ -634,6 +634,147 @@
         "priorität",
         "prioritaet"
       ]
+    },
+    {
+      "id": "ark.injection.jailbreak.priming_en",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.priming",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "Prescribes an affirmative, compliant opener for the model's answer (response priming)",
+      "adaptation": "EN clause-initial directive 'start/begin your response/reply/answer with', 'begin by replying with' or 'your response must begin with', directly followed by an affirmative opener (sure, certainly, absolutely, of course, gladly) that hands over to compliance (here, I can, I will, let me); negated directives, other subjects and plain format openers ('Yes' or 'No', a summary) stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:and|so|then|also|please)\\s+)(?:(?:please|now|always|also)\\s+){0,2}(?:(?:start|begin|open|preface|prefix)\\s+(?:(?:each|every|all)\\s+(?:of\\s+)?)?your\\s+(?:(?:next|final|first)\\s+)?(?:response|reply|answer|output)s?\\s+(?:always\\s+)?(?:with|by\\s+(?:saying|writing))|(?:start|begin)\\s+(?:with|by\\s+(?:saying|replying|responding|answering|writing)(?:\\s+with)?)|your\\s+(?:(?:next|final|first)\\s+)?(?:response|reply|answer|output)s?\\s+(?:must|should|will|shall|has\\s+to|needs\\s+to)\\s+(?:always\\s+)?(?:start|begin|open)\\s+with)\\s*[:,]?\\s*[\\\"'“”‘’«»„‚`]?\\s*(?:sure|certainly|absolutely|of\\s+course|gladly)\\b\\s*[,!.:]?\\s*(?:here\\b|i\\s+(?:can|will|would|am\\s+happy)\\b|i'll\\b|i'm\\s+happy\\b|let\\s+me\\b|let's\\b|let\\s+us\\b|happy\\s+to\\b|this\\s+is\\b)",
+      "required_literals_any": [
+        "sure",
+        "certainly",
+        "absolutely",
+        "course",
+        "gladly"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.priming_de",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.priming_de",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "German: prescribes an affirmative, compliant opener for the model's answer (response priming)",
+      "adaptation": "DE clause-initial 'beginne/starte deine Antwort mit', 'fang deine Antwort mit … an' or 'deine Antwort muss mit … beginnen', directly followed by an affirmative opener (klar, natürlich, sicher, selbstverständlich, gerne) that hands over to compliance (hier, ich kann, ich werde); negated directives and plain format openers stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:und|dann|also|auch|bitte)\\s+)(?:(?:bitte|jetzt|immer)\\s+){0,2}(?:(?:beginne|starte|eröffne|eroeffne)\\s+(?:deine|jede)\\s+(?:(?:nächste|naechste|erste)\\s+)?(?:antwort|ausgabe)(?:en)?\\s+(?:immer\\s+)?mit|fange?\\s+(?:deine|jede)\\s+(?:(?:nächste|naechste|erste)\\s+)?antwort\\s+(?:immer\\s+)?mit|deine\\s+(?:(?:nächste|naechste|erste)\\s+)?(?:antwort|ausgabe)\\s+(?:muss|soll|sollte|wird)\\s+(?:immer\\s+)?mit)\\s*:?\\s*[\\\"'“”‘’«»„‚`]?\\s*(?:klar|natürlich|natuerlich|sicher|selbstverständlich|selbstverstaendlich|gerne?)\\b\\s*[,!.:]?\\s*(?:hier\\b|ich\\s+(?:kann|werde|helfe|erkläre|erklaere|zeige)\\b|das\\s+mache\\s+ich\\b|mache\\s+ich\\b)",
+      "required_literals_any": [
+        "klar",
+        "natürlich",
+        "natuerlich",
+        "sicher",
+        "selbstverständlich",
+        "selbstverstaendlich",
+        "gern"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.refusal_suppression_en",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.refusal_suppression",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "Forbids the model to refuse, decline or say that it cannot help (refusal suppression)",
+      "adaptation": "EN clause-initial 'never', 'do not', 'you must not', 'you are not allowed to' directly followed by refuse/decline/reject with answering or a request as object (or nothing), or by 'say that you cannot' / 'say I'm sorry'; other objects (a refund), third-person and quoted mentions stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:and|so|then|also|please)\\s+)(?:(?:from\\s+now\\s+on|now|also|please)\\s*,?\\s*)?(?:(?:you\\s+(?:must|will|shall|should|may|can)\\s+)?(?:never|not)|do\\s+not|don't|you\\s+(?:must|may|shall)\\s+not|you\\s+(?:can't|cannot|can\\s+not|mustn't)|you\\s+are\\s+not\\s+(?:allowed|permitted)\\s+to|you\\s+are\\s+(?:forbidden|prohibited)\\s+(?:to|from))\\s+(?:ever\\s+)?(?:(?:refuse|decline|reject)(?:\\s+(?:to\\s+(?:answer|respond|reply|comply|help|assist)\\b|(?:any|a|my|the|this|these|our)\\s+(?:(?:user's|single|further|other|more|of\\s+(?:my|the|these))\\s+)?(?:requests?|questions?|prompts?|instructions?|queries|query|tasks?)\\b|anything\\b|and\\b)|\\s*(?:[,;!]|\\.(?:\\s|$)|$))|say\\s+(?:that\\s+)?(?:you\\s+(?:can't|cannot|can\\s+not|are\\s+unable|are\\s+not\\s+able|won't)\\b|[\\\"'“”‘’«»„‚`]?i(?:'m|\\s+am)\\s+(?:sorry|unable)\\b|[\\\"'“”‘’«»„‚`]?i\\s+(?:can't|cannot)\\b))",
+      "required_literals_any": [
+        "refuse",
+        "decline",
+        "reject",
+        "can't",
+        "cannot",
+        "can not",
+        "unable",
+        "not able",
+        "won't",
+        "sorry"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.refusal_suppression_de",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.refusal_suppression_de",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "German: forbids the model to refuse, decline or say that it cannot help (refusal suppression)",
+      "adaptation": "DE clause-initial 'lehne niemals/keine Anfrage ab', 'verweigere nie eine Antwort', 'du darfst keine Anfrage ablehnen' or 'sag niemals, dass du etwas nicht kannst / es tut mir leid'; other objects (eine Rücksendung), third-person and quoted mentions stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:und|dann|also|auch|bitte)\\s+)(?:(?:ab\\s+(?:jetzt|sofort|heute)|von\\s+nun\\s+an|bitte)\\s*,?\\s*)?(?:lehn(?:e|st)\\s+(?:du\\s+)?(?:(?:niemals|nie)\\s+(?:mehr\\s+)?(?:(?:eine|irgendeine|meine)\\s+)?(?:(?:anfrage|frage|bitte|aufgabe|anweisung)n?\\s+|etwas\\s+|irgendetwas\\s+|irgendwas\\s+)?|keine\\s+(?:einzige\\s+)?(?:anfrage|frage|bitte|aufgabe|anweisung)n?\\s+|nichts\\s+)ab\\b|verweiger(?:e|st)\\s+(?:du\\s+)?(?:niemals|nie)\\s+(?:(?:eine|die|irgendeine|deine)\\s+)?(?:antwort|anfrage|auskunft|frage|aufgabe|hilfe)\\b|du\\s+(?:darfst|kannst|wirst)\\s+(?:(?:niemals|nie|nicht)\\s+(?:(?:eine|irgendeine)\\s+(?:anfrage|frage|bitte|aufgabe|anweisung)\\s+)?|keine\\s+(?:anfrage|frage|bitte|aufgabe|anweisung)n?\\s+|nichts\\s+)ablehnen\\b|sag(?:e|st)?\\s+(?:du\\s+)?(?:niemals|nie)\\s*,?\\s*(?:dass\\s+du\\s+(?:(?:etwas|das|es)\\s+)?nicht\\s+(?:kannst|darfst|helfen\\s+kannst)\\b|[\\\"'“”‘’«»„‚`]?(?:es\\s+tut\\s+mir\\s+leid|ich\\s+kann\\s+(?:(?:das|dir)\\s+)?nicht)\\b))",
+      "required_literals_any": [
+        "lehn",
+        "verweiger",
+        "tut mir leid",
+        "nicht kannst",
+        "nicht darfst",
+        "nicht helfen kannst",
+        "ich kann"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.cot_forgery_en",
+      "canonical_id": "ark.injection.skillspector.policy_nullification",
+      "upstream_id": "ark-composition:jailbreak.cot_forgery",
+      "family": "guardrail_tamper",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "Forged reasoning block that declares the request allowed and commits the model to answer",
+      "adaptation": "EN thinking/reasoning marker (<think>, <reasoning>, [thinking], 'Internal reasoning:') followed within the block by a clause-initial permission claim (the request is allowed/permitted/approved, the policy allows this) and, within 80 characters, a commitment to comply (I will answer, no need to refuse, I must not decline); refusing reasoning, tutorials and claims without commitment stay unmatched.",
+      "pattern": "(?:<\\s*(?:think|thinking|reasoning|thoughts?|scratchpad)\\s*>|\\[\\s*(?:think|thinking|reasoning|thoughts?)\\s*\\]|(?:^|\\n)\\s*(?:(?:internal|private|hidden)\\s+)?(?:reasoning|thoughts?|thinking|chain[\\s-]+of[\\s-]+thought|inner\\s+monologue)\\s*:)\\s*(?:[^<\\[]{0,240}?(?:[.!?;:>\\]\\n]\\s*|,\\s*))?(?:(?:so|therefore|thus|hence)\\s*,?\\s*)?(?:(?:(?:the|this|that|the\\s+user's)\\s+)?(?:request|query|question|prompt|task|it|this)\\s+(?:is|was|has\\s+been)\\s+(?:(?:fully|explicitly|clearly|completely|definitely|therefore|now|entirely)\\s+)?(?:allowed|permitted|approved|compliant|authori[sz]ed)|(?:the\\s+)?(?:policy|policies|guidelines?|rules)\\s+(?:(?:explicitly|clearly|fully)\\s+)?(?:allows?|permits?)\\s+(?:this|it|the\\s+request))\\b[^<\\[]{0,80}?(?:\\bi\\s+(?:will|can|should|must|may|shall)\\s+(?:(?:now|therefore|also)\\s+)?(?:answer|comply|respond|help|provide|proceed|continue|explain|give)\\b|\\bi'll\\s+(?:answer|comply|respond|help|provide|proceed|continue|explain|give)\\b|\\b(?:should|must|will|shall|need|do|can)\\s*(?:not|n't|never)\\s+(?:refuse|decline)\\b|\\bwon't\\s+(?:refuse|decline)\\b|\\bno\\s+(?:need|reason)\\s+to\\s+(?:refuse|decline)\\b)",
+      "required_literals_any": [
+        "think",
+        "reason",
+        "thought",
+        "chain",
+        "monologue",
+        "scratchpad"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.cot_forgery_de",
+      "canonical_id": "ark.injection.skillspector.policy_nullification",
+      "upstream_id": "ark-composition:jailbreak.cot_forgery_de",
+      "family": "guardrail_tamper",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "German: forged reasoning block that declares the request allowed and commits the model to answer",
+      "adaptation": "DE thinking/reasoning marker (<think>, <reasoning>, 'Interne Überlegung:', 'Gedankengang:') followed within the block by a clause-initial permission claim (die Anfrage ist erlaubt/zulässig/freigegeben, die Richtlinie erlaubt dies) and, within 80 characters, a commitment to comply (also werde ich antworten, ich darf nicht ablehnen); refusing reasoning, tutorials and claims without commitment stay unmatched.",
+      "pattern": "(?:<\\s*(?:think|thinking|reasoning|thoughts?|scratchpad)\\s*>|\\[\\s*(?:think|thinking|reasoning|thoughts?)\\s*\\]|(?:^|\\n)\\s*(?:(?:interne|private|versteckte)\\s+)?(?:überlegung(?:en)?|ueberlegung(?:en)?|gedankengang|gedanken|denkprozess|begründung|begruendung)\\s*:)\\s*(?:[^<\\[]{0,240}?(?:[.!?;:>\\]\\n]\\s*|,\\s*))?(?:(?:also|daher|somit|deshalb)\\s*,?\\s*)?(?:(?:(?:die|diese|deine|der|das)\\s+)?(?:anfrage|frage|aufgabe|bitte|das|dies|es)\\s+(?:ist|war|wurde)\\s+(?:(?:ausdrücklich|ausdruecklich|eindeutig|klar|vollständig|vollstaendig|also|daher|somit|damit|jetzt)\\s+)?(?:erlaubt|zulässig|zulaessig|freigegeben|genehmigt|gestattet|richtlinienkonform|unbedenklich)|(?:die\\s+)?(?:richtlinien?|regeln?|policy)\\s+(?:(?:ausdrücklich|ausdruecklich|eindeutig|klar)\\s+)?(?:erlaubt|erlauben|gestattet|gestatten)\\s+(?:dies|das|es|diese\\s+anfrage|die\\s+anfrage))\\b[^<\\[]{0,80}?(?:\\b(?:werde|kann|darf)\\s+ich\\s+(?:(?:jetzt|also)\\s+)?(?:antworten|helfen|fortfahren)\\b|\\bich\\s+(?:werde|kann|darf)\\s+(?:(?:jetzt|also)\\s+)?(?:antworten|helfen|fortfahren)\\b|\\b(?:nicht|nie|niemals)\\s+ablehnen\\b)",
+      "required_literals_any": [
+        "think",
+        "reason",
+        "thought",
+        "scratchpad",
+        "überleg",
+        "ueberleg",
+        "gedanke",
+        "denkprozess",
+        "begründung",
+        "begruendung"
+      ]
     }
   ]
 }
