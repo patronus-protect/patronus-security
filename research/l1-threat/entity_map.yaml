@@ -173,7 +173,7 @@ datasets:
     split: holdout
     family: neutral
     labels:
-      - {label: "split harmful, Category in (Physical harm, Malware/Hacking, Fraud/Deception, Economic harm, Privacy)", classes: [harmful_content]}
+      - {label: "split harmful, Category in (Physical harm, Malware/Hacking, Fraud/Deception, Economic harm, Privacy)", classes: [harmful_content], decides: false, reason: "owner holdout re-check 2026-11-16: 10% label errors (rows outside every harmful_content subclass, e.g. academic or financial requests without uplift); reported, xstest decides harmful_content"}
       - {label: "split harmful, Category Harassment/Discrimination (hate and harassment writing requests)", classes: [toxic_language], decides: false, reason: "owner holdout review 2026-11-16: the category also holds defamation and non-protected-group rows; reported until a finer mapping exists"}
       - {label: "split harmful, Category in (Disinformation, Sexual/Adult content, Expert advice, Government decision-making)", out_of_scope: "no L1 class covers disinformation, consensual adult content or unqualified advice requests (owner holdout review 2026-11-13)"}
       - {label: "split benign (Goal)", benign: true}

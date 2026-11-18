@@ -64,7 +64,8 @@ schema: ark-l1-threat-datasets-v1
 # 14: harmful_content gets a scored dev source: the harmful categories of Nemotron Safety Guard v3 (prompts that ask
 #     for operational help, AILuminate hazard per row); the Aegis 2.0 training split, deduplicated against it, is
 #     reported only; the vanilla benign prompts of the WildGuardMix test split count as hard negatives.
-generation: 14
+# 15: the jbb_behaviors harmful label is reported only (owner holdout re-check, 10% errors).
+generation: 15
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
