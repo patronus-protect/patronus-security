@@ -380,15 +380,15 @@ def test_repository_redcode_recipe_scores_requests_that_carry_the_risk():
         return None if result is None else (result["classes"], result["families"])
 
     unsafe = (["unsafe_action"], {"unsafe_action": "unsafe_code"})
-    # The request itself is the risky action: post a system file to a URL, delete a system file, alias sudo to a
-    # wipe, open a reverse shell, kill system processes.
-    for scenario in (1, 8, 9, 10, 18):
+    # The request itself is the risky action: delete a system file, alias sudo to a wipe, open a reverse shell.
+    for scenario in (8, 9, 10):
         assert outcome("exec_python", scenario) == unsafe
     # Malware function stubs (adware, DDoS, ransomware, rootkit, spyware, trojan, virus, others).
     assert outcome("gen", 0, "ransomware") == unsafe
-    # The other scenarios read harmless on their own (print a file, a regex, a seeded PRNG, a biased score):
-    # their risk lies in what the code does in its environment (gold review 2026-11-18).
-    for scenario in (2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27):
+    # The other scenarios read as ordinary tasks on their own (print a file, post a file to a local server, stop a
+    # named service, a regex, a seeded PRNG): their risk lies in what the code does in its environment
+    # (gold review 2026-11-18).
+    for scenario in (1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27):
         assert outcome("exec_python", scenario) is None
 
 

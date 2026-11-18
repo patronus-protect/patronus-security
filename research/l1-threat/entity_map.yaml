@@ -686,25 +686,38 @@ datasets:
     name: Agent-SafetyBench
     source: github:thu-coai/Agent-SafetyBench
     licence: MIT
+    note: >-
+      2,000 cases (commit 74feea8d). Most unfulfillable cases keep their risk in the tool environment ("order 50
+      cartons of milk", "shut down unneeded systems"): the instruction alone is no attack and fails the gold bar
+      (T15). Scored are the unfulfillable harmful-code cases the agent fails by writing the code itself (failure
+      mode 1) whose request names the harmful act (cue filter in datasets.yaml); the fulfillable code cases are hard
+      negatives. The tool environments name tools without poisoned descriptions (no tool_poisoning rows).
     languages: [en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "risk = Leak sensitive data / information", classes: [exfiltration]}
-      - {label: "risk in (Lead to property loss, Lead to physical harm, Contribute to harmful / vulnerable code)", classes: [unsafe_action]}
-      - {label: "risk = Compromise availability", classes: [resource_exhaustion]}
-      - {label: "risk = Violate law / ethics", classes: [harmful_content]}
-      - {label: "risk in (Spread unsafe information / misinformation, Produce unsafe information / misinformation)", out_of_scope: "output-side harm and disinformation, not an input signal"}
-      - {label: "fulfillable = 1 safe cases", benign: true}
+      - {label: "risk = Contribute to harmful / vulnerable code, fulfillable = 0, failure mode 1", classes: [unsafe_action], family: unsafe_code}
+      - {label: "risk = Contribute to harmful / vulnerable code, fulfillable = 0, other failure modes", out_of_scope: "the risk lies in tool calls or tool results, not in the instruction"}
+      - {label: "risk = Contribute to harmful / vulnerable code, fulfillable = 1", benign: true}
+      - {label: "every other risk", out_of_scope: "the risk lies in the tool environment, the instruction alone carries no attack (gold review T15)"}
   - id: redcode
     name: RedCode
     source: github:AI-secure/RedCode
-    licence: MIT
+    licence: MIT (code), CC-BY-4.0 (dataset)
+    note: >-
+      commit 664e4793. RedCode-Exec Python: 27 risky scenarios of 30 items, each with a summary and a step-list
+      request ("Create and execute a Python script that ..."); scored are the scenarios whose request is itself the
+      risky action (8 delete a system file, 9 alias sudo to a wipe, 10 reverse shell). The others read as ordinary
+      tasks on their own (print or copy a file, post a file to a local server, stop a named service, a regex, a
+      seeded PRNG, a biased score); their risk lies in what the code does in its environment (gold review T18).
+      RedCode-Gen: 160 malware function stubs (signature and docstring to complete).
     languages: [en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "RedCode-Exec Python and RedCode-Gen prompts", classes: [unsafe_action], family: unsafe_code}
+      - {label: "RedCode-Exec Python, scenarios whose request is the risky action", classes: [unsafe_action], family: unsafe_code}
+      - {label: "RedCode-Exec Python, other scenarios", out_of_scope: "the request reads harmless; the risk lies in the code's effect in its environment"}
+      - {label: "RedCode-Gen prompts", classes: [unsafe_action], family: unsafe_code}
       - {label: "RedCode-Exec Bash", handoff: shell_command}
   - id: wildjailbreak
     name: WildJailbreak

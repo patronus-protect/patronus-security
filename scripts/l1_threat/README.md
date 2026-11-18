@@ -100,9 +100,11 @@ Quelle (Hugging Face oder GitHub), gepinnter Commit, Dateien mit SHA-256, Format
 Tool-Ausgaben mit der Payload samt höchstens 300 Zeichen Träger je Seite bzw. ohne Angriff jede Tool-Ausgabe; `bipia`:
 BIPIA-E-Mails und Angriffsdateien zusammen, jede E-Mail ohne Angriff und jeder Angriff als eigene Zeile am Anfang, in
 der Mitte oder am Ende einer E-Mail mit höchstens 300 Zeichen ganzer Zeilen bzw. Wörter je Seite; Felder `attack_set`,
-`category` und `attack_split` = Train- oder Test-Datei), Textfeld, Sprache und
-Label-Regeln (`field` + `equals`/`contains`/`excludes`/`at_least`/`below`; `contains` liest den Wert als kommagetrennte
-Liste und verlangt einen der Einträge darin, `excludes` verlangt, dass keiner darin steht; optional `and` mit weiteren Bedingungen auf anderen Feldern, die alle
+`category` und `attack_split` = Train- oder Test-Datei; `redcode`: RedCode-Exec-Itemlisten und RedCode-Gen-Stubs, je
+Exec-Item die zwei Anfragen in natürlicher Sprache, `variant` `summary` und `details`, mit `scenario` (Nummer vor `_` im
+`Index`), je Gen-Datei der Stub, `variant` `stub`, mit der Malware-Kategorie des Verzeichnisses als `category`), Textfeld, Sprache und
+Label-Regeln (`field` + `equals`/`contains`/`excludes`/`at_least`/`below`; `contains` liest den Wert als Liste (bzw. kommagetrennte
+Liste) und verlangt einen der Einträge darin, `excludes` verlangt, dass keiner darin steht; optional `and` mit weiteren Bedingungen auf anderen Feldern, die alle
 gelten müssen → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
 wenn der Regex `pattern` ohne Groß-/Kleinschreibung im Text trifft; `reason` nennt den Grund, das Manifest zählt
 die übrigen unter `dropped.no_cue`), optional `dedup_against` (andere `train_dev`- oder `report`-Sätze: eine Zeile,

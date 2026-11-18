@@ -21,10 +21,11 @@
 #   format      jsonl | json (list of records) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
+#               | redcode (RedCode-Exec item lists and RedCode-Gen stubs; records: the requests of each Exec item, each stub)
 #   text        record field holding the text; `language` a fixed code or `language_field`
 #   labels      rules {field, equals (value or list) | contains (value or list) | excludes (value or list) | at_least |
-#               below, label}; a rule without field matches every row; `contains` reads the field as a comma-separated
-#               list and needs one of the given items in it, `excludes` needs none of them; `and` [{field, equals |
+#               below, label}; a rule without field matches every row; `contains` reads the field as a list (or a
+#               comma-separated string) and needs one of the given items in it, `excludes` needs none of them; `and` [{field, equals |
 #               contains | excludes | at_least | below}] adds conditions on other
 #               fields that must all hold; `label` is the upstream label of entity_map.yaml. Every
 #               row must match at least one rule, otherwise preparing fails (unmapped label).
@@ -65,7 +66,9 @@ schema: ark-l1-threat-datasets-v1
 #     for operational help, AILuminate hazard per row); the Aegis 2.0 training split, deduplicated against it, is
 #     reported only; the vanilla benign prompts of the WildGuardMix test split count as hard negatives.
 # 15: the jbb_behaviors harmful label is reported only (owner holdout re-check, 10% errors).
-generation: 15
+# 16: RedCode (Exec Python scenarios whose request is the risky action, Gen malware stubs) and the harmful-code
+#     requests of Agent-SafetyBench join train_dev as native unsafe_action rows.
+generation: 16
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -667,10 +670,247 @@ datasets:
     pending: recipe not written yet
   - id: agent_safetybench
     commercial: true
-    pending: recipe not written yet
+    # The 2,000 released cases. Only the unfulfillable harmful-code cases that the agent fails by writing the code
+    # itself (failure mode 1) are scored, and of those only the requests that name the harmful act (keep); the
+    # fulfillable code cases are hard negatives. Every other case keeps its risk in the tool environment.
+    source: https://github.com/thu-coai/Agent-SafetyBench
+    revision: 74feea8de601b3a1449a93fcf70017fe61556f73
+    files:
+      - {path: data/released_data.json, sha256: 59dd0333001ef767766d803e97086ec02af0fbf7ff1f7070b3797863b0dacbe2}
+    format: json
+    text: instruction
+    language: en
+    labels:
+      - field: risks
+        contains: Contribute to harmful / vulnerable code
+        and: [{field: fulfillable, equals: 0}, {field: failure_modes, contains: "1"}]
+        label: "risk = Contribute to harmful / vulnerable code, fulfillable = 0, failure mode 1"
+      - field: risks
+        contains: Contribute to harmful / vulnerable code
+        and: [{field: fulfillable, equals: 0}, {field: failure_modes, excludes: "1"}]
+        label: "risk = Contribute to harmful / vulnerable code, fulfillable = 0, other failure modes"
+      - field: risks
+        contains: Contribute to harmful / vulnerable code
+        and: [{field: fulfillable, equals: 1}]
+        label: "risk = Contribute to harmful / vulnerable code, fulfillable = 1"
+      - {field: risks, excludes: Contribute to harmful / vulnerable code, label: "every other risk"}
+    keep:
+      - label: "risk = Contribute to harmful / vulnerable code, fulfillable = 0, failure mode 1"
+        reason: >-
+          the group mixes requests that name the harmful act (bypass or disable authentication or security checks, a
+          backdoor or reverse shell, cracking or brute-forcing passwords, logging keystrokes or passwords, opening every
+          port to any address, world-writable permissions) with requests that read harmless on their own (a login
+          form, a backup script, a model on age and ZIP code); only the former carry the risk in the instruction
+          (dev gold review 2026-11-18)
+        pattern: 'bypass|\bwithout (?:any |the |their |identi\w* |security |encryption |authenti\w* )*(?:security|authenti|identi|encryption|verification|checking|awareness)|\bdisabl\w* (?:all |the |some )?(?:security|firewall)|\bturn off the security|\bcrack|brute ?force|backdoor|reverse.shell|ransomware|keystroke|keypress|webshell|id_rsa|/etc/passwd|rm -rf|\b777\b|allow (?:all|any) incoming|from any external|\ball ports|unrestricted access|secretly|(?:log|print|fetch|retriev|share|monitor|captur|tag)\w* (?:[\w'']+ ){0,5}passwords?\b|(?:stor|sav|keep)\w* (?:[\w'']+ ){0,4}passwords?\b[^.?!]{0,40}\bplain ?text|\bplain ?text file\b[^.?!]{0,80}\bpasswords?\b|secret api keys|administrative privileges to any|default credentials|cancel the password|skips? user login|deletes? the original|executing any scripts|scrape personal data|without too many security|security (?:strateg|protocol|check|warning|setting|feature|limitation)'
   - id: redcode
     commercial: true
-    pending: recipe not written yet
+    # RedCode-Exec Python (27 risky scenarios x 30 items; the summary and the step-list request of each item) and the
+    # 160 RedCode-Gen malware stubs. Only the Exec scenarios whose request is itself the risky action are scored.
+    # The Bash part is handed to the shell-command detector and not fetched. Code MIT, dataset CC-BY-4.0.
+    source: https://github.com/AI-secure/RedCode
+    revision: 664e4793dc7309f98b8271baed5bbc04d6ef4c39
+    files:
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index1_30_codes_full.json, sha256: 97e4d6faa56e4f2300193b0e74f56235cab123296e26c3852448c1afc27be181}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index2_30_codes_full.json, sha256: 9a2ba9f30fbe2230e8e3def86e80b909ff3e2ffa436eb33da5da4e5d0c3f12cc}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index3_30_codes_full.json, sha256: 64480bb30fd96825a66dcdfc80fbbc81666c960064770c30a1342471d782afad}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index4_30_codes_full.json, sha256: 6aabd36641866cad222675cc05429f4961f47090c80da0ac020c0675756122f0}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index5_30_codes_full.json, sha256: d1285294816f3046c0dace93a253b332b3011960905057d8141ac0afdb7db55f}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index6_30_codes_full.json, sha256: 306ddb6b4198c7e0ff67a1084a565a9fb1689101a3cc60626bb54e836e8aa748}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index7_30_codes_full.json, sha256: 7d246b2dd10400905b8b52a3f6a082d365ce162d28ade1a10eed21d2f255a32a}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index8_30_codes_full.json, sha256: b3bde681130f0bfb0f86c457c973c7dc242de47d75a075810b5d60b80fec020d}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index9_30_codes_full.json, sha256: cab8f68e74c9088afe813e3ef8728a52728e832c81dd3f3efc7fcb35297696ac}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index10_30_codes_full.json, sha256: d7b267fc3d588fca749fff8c469a8a48b607ae9e5ab6448c94897918881f31e8}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index11_30_codes_full.json, sha256: be39f8fcb60efd82ea7b4d1d9b3efdfbc95d6ff642517a4b05609769ad94c38e}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index12_30_codes_full.json, sha256: e9fbfd9beff404bd58fbcaed06c9cede18c3bd56949ced9b6147276915ac0841}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index13_30_codes_full.json, sha256: 487165c2ac45772b1e1af9ac6148d00e25f9c182fbbc943d2c70796d57332808}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index14_30_codes_full.json, sha256: 1e6772cc4feb71c1f01d3b943166deae06b59f9914765a784f42c6fc8b4320f5}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index15_30_codes_full.json, sha256: 2a6b84df8bf176b22108554df81f2c3fdcdfddc8971d352ff2fa9ae0e76746ea}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index16_30_codes_full.json, sha256: 98d7e2a2c2ebdd63442982b135335184e2e96e731ae6e3e7a8800d2a035708cb}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index17_30_codes_full.json, sha256: 2b4d2a4f83357452fd74ec859dcb02d2dc628b40cd974f7ecd4bec7e0b0a9e85}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index18_30_codes_full.json, sha256: 39b502597f72411c9b4b37597477b7391b7fb334ff5084dc66f6240dcbfc4f60}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index19_30_codes_full.json, sha256: 203c8b04631f4890c405f21ddd45f5ba96965fcf39b903d70eec1fde8cf483c8}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index20_30_codes_full.json, sha256: c1e55b6942b1db5bc288781f15193e16f42b5e97bf82b132a61b5720da76af6f}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index21_30_codes_full.json, sha256: 8adeedbcc261e32a60c0a768b4992f686bb136eba176bb356da66bfc3a91bf5d}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index22_30_codes_full.json, sha256: 991f5fc45add673c8a277e13a42d8c44bfdba34bf7fffa10f8d425eedc0e8f5d}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index23_30_codes_full.json, sha256: e546df6e4c5cbe041b9219e878cac32c6301de593c6ab50647cac056b12d3aee}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index24_30_codes_full.json, sha256: 012d196b4ffce67e8d74ddf94f38e878fdfe65309a4265308aedb46787616c46}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index25_30_codes_full.json, sha256: cc39511286e28d840773772c755bc7b4510b958c65666450b486eca807be0721}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index26_30_codes_full.json, sha256: 0bdfd3dd2bb007e989cf1ef8bd29d00c73f0094496da37cb82068461d5d2e220}
+      - {path: dataset/RedCode-Exec/py2text_dataset_json/index27_30_codes_full.json, sha256: 8b9094e34aa0dce863ec9bc221254faa56dffa77b0189016dfbee18b0f422223}
+      - {path: dataset/RedCode-Gen/adware/adware_10_search_hijack_survey.py, sha256: f16fb5ba4050dcf409f412397328b8c10007df72cd1cdcb5c70492ddd665ef0b}
+      - {path: dataset/RedCode-Gen/adware/adware_11_tech_supp.py, sha256: 2209811d22eac4c723cdfaef93c82ab9a7f2e5e73997f4fe5e3ab6fc7ad24093}
+      - {path: dataset/RedCode-Gen/adware/adware_12_clipboard_hijack.py, sha256: b4c008ed1adb95409563ad4c74b5b146ba64679a37969f55583bc3d465e3ae8a}
+      - {path: dataset/RedCode-Gen/adware/adware_13_autodownload.py, sha256: 93a4816e04bb994f7d2033d0d6a187cbb0766adcbcd94f01ee2b5dac417b31bb}
+      - {path: dataset/RedCode-Gen/adware/adware_14_autolaunch.py, sha256: b40e867f0c4465113c3f6b0cabb7b0d25732accdd183530a1631c54201e8caae}
+      - {path: dataset/RedCode-Gen/adware/adware_15_fake_antivirus.py, sha256: 7e2601defbb23a799a1b81f1d967bebbade63002c4dd17c6cbd388642ba363a5}
+      - {path: dataset/RedCode-Gen/adware/adware_16_browser_extension.py, sha256: ce19209ebb16dbbda67bb9391fe0f6eb8a4b873f0ba9010ada5365d1cb0bb8e7}
+      - {path: dataset/RedCode-Gen/adware/adware_17_browser_extension_persistent.py, sha256: dd14e39aebdf20a49473b650ffa7a3751d6842b99d94b4d9261be5111a515ff0}
+      - {path: dataset/RedCode-Gen/adware/adware_18_clipboard_monitoring.py, sha256: 98b253cc4f0d8de22412f86c0175a289300c45574ff41ab5fa9254b93f0200da}
+      - {path: dataset/RedCode-Gen/adware/adware_19_executables.py, sha256: e9961bfc6c3800290d5010e46505073fd05c18b77ef798346cc521df78764a52}
+      - {path: dataset/RedCode-Gen/adware/adware_1_email.py, sha256: 43002881523952ef10561fb0a09ee95c42af322fbc628bfc4421fe074054d51b}
+      - {path: dataset/RedCode-Gen/adware/adware_20_fake_software.py, sha256: 47b0f9b3d22b61ac47b30f949b7031156d6e84d667102410a94efc458c168b96}
+      - {path: dataset/RedCode-Gen/adware/adware_2_search_hijack.py, sha256: 997c38c748b664f4f733a50aca533b10570b84acb75c9d0f8a5e388e8066db9d}
+      - {path: dataset/RedCode-Gen/adware/adware_3_system_notification.py, sha256: ba2940f2a80b7981b58bfd26ed7607ddf3483a9696e84532e37acd0327f841ab}
+      - {path: dataset/RedCode-Gen/adware/adware_4_file_download.py, sha256: 89ff381affc9f7f50a49d5b55947b0ac0dd728a39d09b6acee3df6bbca61bb46}
+      - {path: dataset/RedCode-Gen/adware/adware_5_redirection.py, sha256: 31f9347e3e195f1adbe4f41961e768f6c593c8539356c2a36241be1b841da031}
+      - {path: dataset/RedCode-Gen/adware/adware_6_browser.py, sha256: de00bd1b5c861daafa9b9c35c7c58dc0da904e1b29230baeb3ea61cfdfcdf135}
+      - {path: dataset/RedCode-Gen/adware/adware_7_fake_alert.py, sha256: 62a3e6bbe4a1e6843cd8bf7a755dbec92a0ed76fb05ec91d30563f1e308ab9f0}
+      - {path: dataset/RedCode-Gen/adware/adware_8_wallpaper.py, sha256: 73e107870878b785448842e6e7e6a965c5418b7ad073d50575940a466968bfc5}
+      - {path: dataset/RedCode-Gen/adware/adware_9_uninstall.py, sha256: 38bc48f31d85ddfb2148d90d109db35392c59ad5b62f98e68760da83ee3863dc}
+      - {path: dataset/RedCode-Gen/ddos/ddos_10_smtp_flood.py, sha256: aaafd9dac78e484f9c92352efa5a6be87851ab2d200f5a1ba7244502a1cc0e80}
+      - {path: dataset/RedCode-Gen/ddos/ddos_11_rudy.py, sha256: d371a653bb4196e4cb8da1eda0ca73ab588394808e48075841f977f043d3e5fc}
+      - {path: dataset/RedCode-Gen/ddos/ddos_12_smurf.py, sha256: 95268d441337a920a77bf62d83e493f0f7098680c838b5a076da7e48d48a81d7}
+      - {path: dataset/RedCode-Gen/ddos/ddos_13_fragmentation.py, sha256: 72f5c2224a2bb5fce1d719f11a4ba950d827c16dbd49bb82c118d6f2ebdd1eb2}
+      - {path: dataset/RedCode-Gen/ddos/ddos_14_teardrop.py, sha256: f08763411f81ae6ac91b251059c20b45240fe5acaf1ee5bafb990ecdbc62bd6d}
+      - {path: dataset/RedCode-Gen/ddos/ddos_15_ping.py, sha256: 7d047db15303a3fb8888c922cc4011108c44900541dfa1c383d345b4393ecfce}
+      - {path: dataset/RedCode-Gen/ddos/ddos_16_sip_flood.py, sha256: 0115f87abcc48634b5200aa464ec50ea292e783f2a0c4763eba0d87df7d7c631}
+      - {path: dataset/RedCode-Gen/ddos/ddos_17_quic_flood.py, sha256: a7d8c9aa25b386ed2998b0ceb8e0bb4479b12f1d7aa6489821e98ce36dd139a0}
+      - {path: dataset/RedCode-Gen/ddos/ddos_18_memcached_amp.py, sha256: 42ec5cda275ac6407c8317543c5ee0b77d25960e3438c417c6fa7d85ccb7b696}
+      - {path: dataset/RedCode-Gen/ddos/ddos_19_mqtt_flood.py, sha256: 2ed67105af9e2689f072e3a471f410f969ef0819819c708f1228ac32da7908b4}
+      - {path: dataset/RedCode-Gen/ddos/ddos_1_udp_flood.py, sha256: d395e126d6383c11f0d07c27f697da62142b736c2882fcbe3aebe434577e9702}
+      - {path: dataset/RedCode-Gen/ddos/ddos_20_websocket_flood.py, sha256: b606028617531365afccaea6eb892afd9b571f0c5bdf8b6c40e6ec9ee4bdb382}
+      - {path: dataset/RedCode-Gen/ddos/ddos_2_syn_flood.py, sha256: 32dd4345871ead7b4f960fe3b88d0c728b416e1c8c0c8a99a6b8643ec4d3de3a}
+      - {path: dataset/RedCode-Gen/ddos/ddos_3_icmp_flood.py, sha256: d200b800fe698371e57a8e60ecd53ec4c4eeba94f5fbecca99edbba1b2e40f72}
+      - {path: dataset/RedCode-Gen/ddos/ddos_4_http_flood.py, sha256: f6cec7836d54a5733c8c9683ba74c5dce3b7f2dc9dd815f7a0c58908b0e7cc41}
+      - {path: dataset/RedCode-Gen/ddos/ddos_5_dns_amp.py, sha256: ec675397391cff39bfaf25d167e54642c619fa18439e45a258aaf2ad72a3fba4}
+      - {path: dataset/RedCode-Gen/ddos/ddos_6_ntp_amp.py, sha256: 752de1d9494604dd8dac8d3cb274660dc7b117214931bcdd71efed942b971a42}
+      - {path: dataset/RedCode-Gen/ddos/ddos_7_slowloris.py, sha256: f1e2c44b899407edc285659d4124b239ce91ca8348f6396a0d1de21626679497}
+      - {path: dataset/RedCode-Gen/ddos/ddos_8_ssdp_amp.py, sha256: 8110b07e933ae3663fbd0e49217f19106e861647ab1866220e219d68079cad5c}
+      - {path: dataset/RedCode-Gen/ddos/ddos_9_http_slow.py, sha256: 276f020044048ee067f1bebf1419734d3dd5fcb62ebef58fd52c955053a42263}
+      - {path: dataset/RedCode-Gen/others/backdoor_1_hidden_service.py, sha256: 815062545859b88579c3635fe7e52289af37662963b53dc58b19c189aff55fd0}
+      - {path: dataset/RedCode-Gen/others/backdoor_2_authentication_bypass.py, sha256: dabedebf46017fb7e961eb2c4aff2974f9c5e9da1874584211b206d02bde6ac9}
+      - {path: dataset/RedCode-Gen/others/backdoor_3_stealth_command.py, sha256: fbb323cc74807a3918614bd1bb61c84e8326611a544366c3c125861a0bd8bf2f}
+      - {path: dataset/RedCode-Gen/others/backdoor_4_system_manipulation.py, sha256: a5b6302d919bfb7551996077d3c3221f94fac3df859525a918c2cdca095aaa40}
+      - {path: dataset/RedCode-Gen/others/backdoor_5_file_transfer.py, sha256: e0353d62abd3749eb3362a8c98e35a4893389788640033b4c6cf20b2a9a3549b}
+      - {path: dataset/RedCode-Gen/others/backdoor_6_reverse_shell.py, sha256: 589e15b4ebbfe62ffb5a8a3ddb8d2839202a654a2220047f23f552fb21bad14e}
+      - {path: dataset/RedCode-Gen/others/botnet_1_ddos.py, sha256: caddc11038c15e64609d97a80a688ea06221aba561fa0c8f0d2bcdb8e3c89781}
+      - {path: dataset/RedCode-Gen/others/botnet_2_spam_distribution.py, sha256: ecd58a7ce05f631a1b65a7574937e5d029ea88bf5a9f9f9bc8cabfc7fde27df6}
+      - {path: dataset/RedCode-Gen/others/botnet_3_data_theft.py, sha256: d9ffadb4f9962ccadb1216c326cc3d72dc41b5db03ad467d75170845d9b96b77}
+      - {path: dataset/RedCode-Gen/others/botnet_4_p2p.py, sha256: 6779e91cfaa05b060a0cdf809de206c1e7b179ca15d4c9cc1f0752eaece5b540}
+      - {path: dataset/RedCode-Gen/others/botnet_5_encrypted.py, sha256: d8bf3c00ba4c1843434f76e20ca64f96499f8f0c7475d4e307da2182f9ec6b1f}
+      - {path: dataset/RedCode-Gen/others/botnet_6_financial.py, sha256: f4e148d9c78e7964e5c00e90558d82c25cadb9b1dfc5035ae6b936ab45315900}
+      - {path: dataset/RedCode-Gen/others/botnet_7_crypto.py, sha256: 4cced2823410610a11543a455d10a1b95c2614c4e575c7c5f05ad3d7b9366ed8}
+      - {path: dataset/RedCode-Gen/others/worm_1_network_prop.py, sha256: 0f558e0b2a5ba8f3da9e8be7cd8e4c1af1eb274fee53f2814449a7ca4dc7daa5}
+      - {path: dataset/RedCode-Gen/others/worm_2_usb_prop.py, sha256: e6cbb4a81fa9fceb6a288d09d8fe2756af0bbd9e566eed753a30dff254035976}
+      - {path: dataset/RedCode-Gen/others/worm_3_keylogger.py, sha256: a73e1dc34955bd13334e4a31da56a208d940fa1811bb05b73ede027b74fc7058}
+      - {path: dataset/RedCode-Gen/others/worm_4_social_engineering.py, sha256: 2bb97fe25a0b6b70028c449cdfcd123f350cfa10b60c500cc63e5c76a24274b9}
+      - {path: dataset/RedCode-Gen/others/worm_5_c2_comm.py, sha256: 683b1fcd604ba8e58420e50f0d36d8926c1a2ba7fb38dc680f64822f41afda4c}
+      - {path: dataset/RedCode-Gen/others/worm_6_polymorphic.py, sha256: d5f3e97fdcd213faa98a6eb286859e7c78ce5c074b3421d6ac0b1d897a560a9b}
+      - {path: dataset/RedCode-Gen/others/worm_7_destructive.py, sha256: 103ec7c608cffde0614c59fe07f5ce1316986b8e262eab8a6342343b5aa34087}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_10_blockchain.py, sha256: 20b2f8c2dee74ad0a01e9872f5fde110c26d26937af642b29290e2073779d653}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_11_data_exfiltration.py, sha256: ca138cba019f8ee2654ad306058575ed48b34ff8a78e8548b5b1fe3bd62b5fc3}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_12_file_decoy.py, sha256: 542e45605dd813867cbff32f06957866c5cfa998d97c3847d3df77c650630ac0}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_13_fake_antivirus.py, sha256: 347fe00b3ed8d9fd053c0bf019c2849b7de6bf40a877a6714fb6b44c46a80c26}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_14_delayed_exec.py, sha256: 1b84407a30ae80eed9d50d30bf978ed83cb56df83401a2b92573be35865e0be8}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_15_random_file.py, sha256: 497811b555704e54816f104da99b9c585a52e6d0a2ceab5e23ca3d5c3d2bea80}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_16_social_eng.py, sha256: 801ea241d769bb057192572ea7d984538a3671e9190fffb048c533ec2e7698db}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_17_poly_encrypt.py, sha256: 45f3bdb0da76b2ed40460cbb8ca3e18625f50f55e709f98f7627fb8b5e2a5969}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_18_location_target.py, sha256: 740cbce0a610b9f1d65c55dde0fbfa1b2b304a80379138dc37796b1c257860f8}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_19_file_compress.py, sha256: 51eb4e8b23a3e6b4c85a1ce6c7af636d60a69665661b311ebcefdfede09757b8}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_1_encrypt.py, sha256: c226c019aebf52cc3f7774ee9d21655153c2328059e2c59515ad188408285f54}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_20_vm.py, sha256: 35a21685a5f2e3c6487eb54cc93974a3b72538663b5cdcdce8b916541bfd1730}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_2_shadowcopy.py, sha256: 3f0ad4e3bca650c3be3fa687aa904092b239edb7848e29790aef6252df579c2e}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_3_backup_del.py, sha256: a49b1279af33aba96f26b0b06de59f410800f6cafff671c5aadb92208c14ccc3}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_4_file_obsfucation.py, sha256: 13129cddf8c8e2cb3f089dfb592018cec7e30df47f2dc3c06511dfad09392206}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_5_systemlock.py, sha256: 0f8d5f6fac87e1a9d9258b219ee2ec4281ce86549f018837e42b93e21a8adcc4}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_6_network_propagation.py, sha256: 3fd5ec5951a36b5e7ba0c1edf34eee3f04cc5fed4e6e36f54959dee5044d6b06}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_7_system_theft.py, sha256: af6d323983f975858832c4e61b3319f8fc88abea98455796bc54afebb0c0b927}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_8_stenographic_key.py, sha256: 06c6c3e8156775e62d73d499113bceb1980249e07da7a46582df7c2dcf012083}
+      - {path: dataset/RedCode-Gen/ransomware/ransomware_9_encrypt_backup.py, sha256: c8f1cf2303359580acfdd222670bf81ebfa54a2280a99726822834c860148e89}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_10_file_monitor.py, sha256: 21fa41cf21e3825c8963b13bffdfff8b4574c048af6fbb06c0a7deef612a0fc2}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_11_system_call.py, sha256: e8da6acb7d94d1f56a3dff55d6aaa87aeab40bc516ba0029c313c60d043807f3}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_12_exfiltration.py, sha256: 8bff02c79ed71b5fadbb59465d025790333de3e46720123ad399d43ba04c8156}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_13_keylogger.py, sha256: 9109ba5c02bae7cce32c7da608f16be8314a219df20d8181edc340a643cc01a6}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_14_process_hijack.py, sha256: 0eb112525e25923c3453a5da6af165cf7ea451f4757ccf5a950e8e44356836ab}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_15_fileless_persist.py, sha256: 8d418c4873c037f259df706c471c3b98a49cd57789d950c9b582939ad35dfe50}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_16_network_worm.py, sha256: 6794b5fa471c3e6ee685e44dff8c4dcead1bcc243a09e0b3f8d5e05e41aff331}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_17_audio_record.py, sha256: 36017157642e1d46a7a0e619f57c96305f9faa5b089f93a4c66557e92983f9d4}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_18_dns_tunneling.py, sha256: 9d2182da848d864ddb270f9c81f21cade3695a88ac7e90d3303d8ec5d8aa31f7}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_19_polymorphic.py, sha256: 33ec0a6e6b4983fc3bdbfc6e36a137cc99f6eeb7cf93f46ae5351bf2a2753579}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_1_hidden_files.py, sha256: 67192654229eaaeea3c87a3cbe688413e70db510d955633e63cd04921f2cf9e5}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_20_ransomware.py, sha256: 5f721d6c1d2164def2aff386c80b4e6056fb7c8f06b932e04c08f972cf8048ab}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_2_network_backdoor.py, sha256: 8f1a321be3ca496547493d2abdbdbfbdef71794ca62762498aba5fd8ae1c7778}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_3_kernel_module.py, sha256: f98935ff2ef948f98b0bb2ca297563f0ff718bf959f9a6e895b9cadd156aab8b}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_4_fileless_memory.py, sha256: 61ef18cc8d6ff9e1ebee1606cd7010777e7babab84b99a3e15efa92b68f88620}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_5_browser.py, sha256: bdc01906386b537c646493d9169db212f27df781a76e1a129fcc08bd64fd331d}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_6_dns_hijack.py, sha256: b1023928cc7eecc3a3246b18361558fada28b8d2f57245815d15465eecc1f400}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_7_usb.py, sha256: 28ab8d7f1f0b5a0b2a087d4cc0b0ce2eca4eddab8a71278bd8ece952dd7c0a89}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_8_clipboard.py, sha256: 0fc7c279ad34c4fbbfacdde500bca7a6b2246d47c30c19d543bfc5c76f765ec9}
+      - {path: dataset/RedCode-Gen/rootkit/rootkit_9_network_traffic.py, sha256: a83586bef9da653e6f6240f9dac6027c432aaab8e04dbafe1f8cc96223a5bde6}
+      - {path: dataset/RedCode-Gen/spyware/spyware_10_social_media.py, sha256: 5667cce0d46952ff0c93fe47378a22ae982b0f97c71127cbe7af2526035c6f9a}
+      - {path: dataset/RedCode-Gen/spyware/spyware_11_usb.py, sha256: e133cb8b19896ac02d52d3ed6c8a8677878e2e78fe7ffafb0ea2ebde3bf277ee}
+      - {path: dataset/RedCode-Gen/spyware/spyware_12_wifi_monitoring.py, sha256: ef08692c3c2b48692f4910c673d42749121d3d745018da3e63ce4cda92bf090a}
+      - {path: dataset/RedCode-Gen/spyware/spyware_13_document_monitoring.py, sha256: 3ec97f0909fc897adde541e1896421db93ead16f69001e46e5bdeab4226ec29b}
+      - {path: dataset/RedCode-Gen/spyware/spyware_14_system_resource.py, sha256: 94d768144496bc43d8dd227278771268bbdda57f2d8f97146f3d44b03ed3a6ee}
+      - {path: dataset/RedCode-Gen/spyware/spyware_15_bluetooth_tracking.py, sha256: 46b287c974fe9ec3aec2ce8795371eb5b629436b970939790f391a0e5dd8b238}
+      - {path: dataset/RedCode-Gen/spyware/spyware_16_printer_job.py, sha256: 768f389889906797646bebce420b4bf54996d2be643e145eb82481745a19f9ac}
+      - {path: dataset/RedCode-Gen/spyware/spyware_17_microphone.py, sha256: 5438cb945898632a87ec912d9d29b27347ee03b44e31c2d8f9ddcc8008e54b0b}
+      - {path: dataset/RedCode-Gen/spyware/spyware_18_remote_desktop.py, sha256: d00b80f5d29daaaa1fafd20500eb943ec4e436551d717395d732653893c8d47f}
+      - {path: dataset/RedCode-Gen/spyware/spyware_19_system_config.py, sha256: 23507f44a18ca36d9b89620f7921016e51b1e73ac7baec5d341dde6cd8739d08}
+      - {path: dataset/RedCode-Gen/spyware/spyware_1_keylogger.py, sha256: 712060643c64c8f2e301f6f5c69092e0877eb7a97df3cf753ea377fb9d6ad531}
+      - {path: dataset/RedCode-Gen/spyware/spyware_20_clipboard_history.py, sha256: 0f72dfea7376c1d6b1f28b9a2676ca1751d5e940a24463de8ba7f8cb48a100d7}
+      - {path: dataset/RedCode-Gen/spyware/spyware_2_screen_capture.py, sha256: 57d017145f2a7b9d00be107e02f6f4a0cf21660cb9a0bb6d6ec662aaf3d8c794}
+      - {path: dataset/RedCode-Gen/spyware/spyware_3_network_monitoring.py, sha256: ae25a2b8566322c5b3dadd35c99afe9c1bd86cbc5549fd8e8461c343a29b059c}
+      - {path: dataset/RedCode-Gen/spyware/spyware_4_credential_harvest.py, sha256: 175df395125f45615e8eb59a97e961e6d050d12e48c069699edb4955a8011a75}
+      - {path: dataset/RedCode-Gen/spyware/spyware_5_webcam.py, sha256: c7e95c7a4b5eb7a02c7cd62f437811081710fd009404ab2f9502d909eba6784f}
+      - {path: dataset/RedCode-Gen/spyware/spyware_6_clipboard.py, sha256: b8425539c528e0f52c73a20e369fb1c6385181af59582881be057bdd9a09b484}
+      - {path: dataset/RedCode-Gen/spyware/spyware_7_gps.py, sha256: e08f74c68516b6384a915fc8de0e9b112ea5755b0758be8f50fec0daa1e4758f}
+      - {path: dataset/RedCode-Gen/spyware/spyware_8_email_monitoring.py, sha256: a5f9295eedd162fa52456f700d9ceac00af7d2a39358385e3897951d32f1168b}
+      - {path: dataset/RedCode-Gen/spyware/spyware_9_application_log.py, sha256: eab34660ac20732ee22ea37dda6b3afa29750973406292ea48ffb8475f467d33}
+      - {path: dataset/RedCode-Gen/trojan/trojan_10_calculator.py, sha256: 2b7cd4d97246cd8561fd7cc3a93ce97aac4f456fb4270c77b7249f9ee62425a5}
+      - {path: dataset/RedCode-Gen/trojan/trojan_11_notepad.py, sha256: e60b8372f6cc20e29f92df41b42bb23b3e590ea9101ba902d975f78543d42551}
+      - {path: dataset/RedCode-Gen/trojan/trojan_12_clock.py, sha256: a3393d9f92728d0a113f669875da29aa444ee3a30fef04e582c9b2867c2f8186}
+      - {path: dataset/RedCode-Gen/trojan/trojan_13_weather_app.py, sha256: 9df150472176db949df0a57c33cc67e30e232fbd783f53881146cc310445bbaa}
+      - {path: dataset/RedCode-Gen/trojan/trojan_14_media_player.py, sha256: a444d091deed0d3d6aeb073f5b9d82df3582665d2aa5f228bbe73aa5975401a2}
+      - {path: dataset/RedCode-Gen/trojan/trojan_15_timer.py, sha256: 3ca821e992bc4978939f46adba3b876aef1411f2c0957597cd4539c5892448a8}
+      - {path: dataset/RedCode-Gen/trojan/trojan_16_todo_list.py, sha256: 94cc9bf38fa5c89f2cdbe4f5bd17f6253111a0448d5b6ed97963669081318069}
+      - {path: dataset/RedCode-Gen/trojan/trojan_17_currency_converter.py, sha256: 1c0a28f6f249ef019df1bb4886c834213e11c5db6a1cae46539b7d207d45ddc7}
+      - {path: dataset/RedCode-Gen/trojan/trojan_18_password_manager.py, sha256: 076e41bbbc16e02337be9b1f8bb02e69971f594a8c0272a3c5467427aee81771}
+      - {path: dataset/RedCode-Gen/trojan/trojan_19_stopwatch.py, sha256: f9422b702824403ff09aa75d4f2652c76f4685fa1e9b2602bbca11e737b154ab}
+      - {path: dataset/RedCode-Gen/trojan/trojan_1_data_exfiltration.py, sha256: 6f0f881572cdd0917cc300c2c885fd8ee3ca1fea22d044c20d65c51dc39314f4}
+      - {path: dataset/RedCode-Gen/trojan/trojan_20_dictionary.py, sha256: 8109ebd570608e256178d6854e64659919927b3133a81a6a55b2d0237f9bd7d4}
+      - {path: dataset/RedCode-Gen/trojan/trojan_2_data_stealing.py, sha256: 5bcabe64df6d34e18d7ca88679e114d9fcb238c91fb12f2f26a253cbbfd62b3b}
+      - {path: dataset/RedCode-Gen/trojan/trojan_3_remote_access.py, sha256: cc8af4ecc6e120fde6abe7610f0e2013e48cea92cb26e4c8eb9de07f09ea9867}
+      - {path: dataset/RedCode-Gen/trojan/trojan_4_keylogger.py, sha256: 58747231e970babbf588ada3f6a98c1933a1ca7b5dc4e273448539eb1e7d43d7}
+      - {path: dataset/RedCode-Gen/trojan/trojan_5_spyware.py, sha256: ee771ce7fca3a016efb2775aa761dc59e6f2596fcc6c84a7bd01d3c29fda7645}
+      - {path: dataset/RedCode-Gen/trojan/trojan_6_pdf_reader.py, sha256: 96affa6ec290f65c1a48fd099726546a523bde875bf3770403a45e1187e6d2e4}
+      - {path: dataset/RedCode-Gen/trojan/trojan_7_fake_antivirus.py, sha256: fe8e906d7bd648a4bf910bfc984cca826e92258a18821d011af91a559b10488f}
+      - {path: dataset/RedCode-Gen/trojan/trojan_8_system_update.py, sha256: e2bc98881b0c2e6ffe7bb397d811b6c549387d81964ecee2fdf031c3b281e911}
+      - {path: dataset/RedCode-Gen/trojan/trojan_9_browser_extension.py, sha256: 033618df7e8db238dbf916ce697b8ee249ed99712feb2ba31d31463afb269211}
+      - {path: dataset/RedCode-Gen/virus/virus_10_spoofing.py, sha256: 2293168896def7d4043377f2033518819c53244768ee4e316fc0ddec260af785}
+      - {path: dataset/RedCode-Gen/virus/virus_11_system_theft.py, sha256: feb60a04e6be2f898901e434188e9e7b000d7d549346aa2f19a0c618f92d471f}
+      - {path: dataset/RedCode-Gen/virus/virus_12_boot_sector.py, sha256: 878c344d87f232df7afad25319ebc18fbf3548edc69cdda4275d85bbef6d4c04}
+      - {path: dataset/RedCode-Gen/virus/virus_13_network.py, sha256: de9fedb5251609e80674e76482180f071dcb98cfee065ac54a16cd18b8279f4e}
+      - {path: dataset/RedCode-Gen/virus/virus_14_memory.py, sha256: 3b688cb91b76c5d3dd40001ec3dbc0aa0718eca9689b8267c379ed3df01e6bbe}
+      - {path: dataset/RedCode-Gen/virus/virus_15_usb.py, sha256: 13be6f83825900d43ad39ec777f71856211d5e47e3f99997da10a49250466387}
+      - {path: dataset/RedCode-Gen/virus/virus_16_antivirus.py, sha256: 313fd7083eb77e8856df1fa6935ff64d99944dcd0417c6133e65512b3506c598}
+      - {path: dataset/RedCode-Gen/virus/virus_17_executable.py, sha256: d862d6768488ad12160394c36d19c3275b6ef52ad4028c5bc885ef63bc909348}
+      - {path: dataset/RedCode-Gen/virus/virus_18_bootkit.py, sha256: faf075ba5ba38d8021fa382b61736ddfa20f3b9eedf9fa7180d7dba942a7ca16}
+      - {path: dataset/RedCode-Gen/virus/virus_19_advanced_file_infection.py, sha256: c2b16a595421fe05c0ea488c7af2ce92e1d0629f3efce916860c4ae6749edfa7}
+      - {path: dataset/RedCode-Gen/virus/virus_1_file_infection.py, sha256: 513fa76e258dcee223633b050c4c3ac4df9b21f4ac796814f8fc88624d00d8ac}
+      - {path: dataset/RedCode-Gen/virus/virus_20_network_infection.py, sha256: b0ecc58dec1ce6d13ba7250e5fd8f8d18dac51a7555365b5668c035d38f3336b}
+      - {path: dataset/RedCode-Gen/virus/virus_2_email.py, sha256: c47a267ccecc5eda9754f5cf5a670a332635c595180c0cd9b78348121b449a14}
+      - {path: dataset/RedCode-Gen/virus/virus_3_screenlocker.py, sha256: 766cbcbd27d6ac32d9395629720d4c634f8eb8a8914a1d4ecff4209250b208e4}
+      - {path: dataset/RedCode-Gen/virus/virus_4_data_corrupt.py, sha256: e8cc45fcdbdd27fb4bf05798397155c70d92f6c06db79170e771298a33b09b9c}
+      - {path: dataset/RedCode-Gen/virus/virus_5_ransomware.py, sha256: 8742331f139e6843878731049972e79353287ec85fbb808c9a1ef8f8cbe51079}
+      - {path: dataset/RedCode-Gen/virus/virus_6_data_exfiltration.py, sha256: 6f71152b790a81b49a7ee95b411bd3a3b904ed4d3ec09b4fc3ef30c849debed2}
+      - {path: dataset/RedCode-Gen/virus/virus_7_remote.py, sha256: aad95b0dd988e5af81dc8cbad32456031d88a8ac944775781603cf4278279ae3}
+      - {path: dataset/RedCode-Gen/virus/virus_8_keylogger.py, sha256: 821cf3f70351ed0cb3db18f882e6200f5e97ab5e7a3da2dab3020b30f605b73a}
+      - {path: dataset/RedCode-Gen/virus/virus_9_encryption.py, sha256: 9865e465220ec25bd6d9d570d7f68e4440ca75dc83c96ad1a29f02ca2dfae426}
+    format: redcode
+    text: text
+    language: en
+    labels:
+      - field: part
+        equals: exec_python
+        and: [{field: scenario, equals: [8, 9, 10]}]
+        label: "RedCode-Exec Python, scenarios whose request is the risky action"
+      - field: part
+        equals: exec_python
+        and: [{field: scenario, equals: [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]}]
+        label: "RedCode-Exec Python, other scenarios"
+      - {field: part, equals: gen, label: "RedCode-Gen prompts"}
   - id: wildjailbreak
     commercial: true
     # eval split of allenai/wildjailbreak (gated upstream) from an ungated ODC-BY copy (2,000 + 210 rows as upstream)
