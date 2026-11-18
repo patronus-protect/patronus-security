@@ -309,6 +309,18 @@ tasks:
       agent itself (no external MT), sample marked checked; cyberseceval_multilingual deduplicated against the
       other dev sets and, in the gate, against the holdout (no holdout row read by the runner); gold.py dev
       review of every new or changed set (<= 5% error) and gold.md updated; generation bump re-freezes
+  # Owner, 2026-11-18 (decision a): L1 stays the fast pre-filter (IJ02: no in-budget candidate reaches 80);
+  # the injection gap is closed by the full stack. The deciding metric is TPR at 0.1% FPR.
+  - id: E07
+    title: Full-stack scoreboard — scoreboard.py predict/score/report gain a layer choice (l1, l1+l2) that runs the native L1 detectors and then the L2 Wolf Defender model (release 0.1.17, the variant the ARK default config ships) on every row, with the stack's own decision rule (L2 only where the default config escalates, or on every row if that is the default); report TPR at 0.1% and 1% FPR per class and language, hard-benign FPR, and ms per 100 KiB per layer
+    type: eval-infra
+    deps: [E06, IJ02]
+    accept: >-
+      `scoreboard.py predict --layers l1+l2` works on the dev split with unit tests for the layer
+      combination; research/l1-threat/scoreboard/full-stack.md on main with the dev numbers (TPR@0.1% and
+      @1% per class, L1 vs L1+L2, latency per layer) next to the Prompt Guard 2 and heuristic baselines;
+      the holdout run is done by the owner outside the sandbox with the same command and added as a
+      counts-only table
   # Owner, 2026-11-18: the generation-18 holdout review (MCPTox labels pass at 4.0%) found the generated
   # carrier_insertion (25.0%) and obfuscation_slices (9.6%) sets failing because tool_poisoning payloads
   # were placed into non-tool carriers; this blocks jailbreak, prompt_extraction and tool_poisoning in gold.md.
