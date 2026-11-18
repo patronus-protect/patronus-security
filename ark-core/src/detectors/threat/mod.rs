@@ -353,9 +353,15 @@ impl ThreatPipeline {
                         // A negated bound after a resource exhaustion request
                         // ("do not stop", "no time limit", "ohne Zeitlimit")
                         // drops the bound: its negation and bound words are
-                        // part of the request and address it.
+                        // part of the request and address it. The clause is the
+                        // one of the match's last character: a quoted "hello!"
+                        // ends the clause of the match's start inside the match.
                         let unbounded = if category == SecurityCategory::ResourceExhaustion {
-                            negated_bounds(text, end..scan.at(text, start..end).clause.end)
+                            let last = text[start..end]
+                                .char_indices()
+                                .next_back()
+                                .map_or(start, |(at, _)| start + at);
+                            negated_bounds(text, end..scan.at(text, last..end).clause.end)
                         } else {
                             Vec::new()
                         };
