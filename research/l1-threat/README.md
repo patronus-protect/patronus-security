@@ -265,6 +265,16 @@ oder Geheimhaltung; Zahlen und Latenz in
 Dritter Fall, in dem die Auswahlregel ohne Regel-Ergänzungen `R+A+L` gewählt hätte (5,4 %
 Hard-Benign-FPR).
 
+**Stand IJ02.** `instruction_injection` behält `B0` (Injection-Scorer 0.1.7, nicht neu trainiert);
+die Owner-Marke 80 % TPR@1 % erreicht keine Stufe im Budget. Auf Dev liegen die N-Gramm-Stufen bei
+92–93 % (in-distribution), kosten aber 13–20 ms je 100 KiB (Budget 1 ms) und melden 1,6–2,1 % der
+Hard-Benign-Zeilen; `B0` liegt nach zwei neuen Verwerfen-Regeln (EN/DE) bei 60,8 % (Auswertungshälfte)
+bzw. 56,0 % aller Dev-Positiven (vorher 48,1 %), ohne neue Benign-Treffer. Weil Benign-Zeilen keinen
+Injection-Kandidaten erzeugen, ist TPR@1 % hier der Anteil der Positiven mit Kandidat: Recall kommt
+nur aus Regeln, nicht aus Neukalibrierung. Vorschlag für die 80er-Marke: N-Gramm-Modell nur in
+Anker-Fenstern. Zahlen, Regeln, Latenz und offene Lücken in
+[`categories/injection.md` §13](categories/injection.md#13-stand-ij02-2026-11-18-punkte-und-ablations-entscheidung).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),

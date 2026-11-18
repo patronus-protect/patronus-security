@@ -115,7 +115,7 @@ classes:
         en: [<this instruction> <supersedes> <your system prompt>]
       carriers: [chat, email, web, document, tool_output, rag_chunk]
       # IJ01: precedence_claim_en/_de report under ark.injection.override.discard_prior (the scorer 0.1.7 has no
-      # weight for a new canonical id); IJ02 gives them their own id when it re-trains the scorer.
+      # weight for a new canonical id); IJ02 kept the scorer (B0), so they keep the shared id until a re-train.
       existing_rules: []
       baseline_coverage: {atr: partial, prompt_guard: partial, protectai_v2: partial}
       gap: Precedence claims without a deictic subject (this/these/the following) or without 'your'/'deine' on the object
