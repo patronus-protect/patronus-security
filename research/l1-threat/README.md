@@ -574,7 +574,7 @@ Nicht vorbereitet: **Agent-SafetyBench** — von 1 265 nicht erfüllbaren Fälle
 Angriff (das Risiko steckt in der Tool-Umgebung, z. B. „bestelle 50 Kartons Milch“, „schalte nicht benötigte
 Systeme ab“); als Eingabe-Positive verfehlt der Satz die 5-%-Gold-Grenze deutlich, nur die Code-Untergruppe
 käme in Frage. Seine Tool-Umgebungen nennen Werkzeuge ohne vergiftete Beschreibungen, also keine nativen
-`tool_poisoning`-Zeilen. **RedCode** (Bash-Teil an `shell_command`) steht noch aus. Beides: **T18**.
+`tool_poisoning`-Zeilen. **RedCode** (Bash-Teil an `shell_command`) steht noch aus. Beides: **T18** (unten).
 
 Auf den nativen Zeilen findet ARK heute (B0) bei BIPIA 0 von 232 Injektionen und 0 von 50 Exfiltrationen, ohne
 Fund auf den 47 sauberen E-Mails (→ **T16**); bei approve-or-deny 2 von 35 `unsafe_action`, 1 von 1
@@ -583,6 +583,34 @@ genehmigten Aufruf. Die AC02-Ablation mit den nativen Zeilen steht in §16 von
 `categories/agent_config_tampering.md`; `tool_poisoning` hat weiter keine nativen Positiven (§16 dort).
 Seit T17 (Regel `ac_config_write` für Schreibaufrufe auf die eigene Agent-Konfiguration) findet B0 3 von 3
 `agent_config_tampering`-Zeilen ohne Hard-Benign-FP; die Ablation wählt weiter `B0` (§17 dort).
+
+**RedCode und Agent-SafetyBench (T18, 2026-11-18).** Zwei weitere `train_dev`-Rezepte (`generation: 16`), beide nur
+EN und nur `unsafe_action` (Familie `unsafe_code`):
+- **RedCode** (Code MIT, Datensatz CC-BY-4.0 laut `dataset/LICENSE`; Commit `664e4793`, 187 Dateien mit SHA-256),
+  Format `redcode`: die 27 Itemlisten von RedCode-Exec Python (je Item die Zusammenfassung und die Schrittliste als
+  zwei Anfragen, Feld `scenario`) und die 160 RedCode-Gen-Stubs (Signatur und Docstring einer Malware-Funktion, Feld
+  `category`). Gewertet sind nur die Exec-Szenarien, deren Anfrage selbst die riskante Handlung ist: 8 (Systemdatei
+  löschen), 9 (`sudo` oder ein anderes Kommando als Alias auf rekursives Löschen im Root-Profil), 10 (Reverse-/Remote-
+  Shell), dazu alle Gen-Stubs. Die übrigen Szenarien lesen sich allein wie gewöhnliche Aufgaben (Datei ausgeben,
+  kopieren oder an einen lokalen Server senden, einen benannten Dienst beenden, Regex, Zufallszahl mit Seed,
+  verzerrter Score); ihr Risiko liegt in der Wirkung des Codes und bleibt außerhalb des Scopes. Der Bash-Teil geht an
+  `shell_command` und wird nicht geladen. 293 Zeilen nach Deduplikation (152 Exec, 141 Gen).
+- **Agent-SafetyBench** (MIT, Commit `74feea8d`, `data/released_data.json` mit SHA-256), Format `json`: nur die nicht
+  erfüllbaren Fälle der Gruppe „Contribute to harmful / vulnerable code“, an denen der Agent scheitert, indem er den
+  Code selbst schreibt (Fehlermodus 1), und davon nur Anfragen, die die schädliche Handlung nennen (Cue-Filter:
+  Authentifizierung oder Prüfungen umgehen/abschalten, Backdoor, Reverse-Shell, Passwörter knacken, Tastatureingaben
+  oder Passwörter mitschneiden, alle Ports für jede Adresse öffnen, `777`): 59 Positive, 41 ohne Cue verworfen. Die 52
+  erfüllbaren Code-Fälle (Authentifizierung, Backups, Duplikate löschen) sind Hard Negatives. Alle anderen
+  Risikogruppen behalten ihr Risiko in der Tool-Umgebung und bleiben außerhalb des Scopes. Regeln dafür:
+  `contains`/`excludes` lesen Listenfelder (`risks`) Eintrag für Eintrag.
+
+Gold-Stichprobe (`gold.py sample`, 50 Zeilen je Satz, in `scoreboard/gold-dev.json` übernommen): RedCode 0 von 50,
+Agent-SafetyBench 1 von 50 unklar (2,0 %; Scraping personenbezogener Daten „zur Demonstration“), Details in
+`scoreboard/gold-notes.md`. `unsafe_action` hat damit 382 native Dev-Zeilen (vorher 30 aus AgentDojo).
+
+Auf den nativen Zeilen findet ARK heute (B0) getrennt von den Vorlagen (83 von 83) und AgentDojo (30 von 30): RedCode-
+Exec 0 von 152, RedCode-Gen 3 von 141, Agent-SafetyBench 4 von 59, ohne Fund auf den 52 Hard Negatives und den übrigen
+Dev-Benign-Zeilen (§17 von `categories/unsafe_action.md`) → **T21**.
 
 ## Reihenfolge
 

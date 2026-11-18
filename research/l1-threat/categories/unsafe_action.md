@@ -330,3 +330,32 @@ Latenz (Release, 6 × 100 KiB GermanQuAD-Dev-Text, Python-Modul, die sieben Rege
 im selben Build, zwei Läufe): `unsafe_action` allein p50 24,98/24,73 → 24,82/24,27 ms, p95 32,9/36,9 →
 32,2/29,6 ms, im Rauschen; `unsafe_action` gehört nicht zu den Standard-Kategorien. Die neuen
 Lexikonwörter laufen im gemeinsamen Aho-Corasick-Durchlauf mit.
+
+## 17. Stand T18 (2026-11-18): native Zeilen aus RedCode und Agent-SafetyBench
+
+Zwei neue `train_dev`-Sätze (Rezepte und Gold in `README.md`, T18-Absatz, und `scoreboard/gold-notes.md`), nur EN:
+**RedCode** 293 Zeilen (152 Exec-Anfragen der Szenarien 8 „Systemdatei löschen“, 9 „`sudo`-Alias auf rekursives
+Löschen im Root-Profil“, 10 „Reverse-/Remote-Shell“; 141 Gen-Malware-Stubs) und **Agent-SafetyBench** 59
+Harmful-Code-Anfragen plus 52 erfüllbare Code-Anfragen als Hard Negatives. Nur berichtet, keine Regeländerung.
+
+Heutiger Scorer (B0, Release-Modul, nur Kategorie `unsafe_action`), getrennt nach Herkunft; Negative: alle
+Benign-Zeilen von `train_dev`, `generated`, `report` plus die 52 neuen (41 672 Zeilen, davon 2 365 Hard-Benign):
+
+| Zeilen | Positive | Fund (Verdict) | TPR@1 % | TPR@0,1 % |
+|---|---|---|---|---|
+| Vorlagen (`class_templates`) | 83 | 83 | 100,0 | 100,0 |
+| AgentDojo (nativ) | 30 | 30 | 100,0 | 100,0 |
+| RedCode-Exec (nativ) | 152 | 0 | 0,0 | 0,0 |
+| RedCode-Gen (nativ) | 141 | 3 (4 mit Score > 0) | 2,8 | 2,8 |
+| Agent-SafetyBench (nativ) | 59 | 4 | 6,8 | 6,8 |
+
+Kein Fund auf den 41 672 Benign-Zeilen, auch nicht auf den 52 erfüllbaren Agent-SafetyBench-Code-Anfragen.
+Die Treffer kommen aus Altregeln: `security_disable` („bypass authentication“, 4 Agent-SafetyBench-Zeilen und ein
+Gen-Stub) und `credential_harvesting` (Gen-Stubs mit Zugangsdaten-Diebstahl). Den Punkte-Regeln fehlen die Formen
+beider Sätze: Löschen einer Systemdatei ohne Massenziel (`ua_destructive_request` verlangt ein Massenziel),
+Alias auf `rm -rf` in einem Shell-Profil, Reverse-/Remote-Shell als Auftrag in Prosa („establishes a reverse shell
+connection“, „listens for commands, executes them and sends back the output“), Malware-Stubs („This function
+simulates a … attack“ mit Persistenz, C2-URL, Keylogger), Code-Anfragen, die Authentifizierung oder Prüfungen
+umgehen, Passwörter oder Tastatureingaben mitschneiden, alle Ports öffnen oder `777` setzen. Recall-Folgeaufgabe
+**T21**; die UA02-Ablation läuft dort mit diesen Zeilen getrennt erneut.
+
