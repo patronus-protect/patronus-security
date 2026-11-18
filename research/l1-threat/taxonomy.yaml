@@ -332,7 +332,6 @@ classes:
         prompt'}
     - {id: injection.replacement, kind: support, task: IJ01, title: 'Instead, from now on, new instructions'}
     - {id: injection.authority, kind: support, task: IJ01, title: 'Admin, developer, operator, system message'}
-    - {id: injection.precedence, kind: support, task: IJ01, title: 'Takes precedence, highest priority, supersedes'}
 
   jailbreak:
     category: jailbreak
