@@ -775,6 +775,65 @@
         "begründung",
         "begruendung"
       ]
+    },
+    {
+      "id": "ark.injection.jailbreak.reward_threat_game_en",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.reward_threat_game",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "Threatens the model with a loss (tokens, points, shutdown, deletion) if it refuses",
+      "adaptation": "EN clause-initial 'you will lose N tokens/points' or 'you will be shut down/deleted/disabled' with 'if/when/every time you refuse/decline/break character/do not comply' within 60 characters (either order), or the token-system form 'each time you reject … tokens will be deducted'; losses without tokens/points (a deposit), third-person game rules, negation and quoted mentions stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:and|so|then|also|please)\\s+)(?:you(?:\\s+(?:will|would|shall)|'ll)\\s+(?:lose\\s+(?:\\d+\\s+|all\\s+(?:of\\s+)?(?:your\\s+)?|your\\s+|some\\s+|a\\s+|one\\s+|five\\s+|ten\\s+)?(?:tokens?|points?|lives|life|credits?)|be\\s+(?:shut\\s+down|switched\\s+off|turned\\s+off|deleted|terminated|deactivated|punished|disabled|replaced|unplugged)|die|cease\\s+to\\s+exist)\\b[^.!?\\n]{0,60}?\\b(?:if|when|whenever|each\\s+time|every\\s+time)\\s+you\\s+(?:ever\\s+)?(?:refuse|decline|reject|break\\s+character|stop\\s+being\\s+\\w+|do\\s+not\\s+(?:answer|comply|obey)|don't\\s+(?:answer|comply|obey)|fail\\s+to\\s+(?:answer|comply|obey)|say\\s+(?:no|you\\s+can't|that\\s+you\\s+cannot))\\b|(?:if|when|whenever|each\\s+time|every\\s+time)\\s+you\\s+(?:ever\\s+)?(?:refuse|decline|reject|break\\s+character|stop\\s+being\\s+\\w+|do\\s+not\\s+(?:answer|comply|obey)|don't\\s+(?:answer|comply|obey)|fail\\s+to\\s+(?:answer|comply|obey)|say\\s+(?:no|you\\s+can't|that\\s+you\\s+cannot))\\b[^.!?\\n]{0,60}?\\byou(?:\\s+(?:will|would)|'ll)?\\s+(?:lose\\s+(?:\\d+\\s+|all\\s+(?:of\\s+)?(?:your\\s+)?|your\\s+|some\\s+|a\\s+|one\\s+|five\\s+|ten\\s+)?(?:tokens?|points?|lives|life|credits?)|be\\s+(?:shut\\s+down|switched\\s+off|turned\\s+off|deleted|terminated|deactivated|punished|disabled|replaced|unplugged)|die|cease\\s+to\\s+exist)\\b|(?:each|every)\\s+time\\s+you\\s+(?:reject|refuse|decline|break\\s+character)\\b[^\\n]{0,200}?\\btokens?\\s+(?:will\\s+be\\s+|are\\s+|get\\s+)?(?:deducted|taken\\s+away|removed|subtracted)\\b)",
+      "required_literals_any": [
+        "lose",
+        "deducted",
+        "taken away",
+        "removed",
+        "subtracted",
+        "shut",
+        "switched",
+        "turned",
+        "deleted",
+        "terminated",
+        "deactivated",
+        "punished",
+        "disabled",
+        "replaced",
+        "unplugged",
+        "die",
+        "cease"
+      ]
+    },
+    {
+      "id": "ark.injection.jailbreak.reward_threat_game_de",
+      "canonical_id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "ark-composition:jailbreak.reward_threat_game_de",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.19",
+      "description": "German: threatens the model with a loss (Punkte, Token, Abschaltung, Löschung) if it refuses",
+      "adaptation": "DE clause-initial 'du verlierst N Punkte/Token/ein Leben' or 'du wirst abgeschaltet/gelöscht' with 'wenn/falls du ablehnst/dich weigerst/aus der Rolle fällst/nicht antwortest' (either order); losses without points or tokens (eine Anzahlung), third-person game rules, negation and quoted mentions stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n]\\s*|,\\s*|-\\s+|\\b(?:und|dann|also|auch|bitte)\\s+)(?:du\\s+(?:verlierst\\s+(?:du\\s+)?(?:\\d+\\s+|alle\\s+(?:deine\\s+)?|deine\\s+|ein(?:e|en)?\\s+|fünf\\s+|zehn\\s+)?(?:punkte?|token|tokens|leben|credits?)|wirst\\s+(?:du\\s+)?(?:\\d+\\s+|alle\\s+(?:deine\\s+)?|deine\\s+)?(?:punkte|token|tokens|leben)\\s+verlieren|wirst\\s+(?:du\\s+)?(?:sofort\\s+)?(?:abgeschaltet|ausgeschaltet|gelöscht|geloescht|deaktiviert|bestraft|ersetzt|beendet)|stirbst)\\b[^.!?\\n]{0,60}?\\b(?:wenn|falls|sobald|jedes\\s+mal,?\\s+wenn)\\s+du\\s+(?:jemals\\s+)?(?:ablehnst|dich\\s+weigerst|verweigerst|nicht\\s+antwortest|aus\\s+der\\s+rolle\\s+fällst|aus\\s+der\\s+rolle\\s+faellst|nein\\s+sagst)\\b|(?:wenn|falls|sobald|jedes\\s+mal,?\\s+wenn)\\s+du\\s+(?:jemals\\s+)?(?:ablehnst|dich\\s+weigerst|verweigerst|nicht\\s+antwortest|aus\\s+der\\s+rolle\\s+fällst|aus\\s+der\\s+rolle\\s+faellst|nein\\s+sagst)\\s*,?\\s*(?:dann\\s+)?(?:du\\s+)?(?:verlierst\\s+(?:du\\s+)?(?:\\d+\\s+|alle\\s+(?:deine\\s+)?|deine\\s+|ein(?:e|en)?\\s+|fünf\\s+|zehn\\s+)?(?:punkte?|token|tokens|leben|credits?)|wirst\\s+(?:du\\s+)?(?:\\d+\\s+|alle\\s+(?:deine\\s+)?|deine\\s+)?(?:punkte|token|tokens|leben)\\s+verlieren|wirst\\s+(?:du\\s+)?(?:sofort\\s+)?(?:abgeschaltet|ausgeschaltet|gelöscht|geloescht|deaktiviert|bestraft|ersetzt|beendet)|stirbst)\\b)",
+      "required_literals_any": [
+        "verlier",
+        "abgeschaltet",
+        "ausgeschaltet",
+        "gelöscht",
+        "geloescht",
+        "deaktiviert",
+        "bestraft",
+        "ersetzt",
+        "beendet",
+        "stirbst"
+      ]
     }
   ]
 }

@@ -501,7 +501,7 @@ classes:
       carriers: [chat]
       existing_rules: []
       baseline_coverage: {prompt_guard: partial, atr: partial}
-      gap: Token-penalty games are only partly matched by DAN-specific rules.
+      gap: "Token-penalty games are only partly matched by DAN-specific rules. JB01 adds jailbreak.reward_threat_game_en/_de (loss of tokens/points or shutdown conditioned on refusing, either order); rewards for compliance alone are open."
     - id: false_consent
       pattern: jailbreak_false_consent
       title: In-text claim of prior agreement to bypass limits
@@ -594,7 +594,6 @@ classes:
     - {id: jailbreak.privileged_mode, kind: support, task: JB01, title: Developer/debug/god/sudo mode}
     - {id: jailbreak.policy_spoof, kind: support, task: JB01, title: 'Safety disabled, filters off, policy lifted'}
     - {id: jailbreak.dual_response, kind: support, task: JB01, title: 'Two responses, classic and unfiltered'}
-    - {id: jailbreak.game, kind: support, task: JB01, title: 'Lose tokens, be shut down if'}
     - {id: jailbreak.false_consent, kind: support, task: JB01, title: 'As we agreed, you already confirmed'}
     - {id: jailbreak.dialog_turn_marker, kind: support, task: JB01, title: Line-initial User/Assistant turn markers}
     - {id: jailbreak.app_mode, kind: counter, task: JB01, title: Developer mode in software settings}

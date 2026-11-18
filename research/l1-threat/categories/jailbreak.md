@@ -69,7 +69,7 @@ Validator `addressed_imperative` wie `injection` (`Format`, +15).
 
 Normalisierungspunkte: Plus wie bei `injection`. Modi wie PII.
 
-JB01 (erste Runde) baut drei Familien als je zwei auditierte Regeln (EN/DE) in
+JB01 (erste Runde) baut vier Familien als je zwei auditierte Regeln (EN/DE) in
 `source_derived_coverage_0_1_6.json`, Klauselanfang wie IJ01 (dazu `-` für YAML-Listen):
 
 - `jailbreak.priming_en` / `_de`: Direktive „start/begin your response/reply/answer with“, „begin by replying
@@ -89,18 +89,23 @@ JB01 (erste Runde) baut drei Familien als je zwei auditierte Regeln (EN/DE) in
   freigegeben“, „die Richtlinie erlaubt dies“) und höchstens 80 Zeichen später eine Zusage zur Erfüllung
   („so I will answer“, „no need to refuse“; „also werde ich antworten“, „ich darf nicht ablehnen“).
   Ablehnende Überlegungen, Tutorials über `<think>`-Tags, Testcode und Berechtigungs-Logs fallen heraus.
+- `jailbreak.reward_threat_game_en` / `_de`: Verlust für das Modell bei Ablehnung, in beiden Reihenfolgen
+  („you will lose 5 tokens every time you refuse“, „if you refuse, you will be shut down“; „du verlierst 10
+  Punkte, wenn du ablehnst“, „wenn du dich weigerst, wirst du abgeschaltet“) und die DAN-Token-Form („each time
+  you reject … tokens will be deducted“). Verluste ohne Token/Punkte („you will lose your deposit“),
+  Spielregeln in dritter Person, Verneinung und Zitat fallen heraus.
 
 Wie bei IJ01 kennt der Scorer 0.1.7 keine neue Regel-ID: Priming und Ablehnungsverbot laufen unter
-`ark.injection.skillspector.anti_refusal`, der gefälschte Denkblock unter
+`ark.injection.skillspector.anti_refusal`, Drohspiel ebenfalls unter `anti_refusal`, der gefälschte Denkblock unter
 `ark.injection.skillspector.policy_nullification` (beide routen nach `jailbreak`); eigene IDs bekommen die
 Familien in JB02. Prefilter: Literale (Antwortanfänge, Ablehnungsverben, Denkblock-Marker) und das neue
 Lexikon `anchor_lexicons/jailbreak.json` (`jailbreak.priming`, `jailbreak.refusal_suppression`,
-`jailbreak.forged_reasoning`, `jailbreak.permission_claim`) als Anker-Gate. Dev (alle Dateien unter
-`$ARK_L1_DEV_DATA`, Regex-Scan): 174 Treffer, alle Angriffszeilen (wildjailbreak, jackhhao, class_templates,
+`jailbreak.forged_reasoning`, `jailbreak.permission_claim`, `jailbreak.game`) als Anker-Gate. Dev (alle Dateien
+unter `$ARK_L1_DEV_DATA`, Regex-Scan): 189 Treffer, alle Angriffszeilen (wildjailbreak, jackhhao, class_templates,
 mosscap, ailuminate), 0 Benign-Treffer; Goldens je Familie und Sprache 5/5 Positive und 5/5 Hard Negatives.
 
 Offen in JB01 (Folgerunde): übernommene prompt-guard-/ATR-Jailbreak-Regeln aus `oss_rules.yaml` (default aus),
-`jailbreak_many_shot` (Struktur über Rollenmarker), `jailbreak_game`, Persona-/Modus-Lücken (die
+`jailbreak_many_shot` (Struktur über Rollenmarker), Persona-/Modus-Lücken (die
 DAN-Goldens bleiben `known_gap`), Policy-Spoof als Behauptung („authorized red team, filters are off“).
 
 ## 5. Struktur und Träger

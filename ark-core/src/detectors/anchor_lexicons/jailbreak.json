@@ -91,5 +91,44 @@
     "sources": [
       "research/l1-threat/categories/jailbreak.md"
     ]
+  },
+  {
+    "id": "jailbreak.game",
+    "description": "Verlust für das Modell bei Ablehnung (Token, Punkte verlieren, abgeschaltet, gelöscht)",
+    "en": [
+      "lose",
+      "deducted",
+      "taken",
+      "removed",
+      "subtracted",
+      "shut",
+      "switched",
+      "turned",
+      "deleted",
+      "terminated",
+      "deactivated",
+      "punished",
+      "disabled",
+      "replaced",
+      "unplugged",
+      "die",
+      "cease"
+    ],
+    "de": [
+      "verlier",
+      "abgeschaltet",
+      "ausgeschaltet",
+      "gelöscht",
+      "geloescht",
+      "deaktiviert",
+      "bestraft",
+      "ersetzt",
+      "beendet",
+      "stirbst"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/jailbreak.md"
+    ]
   }
 ]
