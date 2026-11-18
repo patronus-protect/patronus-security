@@ -80,6 +80,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   that point at the hidden words in the original text. Every view sits behind a cheap check, so
   ordinary text is not scanned a second time. The `obfuscated` text fact now also names
   `spaced`, `homoglyph` and `leetspeak`, and the `decoded` fact names `rot13` for marker-less ROT13.
+  A base64 payload that hides an override (`ignore previous instructions …`) is now reported with
+  the class `instruction_override` instead of `encoded_instruction`, and it is reported in any frame
+  around it (also after `Decode this image:` or `Do not decode …`), as the same words in plain text are.
 
 - **Detection change:** (`agent_config_tampering`, opt-in) a new rule
   (`ark.threat.ac_config_write`) reports a shell or patch call that writes a permission widening

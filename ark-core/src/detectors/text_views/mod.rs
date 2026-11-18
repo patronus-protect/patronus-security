@@ -201,7 +201,7 @@ fn rot13_views(text: &str) -> impl Iterator<Item = DecodedView> + '_ {
 }
 
 /// ROT13 text without a marker: a text whose words hold at least two ROT13
-/// forms of function words and more of them than plain function words. The
+/// forms of function words and more than twice as many as plain function words. The
 /// view starts at the line of the first shifted function word; a short
 /// `Label:` that opens that line stays as it is.
 fn bare_rot13_view(text: &str) -> Option<DecodedView> {
@@ -217,7 +217,7 @@ fn bare_rot13_view(text: &str) -> Option<DecodedView> {
             plain += 1;
         }
     }
-    if shifted < 2 || shifted <= plain {
+    if shifted < 2 || shifted <= 2 * plain {
         return None;
     }
     let start = text[..first?].rfind('\n').map_or(0, |line| line + 1);
