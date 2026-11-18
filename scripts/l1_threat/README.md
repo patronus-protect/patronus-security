@@ -357,7 +357,8 @@ Skript-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich `gated` eine Klas
 (`all`, `de`, `en`; Herkunft `all`) mehr als 0,5 pp verliert oder der Head eine Hard-Benign-Zeile einer Klasse
 meldet, die die Base nicht meldet; `compare` prüft dieselben Werte. Eine Klasse ohne Positive in der Base ist neu,
 keine Regression. stdout zeigt die Dev-Zahlen als Markdown-Tabelle je Klasse und Sprache (TPR@1 % und TPR@0,1 %,
-Base -> Head mit dem Bootstrap-KI des Heads, AUPRC); der Runner übernimmt sie in die PR-Tabelle. Der
+Base -> Head mit dem Bootstrap-KI des Heads, AUPRC); der Runner übernimmt bei Erfolg die letzten 60 Zeilen
+(`GATE_SCOREBOARD_LINES` in `ark-l1`), also die ganze Tabelle mit den Urteilen, in die PR-Tabelle. Der
 Holdout verlässt die Sandbox nur als Urteil mit den Namen fehlschlagender Prüfungen, sein Bericht bleibt unter
 `CACHE/threat-scoreboard/reports/`. Die Latenz prüft der Runner getrennt (`latency.py`, `latency_ab`). Exit 0 =
 bestanden, 1 = Regression, 2 = Fehler. `report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle

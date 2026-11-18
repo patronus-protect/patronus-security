@@ -455,7 +455,7 @@ Hard-Negative-FP je Schwelle), Dev-FP und Dev-Regressionen. Für den Holdout
 steht dort nur `holdout: no regression` bzw. `holdout: regression`. Danach folgt je Split eine
 Zeile `milestones <split> …` mit M1 und M2 des Heads gegen die gepinnten Baselines (siehe
 [Meilensteine](#meilensteine-m1m3-h-final)), und zuletzt `scoreboard: PASS|FAIL`. Vor dem Dev-Urteil steht eine Zeile `dev latency: 100 KiB p95 … ms`
-mit dem Durchsatz auf dem 10-MiB-Repo. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,
+mit dem Durchsatz auf dem 10-MiB-Repo. Bei Erfolg übernimmt der Runner die letzten 60 Zeilen (`GATE_SCOREBOARD_LINES`) in den Gate-Bericht,
 bei Misserfolg nur den Exit-Code. Die vollständigen Berichte beider Splits (Head, Basis, Checks)
 liegen unter `CACHE/scoreboard/reports/<head>-<basis>/{dev,holdout}.json`, die Latenzmessung in
 `latency.json`. Sie verlassen die Sandbox nicht.

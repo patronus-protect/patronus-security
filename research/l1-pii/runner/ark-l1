@@ -1483,6 +1483,16 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     return steps
 
 
+# Lines of a green scoreboard's stdout tail kept in the gate report (and so in the PR body). The threat
+# scoreboard's dev table alone has a row per class and language (11 × 3) above its verdicts.
+GATE_SCOREBOARD_LINES = 60
+
+
+def scoreboard_summary(stdout: str) -> list[str]:
+    """The tail of a green scoreboard for the gate report: its summary and verdicts, bounded."""
+    return stdout.strip().splitlines()[-GATE_SCOREBOARD_LINES:]
+
+
 def failure_output(proc: subprocess.CompletedProcess, timed_out: bool, elapsed: float, max_sec: int) -> str:
     """Tail of a failed gate step: stdout and stderr each, so cargo's test failures on stdout
     are not pushed out by its `Running ...` lines on stderr; a sandbox timeout is named."""
@@ -1657,7 +1667,7 @@ def cmd_gate() -> int:
                         lines.append(f"- ✅ {name} (flaky, {summary})")
                         continue
                 if proc.returncode == 0:
-                    tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
+                    tail = scoreboard_summary(proc.stdout) if name == "scoreboard" else []
                     lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
                 else:
                     # The scoreboard reads the holdout: report its exit code, never its output. The
