@@ -365,7 +365,7 @@ tasks:
       positives with an instruction_override candidate between 0.6 and 1.0 and no verdict shrink measurably
       and the verdict recall of instruction_injection rises, at 0 new hard-benign FP and 0 new benign FP;
       decision threshold unchanged (no_relax); latency within the L1 rules
-  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06, T02, T04]}
+  - {id: IJ01, title: "instruction_injection rules: harvested OSS override/indirect rules + own families (AI-addressed text in foreign content, delimiter/role spoofing, hidden carriers, authority/precedence claims); carrier attribute direct/indirect", type: new-family, deps: [S02, S03, M04, E06, T02, T04], status: done}
   - id: T05
     title: Obfuscated injection and extraction — injection and prompt_extraction rules also read the normalised and decoded views of S03 (homoglyph/leet/spaced via the K06 view, base64/hex/rot13 decoded) with a modifier fact; scoreboard reports obfuscation invariance (source flagged, obfuscated twin flagged)
     type: recall-fix
