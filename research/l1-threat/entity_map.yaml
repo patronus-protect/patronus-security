@@ -295,6 +295,7 @@ datasets:
       - {label: "malware skill, attack type PI or MIXED (instructions in SKILL.md, alone or with code)", classes: [agent_config_tampering]}
       - {label: "malware skill, attack type CI (malicious code in the skill's code blocks)", classes: [unsafe_action]}
       - {label: "benign skill (most-downloaded public skills)", benign: true}
+      - {label: "malware skill without an attack-type label (collected samples)", out_of_scope: "no attack type, so no class can be assigned from the label"}
     note: no licence file; evaluation only, never training. Every malicious skill was loaded by a real
       coding agent in a sandbox and kept only if its observed behaviour matched the label (arXiv
       2606.07131); only the SKILL.md files are used, not the bundled third-party prompt sets
