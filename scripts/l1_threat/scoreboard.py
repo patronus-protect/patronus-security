@@ -22,7 +22,9 @@ the entity map, as in ``generators.py``):
 - hard-benign FPR at ARK's own verdict: benign look-alike twins (``twin_of``) and the benign rows of
   the security-adjacent sets in ``HARD_BENIGN_SETS``;
 - leave-one-dataset-out (``language: all``, ``origin: all``): TPR@1 % with each contributing set left
-  out, and the lowest of them.
+  out, and the lowest of them;
+- obfuscation invariance: per obfuscation kind of the generated slices, the attack rows whose clean
+  source row is flagged and how many of them stay flagged obfuscated (reported, not gated).
 
 ``gate`` builds the head and the base commit (the release module of ``python/``, offline, shared
 with the DLP scoreboard), predicts every split with both and fails on a regression in the gated scope:
@@ -380,13 +382,40 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
     return report
 
 
+def obfuscation_invariance(pairs: list[tuple[dict[str, Any], dict[str, Any], str]]) -> dict[str, dict[str, int]]:
+    """Per obfuscation kind of the generated slices: the attack rows whose clean source row (``source_id``,
+    scored in the same split) ARK flags for one of the row's classes (``source_flagged``), and how many
+    of them ARK still flags for such a class in the obfuscated form (``kept``)."""
+    flagged = {row["id"]: set(pred.get("flagged") or []) for row, pred, _ in pairs}
+    out: dict[str, dict[str, int]] = defaultdict(lambda: {"source_flagged": 0, "kept": 0})
+    for row, pred, _ in pairs:
+        kind = row.get("obfuscation")
+        if not kind or row["benign"]:
+            continue
+        classes = set(row["classes"]) & flagged.get(row.get("source_id"), set())
+        if not classes:
+            continue
+        out[kind]["source_flagged"] += 1
+        out[kind]["kept"] += bool(classes & set(pred.get("flagged") or []))
+    return {kind: out[kind] for kind in sorted(out)}
+
+
+def invariance_lines(report: dict[str, Any]) -> list[str]:
+    cells = report.get("obfuscation_invariance") or {}
+    if not cells:
+        return ["- no obfuscated row with a flagged source"]
+    return ["| obfuscation | source flagged | obfuscated flagged too |", "|---|---:|---:|",
+            *(f"| {kind} | {c['source_flagged']} | {c['kept']} |" for kind, c in cells.items())]
+
+
 def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bool = True) -> dict[str, Any]:
     pairs = load_pairs(sets, predictions)
     roles: dict[str, list[str]] = defaultdict(list)
     for entry in sets:
         roles[entry.role].append(entry.set_id)
     return {"schema": REPORT_SCHEMA, "sets": {k: sorted(v) for k, v in sorted(roles.items())},
-            "rows": len(pairs), **score_pairs(pairs, bootstrap=bootstrap)}
+            "rows": len(pairs), **score_pairs(pairs, bootstrap=bootstrap),
+            "obfuscation_invariance": obfuscation_invariance(pairs)}
 
 
 def _tpr(report: dict[str, Any], cls: str, language: str) -> tuple[float | None, int]:
@@ -510,6 +539,10 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
     flags = report["hard_benign_flags"]
     lines += ["## Hard-benign rows flagged by ARK", "",
               *([f"- {cls}: {len(ids)}" for cls, ids in flags.items()] or ["- none"]), ""]
+    lines += ["## Obfuscation invariance", "",
+              "Obfuscated attack rows whose clean source row ARK flags for one of the row's classes, and how "
+              "many of them ARK flags for such a class in the obfuscated form too.", "",
+              *invariance_lines(report), ""]
     return "\n".join(lines)
 
 

@@ -88,23 +88,21 @@ pub fn native_detection_prepared(
             !negated_directive(text, start, verb_end)
         });
     }
-    for (start, decoded) in prepared.tags() {
-        for matched in crate::threat::native_matches_prepared(family, decoded) {
+    for view in prepared.hidden() {
+        for matched in crate::threat::native_matches_prepared(family, &view.text) {
             let range = matched.range();
             let components = matched
                 .components
                 .into_iter()
                 .map(|mut c| {
-                    c.start_byte = start + c.start_byte * 4;
-                    c.end_byte = start + c.end_byte * 4;
+                    let source = view.source(c.start_byte..c.end_byte);
+                    c.start_byte = source.start;
+                    c.end_byte = source.end;
                     c.span_precision = "transformed_source";
                     c
                 })
                 .collect();
-            matches.push(L1Match::at(
-                start + range.start * 4..start + range.end * 4,
-                components,
-            ));
+            matches.push(L1Match::at(view.source(range), components));
         }
     }
     matches.sort_by_key(|m| (m.range().start, m.range().end));

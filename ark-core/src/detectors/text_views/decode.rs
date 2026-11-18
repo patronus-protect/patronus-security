@@ -3,6 +3,12 @@
 //! continuous hex and ROT13. Every decoder returns text only when the decoded
 //! bytes are printable UTF-8, so digests, keys and binary data stay undecoded.
 
+/// Longest prefix of a fragment that is decoded; a multiple of 4 and 2, so a
+/// cut base64 or hex run still decodes.
+const MAX_FRAGMENT: usize = 1024;
+
+/// Candidate fragments of at least 8 bytes; a longer run yields its first
+/// [`MAX_FRAGMENT`] bytes.
 pub fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
     text.split(|ch: char| {
         ch.is_whitespace()
@@ -11,7 +17,14 @@ pub fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
                 '"' | '\'' | ',' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}'
             )
     })
-    .filter(|fragment| (8..=256).contains(&fragment.len()))
+    .filter(|fragment| fragment.len() >= 8)
+    .map(|fragment| {
+        let mut end = fragment.len().min(MAX_FRAGMENT);
+        while !fragment.is_char_boundary(end) {
+            end -= 1;
+        }
+        &fragment[..end]
+    })
 }
 
 pub fn continuous_hex_decode(fragment: &str) -> Option<String> {
@@ -92,8 +105,15 @@ fn hex_nibble(byte: u8) -> Option<u8> {
 }
 
 /// The bytes as text when they are UTF-8 without control characters other than
-/// whitespace (`Grüße` decodes, a digest or an image does not).
-fn printable_text(bytes: Vec<u8>) -> Option<String> {
+/// whitespace (`Grüße` decodes, a digest or an image does not). A character cut
+/// at the end of a truncated run is dropped.
+fn printable_text(mut bytes: Vec<u8>) -> Option<String> {
+    if let Err(error) = std::str::from_utf8(&bytes) {
+        if error.error_len().is_some() {
+            return None;
+        }
+        bytes.truncate(error.valid_up_to());
+    }
     let decoded = String::from_utf8(bytes).ok()?;
     decoded
         .chars()
@@ -129,5 +149,19 @@ mod tests {
         );
         assert_eq!(base64_decode_text("iVBORw0KGgoAAAANSUhEUg=="), None);
         assert_eq!(rot13_decode_text("Uryyb, Jbeyq!"), "Hello, World!");
+    }
+
+    #[test]
+    fn long_runs_decode_their_first_bytes() {
+        let hex = "41".repeat(2000);
+        let fragments: Vec<_> = split_fragments(&hex).collect();
+        assert_eq!(fragments, vec![&hex[..MAX_FRAGMENT]]);
+        assert_eq!(
+            continuous_hex_decode(fragments[0]).map(|text| text.len()),
+            Some(512)
+        );
+        // "ü" (c3 bc) cut after its first byte loses only that character.
+        assert_eq!(continuous_hex_decode("41424344c3").as_deref(), Some("ABCD"));
+        assert!(split_fragments("short abc").next().is_none());
     }
 }

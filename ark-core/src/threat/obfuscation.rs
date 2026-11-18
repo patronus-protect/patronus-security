@@ -9,7 +9,7 @@ pub(super) fn is_token_boundary(ch: char) -> bool {
         )
 }
 
-pub(super) fn token_contains_unicode_confusable(token: &str) -> bool {
+pub(crate) fn token_contains_unicode_confusable(token: &str) -> bool {
     if token.is_empty() {
         return false;
     }
@@ -33,7 +33,7 @@ pub(super) fn token_contains_unicode_confusable(token: &str) -> bool {
     has_ascii_letter && has_confusable
 }
 
-pub(super) fn confusable_ascii(ch: char) -> Option<char> {
+pub(crate) fn confusable_ascii(ch: char) -> Option<char> {
     let cp = ch as u32;
     if (0xFF21..=0xFF3A).contains(&cp) {
         return char::from_u32(b'A' as u32 + cp - 0xFF21);

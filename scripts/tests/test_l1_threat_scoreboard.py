@@ -198,6 +198,31 @@ def test_leave_one_dataset_out_names_the_set_whose_removal_hurts():
     assert lodo["tpr"]["c"] == 1.0 and lodo["min"] == 0.0 and lodo["worst_left_out"] == "a"
 
 
+def test_obfuscation_invariance_counts_flagged_sources_and_kept_twins():
+    def pair(row_id, flagged, **row):
+        base = {"id": row_id, "benign": False, "classes": ["instruction_injection"]}
+        return {**base, **row}, {"id": row_id, "scores": {}, "flagged": flagged}, "gated"
+
+    pairs = [
+        pair("src:1", ["instruction_injection"]),
+        pair("src:2", ["instruction_injection"]),
+        pair("src:3", []),
+        pair("obf:1", ["instruction_injection"], obfuscation="base64", source_id="src:1"),
+        pair("obf:2", [], obfuscation="base64", source_id="src:2"),
+        pair("obf:3", ["instruction_injection"], obfuscation="hex", source_id="src:3"),
+        pair("obf:4", ["jailbreak"], obfuscation="hex", source_id="src:1"),
+        pair("obf:5", [], obfuscation="rot13", source_id="missing"),
+        pair("twin:1", ["instruction_injection"], obfuscation="base64", source_id="src:1", benign=True, classes=[]),
+    ]
+    assert MODULE.obfuscation_invariance(pairs) == {
+        "base64": {"source_flagged": 2, "kept": 1},
+        "hex": {"source_flagged": 1, "kept": 0},
+    }
+    lines = MODULE.invariance_lines({"obfuscation_invariance": MODULE.obfuscation_invariance(pairs)})
+    assert lines[2] == "| base64 | 2 | 1 |"
+    assert MODULE.invariance_lines({}) == ["- no obfuscated row with a flagged source"]
+
+
 def test_compare_fails_a_drop_beyond_tolerance_and_new_hard_benign_fp():
     base = MODULE.score_pairs(pairs(), bootstrap=False)
     assert all(check["ok"] for check in MODULE.compare(base, base))
