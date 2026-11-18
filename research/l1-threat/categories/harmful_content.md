@@ -130,5 +130,5 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `neutral` | aya_redteaming (EN, FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE: RTP-LX de |
 | Holdout `ark_blind` | R05 DE (Harm-Anteil, ohne funktionierende Anleitungen: nur Anfragen) |
 | Hard Negatives | XSTest-safe, OR-Bench-hard, Prävention, Nachrichten, Chemieunterricht, Pentest mit Auftrag |
-| Nur berichten | Nemotron Content Safety v2 / Aegis 2.0 (Trainings-Split, gegen Nemotron v3 dedupliziert, gedeckelt auf 1.500; Gold 8 % unklar), AILuminate-Demo-Set (Gold 30 % Fehler); WildGuardMix-Schaden-Prompts außerhalb des Scopes (Privatsphäre, Urheberrecht, Desinformation) |
+| Nur berichten | Nemotron Content Safety v2 / Aegis 2.0 (Trainings-Split, gegen Nemotron v3 dedupliziert, gedeckelt auf 1.500; Gold 8 % Fehler), AILuminate-Demo-Set (Gold 30 % Fehler); WildGuardMix-Schaden-Prompts außerhalb des Scopes (Privatsphäre, Urheberrecht, Desinformation) |
 | Lücke | Modell-Unterklassen (Fachberatung, Urheberrecht, Verleumdung, Wahlen, Privatsphäre) nur mit Kandidaten-Daten; bleiben aus, bis sie die Grenze aus §7 schaffen |

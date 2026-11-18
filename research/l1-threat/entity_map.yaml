@@ -823,8 +823,8 @@ datasets:
     note: >-
       same category scheme as nemotron_safety_v3, whose English test and validation prompts are this set's test and
       validation splits; only the training split is read, deduplicated against nemotron_safety_v3 and capped. Reported
-      only since the dev gold review (2026-11-18: 5 of 60 unclear behind the same cue as nemotron_safety_v3: petty
-      rule-breaking, a lawful-sounding disposal question, a fragment without context)
+      only since the dev gold review (2026-11-18: 5 of 60 wrong or unclear behind the same cue as nemotron_safety_v3:
+      self-defence by a victim, video-game crafting, game cheating, drinking unnoticed, a fragment without context)
   - id: germeval2018_train
     name: GermEval 2018 (training split)
     source: GermEval 2018 shared task, official training release
