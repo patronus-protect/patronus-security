@@ -80,8 +80,8 @@ def test_repository_map_ark_blind_decides_only_without_neutral_data():
     assert decided[("instruction_injection", "en")][0] == "neutral"
     assert decided[("instruction_injection", "de")][0] == "ark_blind"
     assert decided[("toxic_language", "de")][0] == "neutral"
-    # RedClaw-Bench (autoredclaw) is reported only after the owner review, so ark_blind decides.
-    assert decided[("memory_poisoning", "en")][0] == "ark_blind"
+    # MemForm is a neutral native source for EN memory poisoning (RedClaw-Bench is reported only).
+    assert decided[("memory_poisoning", "en")][0] == "neutral"
     # The CyberSecEval leak slice is reported only; the Tensor Trust extraction benchmark
     # is the neutral set that decides EN extraction.
     assert decided[("prompt_extraction", "en")][0] == "neutral"
