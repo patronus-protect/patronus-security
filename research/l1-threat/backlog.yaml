@@ -30,7 +30,7 @@
 #                 attack payloads copied from datasets; third-party data only fetched at eval time.
 #   points:       rule/anchor weights >= 0, damping <= 0, n-gram share capped; integer points; Python
 #                 training and Rust inference bit-identical (golden parity cases).
-#   gate:         same steps as CI; threat scoreboard without regression (> 0.5 pp TPR@1%FPR per class),
+#   gate:         same steps as CI; threat scoreboard without regression (> 0.5 pp TPR@1%FPR or TPR@0.1%FPR per class, E08),
 #                 0 new FP on hard negatives, L1 100 KiB p95 on the real-DE corpus at most +5 %.
 #   docs:         CHANGELOG "Detection change", rule catalog via scripts/generate_docs.py.
 #   no_relax:     never lower a threshold to buy recall; recall comes from rules, anchors, structure.
