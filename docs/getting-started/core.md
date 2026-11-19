@@ -13,7 +13,7 @@ inference, and decides on **shell commands** with Cat (`allow`, `ask`, `block`).
 | Package | `patronus-ark-core` (crate and PyPI, imports as `patronus_ark_core`) | `patronus-ark` (crate and PyPI, imports as `patronus_ark`) |
 | Categories | `pii`, `dlp`, the attack classes (`injection`, `unsafe_action`, `exfiltration`, …), + Cat via `shell_verdict` (not a scan category) | all [categories](../concepts/categories.md), Cat as the `shell_command` category |
 | Cat | `Scanner::shell_verdict` with harness context (cwd, home, repo root) and `prior_facts` of earlier commands | `shell_command` category scan; no harness context or session |
-| Detection | native L1 rules; Wolf as an optional prompt-injection model; Cat as an optional shell-command verdict | L1, NTDB L2 heads and L3 transformers ([layered scanning](../concepts/layered-scanning.md)) |
+| Detection | L1 analysis modules (native rules, Cat's shell model and policies); Wolf Defender as the optional L3 for prompt injection | L1, NTDB L2 heads and L3 transformers ([analysis framework](../concepts/layered-scanning.md)) |
 | Execution | synchronous on the calling thread; no queue, no worker threads | asynchronous queue with background L3 workers |
 | Assets | none for native rules; one Wolf and one Cat bundle when enabled | L2/L3 model bundles ([manage assets](../how-to/manage-assets.md)) |
 | License | MIT OR Apache-2.0 | GPL-3.0-only or commercial |
@@ -78,8 +78,8 @@ A report has three parts:
 - `input_bytes` — the size of the scanned input.
 - `native` — one result per category, with `class_name`, `confidence`, ordered `layers` and
   `evidence_spans` carrying UTF-8 byte and character offsets into the original text.
-- `wolf` — the separate Wolf result (`attack_probability`, `threshold`, `matched`), or `None`
-  when Wolf is not configured.
+- `wolf` — the Wolf result (`attack_probability`, `threshold`, `matched`), or `None` when Wolf
+  is not configured or did not run because L1 already decided.
 
 Core reports findings; your application decides whether to block, redact or log. Interpret
 native results by `class_name`, evidence and `decision`: a native layer's `matched` flag can be
@@ -114,8 +114,11 @@ skips both the native prompt-injection rules and Wolf.
 
 ## Add Wolf Defender
 
-Wolf Defender is a local prompt-injection classifier. Point the scanner at a bundle directory and
-choose a threshold for your deployment; the examples use `0.8`.
+Wolf Defender is a local prompt-injection classifier and the L3 layer of the injection module: it
+runs only on inputs the injection module's L1 stages left undecided — by default every input
+whose injection L1 did not detect (see [Analysis framework](../concepts/layered-scanning.md)).
+Point the scanner at a bundle directory; the default threshold is `0.93` for every variant (base,
+small, edge), and the examples set `0.8` explicitly.
 
 === "Python"
 

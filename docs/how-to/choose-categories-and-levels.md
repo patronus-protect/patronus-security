@@ -19,7 +19,9 @@ for what each one classifies and which layers back it.
 
 ## Pick a level
 
-`max_level` is the hard ceiling on escalation:
+`max_level` is the hard ceiling on escalation. Each layer runs only on what the layers below it
+left undecided (in Ark, every category L1 did not detect), and the last layer you allow gives the
+final answer: with `l1`, what L1 does not detect is clear (see [Analysis framework](../concepts/layered-scanning.md)):
 
 | `max_level` | Use when |
 | --- | --- |

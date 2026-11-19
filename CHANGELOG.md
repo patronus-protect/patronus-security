@@ -71,18 +71,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
-- An optional `threat_points_acceptance` (Rust `NativeGates`, Python `ScannerConfig`): the least
-  score of an accepted threat points rule, between `0.0` and `1.0` (default `0.5`). Unset, results
-  are unchanged.
-- An optional `cascade` (Rust `ScannerConfig::cascade`, Python `ScannerConfig["cascade"]`): per
-  category a `detect_threshold` and a `clear_threshold` on the rule score (both between `0.0` and
-  `1.0`), an optional L1 text model (`l1_model`) and which later layers may run. The scan report
-  then gives each category's final answer (`decision`: `detected` or `clear`) and the stage that
-  decided it (`decided_by`). Unset thresholds keep today's results.
-- The optional L1 text model of a category (`cascade.modules.<category>.l1_model`, Rust
-  `L1ModelConfig`): a pinned model release, loaded once when the scanner is created, that answers
-  what the rules leave undecided. Its detect and clear cuts default to the model's own and can be
-  overridden; clearing can be switched off. Off unless configured; no model ships.
+- One analysis framework for every category: each category is an analysis module whose layers
+  (L1 rules and an optional L1 text model, then L2, then L3) run in order, and a later layer runs
+  only on what the earlier configured layers left undecided. See "Analysis framework" in the docs.
+  - Core: an optional `cascade` in the scanner configuration (Rust `ScannerConfig::cascade`,
+    Python `ScannerConfig["cascade"]`) sets the deepest layer, per category a `detect_threshold`
+    and a `clear_threshold` on the rule score (both between `0.0` and `1.0`) and an optional L1
+    text model (`l1_model`: a pinned model release, loaded once when the scanner is created,
+    whose detect and clear cuts default to the model's own; clearing can be switched off). With
+    `cascade` set, the report gives each category's final answer (`decision`: `detected` or
+    `clear`), the stage that decided it (`decided_by`) and the time of each later layer. Unset
+    thresholds keep today's results; no model ships.
+  - Core: Wolf Defender is the L3 of `injection` and runs only on inputs whose injection L1 did
+    not detect (or, with a clear threshold, left undecided). Its default threshold is `0.93` for
+    base, small and edge.
+  - Ark: a category L1 detects skips L2 and L3, and its results carry `decided_by: "heuristic"`;
+    L2 and L3 results carry `decided_by: "l2"` or `"l3"` once final (Python and HTTP results too).
+  - An optional `threat_points_acceptance` (Rust `NativeGates`, Python `ScannerConfig`): the least
+    score of an accepted threat points rule, between `0.0` and `1.0` (default `0.5`).
 - Python: `NativeCategory` lists every native category.
 
 - **Detection change:** (`injection`, `prompt_extraction`) the injection rules now also read text
@@ -458,8 +464,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   open. `scoreboard.py report --cascade` shows, per class and language at that configuration's
   operating point, the detection rate, the false-positive rate on benign data and on hard benign
   look-alikes at the same decision, which layer decided how many rows, and the time per layer.
-  `scoreboard.py calibrate` writes per-class thresholds for a 0.1 % false-positive rate on the benign
-  evaluation data into such a configuration; it never changes the Core defaults. The hard-benign
+  `scoreboard.py calibrate` writes per-class detect and clear thresholds (`cascade.modules`) for a
+  0.1 % false-positive rate on the benign evaluation data into such a configuration; it never
+  changes the Core defaults. The hard-benign
   false-positive rate in the scoreboard report is now taken at the same threshold as each detection
   rate. The earlier layer option (`--layers l1+l2`), which ran every layer on every row, is removed.
   **Detection change:** none; this is evaluation tooling only.
