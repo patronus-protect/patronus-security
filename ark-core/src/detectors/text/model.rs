@@ -23,7 +23,7 @@ pub const TEXT_MODEL: ModelForm = ModelForm {
 
 /// A loaded text category model of either candidate form.
 pub enum CategoryModel {
-    TfidfLr(TfidfLrModel),
+    TfidfLr(Box<TfidfLrModel>),
     FastText(FastTextModel),
 }
 
@@ -36,7 +36,8 @@ impl CategoryModel {
         if is_fasttext(&document) {
             FastTextModel::from_json_slice(bytes, TEXT_MODEL).map(Self::FastText)
         } else {
-            TfidfLrModel::from_json_slice(bytes, TEXT_MODEL).map(Self::TfidfLr)
+            TfidfLrModel::from_json_slice(bytes, TEXT_MODEL)
+                .map(|model| Self::TfidfLr(Box::new(model)))
         }
     }
 
