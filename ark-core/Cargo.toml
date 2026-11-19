@@ -36,6 +36,8 @@ thiserror = "1"
 # Python reference by construction.
 cedar-policy = { version = "=4.12.0", default-features = false }
 rustc-hash = "2"
+# Index-only hash table over the TF-IDF vocabulary names (`facts_common::model`).
+hashbrown = { version = "0.17", default-features = false }
 ort = { version = "2.0.0-rc.13", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "lax-feature-matching", "tls-rustls", "copy-dylibs", "api-24", "half"] }
 half = { version = "2.1", optional = true }
 blake3 = { version = "1.5", optional = true }

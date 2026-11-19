@@ -16,9 +16,12 @@
 //! Scores match scikit-learn's float32 pipeline and scipy's summation order.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fmt;
+use std::hash::BuildHasher;
 
-use rustc_hash::FxHashMap;
-
+use hashbrown::hash_table::{Entry, HashTable};
+use rustc_hash::{FxBuildHasher, FxHashMap};
+use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, Visitor};
 use serde::Deserialize;
 
 use crate::detectors::facts_common::pyjson::py_round;
@@ -62,8 +65,74 @@ struct RawBlock {
     feature_dtype: String,
     idf_dtype: String,
     #[serde(default)]
-    vocabulary: HashMap<String, u32>,
+    vocabulary: RawVocabulary,
     idf: Vec<f64>,
+}
+
+/// A block's `vocabulary` (feature -> index) as read: every feature name
+/// appended to one string, with its index and byte range there. Reading
+/// allocates no string per feature.
+#[derive(Default)]
+struct RawVocabulary {
+    text: String,
+    /// (index, start, end) of each feature, in file order.
+    entries: Vec<(u32, u32, u32)>,
+}
+
+impl<'de> Deserialize<'de> for RawVocabulary {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(RawVocabularyVisitor)
+    }
+}
+
+struct RawVocabularyVisitor;
+
+impl<'de> Visitor<'de> for RawVocabularyVisitor {
+    type Value = RawVocabulary;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map of feature names to indices")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<RawVocabulary, A::Error> {
+        let mut raw = RawVocabulary::default();
+        raw.entries.reserve(map.size_hint().unwrap_or(0));
+        loop {
+            let start = raw.text.len();
+            if map.next_key_seed(AppendStr(&mut raw.text))?.is_none() {
+                break;
+            }
+            let index: u32 = map.next_value()?;
+            let end = u32::try_from(raw.text.len())
+                .map_err(|_| de::Error::custom("vocabulary names exceed 4 GiB"))?;
+            raw.entries.push((index, start as u32, end));
+        }
+        Ok(raw)
+    }
+}
+
+/// Deserializes a string by appending it to the target.
+struct AppendStr<'a>(&'a mut String);
+
+impl<'de> DeserializeSeed<'de> for AppendStr<'_> {
+    type Value = ();
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        deserializer.deserialize_str(self)
+    }
+}
+
+impl<'de> Visitor<'de> for AppendStr<'_> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a feature name")
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<(), E> {
+        self.0.push_str(value);
+        Ok(())
+    }
 }
 
 /// A block's vectorizer config, where scikit-learn defaults (`norm="l2"`,
@@ -103,13 +172,88 @@ struct Block {
 
 /// How a block maps a feature to its index.
 enum Lookup {
-    Vocabulary {
-        index: FxHashMap<Box<str>, u32>,
-        /// Feature name of each vocabulary index (for the top features).
-        names: Vec<Box<str>>,
-    },
+    Vocabulary(Vocabulary),
     /// FNV-1a bucket of the feature among `idf.len()` buckets.
     Hashed,
+}
+
+/// A block vocabulary in three allocations: the feature names in index order
+/// in one string, the end offset of each name, and a hash table of indices
+/// that compares against those names (instead of a map of boxed names plus a
+/// second boxed copy of each name for the top features).
+struct Vocabulary {
+    names: String,
+    ends: Vec<u32>,
+    table: HashTable<u32>,
+}
+
+fn feature_hash(feature: &str) -> u64 {
+    FxBuildHasher.hash_one(feature)
+}
+
+/// Name `index` among `names` cut at `ends`.
+fn name_at<'a>(names: &'a str, ends: &[u32], index: usize) -> &'a str {
+    let start = index
+        .checked_sub(1)
+        .map_or(0, |previous| ends[previous] as usize);
+    &names[start..ends[index] as usize]
+}
+
+impl Vocabulary {
+    /// Order `raw` by index and index it. The indices must be a permutation
+    /// of `0..idf_len` and the names unique.
+    fn new(raw: RawVocabulary, idf_len: usize, label: &str) -> Result<Self, String> {
+        let features = raw.entries.len();
+        if idf_len != features {
+            return Err(format!(
+                "{label} block has {features} vocabulary entries and {idf_len} idf values"
+            ));
+        }
+        let mut by_index = vec![None; features];
+        for &(index, start, end) in &raw.entries {
+            let slot = by_index
+                .get_mut(index as usize)
+                .ok_or_else(|| format!("{label} vocabulary index {index} is out of range"))?;
+            if slot.replace((start as usize, end as usize)).is_some() {
+                return Err(format!("{label} vocabulary index {index} is duplicated"));
+            }
+        }
+        let mut names = String::with_capacity(raw.text.len());
+        let mut ends = Vec::with_capacity(features);
+        for (start, end) in by_index.into_iter().flatten() {
+            names.push_str(&raw.text[start..end]);
+            ends.push(names.len() as u32);
+        }
+        let mut table = HashTable::with_capacity(features);
+        for index in 0..features {
+            let name = name_at(&names, &ends, index);
+            match table.entry(
+                feature_hash(name),
+                |&other| name_at(&names, &ends, other as usize) == name,
+                |&other| feature_hash(name_at(&names, &ends, other as usize)),
+            ) {
+                Entry::Occupied(_) => {
+                    return Err(format!("{label} vocabulary feature {name:?} is duplicated"))
+                }
+                Entry::Vacant(slot) => {
+                    slot.insert(index as u32);
+                }
+            }
+        }
+        Ok(Self { names, ends, table })
+    }
+
+    fn get(&self, feature: &str) -> Option<u32> {
+        self.table
+            .find(feature_hash(feature), |&index| {
+                self.name(index as usize) == feature
+            })
+            .copied()
+    }
+
+    fn name(&self, index: usize) -> &str {
+        name_at(&self.names, &self.ends, index)
+    }
 }
 
 impl Block {
@@ -133,14 +277,12 @@ impl Block {
         }
         let lookup = match (cfg.n_features, cfg.hash.as_deref()) {
             (None, None) => {
-                validate_vocabulary(&raw.vocabulary, raw.idf.len(), label)?;
-                let (index, names) = into_vocabulary(raw.vocabulary);
-                Lookup::Vocabulary { index, names }
+                Lookup::Vocabulary(Vocabulary::new(raw.vocabulary, raw.idf.len(), label)?)
             }
             (Some(buckets), Some(FNV1A_32))
                 if buckets > 0
                     && buckets <= u32::MAX as usize
-                    && raw.vocabulary.is_empty()
+                    && raw.vocabulary.entries.is_empty()
                     && raw.idf.len() == buckets =>
             {
                 Lookup::Hashed
@@ -161,14 +303,14 @@ impl Block {
 
     fn index(&self, feature: &str) -> Option<u32> {
         match &self.lookup {
-            Lookup::Vocabulary { index, .. } => index.get(feature).copied(),
+            Lookup::Vocabulary(vocabulary) => vocabulary.get(feature),
             Lookup::Hashed => Some(fnv1a_32(feature.as_bytes()) % self.len() as u32),
         }
     }
 
     fn name(&self, index: usize) -> String {
         match &self.lookup {
-            Lookup::Vocabulary { names, .. } => names[index].to_string(),
+            Lookup::Vocabulary(vocabulary) => vocabulary.name(index).to_string(),
             Lookup::Hashed => format!("#{index}"),
         }
     }
@@ -536,49 +678,9 @@ pub(crate) fn fnv1a_32_extend(hash: u32, bytes: &[u8]) -> u32 {
     })
 }
 
-/// Build a block vocabulary into the owned representation, with the feature
-/// name of each index. Indices are validated to be a permutation.
-fn into_vocabulary(vocabulary: HashMap<String, u32>) -> (FxHashMap<Box<str>, u32>, Vec<Box<str>>) {
-    let mut names = vec![Box::<str>::from(""); vocabulary.len()];
-    let vocabulary = vocabulary
-        .into_iter()
-        .map(|(term, index)| {
-            let term = term.into_boxed_str();
-            names[index as usize] = term.clone();
-            (term, index)
-        })
-        .collect();
-    (vocabulary, names)
-}
-
 /// scikit-learn's float32 feature matrix; the stored idf is narrowed to f32.
 fn into_f32(idf: Vec<f64>) -> Vec<f32> {
     idf.into_iter().map(|value| value as f32).collect()
-}
-
-/// Check idf length and that vocabulary indices are a permutation of
-/// `0..vocabulary.len()`.
-fn validate_vocabulary(
-    vocabulary: &HashMap<String, u32>,
-    idf_len: usize,
-    label: &str,
-) -> Result<(), String> {
-    let features = vocabulary.len();
-    if idf_len != features {
-        return Err(format!(
-            "{label} block has {features} vocabulary entries and {idf_len} idf values"
-        ));
-    }
-    let mut seen = vec![false; features];
-    for &index in vocabulary.values() {
-        let slot = seen
-            .get_mut(index as usize)
-            .ok_or_else(|| format!("{label} vocabulary index {index} is out of range"))?;
-        if std::mem::replace(slot, true) {
-            return Err(format!("{label} vocabulary index {index} is duplicated"));
-        }
-    }
-    Ok(())
 }
 
 /// Maps padded n-gram character offsets back to the source word.
@@ -650,5 +752,29 @@ mod tests {
         assert_eq!(fnv1a_32(b""), 0x811c_9dc5);
         assert_eq!(fnv1a_32(b"a"), 0xe40c_292c);
         assert_eq!(fnv1a_32(b"foobar"), 0xbf9c_f968);
+    }
+
+    #[test]
+    fn vocabulary_keeps_names_in_index_order_and_finds_them() {
+        let raw: RawVocabulary = serde_json::from_str(r#"{"bär": 2, "a\"b": 0, "": 1}"#).unwrap();
+        let vocabulary = Vocabulary::new(raw, 3, "test").unwrap();
+        for (name, index) in [("a\"b", 0), ("", 1), ("bär", 2)] {
+            assert_eq!(vocabulary.name(index as usize), name);
+            assert_eq!(vocabulary.get(name), Some(index));
+        }
+        assert_eq!(vocabulary.get("b"), None);
+    }
+
+    #[test]
+    fn vocabulary_refuses_bad_indices_and_duplicate_names() {
+        let error = |json: &str, idf_len| {
+            Vocabulary::new(serde_json::from_str(json).unwrap(), idf_len, "test")
+                .err()
+                .unwrap()
+        };
+        assert!(error(r#"{"a": 0}"#, 2).contains("1 vocabulary entries and 2 idf values"));
+        assert!(error(r#"{"a": 0, "b": 2}"#, 2).contains("index 2 is out of range"));
+        assert!(error(r#"{"a": 0, "b": 0}"#, 2).contains("index 0 is duplicated"));
+        assert!(error(r#"{"a": 0, "a": 1}"#, 2).contains(r#"feature "a" is duplicated"#));
     }
 }
