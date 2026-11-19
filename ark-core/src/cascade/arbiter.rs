@@ -23,6 +23,10 @@ pub trait ThresholdTable {
     /// Name of the operating point, reported in the decision envelope.
     fn operating_point(&self) -> &str;
 
+    /// The host's version, reported as `provenance.ark_version` of the
+    /// decision envelope.
+    fn ark_version(&self) -> &str;
+
     /// The pipeline's default (safe) class; it is never "accepted".
     fn default_class(&self, pipeline: &str) -> &str;
 
@@ -124,6 +128,8 @@ impl LayerDecision {
 pub struct ArbitrationTrace {
     pub candidates: Vec<DecisionCandidate>,
     pub operating_point: String,
+    /// The host version for the envelope's provenance.
+    pub ark_version: String,
 }
 
 /// Arbitrate an optional L3 result against its L2 result.
@@ -152,6 +158,7 @@ pub fn arbitrate_l3_l2<R: LayeredResult>(
             .into_iter()
             .collect(),
             operating_point: table.operating_point().to_string(),
+            ark_version: table.ark_version().to_string(),
         };
         return Ok(if accepts_result(table, pipeline, &result) {
             with_arbitration(result, LayerDecision::L3, Some(&trace))
@@ -407,7 +414,7 @@ fn decision_envelope<R: LayeredResult>(
             degradation_reason: None,
         },
         provenance: DecisionProvenance {
-            ark_version: env!("CARGO_PKG_VERSION").to_string(),
+            ark_version: trace.ark_version.clone(),
             schema_version: "ark.decision.v1".to_string(),
             model: result.model().to_string(),
         },
@@ -468,6 +475,7 @@ fn arbitration_trace<R: LayeredResult>(
     ArbitrationTrace {
         candidates,
         operating_point: table.operating_point().to_string(),
+        ark_version: table.ark_version().to_string(),
     }
 }
 

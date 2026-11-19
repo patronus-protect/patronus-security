@@ -79,7 +79,8 @@ A report has three parts:
 - `native` — one result per category, with `class_name`, `confidence`, ordered `layers` and
   `evidence_spans` carrying UTF-8 byte and character offsets into the original text.
 - `wolf` — the Wolf result (`attack_probability`, `threshold`, `matched`), or `None` when Wolf
-  is not configured or did not run because L1 already decided.
+  is not configured, `injection` was not scanned, or (only with a configured `cascade`) the
+  cascade did not escalate the input to Wolf.
 
 Core reports findings; your application decides whether to block, redact or log. Interpret
 native results by `class_name`, evidence and `decision`: a native layer's `matched` flag can be
@@ -114,9 +115,10 @@ skips both the native prompt-injection rules and Wolf.
 
 ## Add Wolf Defender
 
-Wolf Defender is a local prompt-injection classifier and the L3 layer of the injection module: it
-runs only on inputs the injection module's L1 stages left undecided — by default every input
-whose injection L1 did not detect (see [Analysis framework](../concepts/layered-scanning.md)).
+Wolf Defender is a local prompt-injection classifier and the L3 layer of the injection module. It
+runs on every scan that selects `injection`; with a configured `cascade` it runs only on inputs
+the injection module's L1 stages left undecided (see
+[Analysis framework](../concepts/layered-scanning.md)).
 Point the scanner at a bundle directory; the default threshold is `0.93` for every variant (base,
 small, edge), and the examples set `0.8` explicitly.
 

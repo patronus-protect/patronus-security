@@ -165,8 +165,11 @@ class SecurityGateway:
             disables levels, model/native scanner areas, or individual L1 rules
             (Cat shell policies included) for subsequent scan calls; `pii_mode`,
             `dlp_mode`, one `<category>_mode` per attack class (such as
-            `unsafe_action_mode`), `explain`, `conditional` and the L3 worker policy
-            `l3_policy` complete it. Unknown keys raise `ValueError`.
+            `unsafe_action_mode`), `explain`, `conditional`, the L3 worker policy
+            `l3_policy` and the opt-in `cascade` (`{"cascade": {"modules": {...}}}`:
+            L1 early exit with per-category `detect_threshold`/`clear_threshold`;
+            results then carry `decided_by`) complete it. Unknown keys raise
+            `ValueError`.
             New classifier pipelines can be gated independently through
             `models`, for example `{"models": {"tool_action": False}}`.
         onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;

@@ -99,7 +99,7 @@ fn gate_schema_refuses_old_keys_and_bad_values() {
         serde_json::json!({"pii_mode": "fast"}),
         serde_json::json!({"l3_policy": {"priority": "injection"}}),
         serde_json::json!({"l3_policy": {"ttl_ms": {"injection": "soon"}}}),
-        serde_json::json!({"l3_policy": {"estimated_cost_ms": {"dynamic-pii": 0}}}),
+        serde_json::json!({"l3_policy": {"estimated_cost_ms": {"pii": 0}}}),
         serde_json::json!({"l3_policy": {"fairness_quantum_ms": 0}}),
         serde_json::json!({"l3_policy": {"max_wait_ms": -1}}),
         serde_json::json!({"l3_policy": {"degraded_factor": 2.0}}),
@@ -217,7 +217,7 @@ fn evaluates_nested_metadata_and_result_conditions() {
     gates
         .set_conditional(vec![ConditionalPipelineGate {
             level: SecurityLevel::L3,
-            pipeline: Some("dynamic-pii".to_string()),
+            pipeline: Some("pii".to_string()),
             when: GateExpression::All(vec![
                 GateExpression::Metadata(MetadataCondition {
                     path: "tool.action".to_string(),
@@ -226,8 +226,8 @@ fn evaluates_nested_metadata_and_result_conditions() {
                     exists: None,
                 }),
                 GateExpression::Not(Box::new(GateExpression::Result(ResultCondition {
-                    pipeline: "routing".to_string(),
-                    classes: vec!["code_development_request".to_string()],
+                    pipeline: "dlp".to_string(),
+                    classes: vec!["source_code".to_string()],
                     min_confidence: Some(0.8),
                 }))),
             ]),
@@ -239,32 +239,32 @@ fn evaluates_nested_metadata_and_result_conditions() {
     assert!(pipeline_allowed(
         &gates.conditional,
         SecurityLevel::L3,
-        "dynamic-pii",
+        "pii",
         &metadata,
         &[]
     ));
     assert!(pipeline_allowed(
         &gates.conditional,
         SecurityLevel::L2,
-        "dynamic-pii",
+        "pii",
         &Value::Null,
         &[]
     ));
     assert!(!pipeline_allowed(
         &gates.conditional,
         SecurityLevel::L3,
-        "dynamic-pii",
+        "pii",
         &Value::Null,
         &[]
     ));
     assert!(!pipeline_allowed(
         &gates.conditional,
         SecurityLevel::L3,
-        "dynamic-pii",
+        "pii",
         &metadata,
         &[GateResult {
-            pipeline: "routing".to_string(),
-            class_name: "code_development_request".to_string(),
+            pipeline: "dlp".to_string(),
+            class_name: "source_code".to_string(),
             confidence: 0.9,
             level: SecurityLevel::L2,
         }]
@@ -300,7 +300,7 @@ fn matching_policy_gate_overrides_l3_policy_without_suppressing_on_miss() {
             level: SecurityLevel::L3,
             pipeline: Some("injection".to_string()),
             when: GateExpression::Result(ResultCondition {
-                pipeline: "routing".to_string(),
+                pipeline: "dlp".to_string(),
                 classes: vec!["source_code".to_string()],
                 min_confidence: Some(0.8),
             }),
@@ -312,7 +312,7 @@ fn matching_policy_gate_overrides_l3_policy_without_suppressing_on_miss() {
         }])
         .unwrap();
     let source_code = GateResult {
-        pipeline: "routing".to_string(),
+        pipeline: "dlp".to_string(),
         class_name: "source_code".to_string(),
         confidence: 0.9,
         level: SecurityLevel::L2,
@@ -357,4 +357,27 @@ fn layer_execution_caps_levels_by_max_level_and_gates() {
     execution.gates_mut().set_level(SecurityLevel::L3, false);
     assert!(!execution.allows_level(SecurityLevel::L3));
     assert_eq!(execution.max_level(), SecurityLevel::L3);
+}
+
+#[test]
+fn the_gate_cascade_takes_only_modules_and_is_off_by_default() {
+    let gates: ScanGateMatrix = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert!(gates.cascade.is_none());
+    let gates: ScanGateMatrix = serde_json::from_value(serde_json::json!({
+        "l2": false,
+        "cascade": {"modules": {"injection": {"detect_threshold": 0.9, "clear_threshold": 0.1}}}
+    }))
+    .unwrap();
+    assert!(gates.cascade.is_some() && !gates.allows_level(SecurityLevel::L2));
+    for invalid in [
+        serde_json::json!({"cascade": {"l2": false}}),
+        serde_json::json!({"cascade": {"max_level": "l1"}}),
+        serde_json::json!({"cascade": {"modules": {"injection": {"l1_model": {"bundle_dir": "m", "manifest_sha256": "ab"}}}}}),
+        serde_json::json!({"cascade": {"modules": {"injection": {"clear_threshold": 2.0}}}}),
+    ] {
+        assert!(
+            serde_json::from_value::<ScanGateMatrix>(invalid.clone()).is_err(),
+            "{invalid}"
+        );
+    }
 }

@@ -96,6 +96,10 @@ impl ThresholdTable for NtdbThresholds {
         self.profile
     }
 
+    fn ark_version(&self) -> &str {
+        env!("CARGO_PKG_VERSION")
+    }
+
     fn default_class(&self, pipeline: &str) -> &str {
         match pipeline_key(pipeline) {
             "injection" => "benign",
@@ -268,9 +272,11 @@ pub(crate) fn arbitrate_joint_v3(
     if let Some(view) = &union {
         candidates.push(view.candidate.clone());
     }
+    let table = NtdbThresholds::new(point);
     let trace = ArbitrationTrace {
         candidates,
-        operating_point: NtdbThresholds::new(point).operating_point().to_string(),
+        operating_point: table.operating_point().to_string(),
+        ark_version: table.ark_version().to_string(),
     };
 
     if let Some(view) = union.as_ref() {

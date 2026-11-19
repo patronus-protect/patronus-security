@@ -742,16 +742,22 @@ switches clearing off.
 
 ```rust
 pub struct ModuleConfig {
-    /// The heuristic's detect cut on its decision score (`0.0..=1.0`, the
-    /// probability of its rule scorer): a score at or above it is Detected. This is
-    /// the one per-class operating point of the heuristic. `None` (the
-    /// default) keeps the scorer's shipped acceptance (score at or above its
-    /// own cut, as reported in the native results), so results stay identical.
+    /// The heuristic's detect cut on its rule scorer's probability
+    /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
+    /// and the rule classes it feeds, the Threat document scorer's
+    /// `details.scorer_score` for the Threat classes, the confidence of a
+    /// result with evidence for PII and DLP. A score at or above it is
+    /// Detected when the module's score mode admits it. A Threat points rule
+    /// accepted on its own (with evidence left after the mode floor) is
+    /// Detected regardless. `None` (the default) keeps the scorers' shipped
+    /// acceptance as reported in the native results, so results stay
+    /// identical.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_threshold: Option<f64>,
-    /// The heuristic's clear cut on the same scale: an undetected score below
-    /// it is Clear without a later stage. `None` (the default) switches
-    /// it off, so every undetected input escalates.
+    /// The heuristic's clear cut on the same score: an undetected score below
+    /// it is Clear without a later stage. `None` (the default) switches it
+    /// off, so every undetected input escalates.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clear_threshold: Option<f64>,
     /// The module's optional L1 model (cuts on its logit scale), run on what
     /// the heuristic escalates; loaded once by [`crate::Scanner::new`].
@@ -766,15 +772,49 @@ One analysis module's cascade settings.
 pub struct CascadeConfig {
     /// Deepest layer that may run. Default: `L3`.
     pub max_level: SecurityLevel,
-    /// Conditional L2/L3 gates, evaluated over the earlier layers' results.
+    /// `false` switches L1 (heuristics and L1 models) off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1: Option<bool>,
+    /// `false` switches L2 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2: Option<bool>,
+    /// `false` switches L3 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l3: Option<bool>,
+    /// Conditional L2/L3 gates, evaluated over the L1 results of every
+    /// scanned module and the module's own later results. Core has no
+    /// request metadata, so `metadata` conditions are refused.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// Per-module settings keyed by category.
     pub modules: HashMap<SecurityCategory, ModuleConfig>,
 }
 ```
 
-Which layers may run after L1, and per module its L1 clear cut and
-optional L1 model.
+The opt-in cascade: which layers run, with early exit between them, and
+per module its L1 cuts and optional L1 model. Its level keys are the
+gate keys of [`ScanGateMatrix`] with the same meaning: `max_level` is the
+ceiling and `l1`, `l2`, `l3` switch a level off (unset: on), so any one
+layer can run alone (for example `l1: false` leaves Wolf, the injection
+L3, to answer every input). Per module, the L1 model runs when
+`l1_model` is configured and the heuristic runs unless its native
+producers are switched off with the existing `models` gates (for
+example `native:injection_l1`, `native:threat_l1`).
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Whether `level` may run: at most `max_level` and not switched off,
+the rule of [`ScanGateMatrix`] and [`LayerExecution`].
+
+```rust
+pub fn validate_for_gates(&self) -> Result<(), String>;
+```
+
+The cascade as Ark's gate key `cascade`: Ark takes the levels and
+conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
+`l3`, `conditional`) and runs no L1 models yet, so only `modules`
+with their L1 cuts may be set.
 
 ```rust
 pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)>;
@@ -786,8 +826,9 @@ The configured L1 models by module.
 pub fn validate(&self) -> Result<(), String>;
 ```
 
-Refuse invalid conditional gates and heuristic cuts outside `0..=1`
-or with the clear cut above the detect cut.
+Refuse invalid conditional gates, gates over request metadata (Core
+scans have none) and heuristic cuts outside `0..=1` or with the clear
+cut above the detect cut.
 
 ```rust
 pub struct ModuleDecision {
@@ -815,7 +856,6 @@ pub struct L1Stage {
     /// Set when the outcome is [`StageOutcome::Escalate`].
     pub escalation: Option<EscalationSignal>,
     layers: Vec<LayerResult>,
-    gate_results: Vec<GateResult>,
 }
 ```
 
@@ -845,20 +885,41 @@ pub fn new(config: CascadeConfig) -> Result<Self, ScanError>;
 No public documentation is available yet.
 
 ```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Whether `level` may run in this cascade.
+
+```rust
+pub fn l1_off(&self, module: SecurityCategory) -> L1Stage;
+```
+
+L1's answer for `module` when L1 is switched off: nothing decided, the
+input escalates to the next layer that runs.
+
+```rust
+pub fn has_conditional_gates(&self) -> bool;
+```
+
+Whether conditional gates decide which later layer may run; only then
+does [`Self::decide`] read the L1 gate results.
+
+```rust
 pub fn l1_stage<'a, R: LayeredResult + 'a>(
     &self,
     module: SecurityCategory,
+    mode: ScoreMode,
     results: impl IntoIterator<Item = &'a R>,
 ) -> L1Stage;
 ```
 
-The heuristic's outcome for `module` from its L1 results, by
-[`StageOutcome::from_cuts`] on its decision score: the best score of
-its results, also below the scorer's own cut (the candidate score of a
-decision envelope, else the raw `score` of the native layer details,
-else the confidence of a result with evidence). Detected: at or above the module's
-`detect_threshold`, or, unset, a result its scorer accepted (or that
-has evidence without a decision envelope).
+The heuristic's outcome for `module` from its L1 results (see
+[`ModuleConfig::detect_threshold`] for the score per module):
+Detected for a rule hit that detects on its own, a score at or above
+the module's `detect_threshold` that `mode` admits, or, without a
+`detect_threshold`, a result its scorer accepted (or that has evidence
+without a decision envelope); else Clear below the `clear_threshold`;
+else Escalate.
 
 ```rust
 pub fn l1_model_stage(
@@ -881,6 +942,7 @@ pub fn decide(
     module: SecurityCategory,
     text: &str,
     l1: L1Stage,
+    l1_results: &[GateResult],
     l2: &mut [&mut dyn LayerModel],
     mut l3: Option<&mut dyn L3Executor>,
     control: &ScanControl,
@@ -891,6 +953,8 @@ Final decision of `module`: L1's Detected or Clear stands; an
 escalation runs the first allowed L2 model of the module, then the L3
 executor, each only while the previous layer escalates. An escalation
 no configured layer answers ends Clear, decided by the last stage that ran.
+`l1_results` are the L1 gate results of every scanned module, read
+only when [`Self::has_conditional_gates`].
 
 ## Layer Gates And L3 Policy
 
@@ -927,6 +991,12 @@ pub struct ScanGateMatrix {
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
+    /// The opt-in cascade: when set, a module L1 decides (or no later layer
+    /// can run for) skips L2 and L3 and results carry `decided_by`; its
+    /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
+    /// and L3 as before. Levels and conditional gates stay the keys above;
+    /// see [`super::CascadeConfig::validate_for_gates`].
+    pub cascade: Option<super::Cascade>,
 }
 ```
 
@@ -941,7 +1011,8 @@ Deserializes from the one gate schema of every host (Python
 `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
 `pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
 `explain`, the level switches `l1`, `l2` and
-`l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
+`l3`, `conditional`, the L3 worker policy `l3_policy` and the opt-in
+`cascade` (L1 early exit and per-module L1 cuts). Unknown keys and
 out-of-range values are refused.
 
 ```rust
@@ -1273,6 +1344,12 @@ pub fn validate(&self) -> Result<(), String>;
 No public documentation is available yet.
 
 ```rust
+pub fn reads_metadata(&self) -> bool;
+```
+
+Whether the expression reads request metadata anywhere.
+
+```rust
 pub fn matches(&self, metadata: &Value, results: &[GateResult]) -> bool;
 ```
 
@@ -1346,10 +1423,13 @@ The max-level cap backing this execution.
 
 ```rust
 pub struct EscalationSignal {
-    /// Escalation score of the layer (for L1 its rule score, for L2 its
-    /// promote score).
+    /// Escalation score of the layer (for L1 its rule or model score, for L2
+    /// its promote score).
     pub score: f64,
-    /// Score at which the layer escalates.
+    /// The lower bound of the layer's escalate band, the same meaning for
+    /// every producer: the signal escalates when `score >= threshold`
+    /// ([`Self::escalates`]). For an L1 stage it is its clear cut, or
+    /// `f64::MIN` when clearing is off.
     pub threshold: f64,
     /// Byte ranges the next layer should look at; empty means the whole input.
     pub spans: Vec<Range<usize>>,
@@ -1359,6 +1439,14 @@ pub struct EscalationSignal {
 ```
 
 A layer's request to hand its input to the next configured layer.
+
+```rust
+pub fn above(score: f64, clear_threshold: Option<f64>, source: &str) -> Self;
+```
+
+The signal of an L1 stage that escalated `score`: it did not clear, so
+the score is in the band from the clear cut up (`None`: no lower
+bound).
 
 ```rust
 pub fn escalates(&self) -> bool;
@@ -2043,10 +2131,13 @@ pub struct ScannerConfig {
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
     pub shell: Option<ShellConfig>,
-    /// Which layers may run after L1, the per-module clear thresholds and
-    /// optional L1 models (loaded once here); see [`crate::cascade`]. Wolf, the injection L3, runs only on scans whose
-    /// injection L1 did not detect, with or without this key. When set,
+    /// The opt-in cascade (see [`crate::cascade::CascadeConfig`]): which
+    /// layers run with early exit between them, the per-module L1 cuts and
+    /// optional L1 models (loaded once here). When set, Wolf (the injection
+    /// L3) runs only where the cascade escalates, and
     /// [`ScanReport::decision`] reports each scanned module's final answer.
+    /// `None` (the default) leaves every scan as before: all native
+    /// producers, and Wolf on every scan that selects `injection`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cascade: Option<CascadeConfig>,
 }
@@ -2085,6 +2176,12 @@ No public documentation is available yet.
 pub struct ScanReport {
     pub input_bytes: usize,
     pub native: Vec<NativeResult>,
+    /// Wolf's result when it ran. Without a cascade Wolf runs on every scan
+    /// that selects `injection`, as before. `None` when Wolf is not
+    /// configured, when `injection` was not selected, or, with a configured
+    /// cascade, when the cascade did not escalate the injection module to L3
+    /// (its L1 decided the input, L3 is above `cascade.max_level` or switched
+    /// off, or a conditional gate kept it off).
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfResult>,
     /// Final answer and deciding stage per scanned module; set when

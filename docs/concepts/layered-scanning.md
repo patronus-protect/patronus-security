@@ -2,8 +2,10 @@
 
 Patronus Ark analyses text with one framework in two dimensions: **analysis modules** (one per
 category, the rows) and **layers** L1 → L2 → L3 (the columns, from cheap to expensive). Which
-modules run, which layers they may use and every threshold are configuration. A later layer runs
-only on what the earlier configured layers left undecided.
+modules run, which layers they may use and every threshold are configuration. The cascade is
+opt-in: with a configured cascade a later layer runs only on what the earlier layers left
+undecided; without one, Ark Core and full Ark scan exactly as before (every configured layer runs,
+and the new result fields stay absent).
 
 This is the single page for that model. [Architecture](architecture.md) describes the components
 of the full Ark gateway; [Native detectors](detectors.md) catalogues the L1 rules.
@@ -159,10 +161,11 @@ The rules behind the diagram:
   fields stay and new ones are only added.
 - **Policies.** Cedar policies run inside CAT today. The text modules' cascade does not run
   policies yet; the heuristic's own clear threshold (off by default) can clear before the L1 model.
-- **Full Ark today.** Ark has no clear threshold yet: L1 decides a category only when it
-  detects it, and every category L1 does not detect goes on to L2 and L3 as configured.
-- **Wolf Defender in Core** runs only on injection inputs its module escalated: with the
-  default configuration that is every input whose injection L1 did not detect.
+- **Full Ark.** With the gate key `cascade`, a category L1 decides (by default: detects) skips
+  L2 and L3, and so does one no later layer can run for; without it, L2 and L3 run as before.
+- **Wolf Defender in Core.** Without a cascade Wolf runs on every scan that selects
+  `injection`, as before. With a cascade it runs only on injection inputs the module escalated:
+  by default every input whose injection L1 did not detect; with `l1: false` on every input.
 
 ## What you can configure
 
@@ -190,7 +193,11 @@ The rules behind the diagram:
 ### Configuration keys
 
 Ark Core takes the cascade as the optional `cascade` key of the scanner configuration (Rust
-`ScannerConfig::cascade`, Python `ScannerConfig["cascade"]`):
+`ScannerConfig::cascade`, Python `ScannerConfig["cascade"]`). Its level keys are the gate keys
+of full Ark with the same meaning (`max_level` the ceiling; `l1`, `l2`, `l3` switch a level off,
+unset means on), so any single layer can run alone. Per module, the rules run unless their native
+producers are switched off with the existing `models` gate (for example
+`{"models": {"native:injection_l1": false}}`), and the L1 model runs when `l1_model` is set:
 
 ```json
 {
@@ -212,8 +219,9 @@ Ark Core takes the cascade as the optional `cascade` key of the scanner configur
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `cascade.max_level` | Deepest layer that may run: `l1`, `l2` or `l3`. | `l3` |
-| `cascade.conditional` | [Conditional gates](../reference/configuration.md#conditional-gates) for L2 and L3. | none |
-| `cascade.modules.<category>.detect_threshold` | The heuristic's detect cut on its rule score (`0.0`–`1.0`); a score at or above it is detected. The one per-category operating point of the rules. | the scorer's calibrated point |
+| `cascade.l1`, `cascade.l2`, `cascade.l3` | `false` switches that level off (`l1: false`: no rules and no L1 models run; for example only Wolf answers `injection`). | on |
+| `cascade.conditional` | [Conditional gates](../reference/configuration.md#conditional-gates) for L2 and L3, over the L1 results of every scanned module. Only `result` conditions: Core scans carry no request metadata, so `metadata` conditions are refused. | none |
+| `cascade.modules.<category>.detect_threshold` | The heuristic's detect cut on its rule scorer's probability (`0.0`–`1.0`): for `injection` (and the classes its rules feed) the injection scorer's candidate score; for the threat classes the document scorer's probability (`details.scorer_score`), not the points score; for PII and DLP the result's confidence. A score at or above it is detected when the category's mode (`<category>_mode`) admits it. A threat points rule accepted on its own, with evidence left after the mode floor, is detected regardless. | the scorer's calibrated point |
 | `cascade.modules.<category>.clear_threshold` | The heuristic's clear cut on the same score; an undetected score below it is clear. Not above `detect_threshold`. | off |
 | `cascade.modules.<category>.l1_model.bundle_dir` | The L1 model release directory (`manifest.json`, `config.json`, the model file), loaded once when the scanner is created. | no model |
 | `cascade.modules.<category>.l1_model.manifest_sha256` | sha256 of the release's `manifest.json`; required with `bundle_dir`. | — |
@@ -228,8 +236,12 @@ With `cascade` set, the scan report carries `decision`: per scanned module its `
 stage's `score` and the `layers` that ran after the heuristic (L1 model, L3, each with its
 `duration_ms`). Without `cascade`, reports are unchanged.
 
-In full Ark, results carry `decided_by` (`heuristic`, `l2` or `l3`) once a category's answer is
-final; see the [result schema](../reference/result-schema.md).
+Full Ark reads the same `cascade` key in its gates (Python `execution_gates`, Ark API `gates`),
+with only `modules` and their `detect_threshold` / `clear_threshold` inside: its levels and
+conditional gates are the gate keys `max_level`, `l1`, `l2`, `l3` and `conditional` themselves,
+and it runs no L1 models yet. With it, results carry `decided_by` (`heuristic`, `l2` or `l3`) once
+a category's answer is final, in the queue and the distributed plan alike; see the
+[result schema](../reference/result-schema.md).
 
 ## Where the parts live
 

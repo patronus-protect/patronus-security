@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::detectors::text::{DataRef, L1ModelConfig, L1TextModel};
+use crate::native::ScoreMode;
 use crate::{LayerResult, ScanControl, ScanError, SecurityCategory};
 
 mod arbiter;
@@ -122,16 +123,22 @@ impl StageOutcome {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ModuleConfig {
-    /// The heuristic's detect cut on its decision score (`0.0..=1.0`, the
-    /// probability of its rule scorer): a score at or above it is Detected. This is
-    /// the one per-class operating point of the heuristic. `None` (the
-    /// default) keeps the scorer's shipped acceptance (score at or above its
-    /// own cut, as reported in the native results), so results stay identical.
+    /// The heuristic's detect cut on its rule scorer's probability
+    /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
+    /// and the rule classes it feeds, the Threat document scorer's
+    /// `details.scorer_score` for the Threat classes, the confidence of a
+    /// result with evidence for PII and DLP. A score at or above it is
+    /// Detected when the module's score mode admits it. A Threat points rule
+    /// accepted on its own (with evidence left after the mode floor) is
+    /// Detected regardless. `None` (the default) keeps the scorers' shipped
+    /// acceptance as reported in the native results, so results stay
+    /// identical.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_threshold: Option<f64>,
-    /// The heuristic's clear cut on the same scale: an undetected score below
-    /// it is Clear without a later stage. `None` (the default) switches
-    /// it off, so every undetected input escalates.
+    /// The heuristic's clear cut on the same score: an undetected score below
+    /// it is Clear without a later stage. `None` (the default) switches it
+    /// off, so every undetected input escalates.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clear_threshold: Option<f64>,
     /// The module's optional L1 model (cuts on its logit scale), run on what
     /// the heuristic escalates; loaded once by [`crate::Scanner::new`].
@@ -139,14 +146,32 @@ pub struct ModuleConfig {
     pub l1_model: Option<L1ModelConfig>,
 }
 
-/// Which layers may run after L1, and per module its L1 clear cut and
-/// optional L1 model.
+/// The opt-in cascade: which layers run, with early exit between them, and
+/// per module its L1 cuts and optional L1 model. Its level keys are the
+/// gate keys of [`ScanGateMatrix`] with the same meaning: `max_level` is the
+/// ceiling and `l1`, `l2`, `l3` switch a level off (unset: on), so any one
+/// layer can run alone (for example `l1: false` leaves Wolf, the injection
+/// L3, to answer every input). Per module, the L1 model runs when
+/// `l1_model` is configured and the heuristic runs unless its native
+/// producers are switched off with the existing `models` gates (for
+/// example `native:injection_l1`, `native:threat_l1`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CascadeConfig {
     /// Deepest layer that may run. Default: `L3`.
     pub max_level: SecurityLevel,
-    /// Conditional L2/L3 gates, evaluated over the earlier layers' results.
+    /// `false` switches L1 (heuristics and L1 models) off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1: Option<bool>,
+    /// `false` switches L2 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2: Option<bool>,
+    /// `false` switches L3 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l3: Option<bool>,
+    /// Conditional L2/L3 gates, evaluated over the L1 results of every
+    /// scanned module and the module's own later results. Core has no
+    /// request metadata, so `metadata` conditions are refused.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// Per-module settings keyed by category.
     pub modules: HashMap<SecurityCategory, ModuleConfig>,
@@ -156,6 +181,9 @@ impl Default for CascadeConfig {
     fn default() -> Self {
         Self {
             max_level: SecurityLevel::L3,
+            l1: None,
+            l2: None,
+            l3: None,
             conditional: Vec::new(),
             modules: HashMap::new(),
         }
@@ -163,6 +191,34 @@ impl Default for CascadeConfig {
 }
 
 impl CascadeConfig {
+    /// Whether `level` may run: at most `max_level` and not switched off,
+    /// the rule of [`ScanGateMatrix`] and [`LayerExecution`].
+    pub fn allows_level(&self, level: SecurityLevel) -> bool {
+        level <= self.max_level && gates::level_switch([self.l1, self.l2, self.l3], level)
+    }
+
+    /// The cascade as Ark's gate key `cascade`: Ark takes the levels and
+    /// conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
+    /// `l3`, `conditional`) and runs no L1 models yet, so only `modules`
+    /// with their L1 cuts may be set.
+    pub fn validate_for_gates(&self) -> Result<(), String> {
+        let levels = Self {
+            modules: HashMap::new(),
+            ..self.clone()
+        };
+        if levels != Self::default() {
+            return Err(
+                "cascade: set max_level, l1, l2, l3 and conditional as gate keys; \
+                the cascade key takes only modules"
+                    .into(),
+            );
+        }
+        if self.l1_models().next().is_some() {
+            return Err("cascade.modules: Ark runs no L1 models (l1_model)".into());
+        }
+        self.validate()
+    }
+
     /// The configured L1 models by module.
     pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)> {
         self.modules
@@ -170,11 +226,19 @@ impl CascadeConfig {
             .filter_map(|(module, config)| Some((*module, config.l1_model.as_ref()?)))
     }
 
-    /// Refuse invalid conditional gates and heuristic cuts outside `0..=1`
-    /// or with the clear cut above the detect cut.
+    /// Refuse invalid conditional gates, gates over request metadata (Core
+    /// scans have none) and heuristic cuts outside `0..=1` or with the clear
+    /// cut above the detect cut.
     pub fn validate(&self) -> Result<(), String> {
         for gate in &self.conditional {
             gate.validate()?;
+            if gate.when.reads_metadata() {
+                return Err(
+                    "cascade.conditional: Core scans carry no request metadata; \
+                    use result conditions"
+                        .into(),
+                );
+            }
         }
         for (module, config) in &self.modules {
             for (name, value) in [
@@ -228,7 +292,6 @@ pub struct L1Stage {
     /// Set when the outcome is [`StageOutcome::Escalate`].
     pub escalation: Option<EscalationSignal>,
     layers: Vec<LayerResult>,
-    gate_results: Vec<GateResult>,
 }
 
 impl L1Stage {
@@ -257,55 +320,69 @@ impl Cascade {
         Ok(Self { config })
     }
 
-    /// The heuristic's outcome for `module` from its L1 results, by
-    /// [`StageOutcome::from_cuts`] on its decision score: the best score of
-    /// its results, also below the scorer's own cut (the candidate score of a
-    /// decision envelope, else the raw `score` of the native layer details,
-    /// else the confidence of a result with evidence). Detected: at or above the module's
-    /// `detect_threshold`, or, unset, a result its scorer accepted (or that
-    /// has evidence without a decision envelope).
+    /// Whether `level` may run in this cascade.
+    pub fn allows_level(&self, level: SecurityLevel) -> bool {
+        self.config.allows_level(level)
+    }
+
+    /// L1's answer for `module` when L1 is switched off: nothing decided, the
+    /// input escalates to the next layer that runs.
+    pub fn l1_off(&self, module: SecurityCategory) -> L1Stage {
+        L1Stage {
+            outcome: StageOutcome::Escalate,
+            score: 0.0,
+            decided_by: Stage::Heuristic,
+            escalation: Some(EscalationSignal::above(0.0, None, module.as_str())),
+            layers: Vec::new(),
+        }
+    }
+
+    /// Whether conditional gates decide which later layer may run; only then
+    /// does [`Self::decide`] read the L1 gate results.
+    pub fn has_conditional_gates(&self) -> bool {
+        !self.config.conditional.is_empty()
+    }
+
+    /// The heuristic's outcome for `module` from its L1 results (see
+    /// [`ModuleConfig::detect_threshold`] for the score per module):
+    /// Detected for a rule hit that detects on its own, a score at or above
+    /// the module's `detect_threshold` that `mode` admits, or, without a
+    /// `detect_threshold`, a result its scorer accepted (or that has evidence
+    /// without a decision envelope); else Clear below the `clear_threshold`;
+    /// else Escalate.
     pub fn l1_stage<'a, R: LayeredResult + 'a>(
         &self,
         module: SecurityCategory,
+        mode: ScoreMode,
         results: impl IntoIterator<Item = &'a R>,
     ) -> L1Stage {
-        let mut accepted = false;
+        let (mut accepted, mut rule_hit) = (false, false);
         let mut best: Option<(&str, f64)> = None;
-        let mut gate_results = Vec::new();
         for result in results {
-            let (result_accepted, score) = heuristic_score(result);
-            accepted |= result_accepted;
-            if best.is_none_or(|(_, top)| score > top) {
-                best = Some((result.model(), score));
+            let score = heuristic_score(result);
+            accepted |= score.accepted;
+            rule_hit |= score.rule_hit;
+            if best.is_none_or(|(_, top)| score.score > top) {
+                best = Some((result.model(), score.score));
             }
-            gate_results.push(GateResult {
-                pipeline: module.as_str().to_string(),
-                class_name: result.class_name().to_string(),
-                confidence: result.confidence(),
-                level: SecurityLevel::L1,
-            });
         }
         let (source, score) = best.unwrap_or((module.as_str(), 0.0));
         let config = self.config.modules.get(&module);
         let rule = CutRule::AtOrAbove;
-        let detected = match config.and_then(|config| config.detect_threshold) {
-            Some(detect) => rule.counts(score, detect),
-            None => accepted,
-        };
+        let detected = rule_hit
+            || match config.and_then(|config| config.detect_threshold) {
+                Some(detect) => rule.counts(score, detect) && mode.admits(score),
+                None => accepted,
+            };
         let clear_threshold = config.and_then(|config| config.clear_threshold);
         let outcome = StageOutcome::from_cuts(detected, score, clear_threshold, rule);
         L1Stage {
             outcome,
             score,
             decided_by: Stage::Heuristic,
-            escalation: (outcome == StageOutcome::Escalate).then(|| EscalationSignal {
-                score,
-                threshold: clear_threshold.unwrap_or(0.0),
-                spans: Vec::new(),
-                source: source.to_string(),
-            }),
+            escalation: (outcome == StageOutcome::Escalate)
+                .then(|| EscalationSignal::above(score, clear_threshold, source)),
             layers: Vec::new(),
-            gate_results,
         }
     }
 
@@ -324,22 +401,16 @@ impl Cascade {
             return stage;
         };
         let answer = model.evaluate(text, &[], data);
-        let layer = answer.layer_result();
-        stage.gate_results.push(GateResult {
-            pipeline: model.category().as_str().to_string(),
-            class_name: layer.class_name.clone(),
-            confidence: layer.confidence,
-            level: SecurityLevel::L1,
-        });
-        stage.layers.push(layer);
+        stage.layers.push(answer.layer_result());
         stage.outcome = answer.outcome;
         stage.score = answer.score;
         stage.decided_by = Stage::L1Model;
-        stage.escalation = (answer.outcome == StageOutcome::Escalate).then(|| EscalationSignal {
-            score: answer.score,
-            threshold: answer.thresholds.detect_threshold,
-            spans: Vec::new(),
-            source: answer.model,
+        stage.escalation = (answer.outcome == StageOutcome::Escalate).then(|| {
+            EscalationSignal::above(
+                answer.score,
+                answer.thresholds.clear_threshold,
+                &answer.model,
+            )
         });
         stage
     }
@@ -348,11 +419,15 @@ impl Cascade {
     /// escalation runs the first allowed L2 model of the module, then the L3
     /// executor, each only while the previous layer escalates. An escalation
     /// no configured layer answers ends Clear, decided by the last stage that ran.
+    /// `l1_results` are the L1 gate results of every scanned module, read
+    /// only when [`Self::has_conditional_gates`].
+    #[allow(clippy::too_many_arguments)]
     pub fn decide(
         &self,
         module: SecurityCategory,
         text: &str,
         l1: L1Stage,
+        l1_results: &[GateResult],
         l2: &mut [&mut dyn LayerModel],
         mut l3: Option<&mut dyn L3Executor>,
         control: &ScanControl,
@@ -366,22 +441,35 @@ impl Cascade {
             mut decided_by,
             mut escalation,
             mut layers,
-            gate_results: mut results,
         } = l1;
+        let gated = self.has_conditional_gates();
+        let mut results = Vec::new();
+        if gated {
+            results.extend_from_slice(l1_results);
+            results.extend(layers.iter().map(|layer| GateResult {
+                pipeline: module.as_str().to_string(),
+                class_name: layer.class_name.clone(),
+                confidence: layer.confidence,
+                level: SecurityLevel::L1,
+            }));
+        }
         for level in [SecurityLevel::L2, SecurityLevel::L3] {
             let Some(signal) = escalation.take() else {
                 break;
             };
-            if level > self.config.max_level {
-                break;
+            if !self.config.allows_level(level) {
+                // Switched off: the escalation passes on.
+                escalation = Some(signal);
+                continue;
             }
-            let allowed = pipeline_allowed(
-                &self.config.conditional,
-                level,
-                module.as_str(),
-                &Value::Null,
-                &results,
-            );
+            let allowed = !gated
+                || pipeline_allowed(
+                    &self.config.conditional,
+                    level,
+                    module.as_str(),
+                    &Value::Null,
+                    &results,
+                );
             let output = match level {
                 _ if !allowed => None,
                 SecurityLevel::L2 => l2
@@ -401,12 +489,14 @@ impl Cascade {
             };
             decided_by = Stage::from(level);
             score = output.result.confidence;
-            results.push(GateResult {
-                pipeline: module.as_str().to_string(),
-                class_name: output.result.class_name.clone(),
-                confidence: score,
-                level,
-            });
+            if gated {
+                results.push(GateResult {
+                    pipeline: module.as_str().to_string(),
+                    class_name: output.result.class_name.clone(),
+                    confidence: score,
+                    level,
+                });
+            }
             escalation = output
                 .escalation
                 .filter(|signal| !output.result.matched && signal.escalates());
@@ -432,32 +522,50 @@ impl Cascade {
     }
 }
 
-/// Whether the heuristic accepted `result` at its scorer's own cut, and its
-/// decision score (`0.0..=1.0`), also below that cut: the candidate score of
-/// a decision envelope, else the scorer's raw `score` in the native layer
-/// details (Threat rules), else the confidence of a result with evidence;
-/// a result without any of them scores 0.
-fn heuristic_score(result: &impl LayeredResult) -> (bool, f64) {
+/// What the heuristic reads from one L1 result.
+struct HeuristicScore {
+    /// Accepted at the scorer's own cut (with evidence left after the mode
+    /// floor).
+    accepted: bool,
+    /// A rule hit that detects on its own: a Threat points rule accepted
+    /// with evidence left after the mode floor.
+    rule_hit: bool,
+    /// The rule scorer's probability (`0.0..=1.0`), also below its cut.
+    score: f64,
+}
+
+/// The heuristic's view of `result`: with a decision envelope its
+/// acceptance and candidate score; else (Threat rules) the scorer's own
+/// `scorer_score` and `points_accepted` in the native layer details; else
+/// evidence as acceptance and the confidence of a result with evidence.
+fn heuristic_score(result: &impl LayeredResult) -> HeuristicScore {
     if let Some(decision) = result.decision() {
-        return (
-            decision.recommendation.accepted,
-            decision
+        return HeuristicScore {
+            accepted: decision.recommendation.accepted,
+            rule_hit: false,
+            score: decision
                 .decision_candidate
                 .as_ref()
                 .map_or(0.0, |candidate| candidate.confidence),
-        );
+        };
     }
-    let accepted = result.has_evidence();
-    let raw = result
-        .layers()
-        .iter()
-        .find_map(|layer| layer.details.get("score")?.as_f64());
-    let score = match raw {
-        Some(score) => score,
-        None if accepted => result.confidence(),
-        None => 0.0,
+    let evidence = result.has_evidence();
+    let detail = |key: &str| {
+        result
+            .layers()
+            .iter()
+            .find_map(|layer| layer.details.get(key))
     };
-    (accepted, score)
+    let scorer = detail("scorer_score").and_then(Value::as_f64);
+    HeuristicScore {
+        accepted: evidence,
+        rule_hit: evidence && detail("points_accepted").and_then(Value::as_bool) == Some(true),
+        score: match scorer {
+            Some(score) => score,
+            None if evidence => result.confidence(),
+            None => 0.0,
+        },
+    }
 }
 
 #[cfg(test)]

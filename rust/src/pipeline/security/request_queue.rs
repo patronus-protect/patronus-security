@@ -20,7 +20,6 @@ use crate::{
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityRequestState, SecurityScanResult,
 };
-use patronus_ark_core::cascade::Cascade;
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
 
@@ -368,9 +367,6 @@ impl SecurityGateway {
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
         );
         let (mut l1_results, l1_failures) = split_results(raw_l1);
-        // L1's answer is final for the modules it decides; only the others
-        // reach L2 and L3.
-        let undecided = l1_undecided_inputs(&inputs, &mut l1_results);
         metrics.checkpoint(
             "after_split_l1",
             format!(
@@ -386,6 +382,15 @@ impl SecurityGateway {
             .filter_map(gate_result)
             .collect::<Vec<_>>();
         conditional_results.extend(rejected_l1_candidate_gate_results(&l1_results));
+        // L1's answer is final for the modules it decides and for those no
+        // later layer can run for; only the others reach L2 and L3.
+        let undecided = l1_undecided_inputs(
+            &inputs,
+            &mut l1_results,
+            &execution,
+            &metadata,
+            &conditional_results,
+        );
         let l1_classes = l1_results
             .iter()
             .map(|result| (result.category.clone(), result.class_name.clone()))
@@ -452,12 +457,7 @@ impl SecurityGateway {
             dynamic_pii,
         );
         drop_internal_l2_chunk_outputs(&mut l2_results);
-        for result in l2_results
-            .iter_mut()
-            .filter(|result| !has_l3_pending(result))
-        {
-            mark_decided(result);
-        }
+        mark_final_l2(&mut l2_results, &execution);
         metrics.checkpoint(
             "before_publish_l2",
             format!("request_id={request_id} results={}", l2_results.len()),
@@ -485,6 +485,7 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned");
         if let Some(state) = registry.requests.get_mut(&request_id) {
             state.pending_l3_job_ids = pending_l3_job_ids;
+            state.marks_decided = execution.gates().cascade.is_some();
             state.pending_l3_job_categories = pending_l3_job_categories;
             state.gate_results = gate_results;
             state.gate_chunk_results = gate_chunk_results;
@@ -1016,6 +1017,7 @@ impl SecurityGateway {
             usable_results: 2,
             failures: Vec::new(),
             completion: None,
+            marks_decided: false,
         };
         let mut registry = self
             .requests
@@ -1142,6 +1144,7 @@ impl SecurityGateway {
             usable_results: 1,
             failures: Vec::new(),
             completion: None,
+            marks_decided: false,
         };
         let mut registry = self
             .requests
@@ -1186,6 +1189,7 @@ impl SecurityGateway {
             usable_results: 1,
             failures: Vec::new(),
             completion: None,
+            marks_decided: false,
         };
         let mut registry = self
             .requests
@@ -1304,36 +1308,92 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
         .collect()
 }
 
-/// L1's step of the cascade: a module L1 decides (core [`Cascade::l1_stage`])
-/// is final, so its L1 results carry `decided_by` and later layers skip it.
-/// Returns the inputs of the modules L1 left undecided.
+/// L1's step of the opt-in cascade (the gate key `cascade`), shared by the
+/// queue and the distributed plan: a module L1 decides (core
+/// [`patronus_ark_core::cascade::Cascade::l1_stage`] at the cascade's module cuts) is final, and so is
+/// an undecided module no later layer can run for (its answer is clear, as
+/// in Core); their L1 results carry `decided_by`. Returns the inputs of the
+/// modules that go on to L2 or L3: without a cascade, every input, as
+/// before. `gate_results` are the L1 gate results of the request.
 pub(super) fn l1_undecided_inputs(
     inputs: &[ExternalL1Input],
     l1_results: &mut [SecurityScanResult],
+    execution: &ScanExecution,
+    metadata: &serde_json::Value,
+    gate_results: &[GateResult],
 ) -> Vec<ExternalL1Input> {
-    let cascade = Cascade::default();
+    let Some(cascade) = &execution.gates().cascade else {
+        return inputs.to_vec();
+    };
     let mut undecided = Vec::new();
     for input in inputs {
         let module = input.category;
         let stage = cascade.l1_stage(
             module,
+            execution.gates().native.mode(module),
             l1_results
                 .iter()
                 .filter(|result| result.category == module.as_str()),
         );
-        match stage.decision(module) {
-            Some(decision) => {
-                for result in l1_results
-                    .iter_mut()
-                    .filter(|result| result.category == module.as_str())
-                {
-                    result.decided_by = Some(decision.decided_by);
-                }
+        let decided_by = match stage.decision(module) {
+            Some(decision) => decision.decided_by,
+            None if !later_layer_may_run(execution, metadata, gate_results, module) => {
+                stage.decided_by
             }
-            None => undecided.push(input.clone()),
+            None => {
+                undecided.push(input.clone());
+                continue;
+            }
+        };
+        for result in l1_results
+            .iter_mut()
+            .filter(|result| result.category == module.as_str())
+        {
+            result.decided_by = Some(decided_by);
         }
     }
     undecided
+}
+
+/// Whether L2 or L3 may still run for `category` under `execution`: an
+/// allowed L2 model, or an allowed L3 model (dynamic PII's GLiNER for
+/// `dynamic-pii`).
+fn later_layer_may_run(
+    execution: &ScanExecution,
+    metadata: &serde_json::Value,
+    gate_results: &[GateResult],
+    category: SecurityCategory,
+) -> bool {
+    let allowed = |level| {
+        patronus_ark_core::cascade::pipeline_allowed(
+            &execution.gates().conditional,
+            level,
+            category.as_str(),
+            metadata,
+            gate_results,
+        )
+    };
+    let l2 = !super::ntdb_l2::ntdb_l2_model_configs_for_category(execution, category).is_empty()
+        && allowed(SecurityLevel::L2);
+    let l3 = execution.allows_level(SecurityLevel::L3)
+        && execution.l3_policy().enabled
+        && allowed(SecurityLevel::L3)
+        && (category == SecurityCategory::DynamicPii
+            || !super::ntdb_l2::classifier_model_configs_for_category(execution, category)
+                .is_empty());
+    l2 || l3
+}
+
+/// With the opt-in cascade, marks the L2 results that end their module's
+/// run (no L3 pending) as final; shared by the queue and the distributed
+/// aggregation.
+pub(super) fn mark_final_l2(results: &mut [SecurityScanResult], execution: &ScanExecution) {
+    if execution.gates().cascade.is_none() {
+        return;
+    }
+    for result in results.iter_mut().filter(|result| !has_l3_pending(result)) {
+        mark_decided(result);
+    }
 }
 
 pub(super) fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
@@ -1580,7 +1640,19 @@ mod tests {
             ExternalL1Input::new(SecurityCategory::Injection, "x"),
         ];
 
-        let undecided = l1_undecided_inputs(&inputs, &mut results);
+        let undecided = l1_undecided_inputs(
+            &inputs,
+            &mut results,
+            &ScanExecution::with_gates(
+                SecurityLevel::L3,
+                crate::ScanGateMatrix {
+                    cascade: Some(patronus_ark_core::cascade::Cascade::default()),
+                    ..crate::ScanGateMatrix::default()
+                },
+            ),
+            &serde_json::json!({}),
+            &[],
+        );
 
         assert_eq!(
             undecided

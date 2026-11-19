@@ -10,10 +10,13 @@ use crate::{EvaluationResult, LayerResult, ScanControl, ScanError, SecurityCateg
 /// A layer's request to hand its input to the next configured layer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EscalationSignal {
-    /// Escalation score of the layer (for L1 its rule score, for L2 its
-    /// promote score).
+    /// Escalation score of the layer (for L1 its rule or model score, for L2
+    /// its promote score).
     pub score: f64,
-    /// Score at which the layer escalates.
+    /// The lower bound of the layer's escalate band, the same meaning for
+    /// every producer: the signal escalates when `score >= threshold`
+    /// ([`Self::escalates`]). For an L1 stage it is its clear cut, or
+    /// `f64::MIN` when clearing is off.
     pub threshold: f64,
     /// Byte ranges the next layer should look at; empty means the whole input.
     pub spans: Vec<Range<usize>>,
@@ -22,6 +25,18 @@ pub struct EscalationSignal {
 }
 
 impl EscalationSignal {
+    /// The signal of an L1 stage that escalated `score`: it did not clear, so
+    /// the score is in the band from the clear cut up (`None`: no lower
+    /// bound).
+    pub fn above(score: f64, clear_threshold: Option<f64>, source: &str) -> Self {
+        Self {
+            score,
+            threshold: clear_threshold.unwrap_or(f64::MIN),
+            spans: Vec::new(),
+            source: source.to_string(),
+        }
+    }
+
     /// Whether the signal asks for the next layer.
     pub fn escalates(&self) -> bool {
         escalates(self.score, self.threshold)

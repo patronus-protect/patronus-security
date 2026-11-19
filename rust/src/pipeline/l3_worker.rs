@@ -80,6 +80,9 @@ pub(crate) struct RequestState {
     pub usable_results: usize,
     pub failures: Vec<SecurityFailure>,
     pub completion: Option<SecurityRequestCompletion>,
+    /// The request runs the opt-in cascade: published final results carry
+    /// `decided_by`.
+    pub marks_decided: bool,
 }
 
 impl RequestState {
@@ -93,6 +96,7 @@ impl RequestState {
             usable_results: 0,
             failures: Vec::new(),
             completion: None,
+            marks_decided: false,
         }
     }
 }
@@ -990,10 +994,12 @@ fn finish_job(
         .state
         .lock()
         .expect("request registry mutex poisoned");
+    let mut marks_decided = false;
     let publish_result = if let Some(state) = registry.requests.get_mut(&request_id) {
         if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;
         }
+        marks_decided = state.marks_decided;
         state.pending_l3_job_categories.remove(&job_id);
         match failure {
             Some(failure) => {
@@ -1023,7 +1029,9 @@ fn finish_job(
     };
     if publish_result {
         let mut result = result;
-        super::mark_decided(&mut result);
+        if marks_decided {
+            super::mark_decided(&mut result);
+        }
         registry
             .ready
             .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
@@ -1223,7 +1231,9 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
             state.usable_results += 1;
             let mut result =
                 request_wide_skip_result(job.fallback, &job.execution, job.degraded_factor, reason);
-            super::mark_decided(&mut result);
+            if state.marks_decided {
+                super::mark_decided(&mut result);
+            }
             ready.push(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
                 request_id: request_id.to_string(),
                 result,
@@ -1585,6 +1595,7 @@ mod tests {
                 usable_results: 1,
                 failures: Vec::new(),
                 completion: None,
+                marks_decided: false,
             },
         );
 
@@ -2011,6 +2022,7 @@ mod tests {
                 usable_results: 1,
                 failures: Vec::new(),
                 completion: None,
+                marks_decided: false,
             },
         );
         let mut execution = ScanExecution::new(SecurityLevel::L3);

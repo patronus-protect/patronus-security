@@ -522,6 +522,10 @@ impl ThreatPipeline {
         let details = HashMap::from([
             ("matched_rules".into(), json!(matched_rules)),
             ("score".into(), json!(score)),
+            // The rule scorer's own probability (the scale of the cascade's
+            // cuts) and whether a points rule accepted on its own.
+            ("scorer_score".into(), json!(model_score)),
+            ("points_accepted".into(), json!(points_score.is_some())),
             ("accepted".into(), json!(accepted)),
             (
                 "acceptance_threshold".into(),

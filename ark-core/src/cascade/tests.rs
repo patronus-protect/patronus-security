@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::*;
+use crate::native::ScoreMode;
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
     DecisionResult, DecisionTerminality, LayerResult, NativeResult,
@@ -120,12 +121,13 @@ fn cascade(clear: Option<f64>) -> Cascade {
 }
 
 fn run(cascade: &Cascade, l1_result: &NativeResult, l3: &mut Fake) -> ModuleDecision {
-    let stage = cascade.l1_stage(SecurityCategory::Injection, [l1_result]);
+    let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [l1_result]);
     cascade
         .decide(
             SecurityCategory::Injection,
             "text",
             stage,
+            &[],
             &mut [],
             Some(l3),
             &ScanControl::default(),
@@ -179,13 +181,18 @@ fn undecided_l1_escalates_to_l3() {
 #[test]
 fn escalation_without_a_configured_later_layer_is_clear() {
     let cascade = cascade(None);
-    let stage = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    let stage = cascade.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.5, false)],
+    );
     assert_eq!(stage.outcome, StageOutcome::Escalate);
     let decision = cascade
         .decide(
             SecurityCategory::Injection,
             "text",
             stage,
+            &[],
             &mut [],
             None,
             &ScanControl::default(),
@@ -213,12 +220,17 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
     let cascade = cascade(None);
     let mut l3 = Fake::new(SecurityLevel::L3, 0.97);
     let mut l2 = Fake::new(SecurityLevel::L2, 0.4);
-    let stage = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    let stage = cascade.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.5, false)],
+    );
     let decision = cascade
         .decide(
             SecurityCategory::Injection,
             "text",
             stage,
+            &[],
             &mut [&mut l2],
             Some(&mut l3),
             &ScanControl::default(),
@@ -232,12 +244,17 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
 
     let mut l2 = Fake::new(SecurityLevel::L2, 0.4);
     l2.escalate_at = Some(0.3);
-    let stage = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    let stage = cascade.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.5, false)],
+    );
     let decision = cascade
         .decide(
             SecurityCategory::Injection,
             "text",
             stage,
+            &[],
             &mut [&mut l2],
             Some(&mut l3),
             &ScanControl::default(),
@@ -251,19 +268,58 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
 }
 
 #[test]
-fn conditional_gate_keeps_l3_from_running() {
+fn conditional_gates_read_every_modules_l1_results() {
+    // L3 of injection only when PII's L1 found an email.
     let config: CascadeConfig = serde_json::from_value(serde_json::json!({
         "conditional": [{
             "level": "l3",
             "pipeline": "injection",
-            "when": {"metadata": {"path": "tenant", "exists": true}}
+            "when": {"result": {"pipeline": "pii", "classes": ["email"]}}
         }]
     }))
     .unwrap();
-    let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
-    let decision = run(&Cascade::new(config).unwrap(), &l1(0.5, false), &mut l3);
-    assert_eq!(l3.calls, 0);
-    assert_eq!(decision.outcome, StageOutcome::Clear);
+    let cascade = Cascade::new(config).unwrap();
+    assert!(cascade.has_conditional_gates() && !Cascade::default().has_conditional_gates());
+    let pii = GateResult {
+        pipeline: "pii".into(),
+        class_name: "email".into(),
+        confidence: 0.9,
+        level: SecurityLevel::L1,
+    };
+    for (l1_results, runs) in [(vec![], 0), (vec![pii], 1)] {
+        let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
+        let stage = cascade.l1_stage(
+            SecurityCategory::Injection,
+            ScoreMode::Strict,
+            [&l1(0.5, false)],
+        );
+        let decision = cascade
+            .decide(
+                SecurityCategory::Injection,
+                "text",
+                stage,
+                &l1_results,
+                &mut [],
+                Some(&mut l3),
+                &ScanControl::default(),
+            )
+            .unwrap();
+        assert_eq!(l3.calls, runs);
+        assert_eq!(
+            decision.decided_by,
+            if runs == 1 {
+                Stage::L3
+            } else {
+                Stage::Heuristic
+            }
+        );
+    }
+    // Core scans carry no request metadata.
+    let metadata: CascadeConfig = serde_json::from_value(serde_json::json!({
+        "conditional": [{"level": "l3", "when": {"not": {"metadata": {"path": "tenant", "exists": true}}}}]
+    }))
+    .unwrap();
+    assert!(metadata.validate().unwrap_err().contains("metadata"));
 }
 
 #[test]
@@ -294,7 +350,7 @@ fn evidence_without_a_decision_envelope_counts_as_detected() {
     result.decision = None;
     result.category = "pii".into();
     let cascade = Cascade::default();
-    let stage = cascade.l1_stage(SecurityCategory::Pii, [&result]);
+    let stage = cascade.l1_stage(SecurityCategory::Pii, ScoreMode::Strict, [&result]);
     assert_eq!(stage.outcome, StageOutcome::Escalate);
     result.evidence_spans.push(crate::EvidenceSpan {
         label: "email".into(),
@@ -306,7 +362,7 @@ fn evidence_without_a_decision_envelope_counts_as_detected() {
         end_char: 1,
     });
     result.confidence = 0.9;
-    let stage = cascade.l1_stage(SecurityCategory::Pii, [&result]);
+    let stage = cascade.l1_stage(SecurityCategory::Pii, ScoreMode::Strict, [&result]);
     assert_eq!((stage.outcome, stage.score), (StageOutcome::Detected, 0.9));
 }
 
@@ -411,13 +467,14 @@ fn run_with_model(
 ) -> ModuleDecision {
     use crate::detectors::text::l1_model::tests::TEXT;
     let cascade = cascade(None);
-    let stage = cascade.l1_stage(SecurityCategory::Injection, [heuristic]);
+    let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [heuristic]);
     let stage = cascade.l1_model_stage(stage, Some(model), TEXT, &[]);
     cascade
         .decide(
             SecurityCategory::Injection,
             TEXT,
             stage,
+            &[],
             &mut [],
             l3.map(|l3| l3 as &mut dyn L3Executor),
             &ScanControl::default(),
@@ -504,9 +561,19 @@ fn cascade_config_carries_the_l1_model_per_module() {
     assert!(!models[0].1.clear_enabled);
 }
 
-/// A Threat-style result: no decision envelope, the scorer's raw score in
-/// the layer details, evidence only when accepted.
+/// A Threat-style result: no decision envelope, the document scorer's own
+/// probability in the layer details, evidence only when accepted.
 fn threat(score: f64, accepted: bool) -> NativeResult {
+    threat_result(score, accepted, false)
+}
+
+/// A Threat result with a points rule accepted on its own (`evidence`:
+/// whether its evidence survived the mode floor).
+fn points_hit(scorer_score: f64, evidence: bool) -> NativeResult {
+    threat_result(scorer_score, evidence, true)
+}
+
+fn threat_result(score: f64, accepted: bool, points: bool) -> NativeResult {
     let mut result = l1(score, accepted);
     result.decision = None;
     result.category = "exfiltration".into();
@@ -518,7 +585,15 @@ fn threat(score: f64, accepted: bool) -> NativeResult {
         matched: true,
         duration_ms: 0.0,
         thresholds: HashMap::new(),
-        details: HashMap::from([("score".to_string(), score.into())]),
+        details: HashMap::from([
+            // The combined score (points 0.8 when a points rule hit) is not the cascade's scale.
+            (
+                "score".to_string(),
+                (if points { 0.8 } else { score }).into(),
+            ),
+            ("scorer_score".to_string(), score.into()),
+            ("points_accepted".to_string(), points.into()),
+        ]),
     });
     if accepted {
         result.evidence_spans.push(crate::EvidenceSpan {
@@ -535,6 +610,15 @@ fn threat(score: f64, accepted: bool) -> NativeResult {
 }
 
 fn module_stage(detect: Option<f64>, clear: Option<f64>, result: &NativeResult) -> L1Stage {
+    module_stage_at(ScoreMode::Strict, detect, clear, result)
+}
+
+fn module_stage_at(
+    mode: ScoreMode,
+    detect: Option<f64>,
+    clear: Option<f64>,
+    result: &NativeResult,
+) -> L1Stage {
     let mut config = CascadeConfig::default();
     config.modules.insert(
         SecurityCategory::Exfiltration,
@@ -546,7 +630,79 @@ fn module_stage(detect: Option<f64>, clear: Option<f64>, result: &NativeResult) 
     );
     Cascade::new(config)
         .unwrap()
-        .l1_stage(SecurityCategory::Exfiltration, [result])
+        .l1_stage(SecurityCategory::Exfiltration, mode, [result])
+}
+
+#[test]
+fn threat_cuts_read_the_document_scorer_and_points_hits_detect_on_their_own() {
+    // Accepted by the scorer at its own cut (0.1), below the module's cut:
+    // the cut applies to the scorer's probability, not the combined score.
+    let low = threat(0.15, true);
+    assert_eq!(
+        module_stage(None, None, &low).outcome,
+        StageOutcome::Detected
+    );
+    let stage = module_stage(Some(0.3), None, &low);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Escalate, 0.15));
+    // A points rule hit detects whatever the scorer says.
+    let hit = points_hit(0.02, true);
+    assert_eq!(
+        module_stage(Some(0.3), Some(0.1), &hit).outcome,
+        StageOutcome::Detected
+    );
+    // The mode floor dropped the hit's evidence: no rule hit, and the score
+    // is cleared on the scorer's scale (0.02), not the points score (0.8).
+    let floored = points_hit(0.02, false);
+    assert_eq!(
+        module_stage(Some(0.3), Some(0.1), &floored).outcome,
+        StageOutcome::Clear
+    );
+}
+
+#[test]
+fn score_based_detection_needs_the_mode_floor() {
+    // 0.4 passes the cut 0.3 but `balanced` refuses scores below 0.5.
+    let refused = threat(0.4, false);
+    assert_eq!(
+        module_stage_at(ScoreMode::Balanced, Some(0.3), None, &refused).outcome,
+        StageOutcome::Escalate
+    );
+    assert_eq!(
+        module_stage_at(ScoreMode::Recall, Some(0.3), None, &refused).outcome,
+        StageOutcome::Detected
+    );
+}
+
+#[test]
+fn every_escalation_signal_escalates() {
+    for clear in [None, Some(0.2), Some(0.4)] {
+        let stage = module_stage(None, clear, &threat(0.4, false));
+        let signal = stage.escalation.expect("escalates");
+        assert!(signal.escalates(), "heuristic clear {clear:?}");
+        assert_eq!(signal.threshold, clear.unwrap_or(f64::MIN));
+    }
+    for (name, outcome) in [
+        ("signal_model_escalate", Some(StageOutcome::Escalate)),
+        ("signal_model_no_clear", None),
+    ] {
+        let model = l1_model(name, outcome);
+        let stage = cascade(None).l1_stage(
+            SecurityCategory::Injection,
+            ScoreMode::Strict,
+            [&l1(0.5, false)],
+        );
+        let stage = cascade(None).l1_model_stage(
+            stage,
+            Some(&model),
+            crate::detectors::text::l1_model::tests::TEXT,
+            &[],
+        );
+        let signal = stage.escalation.expect("escalates");
+        assert!(
+            signal.escalates() && signal.score > signal.threshold,
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -601,7 +757,11 @@ fn detect_threshold_is_the_per_module_heuristic_cut() {
 #[test]
 fn l1_stage_decision_is_final_only_when_l1_does_not_escalate() {
     let cascade = Cascade::default();
-    let detected = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.95, true)]);
+    let detected = cascade.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.95, true)],
+    );
     let decision = detected.decision(SecurityCategory::Injection).unwrap();
     assert_eq!(
         (
@@ -617,7 +777,11 @@ fn l1_stage_decision_is_final_only_when_l1_does_not_escalate() {
             0.95
         )
     );
-    let undecided = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    let undecided = cascade.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.5, false)],
+    );
     assert!(undecided.decision(SecurityCategory::Injection).is_none());
 }
 
@@ -627,4 +791,34 @@ fn each_level_maps_to_the_stage_that_answers_there() {
         [SecurityLevel::L1, SecurityLevel::L2, SecurityLevel::L3].map(Stage::from),
         [Stage::Heuristic, Stage::L2, Stage::L3]
     );
+}
+
+#[test]
+fn level_switches_turn_single_layers_off() {
+    let no_l2 = Cascade::new(CascadeConfig {
+        l2: Some(false),
+        ..CascadeConfig::default()
+    })
+    .unwrap();
+    assert!(!no_l2.allows_level(SecurityLevel::L2) && no_l2.allows_level(SecurityLevel::L3));
+    let mut l2 = Fake::new(SecurityLevel::L2, 0.99);
+    let mut l3 = Fake::new(SecurityLevel::L3, 0.95);
+    let stage = no_l2.l1_off(SecurityCategory::Injection);
+    let decision = no_l2
+        .decide(
+            SecurityCategory::Injection,
+            "text",
+            stage,
+            &[],
+            &mut [&mut l2],
+            Some(&mut l3),
+            &ScanControl::default(),
+        )
+        .unwrap();
+    assert_eq!((l2.calls, l3.calls), (0, 1));
+    assert_eq!(decision.decided_by, Stage::L3);
+    // L1 off escalates whatever the clear threshold.
+    let stage = cascade(Some(1.0)).l1_off(SecurityCategory::Injection);
+    assert_eq!(stage.outcome, StageOutcome::Escalate);
+    assert!(stage.escalation.unwrap().escalates());
 }

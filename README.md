@@ -152,10 +152,10 @@ Categories use the layers that fit their detector contract:
 | **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + lightweight ONNX heads) | milliseconds | Ark, when assets are cached |
 | **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | Ark, when assets are cached; Wolf Defender also in Core |
 
-Each category is an analysis module that runs these layers in order; a later layer runs only on
-what the earlier ones left undecided, and with only L1 configured, "nothing found" means clear. In
-full Ark, a category L1 detects skips L2 and L3; every other category goes on as configured. In
-Core, Wolf Defender is the L3 model of prompt injection.
+Each category is an analysis module that runs these layers in order. An opt-in `cascade`
+configuration adds early exit: a later layer then runs only on what the earlier ones left
+undecided, and a category L1 detects skips L2 and L3. Without it, every configured layer runs as
+before. In Core, Wolf Defender is the L3 model of prompt injection.
 
 L2 packages carry a trained promote-router that decides when a case actually needs L3, so most
 traffic never touches a transformer. When a scan is promoted, the queue publishes the L2 fallback

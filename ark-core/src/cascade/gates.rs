@@ -75,7 +75,8 @@ impl std::str::FromStr for SecurityLevel {
 /// `execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
 /// `pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
 /// `explain`, the level switches `l1`, `l2` and
-/// `l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
+/// `l3`, `conditional`, the L3 worker policy `l3_policy` and the opt-in
+/// `cascade` (L1 early exit and per-module L1 cuts). Unknown keys and
 /// out-of-range values are refused.
 pub struct ScanGateMatrix {
     /// Native rule, model, mode and `explain` gates, shared with Ark Core.
@@ -90,6 +91,12 @@ pub struct ScanGateMatrix {
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
+    /// The opt-in cascade: when set, a module L1 decides (or no later layer
+    /// can run for) skips L2 and L3 and results carry `decided_by`; its
+    /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
+    /// and L3 as before. Levels and conditional gates stay the keys above;
+    /// see [`super::CascadeConfig::validate_for_gates`].
+    pub cascade: Option<super::Cascade>,
 }
 
 #[derive(Debug, Clone)]
@@ -458,11 +465,7 @@ impl ScanGateMatrix {
     /// Return whether the level is allowed by this matrix before max-level
     /// enforcement.
     pub fn allows_level(&self, level: SecurityLevel) -> bool {
-        match level {
-            SecurityLevel::L1 => self.l1.unwrap_or(true),
-            SecurityLevel::L2 => self.l2.unwrap_or(true),
-            SecurityLevel::L3 => self.l3.unwrap_or(true),
-        }
+        level_switch([self.l1, self.l2, self.l3], level)
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -514,6 +517,17 @@ pub fn pipeline_allowed(
         .all(|gate| gate.when.matches(metadata, results))
 }
 
+/// The one rule of the per-level switches `l1`, `l2`, `l3` of every host:
+/// unset means enabled.
+pub(super) fn level_switch(switches: [Option<bool>; 3], level: SecurityLevel) -> bool {
+    let index = match level {
+        SecurityLevel::L1 => 0,
+        SecurityLevel::L2 => 1,
+        SecurityLevel::L3 => 2,
+    };
+    switches[index].unwrap_or(true)
+}
+
 /// The serialized [`ScanGateMatrix`]; missing keys keep the defaults.
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -525,6 +539,7 @@ struct GateConfig {
     l3: Option<bool>,
     conditional: Vec<ConditionalPipelineGate>,
     l3_policy: L3PolicyConfig,
+    cascade: Option<super::CascadeConfig>,
 }
 
 /// The serialized [`L3SchedulerPolicy`]: each key overrides its default;
@@ -586,6 +601,13 @@ impl TryFrom<GateConfig> for ScanGateMatrix {
             l2: config.l2,
             l3: config.l3,
             l3_policy: policy,
+            cascade: config
+                .cascade
+                .map(|cascade| {
+                    cascade.validate_for_gates()?;
+                    super::Cascade::new(cascade).map_err(|error| error.to_string())
+                })
+                .transpose()?,
             ..Self::default()
         };
         gates.set_conditional(config.conditional)?;
@@ -713,6 +735,16 @@ impl GateExpression {
             Self::Not(item) => item.validate(),
             Self::Metadata(condition) => condition.validate(),
             Self::Result(condition) => condition.validate(),
+        }
+    }
+
+    /// Whether the expression reads request metadata anywhere.
+    pub fn reads_metadata(&self) -> bool {
+        match self {
+            Self::All(items) | Self::Any(items) => items.iter().any(Self::reads_metadata),
+            Self::Not(item) => item.reads_metadata(),
+            Self::Metadata(_) => true,
+            Self::Result(_) => false,
         }
     }
 

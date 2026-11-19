@@ -71,22 +71,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
-- One analysis framework for every category: each category is an analysis module whose layers
-  (L1 rules and an optional L1 text model, then L2, then L3) run in order, and a later layer runs
-  only on what the earlier configured layers left undecided. See "Analysis framework" in the docs.
+- One analysis framework for every category, opt-in: each category is an analysis module whose
+  layers (L1 rules and an optional L1 text model, then L2, then L3) can run as a cascade, where a
+  later layer runs only on what the earlier ones left undecided. Without a configured cascade
+  nothing changes: Core and Ark scan exactly as before and the new result fields stay absent. See
+  "Analysis framework" in the docs.
   - Core: an optional `cascade` in the scanner configuration (Rust `ScannerConfig::cascade`,
-    Python `ScannerConfig["cascade"]`) sets the deepest layer, per category a `detect_threshold`
-    and a `clear_threshold` on the rule score (both between `0.0` and `1.0`) and an optional L1
-    text model (`l1_model`: a pinned model release, loaded once when the scanner is created,
-    whose detect and clear cuts default to the model's own; clearing can be switched off). With
-    `cascade` set, the report gives each category's final answer (`decision`: `detected` or
-    `clear`), the stage that decided it (`decided_by`) and the time of each later layer. Unset
-    thresholds keep today's results; no model ships.
-  - Core: Wolf Defender is the L3 of `injection` and runs only on inputs whose injection L1 did
-    not detect (or, with a clear threshold, left undecided). Its default threshold is `0.93` for
-    base, small and edge.
-  - Ark: a category L1 detects skips L2 and L3, and its results carry `decided_by: "heuristic"`;
-    L2 and L3 results carry `decided_by: "l2"` or `"l3"` once final (Python and HTTP results too).
+    Python `ScannerConfig["cascade"]`) turns it on. Its level keys are those of the Ark gates:
+    `max_level` and `l1`, `l2`, `l3` (`false` switches a level off, so any one layer can run
+    alone, for example only Wolf with `l1: false`), plus `conditional` gates over the L1 results.
+    Per category, `modules.<category>` sets a `detect_threshold` and a `clear_threshold` on the
+    rule score (both between `0.0` and `1.0`) and an optional L1 text model (`l1_model`: a pinned
+    model release, loaded once when the scanner is created, whose detect and clear cuts default
+    to the model's own; clearing can be switched off). A category's rules are switched off with
+    the existing `models` gates. The report then gives each category's final answer (`decision`:
+    `detected` or `clear`), the stage that decided it (`decided_by`) and the time of each later
+    layer. With a cascade, Wolf Defender (the L3 of `injection`) runs only where the cascade
+    escalates.
+  - Ark: the same `cascade` key in the gates (Python `execution_gates`, Ark API `gates`) with
+    per-category `modules` turns on early exit: a category L1 decides, or one no later layer can
+    run for, skips L2 and L3, and results carry `decided_by` (`heuristic`, `l2` or `l3`) once
+    final, in the queue and the distributed plan alike. Levels and conditional gates stay the
+    existing gate keys.
+  - Wolf Defender's `threshold` is optional; without it the default is `0.93` for base, small and
+    edge.
   - An optional `threat_points_acceptance` (Rust `NativeGates`, Python `ScannerConfig`): the least
     score of an accepted threat points rule, between `0.0` and `1.0` (default `0.5`).
 - Python: `NativeCategory` lists every native category.

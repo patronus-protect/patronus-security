@@ -10,6 +10,9 @@ impl ThresholdTable for Table {
     fn operating_point(&self) -> &str {
         "test_point"
     }
+    fn ark_version(&self) -> &str {
+        "test-host"
+    }
     fn default_class(&self, _pipeline: &str) -> &str {
         "benign"
     }

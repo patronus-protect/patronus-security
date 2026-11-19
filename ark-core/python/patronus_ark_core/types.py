@@ -173,12 +173,15 @@ class ModuleConfig(TypedDict, total=False):
     """One module's cascade settings; heuristic cuts on its 0..1 rule score."""
     detect_threshold: float | None
     clear_threshold: float | None
-    l1_model: L1ModelConfig
+    l1_model: L1ModelConfig | None
 
 
 class CascadeConfig(TypedDict, total=False):
-    """Layers that may run after L1, per-module L1 cuts and optional L1 models."""
+    """The opt-in cascade: level switches as in Ark's gates, per-module L1 cuts and L1 models."""
     max_level: Literal["L1", "L2", "L3"]
+    l1: bool
+    l2: bool
+    l3: bool
     conditional: list[dict[str, object]]
     modules: dict[str, ModuleConfig]
 
