@@ -146,7 +146,14 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
                             required_anchors: anchor_gate.required_anchors(),
                         }
                     }
-                    None => rule_points(&rule.id, &anchor_gate),
+                    // Threat rules have no severity of their own; all count
+                    // as `high`. The metadata rule parses the URL host after
+                    // the match.
+                    None => RulePoints::for_rule(
+                        "high",
+                        rule.id == "ark.threat.ssrf_metadata",
+                        &anchor_gate,
+                    ),
                 };
                 let category = rule
                     .class_name
@@ -584,16 +591,6 @@ pub fn facts_findings(detection: &NativeDetection) -> Vec<Finding<'static>> {
         .collect()
 }
 
-/// Threat rules have no severity of their own; all count as `high`. The
-/// metadata rule parses the URL host after the match.
-fn rule_points(rule_id: &str, gate: &super::anchor_gate::AnchorGate) -> RulePoints {
-    let strength = if rule_id == "ark.threat.ssrf_metadata" {
-        ValidatorStrength::Structure
-    } else {
-        ValidatorStrength::None
-    };
-    RulePoints::for_severity("high", strength, gate.required_anchors())
-}
 
 /// Whether a counter term sets `span` apart as for the class's own points
 /// rules (see [`clause_context`]); the `ark.injection.*` rules that report
@@ -1451,10 +1448,12 @@ mod tests {
                 super::super::score::Context::None
             ))
         );
-        assert_eq!(
-            rule_points("ark.threat.ssrf_metadata", &compiled.anchor_gate).strength,
-            ValidatorStrength::Structure
-        );
+        let metadata = catalog()
+            .1
+            .iter()
+            .find(|r| r.rule.id == "ark.threat.ssrf_metadata")
+            .unwrap();
+        assert_eq!(metadata.points.strength, ValidatorStrength::Structure);
     }
 
     fn points_rules(detection: &NativeDetection) -> Vec<String> {

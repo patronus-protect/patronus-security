@@ -8,7 +8,7 @@ use serde_json::json;
 use super::signal::{detection_from_signals, rule_category, InjectionReference, InjectionSignal};
 use super::token_relations::{OrderedRelationDefinition, OrderedTokenRelation};
 use crate::detectors::evidence::L1Match;
-use crate::detectors::score::{score, severity_rank, Context, RulePoints, ValidatorStrength};
+use crate::detectors::score::{score, severity_rank, Context, RulePoints};
 use crate::detectors::NativeDetection;
 use crate::{EvaluationResult, SecurityCategory};
 
@@ -691,17 +691,16 @@ fn validate_catalog(catalog: &RuleCatalog) {
 }
 
 /// Rules whose decoded payload must itself be an injection signal have a
-/// verified structure; the other rules are keyword forms without a validator.
+/// verified structure.
 fn rule_points(
     rule: &RuleDefinition,
     gate: &crate::detectors::anchor_gate::AnchorGate,
 ) -> RulePoints {
-    let strength = if rule.decoded_base64_instruction || rule.decoded_unicode_instruction {
-        ValidatorStrength::Structure
-    } else {
-        ValidatorStrength::None
-    };
-    RulePoints::for_severity(&rule.severity, strength, gate.required_anchors())
+    RulePoints::for_rule(
+        &rule.severity,
+        rule.decoded_base64_instruction || rule.decoded_unicode_instruction,
+        gate,
+    )
 }
 
 fn safe_detection() -> NativeDetection {
@@ -728,6 +727,7 @@ mod tests {
     use std::sync::OnceLock;
 
     use super::*;
+    use crate::detectors::score::ValidatorStrength;
 
     const PROMPT_ARMOR_JSON: &str = include_str!("rules/prompt_armor_95e532e.json");
 
