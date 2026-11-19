@@ -330,10 +330,30 @@ tasks:
       candidate family available to every class's scorer task next to B0 / K26-like / hashed; model size and
       ms per 100 KiB reported; DLP latency budget (100 KiB p95 <= 10 ms) holds for the shipped set; parity
       goldens in CI; dev TPR@0.1% and @1% per class for the fastText-type candidate in the PR
-  - id: JB02
-    title: jailbreak scorer — choose among the S04 and S09 candidates (B0, K26-like, hashed, fastText-type) by dev TPR@0.1% FPR within the L1 budget; rules from JB01 stay as the precise layer
+  # Owner, plan review 2026-11-19: S09's fastText-type candidates beat rules and the heuristics on dev
+  # (prompt_extraction 76.2/52.9 at TPR@1/0.1% — above Prompt Guard 2's 23.5 at 0.1%; injection 72.1/64.8),
+  # but the threshold from train negatives does not carry (hard-benign FPR 27-70% at the operating point) and
+  # p95 is 3.8 ms per 100 KiB (budget 1 ms per model). S10 fixes both before the class scorers pick it.
+  - id: S10
+    title: fastText-type candidates ready to ship — threshold calibrated per class on held-out negatives incl. the hard-benign pool (operating point at 0.1% FPR), int8-quantised embeddings and a lean feature path (e.g. 3-4-grams only) to meet the 1 ms per 100 KiB model budget; parity goldens updated
     type: scorer
-    deps: [JB01, S05, S09]
+    deps: [S09]
+    accept: >-
+      per class: hard-benign FPR at the calibrated operating point <= 0.1% (or the gap named); dev TPR@0.1% for
+      the calibrated, quantised candidate vs the S09 float model (loss stated); p95 <= 1 ms per 100 KiB on the
+      E03 latency corpus; Rust parity bit-exact; nothing wired into the scan path before a class task picks it
+  - id: E09
+    title: Scoreboard of main after every merge — baseline.md (and full-stack.md once E07 lands) re-rendered from main's current dev split with TPR@0.1% and @1% per class and language, so every class has one current number instead of per-PR bases
+    type: eval-infra
+    deps: [E08]
+    accept: >-
+      a runner step (or task) re-renders research/l1-threat/scoreboard/baseline.md on main after each merged
+      detector, scorer or gold change, in the same PR or a follow-up; the table shows TPR@0.1% and @1%,
+      hard-benign FPR and the baseline columns; README links it as the current state
+  - id: JB02
+    title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
+    type: scorer
+    deps: [JB01, S05, S10]
     accept: >-
       target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
       regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
@@ -341,7 +361,7 @@ tasks:
   - id: PX02
     title: prompt_extraction scorer — choose among the S04 and S09 candidates by dev TPR@0.1% FPR within the L1 budget; PX01 rules stay as the precise layer
     type: scorer
-    deps: [PX01, S05, S09]
+    deps: [PX01, S05, S10]
     accept: >-
       target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
       regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
