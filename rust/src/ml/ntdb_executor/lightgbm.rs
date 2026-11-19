@@ -48,19 +48,26 @@ impl LightGbmStore {
 
 #[derive(Debug, Clone)]
 pub struct LightGbmModel {
-    trees: Vec<Tree>,
+    trees: Box<[Tree]>,
     num_class: usize,
     feature_count: usize,
 }
 
+/// One regression tree in a compact layout: feature indices as `u16` and child
+/// links as `i16` (load-time checked); thresholds and leaf values stay `f64` so
+/// predictions are bit-identical to the reference LightGBM evaluation.
 #[derive(Debug, Clone)]
 pub struct Tree {
-    split_feature: Vec<usize>,
-    threshold: Vec<f64>,
-    left_child: Vec<i32>,
-    right_child: Vec<i32>,
-    leaf_value: Vec<f64>,
+    split_feature: Box<[u16]>,
+    threshold: Box<[f64]>,
+    left_child: Box<[i16]>,
+    right_child: Box<[i16]>,
+    leaf_value: Box<[f64]>,
 }
+
+/// Largest tree the `i16` child links can address: leaves are encoded as
+/// `-(leaf + 1)`, so leaf indices run down to `i16::MIN`.
+const MAX_TREE_LEAVES: usize = i16::MAX as usize + 1;
 
 impl LightGbmModel {
     fn parse(text: &str) -> NtdbResult<Self> {
@@ -93,7 +100,7 @@ impl LightGbmModel {
             return Err(ntdb_error("LightGBM model has no trees"));
         }
         Ok(Self {
-            trees,
+            trees: trees.into_boxed_slice(),
             num_class,
             feature_count,
         })
@@ -138,6 +145,11 @@ impl Tree {
         if num_leaves == 0 {
             return Err(ntdb_error("LightGBM num_leaves must be positive"));
         }
+        if num_leaves > MAX_TREE_LEAVES {
+            return Err(ntdb_error(format!(
+                "LightGBM trees with more than {MAX_TREE_LEAVES} leaves are not supported"
+            )));
+        }
         let num_cat = parse_value::<usize>(block, "num_cat")?;
         if num_cat != 0 {
             return Err(ntdb_error("categorical LightGBM trees are not supported"));
@@ -146,10 +158,12 @@ impl Tree {
         if is_linear != 0 {
             return Err(ntdb_error("linear LightGBM trees are not supported"));
         }
-        let split_feature = parse_vec::<usize>(block, "split_feature")?;
+        // `u16::from_str` rejects indices above 65535, so a model with more
+        // features fails to load instead of being evaluated on wrong features.
+        let split_feature = parse_vec::<u16>(block, "split_feature")?;
         let threshold = parse_vec::<f64>(block, "threshold")?;
-        let left_child = parse_vec::<i32>(block, "left_child")?;
-        let right_child = parse_vec::<i32>(block, "right_child")?;
+        let left_child = parse_vec::<i16>(block, "left_child")?;
+        let right_child = parse_vec::<i16>(block, "right_child")?;
         let leaf_value = parse_vec::<f64>(block, "leaf_value")?;
         let expected_internal_nodes = num_leaves.saturating_sub(1);
         if leaf_value.len() != num_leaves {
@@ -188,14 +202,17 @@ impl Tree {
         let mut node = 0usize;
         loop {
             let feature_index = self.split_feature[node];
-            let feature_value = features.get(feature_index).copied().unwrap_or(0.0) as f64;
+            let feature_value = features
+                .get(usize::from(feature_index))
+                .copied()
+                .unwrap_or(0.0) as f64;
             let child = if feature_value <= self.threshold[node] {
                 self.left_child[node]
             } else {
                 self.right_child[node]
             };
             if child < 0 {
-                return (-child - 1) as usize;
+                return (-1 - i32::from(child)) as usize;
             }
             node = child as usize;
         }
@@ -220,7 +237,7 @@ where
         .map_err(|err| ntdb_error(format!("invalid LightGBM key {key}: {err}")))
 }
 
-fn parse_vec<T>(block: &str, key: &str) -> NtdbResult<Vec<T>>
+fn parse_vec<T>(block: &str, key: &str) -> NtdbResult<Box<[T]>>
 where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
@@ -266,6 +283,30 @@ mod tests {
              Tree=0\nnum_leaves=1\nnum_cat=0\nsplit_feature=\nthreshold=\nleft_child=\n\
              right_child=\nleaf_value={leaf_value}\nis_linear=0\n\nend of trees\n"
         )
+    }
+
+    const SPLIT_TREE: &str = "Tree=0\nnum_leaves=3\nnum_cat=0\nsplit_feature=3453 0\n\
+        threshold=0.5 -1\nleft_child=1 -1\nright_child=-3 -2\nleaf_value=1 2 3\nis_linear=0\n";
+
+    #[test]
+    fn compact_tree_follows_both_branches() {
+        let tree = Tree::parse(SPLIT_TREE).unwrap();
+        let mut features = vec![0.0_f32; 3454];
+        features[0] = -2.0;
+        assert_eq!(tree.predict_raw(&features), 1.0);
+        features[0] = 0.0;
+        assert_eq!(tree.predict_raw(&features), 2.0);
+        features[3453] = 0.75;
+        assert_eq!(tree.predict_raw(&features), 3.0);
+    }
+
+    #[test]
+    fn compact_tree_refuses_indices_beyond_its_integer_types() {
+        let wide_feature = SPLIT_TREE.replace("split_feature=3453 0", "split_feature=65536 0");
+        assert!(Tree::parse(&wide_feature).is_err());
+        let too_many_leaves = SPLIT_TREE.replace("num_leaves=3", "num_leaves=32769");
+        let error = Tree::parse(&too_many_leaves).unwrap_err().to_string();
+        assert!(error.contains("32768 leaves"), "{error}");
     }
 
     #[test]
