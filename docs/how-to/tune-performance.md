@@ -100,4 +100,12 @@ export PATRONUS_L3_TTL_SECS=600
   encoder across categories.
 - Don't download optional full-precision assets (leave `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS`
   unset) — the quantized bundles are the default.
-- Scan only the categories you act on.
+- Scan only the categories you act on, and leave rules you do not need switched off: native
+  rules are compiled only when the gates enable them, so rules of categories a scanner does not
+  run, opt-in forms and rules switched off in `rules` take no memory. The enabled rules are
+  compiled when the scanner or gateway is built, so the first scan does not pay for them.
+- Run `warmup()` (or `prepare_assets()`) with downloads allowed at least once per cache: it
+  moves the weights of each downloaded ONNX graph into `model.onnx.data` next to it, which ONNX
+  Runtime memory-maps instead of copying onto the heap. The cache needs about as much disk space
+  as before (the graph file shrinks by what moves into the data file); keep both files together
+  when you copy a cache to another machine.

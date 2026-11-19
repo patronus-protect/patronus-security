@@ -244,7 +244,8 @@ Detectors run after the built-in L1 heuristics in registration order.
 pub fn set_execution_gates(&self, gates: ScanGateMatrix);
 ```
 
-Replace the execution gate matrix used by subsequent scans.
+Replace the execution gate matrix used by subsequent scans. The
+native rules the new gates enable are built here, not on a scan.
 
 ```rust
 pub fn set_onnx_batch_mode(&self, mode: OnnxBatchMode);
@@ -2328,6 +2329,17 @@ Initialize only configured native categories; other categories have no
 native producers. An empty selection creates no pipelines.
 
 ```rust
+pub fn prepare(&self, gates: &NativeGates);
+```
+
+Builds what a scan under `gates` runs, for every enabled producer:
+rules and pipelines are built on first use, so the ones the gates
+keep off cost no memory. Call it when the gates are fixed (a scanner's
+config, a gateway's execution gates) so that no scan under them
+builds anything; a scan under other gates builds what they enable on
+first use. What is built stays, also after a gate change turns it off.
+
+```rust
 pub fn load_l1_models<'a>(
     &mut self,
     configs: impl IntoIterator<Item = (SecurityCategory, &'a L1ModelConfig)>,
@@ -2492,6 +2504,10 @@ pub struct NativeProducerSpec {
     parent: Option<&'static str>,
     rule: Option<&'static str>,
     detect: Detect,
+    /// Builds what a scan under the gates runs (the enabled rules, the
+    /// pipeline itself), so that the scan builds nothing; see
+    /// [`super::NativeEngine::prepare`].
+    prepare: Prepare,
 }
 ```
 

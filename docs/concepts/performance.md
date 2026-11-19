@@ -55,6 +55,11 @@ traffic — but budget memory for the L3 models your configuration enables, sinc
 stays resident. (The one exception is `dynamic-pii`: its GLiNER session is warmed eagerly during
 `warmup()`, before any request, then follows the same idle-TTL eviction.)
 
+Model weights are memory-mapped from the `model.onnx.data` file that asset preparation writes
+next to each downloaded graph, so a resident session holds mostly its working memory, not a heap
+copy of its weights. Clean mapped pages do not count towards the process footprint, and the
+operating system can drop and re-read them under memory pressure.
+
 ### Cost-scheduled worker
 
 The L3 worker schedules promoted jobs by **estimated and observed compute cost** (an EWMA of

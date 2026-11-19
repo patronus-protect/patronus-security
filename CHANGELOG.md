@@ -468,11 +468,33 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
-- Native rules that the gates keep off (opt-in PII forms, opt-in DLP classes, rules a host
-  switches off, rules of categories a scanner does not run) are no longer compiled, and the PII
-  context lexica are built per label and share one counter-term lexicon. A PII-only scanner now
-  holds about 70 MB after warmup instead of about 150 MB, and the first scans no longer pay
-  for compiling the PII lexica or the attack-class rules. Results are unchanged.
+- Lower memory use and faster first scans. Only what a scanner or gateway actually runs takes
+  memory, and model weights are memory-mapped. **Detection change:** none; every rule and model
+  returns the same results.
+  - Native rules that the gates keep off (opt-in PII forms, opt-in DLP classes, rules a host
+    switches off, rules of categories a scanner does not run) are no longer compiled. The rules
+    a scanner or gateway runs are compiled when it is built (and again for newly enabled rules
+    when its gates change), not on the first scan. The PII context lexica are built per label
+    and share one counter-term lexicon. A PII-only scanner holds about 70 MB after warmup
+    instead of about 150 MB, and its first scan takes about 0.2 s instead of 3 to 6 s; with all
+    categories, memory after warmup drops from about 490 MB to about 420 MB and the first scan
+    from about 3.7 s to 0.5 s.
+  - The shell-command check (`shell_command`) keeps its model vocabulary in a compact form and
+    compiles its policy patterns once per bundle: about 51 MB instead of 71 MB, and it loads in
+    under 0.8 s instead of up to 2.3 s.
+  - The L2 tree models parse identical model files once and share them, and store their trees
+    in a compact layout: an all-category L2 warmup holds about 60 MB instead of 90 MB.
+  - Asset preparation (`warmup` with downloads allowed, and Core's Wolf preparation) moves the
+    weights of each downloaded ONNX graph of Wolf Defender, the unified L3 classifier, the
+    dedicated L3 classifiers and GLiNER into a data file next to it (`model.onnx` →
+    `model.onnx.data`), once, so ONNX Runtime memory-maps them instead of copying them onto the
+    heap. The weights are copied byte for byte, and the rewrite is kept only when the original
+    file can be rebuilt from it exactly; the cache takes about as much disk space as before.
+    A loaded Wolf Defender Edge model holds about 137 MB instead of 264 MB (peak 508 MB before),
+    Lion Warden about 67 MB instead of 107 MB, GLiNER about 65 MB instead of 122 MB. Caches
+    downloaded by an earlier release are rewritten the next time they are prepared. Local Wolf
+    bundles that Ark did not download, including those with an integrity manifest, are left as
+    they are.
 
 - The threat scoreboard measures `patronus-ark-core` alone instead of the full Ark package: a new
   example, `threat_cascade`, scans every evaluation row once with the Core scanner and a layer
@@ -584,15 +606,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
   to the same detector.
-- Model weights are memory-mapped instead of copied onto the heap. Asset preparation (`warmup`
-  with downloads allowed, and Core's Wolf preparation) now moves the weights of each downloaded
-  ONNX graph of Wolf Defender, the unified L3 classifier, the dedicated L3 classifiers and GLiNER
-  into a data file next to it (`model.onnx` → `model.onnx.data`), once. The weights are copied
-  byte for byte, and the rewrite is kept only when the original file can be rebuilt from it
-  exactly. Caches downloaded by an earlier release are rewritten the next time they are
-  prepared. Local Wolf bundles that Ark did not download, including those with an integrity
-  manifest, are left as they are.
-  **Detection change:** none; the models compute the same results.
 ## [0.1.17] - 2026-11-16
 
 This release changes only the prompt-injection model (Wolf Defender) on top of 0.1.16.
