@@ -28,20 +28,22 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use cedar_policy::{EntityUid, Schema};
-use regex::{Regex, RegexSet, RegexSetBuilder};
+use regex::Regex;
 use serde::Deserialize;
 
 use super::facts::Facts;
-use super::pyre::{py_regex, try_py_regex, Anchor};
+use super::pyre::{py_pattern, py_regex, Anchor};
 use crate::detectors::facts_common::cedar::{self, CedarPolicies, CedarRule, PolicyScope};
 pub use crate::detectors::facts_common::cedar::{Decision, Lowered, PolicyHit, Tier};
 
+mod pattern;
 mod request;
 mod rules;
 
+use pattern::RulePatterns;
 use request::requests;
 use rules::{dc_rules, parse_cedar};
 
@@ -66,9 +68,6 @@ static HKLM: LazyLock<Regex> =
 static HKCU: LazyLock<Regex> =
     LazyLock::new(|| py_regex(r"^(HKEY_CURRENT_USER|HKCU:?)(/|$)", true, Anchor::Search));
 static SLASHES: LazyLock<Regex> = LazyLock::new(|| Regex::new("/+").expect("slashes"));
-/// Python's Unicode classes make the combined pattern program and its lazy DFA
-/// larger than the regex defaults; below them the search falls back to the NFA.
-const PATTERN_SET_SIZE_LIMIT: usize = 256 << 20;
 
 /// Which request a policy reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,8 +164,10 @@ pub struct ShellPolicies {
     policies: CedarPolicies<Scope>,
     bundle_rules: usize,
     /// One pass over the command for every rule pattern, numbered as
-    /// [`CedarPolicies::pattern_rules`].
-    patterns: RegexSet,
+    /// [`CedarPolicies::pattern_rules`]. Only bundle rules carry patterns, so
+    /// they are compiled once per bundle and shared by every
+    /// [`Self::configure`]d copy.
+    patterns: Arc<RulePatterns>,
 }
 
 impl ShellPolicies {
@@ -185,40 +186,50 @@ impl ShellPolicies {
         let mut rules = dc_rules(levels)?;
         rules.extend(parse_cedar(CORE_POLICIES, Tier::Core, Some(levels))?);
         let bundle_rules = rules.len();
-        Self::build(rules, bundle_rules, BTreeMap::new())
+        let patterned: Vec<(&Rule, &str)> = rules
+            .iter()
+            .filter_map(|rule| Some((rule, rule.pattern.as_deref()?)))
+            .collect();
+        let sources = patterned
+            .iter()
+            .map(|(rule, pattern)| {
+                py_pattern(pattern, false, Anchor::Search)
+                    .map_err(|error| format!("{}: pattern: {error}", rule.id()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let patterns = RulePatterns::new(&sources).map_err(|(index, error)| match index {
+            Some(index) => format!("{}: pattern: {error}", patterned[index].0.id()),
+            None => error,
+        })?;
+        Self::build(rules, bundle_rules, BTreeMap::new(), Arc::new(patterns))
     }
 
     /// No policies: the model alone decides.
     pub fn none() -> Self {
-        Self::build(Vec::new(), 0, BTreeMap::new()).expect("empty policy set")
+        Self::build(
+            Vec::new(),
+            0,
+            BTreeMap::new(),
+            Arc::new(RulePatterns::new(&[]).expect("no patterns")),
+        )
+        .expect("empty policy set")
     }
 
     fn build(
         rules: Vec<Rule>,
         bundle_rules: usize,
         allowlist: BTreeMap<String, String>,
+        patterns: Arc<RulePatterns>,
     ) -> Result<Self, String> {
-        let mut sources = Vec::new();
-        for rule in &rules {
-            if let Some(pattern) = &rule.pattern {
-                let regex = try_py_regex(pattern, false, Anchor::Search)
-                    .map_err(|error| format!("{}: pattern: {error}", rule.id()))?;
-                sources.push(regex.as_str().to_string());
-            }
-        }
-        let patterns = RegexSetBuilder::new(&sources)
-            .size_limit(PATTERN_SET_SIZE_LIMIT)
-            .dfa_size_limit(PATTERN_SET_SIZE_LIMIT)
-            .build()
-            .map_err(|error| error.to_string())?;
+        let policies = CedarPolicies::build(
+            &CEDAR_SCHEMA,
+            rules,
+            allowlist,
+            PRINCIPAL.clone(),
+            RESOURCE.clone(),
+        )?;
         Ok(Self {
-            policies: CedarPolicies::build(
-                &CEDAR_SCHEMA,
-                rules,
-                allowlist,
-                PRINCIPAL.clone(),
-                RESOURCE.clone(),
-            )?,
+            policies,
             bundle_rules,
             patterns,
         })
@@ -253,7 +264,13 @@ impl ShellPolicies {
                 ));
             }
         }
-        Self::build(rules, self.bundle_rules, config.allowlist.clone())
+        // User policies carry no pattern: the bundle's compiled patterns apply.
+        Self::build(
+            rules,
+            self.bundle_rules,
+            config.allowlist.clone(),
+            Arc::clone(&self.patterns),
+        )
     }
 
     /// Number of loaded policies, user policies included.
@@ -284,7 +301,8 @@ impl ShellPolicies {
         let matched: Vec<usize> = self
             .patterns
             .matches(command)
-            .into_iter()
+            .iter()
+            .map(|pattern| pattern.as_usize())
             .filter(|&k| allows_rule(&rules[pattern_rules[k]].rule_id))
             .collect();
         // `context.patterns` names a rule pattern `p<rule index>`, as the reference does.
