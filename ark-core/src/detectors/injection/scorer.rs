@@ -16,10 +16,7 @@ pub struct L1CandidateScore {
 pub fn scorer_config() -> &'static RuleScorer {
     static CONFIG: OnceLock<RuleScorer> = OnceLock::new();
     CONFIG.get_or_init(|| {
-        let config = RuleScorer::load(
-            include_str!("rules/l1_scorer_0_1_7.json"),
-            "Injection L1",
-        );
+        let config = RuleScorer::load(include_str!("rules/l1_scorer_0_1_7.json"), "Injection L1");
         for name in &config.feature_order {
             assert!(
                 supported_feature(name),

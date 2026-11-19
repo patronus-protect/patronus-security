@@ -390,7 +390,11 @@ mod tests {
         );
         let checked = RulePoints::for_rule("high", true, &AnchorGate::Always);
         assert_eq!(
-            (checked.base_score, checked.strength, checked.required_anchors),
+            (
+                checked.base_score,
+                checked.strength,
+                checked.required_anchors
+            ),
             (45, ValidatorStrength::Structure, 0)
         );
     }

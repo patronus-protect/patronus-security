@@ -14,8 +14,10 @@
 //!   n-gram embeddings, averaged, linear softmax), the second candidate form
 //!   of the text category models.
 //! - [`thresholds`]: the detect and clear cuts of an L1 model's score.
+//! - [`bundle`]: a sha256-pinned model release directory, verified file by file.
 //! - [`cedar`]: loading the Cedar schema a facts document is checked against.
 
+pub(crate) mod bundle;
 pub mod cedar;
 pub mod fasttext;
 pub(crate) mod fields;

@@ -317,7 +317,8 @@ impl ThreatPipeline {
                         .name("count")
                         .or_else(|| captures.name("count_late"))
                     {
-                        if parse_count(count.as_str()).is_none_or(|count| count < thresholds.count) {
+                        if parse_count(count.as_str()).is_none_or(|count| count < thresholds.count)
+                        {
                             continue;
                         }
                     }
@@ -590,7 +591,6 @@ pub fn facts_findings(detection: &NativeDetection) -> Vec<Finding<'static>> {
         })
         .collect()
 }
-
 
 /// Whether a counter term sets `span` apart as for the class's own points
 /// rules (see [`clause_context`]); the `ark.injection.*` rules that report

@@ -49,7 +49,10 @@ impl RuleScorer {
     pub fn load(json: &str, label: &str) -> Self {
         let scorer: Self = serde_json::from_str(json)
             .unwrap_or_else(|error| panic!("embedded {label} scorer must parse: {error}"));
-        assert_eq!(scorer.schema_version, 1, "unsupported {label} scorer schema");
+        assert_eq!(
+            scorer.schema_version, 1,
+            "unsupported {label} scorer schema"
+        );
         assert_eq!(
             scorer.feature_order.len(),
             scorer.coefficients.len(),
@@ -57,7 +60,10 @@ impl RuleScorer {
         );
         let mut names = HashSet::new();
         for name in &scorer.feature_order {
-            assert!(names.insert(name), "duplicate {label} scorer feature: {name}");
+            assert!(
+                names.insert(name),
+                "duplicate {label} scorer feature: {name}"
+            );
         }
         assert!(
             scorer.intercept.is_finite() && scorer.coefficients.iter().all(|v| v.is_finite()),

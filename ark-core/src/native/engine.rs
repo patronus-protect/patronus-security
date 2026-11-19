@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use super::{registry, NativeGates, NativeProducerSpec};
 use crate::{
-    detectors::NativeDetection, threat::NativeText, ScanControl, ScanError, SecurityCategory,
+    detectors::{
+        text::{L1ModelConfig, L1TextModel},
+        NativeDetection,
+    },
+    threat::NativeText,
+    ScanControl, ScanError, SecurityCategory,
 };
 use std::{
+    collections::BTreeMap,
     panic::{catch_unwind, AssertUnwindSafe},
     time::Instant,
 };
@@ -35,6 +41,8 @@ pub const NATIVE_CATEGORIES: [SecurityCategory; 13] = [
 /// Owns each selected category's detector state once, without worker threads.
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
+    /// Each module's optional L1 model ([`Self::load_l1_models`]).
+    l1_models: [Option<L1TextModel>; NATIVE_CATEGORIES.len()],
 }
 
 impl NativeEngine {
@@ -49,7 +57,33 @@ impl NativeEngine {
                 }
             }
         }
-        Self { groups }
+        Self {
+            groups,
+            l1_models: std::array::from_fn(|_| None),
+        }
+    }
+
+    /// Load the configured L1 models, keyed by category name, once; each
+    /// replaces the module's earlier model. Unknown or non-native categories
+    /// are refused. No model is loaded unless configured.
+    pub fn load_l1_models(
+        &mut self,
+        configs: &BTreeMap<String, L1ModelConfig>,
+    ) -> Result<(), String> {
+        for (name, config) in configs {
+            let category: SecurityCategory = name
+                .parse()
+                .map_err(|_| format!("l1 model for unknown category {name:?}"))?;
+            let slot = index(category)
+                .ok_or_else(|| format!("l1 model for non-native category {name:?}"))?;
+            self.l1_models[slot] = Some(L1TextModel::load(category, config)?);
+        }
+        Ok(())
+    }
+
+    /// The loaded L1 model of `category`'s module, if one is configured.
+    pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel> {
+        index(category).and_then(|i| self.l1_models[i].as_ref())
     }
 
     /// Producers in the established category order, or empty for an unselected

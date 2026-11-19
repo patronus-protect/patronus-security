@@ -330,7 +330,10 @@ mod tests {
         ] {
             for bad in ["1.5", "-0.1"] {
                 let json = format!(r#"{{"{key}":{bad}}}"#);
-                assert!(serde_json::from_str::<NativeGates>(&json).is_err(), "{json}");
+                assert!(
+                    serde_json::from_str::<NativeGates>(&json).is_err(),
+                    "{json}"
+                );
             }
         }
     }

@@ -213,7 +213,8 @@ fn policy_set<'a, S: 'a>(
 
 /// Validate `rules` against `schema` (strict mode).
 pub fn validate<S>(schema: &Schema, rules: &[CedarRule<S>]) -> Result<(), String> {
-    let result = Validator::new(schema.clone()).validate(&policy_set(rules)?, ValidationMode::Strict);
+    let result =
+        Validator::new(schema.clone()).validate(&policy_set(rules)?, ValidationMode::Strict);
     if result.validation_passed() {
         return Ok(());
     }
@@ -512,6 +513,9 @@ mod tests {
         let rules: Vec<CedarRule<Text>> =
             parse_annotated(POLICIES, Tier::Core, Some(&levels), |_| true, "t.").unwrap();
         assert_eq!(rules.len(), 1);
-        assert_eq!((rules[0].id(), rules[0].level), ("core.mail_out", Decision::Ask));
+        assert_eq!(
+            (rules[0].id(), rules[0].level),
+            ("core.mail_out", Decision::Ask)
+        );
     }
 }
