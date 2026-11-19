@@ -278,12 +278,9 @@ impl SecurityGateway {
                 }
             }
             // Runtime startup and readiness checks only consume prepared files.
-            // Converting/verifying the source tokenizer belongs to delivery.
+            // Converting the source tokenizer and weights belongs to delivery.
             if allow_download {
-                assets::prepare_cached_pipeline_model_compact_tokenizer(
-                    assets::UNIFIED_L3_ASSET,
-                    &base_dir,
-                );
+                assets::prepare_cached_pipeline_model(assets::UNIFIED_L3_ASSET, &base_dir);
             }
         }
 
@@ -355,6 +352,9 @@ impl SecurityGateway {
                         missing_files.join(", ")
                     )
                     .into());
+                }
+                if allow_download {
+                    assets::prepare_cached_pipeline_model(assets::DYNAMIC_PII_ASSET, &base_dir);
                 }
                 continue;
             }
@@ -491,11 +491,17 @@ impl SecurityGateway {
                 && execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
             {
-                // Core builds Wolf's compact tokenizer with its cache.
-                if let Some(asset) = assets::dedicated_l3_asset(*category)
-                    .filter(|asset| asset.model != assets::WOLF_PIPELINE_MODEL)
-                {
-                    assets::prepare_cached_pipeline_model_compact_tokenizer(asset, &base_dir);
+                match assets::dedicated_l3_asset(*category) {
+                    // Core prepares Wolf's compact tokenizer and external weights with its cache.
+                    Some(asset) if asset.model == assets::WOLF_PIPELINE_MODEL => {
+                        assets::download_dedicated_l3_assets(
+                            *category,
+                            &base_dir,
+                            execution.wolf_selection(),
+                        )?;
+                    }
+                    Some(asset) => assets::prepare_cached_pipeline_model(asset, &base_dir),
+                    None => {}
                 }
             }
             if !assets::required_assets_present(*category, asset_level, &category_dir) {
