@@ -2,7 +2,7 @@
 
 Every knob that changes gateway behavior, in one place. For the full method signatures see the
 generated [Python API](../python-api.md) and [Rust API](../rust-api.md); for concepts see
-[Architecture](../concepts/architecture.md) and [Layered scanning](../concepts/layered-scanning.md).
+[Architecture](../concepts/architecture.md) and [Analysis framework](../concepts/layered-scanning.md).
 
 ## Constructor options
 
@@ -103,11 +103,13 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 
 | Value | Layers used |
 | --- | --- |
-| `l1` | Native L1 only. |
-| `l2` | L1 + L2 (NTDB), when assets are cached. |
-| `l3` | L1 + L2 + L3 (transformer, on promotion), when assets are cached. |
+| `l1` | Native L1 only; what L1 does not detect is clear. |
+| `l2` | L1, then L2 (NTDB) on what L1 left undecided, when assets are cached. |
+| `l3` | L1, L2, then L3 (transformer, on promotion), when assets are cached. |
 
-`max_level` is a ceiling; execution gates can disable levels *below* it per request.
+`max_level` is a ceiling; execution gates can disable levels *below* it per request. Each layer
+runs only on what the earlier configured layers left undecided; see
+[Analysis framework](../concepts/layered-scanning.md).
 
 ## Execution gates
 

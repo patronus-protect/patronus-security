@@ -1,6 +1,8 @@
 # Native detectors (L1)
 
-Native detectors are the rule-based Rust checks that make up **L1**. Except for
+Native detectors are the rule-based Rust checks that make up the heuristic stage of each
+**L1** analysis module (how a module adds an L1 model and policies, and escalates to L2 and L3,
+is on [Analysis framework](layered-scanning.md)). Except for
 [`shell_command`](#shell-command), they need no model assets and are available fully offline.
 Their runtime scales with the input and enabled rule inventory: short inputs are cheap, while sufficiently large inputs can take milliseconds rather
 than microseconds. This page catalogues the detectors by family. The source lives under
