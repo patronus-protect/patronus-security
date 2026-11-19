@@ -534,10 +534,20 @@ def test_cascade_hard_benign_fpr_is_at_the_same_decision_per_source():
     assert "dolly" not in cell["hard_benign"]
 
 
-def test_cascade_needs_an_answer_for_every_class():
+def test_cascade_needs_cascade_answers():
     item = row("dev_a", 9, [INJ])
     with pytest.raises(ValueError, match="no cascade answer"):
         MODULE.cascade_metrics([(item, {"id": item["id"], "scores": {}, "flagged": []}, "dev")])
+
+
+def test_a_class_without_a_decision_counts_as_clear_by_no_stage():
+    positive = row("dev_a", 7, [INJ])
+    benign = row("dolly", 8, benign=True)
+    pairs = [(item, {**cascade_pred(item), "cascade": {}}, "dev") for item in (positive, benign)]
+    cell = MODULE.cascade_metrics(pairs)["gated"][INJ]["all"]
+    assert cell["tpr"] == 0.0 and cell["fpr"] == 0.0
+    assert cell["decided_by"] == {stage: 0 for stage in MODULE.STAGES}
+    assert MODULE._stage(pairs[0][1], INJ)["l1_score"] == 0.0
 
 
 def test_stage_latency_counts_l3_only_where_it_ran():

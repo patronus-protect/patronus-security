@@ -342,10 +342,14 @@ Ebene ist offen = sauber. L2 gibt es nur in ARK; es wird hier nicht gemessen. Oh
   Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des Injection-Scorers); 0,
   wenn L1 nichts meldet (dieselbe Regel wie zuvor über ARKs L1);
 - `flagged`: die Klassen, die L1 erkennt;
-- `cascade`: `l1` (L1-Ausgang `detected`/`clear`/`escalate`), `l1_score` (der Wert, den die Clear-Schwelle
-  vergleicht), `decision` (Endentscheidung) und `decided_by` (`heuristic`, `l1_model`, `l3`);
+- `cascade`, je Klasse mit Entscheidung: `l1` (L1-Ausgang `detected`/`clear`/`escalate`), `l1_score` (der
+  Wert, den Detect- und Clear-Schwelle vergleichen, in voller Genauigkeit), `decision` (Endentscheidung) und
+  `decided_by` (`heuristic`, `l1_model`, `l3`). Eine Klasse, für die keine Stufe lief (etwa eine Klasse ohne
+  Regeln und ohne spätere Ebene), fehlt; das Scoreboard wertet sie als nicht erkannt (`clear`, L1-Score 0) und
+  zählt sie bei keiner entscheidenden Stufe;
 - `wolf`: Wolfs Angriffswahrscheinlichkeit, nur wenn Wolf lief;
-- `ms`: `scan` (Wanduhr des Scans), `l1` (die nativen L1-Erzeuger) und, wenn Wolf lief, `l3` (der Rest).
+- `ms`: `scan` (Wanduhr des Scans), `l1` (die nativen L1-Erzeuger) und, wenn Wolf lief, `l3` (die Dauer der
+  L3-Ebenen aus den Modulentscheidungen).
 
 Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`, `native`, `translated`; Runner-Übersetzungen und der
 deutsche Teil eines in der Entity-Map als `translated` markierten Satzes, wie in `generators.py`) auf der
