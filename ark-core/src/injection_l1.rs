@@ -44,6 +44,22 @@ pub fn category_results(
     text: &str,
     outputs: Vec<(bool, NativeResult)>,
 ) -> Vec<NativeResult> {
+    category_results_at(
+        category,
+        text,
+        outputs,
+        scorer_config().acceptance_threshold,
+    )
+}
+
+/// [`category_results`] with the scorer's acceptance cut set to
+/// `acceptance_threshold` ([`crate::native::NativeGates::injection_acceptance_threshold`]).
+pub fn category_results_at(
+    category: SecurityCategory,
+    text: &str,
+    outputs: Vec<(bool, NativeResult)>,
+    acceptance_threshold: f64,
+) -> Vec<NativeResult> {
     let (scored, direct): (Vec<_>, Vec<_>) = outputs.into_iter().partition(|(scored, _)| *scored);
     let mut results = direct
         .into_iter()
@@ -51,7 +67,7 @@ pub fn category_results(
         .collect::<Vec<_>>();
     if !scored.is_empty() {
         let scored = scored.into_iter().map(|(_, result)| result).collect();
-        let result = aggregate(category, text, scored);
+        let result = aggregate_at(category, text, scored, acceptance_threshold);
         if category == SecurityCategory::Injection || reports_candidates_or_errors(&result) {
             results.push(result);
         }
@@ -76,6 +92,20 @@ pub fn aggregate(
     category: SecurityCategory,
     text: &str,
     producer_results: Vec<NativeResult>,
+) -> NativeResult {
+    aggregate_at(
+        category,
+        text,
+        producer_results,
+        scorer_config().acceptance_threshold,
+    )
+}
+
+fn aggregate_at(
+    category: SecurityCategory,
+    text: &str,
+    producer_results: Vec<NativeResult>,
+    acceptance_threshold: f64,
 ) -> NativeResult {
     let mut metrics = crate::diagnostics::PhaseMetricScope::new("l1_aggregation_detail", "");
     let aggregation_started = Instant::now();
@@ -127,8 +157,8 @@ pub fn aggregate(
                     producers,
                     class_name,
                     score: score.score,
-                    acceptance_threshold: config.acceptance_threshold,
-                    accepted: score.accepted,
+                    acceptance_threshold,
+                    accepted: score.score >= acceptance_threshold,
                     scoring_features: score.features.into_iter().collect(),
                     score_version: config.score_version.clone(),
                 }
@@ -193,7 +223,7 @@ pub fn aggregate(
         confidence,
         matched: accepted,
         duration_ms,
-        thresholds: HashMap::from([("acceptance".to_string(), config.acceptance_threshold)]),
+        thresholds: HashMap::from([("acceptance".to_string(), acceptance_threshold)]),
         details,
     };
     let decision_candidates = scored.iter().map(decision_candidate).collect::<Vec<_>>();

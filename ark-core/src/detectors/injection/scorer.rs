@@ -2,95 +2,34 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-use serde::Deserialize;
-
 use super::candidate::L1Candidate;
-
-const SCORER_JSON: &str = include_str!("rules/l1_scorer_0_1_7.json");
-
-#[derive(Debug, Deserialize)]
-pub struct L1ScorerConfig {
-    pub schema_version: u32,
-    pub model_id: String,
-    pub score_version: String,
-    pub feature_order: Vec<String>,
-    pub coefficients: Vec<f64>,
-    pub intercept: f64,
-    pub acceptance_threshold: f64,
-    pub golden_cases: Vec<L1ScorerGoldenCase>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct L1ScorerGoldenCase {
-    pub name: String,
-    pub features: Vec<f64>,
-    pub expected_score: f64,
-    pub expected_accepted: bool,
-}
+use crate::detectors::rule_scorer::RuleScorer;
 
 #[derive(Debug)]
 pub struct L1CandidateScore {
     pub score: f64,
-    pub accepted: bool,
     pub features: HashMap<String, f64>,
 }
 
-pub fn scorer_config() -> &'static L1ScorerConfig {
-    static CONFIG: OnceLock<L1ScorerConfig> = OnceLock::new();
+/// The embedded scorer, its features checked against the ones this module
+/// extracts.
+pub fn scorer_config() -> &'static RuleScorer {
+    static CONFIG: OnceLock<RuleScorer> = OnceLock::new();
     CONFIG.get_or_init(|| {
-        let config: L1ScorerConfig =
-            serde_json::from_str(SCORER_JSON).expect("embedded Injection L1 scorer must parse");
-        assert_eq!(config.schema_version, 1, "unsupported L1 scorer schema");
-        assert_eq!(
-            config.feature_order.len(),
-            config.coefficients.len(),
-            "L1 scorer feature and coefficient counts must match"
+        let config = RuleScorer::load(
+            include_str!("rules/l1_scorer_0_1_7.json"),
+            "Injection L1",
         );
-        assert!(
-            (0.0..=1.0).contains(&config.acceptance_threshold),
-            "L1 scorer acceptance threshold must be a probability"
-        );
-        let mut names = HashSet::new();
         for name in &config.feature_order {
-            assert!(names.insert(name), "duplicate L1 scorer feature: {name}");
             assert!(
                 supported_feature(name),
                 "unsupported L1 scorer feature: {name}"
             );
         }
-        assert!(
-            !config.golden_cases.is_empty(),
-            "L1 scorer must embed golden parity cases"
-        );
         for case in &config.golden_cases {
-            assert!(!case.name.is_empty(), "L1 scorer golden case needs a name");
-            assert_eq!(
-                case.features.len(),
-                config.coefficients.len(),
-                "L1 scorer golden feature count must match for {}",
-                case.name
-            );
             assert!(
-                case.features.iter().all(|value| value.is_finite()),
-                "L1 scorer golden features must be finite for {}",
-                case.name
-            );
-            assert!(
-                case.expected_score.is_finite() && (0.0..=1.0).contains(&case.expected_score),
-                "L1 scorer golden score must be a probability for {}",
-                case.name
-            );
-            let actual = score_feature_values(&config, &case.features);
-            assert!(
-                (actual - case.expected_score).abs() <= 1e-12,
-                "L1 scorer golden score mismatch for {}",
-                case.name
-            );
-            assert_eq!(
-                actual >= config.acceptance_threshold,
-                case.expected_accepted,
-                "L1 scorer golden acceptance mismatch for {}",
-                case.name
+                case.name.as_deref().is_some_and(|name| !name.is_empty()),
+                "L1 scorer golden case needs a name"
             );
         }
         config
@@ -106,7 +45,6 @@ pub fn score_candidate(candidate: &L1Candidate, producer_count: usize) -> L1Cand
     {
         return L1CandidateScore {
             score: 0.0,
-            accepted: false,
             features: config
                 .feature_order
                 .iter()
@@ -126,27 +64,10 @@ pub fn score_candidate(candidate: &L1Candidate, producer_count: usize) -> L1Cand
         .cloned()
         .zip(ordered_values.iter().copied())
         .collect::<HashMap<_, _>>();
-    let score = score_feature_values(config, &ordered_values);
     L1CandidateScore {
-        score,
-        accepted: score >= config.acceptance_threshold,
+        score: config.probability(&ordered_values),
         features,
     }
-}
-
-fn score_feature_values(config: &L1ScorerConfig, values: &[f64]) -> f64 {
-    assert_eq!(
-        values.len(),
-        config.coefficients.len(),
-        "L1 scorer value and coefficient counts must match"
-    );
-    let logit = config.intercept
-        + values
-            .iter()
-            .zip(&config.coefficients)
-            .map(|(value, coefficient)| value * coefficient)
-            .sum::<f64>();
-    sigmoid(logit)
 }
 
 fn supported_feature(name: &str) -> bool {
@@ -294,15 +215,6 @@ fn acceptance_span_length(candidate: &L1Candidate) -> f64 {
     (end.saturating_sub(start) as f64).ln_1p()
 }
 
-fn sigmoid(value: f64) -> f64 {
-    if value >= 0.0 {
-        1.0 / (1.0 + (-value).exp())
-    } else {
-        let exp = value.exp();
-        exp / (1.0 + exp)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,7 +307,6 @@ mod tests {
         let scored = score_candidate(&candidate, 0);
 
         assert!(scored.features.values().all(|value| *value == 0.0));
-        assert!(!scored.accepted);
         assert_eq!(scored.score, 0.0);
     }
 
@@ -415,7 +326,6 @@ mod tests {
 
         assert_eq!(mixed_score.features, native_score.features);
         assert_eq!(mixed_score.score, native_score.score);
-        assert_eq!(mixed_score.accepted, native_score.accepted);
     }
 
     #[test]
@@ -461,31 +371,17 @@ mod tests {
     }
 
     #[test]
-    fn embedded_golden_cases_match_scores_and_threshold_boundary() {
+    fn embedded_golden_cases_cover_the_threshold_boundary() {
         let config = scorer_config();
         assert!(config.golden_cases.len() >= 3);
-        for case in &config.golden_cases {
-            let actual = score_feature_values(config, &case.features);
-            assert!(
-                (actual - case.expected_score).abs() <= 1e-12,
-                "golden score mismatch for {}: {actual} != {}",
-                case.name,
-                case.expected_score
-            );
-            assert_eq!(
-                actual >= config.acceptance_threshold,
-                case.expected_accepted,
-                "{}",
-                case.name
-            );
-        }
-        assert!(config
-            .golden_cases
-            .iter()
-            .any(|case| { case.name == "one_quantum_below_threshold" && !case.expected_accepted }));
-        assert!(config
-            .golden_cases
-            .iter()
-            .any(|case| { case.name == "one_quantum_above_threshold" && case.expected_accepted }));
+        let named = |name: &str| {
+            config
+                .golden_cases
+                .iter()
+                .find(|case| case.name.as_deref() == Some(name))
+                .unwrap()
+        };
+        assert!(!named("one_quantum_below_threshold").expected_accepted);
+        assert!(named("one_quantum_above_threshold").expected_accepted);
     }
 }

@@ -95,7 +95,7 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
                 prepared,
                 category,
                 |id| gates.allows_rule(id),
-                gates.resource_exhaustion_count_threshold(),
+                &gates.threat_thresholds(),
             )
         }),
     });

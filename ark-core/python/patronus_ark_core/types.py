@@ -30,7 +30,21 @@ class LabelScore(TypedDict):
     matched: bool
 
 
-NativeCategory = Literal["pii", "dlp", "injection"]
+NativeCategory = Literal[
+    "pii",
+    "dlp",
+    "injection",
+    "jailbreak",
+    "prompt_extraction",
+    "tool_poisoning",
+    "agent_config_tampering",
+    "memory_poisoning",
+    "exfiltration",
+    "unsafe_action",
+    "resource_exhaustion",
+    "harmful_content",
+    "toxic_language",
+]
 
 
 class NativeResult(TypedDict):
@@ -149,6 +163,9 @@ class ScannerConfig(TypedDict, total=False):
     unsafe_action_mode: ScoreMode
     resource_exhaustion_mode: ScoreMode
     resource_exhaustion_count_threshold: int
+    injection_acceptance_threshold: float
+    threat_acceptance_threshold: float
+    threat_points_acceptance: float
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode
     explain: bool
