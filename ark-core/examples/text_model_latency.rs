@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Time a text category `model.json` on the 100 KiB latency windows: the
+//! Time a text category `model.json` (either form) on the 100 KiB latency windows: the
 //! cost the model adds on top of the facts, which every stage shares. Reads
 //! the windows (`windows.jsonl` of `scripts/l1_threat/latency.py`, rows with
 //! a `text` field), extracts the facts of each once, then times only the
@@ -14,8 +14,7 @@
 
 use std::time::Instant;
 
-use patronus_ark_core::detectors::facts_common::model::TfidfLrModel;
-use patronus_ark_core::detectors::text::{extract, model, visit_tf1, TEXT_MODEL};
+use patronus_ark_core::detectors::text::{extract, visit_tf1, CategoryModel};
 use serde_json::{json, Value};
 
 const SAMPLES: usize = 5;
@@ -45,7 +44,7 @@ fn main() -> Result<(), String> {
         return Err(format!("unknown --tokens {tokens}"));
     }
     let bytes = std::fs::read(model_path).map_err(|e| format!("{model_path}: {e}"))?;
-    let model = TfidfLrModel::from_json_slice(&bytes, TEXT_MODEL)?;
+    let model = CategoryModel::from_json_slice(&bytes)?;
     let windows =
         std::fs::read_to_string(windows_path).map_err(|e| format!("{windows_path}: {e}"))?;
     let mut samples = Vec::new();
@@ -57,15 +56,15 @@ fn main() -> Result<(), String> {
         for _ in 0..=SAMPLES {
             let start = Instant::now();
             let (score, _) = match tokens {
-                "tf1" => model::score(&model, text, &facts),
-                "words" => model.score(text, |emit| {
+                "tf1" => model.score(text, &facts),
+                "words" => model.score_tokens(text, |emit| {
                     visit_tf1(text, &facts, &mut |t| {
                         if t.starts_with("T:") {
                             emit(t)
                         }
                     })
                 }),
-                _ => model.score(text, |_| {}),
+                _ => model.score_tokens(text, |_| {}),
             };
             samples.push(start.elapsed().as_secs_f64() * 1000.0 * scale);
             std::hint::black_box(score);

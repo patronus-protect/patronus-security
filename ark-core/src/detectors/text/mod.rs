@@ -12,8 +12,9 @@
 //!   the normalisation pre-pass undid, the context terms and the language.
 //! - [`tf1`]: lowercased word tokens plus the flattened facts.
 //! - [`schema`]: the Cedar schema and the request context of a text.
-//! - [`model`]: the per-category text models in the K26 form (`char_wb`
-//!   TF-IDF + `tf1` tokens -> LR), scored over the facts.
+//! - [`model`]: the per-category text models, in the K26 form (`char_wb`
+//!   TF-IDF + `tf1` tokens -> LR) or the fastText-type form, scored over the
+//!   facts.
 //!
 //! Only the text is read: request metadata (role, source) never feeds the
 //! facts. Deterministic, no I/O.
@@ -24,6 +25,6 @@ mod schema;
 mod tf1;
 
 pub use facts::{data_refs, extract, DataRef, Finding, FindingFacts, Sink, TextFacts};
-pub use model::TEXT_MODEL;
+pub use model::{CategoryModel, TEXT_MODEL};
 pub use schema::schema;
 pub use tf1::{tf1, visit_tf1};
