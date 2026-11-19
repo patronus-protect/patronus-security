@@ -62,6 +62,7 @@ mod tests {
                 details: HashMap::from([("l1_candidates".to_string(), candidate)]),
             }],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

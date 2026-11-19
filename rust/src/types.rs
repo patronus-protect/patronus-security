@@ -224,6 +224,9 @@ pub struct SecurityScanResult {
     pub label_scores: Vec<LabelScore>,
     /// Structured classifier decision contract for policy consumers.
     pub decision: Option<DecisionEnvelope>,
+    /// Stage that gave the category its final answer (`heuristic` for an L1
+    /// result, `l2`, `l3`); `None` while a later layer still answers.
+    pub decided_by: Option<Stage>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -534,7 +537,7 @@ pub use patronus_ark_core::cascade::{
     ConditionalPipelineGate, EffectiveL3PipelinePolicy, GateExpression, GateResult,
     L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
     L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, LayerExecution, MetadataCondition,
-    ResultCondition, ScanGateMatrix, SecurityLevel,
+    ResultCondition, ScanGateMatrix, SecurityLevel, Stage,
 };
 
 pub use patronus_ark_core::{
@@ -557,6 +560,7 @@ impl From<patronus_ark_core::NativeResult> for SecurityScanResult {
             label_scores: value.label_scores,
             decision: value.decision,
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
         }
     }
 }

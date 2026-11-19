@@ -1022,6 +1022,8 @@ fn finish_job(
         false
     };
     if publish_result {
+        let mut result = result;
+        super::mark_decided(&mut result);
         registry
             .ready
             .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
@@ -1219,14 +1221,12 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
         if state.pending_l3_job_ids.remove(&job.job_id) {
             state.pending_l3_job_categories.remove(&job.job_id);
             state.usable_results += 1;
+            let mut result =
+                request_wide_skip_result(job.fallback, &job.execution, job.degraded_factor, reason);
+            super::mark_decided(&mut result);
             ready.push(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
                 request_id: request_id.to_string(),
-                result: request_wide_skip_result(
-                    job.fallback,
-                    &job.execution,
-                    job.degraded_factor,
-                    reason,
-                ),
+                result,
             }));
         }
     }
@@ -2269,6 +2269,7 @@ mod tests {
                     details: HashMap::new(),
                 }],
                 internal_l2_chunk_outputs: Vec::new(),
+                decided_by: None,
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -2310,6 +2311,7 @@ mod tests {
             duration_ms: 0.0,
             layers: Vec::new(),
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

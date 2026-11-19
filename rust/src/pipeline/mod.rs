@@ -21,7 +21,7 @@ pub use l3_routing::{priority_index, ttl_ms};
 pub use l3_worker::DistributedL3ChunkInference;
 pub use security::{DistributedL2Pipeline, DistributedL2Plan, DistributedL3Plan, SecurityGateway};
 
-pub(crate) use l3_result::mark_decision_degraded;
+pub(crate) use l3_result::{mark_decided, mark_decision_degraded};
 pub(crate) use l3_worker::{
     failure_from_scan_result, finish_request_if_ready, L3JobSpec, L3Worker, PendingDynamicPii,
     RequestRegistry, RequestState,

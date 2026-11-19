@@ -51,6 +51,9 @@ def _to_dict(result):
     decision = _decode_json_object(getattr(result, "decision_json", None))
     if decision:
         output["decision"] = decision
+    decided_by = getattr(result, "decided_by", None)
+    if decided_by is not None:
+        output["decided_by"] = decided_by
     return output
 
 

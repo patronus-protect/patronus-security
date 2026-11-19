@@ -67,6 +67,7 @@ mod l3_results {
                 },
             ],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

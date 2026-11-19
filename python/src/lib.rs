@@ -691,6 +691,9 @@ struct PyEvaluationResult {
     label_scores: Vec<PyLabelScore>,
     #[pyo3(get)]
     decision_json: Option<String>,
+    /// Stage that gave the category its final answer, e.g. `heuristic`.
+    #[pyo3(get)]
+    decided_by: Option<String>,
 }
 
 #[pymethods]
@@ -950,6 +953,10 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
                 .map(PyLabelScore::from)
                 .collect(),
             decision_json,
+            decided_by: result
+                .decided_by
+                .and_then(|stage| serde_json::to_value(stage).ok())
+                .and_then(|value| value.as_str().map(str::to_string)),
         }
     }
 }

@@ -59,6 +59,16 @@ pub fn has_l3_pending(result: &SecurityScanResult) -> bool {
         .any(|layer| layer.level == "L3" && layer.layer_type == "l3_pending")
 }
 
+/// Marks a result published as its module's final answer with the stage of
+/// its layer: an L2 fallback after a skipped or failed L3 stays `l2`.
+pub(crate) fn mark_decided(result: &mut SecurityScanResult) {
+    result.decided_by = result
+        .level
+        .parse::<crate::SecurityLevel>()
+        .ok()
+        .map(crate::Stage::from);
+}
+
 pub fn degraded_timeout_result(
     mut result: SecurityScanResult,
     queued_ms: f64,
@@ -197,6 +207,7 @@ mod tests {
                 details: HashMap::new(),
             }],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: Some(DecisionEnvelope {
