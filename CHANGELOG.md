@@ -398,6 +398,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   sets set the cuts, with no training row among them. The report lists the detection rate and false
   positive rate per language, the false positive rate per benign source and what the training cut
   would have flagged. The calibrated `model.json` records the benign pool under `calibration`.
+  Each stage is calibrated and reported on the same tokens it was trained with (`B4` on the
+  words alone, without fact tokens).
   Reading JSONL rows in the threat scripts no longer breaks a row at a Unicode line separator
   inside a string. The text model parity data now also checks each model's answer at its cuts.
   **Detection change:** none; no text model is enabled yet.

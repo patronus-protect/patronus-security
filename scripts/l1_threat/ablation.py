@@ -193,13 +193,14 @@ class LearnedPoints:
 
 
 class Stage:
-    """One ablation stage: a row scorer and its cost."""
+    """One ablation stage: a row scorer and its cost; a model stage also its token source."""
 
     def __init__(self, name: str, score: Callable[[dict], float], *, model: dict | None = None,
-                 ram_bytes: int = 0) -> None:
+                 tokens: Callable[[dict], list[str]] | None = None, ram_bytes: int = 0) -> None:
         self.name = name
         self.score = score
         self.model = model
+        self.tokens = tokens
         self.ram_bytes = ram_bytes
 
 
@@ -261,7 +262,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
                              tokens=no_tokens)
         b1 = MODEL.Model(b1_doc)
         fitted.append(Stage("B1", lambda row: sigmoid(b1.score(row["text"], [])[0]), model=b1_doc,
-                            ram_bytes=model_ram_bytes(b1_doc)))
+                            tokens=no_tokens, ram_bytes=model_ram_bytes(b1_doc)))
     if wanted & {"B4", "B5"}:
         b4_doc = MODEL.train(model_rows, f"ablation-{cls}-b4", char_buckets=buckets[0], token_buckets=buckets[1],
                              iterations=iterations, tokens=word_tokens)
@@ -275,7 +276,8 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
             return anchors(row) + ngram
 
         fitted += [
-            Stage("B4", lambda row: sigmoid(b4_logit(row)), model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
+            Stage("B4", lambda row: sigmoid(b4_logit(row)), model=b4_doc, tokens=word_tokens,
+                  ram_bytes=model_ram_bytes(b4_doc)),
             Stage("B5", hybrid, model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
         ]
     if "FT" in wanted:
@@ -283,7 +285,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
                                       dim=FASTTEXT_SHAPE[1])
         ft = MODEL.FastTextModel(ft_doc)
         fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.fasttext_tokens(row))), model=ft_doc,
-                            ram_bytes=model_ram_bytes(ft_doc)))
+                            tokens=MODEL.fasttext_tokens, ram_bytes=model_ram_bytes(ft_doc)))
     return [stage for stage in fitted if stage.name in wanted]
 
 
@@ -414,14 +416,16 @@ def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, 
     return out
 
 
-def calibrate(document: dict, rows: list[dict], cls: str, *, target_fpr: float = SCOREBOARD.TARGET_FPR,
-              clear_fpr: float = SCOREBOARD.CLEAR_FPR, report_rows: Iterable[dict] = ()) -> tuple[dict, dict[str, Any]]:
+def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[dict], list[str]],
+              target_fpr: float = SCOREBOARD.TARGET_FPR, clear_fpr: float = SCOREBOARD.CLEAR_FPR,
+              report_rows: Iterable[dict] = ()) -> tuple[dict, dict[str, Any]]:
     """``document`` with its ``0_1pct_fpr`` / ``1pct_fpr`` cuts at ``target_fpr`` / ``clear_fpr`` of the
-    benign ``rows``, and the report of those cuts on ``rows`` and ``report_rows`` (see the module docstring)."""
+    benign ``rows``, and the report of those cuts on ``rows`` and ``report_rows`` (see the module docstring).
+    ``tokens`` is the token source the model was trained with (``Stage.tokens``)."""
     model = MODEL.load_model(document)
 
     def scored(chosen: Iterable[dict]) -> list[tuple[dict, int, float]]:
-        return [(row, label, model.score(row["text"], model.tokens_of(row))[0]) for row, label in labelled(chosen, cls)]
+        return [(row, label, model.score(row["text"], tokens(row))[0]) for row, label in labelled(chosen, cls)]
 
     calibration = scored(rows)
     benign = [score for _, label, score in calibration if not label]
@@ -456,8 +460,8 @@ def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str
         raise ValueError(f"{stage} is not a model stage with its own model.json")
     fitted = fit_stages(train, cls, stages=[stage])[0]
     rows = calibration_rows(train, test)
-    document, report = calibrate(fitted.model, rows, cls, target_fpr=target_fpr, clear_fpr=clear_fpr,
-                                 report_rows=calibration_rows(train, report_rows))
+    document, report = calibrate(fitted.model, rows, cls, tokens=fitted.tokens, target_fpr=target_fpr,
+                                 clear_fpr=clear_fpr, report_rows=calibration_rows(train, report_rows))
     report.update({"stage": stage, "rows": {"train": len(train), "calibration": len(rows)},
                    "ram_bytes": model_ram_bytes(document),
                    "ms_per_100kib": None if bench_bin is None or windows is None
