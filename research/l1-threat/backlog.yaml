@@ -352,18 +352,21 @@ tasks:
       a runner step (or task) re-renders research/l1-threat/scoreboard/baseline.md on main after each merged
       detector, scorer or gold change, in the same PR or a follow-up; the table shows TPR@0.1% and @1%,
       hard-benign FPR and the baseline columns; README links it as the current state
-  # Owner, 2026-11-19 (E07 numbers): with Wolf on L2 the stack gets worse at the deciding metric —
-  # instruction_injection dev TPR@0.1% drops from 60.2 (L1) to 36.2 (L1+L2) while hard-benign FPR rises from
-  # 0/2313 to 524/2313 (22.7%); jailbreak and prompt_extraction gain nothing. L2 needs the same benign-data
-  # calibration as the L1 models before decision (a) can hold.
+  # Owner, 2026-11-19 (E07 review): full-stack.md mixes two operating points and combines the layers wrongly.
+  # The L1+L2 score is max(L1 confidence, Wolf confidence), so Wolf's high scores on benign rows push the 0.1%
+  # threshold above the L1 rule hits (injection 60.2 -> 36.2 is that artefact), and the 22.7% hard-benign FPR
+  # (524/2313) is at the shipped default verdict of Wolf Defender small, not at 0.1% FPR. E10 fixes the method
+  # and calibrates L2 on benign data.
   - id: E10
-    title: Calibrate the L2 escalation on benign data — Wolf Defender's thresholds (and the stack's escalation rule) per class set so that the full stack's FPR, measured on the dev benign pool incl. the hard-benign sets, stays at the 0.1% operating point; full-stack.md re-rendered; the class's default config only ships L2 where L1+L2 beats L1 at 0.1% FPR
+    title: Full-stack method fix and L2 calibration on benign data — combine the layers as L1 verdict OR Wolf score above its own threshold t (never max of confidences), with t per class calibrated so the stack's FPR on the dev benign pool (incl. hard benigns) is 0.1%; every column of full-stack.md at the same operating point, plus the hard-benign FPR at the shipped default verdict as a separate, labelled column; the default config ships L2 only where L1+L2 beats L1 at 0.1% FPR
     type: scorer
     deps: [E07]
     accept: >-
-      per class: L1+L2 TPR@0.1% >= L1 TPR@0.1% on dev, or L2 is not escalated for that class by default (decision
-      named); hard-benign FPR of L1+L2 at the operating point <= 0.1% and reported per benign source; latency of
-      the L2 path named; the owner's holdout run follows with the same command
+      unit test: with an L1 that has no false positive, L1+L2 TPR at a fixed FPR is never below L1; per class:
+      L1+L2 TPR@0.1% and the hard-benign FPR at that same operating point (per benign source) on dev; the default
+      verdict's hard-benign FPR in its own labelled column; Wolf variant named (default: Wolf Defender small);
+      L2 shipped by default only where it adds TPR at 0.1% FPR; latency of the L2 path named; the owner's
+      holdout run follows with the same command
   - id: JB02
     title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
     type: scorer
