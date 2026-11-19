@@ -26,6 +26,7 @@ use crate::detectors::facts_common::model::{
     fnv1a_32_extend, for_each_word, ModelForm, TopFeature, FNV1A_32, TOP_FEATURES,
 };
 use crate::detectors::facts_common::pyjson::py_round;
+use crate::detectors::facts_common::thresholds::L1Thresholds;
 
 const KIND: &str = "fasttext";
 const FNV1A_32_OFFSET: u32 = 0x811c_9dc5;
@@ -55,8 +56,7 @@ pub struct FastTextModel {
     char_ngrams: (usize, usize),
     values: Vec<f64>,
     bias: f64,
-    ask_cut: f64,
-    block_cut: f64,
+    thresholds: L1Thresholds,
 }
 
 /// Whether a `model.json` document is of the fastText-type form.
@@ -109,15 +109,12 @@ impl FastTextModel {
             .chunks_exact(dim)
             .map(|row| row.iter().zip(&delta).fold(0.0, |sum, (e, d)| sum + e * d))
             .collect();
-        let cut = |name: &str| {
-            file.thresholds
-                .get(name)
-                .copied()
-                .ok_or_else(|| format!("{label} fastText model has no {name} threshold"))
-        };
         Ok(Self {
-            ask_cut: cut(form.ask_threshold)?,
-            block_cut: cut(form.block_threshold)?,
+            thresholds: L1Thresholds::from_model(
+                &file.thresholds,
+                form,
+                &format!("{label} fastText model"),
+            )?,
             name: file.name,
             char_ngrams: (min_n, max_n),
             values,
@@ -130,9 +127,9 @@ impl FastTextModel {
         &self.name
     }
 
-    /// The `ask` and `block` cuts on the decision score.
-    pub fn cuts(&self) -> (f64, f64) {
-        (self.ask_cut, self.block_cut)
+    /// The detect and clear cuts on the decision score.
+    pub fn thresholds(&self) -> L1Thresholds {
+        self.thresholds
     }
 
     /// Number of embedding buckets.
@@ -332,7 +329,13 @@ mod tests {
         assert_eq!(top[0].feature, "#0");
         // No feature: the bias difference alone.
         assert_eq!(model.score("", |_| {}), (0.25, Vec::new()));
-        assert_eq!(model.cuts(), (0.0, 1.0));
+        assert_eq!(
+            model.thresholds(),
+            L1Thresholds {
+                detect_threshold: 1.0,
+                clear_threshold: Some(0.0)
+            }
+        );
     }
 
     #[test]
