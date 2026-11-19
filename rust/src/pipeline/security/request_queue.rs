@@ -418,11 +418,10 @@ impl SecurityGateway {
         );
         conditional_results.extend(l2_results.iter().filter_map(gate_result));
         let gate_chunk_results = dynamic_pii_source_chunks(&l2_results);
-        let l3_execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
-            &execution,
-            &metadata,
-            &conditional_results,
-        );
+        let mut l3_execution = execution.clone();
+        l3_execution
+            .gates_mut()
+            .apply_l3_policy_overrides(&metadata, &conditional_results);
         let text = inputs
             .first()
             .map(|input| Arc::clone(&input.text))
@@ -706,14 +705,14 @@ impl SecurityGateway {
         let policy = execution.l3_policy();
         let mut jobs = Vec::new();
         for result in results.iter_mut().filter(|result| has_l3_pending(result)) {
-            let allowed = crate::pipeline::conditional_gate::pipeline_allowed(
-                execution,
+            let allowed = patronus_ark_core::cascade::pipeline_allowed(
+                &execution.gates().conditional,
                 SecurityLevel::L3,
                 &result.category,
                 metadata,
                 gate_results,
-            ) && crate::pipeline::conditional_gate::pipeline_allowed(
-                execution,
+            ) && patronus_ark_core::cascade::pipeline_allowed(
+                &execution.gates().conditional,
                 SecurityLevel::L3,
                 &result.model,
                 metadata,
@@ -796,8 +795,8 @@ impl SecurityGateway {
                 .native
                 .allows_model(DYNAMIC_PII_ASSET.model)
             || !execution.l3_policy().enabled
-            || !crate::pipeline::conditional_gate::pipeline_allowed(
-                execution,
+            || !patronus_ark_core::cascade::pipeline_allowed(
+                &execution.gates().conditional,
                 SecurityLevel::L3,
                 DYNAMIC_PII_ASSET.category.as_str(),
                 metadata,
@@ -1491,15 +1490,15 @@ mod tests {
             }])
             .unwrap();
         let execution = ScanExecution::with_gates(SecurityLevel::L2, gates);
-        assert!(crate::pipeline::conditional_gate::pipeline_allowed(
-            &execution,
+        assert!(patronus_ark_core::cascade::pipeline_allowed(
+            &execution.gates().conditional,
             SecurityLevel::L2,
             "injection",
             &serde_json::Value::Null,
             &candidate_results,
         ));
-        assert!(!crate::pipeline::conditional_gate::pipeline_allowed(
-            &execution,
+        assert!(!patronus_ark_core::cascade::pipeline_allowed(
+            &execution.gates().conditional,
             SecurityLevel::L2,
             "injection",
             &serde_json::Value::Null,

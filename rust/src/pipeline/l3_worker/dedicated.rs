@@ -26,10 +26,7 @@ use crate::{
     QueuedSecurityProgress, RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
 };
 
-use super::super::long_text::aggregate_chunk_outputs;
-use super::super::{
-    degraded_error_result, degraded_timeout_result, l3_metadata_layer, PipelineStrategy,
-};
+use super::super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer};
 use super::active_run::{ActiveRunGuard, Stopped};
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
@@ -42,8 +39,11 @@ use crate::cache::{
 use crate::ml::onnx::RawClassifierOutput;
 use crate::pipeline::decision_cache::DecisionCache;
 use crate::pipeline::decision_thresholds::{arbitrate_joint_v3, arbitrate_l3_l2, JointV3L3Chunk};
-use crate::pipeline::strategy::{aggregate_decision_index, ChunkDecision, HeadDecisionState};
-use crate::pipeline::ChunkAggregation;
+use crate::pipeline::strategy::chunk_aggregation;
+use crate::L3AggregationStrategy;
+use patronus_ark_core::cascade::{
+    aggregate_chunk_outputs, aggregate_decision_index, ChunkDecision, HeadDecisionState,
+};
 
 pub(super) fn execute(
     state: &Arc<L3WorkerState>,
@@ -464,10 +464,11 @@ fn run_wolf_document_job(
     let L3WorkerInput::Text(source_text) = &job.input else {
         return Err("Wolf requires the original source document".into());
     };
-    let policy = job
-        .execution
-        .l3_policy()
-        .pipeline_policy(&job.category, &job.model);
+    let policy = crate::pipeline::l3_routing::pipeline_policy(
+        job.execution.l3_policy(),
+        &job.category,
+        &job.model,
+    );
     let threshold = match policy.aggregation {
         Some(crate::L3AggregationStrategy::AnyPositiveOrHighest { threshold, .. })
         | Some(crate::L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold }) => {
@@ -747,15 +748,16 @@ fn run_model_job(
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
     let job_started = Instant::now();
     let l3_policy = job.execution.l3_policy();
-    let pipeline_policy = l3_policy.pipeline_policy(&job.category, &job.model);
+    let pipeline_policy =
+        crate::pipeline::l3_routing::pipeline_policy(l3_policy, &job.category, &job.model);
     let joint_v3 = job
         .l2_chunk_outputs
         .iter()
         .any(|chunk| chunk.joint_v3_decision.is_some());
-    let mut strategy = l3_strategy(&job);
-    if let Some(aggregation) = pipeline_policy.aggregation.clone() {
-        strategy.aggregation = aggregation.into();
-    }
+    let aggregation = pipeline_policy
+        .aggregation
+        .clone()
+        .unwrap_or_else(|| chunk_aggregation(&job.category, &job.model));
     let mut chunks = planned_chunks(&job)?;
     prioritize_historical_non_safe(
         &mut chunks,
@@ -769,7 +771,7 @@ fn run_model_job(
     let total_chunks = chunks.len();
     let mut chunk_trace = l3_chunk_trace_enabled().then(Vec::new);
     let decision = HeadDecisionState::new(
-        strategy.aggregation.clone(),
+        aggregation.clone(),
         l3_safe_class(&job),
         pipeline_policy.early_exit,
         total_chunks,
@@ -815,7 +817,7 @@ fn run_model_job(
         resolved_l3_chunks: &mut resolved_l3_chunks,
         chunk_trace: &mut chunk_trace,
         decision,
-        aggregation: strategy.aggregation.clone(),
+        aggregation: aggregation.clone(),
         safe_class: l3_safe_class(&job),
         queue_wait_ms,
         total_chunks,
@@ -840,7 +842,7 @@ fn run_model_job(
         chunk_outputs,
         total_chunks,
         l3_safe_class(&job),
-        strategy.aggregation.clone(),
+        aggregation.clone(),
     );
 
     let l3_result = aggregate.map(|aggregate| {
@@ -916,7 +918,7 @@ struct DedicatedExecutionAdapter<'a> {
     resolved_l3_chunks: &'a mut Vec<(crate::ml::ntdb_executor::ByteSpan, String, f32)>,
     chunk_trace: &'a mut Option<Vec<serde_json::Value>>,
     decision: HeadDecisionState,
-    aggregation: ChunkAggregation,
+    aggregation: L3AggregationStrategy,
     safe_class: &'static str,
     queue_wait_ms: f64,
     total_chunks: usize,
@@ -1212,7 +1214,7 @@ fn publish_l3_provisional(
     job: &L3WorkerJob,
     chunk_outputs: &[(EvaluationResult, Vec<LayerResult>)],
     total_chunks: usize,
-    aggregation: ChunkAggregation,
+    aggregation: L3AggregationStrategy,
     safe_class: &'static str,
     metadata: EarlyExitMetadata,
 ) {
@@ -1822,10 +1824,6 @@ fn decorate_l3_layers(
             .details
             .insert("l3_chunk_len".to_string(), serde_json::json!(chunk_len));
     }
-}
-
-fn l3_strategy(job: &L3WorkerJob) -> PipelineStrategy {
-    PipelineStrategy::for_category_model(&job.category, &job.model)
 }
 
 fn l3_safe_class(job: &L3WorkerJob) -> &'static str {

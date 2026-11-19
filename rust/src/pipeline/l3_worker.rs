@@ -565,10 +565,12 @@ impl L3Worker {
         let clustering = if spec.execution.l3_strategy() == L3Strategy::Multi {
             unified::selection_clustering_for_spec(spec)
         } else {
-            spec.execution
-                .l3_policy()
-                .pipeline_policy(&spec.category, &spec.model)
-                .clustering
+            super::l3_routing::pipeline_policy(
+                spec.execution.l3_policy(),
+                &spec.category,
+                &spec.model,
+            )
+            .clustering
         };
         let mut chunks = selected_l3_chunks(token_chunks, &spec.l3_candidates, clustering);
         if chunks.is_empty() {

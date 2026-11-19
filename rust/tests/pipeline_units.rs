@@ -214,10 +214,9 @@ mod public_strategy_types {
 mod long_text {
     use std::collections::HashMap;
 
-    use patronus_ark::pipeline::test_util::{
-        aggregate_chunk_outputs, candidate_selection, l3_metadata, ChunkAggregation,
-    };
-    use patronus_ark::{EvaluationResult, LayerResult};
+    use patronus_ark::pipeline::test_util::{candidate_selection, l3_metadata};
+    use patronus_ark::{EvaluationResult, L3AggregationStrategy, LayerResult};
+    use patronus_ark_core::cascade::aggregate_chunk_outputs;
 
     fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
         EvaluationResult {
@@ -299,7 +298,7 @@ mod long_text {
             chunk_outputs,
             3,
             "safe",
-            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
+            L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
         )
         .unwrap();
 
@@ -342,7 +341,7 @@ mod long_text {
             chunk_outputs,
             2,
             "safe",
-            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
+            L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
         )
         .unwrap();
 
@@ -389,7 +388,7 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            ChunkAggregation::AnyPositiveOrHighest {
+            L3AggregationStrategy::AnyPositiveOrHighest {
                 positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
@@ -412,7 +411,7 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            ChunkAggregation::AnyPositiveOrHighest {
+            L3AggregationStrategy::AnyPositiveOrHighest {
                 positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
@@ -435,7 +434,7 @@ mod long_text {
             chunk_outputs,
             10,
             "benign",
-            ChunkAggregation::MajorityVoteOrHighest,
+            L3AggregationStrategy::MajorityVoteOrHighest,
         )
         .unwrap();
 
@@ -454,7 +453,7 @@ mod long_text {
             chunk_outputs,
             10,
             "safe",
-            ChunkAggregation::MajorityVoteOrHighest,
+            L3AggregationStrategy::MajorityVoteOrHighest,
         )
         .unwrap();
 

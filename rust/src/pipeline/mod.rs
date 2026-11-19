@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-mod conditional_gate;
 mod decision_cache;
 mod decision_thresholds;
 mod generic;
@@ -8,6 +7,7 @@ mod l3_result;
 mod l3_routing;
 mod l3_schedule;
 mod l3_worker;
+#[cfg(feature = "test-util")]
 mod long_text;
 mod security;
 mod strategy;
@@ -26,7 +26,6 @@ pub(crate) use l3_worker::{
     failure_from_scan_result, finish_request_if_ready, L3JobSpec, L3Worker, PendingDynamicPii,
     RequestRegistry, RequestState,
 };
-pub(crate) use strategy::{ChunkAggregation, PipelineStrategy};
 
 /// Internal items re-exported for the integration test suite. Not public API.
 #[cfg(feature = "test-util")]
@@ -39,11 +38,10 @@ pub mod test_util {
         unified_coalescing_snapshot, unified_metadata_details_for_test,
         unified_outputs_have_same_classes_for_heads_for_test, UnifiedCoalescingSnapshot,
     };
-    pub use super::long_text::{aggregate_chunk_outputs, candidate_selection, l3_metadata};
+    pub use super::long_text::{candidate_selection, l3_metadata};
     pub use super::security::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision,
         NtdbL2ModelConfig,
     };
-    pub use super::strategy::ChunkAggregation;
 }

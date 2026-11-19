@@ -13,6 +13,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use patronus_ark::cascade::escalates;
 use patronus_ark::ml::ntdb_executor::{ByteSpan, NtdbModelChunkInferences, PreparedNtdbChunk};
 use patronus_ark::{L3Strategy, NtdbOperatingPoint, ScanExecution, SecurityCategory};
 use serde_json::json;
@@ -344,7 +345,12 @@ fn infer_batch_blocking(
             for chunk in model
                 .chunks
                 .iter()
-                .filter(|chunk| chunk.promote_score >= chunk.promote_threshold)
+                .filter(|chunk| {
+                    escalates(
+                        f64::from(chunk.promote_score),
+                        f64::from(chunk.promote_threshold),
+                    )
+                })
                 .filter(|chunk| {
                     chunk_requests_pipeline(
                         &requested_chunks,
@@ -405,7 +411,10 @@ fn infer_batch_blocking(
                 continue;
             };
             let result = &mut results[position];
-            let promoted = chunk.promote_score >= chunk.promote_threshold;
+            let promoted = escalates(
+                f64::from(chunk.promote_score),
+                f64::from(chunk.promote_threshold),
+            );
             let head = l3_by_index
                 .get(&chunk.chunk_index)
                 .and_then(|output| output.output.heads.get(&pipeline.category));

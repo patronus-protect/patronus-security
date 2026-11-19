@@ -9,13 +9,12 @@ pub use patronus_ark_core::{
     WolfExecutionOptions,
 };
 pub mod dynamic_pii;
-pub mod external_l1;
 pub mod gliner_onnx_engine;
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub use patronus_ark_core::normalization;
+pub use patronus_ark_core::{cascade, normalization};
 pub mod pipeline;
 pub mod post_prediction;
 pub use patronus_ark_core::threat;
@@ -29,9 +28,9 @@ pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
 };
-pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
+pub use patronus_ark_core::cascade::{ExternalL1Detector, ExternalL1Input};
 pub use patronus_ark_core::native::{NativeGates, ScoreMode};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{

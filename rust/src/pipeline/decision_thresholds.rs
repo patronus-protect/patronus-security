@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+//! Ark's calibrated NTDB decision thresholds (`decision_thresholds.json`) as a
+//! Core [`ThresholdTable`], and the Package-v4 joint arbitration.
 use std::{collections::HashMap, sync::OnceLock};
 
+use patronus_ark_core::cascade::{
+    sync_final_layers, with_arbitration, ArbitrationTrace, LayerDecision, LayeredResult,
+    ThresholdTable, UnionPolicy,
+};
 use serde::Deserialize;
 
 use crate::ml::ntdb_executor::{
@@ -8,8 +14,8 @@ use crate::ml::ntdb_executor::{
     L2ChunkOutput,
 };
 use crate::{
-    DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, EvaluationResult, NtdbOperatingPoint, SecurityScanResult,
+    DecisionCandidate, DecisionEnvelope, LabelScore, LayerResult, NtdbOperatingPoint,
+    SecurityLevel, SecurityScanResult,
 };
 
 #[derive(Debug, Clone)]
@@ -40,20 +46,6 @@ struct UnionThreshold {
     l3_weight: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LayerDecision {
-    L2,
-    L3,
-    Union,
-    Default,
-}
-
-#[derive(Debug)]
-struct ArbitrationTrace {
-    candidates: Vec<DecisionCandidate>,
-    operating_point: NtdbOperatingPoint,
-}
-
 static THRESHOLDS: OnceLock<ThresholdAsset> = OnceLock::new();
 
 fn thresholds() -> &'static ThresholdAsset {
@@ -63,68 +55,163 @@ fn thresholds() -> &'static ThresholdAsset {
     })
 }
 
+/// The bundled thresholds at one NTDB operating point; a class without a
+/// value at the point falls back to its `best_f1` value.
+pub(crate) struct NtdbThresholds {
+    profile: &'static str,
+}
+
+impl NtdbThresholds {
+    pub(crate) fn new(point: NtdbOperatingPoint) -> Self {
+        let profile = match point {
+            NtdbOperatingPoint::BestF1 => "best_f1",
+            NtdbOperatingPoint::BestFprInF1 => "best_fpr",
+            NtdbOperatingPoint::BestFnrInF1 => "best_fnr",
+            NtdbOperatingPoint::BestPromote => "best_promote",
+            NtdbOperatingPoint::ArkApiShortInjectionUtility => "best_promote",
+            NtdbOperatingPoint::BestLatencyInF1 => "best_latency_in_f1",
+        };
+        Self { profile }
+    }
+
+    fn at_profile<T: Copy>(&self, profiles: &HashMap<String, T>) -> Option<T> {
+        profiles
+            .get(self.profile)
+            .or_else(|| profiles.get("best_f1"))
+            .copied()
+    }
+}
+
+fn pipeline_key(pipeline: &str) -> &str {
+    match pipeline {
+        "sensitive_document" => "sensitive_docs",
+        // The unified threat head reports under `unsafe_action`.
+        "unsafe_action" => "threat",
+        other => other,
+    }
+}
+
+impl ThresholdTable for NtdbThresholds {
+    fn operating_point(&self) -> &str {
+        self.profile
+    }
+
+    fn default_class(&self, pipeline: &str) -> &str {
+        match pipeline_key(pipeline) {
+            "injection" => "benign",
+            "routing" => "benign_conv",
+            "sensitive_docs" => "other",
+            "threat" => "benign",
+            "tool_action" | "tool_class" => "unknown",
+            "tool_tags_sink_external"
+            | "tool_tags_source_sensitive"
+            | "tool_tags_source_untrusted" => "absent",
+            _ => "unknown",
+        }
+    }
+
+    fn threshold(&self, pipeline: &str, layer: SecurityLevel, class_name: &str) -> Option<f64> {
+        let pipeline = thresholds().thresholds.get(pipeline_key(pipeline))?;
+        let classes = match layer {
+            SecurityLevel::L3 => &pipeline.l3,
+            _ => &pipeline.l2,
+        };
+        self.at_profile(classes.get(class_name)?)
+    }
+
+    fn union_policies(&self, pipeline: &str) -> Vec<(&str, UnionPolicy)> {
+        thresholds()
+            .thresholds
+            .get(pipeline_key(pipeline))
+            .map(|pipeline| {
+                pipeline
+                    .union
+                    .iter()
+                    .filter_map(|(class_name, profiles)| {
+                        let policy = self.at_profile(profiles)?;
+                        Some((
+                            class_name.as_str(),
+                            UnionPolicy {
+                                threshold: policy.threshold,
+                                l2_weight: policy.l2_weight,
+                                l3_weight: policy.l3_weight,
+                            },
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn binary_positive_class(&self, pipeline: &str) -> Option<&str> {
+        (pipeline_key(pipeline) == "injection").then_some("attack")
+    }
+}
+
+impl LayeredResult for SecurityScanResult {
+    fn class_name(&self) -> &str {
+        &self.class_name
+    }
+    fn confidence(&self) -> f64 {
+        self.confidence
+    }
+    fn level(&self) -> &str {
+        &self.level
+    }
+    fn model(&self) -> &str {
+        &self.model
+    }
+    fn layers(&self) -> &[LayerResult] {
+        &self.layers
+    }
+    fn layers_mut(&mut self) -> &mut Vec<LayerResult> {
+        &mut self.layers
+    }
+    fn label_scores(&self) -> &[LabelScore] {
+        &self.label_scores
+    }
+    fn decision(&self) -> Option<&DecisionEnvelope> {
+        self.decision.as_ref()
+    }
+    fn set_class(&mut self, class_name: String, confidence: f64) {
+        self.class_name = class_name;
+        self.confidence = confidence;
+    }
+    fn set_level(&mut self, level: &str) {
+        self.level = level.to_string();
+    }
+    fn set_decision(&mut self, decision: DecisionEnvelope) {
+        self.decision = Some(decision);
+    }
+}
+
+/// Core arbitration under the NTDB thresholds; a direct-L3 placeholder
+/// without L3 output degrades.
 pub(crate) fn arbitrate_l3_l2(
     pipeline: &str,
     l3_result: Option<SecurityScanResult>,
     l2_result: SecurityScanResult,
     point: NtdbOperatingPoint,
 ) -> SecurityScanResult {
-    // A direct L3 placeholder is not an L2 observation and must never enter Union.
-    if l2_result.level == "L3" && !l2_result.layers.iter().any(|layer| layer.level == "L2") {
-        let Some(result) = l3_result else {
-            return crate::pipeline::degraded_error_result(
-                l2_result,
-                0.0,
-                0,
-                1.0,
-                "L3 produced no classifier output".to_string(),
-            );
-        };
-        let trace = ArbitrationTrace {
-            candidates: decision_candidate_for_source(
-                pipeline,
-                "L3",
-                "l3",
-                &result.class_name,
-                result.confidence,
-                point,
-                None,
-            )
-            .into_iter()
-            .collect(),
-            operating_point: point,
-        };
-        return if accepts_result(pipeline, &result, point) {
-            with_arbitration(result, LayerDecision::L3, Some(&trace))
-        } else {
-            let confidence = default_confidence(pipeline, &result);
-            with_arbitration(
-                with_default_result(result, pipeline, confidence),
-                LayerDecision::Default,
-                Some(&trace),
-            )
-        };
-    }
-    let trace = arbitration_trace(pipeline, l3_result.as_ref(), &l2_result, point);
-    if let Some(l3_result) = l3_result.as_ref() {
-        if accepts_result(pipeline, l3_result, point) {
-            return with_arbitration(l3_result.clone(), LayerDecision::L3, Some(&trace));
-        }
-        if let Some(result) = union_result(pipeline, l3_result, &l2_result, point) {
-            return with_arbitration(result, LayerDecision::Union, Some(&trace));
-        }
-    }
-
-    if let Some((class_name, confidence)) = accepted_l2_candidate(&trace) {
-        let result = with_l2_final_result(l2_result, &class_name, confidence);
-        return with_arbitration(result, LayerDecision::L2, Some(&trace));
-    }
-
-    let result =
-        default_result_for_selected_candidate(pipeline, l3_result.as_ref(), l2_result, &trace);
-    with_arbitration(result, LayerDecision::Default, Some(&trace))
+    patronus_ark_core::cascade::arbitrate_l3_l2(
+        &NtdbThresholds::new(point),
+        pipeline,
+        l3_result,
+        l2_result,
+    )
+    .unwrap_or_else(|placeholder| {
+        crate::pipeline::degraded_error_result(
+            placeholder,
+            0.0,
+            0,
+            1.0,
+            "L3 produced no classifier output".to_string(),
+        )
+    })
 }
 
+/// The Package-v4 joint decision when the L2 chunks carry one, otherwise
+/// Core L2 arbitration under the NTDB thresholds.
 pub(crate) fn arbitrate_l2(
     pipeline: &str,
     l2_result: SecurityScanResult,
@@ -133,15 +220,7 @@ pub(crate) fn arbitrate_l2(
     if let Some(result) = arbitrate_joint_v3(pipeline, None, l2_result.clone(), &[], point) {
         return result;
     }
-    let trace = arbitration_trace(pipeline, None, &l2_result, point);
-    if let Some((class_name, confidence)) = accepted_l2_candidate(&trace) {
-        let result = with_l2_final_result(l2_result, &class_name, confidence);
-        return with_arbitration(result, LayerDecision::L2, Some(&trace));
-    }
-
-    let confidence = default_confidence(pipeline, &l2_result);
-    let result = with_default_result(l2_result, pipeline, confidence);
-    with_arbitration(result, LayerDecision::Default, Some(&trace))
+    patronus_ark_core::cascade::arbitrate_l2(&NtdbThresholds::new(point), pipeline, l2_result)
 }
 
 /// Apply the Package-v4 document contract. L2-only and L3-only remain visible
@@ -188,7 +267,7 @@ pub(crate) fn arbitrate_joint_v3(
     }
     let trace = ArbitrationTrace {
         candidates,
-        operating_point: point,
+        operating_point: NtdbThresholds::new(point).operating_point().to_string(),
     };
 
     if let Some(view) = union.as_ref() {
@@ -365,522 +444,8 @@ fn apply_joint_v3_view(
             matched: label == &result.class_name,
         })
         .collect();
-    update_final_layer_result(&mut result);
-    update_l3_pending_fallback(&mut result);
+    sync_final_layers(&mut result);
     result
-}
-
-pub(crate) fn threshold_l2_result(
-    pipeline: &str,
-    mut result: EvaluationResult,
-    point: NtdbOperatingPoint,
-) -> (EvaluationResult, LayerDecision) {
-    if accepts_class(pipeline, "L2", &result.class_name, result.confidence, point) {
-        return (result, LayerDecision::L2);
-    }
-
-    result.class_name = default_class(pipeline).to_string();
-    result.confidence = 0.0;
-    (result, LayerDecision::Default)
-}
-
-pub(crate) fn arbitration_name(decision: LayerDecision) -> &'static str {
-    match decision {
-        LayerDecision::L2 => "l2",
-        LayerDecision::L3 => "l3",
-        LayerDecision::Union => "union",
-        LayerDecision::Default => "default",
-    }
-}
-
-fn accepted_l2_candidate(trace: &ArbitrationTrace) -> Option<(String, f64)> {
-    trace
-        .candidates
-        .iter()
-        .find(|candidate| candidate.source == "l2" && candidate.accepted)
-        .map(|candidate| (candidate.class_name.clone(), candidate.confidence))
-}
-
-fn with_l2_final_result(
-    mut result: SecurityScanResult,
-    class_name: &str,
-    confidence: f64,
-) -> SecurityScanResult {
-    result.class_name = class_name.to_string();
-    result.confidence = confidence.clamp(0.0, 1.0);
-    update_final_layer_result(&mut result);
-    update_l3_pending_fallback(&mut result);
-    result
-}
-
-fn default_result_for_selected_candidate(
-    pipeline: &str,
-    l3_result: Option<&SecurityScanResult>,
-    l2_result: SecurityScanResult,
-    trace: &ArbitrationTrace,
-) -> SecurityScanResult {
-    match selected_decision_candidate(LayerDecision::Default, &trace.candidates)
-        .as_ref()
-        .map(|candidate| candidate.source.as_str())
-    {
-        Some("l3") => {
-            let result = l3_result.cloned().unwrap_or(l2_result);
-            let confidence = default_confidence(pipeline, &result);
-            with_default_result(result, pipeline, confidence)
-        }
-        Some("l2") => {
-            let confidence = default_confidence(pipeline, &l2_result);
-            with_default_result(l2_result, pipeline, confidence)
-        }
-        _ => with_default_result(l3_result.cloned().unwrap_or(l2_result), pipeline, 0.0),
-    }
-}
-
-fn with_default_result(
-    mut result: SecurityScanResult,
-    pipeline: &str,
-    confidence: f64,
-) -> SecurityScanResult {
-    result.class_name = default_class(pipeline).to_string();
-    result.confidence = confidence;
-    update_final_layer_result(&mut result);
-    update_l3_pending_fallback(&mut result);
-    result
-}
-
-fn default_confidence(pipeline: &str, result: &SecurityScanResult) -> f64 {
-    let default = default_class(pipeline);
-    result
-        .label_scores
-        .iter()
-        .find(|score| score.label == default)
-        .map(|score| score.confidence.clamp(0.0, 1.0))
-        .or_else(|| {
-            (pipeline_key(pipeline) == "injection")
-                .then(|| score_map("injection", result).get(default).copied())
-                .flatten()
-        })
-        .or_else(|| (result.class_name == default).then_some(result.confidence.clamp(0.0, 1.0)))
-        .unwrap_or(0.0)
-}
-
-fn update_final_layer_result(result: &mut SecurityScanResult) {
-    for layer in &mut result.layers {
-        if layer.level == result.level && layer.layer_type != "l3_pending" {
-            layer.class_name = result.class_name.clone();
-            layer.confidence = result.confidence;
-        }
-    }
-}
-
-fn update_l3_pending_fallback(result: &mut SecurityScanResult) {
-    for layer in &mut result.layers {
-        if layer.layer_type != "l3_pending" {
-            continue;
-        }
-        layer.class_name = result.class_name.clone();
-        layer.details.insert(
-            "fallback_class".to_string(),
-            serde_json::json!(result.class_name),
-        );
-        layer.details.insert(
-            "fallback_confidence".to_string(),
-            serde_json::json!(result.confidence),
-        );
-    }
-}
-
-fn with_arbitration(
-    mut result: SecurityScanResult,
-    decision: LayerDecision,
-    trace: Option<&ArbitrationTrace>,
-) -> SecurityScanResult {
-    let selected = arbitration_name(decision);
-    for layer in &mut result.layers {
-        layer
-            .details
-            .insert("final_arbitration".to_string(), serde_json::json!(selected));
-    }
-    if let Some(trace) = trace {
-        result.decision = Some(decision_envelope(&result, decision, trace));
-    }
-    result
-}
-
-fn decision_envelope(
-    result: &SecurityScanResult,
-    decision: LayerDecision,
-    trace: &ArbitrationTrace,
-) -> DecisionEnvelope {
-    let final_arbitration = arbitration_name(decision).to_string();
-    let decision_candidate = selected_decision_candidate(decision, &trace.candidates);
-    let acceptance_threshold = decision_candidate
-        .as_ref()
-        .map(|candidate| candidate.acceptance_threshold);
-    DecisionEnvelope {
-        schema_version: "ark.decision.v1".to_string(),
-        final_result: DecisionResult {
-            class_name: result.class_name.clone(),
-            confidence: result.confidence,
-            source: final_arbitration.clone(),
-        },
-        decision_candidate: decision_candidate.clone(),
-        recommendation: DecisionRecommendation {
-            accepted: decision != LayerDecision::Default,
-            final_arbitration,
-            operating_point: profile_key(trace.operating_point).to_string(),
-            acceptance_threshold,
-        },
-        candidates: trace.candidates.clone(),
-        terminality: DecisionTerminality {
-            completion: "complete".to_string(),
-            degraded: false,
-            degradation_reason: None,
-        },
-        provenance: DecisionProvenance {
-            ark_version: env!("CARGO_PKG_VERSION").to_string(),
-            schema_version: "ark.decision.v1".to_string(),
-            model: result.model.clone(),
-        },
-    }
-}
-
-fn selected_decision_candidate(
-    decision: LayerDecision,
-    candidates: &[DecisionCandidate],
-) -> Option<DecisionCandidate> {
-    let source = match decision {
-        LayerDecision::L2 => Some("l2"),
-        LayerDecision::L3 => Some("l3"),
-        LayerDecision::Union => Some("union"),
-        LayerDecision::Default => None,
-    };
-    if let Some(source) = source {
-        return candidates
-            .iter()
-            .find(|candidate| candidate.source == source)
-            .cloned();
-    }
-    ["l3", "union", "l2"].iter().find_map(|source| {
-        candidates
-            .iter()
-            .find(|candidate| candidate.source == *source)
-            .cloned()
-    })
-}
-
-fn arbitration_trace(
-    pipeline: &str,
-    l3_result: Option<&SecurityScanResult>,
-    l2_result: &SecurityScanResult,
-    point: NtdbOperatingPoint,
-) -> ArbitrationTrace {
-    let (l2_raw_class_name, l2_raw_confidence) = l2_raw_candidate(pipeline, l2_result);
-    let candidates = arbitration_candidates(
-        pipeline,
-        &l2_raw_class_name,
-        l2_raw_confidence,
-        l3_result,
-        l2_result,
-        point,
-    );
-    ArbitrationTrace {
-        candidates,
-        operating_point: point,
-    }
-}
-
-fn l2_raw_candidate(pipeline: &str, result: &SecurityScanResult) -> (String, f64) {
-    if let Some(candidate) = result.decision.as_ref().and_then(|decision| {
-        decision
-            .candidates
-            .iter()
-            .find(|candidate| candidate.source == "l2")
-    }) {
-        return (candidate.class_name.clone(), candidate.confidence);
-    }
-    let default = default_class(pipeline);
-    if let Some(score) = result
-        .label_scores
-        .iter()
-        .filter(|score| score.label != default)
-        .max_by(|left, right| left.confidence.total_cmp(&right.confidence))
-    {
-        return (score.label.clone(), score.confidence);
-    }
-    (result.class_name.clone(), result.confidence)
-}
-
-fn arbitration_candidates(
-    pipeline: &str,
-    l2_class_name: &str,
-    l2_confidence: f64,
-    l3_result: Option<&SecurityScanResult>,
-    l2_result: &SecurityScanResult,
-    point: NtdbOperatingPoint,
-) -> Vec<DecisionCandidate> {
-    let mut candidates = Vec::new();
-    if let Some(candidate) = decision_candidate_for_source(
-        pipeline,
-        "L2",
-        "l2",
-        l2_class_name,
-        l2_confidence,
-        point,
-        None,
-    ) {
-        candidates.push(candidate);
-    }
-    if let Some(l3_result) = l3_result {
-        if let Some(candidate) = decision_candidate_for_source(
-            pipeline,
-            "L3",
-            "l3",
-            &l3_result.class_name,
-            l3_result.confidence,
-            point,
-            None,
-        ) {
-            candidates.push(candidate);
-        }
-        if let Some(candidate) = union_decision_candidate(pipeline, l3_result, l2_result, point) {
-            candidates.push(candidate);
-        }
-    }
-    candidates
-}
-
-fn decision_candidate_for_source(
-    pipeline: &str,
-    level: &str,
-    source: &str,
-    class_name: &str,
-    confidence: f64,
-    point: NtdbOperatingPoint,
-    evidence: Option<HashMap<String, f64>>,
-) -> Option<DecisionCandidate> {
-    if class_name == default_class(pipeline) {
-        return None;
-    }
-    let acceptance_threshold = threshold_for(pipeline, level, class_name, point)?;
-    Some(DecisionCandidate {
-        source: source.to_string(),
-        class_name: class_name.to_string(),
-        confidence,
-        acceptance_threshold,
-        accepted: confidence >= acceptance_threshold,
-        evidence,
-        chunk_evidence: None,
-    })
-}
-
-fn union_decision_candidate(
-    pipeline: &str,
-    l3_result: &SecurityScanResult,
-    l2_result: &SecurityScanResult,
-    point: NtdbOperatingPoint,
-) -> Option<DecisionCandidate> {
-    let (class_name, policy, confidence) =
-        best_union_candidate(pipeline, l3_result, l2_result, point)?;
-    let key = pipeline_key(pipeline);
-    let l2_scores = score_map(key, l2_result);
-    let l3_scores = score_map(key, l3_result);
-    let evidence = HashMap::from([
-        ("l2_weight".to_string(), policy.l2_weight),
-        ("l3_weight".to_string(), policy.l3_weight),
-        (
-            "l2_confidence".to_string(),
-            *l2_scores.get(&class_name).unwrap_or(&0.0),
-        ),
-        (
-            "l3_confidence".to_string(),
-            *l3_scores.get(&class_name).unwrap_or(&0.0),
-        ),
-    ]);
-    Some(DecisionCandidate {
-        source: "union".to_string(),
-        class_name,
-        confidence: confidence.clamp(0.0, 1.0),
-        acceptance_threshold: policy.threshold,
-        accepted: confidence >= policy.threshold,
-        evidence: Some(evidence),
-        chunk_evidence: None,
-    })
-}
-
-fn accepts_result(pipeline: &str, result: &SecurityScanResult, point: NtdbOperatingPoint) -> bool {
-    accepts_class(
-        pipeline,
-        &result.level,
-        &result.class_name,
-        result.confidence,
-        point,
-    )
-}
-
-fn union_result(
-    pipeline: &str,
-    l3_result: &SecurityScanResult,
-    l2_result: &SecurityScanResult,
-    point: NtdbOperatingPoint,
-) -> Option<SecurityScanResult> {
-    let (class_name, policy, confidence) =
-        best_union_candidate(pipeline, l3_result, l2_result, point)?;
-
-    if confidence < policy.threshold {
-        return None;
-    }
-
-    let mut result = l3_result.clone();
-    result.class_name = class_name.clone();
-    result.confidence = confidence.clamp(0.0, 1.0);
-    result.level = "L3".to_string();
-    for layer in &mut result.layers {
-        layer
-            .thresholds
-            .insert("union".to_string(), policy.threshold);
-        layer.details.insert(
-            "union_l2_weight".to_string(),
-            serde_json::json!(policy.l2_weight),
-        );
-        layer.details.insert(
-            "union_l3_weight".to_string(),
-            serde_json::json!(policy.l3_weight),
-        );
-    }
-    Some(result)
-}
-
-fn best_union_candidate(
-    pipeline: &str,
-    l3_result: &SecurityScanResult,
-    l2_result: &SecurityScanResult,
-    point: NtdbOperatingPoint,
-) -> Option<(String, UnionThreshold, f64)> {
-    let key = pipeline_key(pipeline);
-    let profile = profile_key(point);
-    let union = &thresholds().thresholds.get(key)?.union;
-    if union.is_empty() {
-        return None;
-    }
-
-    let l2_scores = score_map(key, l2_result);
-    let l3_scores = score_map(key, l3_result);
-    union
-        .iter()
-        .filter(|(class_name, _)| class_name.as_str() != default_class(pipeline))
-        .filter_map(|(class_name, profiles)| {
-            let policy = profiles.get(profile).or_else(|| profiles.get("best_f1"))?;
-            let l2_score = l2_scores.get(class_name)?;
-            let l3_score = l3_scores.get(class_name)?;
-            let confidence = policy.l2_weight * l2_score + policy.l3_weight * l3_score;
-            Some((class_name.clone(), *policy, confidence))
-        })
-        .max_by(|left, right| left.2.total_cmp(&right.2))
-}
-
-fn score_map(pipeline: &str, result: &SecurityScanResult) -> HashMap<String, f64> {
-    if !result.label_scores.is_empty() {
-        return result
-            .label_scores
-            .iter()
-            .map(|score| (score.label.clone(), score.confidence))
-            .collect();
-    }
-
-    let mut scores = HashMap::new();
-    if pipeline == "injection" {
-        let attack = if result.class_name == "attack" {
-            result.confidence
-        } else {
-            1.0 - result.confidence
-        }
-        .clamp(0.0, 1.0);
-        scores.insert("attack".to_string(), attack);
-        scores.insert("benign".to_string(), 1.0 - attack);
-        return scores;
-    }
-
-    scores.insert(result.class_name.clone(), result.confidence.clamp(0.0, 1.0));
-    scores
-}
-
-pub(crate) fn accepts_class(
-    pipeline: &str,
-    level: &str,
-    class_name: &str,
-    confidence: f64,
-    point: NtdbOperatingPoint,
-) -> bool {
-    if class_name == default_class(pipeline) {
-        return false;
-    }
-    threshold_for(pipeline, level, class_name, point)
-        .is_some_and(|threshold| confidence >= threshold)
-}
-
-pub(crate) fn default_class(pipeline: &str) -> &'static str {
-    match pipeline_key(pipeline) {
-        "injection" => "benign",
-        "routing" => "benign_conv",
-        "sensitive_docs" => "other",
-        "threat" => "benign",
-        "tool_action" | "tool_class" => "unknown",
-        "tool_tags_sink_external" | "tool_tags_source_sensitive" | "tool_tags_source_untrusted" => {
-            "absent"
-        }
-        _ => "unknown",
-    }
-}
-
-fn threshold_for(
-    pipeline: &str,
-    level: &str,
-    class_name: &str,
-    point: NtdbOperatingPoint,
-) -> Option<f64> {
-    if class_name == default_class(pipeline) {
-        return Some(0.0);
-    }
-    let asset = thresholds();
-    let key = pipeline_key(pipeline);
-    let level_key = level.to_ascii_lowercase();
-    let profile = profile_key(point);
-    asset
-        .thresholds
-        .get(key)
-        .map(|pipeline| match level_key.as_str() {
-            "l2" => &pipeline.l2,
-            "l3" => &pipeline.l3,
-            _ => &pipeline.l2,
-        })
-        .and_then(|classes| classes.get(class_name))
-        .and_then(|profiles| {
-            profiles
-                .get(profile)
-                .or_else(|| profiles.get("best_f1"))
-                .copied()
-        })
-}
-
-fn pipeline_key(pipeline: &str) -> &str {
-    match pipeline {
-        "sensitive_document" => "sensitive_docs",
-        // The unified threat head reports under `unsafe_action`.
-        "unsafe_action" => "threat",
-        other => other,
-    }
-}
-
-fn profile_key(point: NtdbOperatingPoint) -> &'static str {
-    match point {
-        NtdbOperatingPoint::BestF1 => "best_f1",
-        NtdbOperatingPoint::BestFprInF1 => "best_fpr",
-        NtdbOperatingPoint::BestFnrInF1 => "best_fnr",
-        NtdbOperatingPoint::BestPromote => "best_promote",
-        NtdbOperatingPoint::ArkApiShortInjectionUtility => "best_promote",
-        NtdbOperatingPoint::BestLatencyInF1 => "best_latency_in_f1",
-    }
 }
 
 #[cfg(test)]

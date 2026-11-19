@@ -38,8 +38,8 @@ impl SecurityGateway {
                     ]
                     .into_iter()
                     .all(|pipeline| {
-                        crate::pipeline::conditional_gate::pipeline_allowed(
-                            execution,
+                        patronus_ark_core::cascade::pipeline_allowed(
+                            &execution.gates().conditional,
                             SecurityLevel::L3,
                             pipeline,
                             metadata,

@@ -1058,8 +1058,8 @@ impl SecurityGateway {
         let categories = inputs
             .iter()
             .filter(|input| {
-                crate::pipeline::conditional_gate::pipeline_allowed(
-                    execution,
+                patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
                     SecurityLevel::L2,
                     input.category.as_str(),
                     metadata,
@@ -1075,8 +1075,8 @@ impl SecurityGateway {
                 if ![config.model_id, config.public_model]
                     .into_iter()
                     .all(|model| {
-                        crate::pipeline::conditional_gate::pipeline_allowed(
-                            execution,
+                        patronus_ark_core::cascade::pipeline_allowed(
+                            &execution.gates().conditional,
                             SecurityLevel::L2,
                             model,
                             metadata,
@@ -1119,23 +1119,22 @@ impl SecurityGateway {
     ) -> DistributedL3Plan {
         let mut gate_results = l1_gate_results.to_vec();
         gate_results.extend(l2_results.iter().filter_map(request_queue::gate_result));
-        let execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
-            execution,
-            metadata,
-            &gate_results,
-        );
+        let mut execution = execution.clone();
+        execution
+            .gates_mut()
+            .apply_l3_policy_overrides(metadata, &gate_results);
         let categories = l2_results
             .iter()
             .filter(|result| crate::pipeline::has_l3_pending(result))
             .filter(|result| {
-                crate::pipeline::conditional_gate::pipeline_allowed(
-                    &execution,
+                patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
                     SecurityLevel::L3,
                     &result.category,
                     metadata,
                     &gate_results,
-                ) && crate::pipeline::conditional_gate::pipeline_allowed(
-                    &execution,
+                ) && patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
                     SecurityLevel::L3,
                     &result.model,
                     metadata,
@@ -1609,8 +1608,8 @@ impl SecurityGateway {
         let allowed_categories = inputs
             .iter()
             .filter(|input| {
-                crate::pipeline::conditional_gate::pipeline_allowed(
-                    &execution,
+                patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
                     SecurityLevel::L2,
                     input.category.as_str(),
                     metadata,
@@ -1630,8 +1629,8 @@ impl SecurityGateway {
                     [config.model_id, config.public_model]
                         .into_iter()
                         .all(|model| {
-                            crate::pipeline::conditional_gate::pipeline_allowed(
-                                &execution,
+                            patronus_ark_core::cascade::pipeline_allowed(
+                                &execution.gates().conditional,
                                 SecurityLevel::L2,
                                 model,
                                 metadata,
