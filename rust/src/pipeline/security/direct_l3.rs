@@ -7,6 +7,44 @@ use crate::{
     EvaluationResult, ExternalL1Input, ScanExecution, SecurityLevel, SecurityScanResult,
 };
 
+/// The classifier models that may run directly at L3 for `category` when
+/// no L2 stage runs: L3 allowed and enabled, the unified model allowed under
+/// the multi strategy, and the L3 conditional gates of the category and the
+/// model passing. Shared by the scan and the cascade's finality check.
+pub(super) fn direct_l3_configs(
+    execution: &ScanExecution,
+    metadata: &serde_json::Value,
+    gate_results: &[crate::GateResult],
+    category: crate::SecurityCategory,
+) -> Vec<super::ntdb_l2::NtdbL2ModelConfig> {
+    if !execution.allows_level(SecurityLevel::L3)
+        || !execution.l3_policy().enabled
+        || (execution.l3_strategy() == crate::L3Strategy::Multi
+            && !execution
+                .gates()
+                .native
+                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL))
+    {
+        return Vec::new();
+    }
+    classifier_model_configs_for_category(execution, category)
+        .into_iter()
+        .filter(|config| {
+            [category.as_str(), config.public_model, config.model_id]
+                .into_iter()
+                .all(|pipeline| {
+                    patronus_ark_core::cascade::pipeline_allowed(
+                        &execution.gates().conditional,
+                        SecurityLevel::L3,
+                        pipeline,
+                        metadata,
+                        gate_results,
+                    )
+                })
+        })
+        .collect()
+}
+
 impl SecurityGateway {
     pub(super) fn direct_l3_results(
         &self,
@@ -15,39 +53,9 @@ impl SecurityGateway {
         metadata: &serde_json::Value,
         gate_results: &[crate::GateResult],
     ) -> Vec<SecurityScanResult> {
-        if !execution.allows_level(SecurityLevel::L3) || !execution.l3_policy().enabled {
-            return Vec::new();
-        }
-        if execution.l3_strategy() == crate::L3Strategy::Multi
-            && !execution
-                .gates()
-                .native
-                .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
-        {
-            return Vec::new();
-        }
         let mut results = Vec::new();
         for input in inputs {
-            let configs = classifier_model_configs_for_category(execution, input.category)
-                .into_iter()
-                .filter(|config| {
-                    [
-                        input.category.as_str(),
-                        config.public_model,
-                        config.model_id,
-                    ]
-                    .into_iter()
-                    .all(|pipeline| {
-                        patronus_ark_core::cascade::pipeline_allowed(
-                            &execution.gates().conditional,
-                            SecurityLevel::L3,
-                            pipeline,
-                            metadata,
-                            gate_results,
-                        )
-                    })
-                })
-                .collect::<Vec<_>>();
+            let configs = direct_l3_configs(execution, metadata, gate_results, input.category);
             if configs.is_empty() {
                 continue;
             }

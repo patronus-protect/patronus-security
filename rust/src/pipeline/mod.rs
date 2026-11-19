@@ -7,8 +7,6 @@ mod l3_result;
 mod l3_routing;
 mod l3_schedule;
 mod l3_worker;
-#[cfg(feature = "test-util")]
-mod long_text;
 mod security;
 mod strategy;
 
@@ -38,7 +36,6 @@ pub mod test_util {
         unified_coalescing_snapshot, unified_metadata_details_for_test,
         unified_outputs_have_same_classes_for_heads_for_test, UnifiedCoalescingSnapshot,
     };
-    pub use super::long_text::{candidate_selection, l3_metadata};
     pub use super::security::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision,

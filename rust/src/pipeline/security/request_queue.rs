@@ -377,16 +377,13 @@ impl SecurityGateway {
         );
         // What later phases need of the L1 results; the results themselves move
         // to the caller instead of being cloned with all their evidence (H03).
-        let mut conditional_results = l1_results
-            .iter()
-            .filter_map(gate_result)
-            .collect::<Vec<_>>();
-        conditional_results.extend(rejected_l1_candidate_gate_results(&l1_results));
+        let mut conditional_results = patronus_ark_core::cascade::l1_gate_results(&l1_results);
         // L1's answer is final for the modules it decides and for those no
         // later layer can run for; only the others reach L2 and L3.
         let undecided = l1_undecided_inputs(
             &inputs,
             &mut l1_results,
+            !l1_failures.is_empty(),
             &execution,
             &metadata,
             &conditional_results,
@@ -425,7 +422,11 @@ impl SecurityGateway {
                 l2_failures.len()
             ),
         );
-        conditional_results.extend(l2_results.iter().filter_map(gate_result));
+        conditional_results.extend(
+            l2_results
+                .iter()
+                .filter_map(patronus_ark_core::cascade::gate_result),
+        );
         let gate_chunk_results = dynamic_pii_source_chunks(&l2_results);
         let mut l3_execution = execution.clone();
         l3_execution
@@ -457,7 +458,7 @@ impl SecurityGateway {
             dynamic_pii,
         );
         drop_internal_l2_chunk_outputs(&mut l2_results);
-        mark_final_l2(&mut l2_results, &execution);
+        mark_final(&mut l2_results, &execution);
         metrics.checkpoint(
             "before_publish_l2",
             format!("request_id={request_id} results={}", l2_results.len()),
@@ -800,19 +801,7 @@ impl SecurityGateway {
         if !inputs
             .iter()
             .any(|input| input.category == SecurityCategory::DynamicPii)
-            || !execution.allows_level(SecurityLevel::L3)
-            || !execution
-                .gates()
-                .native
-                .allows_model(DYNAMIC_PII_ASSET.model)
-            || !execution.l3_policy().enabled
-            || !patronus_ark_core::cascade::pipeline_allowed(
-                &execution.gates().conditional,
-                SecurityLevel::L3,
-                DYNAMIC_PII_ASSET.category.as_str(),
-                metadata,
-                gate_results,
-            )
+            || !dynamic_pii_runs(execution, metadata, gate_results)
         {
             return None;
         }
@@ -1315,10 +1304,14 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
 /// an undecided module no later layer can run for (its answer is clear, as
 /// in Core); their L1 results carry `decided_by`. Returns the inputs of the
 /// modules that go on to L2 or L3: without a cascade, every input, as
-/// before. `gate_results` are the L1 gate results of the request.
+/// before. `gate_results` are the L1 gate results of the request. A module
+/// without an L1 result (its rules switched off or not reporting), or any
+/// module of a request whose L1 had a failure (`l1_failed`), is never
+/// decided by L1: it passes on.
 pub(super) fn l1_undecided_inputs(
     inputs: &[ExternalL1Input],
     l1_results: &mut [SecurityScanResult],
+    l1_failed: bool,
     execution: &ScanExecution,
     metadata: &serde_json::Value,
     gate_results: &[GateResult],
@@ -1329,6 +1322,14 @@ pub(super) fn l1_undecided_inputs(
     let mut undecided = Vec::new();
     for input in inputs {
         let module = input.category;
+        if l1_failed
+            || !l1_results
+                .iter()
+                .any(|result| result.category == module.as_str())
+        {
+            undecided.push(input.clone());
+            continue;
+        }
         let stage = cascade.l1_stage(
             module,
             execution.gates().native.mode(module),
@@ -1339,7 +1340,7 @@ pub(super) fn l1_undecided_inputs(
         // Undecided with no later layer to run: L1's answer is final and clear.
         let outcome = match stage.outcome {
             StageOutcome::Escalate
-                if later_layer_may_run(execution, metadata, gate_results, module) =>
+                if super::later_layer_may_run(execution, metadata, gate_results, module) =>
             {
                 undecided.push(input.clone());
                 continue;
@@ -1358,54 +1359,38 @@ pub(super) fn l1_undecided_inputs(
     undecided
 }
 
-/// Whether L2 or L3 may still run for `category` under `execution`: an
-/// allowed L2 model, or an allowed L3 model (dynamic PII's GLiNER for
-/// `dynamic-pii`).
-fn later_layer_may_run(
+/// Whether dynamic PII's GLiNER L3 runs under `execution`: L3 allowed and
+/// enabled, its model gate on and its L3 conditional gate passing.
+pub(super) fn dynamic_pii_runs(
     execution: &ScanExecution,
     metadata: &serde_json::Value,
     gate_results: &[GateResult],
-    category: SecurityCategory,
 ) -> bool {
-    let allowed = |level| {
-        patronus_ark_core::cascade::pipeline_allowed(
+    execution.allows_level(SecurityLevel::L3)
+        && execution
+            .gates()
+            .native
+            .allows_model(DYNAMIC_PII_ASSET.model)
+        && execution.l3_policy().enabled
+        && patronus_ark_core::cascade::pipeline_allowed(
             &execution.gates().conditional,
-            level,
-            category.as_str(),
+            SecurityLevel::L3,
+            DYNAMIC_PII_ASSET.category.as_str(),
             metadata,
             gate_results,
         )
-    };
-    let l2 = !super::ntdb_l2::ntdb_l2_model_configs_for_category(execution, category).is_empty()
-        && allowed(SecurityLevel::L2);
-    let l3 = execution.allows_level(SecurityLevel::L3)
-        && execution.l3_policy().enabled
-        && allowed(SecurityLevel::L3)
-        && (category == SecurityCategory::DynamicPii
-            || !super::ntdb_l2::classifier_model_configs_for_category(execution, category)
-                .is_empty());
-    l2 || l3
 }
 
-/// With the opt-in cascade, marks the L2 results that end their module's
-/// run (no L3 pending) as final; shared by the queue and the distributed
-/// aggregation.
-pub(super) fn mark_final_l2(results: &mut [SecurityScanResult], execution: &ScanExecution) {
+/// With the opt-in cascade, marks the L2 and L3 results that end their
+/// module's run (no L3 pending) as final; shared by the queue and the
+/// distributed L2 and L3 aggregation.
+pub(super) fn mark_final(results: &mut [SecurityScanResult], execution: &ScanExecution) {
     if execution.gates().cascade.is_none() {
         return;
     }
     for result in results.iter_mut().filter(|result| !has_l3_pending(result)) {
         mark_decided(result);
     }
-}
-
-pub(super) fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
-    Some(GateResult {
-        pipeline: result.category.clone(),
-        class_name: result.class_name.clone(),
-        confidence: result.confidence,
-        level: result.level.parse().ok()?,
-    })
 }
 
 fn dynamic_pii_source_chunks(
@@ -1428,24 +1413,6 @@ fn dynamic_pii_source_chunks(
             });
     }
     chunks
-}
-
-pub(super) fn rejected_l1_candidate_gate_results(
-    results: &[SecurityScanResult],
-) -> Vec<GateResult> {
-    results
-        .iter()
-        .filter(|result| result.model == "native:injection_l1")
-        .filter_map(|result| result.decision.as_ref())
-        .flat_map(|decision| decision.candidates.iter())
-        .filter(|candidate| candidate.source == "l1" && !candidate.accepted)
-        .map(|candidate| GateResult {
-            pipeline: "native:injection_l1".to_string(),
-            class_name: candidate.class_name.clone(),
-            confidence: candidate.confidence,
-            level: SecurityLevel::L1,
-        })
-        .collect()
 }
 
 pub(super) fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
@@ -1581,7 +1548,10 @@ mod tests {
                 model: "native:injection_l1".to_string(),
             },
         });
-        let candidate_results = rejected_l1_candidate_gate_results(&[result]);
+        let candidate_results = patronus_ark_core::cascade::l1_gate_results(&[result])
+            .into_iter()
+            .filter(|gate| gate.pipeline == "native:injection_l1")
+            .collect::<Vec<_>>();
         assert_eq!(candidate_results.len(), 1);
 
         let mut gates = ScanGateMatrix::all_enabled();
@@ -1647,6 +1617,7 @@ mod tests {
         let undecided = l1_undecided_inputs(
             &inputs,
             &mut results,
+            false,
             &ScanExecution::with_gates(
                 SecurityLevel::L3,
                 crate::ScanGateMatrix {
@@ -1679,6 +1650,33 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![Some(StageOutcome::Detected), None]
         );
+    }
+
+    #[test]
+    fn final_results_are_marked_only_with_a_cascade() {
+        let l3 = super::super::scan_result(
+            SecurityCategory::Injection,
+            "wolf-defender-small",
+            crate::EvaluationResult {
+                class_name: "attack".to_string(),
+                confidence: 0.9,
+                level: "L3".to_string(),
+            },
+            Vec::new(),
+        );
+        let mut plain = [l3.clone()];
+        mark_final(&mut plain, &ScanExecution::new(SecurityLevel::L3));
+        assert_eq!(plain[0].decided_by, None);
+        let cascade = ScanGateMatrix {
+            cascade: Some(patronus_ark_core::cascade::Cascade::default()),
+            ..ScanGateMatrix::default()
+        };
+        let mut cascaded = [l3];
+        mark_final(
+            &mut cascaded,
+            &ScanExecution::with_gates(SecurityLevel::L3, cascade),
+        );
+        assert_eq!(cascaded[0].decided_by, Some(crate::Stage::L3));
     }
 
     #[test]

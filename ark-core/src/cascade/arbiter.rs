@@ -47,6 +47,8 @@ pub trait ThresholdTable {
 /// Access to the result fields arbitration reads and rewrites; implemented
 /// by every scan-result type that carries layered evidence.
 pub trait LayeredResult: Clone {
+    /// The category (pipeline) the result answers.
+    fn category(&self) -> &str;
     fn class_name(&self) -> &str;
     fn confidence(&self) -> f64;
     fn level(&self) -> &str;
@@ -57,12 +59,17 @@ pub trait LayeredResult: Clone {
     fn decision(&self) -> Option<&DecisionEnvelope>;
     /// Whether the result carries evidence spans.
     fn has_evidence(&self) -> bool;
+    /// Whether an evidence span covers exactly the bytes `start..end`.
+    fn has_evidence_at(&self, start: usize, end: usize) -> bool;
     fn set_class(&mut self, class_name: String, confidence: f64);
     fn set_level(&mut self, level: &str);
     fn set_decision(&mut self, decision: DecisionEnvelope);
 }
 
 impl LayeredResult for NativeResult {
+    fn category(&self) -> &str {
+        &self.category
+    }
     fn class_name(&self) -> &str {
         &self.class_name
     }
@@ -89,6 +96,11 @@ impl LayeredResult for NativeResult {
     }
     fn has_evidence(&self) -> bool {
         !self.evidence_spans.is_empty()
+    }
+    fn has_evidence_at(&self, start: usize, end: usize) -> bool {
+        self.evidence_spans
+            .iter()
+            .any(|span| span.start_byte == start && span.end_byte == end)
     }
     fn set_class(&mut self, class_name: String, confidence: f64) {
         self.class_name = class_name;

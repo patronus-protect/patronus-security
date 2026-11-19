@@ -897,9 +897,10 @@ Whether `level` may run in this cascade.
 pub fn l1_off(&self, module: SecurityCategory) -> L1Stage;
 ```
 
-L1's answer for `module` when L1 is switched off: no stage ran, the
-input escalates to the next layer that runs; if none does,
-[`Self::decide`] reports no decision for the module.
+L1's answer for `module` when its heuristic did not run (L1 switched
+off, or its rules switched off or failed): the input escalates to the
+next stage that runs and is never cleared for lack of evidence; if no
+stage runs, [`Self::decide`] reports no decision for the module.
 
 ```rust
 pub fn has_conditional_gates(&self) -> bool;
@@ -963,6 +964,24 @@ ran. `None` when no stage ran at all (L1 switched off and no later
 layer answered): the module has no decision.
 `l1_results` are the L1 gate results of every scanned module, read
 only when [`Self::has_conditional_gates`].
+
+```rust
+pub fn gate_result(result: &impl LayeredResult) -> Option<GateResult>;
+```
+
+The gate result of one result for conditional gates (its category, class,
+confidence and level); `None` for a result without a known level.
+
+```rust
+pub fn l1_gate_results<'a, R: LayeredResult + 'a>(
+    results: impl IntoIterator<Item = &'a R>,
+) -> Vec<GateResult>;
+```
+
+The gate results of L1 results, shared by every host: one per result
+([`gate_result`]) and one per injection L1 candidate the scorer rejected,
+under the pipeline `native:injection_l1`, so a gate can ask for a rule
+match below the acceptance cut.
 
 ## Layer Gates And L3 Policy
 

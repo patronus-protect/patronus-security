@@ -1,7 +1,5 @@
 use crate::{
-    cascade::{
-        Cascade, CascadeConfig, GateResult, L3Executor, ModuleDecision, SecurityLevel, StageOutcome,
-    },
+    cascade::{Cascade, CascadeConfig, L3Executor, ModuleDecision, SecurityLevel, StageOutcome},
     detectors::{
         shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
         text::Finding,
@@ -295,15 +293,7 @@ impl Scanner {
         // Conditional gates read the L1 results of every scanned module;
         // built only when gates exist.
         let l1_results = if self.cascade.has_conditional_gates() {
-            native
-                .iter()
-                .map(|result| GateResult {
-                    pipeline: result.category.clone(),
-                    class_name: result.class_name.clone(),
-                    confidence: result.confidence,
-                    level: SecurityLevel::L1,
-                })
-                .collect()
+            crate::cascade::l1_gate_results(native)
         } else {
             Vec::new()
         };
@@ -317,13 +307,24 @@ impl Scanner {
                 .map(|layer| layer as &mut dyn L3Executor);
             #[cfg(not(feature = "wolf"))]
             let l3: Option<&mut dyn L3Executor> = None;
+            // The heuristic ran when one of the module's producers is enabled.
+            let heuristic = l1
+                && self
+                    .native
+                    .producers(module)
+                    .iter()
+                    .any(|producer| producer.enabled(&self.config.gates));
             let stage = if l1 {
                 // Once per module and scan, after the native producers.
-                let stage = self.cascade.l1_stage(
-                    module,
-                    self.config.gates.mode(module),
-                    native.iter().filter(|r| r.category == module.as_str()),
-                );
+                let stage = if heuristic {
+                    self.cascade.l1_stage(
+                        module,
+                        self.config.gates.mode(module),
+                        native.iter().filter(|r| r.category == module.as_str()),
+                    )
+                } else {
+                    self.cascade.l1_off(module)
+                };
                 let model = self.native.l1_model(module);
                 let findings = if model.is_some() && stage.outcome == StageOutcome::Escalate {
                     scan_findings(native)
@@ -979,10 +980,13 @@ mod cascade_tests {
         config.gates.models.insert("native:pii".into(), false);
         let report = Scanner::new(config).unwrap().scan(MIXED).unwrap();
         assert!(!report.native.iter().any(|r| r.category == "pii"));
-        assert_eq!(
-            decided(&report, SecurityCategory::Pii).0,
-            StageOutcome::Clear
-        );
+        // No PII stage ran: no decision, never a clear for lack of evidence.
+        assert!(!report
+            .decision
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|d| d.module == SecurityCategory::Pii));
         assert_eq!(
             decided(&report, SecurityCategory::Injection).0,
             StageOutcome::Detected

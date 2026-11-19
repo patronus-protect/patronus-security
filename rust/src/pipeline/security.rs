@@ -373,6 +373,58 @@ mod distributed_plan_tests {
         );
     }
 
+    fn plan_with(gates: serde_json::Value, level: SecurityLevel) -> DistributedL2Plan {
+        let gates = serde_json::from_value::<crate::ScanGateMatrix>(gates).unwrap();
+        injection_gateway().plan_distributed_l2(
+            &[ExternalL1Input::new(
+                SecurityCategory::Injection,
+                "ordinary prose",
+            )],
+            &serde_json::json!({}),
+            &ScanExecution::with_gates(level, gates),
+        )
+    }
+
+    #[test]
+    fn a_module_without_l1_results_is_passed_on_not_cleared() {
+        // Rules off: no L1 result; even detect 0 must not decide or clear it.
+        let plan = plan_with(
+            serde_json::json!({
+                "models": {"native:injection_l1": false},
+                "cascade": {"modules": {"injection": {"detect_threshold": 0.0}}}
+            }),
+            SecurityLevel::L2,
+        );
+        assert_eq!(plan.categories, vec![SecurityCategory::Injection]);
+    }
+
+    #[test]
+    fn finality_reads_the_per_model_l2_gates() {
+        // The category gate passes, the L2 model's own gate does not: no
+        // later layer runs, so L1's clear answer is final.
+        let plan = plan_with(
+            serde_json::json!({
+                "cascade": {},
+                "conditional": [{"level": "l2", "pipeline": "wolf-defender-small",
+                    "when": {"result": {"pipeline": "pii", "classes": ["EMAIL"]}}}]
+            }),
+            SecurityLevel::L2,
+        );
+        assert!(plan.categories.is_empty(), "{:?}", plan.categories);
+        let l1 = plan
+            .l1_results
+            .iter()
+            .find(|result| result.model == "native:injection_l1")
+            .unwrap();
+        assert_eq!(
+            (l1.decided_by, l1.l1_outcome),
+            (
+                Some(crate::Stage::Heuristic),
+                Some(crate::StageOutcome::Clear)
+            )
+        );
+    }
+
     #[test]
     fn without_a_cascade_l2_runs_as_before_and_nothing_is_marked() {
         // An L1 detection does not stop L2, in the queue and the distributed plan.
@@ -462,6 +514,58 @@ pub struct DistributedL3Plan {
     pub gate_results: Vec<crate::GateResult>,
 }
 
+/// The L2 conditional gate check of one pipeline (category or model id).
+fn l2_allowed<'a>(
+    execution: &'a ScanExecution,
+    metadata: &'a serde_json::Value,
+    gate_results: &'a [crate::GateResult],
+) -> impl Fn(&str) -> bool + 'a {
+    move |pipeline| {
+        patronus_ark_core::cascade::pipeline_allowed(
+            &execution.gates().conditional,
+            SecurityLevel::L2,
+            pipeline,
+            metadata,
+            gate_results,
+        )
+    }
+}
+
+/// Whether an L2 model of `category` runs under `execution`, by the checks
+/// [`l2_gated_inputs`] applies: the category's gate and at least one model
+/// whose own gates pass.
+fn l2_runs_for(
+    execution: &ScanExecution,
+    metadata: &serde_json::Value,
+    gate_results: &[crate::GateResult],
+    category: SecurityCategory,
+) -> bool {
+    let allowed = l2_allowed(execution, metadata, gate_results);
+    allowed(category.as_str())
+        && ntdb_l2_model_configs_for_category(execution, category)
+            .iter()
+            .any(|config| allowed(config.model_id) && allowed(config.public_model))
+}
+
+/// Whether L2 or L3 may still run for `category` after L1, by the checks
+/// the scan applies: with L2 on, an L2 model ([`l2_runs_for`], L3 follows
+/// on promotion); without it, a direct L3 model; for `dynamic-pii`, GLiNER.
+fn later_layer_may_run(
+    execution: &ScanExecution,
+    metadata: &serde_json::Value,
+    gate_results: &[crate::GateResult],
+    category: SecurityCategory,
+) -> bool {
+    let classifier = if execution.allows_level(SecurityLevel::L2) {
+        l2_runs_for(execution, metadata, gate_results, category)
+    } else {
+        !direct_l3::direct_l3_configs(execution, metadata, gate_results, category).is_empty()
+    };
+    classifier
+        || (category == SecurityCategory::DynamicPii
+            && request_queue::dynamic_pii_runs(execution, metadata, gate_results))
+}
+
 /// The L2 step for the inputs L1 left undecided: the inputs whose L2 gates
 /// pass, and the execution with gated-off L2 models switched off and L3
 /// deferred to the central queue when it may run.
@@ -471,16 +575,7 @@ fn l2_gated_inputs<'a>(
     metadata: &serde_json::Value,
     gate_results: &[crate::GateResult],
 ) -> (Vec<&'a ExternalL1Input>, ScanExecution) {
-    let conditional = &execution.gates().conditional;
-    let allowed = |pipeline: &str| {
-        patronus_ark_core::cascade::pipeline_allowed(
-            conditional,
-            SecurityLevel::L2,
-            pipeline,
-            metadata,
-            gate_results,
-        )
-    };
+    let allowed = l2_allowed(execution, metadata, gate_results);
     let inputs = inputs
         .iter()
         .filter(|input| allowed(input.category.as_str()))
@@ -1254,6 +1349,8 @@ impl SecurityGateway {
         results
             .iter_mut()
             .for_each(ntdb_l2::publish_threat_model_result);
+        // As in the queue: a final L3 result carries decided_by.
+        request_queue::mark_final(&mut results, execution);
         Ok(results)
     }
 
@@ -1288,7 +1385,7 @@ impl SecurityGateway {
             })
             .collect::<Vec<_>>();
         // As in the queue: an L2 result without a pending L3 is final.
-        request_queue::mark_final_l2(&mut results, execution);
+        request_queue::mark_final(&mut results, execution);
         Ok(results)
     }
 
@@ -1333,16 +1430,11 @@ impl SecurityGateway {
     ) -> DistributedL2Plan {
         let (mut l1_results, l1_failures) =
             request_queue::split_results(self.scan_l1_inputs(inputs, execution));
-        let mut gate_results = l1_results
-            .iter()
-            .filter_map(request_queue::gate_result)
-            .collect::<Vec<_>>();
-        gate_results.extend(request_queue::rejected_l1_candidate_gate_results(
-            &l1_results,
-        ));
+        let gate_results = patronus_ark_core::cascade::l1_gate_results(&l1_results);
         let undecided = request_queue::l1_undecided_inputs(
             inputs,
             &mut l1_results,
+            !l1_failures.is_empty(),
             execution,
             metadata,
             &gate_results,
@@ -1378,7 +1470,11 @@ impl SecurityGateway {
         execution: &ScanExecution,
     ) -> DistributedL3Plan {
         let mut gate_results = l1_gate_results.to_vec();
-        gate_results.extend(l2_results.iter().filter_map(request_queue::gate_result));
+        gate_results.extend(
+            l2_results
+                .iter()
+                .filter_map(patronus_ark_core::cascade::gate_result),
+        );
         let mut execution = execution.clone();
         execution
             .gates_mut()

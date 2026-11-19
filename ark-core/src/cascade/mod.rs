@@ -328,9 +328,10 @@ impl Cascade {
         self.config.allows_level(level)
     }
 
-    /// L1's answer for `module` when L1 is switched off: no stage ran, the
-    /// input escalates to the next layer that runs; if none does,
-    /// [`Self::decide`] reports no decision for the module.
+    /// L1's answer for `module` when its heuristic did not run (L1 switched
+    /// off, or its rules switched off or failed): the input escalates to the
+    /// next stage that runs and is never cleared for lack of evidence; if no
+    /// stage runs, [`Self::decide`] reports no decision for the module.
     pub fn l1_off(&self, module: SecurityCategory) -> L1Stage {
         L1Stage {
             outcome: StageOutcome::Escalate,
@@ -413,6 +414,7 @@ impl Cascade {
         stage.outcome = answer.outcome;
         stage.score = answer.score;
         stage.decided_by = Stage::L1Model;
+        stage.ran = true;
         stage.escalation = (answer.outcome == StageOutcome::Escalate).then(|| {
             EscalationSignal::above(
                 answer.score,
@@ -534,6 +536,47 @@ impl Cascade {
     }
 }
 
+/// The gate result of one result for conditional gates (its category, class,
+/// confidence and level); `None` for a result without a known level.
+pub fn gate_result(result: &impl LayeredResult) -> Option<GateResult> {
+    Some(GateResult {
+        pipeline: result.category().to_string(),
+        class_name: result.class_name().to_string(),
+        confidence: result.confidence(),
+        level: result.level().parse().ok()?,
+    })
+}
+
+/// The gate results of L1 results, shared by every host: one per result
+/// ([`gate_result`]) and one per injection L1 candidate the scorer rejected,
+/// under the pipeline `native:injection_l1`, so a gate can ask for a rule
+/// match below the acceptance cut.
+pub fn l1_gate_results<'a, R: LayeredResult + 'a>(
+    results: impl IntoIterator<Item = &'a R>,
+) -> Vec<GateResult> {
+    let mut gates = Vec::new();
+    let mut rejected = Vec::new();
+    for result in results {
+        gates.extend(gate_result(result));
+        if result.model() != crate::injection_l1::MODEL {
+            continue;
+        }
+        let candidates = result.decision().into_iter().flat_map(|d| &d.candidates);
+        rejected.extend(
+            candidates
+                .filter(|candidate| candidate.source == "l1" && !candidate.accepted)
+                .map(|candidate| GateResult {
+                    pipeline: crate::injection_l1::MODEL.to_string(),
+                    class_name: candidate.class_name.clone(),
+                    confidence: candidate.confidence,
+                    level: SecurityLevel::L1,
+                }),
+        );
+    }
+    gates.extend(rejected);
+    gates
+}
+
 /// What the heuristic reads from one L1 result.
 struct HeuristicScore {
     /// Accepted at the scorer's own cut (with evidence left after the mode
@@ -563,13 +606,14 @@ fn heuristic_score(result: &impl LayeredResult) -> HeuristicScore {
         };
     }
     let evidence = result.has_evidence();
-    let threat = result
-        .layers()
-        .iter()
-        .find_map(|layer| crate::detectors::threat::cascade_view(&layer.details));
+    let threat = result.layers().iter().find_map(|layer| {
+        crate::detectors::threat::cascade_view(&layer.details, |start, end| {
+            result.has_evidence_at(start, end)
+        })
+    });
     HeuristicScore {
         accepted: evidence,
-        rule_hit: evidence && threat.is_some_and(|(_, points_accepted)| points_accepted),
+        rule_hit: threat.is_some_and(|(_, points_accepted)| points_accepted),
         score: match threat {
             Some((score, _)) => score,
             None if evidence => result.confidence(),

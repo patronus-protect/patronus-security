@@ -580,7 +580,10 @@ fn threat(scorer: bool, points: bool, evidence: bool) -> NativeResult {
         rules.push(crate::detectors::threat::scorer_finding().0);
     }
     if points {
-        rules.push(serde_json::json!({"rule_id": "points", "rule_score": 0.8, "accepted": true}));
+        rules.push(
+            serde_json::json!({"rule_id": "points", "rule_score": 0.8, "accepted": true,
+            "start_byte": 0, "end_byte": 1}),
+        );
     }
     result.layers.push(LayerResult {
         level: "L1".into(),
@@ -857,4 +860,37 @@ fn level_switches_turn_single_layers_off() {
         )
         .unwrap();
     assert!(none.is_none());
+}
+
+#[test]
+fn a_points_hit_needs_its_own_evidence_after_the_mode_floor() {
+    // The floor kept only another span: the accepted points rule is no hit.
+    let mut other = threat(true, true, true);
+    other.evidence_spans[0].start_byte = 5;
+    other.evidence_spans[0].end_byte = 9;
+    assert_eq!(
+        module_stage(Some(0.99), None, &other).outcome,
+        StageOutcome::Escalate
+    );
+    assert_eq!(
+        module_stage(Some(0.99), None, &threat(true, true, true)).outcome,
+        StageOutcome::Detected
+    );
+}
+
+#[test]
+fn l1_gate_results_include_rejected_injection_candidates() {
+    let mut result = l1(0.5, false);
+    result.model = crate::injection_l1::MODEL.into();
+    let decision = result.decision.as_mut().unwrap();
+    decision
+        .candidates
+        .push(decision.decision_candidate.clone().unwrap());
+    let gates = l1_gate_results([&result]);
+    assert_eq!(gates.len(), 2);
+    assert_eq!(gates[0].pipeline, "injection");
+    assert_eq!(
+        (gates[1].pipeline.as_str(), gates[1].class_name.as_str()),
+        (crate::injection_l1::MODEL, "injection")
+    );
 }

@@ -153,6 +153,9 @@ impl ThresholdTable for NtdbThresholds {
 }
 
 impl LayeredResult for SecurityScanResult {
+    fn category(&self) -> &str {
+        &self.category
+    }
     fn class_name(&self) -> &str {
         &self.class_name
     }
@@ -179,6 +182,11 @@ impl LayeredResult for SecurityScanResult {
     }
     fn has_evidence(&self) -> bool {
         !self.evidence_spans.is_empty()
+    }
+    fn has_evidence_at(&self, start: usize, end: usize) -> bool {
+        self.evidence_spans
+            .iter()
+            .any(|span| span.start_byte == start && span.end_byte == end)
     }
     fn set_class(&mut self, class_name: String, confidence: f64) {
         self.class_name = class_name;
