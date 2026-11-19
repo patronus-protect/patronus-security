@@ -13,6 +13,7 @@ Every stage scores the same rows; the comparison shows what each building block 
 | ``B1`` | char n-gram TF-IDF + LR alone (``category_model.py``, vocabulary, no token features) |
 | ``B4`` | hashed char n-gram + word TF-IDF + LR alone (``tf1`` words without fact tokens) |
 | ``B5`` | ``R+A`` plus the ``B4`` logit as points, capped at ``NGRAM_CAP`` |
+| ``FT`` | fastText-type model alone (``category_model.FastTextModel``: hashed word, bigram and char n-gram embeddings plus the ``tf1`` tokens, averaged, linear softmax) |
 
 Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``text_facts`` example),
 ``classes``, ``benign``, ``language`` and ``dataset``, as in the frozen corpora. A row is a positive
@@ -27,11 +28,12 @@ verdict) on the security-adjacent benign rows (``scoreboard.is_hard_benign``), t
 estimate and the ms per 100 KiB it adds to the facts (``text_model_latency`` example on the latency
 windows, ``--bench-bin``/``--windows``; points stages sum over the facts and add none).
 
-Selection (``select``): among the model stages ``B0``, ``R+A+L``, ``B1``, ``B4``, ``B5`` within the
+Selection (``select``): among the model stages ``B0``, ``R+A+L``, ``B1``, ``B4``, ``B5``, ``FT`` within the
 budget (RAM <= 2 MB, <= 1 ms per 100 KiB added), the cheapest (ms, then RAM, then stage order) whose
 TPR at 1 % FPR is within 1 pp of the best. ``R`` and ``R+A`` are comparison rows only. ``B0`` is the
-status quo and adds no cost. A stage whose cost is unknown (``B1``, ``B4``, ``B5`` without
-``--bench-bin``/``--windows``) is reported as ``untimed`` and left out of the selection.
+status quo and adds no cost. A stage whose cost is unknown (``B1``, ``B4``, ``B5``, ``FT`` without
+``--bench-bin``/``--windows``) is reported as ``untimed`` and left out of the selection. ``--stage``
+limits a run to some stages (e.g. ``--stage FT`` for one candidate's numbers).
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -72,8 +74,8 @@ if SCOREBOARD is None:
     _spec.loader.exec_module(SCOREBOARD)
 
 REPORT_SCHEMA = "ark-l1-threat-ablation-v1"
-STAGES = ("R", "R+A", "B0", "R+A+L", "B1", "B4", "B5")
-MODEL_STAGES = ("B0", "R+A+L", "B1", "B4", "B5")
+STAGES = ("R", "R+A", "B0", "R+A+L", "B1", "B4", "B5", "FT")
+MODEL_STAGES = ("B0", "R+A+L", "B1", "B4", "B5", "FT")
 LANGUAGES = ("all", "de", "en")
 # Hand-set context points, as the shared points layer (ark-core detectors/score.rs).
 SUPPORT_POINTS = 25
@@ -84,6 +86,8 @@ POINT_SCALE = 10
 NGRAM_POINTS_PER_LOGIT = 10
 NGRAM_CAP = 40
 BUCKETS = (1 << 15, 1 << 14)
+# FT: embedding buckets x dimension.
+FASTTEXT_SHAPE = (1 << 15, 16)
 TOLERANCE_PP = 1.0
 MAX_RAM_BYTES = 2 * 1024 * 1024
 MAX_EXTRA_MS = 1.0
@@ -92,7 +96,7 @@ OPERATING_FPR = 0.01
 ENTRY_BYTES = 32
 # ``Box<str>`` header of a vocabulary term's clone in the Rust model's ``names`` vector.
 NAME_BYTES = 16
-TOKENS = {"B1": "none", "B4": "words"}
+TOKENS = {"B1": "none", "B4": "words", "FT": "tf1"}
 
 
 def rule_points(facts: dict, category: str) -> int:
@@ -191,8 +195,11 @@ def model_ram_bytes(document: dict) -> int:
     """RAM estimate of a loaded ``model.json``: f64 weight + f32 idf per feature, vocabulary entries.
 
     The Rust model owns each vocabulary term twice (``into_vocabulary``): as the lookup map key and
-    as a ``Box<str>`` clone in the ``names`` vector.
+    as a ``Box<str>`` clone in the ``names`` vector. A fastText-type model keeps one f64 value per
+    bucket (the folded output layer).
     """
+    if document.get("kind") == MODEL.FASTTEXT_KIND:
+        return document["buckets"] * 8
     features = len(document["weights"])
     vocab = sum(2 * len(name.encode("utf-8")) + ENTRY_BYTES + NAME_BYTES
                 for block in document["blocks"] for name in block.get("vocabulary", {}))
@@ -224,8 +231,9 @@ def operating_cut(scored: list[tuple[float, int]]) -> float:
 
 
 def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS, iterations: int = 400,
-               min_df: int = 2) -> list[Stage]:
-    """Every stage but ``B0``, trained on ``rows`` and with its operating cut."""
+               min_df: int = 2, stages: Iterable[str] = STAGES) -> list[Stage]:
+    """The chosen ``stages`` but ``B0``, trained on ``rows`` and with their operating cut."""
+    wanted = set(stages)
     category = SCOREBOARD.category(cls)
     train = labelled(rows, cls)
     model_rows = [{**row, "label": label} for row, label in train]
@@ -236,31 +244,43 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
     def anchors(row: dict) -> int:
         return anchor_points(row["facts"], category)
 
-    learned = LearnedPoints.fit(train, min_df=min_df, iterations=iterations)
-    b1_doc = MODEL.train(model_rows, f"ablation-{cls}-b1", min_df=min_df, iterations=iterations, tokens=no_tokens)
-    b4_doc = MODEL.train(model_rows, f"ablation-{cls}-b4", char_buckets=buckets[0], token_buckets=buckets[1],
-                         iterations=iterations, tokens=word_tokens)
-    b1, b4 = MODEL.Model(b1_doc), MODEL.Model(b4_doc)
+    fitted = [Stage("R", rules), Stage("R+A", anchors)]
+    if "R+A+L" in wanted:
+        learned = LearnedPoints.fit(train, min_df=min_df, iterations=iterations)
+        fitted.append(Stage("R+A+L", lambda row: max(anchors(row) + learned.score(row), 0),
+                            ram_bytes=learned.ram_bytes()))
+    if "B1" in wanted:
+        b1_doc = MODEL.train(model_rows, f"ablation-{cls}-b1", min_df=min_df, iterations=iterations,
+                             tokens=no_tokens)
+        b1 = MODEL.Model(b1_doc)
+        fitted.append(Stage("B1", lambda row: sigmoid(b1.score(row["text"], [])[0]), model=b1_doc,
+                            ram_bytes=model_ram_bytes(b1_doc)))
+    if wanted & {"B4", "B5"}:
+        b4_doc = MODEL.train(model_rows, f"ablation-{cls}-b4", char_buckets=buckets[0], token_buckets=buckets[1],
+                             iterations=iterations, tokens=word_tokens)
+        b4 = MODEL.Model(b4_doc)
 
-    def b4_logit(row: dict) -> float:
-        return b4.score(row["text"], word_tokens(row))[0]
+        def b4_logit(row: dict) -> float:
+            return b4.score(row["text"], word_tokens(row))[0]
 
-    def hybrid(row: dict) -> int:
-        ngram = min(max(int(round(b4_logit(row) * NGRAM_POINTS_PER_LOGIT)), 0), NGRAM_CAP)
-        return anchors(row) + ngram
+        def hybrid(row: dict) -> int:
+            ngram = min(max(int(round(b4_logit(row) * NGRAM_POINTS_PER_LOGIT)), 0), NGRAM_CAP)
+            return anchors(row) + ngram
 
-    stages = [
-        Stage("R", rules),
-        Stage("R+A", anchors),
-        Stage("R+A+L", lambda row: max(anchors(row) + learned.score(row), 0), ram_bytes=learned.ram_bytes()),
-        Stage("B1", lambda row: sigmoid(b1.score(row["text"], [])[0]), model=b1_doc,
-              ram_bytes=model_ram_bytes(b1_doc)),
-        Stage("B4", lambda row: sigmoid(b4_logit(row)), model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
-        Stage("B5", hybrid, model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
-    ]
-    for stage in stages:
+        fitted += [
+            Stage("B4", lambda row: sigmoid(b4_logit(row)), model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
+            Stage("B5", hybrid, model=b4_doc, ram_bytes=model_ram_bytes(b4_doc)),
+        ]
+    if "FT" in wanted:
+        ft_doc = MODEL.train_fasttext(model_rows, f"ablation-{cls}-fasttext", buckets=FASTTEXT_SHAPE[0],
+                                      dim=FASTTEXT_SHAPE[1])
+        ft = MODEL.FastTextModel(ft_doc)
+        fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.row_tokens(row))), model=ft_doc,
+                            ram_bytes=model_ram_bytes(ft_doc)))
+    fitted = [stage for stage in fitted if stage.name in wanted]
+    for stage in fitted:
         stage.cut = operating_cut([(stage.score(row), label) for row, label in train])
-    return stages
+    return fitted
 
 
 def b0_stage(predictions: dict[str, dict], cls: str) -> Stage:
@@ -333,14 +353,16 @@ def select(results: list[dict[str, Any]], tolerance_pp: float = TOLERANCE_PP) ->
 
 def run_class(train: list[dict], test: list[dict], cls: str, *, predictions: dict[str, dict] | None = None,
               bench_bin: Path | None = None, windows: Path | None = None, buckets: tuple[int, int] = BUCKETS,
-              iterations: int = 400) -> dict[str, Any]:
-    fitted = {stage.name: stage for stage in fit_stages(train, cls, buckets=buckets, iterations=iterations)}
-    if predictions is not None:
+              iterations: int = 400, stages: Iterable[str] = STAGES) -> dict[str, Any]:
+    stages = [name for name in STAGES if name in set(stages)]
+    fitted = {stage.name: stage
+              for stage in fit_stages(train, cls, buckets=buckets, iterations=iterations, stages=stages)}
+    if predictions is not None and "B0" in stages:
         fitted["B0"] = b0_stage(predictions, cls)
     eval_rows = labelled(test, cls)
     results = []
     timed: dict[int, float] = {}  # B5 scores with the B4 model: one measurement per model
-    for name in STAGES:
+    for name in stages:
         stage = fitted.get(name)
         if stage is None:
             results.append({"stage": name, "measured": False})
@@ -406,6 +428,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
     run.add_argument("--buckets", type=int, nargs=2, default=BUCKETS, metavar=("CHAR", "TOKEN"))
     run.add_argument("--iterations", type=int, default=400)
+    run.add_argument("--stage", dest="stages", action="append", choices=STAGES,
+                     help="run only these stages (default: all)")
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--markdown", type=Path)
     args = parser.parse_args(argv)
@@ -417,7 +441,8 @@ def main(argv: list[str] | None = None) -> int:
         train, test = split_rows(rows)
     predictions = load_predictions(args.b0_predictions) if args.b0_predictions else None
     reports = [run_class(train, test, cls, predictions=predictions, bench_bin=args.bench_bin, windows=args.windows,
-                         buckets=tuple(args.buckets), iterations=args.iterations) for cls in args.classes]
+                         buckets=tuple(args.buckets), iterations=args.iterations, stages=args.stages or STAGES)
+               for cls in args.classes]
     args.out.write_text(json.dumps({"schema": REPORT_SCHEMA, "classes": reports}, indent=2, sort_keys=True) + "\n",
                         encoding="utf-8")
     if args.markdown is not None:

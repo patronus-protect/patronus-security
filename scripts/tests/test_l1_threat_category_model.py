@@ -131,3 +131,65 @@ def test_parity_goldens_are_fresh():
     assert len(rows) >= 5
     assert {r["id"] for r in rows} == {r["id"] for r in MODULE.synthetic_rows()}
     assert all(set(r["models"]) == set(MODULE.SYNTHETIC_MODELS) for r in rows)
+
+
+# ── fastText-type candidate ─────────────────────────────────────────────────
+
+
+def test_fasttext_features_order_and_names():
+    assert list(MODULE.fasttext_features("Ab  ÄB", ["F:X=1"], 3, 4)) == [
+        "w:ab", "c:<ab", "c:ab>", "c:<ab>", "w:äb", "b:ab äb", "c:<äb", "c:äb>", "c:<äb>", "F:X=1",
+    ]
+    # A padded word shorter than the smallest n counts once, whole.
+    assert list(MODULE.fasttext_features("é", ["T"], 4, 5)) == ["w:é", "c:<é>", "T"]
+
+
+def toy_fasttext(buckets=1, embeddings=None):
+    return {
+        "kind": "fasttext", "format_version": 1, "name": "toy", "analyzer_func": "tf1",
+        "hash": "fnv1a_32", "buckets": buckets, "dim": 1, "char_ngram_range": [3, 4],
+        "embeddings": embeddings or [1.0] * buckets, "output": [0.0, 2.0], "bias": [0.25, 0.5],
+        "thresholds": {"1pct_fpr": 0.0, "0_1pct_fpr": 1.0}, "decision_rule": "score > threshold",
+    }
+
+
+def test_fasttext_score_is_the_logit_difference_of_the_averaged_embedding():
+    model = MODULE.load_model(toy_fasttext())
+    assert isinstance(model, MODULE.FastTextModel)
+    score, top = model.score("hello world", [])
+    assert score == 2.25 and model.logit("hello world", []) == 2.25
+    assert top == [{"feature": "#0", "weight": 2.0}]
+    assert model.score("", []) == (0.25, [])
+
+
+def test_fasttext_rejects_bad_shapes_and_analyzers():
+    with pytest.raises(ValueError):
+        MODULE.FastTextModel(toy_fasttext(buckets=2, embeddings=[1.0]))
+    with pytest.raises(ValueError):
+        MODULE.FastTextModel({**toy_fasttext(), "analyzer_func": "kf1"})
+    assert isinstance(MODULE.load_model(json.loads(MODULE.SYNTHETIC_MODEL_PATH.read_text("utf-8"))), MODULE.Model)
+
+
+def test_train_fasttext_separates_toy_rows_and_sets_cuts():
+    rows = toy_rows()
+    document = MODULE.train_fasttext(rows, "toy-ft", buckets=256, dim=4, lr=0.05, epochs=50, batch=4)
+    assert document["kind"] == "fasttext" and len(document["embeddings"]) == 256 * 4
+    model = MODULE.FastTextModel(document)
+    positives = [model.logit(r["text"], MODULE.row_tokens(r)) for r in rows if r["label"]]
+    negatives = [model.logit(r["text"], MODULE.row_tokens(r)) for r in rows if not r["label"]]
+    assert min(positives) > max(negatives)
+    assert document["thresholds"]["1pct_fpr"] == max(negatives)
+    # Deterministic for a seed.
+    again = MODULE.train_fasttext(rows, "toy-ft", buckets=256, dim=4, lr=0.05, epochs=50, batch=4)
+    assert again == document
+
+
+def test_fasttext_cli_trains_and_scores(tmp_path):
+    rows = tmp_path / "rows.jsonl"
+    rows.write_text("".join(json.dumps(r) + "\n" for r in toy_rows()), encoding="utf-8")
+    out = tmp_path / "model.json"
+    assert MODULE.main(["train", "--rows", str(rows), "--category", "exfiltration", "--out", str(out),
+                        "--fasttext", "--buckets", "128", "--dim", "4", "--epochs", "2"]) == 0
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["name"] == "text-exfiltration-fasttext" and document["buckets"] == 128
+    assert MODULE.main(["score", "--model", str(out), "--rows", str(rows)]) == 0

@@ -29,7 +29,7 @@ inference matches bit for bit.
 - ``train --fasttext``: the fastText-type candidate instead (``FastTextModel``): hashed word,
   word-bigram and ``<word>`` char n-gram features plus the ``tf1`` tokens share one embedding table
   (``--buckets`` x ``--dim``); a text's vector is the average of its feature embeddings, followed
-  by a linear softmax over the classes (negative, positive). Fitted by deterministic full-batch Adam
+  by a linear softmax over the classes (negative, positive). Fitted by deterministic mini-batch Adam
   with balanced class weights; the decision score is the positive minus the negative logit.
 - ``parity``: recomputes the expected scores of the parity goldens from the checked-in synthetic
   models (one with vocabularies, one hashed, one fastText-type); ``--retrain`` first retrains them on the rows of the text-facts parity file
@@ -445,29 +445,26 @@ def load_model(document: dict) -> "Model | FastTextModel":
 
 
 def fit_fasttext(
-    docs: list[list[int]],
+    docs: list[np.ndarray],
     labels: np.ndarray,
     buckets: int,
     dim: int,
     *,
     lr: float,
     epochs: int,
+    batch: int,
     weight_decay: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Embeddings, output matrix (2 x dim) and bias of the averaged-embedding softmax, fitted by
-    full-batch Adam on the class-balanced cross-entropy (deterministic for a seed). ``docs`` are
-    the bucket lists of the rows; embeddings start uniform in ``±1/dim`` as in fastText, the
-    output layer at zero."""
+    mini-batch Adam on the class-balanced cross-entropy (deterministic for a seed: the batches
+    of an epoch follow a seeded permutation). ``docs`` are the bucket arrays of the rows;
+    embeddings start uniform in ``±1/dim`` as in fastText, the output layer at zero."""
     n = len(docs)
     positives = float(labels.sum())
     if positives in (0.0, float(n)):
         raise ValueError("training rows need both labels")
-    sample = np.where(labels == 1, n / (2 * positives), n / (2 * (n - positives))) / n
-    lengths = np.array([len(doc) for doc in docs], dtype=np.float64)
-    row_of = np.concatenate([np.full(len(doc), i, dtype=np.int64) for i, doc in enumerate(docs)] or [np.zeros(0, np.int64)])
-    cols = np.array([index for doc in docs for index in doc], dtype=np.int64)
-    share = 1.0 / lengths[row_of]
+    sample = np.where(labels == 1, n / (2 * positives), n / (2 * (n - positives)))
     rng = np.random.default_rng(seed)
     params = [
         rng.uniform(-1.0 / dim, 1.0 / dim, size=(buckets, dim)),
@@ -475,35 +472,43 @@ def fit_fasttext(
         np.zeros(2),
     ]
     moments = [(np.zeros_like(p), np.zeros_like(p)) for p in params]
-    onehot = np.stack([1.0 - labels, labels], axis=1)
     beta1, beta2, eps = 0.9, 0.999, 1e-8
-    for step in range(1, epochs + 1):
-        embeddings, output, bias = params
-        hidden = np.zeros((n, dim))
-        weighted = embeddings[cols] * share[:, None]
-        for j in range(dim):
-            hidden[:, j] = np.bincount(row_of, weights=weighted[:, j], minlength=n)
-        logits = hidden @ output.T + bias
-        logits -= logits.max(axis=1, keepdims=True)
-        probs = np.exp(logits)
-        probs /= probs.sum(axis=1, keepdims=True)
-        residual = (probs - onehot) * sample[:, None]
-        grad_hidden = residual @ output
-        per_feature = grad_hidden[row_of] * share[:, None]
-        grad_embeddings = np.stack(
-            [np.bincount(cols, weights=per_feature[:, j], minlength=buckets) for j in range(dim)], axis=1
-        )
-        grads = [
-            grad_embeddings + weight_decay * embeddings,
-            residual.T @ hidden + weight_decay * output,
-            residual.sum(axis=0),
-        ]
-        for param, grad, (m, v) in zip(params, grads, moments):
-            m *= beta1
-            m += (1 - beta1) * grad
-            v *= beta2
-            v += (1 - beta2) * grad * grad
-            param -= lr * (m / (1 - beta1**step)) / (np.sqrt(v / (1 - beta2**step)) + eps)
+    step = 0
+    for _ in range(epochs):
+        order = rng.permutation(n)
+        for begin in range(0, n, batch):
+            chosen = order[begin : begin + batch]
+            m = len(chosen)
+            row_of = np.concatenate([np.full(len(docs[i]), r, dtype=np.int64) for r, i in enumerate(chosen)])
+            cols = np.concatenate([docs[i] for i in chosen]).astype(np.int64)
+            share = 1.0 / np.array([len(docs[i]) for i in chosen], dtype=np.float64)[row_of]
+            embeddings, output, bias = params
+            weighted = embeddings[cols] * share[:, None]
+            hidden = np.stack(
+                [np.bincount(row_of, weights=weighted[:, j], minlength=m) for j in range(dim)], axis=1
+            )
+            logits = hidden @ output.T + bias
+            logits -= logits.max(axis=1, keepdims=True)
+            probs = np.exp(logits)
+            probs /= probs.sum(axis=1, keepdims=True)
+            target = labels[chosen]
+            residual = (probs - np.stack([1.0 - target, target], axis=1)) * (sample[chosen] / m)[:, None]
+            per_feature = (residual @ output)[row_of] * share[:, None]
+            grad_embeddings = np.stack(
+                [np.bincount(cols, weights=per_feature[:, j], minlength=buckets) for j in range(dim)], axis=1
+            )
+            grads = [
+                grad_embeddings + weight_decay * embeddings,
+                residual.T @ hidden + weight_decay * output,
+                residual.sum(axis=0),
+            ]
+            step += 1
+            for param, grad, (first, second) in zip(params, grads, moments):
+                first *= beta1
+                first += (1 - beta1) * grad
+                second *= beta2
+                second += (1 - beta2) * grad * grad
+                param -= lr * (first / (1 - beta1**step)) / (np.sqrt(second / (1 - beta2**step)) + eps)
     return params[0], params[1], params[2]
 
 
@@ -514,8 +519,9 @@ def train_fasttext(
     buckets: int = 1 << 15,
     dim: int = 16,
     ngram_range: tuple[int, int] = (3, 5),
-    lr: float = 0.05,
-    epochs: int = 100,
+    lr: float = 0.01,
+    epochs: int = 5,
+    batch: int = 256,
     weight_decay: float = 1e-6,
     seed: int = 0,
     tokens: Callable[[dict], list[str]] = row_tokens,
@@ -525,14 +531,14 @@ def train_fasttext(
     weights are stored as float32 values."""
     token_docs = [tokens(row) for row in rows]
     docs = [
-        [bucket_of(f, buckets) for f in fasttext_features(row["text"], toks, *ngram_range)]
+        np.array([bucket_of(f, buckets) for f in fasttext_features(row["text"], toks, *ngram_range)], dtype=np.int32)
         for row, toks in zip(rows, token_docs)
     ]
-    keep = [i for i, doc in enumerate(docs) if doc]
+    keep = [i for i, doc in enumerate(docs) if len(doc)]
     labels = np.array([int(rows[i]["label"]) for i in keep], dtype=np.float64)
     embeddings, output, bias = fit_fasttext(
         [docs[i] for i in keep], labels, buckets, dim,
-        lr=lr, epochs=epochs, weight_decay=weight_decay, seed=seed,
+        lr=lr, epochs=epochs, batch=batch, weight_decay=weight_decay, seed=seed,
     )
     document = {
         "kind": FASTTEXT_KIND,
@@ -580,7 +586,7 @@ def retrain_synthetic_models() -> None:
     """Retrain the synthetic models of the parity goldens on the parity rows."""
     for name, (path, options) in SYNTHETIC_MODELS.items():
         if "fasttext" in options:
-            document = train_fasttext(synthetic_rows(), name, epochs=200, **options["fasttext"])
+            document = train_fasttext(synthetic_rows(), name, lr=0.05, epochs=200, **options["fasttext"])
         else:
             document = train(synthetic_rows(), name, min_df=1, iterations=200, **options)
         path.write_text(dump_model(document), encoding="utf-8")
@@ -617,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
     fit.add_argument("--fasttext", action="store_true", help="train the fastText-type candidate")
     fit.add_argument("--buckets", type=int, default=1 << 15, help="fastText-type: embedding buckets")
     fit.add_argument("--dim", type=int, default=16, help="fastText-type: embedding dimension")
-    fit.add_argument("--epochs", type=int, default=100, help="fastText-type: full-batch Adam steps")
+    fit.add_argument("--epochs", type=int, default=5, help="fastText-type: passes over the rows")
     score = sub.add_parser("score", help="reference scores of rows with text and facts")
     score.add_argument("--model", type=Path, required=True)
     score.add_argument("--rows", type=Path, required=True)

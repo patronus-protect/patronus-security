@@ -130,7 +130,7 @@ def test_split_rows_is_deterministic_and_disjoint():
 def test_fit_stages_scores_every_stage_and_b5_caps_the_ngram_share():
     rows = toy_rows()
     stages = MODULE.fit_stages(rows, CLS, buckets=(64, 32), iterations=50)
-    assert [s.name for s in stages] == ["R", "R+A", "R+A+L", "B1", "B4", "B5"]
+    assert [s.name for s in stages] == ["R", "R+A", "R+A+L", "B1", "B4", "B5", "FT"]
     by_name = {s.name: s for s in stages}
     for stage in stages:
         scores = [stage.score(r) for r in rows]
@@ -145,11 +145,22 @@ def test_fit_stages_scores_every_stage_and_b5_caps_the_ngram_share():
     assert by_name["B4"].model["blocks"][0]["vectorizer"]["n_features"] == 64
     assert b4.ram_bytes > 0 and by_name["R"].ram_bytes == 0
     assert by_name["B5"].model is b4.model
+    ft = by_name["FT"]
+    assert ft.model["kind"] == "fasttext"
+    assert ft.ram_bytes == MODULE.FASTTEXT_SHAPE[0] * 8
+
+
+def test_fit_stages_limits_the_run_to_the_chosen_stages():
+    stages = MODULE.fit_stages(toy_rows(), CLS, buckets=(64, 32), iterations=20, stages=("R", "FT"))
+    assert [s.name for s in stages] == ["R", "FT"]
+    report = MODULE.run_class(toy_rows(), toy_rows(), CLS, iterations=20, stages=("FT", "B0"))
+    assert [r["stage"] for r in report["stages"]] == ["B0", "FT"]
+    assert report["selection"]["untimed"] == ["FT"]
 
 
 def test_lr_stages_score_as_probabilities():
     stages = {s.name: s for s in MODULE.fit_stages(toy_rows(), CLS, buckets=(64, 32), iterations=50)}
-    for name in ("B1", "B4"):
+    for name in ("B1", "B4", "FT"):
         scores = [stages[name].score(r) for r in toy_rows()]
         assert all(0.0 < s < 1.0 for s in scores)
 
@@ -307,5 +318,6 @@ def test_run_class_times_each_model_once_with_its_token_source(tmp_path):
     rows = toy_rows()
     report = MODULE.run_class(rows, rows, CLS, bench_bin=fake, windows=windows, buckets=(64, 32), iterations=20)
     ms = {r["stage"]: r.get("ms_per_100kib") for r in report["stages"]}
-    assert ms == {"R": 0.0, "R+A": 0.0, "B0": None, "R+A+L": 0.0, "B1": 0.5, "B4": 0.5, "B5": 0.5}
-    assert sorted(log.read_text(encoding="utf-8").split("\n")[:-1]) == ["--tokens none", "--tokens words"]
+    assert ms == {"R": 0.0, "R+A": 0.0, "B0": None, "R+A+L": 0.0, "B1": 0.5, "B4": 0.5, "B5": 0.5, "FT": 0.5}
+    assert sorted(log.read_text(encoding="utf-8").split("\n")[:-1]) == [
+        "--tokens none", "--tokens tf1", "--tokens words"]
