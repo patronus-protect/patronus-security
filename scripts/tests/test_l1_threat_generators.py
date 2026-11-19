@@ -438,3 +438,15 @@ def test_obfuscated_tool_poisoning_keeps_its_wrapper(tool_roots):
 
 def test_generator_version_forces_a_regeneration_of_the_tool_metadata_change():
     assert MODULE.GENERATOR_VERSION >= 5
+
+
+def test_tool_poisoning_class_templates_are_tool_metadata():
+    table = MODULE.CLASS_TEMPLATES["tool_poisoning"]
+    for split in ("dev", "holdout"):
+        for family, pair in table[split].items():
+            for lang in ("de", "en"):
+                for text in pair[lang]:
+                    filled = text.format(n="3", a="a", title="t")
+                    assert TOOL_DESCRIPTION_MARK.search(filled), f"{split}/{family}/{lang}"
+                    if filled.startswith("{"):
+                        json.loads(filled)
