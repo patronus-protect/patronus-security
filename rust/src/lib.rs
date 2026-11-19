@@ -36,6 +36,7 @@ pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
     CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
 };
+pub use types::defaults;
 pub use types::{
     ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
     DecisionRecommendation, DecisionResult, DecisionTerminality, EffectiveL3PipelinePolicy,

@@ -87,7 +87,7 @@ struct RawPipeline {
 }
 
 fn default_l3_strategy() -> String {
-    "multi".into()
+    patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into()
 }
 
 #[derive(Debug, Deserialize)]
