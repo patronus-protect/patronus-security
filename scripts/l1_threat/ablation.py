@@ -34,12 +34,27 @@ status quo and adds no cost. A stage whose cost is unknown (``B1``, ``B4``, ``B5
 ``--bench-bin``/``--windows``) is reported as ``untimed`` and left out of the selection. ``--stage``
 limits a run to some stages (e.g. ``--stage FT`` for one candidate's numbers).
 
+Calibration (``calibrate``): a model's cuts read off benign data instead of its train negatives. The
+candidate (``--stage``, default ``FT``) trains on the train half of ``--rows``; the other half and
+``--eval-rows`` (the gated dev sets, e.g. ``generated``) form the calibration rows, and no row id of the
+train half is among them. ``0_1pct_fpr`` (detect) and ``1pct_fpr`` (clear) are the cuts at
+``--target-fpr`` and ``--clear-fpr`` on the scores of the benign calibration rows (the dev benign pool
+incl. the hard benigns, ``score > threshold`` as in the model's ``decision_rule``). The report gives, per
+language, the TPR and FPR at the detect cut, the FPR per benign source (set, ``twins`` for look-alike
+twins) and what the train-negative cut would have flagged; ``--report-rows`` (sets with the role
+``report``) are scored at the same cuts in their own scope and never move them. The calibrated
+``model.json`` (``--model-out``) records the pool in ``calibration``; it is not wired into any scan path.
+
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
     python3 scripts/l1_threat/ablation.py run --rows rows.facts.jsonl --class exfiltration \\
         [--eval-rows EVAL.facts.jsonl] [--b0-predictions PRED_DIR] \\
         [--bench-bin target/release/examples/text_model_latency --windows windows.jsonl] \\
         --out ablation.json [--markdown ablation.md]
+    python3 scripts/l1_threat/ablation.py calibrate --rows train_dev.facts.jsonl --class exfiltration \\
+        [--eval-rows generated.facts.jsonl] [--report-rows report.facts.jsonl] [--stage FT] \\
+        [--bench-bin ... --windows ...] --model-out exfiltration.model.json --out calibration.json \\
+        [--markdown calibration.md]
 """
 
 from __future__ import annotations
@@ -73,6 +88,7 @@ if SCOREBOARD is None:
     _spec.loader.exec_module(SCOREBOARD)
 
 REPORT_SCHEMA = "ark-l1-threat-ablation-v1"
+CALIBRATION_SCHEMA = "ark-l1-threat-calibration-v1"
 STAGES = ("R", "R+A", "B0", "R+A+L", "B1", "B4", "B5", "FT")
 MODEL_STAGES = ("B0", "R+A+L", "B1", "B4", "B5", "FT")
 LANGUAGES = ("all", "de", "en")
@@ -365,8 +381,120 @@ def run_class(train: list[dict], test: list[dict], cls: str, *, predictions: dic
             "selection": select(results)}
 
 
-def _pct(value: float | None) -> str:
-    return "–" if value is None else f"{100 * value:.1f}"
+# ── calibration on benign data ───────────────────────────────────────────────
+
+
+def calibration_rows(train: list[dict], rows: Iterable[dict]) -> list[dict]:
+    """``rows`` without a row whose id is in ``train`` (a train negative never calibrates)."""
+    seen = {row["id"] for row in train}
+    return [row for row in rows if row["id"] not in seen]
+
+
+def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, Any]:
+    """TPR and FPR at ``cut`` (``score > cut``) per language, and the FPR per benign source."""
+    out: dict[str, Any] = {}
+    for language in LANGUAGES:
+        chosen = [(row, label, score) for row, label, score in scores
+                  if language == "all" or row.get("language") == language]
+        positives = sum(label for _, label, _ in chosen)
+        negatives = len(chosen) - positives
+        tp = sum(label and score > cut for _, label, score in chosen)
+        fp = sum(not label and score > cut for _, label, score in chosen)
+        if chosen:
+            out[language] = {"positives": positives, "tp": tp, "tpr": tp / positives if positives else None,
+                             "negatives": negatives, "fp": fp, "fpr": fp / negatives if negatives else None}
+    sources: dict[str, dict[str, int]] = {}
+    for row, label, score in scores:
+        if not label:
+            source = sources.setdefault(SCOREBOARD._benign_source(row), {"rows": 0, "fp": 0})
+            source["rows"] += 1
+            source["fp"] += score > cut
+    out["benign_sources"] = {name: {**cell, "fpr": cell["fp"] / cell["rows"]}
+                             for name, cell in sorted(sources.items())}
+    return out
+
+
+def calibrate(document: dict, rows: list[dict], cls: str, *, target_fpr: float = SCOREBOARD.TARGET_FPR,
+              clear_fpr: float = SCOREBOARD.CLEAR_FPR, report_rows: Iterable[dict] = ()) -> tuple[dict, dict[str, Any]]:
+    """``document`` with its ``0_1pct_fpr`` / ``1pct_fpr`` cuts at ``target_fpr`` / ``clear_fpr`` of the
+    benign ``rows``, and the report of those cuts on ``rows`` and ``report_rows`` (see the module docstring)."""
+    model = MODEL.load_model(document)
+
+    def scored(chosen: Iterable[dict]) -> list[tuple[dict, int, float]]:
+        return [(row, label, model.score(row["text"], model.tokens_of(row))[0]) for row, label in labelled(chosen, cls)]
+
+    calibration = scored(rows)
+    benign = [score for _, label, score in calibration if not label]
+    if not benign:
+        raise ValueError(f"{cls}: no benign rows to calibrate on")
+    detect = MODEL.fpr_cut(benign, target_fpr)
+    clear = min(MODEL.fpr_cut(benign, clear_fpr), detect)
+    train_cut = document["thresholds"].get(MODEL.BLOCK_THRESHOLD)
+    calibrated = {**document, "thresholds": {MODEL.ASK_THRESHOLD: clear, MODEL.BLOCK_THRESHOLD: detect},
+                  "calibration": {"target_fpr": target_fpr, "clear_fpr": clear_fpr, "benign_rows": len(benign),
+                                  "benign_sources": sorted({SCOREBOARD._benign_source(row)
+                                                            for row, label, _ in calibration if not label})}}
+    report: dict[str, Any] = {
+        "class": cls, "model": document["name"], "target_fpr": target_fpr, "clear_fpr": clear_fpr,
+        "thresholds": calibrated["thresholds"], "calibration": _detections(calibration, detect),
+        "escalate_fpr": sum(score > clear for score in benign) / len(benign),
+    }
+    if train_cut is not None:
+        report["train_negative_cut"] = {"threshold": train_cut, **_detections(calibration, train_cut)}
+    reported = scored(report_rows)
+    if reported:
+        report["report"] = _detections(reported, detect)
+    return calibrated, report
+
+
+def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str = "FT",
+                    report_rows: Iterable[dict] = (), bench_bin: Path | None = None, windows: Path | None = None,
+                    target_fpr: float = SCOREBOARD.TARGET_FPR,
+                    clear_fpr: float = SCOREBOARD.CLEAR_FPR) -> tuple[dict, dict[str, Any]]:
+    """Train ``stage`` on ``train``, calibrate it on the rows of ``test`` that are not in ``train`` and time it."""
+    if stage not in TOKENS:
+        raise ValueError(f"{stage} is not a model stage with its own model.json")
+    fitted = fit_stages(train, cls, stages=[stage])[0]
+    rows = calibration_rows(train, test)
+    document, report = calibrate(fitted.model, rows, cls, target_fpr=target_fpr, clear_fpr=clear_fpr,
+                                 report_rows=calibration_rows(train, report_rows))
+    report.update({"stage": stage, "rows": {"train": len(train), "calibration": len(rows)},
+                   "ram_bytes": model_ram_bytes(document),
+                   "ms_per_100kib": None if bench_bin is None or windows is None
+                   else bench(bench_bin, windows, Stage(stage, fitted.score, model=document))})
+    return document, report
+
+
+def calibration_markdown(reports: list[dict[str, Any]]) -> str:
+    """Per class: the calibrated cut, TPR and FPR per language, FPR per benign source, the train-negative cut."""
+    lines = ["# Threat model calibration on benign data", "",
+             "| Class | Stage | benign rows | detect cut | TPR all | TPR DE | TPR EN | FPR | FPR at train-negative cut "
+             "| ms/100 KiB | RAM KiB |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for report in reports:
+        cells = report["calibration"]
+        train = (report.get("train_negative_cut") or {}).get("all") or {}
+
+        def tpr(language: str) -> str:
+            return _pct((cells.get(language) or {}).get("tpr"))
+
+        ms, ram = report.get("ms_per_100kib"), report.get("ram_bytes")
+        lines.append(f"| {report['class']} | {report['stage']} | {cells['all']['negatives']} | "
+                     f"{report['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {tpr('all')} | {tpr('de')} | {tpr('en')} | "
+                     f"{_pct(cells['all']['fpr'], 2)} | {_pct(train.get('fpr'), 2)} | {'–' if ms is None else ms} | "
+                     f"{'–' if ram is None else round(ram / 1024, 1)} |")
+    for report in reports:
+        lines += ["", f"## {report['class']}: FPR per benign source at the detect cut", "",
+                  "| Scope | Source | rows | FP | FPR |", "|---|---|---|---|---|"]
+        for scope in ("calibration", "report"):
+            for source, cell in (report.get(scope) or {}).get("benign_sources", {}).items():
+                lines.append(f"| {scope} | {source} | {cell['rows']} | {cell['fp']} | {_pct(cell['fpr'], 2)} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _pct(value: float | None, digits: int = 1) -> str:
+    return "–" if value is None else f"{100 * value:.{digits}f}"
 
 
 def markdown(reports: list[dict[str, Any]]) -> str:
@@ -415,8 +543,42 @@ def main(argv: list[str] | None = None) -> int:
                      help="run only these stages (default: all)")
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--markdown", type=Path)
+    cal = sub.add_parser("calibrate", help="calibrate a model stage's cuts on benign data")
+    cal.add_argument("--rows", type=Path, required=True, help="rows with facts (train half / calibration half)")
+    cal.add_argument("--eval-rows", type=Path, action="append", default=[],
+                     help="further calibration rows with facts (gated dev sets)")
+    cal.add_argument("--report-rows", type=Path, action="append", default=[],
+                     help="rows of report sets: scored at the cuts, never calibrate")
+    cal.add_argument("--class", dest="classes", action="append", required=True, choices=SCOREBOARD.CLASSES)
+    cal.add_argument("--stage", default="FT", choices=sorted(TOKENS))
+    cal.add_argument("--target-fpr", type=float, default=SCOREBOARD.TARGET_FPR)
+    cal.add_argument("--clear-fpr", type=float, default=SCOREBOARD.CLEAR_FPR)
+    cal.add_argument("--bench-bin", type=Path, help="text_model_latency example binary")
+    cal.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
+    cal.add_argument("--model-out", type=Path, help="calibrated model.json (one --class only)")
+    cal.add_argument("--out", type=Path, required=True)
+    cal.add_argument("--markdown", type=Path)
     args = parser.parse_args(argv)
 
+    if args.command == "calibrate":
+        if args.model_out is not None and len(args.classes) != 1:
+            parser.error("--model-out takes one --class")
+        train, held_out = split_rows(MODEL.read_rows(args.rows))
+        test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
+        reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
+        reports = []
+        for cls in args.classes:
+            document, report = calibrate_class(train, test, cls, stage=args.stage, report_rows=reported,
+                                               bench_bin=args.bench_bin, windows=args.windows,
+                                               target_fpr=args.target_fpr, clear_fpr=args.clear_fpr)
+            if args.model_out is not None:
+                args.model_out.write_text(MODEL.dump_model(document), encoding="utf-8")
+            reports.append(report)
+        args.out.write_text(json.dumps({"schema": CALIBRATION_SCHEMA, "classes": reports}, indent=2, sort_keys=True)
+                            + "\n", encoding="utf-8")
+        if args.markdown is not None:
+            args.markdown.write_text(calibration_markdown(reports), encoding="utf-8")
+        return 0
     rows = MODEL.read_rows(args.rows)
     if args.eval_rows is not None:
         train, test = rows, MODEL.read_rows(args.eval_rows)
