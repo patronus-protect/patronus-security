@@ -92,6 +92,21 @@ fn local_present(
     let manifest = crate::wolf::asset_manifest_at(dir, model, precision)?;
     Ok(dir.join(&manifest.model.path).is_file() && dir.join(&manifest.tokenizer.path).is_file())
 }
+/// The selected graph of a cache when it may be rewritten to external data: not when a
+/// supplied integrity manifest applies to it, whose BLAKE3 pins the graph as published and
+/// which [`crate::wolf::WolfRunner`] checks on every load.
+fn rewritable_graph(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<Option<std::path::PathBuf>, ScanError> {
+    let manifest = crate::wolf::asset_manifest_at(dir, model, precision)?;
+    Ok(manifest
+        .model
+        .blake3
+        .is_empty()
+        .then(|| dir.join(&manifest.model.path)))
+}
 /// Rewrite the selected graph of a cache to external data (see
 /// [`crate::onnx::externalize_weights`]); the caller holds the exclusive bundle lock.
 fn externalize_graph(
@@ -99,30 +114,25 @@ fn externalize_graph(
     model: WolfModel,
     precision: WolfPrecision,
 ) -> Result<(), ScanError> {
-    let graph = dir.join(
-        crate::wolf::asset_manifest_at(dir, model, precision)?
-            .model
-            .path,
-    );
+    let Some(graph) = rewritable_graph(dir, model, precision)? else {
+        return Ok(());
+    };
     if crate::onnx::externalize_weights(&graph).map_err(asset)? {
         log::info!("moved the weights of {} to external data", graph.display());
     }
     Ok(())
 }
 /// Rewrite the selected graph of a complete managed cache to external data, once, under the
-/// exclusive bundle lock. Unmanaged local bundles, and with them the files a supplied manifest
-/// pins, are never rewritten. A failure is logged and leaves the inline graph, which loads as
-/// before.
+/// exclusive bundle lock. Unmanaged local bundles, and graphs a supplied manifest pins, are
+/// never rewritten. A failure is logged and leaves the inline graph, which loads as before.
 fn externalize_cached(dir: &Path, model: WolfModel, precision: WolfPrecision, deadline: Instant) {
     let result = (|| {
         if other_pin(dir, model)? || !dir.join(REVISION).is_file() {
             return Ok(());
         }
-        let graph = dir.join(
-            crate::wolf::asset_manifest_at(dir, model, precision)?
-                .model
-                .path,
-        );
+        let Some(graph) = rewritable_graph(dir, model, precision)? else {
+            return Ok(());
+        };
         if !crate::onnx::has_inline_weights(&graph).map_err(asset)? {
             return Ok(());
         }
@@ -622,6 +632,37 @@ mod tests {
         let graph = with_weights(&local);
         prepare_wolf_cache(&local.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
         assert!(crate::onnx::has_inline_weights(&graph).unwrap());
+        assert!(!crate::onnx::external_data_path(&graph).exists());
+    }
+    #[test]
+    fn a_managed_cache_with_a_supplied_manifest_keeps_the_pinned_graph_inline() {
+        let dir = Directory::new();
+        dir.complete();
+        let graph = with_weights(&dir);
+        fs::write(dir.0.join(REVISION), SMALL.spec().revision).unwrap();
+        fs::write(dir.0.join(LOCK), b"").unwrap();
+        let blake3 = |path: &str| blake3::hash(&fs::read(dir.0.join(path)).unwrap()).to_hex();
+        let manifest = serde_json::json!({
+            "schema_version": 1, "model_id": SMALL.spec().id, "revision": "pinned",
+            "precision": "fp16",
+            "model": {"path": FP16, "blake3": blake3(FP16).as_str()},
+            "tokenizer": {"path": "tokenizer.mmbpe", "blake3": blake3("tokenizer.mmbpe").as_str()},
+            "content_tokens": 254, "sequence_tokens": 256, "pad_id": 0,
+            "output_name": "logits", "output": "scalar", "reference": "synthetic",
+            "parity_cases": [{"token_ids": [], "expected_logit": 0.0}], "logit_tolerance": 0.02
+        });
+        fs::write(dir.0.join("wolf.manifest.json"), manifest.to_string()).unwrap();
+        let pinned = fs::read(&graph).unwrap();
+        prepare_wolf_cache(
+            &dir.0,
+            SMALL,
+            WolfPrecision::Fp16,
+            &WarmupOptions::default(),
+            None,
+        )
+        .unwrap();
+        // The manifest pins the graph as published: it stays inline and keeps its hash.
+        assert_eq!(fs::read(&graph).unwrap(), pinned);
         assert!(!crate::onnx::external_data_path(&graph).exists());
     }
     #[test]

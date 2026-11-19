@@ -29,7 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("no existing Wolf FP16 ONNX artifact found")?;
     // Never overwrite another bundle. Reuse the source's assets and provenance.
     fs::create_dir(&output)?;
-    fs::copy(model, output.join("model_fp16.onnx"))?;
+    // A prepared graph keeps its weights in an external data file that must come along.
+    patronus_ark_core::onnx::copy_graph(&model, &output.join("model_fp16.onnx"))?;
     fs::copy(source.join("tokenizer.json"), output.join("tokenizer.json"))?;
     for name in ["config.json", "tokenizer_config.json", ".patronus-revision"] {
         if source.join(name).is_file() {

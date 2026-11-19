@@ -360,7 +360,8 @@ fn prepare_wolf_assets(
         &target.join("tokenizer.json"),
     )?;
     link(pair_tokenizer, &target.join("tokenizer.mmbpe"))?;
-    link(
+    // A prepared graph keeps its weights in an external data file that must come along.
+    patronus_ark_core::onnx::copy_graph(
         &source.join("model.onnx"),
         &target.join("onnx/onnx_mixed/model_mixed.onnx"),
     )?;

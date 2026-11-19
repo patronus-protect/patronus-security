@@ -5,7 +5,7 @@ mod u8u8;
 
 #[cfg(any(test, feature = "test-util"))]
 pub use external_data::testing;
-pub use external_data::{external_data_path, externalize_weights, has_inline_weights};
+pub use external_data::{copy_graph, external_data_path, externalize_weights, has_inline_weights};
 
 use crate::{ExecutionBackend, OnnxRuntimeOptions};
 #[cfg(any(

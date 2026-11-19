@@ -197,7 +197,7 @@ mod published_model_tests {
         let _cleanup = Cleanup(dir.clone());
         let relative_model = "onnx/onnx_fp16/model_fp16.onnx";
         fs::create_dir_all(dir.join("onnx/onnx_fp16")).unwrap();
-        fs::hard_link(source.join(relative_model), dir.join(relative_model)).unwrap();
+        crate::onnx::copy_graph(&source.join(relative_model), &dir.join(relative_model)).unwrap();
         fs::hard_link(source.join("tokenizer.json"), dir.join("tokenizer.json")).unwrap();
         // v2.1 spells its labels in upper case.
         fs::write(

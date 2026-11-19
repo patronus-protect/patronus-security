@@ -22,6 +22,7 @@ use super::proto::{
     TENSOR_EXTERNAL_DATA, TENSOR_RAW_DATA, WIRE_FIXED32, WIRE_FIXED64, WIRE_LEN, WIRE_VARINT,
 };
 use std::{
+    collections::BTreeSet,
     fs::{self, File, OpenOptions},
     io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -49,6 +50,30 @@ pub fn external_data_path(graph: &Path) -> PathBuf {
 /// Reads only field headers; weight payloads are skipped.
 pub fn has_inline_weights(path: &Path) -> io::Result<bool> {
     Ok(layout(path)?.moves_weights())
+}
+
+/// Copy the ONNX graph at `source` to `destination` with the external data files it
+/// references. The data files keep their names next to the copy, so the graph's relative
+/// references hold even when the copy is renamed. Use this wherever a prepared graph is copied
+/// into another bundle: after [`externalize_weights`] the graph alone has no weights.
+pub fn copy_graph(source: &Path, destination: &Path) -> io::Result<()> {
+    let files = layout(source)?.external.files;
+    let (Some(from), Some(to)) = (source.parent(), destination.parent()) else {
+        return Err(invalid("ONNX graph path has no directory"));
+    };
+    for file in &files {
+        let name = Path::new(file);
+        if name.file_name() != Some(name.as_os_str()) {
+            return Err(invalid(format!(
+                "external data location {file} is not a file next to the graph"
+            )));
+        }
+    }
+    for file in &files {
+        fs::copy(from.join(file), to.join(file))?;
+    }
+    fs::copy(source, destination)?;
+    Ok(())
 }
 
 /// Rewrite the graph at `path` to keep its large initializers in `<path>.data`.
@@ -212,14 +237,22 @@ struct Layout {
     /// Top-level model fields in file order; `None` is the graph.
     model: Vec<Option<Span>>,
     graph: Vec<Part>,
-    /// Whether an initializer already references external data.
-    external: bool,
+    /// What the initializers already reference outside the graph file.
+    external: External,
+}
+
+#[derive(Default)]
+struct External {
+    /// Whether an initializer references external data.
+    any: bool,
+    /// The `location` of every external data reference.
+    files: BTreeSet<String>,
 }
 
 impl Layout {
     fn moves_weights(&self) -> bool {
         // A graph that already uses external data keeps its layout.
-        !self.external && self.graph.iter().any(|p| matches!(p, Part::Tensor { .. }))
+        !self.external.any && self.graph.iter().any(|p| matches!(p, Part::Tensor { .. }))
     }
 }
 
@@ -369,7 +402,7 @@ fn layout(path: &Path) -> io::Result<Layout> {
     let mut layout = Layout {
         model: Vec::new(),
         graph: Vec::new(),
-        external: false,
+        external: External::default(),
     };
     let mut graphs = 0;
     while source.pos < source.len {
@@ -389,16 +422,14 @@ fn layout(path: &Path) -> io::Result<Layout> {
     Ok(layout)
 }
 
-/// The graph's parts, and whether an initializer already references external data.
-fn graph_parts(source: &mut Source, graph: &Header) -> io::Result<(Vec<Part>, bool)> {
+/// The graph's parts, and what its initializers already reference outside the graph file.
+fn graph_parts(source: &mut Source, graph: &Header) -> io::Result<(Vec<Part>, External)> {
     let mut parts = Vec::new();
-    let mut external = false;
+    let mut external = External::default();
     while source.pos < graph.end {
         let field = source.header(graph.end)?;
         let tensor = if field.number == GRAPH_INITIALIZER && field.wire == WIRE_LEN {
-            let (tensor, tensor_external) = initializer(source, &field)?;
-            external |= tensor_external;
-            tensor
+            initializer(source, &field, &mut external)?
         } else {
             None
         };
@@ -408,21 +439,36 @@ fn graph_parts(source: &mut Source, graph: &Header) -> io::Result<(Vec<Part>, bo
     Ok((parts, external))
 }
 
-/// The initializer as a [`Part::Tensor`] when its `raw_data` moves out, and whether it
-/// already references external data.
-fn initializer(source: &mut Source, tensor: &Header) -> io::Result<(Option<Part>, bool)> {
+/// The initializer as a [`Part::Tensor`] when its `raw_data` moves out; what it already
+/// references outside the graph file is added to `known`.
+fn initializer(
+    source: &mut Source,
+    tensor: &Header,
+    known: &mut External,
+) -> io::Result<Option<Part>> {
     source.seek(tensor.payload.start)?;
     let mut raw = Vec::new();
     let mut locations = Vec::new();
-    let mut external = false;
+    let mut entries = Vec::new();
     while source.pos < tensor.end {
         let field = source.header(tensor.end)?;
         source.seek(field.end)?;
         match field.number {
             TENSOR_RAW_DATA if field.wire == WIRE_LEN => raw.push(field),
-            TENSOR_EXTERNAL_DATA => external = true,
+            TENSOR_EXTERNAL_DATA if field.wire == WIRE_LEN => entries.push(field),
             TENSOR_DATA_LOCATION => locations.push(field),
             _ => {}
+        }
+    }
+    let mut external = !entries.is_empty();
+    for entry in &entries {
+        let entry = source.read(entry.payload)?;
+        let entry = fields(&entry).map_err(invalid)?;
+        let text = |number| entry.iter().find(|f| f.number == number).map(|f| f.payload);
+        if text(ENTRY_KEY) == Some(b"location".as_slice()) {
+            let file = std::str::from_utf8(text(ENTRY_VALUE).unwrap_or_default())
+                .map_err(|_| invalid("non-UTF-8 external data location"))?;
+            known.files.insert(file.to_owned());
         }
     }
     let mut location = None;
@@ -432,11 +478,12 @@ fn initializer(source: &mut Source, tensor: &Header) -> io::Result<(Option<Part>
         location = Some(field.span());
     }
     // A repeated `raw_data` or `data_location` (last one wins in protobuf) is left inline.
+    known.any |= external;
     let ([raw], false, false) = (raw.as_slice(), external, locations.len() > 1) else {
-        return Ok((None, external));
+        return Ok(None);
     };
     if raw.payload.len < MIN_EXTERNAL_BYTES {
-        return Ok((None, false));
+        return Ok(None);
     }
     let before = source.read_external_location(
         Span {
@@ -452,15 +499,12 @@ fn initializer(source: &mut Source, tensor: &Header) -> io::Result<(Option<Part>
         },
         location,
     )?;
-    Ok((
-        Some(Part::Tensor {
-            before,
-            raw: raw.payload,
-            after,
-            implicit_location: location.is_none(),
-        }),
-        false,
-    ))
+    Ok(Some(Part::Tensor {
+        before,
+        raw: raw.payload,
+        after,
+        implicit_location: location.is_none(),
+    }))
 }
 
 /// Rebuild the original inline model from a rewritten `model` and its data file into `out`.
@@ -912,6 +956,42 @@ mod tests {
         let path = dir.write("model.onnx", &source);
         dir.write("model.onnx.data", b"stale");
         assert_eq!(inline_model(&path).unwrap(), source);
+    }
+
+    #[test]
+    fn a_copied_graph_takes_its_external_data_along_under_a_new_name() {
+        let source = Directory::new();
+        let target = Directory::new();
+        let path = source.write("model.onnx", &model_with_weights());
+        assert!(externalize_weights(&path).unwrap());
+        let copy = target.0.join("model_fp16.onnx");
+        copy_graph(&path, &copy).unwrap();
+        // The data file keeps the name the graph refers to.
+        assert_eq!(
+            fs::read(target.0.join("model.onnx.data")).unwrap(),
+            fs::read(external_data_path(&path)).unwrap()
+        );
+        assert_eq!(run(&copy), run(&path));
+
+        // A published data file is copied as well; an inline graph is copied alone.
+        let mixed = source.write(
+            "mixed.onnx",
+            &model(&[Initializer {
+                name: "w2",
+                dims: vec![512, 4],
+                raw: Vec::new(),
+                data_location: Some(1),
+            }]),
+        );
+        source.write("published.bin", b"weights");
+        copy_graph(&mixed, &target.0.join("mixed.onnx")).unwrap();
+        assert_eq!(
+            fs::read(target.0.join("published.bin")).unwrap(),
+            b"weights"
+        );
+        let inline = source.write("inline.onnx", &model_with_weights());
+        copy_graph(&inline, &target.0.join("inline.onnx")).unwrap();
+        assert_eq!(target.entries(), 5);
     }
 
     fn run(path: &Path) -> Vec<f32> {
