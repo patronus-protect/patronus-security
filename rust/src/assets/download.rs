@@ -347,7 +347,7 @@ fn download_pipeline_model_assets(
         },
     )?;
     fs::write(bundle_dir.join(".patronus-revision"), asset.revision)?;
-    prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
+    prepare_pipeline_model_files(asset, &bundle_dir);
     Ok(bundle_dir)
 }
 
@@ -385,21 +385,44 @@ pub(crate) fn prefer_fp16_l3() -> bool {
     std::env::var("PATRONUS_L3_PRECISION").is_ok_and(|value| value.eq_ignore_ascii_case("fp16"))
 }
 
-pub(crate) fn prepare_cached_pipeline_model_compact_tokenizer(
-    asset: PipelineModelAssetSpec,
-    target_dir: &Path,
-) {
+/// Prepare the generated files of a cached pipeline model bundle: the compact tokenizer, and
+/// the external weight data of its selected ONNX graphs.
+pub(crate) fn prepare_cached_pipeline_model(asset: PipelineModelAssetSpec, target_dir: &Path) {
     let bundle_dir = target_dir.join(asset.destination_path);
     let assets_present = pipeline_model_assets_present(asset, target_dir);
     log::debug!(
-        "checked cached pipeline model assets before compact tokenizer preparation; model={}; target_dir={}; bundle_dir={}; assets_present={}",
+        "checked cached pipeline model assets before preparation; model={}; target_dir={}; bundle_dir={}; assets_present={}",
         asset.model,
         target_dir.display(),
         bundle_dir.display(),
         assets_present
     );
     if assets_present {
-        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
+        prepare_pipeline_model_files(asset, &bundle_dir);
+    }
+}
+
+fn prepare_pipeline_model_files(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
+    prepare_pipeline_model_compact_tokenizer(asset, bundle_dir);
+    externalize_pipeline_model_weights(asset, bundle_dir);
+}
+
+/// Move the weights of the bundle's selected ONNX graphs to external data once, so ONNX
+/// Runtime memory-maps them. A failure leaves the inline graph, which loads as before.
+fn externalize_pipeline_model_weights(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
+    for file in selected_pipeline_model_files(asset)
+        .into_iter()
+        .filter(|file| file.ends_with(".onnx"))
+    {
+        let graph = bundle_dir.join(file);
+        match patronus_ark_core::onnx::externalize_weights(&graph) {
+            Ok(true) => log::info!("moved the weights of {} to external data", graph.display()),
+            Ok(false) => {}
+            Err(error) => log::warn!(
+                "weights of {} stay inline; external data rewrite failed: {error}",
+                graph.display()
+            ),
+        }
     }
 }
 
@@ -1698,6 +1721,35 @@ mod tests {
             }
         });
         fs::write(path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn cached_pipeline_model_prepare_moves_graph_weights_to_external_data() {
+        use patronus_ark_core::onnx::{external_data_path, has_inline_weights, testing};
+        let root = temp_dir("pipeline_external_data");
+        let asset = PipelineModelAssetSpec {
+            category: SecurityCategory::ToolClass,
+            model: "external-data-test",
+            repo: "example/repo",
+            revision: "rev",
+            destination_path: "pipeline",
+            files: &["onnx/int8_int4_embeddings/model.onnx"],
+        };
+        let graph = root.join("pipeline/onnx/int8_int4_embeddings/model.onnx");
+        fs::create_dir_all(graph.parent().unwrap()).unwrap();
+        fs::write(&graph, testing::model_with_weights()).unwrap();
+
+        // Without its revision marker the bundle is not a cached model and stays as it is.
+        prepare_cached_pipeline_model(asset, &root);
+        assert!(has_inline_weights(&graph).unwrap());
+
+        fs::write(root.join("pipeline/.patronus-revision"), "rev").unwrap();
+        prepare_cached_pipeline_model(asset, &root);
+        assert!(!has_inline_weights(&graph).unwrap());
+        assert!(external_data_path(&graph).is_file());
+        assert!(pipeline_model_assets_present(asset, &root));
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

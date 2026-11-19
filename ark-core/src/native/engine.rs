@@ -62,6 +62,20 @@ impl NativeEngine {
         }
     }
 
+    /// Builds what a scan under `gates` runs, for every enabled producer:
+    /// rules and pipelines are built on first use, so the ones the gates
+    /// keep off cost no memory. Call it when the gates are fixed (a scanner's
+    /// config, a gateway's execution gates) so that no scan under them
+    /// builds anything; a scan under other gates builds what they enable on
+    /// first use. What is built stays, also after a gate change turns it off.
+    pub fn prepare(&self, gates: &NativeGates) {
+        for producer in self.groups.iter().flatten() {
+            if producer.enabled(gates) {
+                producer.prepare(gates);
+            }
+        }
+    }
+
     /// Load the configured L1 models once (for example
     /// [`crate::cascade::CascadeConfig::l1_models`]); each replaces the
     /// module's earlier model. Non-native categories are refused. No model is

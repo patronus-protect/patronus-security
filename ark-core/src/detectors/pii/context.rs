@@ -13,13 +13,18 @@
 //! [`key_evidence`]. It outranks proximity: the key names the value, nearby words
 //! may name its neighbours.
 //! The older helpers below gate single rules on the preceding clause.
-use std::{collections::HashMap, ops::Range, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    ops::Range,
+    sync::{Arc, LazyLock, OnceLock},
+};
 
 use regex::Regex;
 
 use super::validators;
 use crate::detectors::context::{
-    lexicon_regex, lexicon_words, nearest_term, Evidence, ProximityLexicon, Side,
+    lexicon_regex, lexicon_words, longest_term, nearest_term, Evidence, LexiconTerms,
+    ProximityLexicon, Side,
 };
 use crate::detectors::score::{Context, PROXIMITY_CONTEXT_POINTS};
 use crate::detectors::structure::{normalize_key, Field, Fields};
@@ -200,38 +205,46 @@ const BARE_FOREIGN_LEXICON: &[&str] = &[
     "pii.identity_card",
 ];
 
-/// Proximity lexicon per label with support terms, and the counter-context
-/// lexicon alone for every other label. All search the same windows: those of
-/// the longest term of any of them.
+/// Proximity lexicon per label with support terms, built on the label's first
+/// use, and the counter-context lexicon alone for every other label. All share
+/// one compiled counter lexicon and search the same windows: those of the
+/// longest term of any of them.
 struct Lexicon {
-    labels: HashMap<&'static str, ProximityLexicon>,
+    labels: HashMap<&'static str, (&'static [&'static str], OnceLock<ProximityLexicon>)>,
+    counter_terms: Arc<LexiconTerms>,
     counter: ProximityLexicon,
+    longest: usize,
 }
 
 static LEXICON: LazyLock<Lexicon> = LazyLock::new(|| {
-    let counter = ProximityLexicon::new(&[], COUNTER_LEXICON);
-    let labels: Vec<_> = SUPPORT_LEXICON
+    let counter_terms = Arc::new(LexiconTerms::new(COUNTER_LEXICON));
+    let longest = SUPPORT_LEXICON
         .iter()
-        .map(|(label, ids)| (*label, ProximityLexicon::new(ids, COUNTER_LEXICON)))
-        .collect();
-    let longest = labels
-        .iter()
-        .map(|(_, lexicon)| lexicon.longest())
-        .chain([counter.longest()])
+        .map(|(_, ids)| longest_term(ids))
+        .chain([longest_term(COUNTER_LEXICON)])
         .max()
         .unwrap_or(0);
     Lexicon {
-        labels: labels
-            .into_iter()
-            .map(|(label, lexicon)| (label, lexicon.with_longest(longest)))
+        labels: SUPPORT_LEXICON
+            .iter()
+            .map(|(label, ids)| (*label, (*ids, OnceLock::new())))
             .collect(),
-        counter: counter.with_longest(longest),
+        counter: ProximityLexicon::with_counter(&[], Arc::clone(&counter_terms))
+            .with_longest(longest),
+        counter_terms,
+        longest,
     }
 });
 
 impl Lexicon {
     fn of(&self, label: &str) -> &ProximityLexicon {
-        self.labels.get(label).unwrap_or(&self.counter)
+        let Some((ids, lexicon)) = self.labels.get(label) else {
+            return &self.counter;
+        };
+        lexicon.get_or_init(|| {
+            ProximityLexicon::with_counter(ids, Arc::clone(&self.counter_terms))
+                .with_longest(self.longest)
+        })
     }
 }
 
@@ -434,12 +447,10 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
 /// or next to another occurrence of the same value in the text.
 pub(super) fn foreign_number_term(text: &str, value: Range<usize>, own: &Evidence) -> bool {
     static FOREIGN: LazyLock<(Regex, usize)> = LazyLock::new(|| {
-        let longest = lexicon_words(BARE_FOREIGN_LEXICON)
-            .into_iter()
-            .map(|word| word.chars().count())
-            .max()
-            .unwrap_or(0);
-        (lexicon_regex(BARE_FOREIGN_LEXICON), longest)
+        (
+            lexicon_regex(BARE_FOREIGN_LEXICON),
+            longest_term(BARE_FOREIGN_LEXICON),
+        )
     });
     let (regex, longest) = &*FOREIGN;
     let nearest_term = |at: (usize, usize)| nearest_term(text, regex, *longest, at);

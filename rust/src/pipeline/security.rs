@@ -972,13 +972,15 @@ impl SecurityGateway {
         let requests = Arc::new(RequestRegistry::default());
         let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
         let native_engine = NativeEngine::new(&categories);
+        let execution = ScanExecution::new(max_level);
+        native_engine.prepare(&execution.gates().native);
         let core = SecurityGatewayCore {
             categories,
             max_level,
             model_dir,
             download_files,
             download_categories,
-            execution: Mutex::new(ScanExecution::new(max_level)),
+            execution: Mutex::new(execution),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
             shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
@@ -1172,8 +1174,10 @@ impl SecurityGateway {
         }
     }
 
-    /// Replace the execution gate matrix used by subsequent scans.
+    /// Replace the execution gate matrix used by subsequent scans. The
+    /// native rules the new gates enable are built here, not on a scan.
     pub fn set_execution_gates(&self, gates: ScanGateMatrix) {
+        self.native_engine.prepare(&gates.native);
         self.execution
             .lock()
             .expect("execution mutex poisoned")

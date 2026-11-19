@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
     joint_v3_runtime::JointV3Runtime,
+    lightgbm::LightGbmStore,
     manifest::{parse_package_manifest, PackageManifest},
     ntdb_error,
     package_fingerprint::DeferredPackageFingerprint,
@@ -252,7 +253,10 @@ impl PreparedNtdbPackage {
 }
 
 impl NtdbPackage {
-    fn from_prepared(prepared: PreparedNtdbPackage) -> NtdbResult<Self> {
+    fn from_prepared(
+        prepared: PreparedNtdbPackage,
+        lightgbm_store: &LightGbmStore,
+    ) -> NtdbResult<Self> {
         let PreparedNtdbPackage {
             package_dir,
             manifest,
@@ -268,6 +272,7 @@ impl NtdbPackage {
                 .joint_v3
                 .as_ref()
                 .ok_or_else(|| ntdb_error("NTDB v4 joint_v3 is required"))?,
+            lightgbm_store,
         )?;
 
         metrics.checkpoint("joint_model", &details);
@@ -433,6 +438,7 @@ impl NtdbMultiPackage {
         // Resolve shared encoders in specification order, retaining deterministic
         // first-package selection and request-time preparation deduplication.
         let mut encoders = StaticEncoderStore::default();
+        let lightgbm_store = LightGbmStore::default();
         let prepared = specs
             .into_iter()
             .map(|spec| {
@@ -453,7 +459,7 @@ impl NtdbMultiPackage {
                 .map(|(id, prepared)| {
                     Ok(NamedPackage {
                         id,
-                        package: NtdbPackage::from_prepared(prepared)?,
+                        package: NtdbPackage::from_prepared(prepared, &lightgbm_store)?,
                     })
                 })
                 .collect::<NtdbResult<Vec<_>>>()

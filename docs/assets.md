@@ -21,6 +21,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 - `download_files=False` disables network downloads even when `download_categories` is set.
 - Existing cached assets are still used in offline mode.
 - `prepare_assets()` downloads and verifies configured model assets without initializing model runtimes.
+- Asset preparation moves the weights of each downloaded ONNX graph (Wolf Defender, L3, GLiNER) into a data file next to it (`model.onnx.data`), once, so ONNX Runtime memory-maps them instead of copying them onto the heap. The weights are copied byte for byte; the rewrite is kept only when the downloaded file can be rebuilt from it exactly. The cache needs about as much disk space as before, since the graph file shrinks by what moves into the data file. Local Wolf bundles that Ark did not download are left as they are.
 - `asset_readiness()` verifies the local cache without downloading or warming models.
 - `warmup_from_local_assets()` initializes configured runtimes strictly from the local cache and has no download path.
 - `warmup()` remains the combined compatibility operation: asset preparation followed by offline runtime warmup.

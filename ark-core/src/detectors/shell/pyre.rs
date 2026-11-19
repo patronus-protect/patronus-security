@@ -37,25 +37,25 @@ const PY_WORD: &str = r"\p{L}\p{N}_";
 /// Compile a Python pattern; `ignore_case` is `re.I`. Panics on a pattern
 /// outside the supported subset (all callers pass fixed, tested patterns).
 pub(crate) fn py_regex(pattern: &str, ignore_case: bool, anchor: Anchor) -> Regex {
-    try_py_regex(pattern, ignore_case, anchor)
+    py_pattern(pattern, ignore_case, anchor)
+        .and_then(|full| Regex::new(&full).map_err(|error| error.to_string()))
         .unwrap_or_else(|error| panic!("unsupported Python pattern {pattern:?}: {error}"))
 }
 
-/// [`py_regex`] for patterns from data (bundle rules): an error instead of a
-/// panic.
-pub(crate) fn try_py_regex(
+/// The `regex` crate pattern of a Python pattern, uncompiled; an error for a
+/// pattern outside the supported subset (patterns from data, bundle rules).
+pub(crate) fn py_pattern(
     pattern: &str,
     ignore_case: bool,
     anchor: Anchor,
-) -> Result<Regex, String> {
+) -> Result<String, String> {
     let body = translate(pattern)?;
     let flags = if ignore_case { "(?i)" } else { "" };
-    let full = match anchor {
+    Ok(match anchor {
         Anchor::Search => format!("{flags}{body}"),
         Anchor::Match => format!(r"{flags}\A(?:{body})"),
         Anchor::Full => format!(r"{flags}\A(?:{body})\z"),
-    };
-    Regex::new(&full).map_err(|error| error.to_string())
+    })
 }
 
 /// Translate Python `re` syntax to the equivalent `regex` crate syntax.
@@ -287,7 +287,7 @@ mod tests {
     fn refuses_unsupported_constructs() {
         for pattern in [r"(?<=a)b", r"(?!a)", r"(a)\1", "a++", "(?>a)"] {
             assert!(
-                try_py_regex(pattern, false, Anchor::Search).is_err(),
+                py_pattern(pattern, false, Anchor::Search).is_err(),
                 "{pattern}"
             );
         }
