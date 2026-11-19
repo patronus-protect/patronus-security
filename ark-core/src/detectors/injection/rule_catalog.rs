@@ -305,9 +305,12 @@ impl InjectionRuleCatalogPipeline {
                 }
             }
         }
-        // Decode only Unicode-tag runs. Ordinary emoji tags have no instruction
-        // match and therefore produce no signal. Source spans retain hidden bytes.
-        for (source_start, decoded_view) in prepared.tags() {
+        // Decoded and folded views (Unicode tags, base64, hex, ROT13, letter
+        // spacing, look-alike letters, leetspeak). Ordinary emoji tags have no
+        // instruction match and therefore produce no signal. Source spans retain
+        // hidden bytes.
+        for view in prepared.hidden() {
+            let decoded_view = &view.text;
             let decoded = decoded_view.text();
             for compiled in &self.catalogs {
                 for (rule_index, regex, _) in &compiled.regexes {
@@ -325,8 +328,9 @@ impl InjectionRuleCatalogPipeline {
                             .components
                             .into_iter()
                             .map(|mut c| {
-                                c.start_byte = source_start + c.start_byte * 4;
-                                c.end_byte = source_start + c.end_byte * 4;
+                                let source = view.source(c.start_byte..c.end_byte);
+                                c.start_byte = source.start;
+                                c.end_byte = source.end;
                                 c.span_precision = "transformed_source";
                                 c
                             })

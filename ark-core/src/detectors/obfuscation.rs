@@ -105,6 +105,14 @@ impl Deobfuscated {
         Some(Self::build(original, kept))
     }
 
+    /// The [`Level::Invisible`] view, built only when the byte prefilter finds
+    /// a zero-width or full-width candidate; ASCII text skips the prefilter.
+    pub fn invisible(original: &str) -> Option<Self> {
+        (!original.is_ascii() && has_invisible_candidates(original))
+            .then(|| Self::new(original, Level::Invisible))
+            .flatten()
+    }
+
     fn build(original: &str, edits: Vec<Edit>) -> Self {
         let mut text = String::with_capacity(original.len());
         let mut starts = Vec::with_capacity(original.len());
@@ -576,6 +584,16 @@ mod tests {
         ] {
             assert!(!has_invisible_candidates(text), "{text}");
         }
+    }
+
+    #[test]
+    fn the_invisible_view_needs_an_invisible_candidate() {
+        assert!(Deobfuscated::invisible("Ticket[.]example.de").is_none());
+        assert!(Deobfuscated::invisible("Grüße aus Köln").is_none());
+        let text = "Wert: aWdu\u{200B}b3Jl";
+        let view = Deobfuscated::invisible(text).unwrap();
+        assert_eq!(view.text, "Wert: aWdub3Jl");
+        assert_eq!(back(text, &view, "aWdub3Jl"), "aWdu\u{200B}b3Jl");
     }
 
     #[test]

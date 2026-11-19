@@ -170,6 +170,32 @@ versteckter Text. Goldens: Suite `text_views_l1` (6 Positive + 6 Hard Negatives 
 Aufrufer im Scan-Pfad: S06 übernimmt die Facts in `patronus.text_facts/1`, die Normalisierungspunkte je
 Kategorie (`Category::normalisation_points`) greifen mit der Umstellung auf Facts.
 
+**Stand T05.** Die Injection- und Extraktionsregeln lesen die versteckten Sichten: `NativeText::hidden()`
+(`ark-core/src/threat/prepared.rs`) liefert einmal je Text die dekodierten Sichten aus
+`text_views::decoded_views` (Unicode-Tags, base64, Hex, ROT13) und die gefaltete Sicht aus
+`text_views/fold.rs` (gesperrt geschriebene Buchstaben, kyrillische/griechische Doppelgänger in lateinischen
+Wörtern, Leetspeak `0 1 3 4 5 7`), jede mit Rückweg zu Originalbytes (Tags ×4, Fragment ganz, Faltung
+bytegenau). Gelesen von Regelkatalog (`rule_catalog.rs`), nativen Familien (`signal.rs`) und
+`encoded_instruction` (`detection.rs`, dekodiert nicht mehr selbst). Jede Sicht hat einen eigenen billigen
+Vorfilter (Byte-Muster für Sperrung, Nicht-ASCII + ≥ 2 Mischwörter, ≥ 3 und ≥ 40 % Leet-Wörter, ≥ 2 verschobene
+ROT13-Funktionswörter und mehr als doppelt so viele wie Klartext-Funktionswörter; ein kurzes `Label: ` am Zeilenanfang bleibt unverschoben); normaler Text wird nicht ein zweites Mal gescannt.
+Fragmente: ab 8 Byte, längere Läufe mit ihren ersten 1024 Byte, `key=value` zählt der Wert. ROT13 ohne
+Marker: ab der Zeile des ersten verschobenen Funktionsworts, höchstens 2048 Byte. Facts: `obfuscated` nennt
+zusätzlich `spaced`/`homoglyph`/`leetspeak`. Das Scoreboard meldet je Obfuskationsart, wie viele Angriffe mit
+gemeldeter Klartext-Quelle auch obfuskiert gemeldet werden (`obfuscation_invariance`, nicht gegatet).
+Goldens: 24 Positive + 22 Hard Negatives (`obfuscated`, `instruction_injection`/`prompt_extraction`, DE + EN).
+Dev (`obfuscation_slices`, Quelle gemeldet → obfuskiert gemeldet): base64 16/16, hex 8/8, rot13 13/14,
+homoglyph 13/13, leetspeak 15/15, spaced 9/9 (vorher je 0); keine obfuskierte Benign-Zwillingszeile gemeldet.
+Gefaltete Sichten decken nur die Zeilen ab, die eine Faltung geändert hat (je Lauf aufeinanderfolgender
+geänderter Zeilen eine Sicht): öffnet ein Tor auf langem Klartext — etwa `homoglyph` durch zwei polnische
+oder türkische Namen (`Wrocław`, `Białystok`: `ł`/`ı` in lateinischen Wörtern) —, lesen die Regeln nur diese
+Zeilen ein zweites Mal. Im 100-KiB-Latenzkorpus (`scripts/l1_threat/latency.py`, 64 deutsche Fenster) öffnet
+kein Fenster eine Faltung; die versteckten Sichten sind dort höchstens fünf base64-Fragmente zu 9 Byte je
+Fenster. **Latenz** (A/B gegen die Basis `ce5ad57f`, nativer Gateway, je 3 Läufe, Median-p95): `all`
+171,5 → 176,7 ms (+3,0 %), `injection` 189,2 → 186,1 ms (−1,6 %), `threat` 42,9 → 43,7 ms (+2,0 %);
+`compare` PASS (≤ +5 %). Die frühere Messung (p95 321 vs. 171 ms, 12 Fenster über das Python-Gateway)
+ist damit nicht bestätigt.
+
 **Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
 `text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
 tool_description, agent_config, code, log; ohne Merkmal `chat`), `language` (de/en/und über

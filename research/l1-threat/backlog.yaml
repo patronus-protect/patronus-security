@@ -442,6 +442,7 @@ tasks:
       if no candidate reaches 80 within budget, the PR states the best reachable value instead of
       lowering the bar
   - id: T05
+    status: done
     title: Obfuscated injection and extraction — injection and prompt_extraction rules also read the normalised and decoded views of S03 (homoglyph/leet/spaced via the K06 view, base64/hex/rot13 decoded) with a modifier fact; scoreboard reports obfuscation invariance (source flagged, obfuscated twin flagged)
     type: recall-fix
     deps: [IJ01, S03]
