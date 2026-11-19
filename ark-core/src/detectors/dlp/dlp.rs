@@ -477,7 +477,9 @@ static DLP_ANCHOR_PATTERNS: &[AnchorPattern] = &[
 pub static DLP_PATTERNS: &[DlpPattern] = &super::rules::DLP_RULES;
 
 pub struct DlpPipeline {
-    regexes: Vec<Regex>,
+    /// Per rule, its automata, compiled on first use: a rule that the gates
+    /// keep off costs no memory ([`Self::prepare`]).
+    rules: Vec<std::sync::OnceLock<CompiledRule>>,
     anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
@@ -489,14 +491,62 @@ pub struct DlpPipeline {
     tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
     anchor_regexes: Vec<crate::detectors::word_boundary::BoundarySearch>,
-    /// K05: per generic key-bound rule, the value regex of config-line values;
-    /// T21: per key-bound provider rule, its value regex for XML values.
-    structured_regexes: Vec<Option<Regex>>,
-    /// K05: per generic key-bound rule, its key grammar for config lines.
-    config_keys: Vec<Option<ConfigKeyRegexes>>,
-    /// T21: per key-bound provider rule, its key for XML config elements;
-    /// T23: per rule of [`rules::sql_key`], its key for SQL rows.
-    bound_keys: Vec<Option<BoundKey>>,
+}
+
+/// The automata of one DLP rule.
+struct CompiledRule {
+    regex: Regex,
+    /// K05: for a generic key-bound rule, the value regex of config-line
+    /// values; T21: for a key-bound provider rule, its value regex for XML values.
+    structured: Option<Regex>,
+    /// K05: for a generic key-bound rule, its key grammar for config lines.
+    config_key: Option<ConfigKeyRegexes>,
+    /// T21: for a key-bound provider rule, its key for XML config elements;
+    /// T23: for a rule of [`rules::sql_key`], its key for SQL rows.
+    bound_key: Option<BoundKey>,
+}
+
+impl CompiledRule {
+    fn new(p: &DlpPattern) -> Self {
+        let config_key = rules::config_key(p.name);
+        let xml_key = rules::provider_xml_key(p.name);
+        let sql_key = rules::sql_key(p.name);
+        Self {
+            regex: regex::RegexBuilder::new(p.pattern)
+                .dfa_size_limit(RULE_DFA_CACHE_BYTES)
+                .build()
+                .unwrap(),
+            structured: config_key
+                .map(|key| {
+                    let max = key.max_len.map_or(String::new(), |max| max.to_string());
+                    format!(r"(?P<structured>[^\r\n]{{{},{max}}})\z", key.min_len)
+                })
+                .or_else(|| {
+                    xml_key
+                        .or(sql_key)
+                        .map(|key| format!(r"(?P<structured>(?:{}))\z", key.value))
+                })
+                .map(|pattern| Regex::new(&pattern).unwrap()),
+            config_key: config_key.map(ConfigKeyRegexes::new),
+            bound_key: xml_key
+                .map(|key| {
+                    BoundKey::new(key, |prepared, find| {
+                        super::config_keys::xml_values(prepared.text(), find)
+                    })
+                })
+                .or_else(|| {
+                    sql_key.map(|key| {
+                        BoundKey::new(key, |prepared, find| {
+                            super::sql_rows::key_field_values(
+                                prepared.text(),
+                                prepared.sql_statements(),
+                                find,
+                            )
+                        })
+                    })
+                }),
+        }
+    }
 }
 
 /// T21: the key of a key-bound provider rule (`provider_key!`), compiled for
@@ -670,99 +720,64 @@ impl DlpPipeline {
         &PIPELINE
     }
 
+    /// Sets up every rule; each rule's automata are compiled on first use
+    /// ([`Self::prepare`]).
     pub fn new() -> Self {
-        let mut regexes = Vec::new();
-        let mut anchor_gates = Vec::new();
-        let mut entity_groups = Vec::new();
-        let mut rule_ids = Vec::new();
-        let mut validators = Vec::new();
-        let mut span_groups = Vec::new();
-        let mut example_checks = Vec::new();
-        let mut placeholder_checks = Vec::new();
-        let mut metas = Vec::new();
-        let mut tiers = Vec::new();
-        let mut structured_regexes = Vec::new();
-        let mut config_keys = Vec::new();
-        let mut bound_keys = Vec::new();
-
-        for p in DLP_PATTERNS {
-            regexes.push(
-                regex::RegexBuilder::new(p.pattern)
-                    .dfa_size_limit(RULE_DFA_CACHE_BYTES)
-                    .build()
-                    .unwrap(),
-            );
-            anchor_gates.push(crate::detectors::anchor_gate::AnchorGate::regex(
-                p.pattern, false,
-            ));
-            entity_groups.push(p.entity_group);
-            rule_ids.push(p.name);
-            validators.push(p.validator);
-            span_groups.push(p.span_group);
-            example_checks.push(rules::example_check(p.name));
-            placeholder_checks.push(rules::placeholder_check(p.name));
-            metas.push(p.meta);
-            tiers.push(rules::overlap_tier(p.name));
-            let config_key = rules::config_key(p.name);
-            let xml_key = rules::provider_xml_key(p.name);
-            let sql_key = rules::sql_key(p.name);
-            structured_regexes.push(
-                config_key
-                    .map(|key| {
-                        let max = key.max_len.map_or(String::new(), |max| max.to_string());
-                        format!(r"(?P<structured>[^\r\n]{{{},{max}}})\z", key.min_len)
-                    })
-                    .or_else(|| {
-                        xml_key
-                            .or(sql_key)
-                            .map(|key| format!(r"(?P<structured>(?:{}))\z", key.value))
-                    })
-                    .map(|pattern| Regex::new(&pattern).unwrap()),
-            );
-            config_keys.push(config_key.map(ConfigKeyRegexes::new));
-            bound_keys.push(
-                xml_key
-                    .map(|key| {
-                        BoundKey::new(key, |prepared, find| {
-                            super::config_keys::xml_values(prepared.text(), find)
-                        })
-                    })
-                    .or_else(|| {
-                        sql_key.map(|key| {
-                            BoundKey::new(key, |prepared, find| {
-                                super::sql_rows::key_field_values(
-                                    prepared.text(),
-                                    prepared.sql_statements(),
-                                    find,
-                                )
-                            })
-                        })
-                    }),
-            );
-        }
-
-        let anchor_regexes = DLP_ANCHOR_PATTERNS
-            .iter()
-            .map(|anchor| crate::detectors::word_boundary::BoundarySearch::new(anchor.pattern))
-            .collect();
-
         DlpPipeline {
-            regexes,
-            anchor_gates,
-            rule_ids,
-            entity_groups,
-            validators,
-            span_groups,
-            example_checks,
-            placeholder_checks,
-            metas,
-            tiers,
+            rules: DLP_PATTERNS
+                .iter()
+                .map(|_| std::sync::OnceLock::new())
+                .collect(),
+            anchor_gates: DLP_PATTERNS
+                .iter()
+                .map(|p| crate::detectors::anchor_gate::AnchorGate::regex(p.pattern, false))
+                .collect(),
+            rule_ids: DLP_PATTERNS.iter().map(|p| p.name).collect(),
+            entity_groups: DLP_PATTERNS.iter().map(|p| p.entity_group).collect(),
+            validators: DLP_PATTERNS.iter().map(|p| p.validator).collect(),
+            span_groups: DLP_PATTERNS.iter().map(|p| p.span_group).collect(),
+            example_checks: DLP_PATTERNS
+                .iter()
+                .map(|p| rules::example_check(p.name))
+                .collect(),
+            placeholder_checks: DLP_PATTERNS
+                .iter()
+                .map(|p| rules::placeholder_check(p.name))
+                .collect(),
+            metas: DLP_PATTERNS.iter().map(|p| p.meta).collect(),
+            tiers: DLP_PATTERNS
+                .iter()
+                .map(|p| rules::overlap_tier(p.name))
+                .collect(),
             prefilter: RulePrefilter::new(DLP_PATTERNS),
-            anchor_regexes,
-            structured_regexes,
-            config_keys,
-            bound_keys,
+            anchor_regexes: DLP_ANCHOR_PATTERNS
+                .iter()
+                .map(|anchor| crate::detectors::word_boundary::BoundarySearch::new(anchor.pattern))
+                .collect(),
         }
+    }
+
+    /// The automata of rule `index`, compiled on first use.
+    fn rule(&self, index: usize) -> &CompiledRule {
+        self.rules[index].get_or_init(|| CompiledRule::new(&DLP_PATTERNS[index]))
+    }
+
+    /// Compiles the rules that `allows_rule` enables, so that no scan under
+    /// these gates compiles one; a rule other gates enable later, or one
+    /// another rule consults (a token rule whose checksum or shape decides a
+    /// generic match), is compiled on first use.
+    pub fn prepare(&self, allows_rule: impl Fn(&str) -> bool) {
+        for (index, id) in self.rule_ids.iter().enumerate() {
+            if allows_rule(id) {
+                self.rule(index);
+            }
+        }
+    }
+
+    /// Whether rule `index` is compiled; see [`Self::prepare`].
+    #[cfg(test)]
+    fn compiled(&self, index: usize) -> bool {
+        self.rules[index].get().is_some()
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
@@ -907,7 +922,7 @@ impl DlpPipeline {
     /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
     fn fails_token_checksum(&self, value: &str) -> bool {
         let value = value.trim_start_matches(['"', '\'', '`']);
-        (0..self.regexes.len()).any(|index| {
+        (0..self.rules.len()).any(|index| {
             let meta = &self.metas[index];
             meta.validator_strength == ValidatorStrength::Checksum
                 && meta.keywords.iter().any(|keyword| {
@@ -915,7 +930,7 @@ impl DlpPipeline {
                         .get(..keyword.len())
                         .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
                 })
-                && self.regexes[index].find(value).is_some_and(|token| {
+                && self.regex(index).find(value).is_some_and(|token| {
                     token.start() == 0
                         && !value[token.end()..]
                             .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
@@ -933,8 +948,7 @@ impl DlpPipeline {
     /// space, a quote, `@`, `,` or `;`.
     fn has_wrong_token_length(&self, text: &str, range: Range<usize>) -> bool {
         let value = text[range.start..].trim_start_matches(['"', '\'', '`']);
-        (0..self.regexes.len()).any(|index| {
-            let meta = &self.metas[index];
+        self.metas.iter().any(|meta| {
             let (Some(body_len), Some(boundary)) = (meta.body_len, meta.boundary) else {
                 return false;
             };
@@ -982,10 +996,10 @@ impl DlpPipeline {
         let window_start = floor(line_start.max(range.start.saturating_sub(256)));
         let window_end = floor(line_end.min(range.end + 256));
         let window = &text[window_start..window_end];
-        (0..self.regexes.len())
+        (0..self.rules.len())
             .filter(|&index| self.example_checks[index] == ExampleCheck::FixedFormat)
             .flat_map(move |index| {
-                self.regexes[index]
+                self.regex(index)
                     .captures_iter(window)
                     .filter_map(move |captures| self.value(index, &captures))
                     .map(move |value| {
@@ -1003,8 +1017,8 @@ impl NativeRegexDetector for DlpPipeline {
     fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
         &self.anchor_gates
     }
-    fn regexes(&self) -> &[Regex] {
-        &self.regexes
+    fn regex(&self, index: usize) -> &Regex {
+        &self.rule(index).regex
     }
 
     fn rule_scan(&self, text: &str) -> Option<super::prefilter::RuleScan> {
@@ -1045,14 +1059,14 @@ impl NativeRegexDetector for DlpPipeline {
         &self.validators
     }
 
-    fn capture_groups(&self) -> Option<&[Option<usize>]> {
-        Some(&self.span_groups)
+    fn capture_group(&self, index: usize) -> Option<usize> {
+        self.span_groups[index]
     }
 
     /// K05: config-line values of the generic key-bound rules; a value
     /// counts with the length bounds of the rule's regex.
-    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
-        Some(&self.structured_regexes)
+    fn structured_regex(&self, index: usize) -> Option<&Regex> {
+        self.rule(index).structured.as_ref()
     }
 
     /// K05: the env, INI/properties and HTTP header values whose key the
@@ -1074,10 +1088,11 @@ impl NativeRegexDetector for DlpPipeline {
         index: usize,
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
-        if let Some(key) = &self.bound_keys[index] {
+        let rule = self.rule(index);
+        if let Some(key) = &rule.bound_key {
             return self.bound_key_values(index, key, prepared);
         }
-        let Some(keys) = &self.config_keys[index] else {
+        let Some(keys) = &rule.config_key else {
             return Vec::new();
         };
         let text = prepared.text();
@@ -1356,5 +1371,38 @@ mod tests {
         DLP_ANCHOR_PATTERNS.iter().for_each(|anchor| {
             crate::detectors::word_boundary::assert_finds_as_regex(anchor.pattern)
         });
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+
+    /// Only the rules the gates enable are compiled: the default gates keep
+    /// the opt-in document classes off. A rule that later gates enable
+    /// compiles on its first scan and finds what a fully compiled pipeline finds.
+    #[test]
+    fn prepare_compiles_only_the_enabled_rules() {
+        let pipeline = DlpPipeline::new();
+        assert!((0..DLP_PATTERNS.len()).all(|index| !pipeline.compiled(index)));
+        pipeline.prepare(crate::native::default_rule_enabled);
+        let mut off = 0;
+        for (index, pattern) in DLP_PATTERNS.iter().enumerate() {
+            let enabled = crate::native::default_rule_enabled(pattern.name);
+            off += usize::from(!enabled);
+            assert_eq!(pipeline.compiled(index), enabled, "{}", pattern.name);
+        }
+        assert!(off > 0, "some DLP rules are opt-in");
+        let expected = DlpPipeline::new();
+        expected.prepare(|_| true);
+        let text = "PRIVILEGED AND CONFIDENTIAL attorney-client communication, \
+                    password = \"hunter2-Very-Secret-42\"";
+        let prepared = crate::threat::NativeText::new(text);
+        for mode in [ScoreMode::Strict, ScoreMode::Recall] {
+            let lazy = pipeline.detect_prepared_with_mode(&prepared, |_| true, true, mode);
+            let full = expected.detect_prepared_with_mode(&prepared, |_| true, true, mode);
+            assert_eq!(lazy.evidence_spans, full.evidence_spans, "{mode}");
+            assert_eq!(lazy.details, full.details, "{mode}");
+        }
     }
 }

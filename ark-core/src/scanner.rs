@@ -162,6 +162,7 @@ impl Scanner {
         options.validate()?;
         config.validate()?;
         let mut native = NativeEngine::new(&config.categories);
+        native.prepare(&config.gates);
         if let Some(cascade) = &config.cascade {
             native
                 .load_l1_models(cascade.l1_models())

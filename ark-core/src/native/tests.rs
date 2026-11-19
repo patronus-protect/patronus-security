@@ -236,6 +236,7 @@ fn probe(detect: Detect) -> NativeProducerSpec {
         parent: None,
         rule: None,
         detect,
+        prepare: Box::new(|_| {}),
     }
 }
 
@@ -462,4 +463,33 @@ fn l1_models_are_off_by_default_and_refuse_unknown_categories() {
         .load_l1_models([(SecurityCategory::Injection, &config)])
         .unwrap_err()
         .contains("missing"));
+}
+
+/// Counts its builds.
+struct Counted;
+
+static BUILT: AtomicUsize = AtomicUsize::new(0);
+
+impl Default for Counted {
+    fn default() -> Self {
+        BUILT.fetch_add(1, Ordering::Relaxed);
+        Self
+    }
+}
+
+#[test]
+fn lazy_pipelines_are_built_once_on_prepare_or_first_scan() {
+    let (detect, prepare) = super::lazy_pipeline::<Counted>(|_, _| clean_detection());
+    let (other, _) = super::lazy_pipeline::<Counted>(|_, _| clean_detection());
+    let gates = NativeGates::default();
+    let text = NativeText::new("text");
+    let built = || BUILT.load(Ordering::Relaxed);
+    assert_eq!(built(), 0);
+    prepare(&gates);
+    prepare(&gates);
+    assert_eq!(built(), 1);
+    detect(&text, &gates);
+    assert_eq!(built(), 1);
+    other(&text, &gates);
+    assert_eq!(built(), 2);
 }

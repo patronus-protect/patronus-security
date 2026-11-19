@@ -86,12 +86,18 @@ pub const PARALLEL_RULES_MIN_BYTES: usize = 32 * 1024;
 pub type RuleFindings = Vec<(serde_json::Value, EvidenceSpan)>;
 
 /// Shared detection contract for native regex scanners that return exact evidence.
+///
+/// Rules are addressed by index; [`Self::rule_ids`] fixes their number and
+/// order. A pipeline may compile a rule's automata on first use, so that
+/// rules its gates keep off cost no memory.
 pub trait NativeRegexDetector: Sync {
-    fn regexes(&self) -> &[Regex];
+    /// The regex of rule `index`.
+    fn regex(&self, index: usize) -> &Regex;
     fn anchor_gates(&self) -> &[anchor_gate::AnchorGate] {
         &[]
     }
-    fn prefilters(&self) -> Option<&[Option<Regex>]> {
+    /// A regex that every text with a match of rule `index` matches.
+    fn prefilter(&self, _index: usize) -> Option<&Regex> {
         None
     }
     /// One prefilter pass over `text` for all rules (K07): which rules may
@@ -114,16 +120,15 @@ pub trait NativeRegexDetector: Sync {
         self.entity_groups()
     }
     fn validators(&self) -> &[Option<NativeMatchValidator>];
-    fn capture_groups(&self) -> Option<&[Option<usize>]> {
+    /// The capture group of rule `index` that holds its value; `None` is the
+    /// whole match.
+    fn capture_group(&self, _index: usize) -> Option<usize> {
         None
     }
     /// Capture group that holds the value of a match of rule `index`; `None`
-    /// is the whole match. By default the rule's group of [`Self::capture_groups`].
+    /// is the whole match. By default the rule's [`Self::capture_group`].
     fn value_group(&self, index: usize, _captures: &regex::Captures<'_>) -> Option<usize> {
-        self.capture_groups()
-            .and_then(|groups| groups.get(index))
-            .copied()
-            .flatten()
+        self.capture_group(index)
     }
     fn preserve_cross_label_overlaps(&self) -> bool {
         false
@@ -174,9 +179,10 @@ pub trait NativeRegexDetector: Sync {
         true
     }
 
-    /// Value regexes per rule, `(?P<value>…)\z`, for the values that the document
-    /// structure binds to the rule (K04). `None` for a rule without structural values.
-    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+    /// Value regex of rule `index`, `(?P<value>…)\z`, for the values that the
+    /// document structure binds to the rule (K04). `None` for a rule without
+    /// structural values.
+    fn structured_regex(&self, _index: usize) -> Option<&Regex> {
         None
     }
 
@@ -253,22 +259,17 @@ pub trait NativeRegexDetector: Sync {
                 .get(index)
                 .is_some_and(|gate| !prepared.admits(gate))
             || self
-                .prefilters()
-                .and_then(|filters| filters[index].as_ref())
+                .prefilter(index)
                 .is_some_and(|filter| !filter.is_match(text));
         // Structural values carry their key outside the regex, so the anchor
         // gate and prefilter of the regex do not apply to them.
-        if gated
-            && self
-                .structured_regexes()
-                .is_none_or(|regexes| regexes[index].is_none())
-        {
+        if gated && self.structured_regex(index).is_none() {
             return None;
         }
         Some(if gated {
             Vec::new()
         } else {
-            self.rule_captures(index, &self.regexes()[index], text, scan)
+            self.rule_captures(index, self.regex(index), text, scan)
         })
     }
 
@@ -292,7 +293,7 @@ pub trait NativeRegexDetector: Sync {
                 .map(|matches| self.accepted_matches(prepared, index, matches, min_score))
                 .unwrap_or_default()
         };
-        let rules = 0..self.regexes().len();
+        let rules = 0..self.rule_ids().len();
         if parallel {
             use rayon::prelude::*;
             rules.into_par_iter().map(findings).collect()
@@ -311,11 +312,9 @@ pub trait NativeRegexDetector: Sync {
         min_score: Option<f64>,
     ) -> RuleFindings {
         let text = prepared.text();
-        let regex = &self.regexes()[index];
+        let regex = self.regex(index);
         let mut accepted = Vec::new();
-        let structured = self
-            .structured_regexes()
-            .and_then(|regexes| regexes[index].as_ref());
+        let structured = self.structured_regex(index);
         let regex_values: Vec<_> = regex_matches
             .iter()
             .filter_map(|captures| captures.get(self.value_group(index, captures).unwrap_or(0)))
@@ -546,7 +545,7 @@ mod tests {
 
     struct TestDetector {
         regexes: Vec<Regex>,
-        capture_groups: Option<Vec<Option<usize>>>,
+        capture_group: Option<usize>,
         rule_ids: Vec<&'static str>,
     }
 
@@ -554,15 +553,15 @@ mod tests {
         fn new(pattern: &str, capture_group: Option<usize>) -> Self {
             Self {
                 regexes: vec![Regex::new(pattern).unwrap()],
-                capture_groups: capture_group.map(|group| vec![Some(group)]),
+                capture_group,
                 rule_ids: vec!["test.rule"],
             }
         }
     }
 
     impl NativeRegexDetector for TestDetector {
-        fn regexes(&self) -> &[Regex] {
-            &self.regexes
+        fn regex(&self, index: usize) -> &Regex {
+            &self.regexes[index]
         }
 
         fn entity_groups(&self) -> &[&'static str] {
@@ -577,8 +576,8 @@ mod tests {
             &[None]
         }
 
-        fn capture_groups(&self) -> Option<&[Option<usize>]> {
-            self.capture_groups.as_deref()
+        fn capture_group(&self, _index: usize) -> Option<usize> {
+            self.capture_group
         }
     }
 
@@ -618,8 +617,8 @@ mod tests {
         }
 
         impl NativeRegexDetector for OverlapDetector {
-            fn regexes(&self) -> &[Regex] {
-                &self.regexes
+            fn regex(&self, index: usize) -> &Regex {
+                &self.regexes[index]
             }
 
             fn entity_groups(&self) -> &[&'static str] {

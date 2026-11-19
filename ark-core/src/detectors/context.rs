@@ -8,6 +8,7 @@
 //! [`Context::Counter`]. [`Evidence`] names the deciding term for
 //! `matched_rules[].context`. The categories only map lexicon IDs to labels.
 use regex::Regex;
+use std::sync::Arc;
 
 use crate::detectors::lexical_anchors::LexicalAnchorScanner;
 use crate::detectors::score::Context;
@@ -229,39 +230,74 @@ pub(crate) fn nearest_term(
     nearest(text, regex, region(text, value, longest), value)
 }
 
+/// The terms of a list of lexicon IDs: one search for all of them, and per
+/// ID a whole-term matcher that names the ID of a found term.
+pub struct LexiconTerms {
+    ids: &'static [&'static str],
+    search: Option<Regex>,
+    matchers: Vec<(&'static str, Regex)>,
+    /// Characters of the longest term.
+    longest: usize,
+}
+
+impl LexiconTerms {
+    pub fn new(ids: &'static [&'static str]) -> Self {
+        Self {
+            ids,
+            search: (!ids.is_empty()).then(|| lexicon_regex(ids)),
+            matchers: ids
+                .iter()
+                .map(|id| {
+                    let words = lexicon_alternation(&[id]);
+                    (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
+                })
+                .collect(),
+            longest: longest_term(ids),
+        }
+    }
+
+    /// The first ID whose terms include `found`.
+    fn id_of(&self, found: &str) -> Option<&'static str> {
+        self.ids.iter().copied().find(|id| {
+            self.matchers
+                .iter()
+                .any(|(known, regex)| known == id && regex.is_match(found))
+        })
+    }
+}
+
+/// Characters of the longest term of the lexicon IDs.
+pub(crate) fn longest_term(ids: &[&str]) -> usize {
+    lexicon_words(ids)
+        .into_iter()
+        .map(|word| word.chars().count())
+        .max()
+        .unwrap_or(0)
+}
+
 /// One support and one counter-context lexicon: the proximity context of a
 /// value as the nearest of their terms decides it.
 pub struct ProximityLexicon {
-    support_ids: &'static [&'static str],
-    counter_ids: &'static [&'static str],
-    support: Option<Regex>,
-    counter: Option<Regex>,
-    /// Whole-term matchers per lexicon ID, to name the ID of a found term.
-    ids: Vec<(&'static str, Regex)>,
+    support: LexiconTerms,
+    /// Shared by the lexica of one category ([`Self::with_counter`]).
+    counter: Arc<LexiconTerms>,
     /// Characters of the longest term the windows must hold.
     longest: usize,
 }
 
 impl ProximityLexicon {
     pub fn new(support_ids: &'static [&'static str], counter_ids: &'static [&'static str]) -> Self {
-        let all = || support_ids.iter().chain(counter_ids);
-        let regex = |ids: &[&str]| (!ids.is_empty()).then(|| lexicon_regex(ids));
+        Self::with_counter(support_ids, Arc::new(LexiconTerms::new(counter_ids)))
+    }
+
+    /// A lexicon whose counter terms are compiled once for all lexica that
+    /// share them.
+    pub fn with_counter(support_ids: &'static [&'static str], counter: Arc<LexiconTerms>) -> Self {
+        let support = LexiconTerms::new(support_ids);
         Self {
-            support_ids,
-            counter_ids,
-            support: regex(support_ids),
-            counter: regex(counter_ids),
-            ids: all()
-                .map(|id| {
-                    let words = lexicon_alternation(&[id]);
-                    (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
-                })
-                .collect(),
-            longest: all()
-                .flat_map(|id| lexicon_words(&[id]))
-                .map(|word| word.chars().count())
-                .max()
-                .unwrap_or(0),
+            longest: support.longest.max(counter.longest),
+            support,
+            counter,
         }
     }
 
@@ -270,11 +306,6 @@ impl ProximityLexicon {
     pub(crate) fn with_longest(mut self, longest: usize) -> Self {
         self.longest = self.longest.max(longest);
         self
-    }
-
-    /// Characters of the longest term.
-    pub(crate) fn longest(&self) -> usize {
-        self.longest
     }
 
     /// Two-sided proximity context of the value at `value` (byte range): the
@@ -292,8 +323,9 @@ impl ProximityLexicon {
 
     fn evidence_with(&self, text: &str, value: (usize, usize), always_counter: bool) -> Evidence {
         let region = region(text, value, self.longest);
-        let nearest = |regex: &Option<Regex>| {
-            regex
+        let nearest = |terms: &LexiconTerms| {
+            terms
+                .search
                 .as_ref()
                 .and_then(|regex| nearest(text, regex, region, value))
         };
@@ -302,26 +334,21 @@ impl ProximityLexicon {
             return Evidence::none();
         }
         let counter = nearest(&self.counter);
-        let (context, term, ids) = match (support, counter) {
+        let (context, term, terms) = match (support, counter) {
             (Some(support), Some(counter)) if counter.gap < support.gap => {
-                (Context::Counter, counter, self.counter_ids)
+                (Context::Counter, counter, &*self.counter)
             }
             (Some(support), _) => (
                 Context::Support { gap: support.gap },
                 support,
-                self.support_ids,
+                &self.support,
             ),
-            (None, Some(counter)) => (Context::Counter, counter, self.counter_ids),
+            (None, Some(counter)) => (Context::Counter, counter, &*self.counter),
             (None, None) => return Evidence::none(),
         };
-        let found = &text[term.range.0..term.range.1];
         Evidence {
             context,
-            anchor: ids.iter().copied().find(|id| {
-                self.ids
-                    .iter()
-                    .any(|(known, regex)| known == id && regex.is_match(found))
-            }),
+            anchor: terms.id_of(&text[term.range.0..term.range.1]),
             side: Some(term.side),
             distance: Some(term.gap),
         }

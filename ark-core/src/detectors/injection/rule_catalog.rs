@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
@@ -110,10 +111,41 @@ impl RuleDefinition {
 #[derive(Debug)]
 struct CompiledCatalog {
     catalog: RuleCatalog,
-    regexes: Vec<(usize, Regex, Option<Regex>)>,
+    /// Per selected regex rule, its regex and literal prefilter, compiled on
+    /// first use ([`Self::rule_regex`]): a rule that the gates keep off
+    /// costs no memory ([`InjectionRuleCatalogPipeline::prepare`]).
+    regexes: Vec<(usize, OnceLock<RuleRegex>)>,
     ordered_relations: Vec<(usize, OrderedTokenRelation)>,
     embedded_file: String,
     anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
+}
+
+/// The regex of a catalogue rule and its literal prefilter.
+type RuleRegex = (Regex, Option<Regex>);
+
+impl CompiledCatalog {
+    /// The regex and prefilter of rule `index` in its `slot` of [`Self::regexes`].
+    fn rule_regex<'a>(&self, index: usize, slot: &'a OnceLock<RuleRegex>) -> &'a RuleRegex {
+        slot.get_or_init(|| {
+            let rule = &self.catalog.rules[index];
+            (
+                RegexBuilder::new(rule.pattern.as_deref().expect("a regex rule"))
+                    .case_insensitive(true)
+                    .build()
+                    .expect("embedded injection rule must compile"),
+                literal_prefilter(rule),
+            )
+        })
+    }
+
+    /// Every selected regex rule with its compiled regex and prefilter.
+    #[cfg(test)]
+    fn rule_regexes(&self) -> impl Iterator<Item = (&usize, &Regex, &Option<Regex>)> {
+        self.regexes.iter().map(|(index, slot)| {
+            let (regex, prefilter) = self.rule_regex(*index, slot);
+            (index, regex, prefilter)
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -133,6 +165,19 @@ impl InjectionRuleCatalogPipeline {
         Self::compile(|rule| rule_category(rule.rule_id()) == category)
     }
 
+    /// Compiles the rules that `allows_rule` enables, so that no scan under
+    /// these gates compiles one; a rule other gates enable later is compiled
+    /// on its first scan.
+    pub fn prepare(&self, allows_rule: impl Fn(&str) -> bool) {
+        for compiled in &self.catalogs {
+            for (index, slot) in &compiled.regexes {
+                if allows_rule(compiled.catalog.rules[*index].rule_id()) {
+                    compiled.rule_regex(*index, slot);
+                }
+            }
+        }
+    }
+
     /// Whether any rule reports under this pipeline's category.
     pub fn is_empty(&self) -> bool {
         self.catalogs
@@ -149,7 +194,7 @@ impl InjectionRuleCatalogPipeline {
                 compiled
                     .regexes
                     .iter()
-                    .map(|(index, _, _)| *index)
+                    .map(|(index, _)| *index)
                     .chain(compiled.ordered_relations.iter().map(|(index, _)| *index))
                     .map(|index| rules[index].rule_id())
             })
@@ -163,27 +208,12 @@ impl InjectionRuleCatalogPipeline {
                 let catalog: RuleCatalog = serde_json::from_str(catalog_json)
                     .expect("embedded injection rule catalog must parse");
                 validate_catalog(&catalog);
-                let regex_rules = catalog
+                let regexes = catalog
                     .rules
                     .iter()
                     .enumerate()
-                    .filter(|(_, rule)| selected(rule))
-                    .filter_map(|(index, rule)| {
-                        rule.pattern.as_deref().map(|pattern| (index, pattern))
-                    })
-                    .collect::<Vec<_>>();
-                let regexes = regex_rules
-                    .iter()
-                    .map(|(index, pattern)| {
-                        (
-                            *index,
-                            RegexBuilder::new(pattern)
-                                .case_insensitive(true)
-                                .build()
-                                .expect("embedded injection rule must compile"),
-                            literal_prefilter(&catalog.rules[*index]),
-                        )
-                    })
+                    .filter(|(_, rule)| selected(rule) && rule.pattern.is_some())
+                    .map(|(index, _)| (index, OnceLock::new()))
                     .collect();
                 let ordered_relations = catalog
                     .rules
@@ -276,12 +306,13 @@ impl InjectionRuleCatalogPipeline {
         let tokens = std::cell::LazyCell::new(|| super::token_relations::tokenize(text));
         let mut matches = Vec::new();
         for compiled in &self.catalogs {
-            for (rule_index, regex, prefilter) in &compiled.regexes {
+            for (rule_index, slot) in &compiled.regexes {
                 let gate = &compiled.anchor_gates[*rule_index];
                 let rule = &compiled.catalog.rules[*rule_index];
                 if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
+                let (regex, prefilter) = compiled.rule_regex(*rule_index, slot);
                 if prefilter
                     .as_ref()
                     .is_some_and(|filter| !filter.is_match(text))
@@ -309,12 +340,13 @@ impl InjectionRuleCatalogPipeline {
             let decoded_view = &view.text;
             let decoded = decoded_view.text();
             for compiled in &self.catalogs {
-                for (rule_index, regex, _) in &compiled.regexes {
+                for (rule_index, slot) in &compiled.regexes {
                     let gate = &compiled.anchor_gates[*rule_index];
                     let rule = &compiled.catalog.rules[*rule_index];
                     if !allows_rule(rule.rule_id()) || !decoded_view.admits(gate) {
                         continue;
                     }
+                    let (regex, _) = compiled.rule_regex(*rule_index, slot);
                     let mut hidden_matches = Vec::new();
                     push_regex_matches(&mut hidden_matches, compiled, *rule_index, regex, decoded);
                     for (catalog, rule, matched) in hidden_matches {
@@ -725,6 +757,31 @@ mod tests {
 
     const PROMPT_ARMOR_JSON: &str = include_str!("rules/prompt_armor_95e532e.json");
 
+    #[test]
+    fn prepare_compiles_only_the_enabled_rules() {
+        let pipeline = InjectionRuleCatalogPipeline::for_category(SecurityCategory::Injection);
+        let compiled = |pipeline: &InjectionRuleCatalogPipeline| {
+            pipeline
+                .catalogs
+                .iter()
+                .flat_map(|catalog| {
+                    catalog.regexes.iter().map(|(index, slot)| {
+                        (
+                            catalog.catalog.rules[*index].rule_id().to_owned(),
+                            slot.get().is_some(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(compiled(&pipeline).iter().all(|(_, done)| !done));
+        let off = compiled(&pipeline)[0].0.clone();
+        pipeline.prepare(|id| id != off);
+        for (id, done) in compiled(&pipeline) {
+            assert_eq!(done, id != off, "{id}");
+        }
+    }
+
     fn pipeline() -> &'static InjectionRuleCatalogPipeline {
         static PIPELINE: OnceLock<InjectionRuleCatalogPipeline> = OnceLock::new();
         PIPELINE.get_or_init(InjectionRuleCatalogPipeline::new)
@@ -764,8 +821,7 @@ mod tests {
             .iter()
             .flat_map(|compiled| {
                 compiled
-                    .regexes
-                    .iter()
+                    .rule_regexes()
                     .map(move |(index, regex, pre)| (compiled, *index, regex, pre))
             })
             .find(|(compiled, index, _, _)| {
@@ -862,7 +918,7 @@ mod tests {
                 .iter()
                 .map(|compiled| {
                     regex::RegexSetBuilder::new(
-                        compiled.regexes.iter().map(|(_, regex, _)| regex.as_str()),
+                        compiled.rule_regexes().map(|(_, regex, _)| regex.as_str()),
                     )
                     .case_insensitive(true)
                     // The union of all catalog regexes outgrows the 10 MiB default.
@@ -875,7 +931,7 @@ mod tests {
         let mut matches = Vec::new();
         for (compiled, set) in pipeline().catalogs.iter().zip(sets) {
             for index in set.matches(text).iter() {
-                let (rule_index, regex, _) = &compiled.regexes[index];
+                let (rule_index, regex, _) = compiled.rule_regexes().nth(index).unwrap();
                 push_regex_matches(&mut matches, compiled, *rule_index, regex, text);
             }
             for (rule_index, relation) in &compiled.ordered_relations {
@@ -959,8 +1015,7 @@ mod tests {
             .iter()
             .flat_map(|catalog| {
                 catalog
-                    .regexes
-                    .iter()
+                    .rule_regexes()
                     .map(move |(index, regex, filter)| (catalog, *index, regex, filter.as_ref()))
             })
             .find(|(catalog, index, _, _)| catalog.catalog.rules[*index].id == rule_id)
@@ -1151,7 +1206,7 @@ mod tests {
         let text = &repeated[..102400];
         let mut filtered_rules = 0;
         for catalog in &pipeline().catalogs {
-            for (index, regex, prefilter) in &catalog.regexes {
+            for (index, regex, prefilter) in catalog.rule_regexes() {
                 // Keep this historical four-rule regression set fixed when
                 // adding other kinds of prefilters. All original assertions stay.
                 if ![
