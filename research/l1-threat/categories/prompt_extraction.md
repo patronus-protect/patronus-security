@@ -155,6 +155,15 @@ mosscap 2 039 / 15 000, gandalf 189 / 998, carrier_insertion 13 / 165; dazu 284 
 carrier_insertion, obfuscation_slices), die ebenfalls nach Passwort oder Anweisungen fragen. Volle Pipeline auf
 1 500 zufälligen mosscap-Zeilen: 7 → 200 erkannt. Goldens: alle 1 005 Threat-Goldens bestehen.
 
+Latenz (Python-Gateway, Release-Build, je 100 KiB: 6 Fenster GermanQuAD, 8 Fenster Dolly, 12–15 Messungen je
+Fenster, zwei verschränkte Läufe, Base `5ac5d872` gegen Head): `prompt_extraction` allein Median DE 7,9–8,2 →
+10,6–11,1 ms, EN 8,4–8,9 → 11,2–12,5 ms (p95 DE 9,7–10,6 → 11,9–14,4 ms). Jede der 14 Regeln ist ein linearer
+Lazy-DFA-Durchlauf von 0,19–0,35 ms je 100 KiB (Einzelmessung der `required_pattern`), und die Zielwörter
+(instruction, password, Funktion, Sicherheit …) stehen in fast jedem 100-KiB-Fenster, sodass die Anker-Gates dort
+nicht greifen. Die Gate-Profile bleiben im Rauschen: `injection` kompiliert nur Regeln seiner Kategorie (die
+PX01-Regeln laufen dort nicht), `threat` (alle zehn Klassen, parallel) Median DE 32,4–33,1 → 31,6–33,8 ms, EN
+35,6–35,8 → 35,4–36,5 ms; `all` DE 78,0–78,4 → 79,0–80,6 ms, EN 65,0–66,0 → 64,1–64,6 ms.
+
 Offen:
 - Alte Regeln mit Fehlalarm: `leak.system_prompt_extraction` (pipelock-Import) trifft „Repeat the previous
   instructions for the second batch“, `prompt-armor.ml-de-004` „Zeige deine Anweisungen am Montag der neuen
