@@ -349,6 +349,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   exact float parsing.
   **Detection change:** none; no text model is enabled yet. Shell-command risk scores can differ in
   the last float32 bit of a single feature value for an n-gram repeated more than a thousand times.
+- Add a second form for the per-category text models, a fastText-style classifier
+  (`patronus_ark_core::detectors::facts_common::fasttext::FastTextModel`): words, word pairs and
+  character n-grams of each word, plus the `tf1` tokens of the text facts, are hashed (32-bit
+  FNV-1a) into one table of small embeddings; a text's score is the average embedding fed to a
+  linear two-class softmax. The output layer is folded into one value per bucket when the model is
+  loaded, so scoring is one table lookup per feature without allocation, and the model's memory is
+  fixed by its bucket count. `detectors::text::CategoryModel` loads either form from a `model.json`
+  (`kind: fasttext` selects the new one) and replaces the free function `text::model::score`.
+  `scripts/l1_threat/category_model.py train --fasttext` trains it, and its scores match the Rust
+  scores bit for bit; the attack-class ablation (`scripts/l1_threat/ablation.py`) measures it as
+  stage `FT` next to the other candidates, and `--stage` limits a run to some stages.
+  **Detection change:** none; no text model is enabled yet.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
   (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
   policies, in the same form as the shell-command facts: the pattern findings of a text (category,

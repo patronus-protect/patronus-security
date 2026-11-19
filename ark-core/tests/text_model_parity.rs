@@ -2,12 +2,11 @@
 //! Exact parity of the text category models with the Python reference
 //! (`scripts/l1_threat/category_model.py`): per row of
 //! `testdata/model_parity.jsonl` the Rust score of each synthetic model (one
-//! with vocabularies, one hashed) is bit-identical and the top features are
+//! with vocabularies, one hashed, one fastText-type) is bit-identical and the top features are
 //! the same.
 use std::path::Path;
 
-use patronus_ark_core::detectors::facts_common::model::TfidfLrModel;
-use patronus_ark_core::detectors::text::{model, TextFacts, TEXT_MODEL};
+use patronus_ark_core::detectors::text::{CategoryModel, TextFacts};
 use serde_json::Value;
 
 fn testdata(name: &str) -> String {
@@ -17,9 +16,10 @@ fn testdata(name: &str) -> String {
     std::fs::read_to_string(path).expect("testdata")
 }
 
-const MODELS: [(&str, &str); 2] = [
+const MODELS: [(&str, &str); 3] = [
     ("synthetic-text-tf1", "synthetic_model.json"),
     ("synthetic-text-tf1-hashed", "synthetic_hashed_model.json"),
+    ("synthetic-text-fasttext", "synthetic_fasttext_model.json"),
 ];
 
 #[test]
@@ -30,14 +30,14 @@ fn rust_scores_match_the_python_reference() {
         .collect();
     assert!(rows.len() >= 5);
     for (name, file) in MODELS {
-        let model = TfidfLrModel::from_json_slice(testdata(file).as_bytes(), TEXT_MODEL)
-            .expect("synthetic model");
+        let model =
+            CategoryModel::from_json_slice(testdata(file).as_bytes()).expect("synthetic model");
         assert_eq!(model.name(), name);
         for row in &rows {
             let id = &row["id"];
             let text = row["text"].as_str().expect("text");
             let facts = TextFacts::from_json(&row["facts"]).expect("facts");
-            let (score, top) = model::score(&model, text, &facts);
+            let (score, top) = model.score(text, &facts);
             let expected = &row["models"][name];
             let want = expected["score"].as_f64().expect("score");
             assert_eq!(

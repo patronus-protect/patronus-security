@@ -10,9 +10,13 @@
 //!   token list of an analyzer.
 //! - [`model`]: the K26 model form (char_wb TF-IDF + analyzer tokens -> LR)
 //!   shared by the shell-risk model and the text category models.
+//! - [`fasttext`]: the fastText-type form (hashed word, bigram and char
+//!   n-gram embeddings, averaged, linear softmax), the second candidate form
+//!   of the text category models.
 //! - [`cedar`]: loading the Cedar schema a facts document is checked against.
 
 pub mod cedar;
+pub mod fasttext;
 pub(crate) mod fields;
 pub mod model;
 pub mod pyjson;

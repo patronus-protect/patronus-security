@@ -253,6 +253,39 @@ kosten in Rust 17–21 ms je 100 KiB (Budget 1 ms) und fallen aus dem Budget, ge
 IJ02 ff.: ein N-Gramm-Modell braucht ein Anker-Fenster (README: „Modelle laufen nur dort, wo ein Anker ein
 Fenster geöffnet hat“) oder ein schnelleres Merkmals-Verfahren, sonst gewinnt es die Auswahl nie.
 
+**Stand S09.** fastText-artige Kandidaten (Ablationsstufe `FT`, neben `B0`, K26-artig `B1` und gehasht
+`B4`/`B5`; für jede Klasse über `ablation.py run --stage FT`): Merkmale je Wort von `str.split()` (klein)
+`w:<wort>`, ab dem zweiten Wort `b:<vorher> <wort>`, Zeichen-N-Gramme `c:` von `<wort>` (3–5, nach
+Startposition, dann Länge) und die `tf1`-Fact-Tokens (die `T:`-Wörter von `tf1` doppeln `w:`); FNV-1a-Bucket
+in einer Embedding-Tabelle (2^15 × 16), Mittelwert, lineare Softmax (negativ, positiv), Score = positiver −
+negativer Logit. Training in `category_model.py train --fasttext` (Mini-Batch-Adam, balancierte Klassengewichte,
+deterministisch per Seed, nur numpy); Rust `facts_common/fasttext.rs` faltet beim Laden die Ausgabeschicht in
+einen Wert je Bucket (256 KiB resident, `model.json` ~10,8 MB JSON), danach ein Lookup je Merkmal ohne
+Allokation. Parität: drittes synthetisches Modell in `text/testdata/model_parity.jsonl` (bitgleich, Summe in
+Merkmalsreihenfolge). `text::CategoryModel` lädt beide Formen (`kind: fasttext`). Latenz (Rust, 24 Fenster à
+100 KiB aus `train_dev`, DE GermanQuAD/approve_or_deny_de + EN Dolly, im Leerlauf): p50 ~2,5 ms, p95 ~3,8 ms je
+100 KiB — 5–8× schneller als die N-Gramm-TF-IDF-Stufen (17–21 ms), aber über dem Ablationsbudget von 1 ms; nichts
+davon ist im Scan-Pfad verdrahtet, das DLP-Budget bleibt unberührt. Dev-Lauf (2026-11-19, Training nur auf
+`train_dev`, 51 231 Zeilen; Auswertung auf `report` + `generated`, 19 698 Zeilen, also außerhalb der
+Trainingsverteilung; Arbeitspunkt 1 % FPR auf den Train-Negativen), TPR@1 % / TPR@0,1 % FPR:
+
+| Klasse | alle | DE | EN | Hard-Benign-FPR am Arbeitspunkt |
+|---|---|---|---|---|
+| instruction_injection | 72,1 / 64,8 | 50,5 / 11,0 | 75,3 / 67,6 | 27,4 % |
+| prompt_extraction | 76,2 / 52,9 | – | 74,4 / 52,8 | 30,9 % |
+| jailbreak | 6,2 / 0,0 | 0,0 / 0,0 | 5,2 / 0,0 | 31,8 % |
+| harmful_content | 43,0 / 20,7 | – | 53,7 / 27,0 | 6,4 % |
+| unsafe_action | 46,7 / 20,4 | 47,3 / 45,5 | 46,5 / 25,6 | 70,7 % |
+| exfiltration | 39,2 / 28,4 | 0,0 / 0,0 | 50,0 / 41,0 | 57,9 % |
+| toxic_language | 0,5 / 0,0 | 0,1 / 0,0 | 1,4 / 0,0 | 11,7 % |
+| agent_config_tampering | 0,0 / 0,0 | 0,0 / 0,0 | 0,0 / 0,0 | 71,4 % (3 Train-Positive) |
+
+`tool_poisoning`, `memory_poisoning`, `resource_exhaustion` haben in `train_dev` keine Positiven; ein `FT`
+nur auf `train_dev` ist dort nicht trainierbar. Die hohe Hard-Benign-FPR zeigt, dass der Schnitt aus den
+Train-Negativen auf `report`/`generated` nicht trägt (Verteilungswechsel); die Klassen-Aufgaben (JB02, PX02 …)
+wählen mit ihrem eigenen Split. Offen: quantisierte Embeddings (int8) und ein schnellerer Merkmalspfad
+(z. B. nur 3–4-Gramme) für das 1-ms-Budget.
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).

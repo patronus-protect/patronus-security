@@ -27,7 +27,7 @@ use crate::EvidenceSpan;
 
 const MAX_EVIDENCE_SPANS: usize = 3;
 const EVIDENCE_FEATURES: usize = 8;
-const TOP_FEATURES: usize = 5;
+pub(crate) const TOP_FEATURES: usize = 5;
 
 /// What a model of one detector must look like: the token analyzer its
 /// `tokens` block was trained with, the names of its `ask` and `block`
@@ -90,7 +90,7 @@ struct BlockVectorizer {
 }
 
 /// The only feature hash of hashed blocks.
-const FNV1A_32: &str = "fnv1a_32";
+pub(crate) const FNV1A_32: &str = "fnv1a_32";
 
 /// One TF-IDF feature block with its own feature lookup, idf and weight
 /// offset in the concatenated feature space.
@@ -518,8 +518,14 @@ fn visit_char_wb_ngrams(
 }
 
 /// 32-bit FNV-1a of `bytes`.
-fn fnv1a_32(bytes: &[u8]) -> u32 {
-    bytes.iter().fold(0x811c_9dc5, |hash: u32, byte| {
+pub(crate) fn fnv1a_32(bytes: &[u8]) -> u32 {
+    fnv1a_32_extend(0x811c_9dc5, bytes)
+}
+
+/// Continue a 32-bit FNV-1a `hash` over `bytes`: hashing a feature in parts
+/// equals hashing its concatenation.
+pub(crate) fn fnv1a_32_extend(hash: u32, bytes: &[u8]) -> u32 {
+    bytes.iter().fold(hash, |hash: u32, byte| {
         (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
     })
 }
@@ -613,7 +619,7 @@ impl SourceMap {
 }
 
 /// Split like Python `str.split()` and report each word's byte offset.
-fn for_each_word(text: &str, mut visit: impl FnMut(usize, &str)) {
+pub(crate) fn for_each_word(text: &str, mut visit: impl FnMut(usize, &str)) {
     let mut start = None;
     for (index, c) in text.char_indices() {
         if is_py_space(c) {

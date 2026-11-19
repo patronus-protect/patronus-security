@@ -322,6 +322,7 @@ tasks:
       a 0.1% regression beyond tolerance fails the gate like a 1% one; unit tests cover the new columns;
       the runner's PR table shows both values
   - id: S09
+    status: done
     title: fastText-style scorer candidates in the S04 pipeline — supervised fastText-type models (word and char n-gram hashing embeddings, averaged, linear softmax per class; optional quantised) trained on train_dev only, Python reference + Rust inference with exact parity goldens, L1 budget measured
     type: scorer
     deps: [S04, E08]

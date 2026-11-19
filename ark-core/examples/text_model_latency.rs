@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Time a text category `model.json` on the 100 KiB latency windows: the
+//! Time a text category `model.json` (either form) on the 100 KiB latency windows: the
 //! cost the model adds on top of the facts, which every stage shares. Reads
 //! the windows (`windows.jsonl` of `scripts/l1_threat/latency.py`, rows with
 //! a `text` field), extracts the facts of each once, then times only the
@@ -7,15 +7,15 @@
 //! model stage and prints `{"p50_ms", "p95_ms", "samples"}` normalised to
 //! 100 KiB.
 //!
-//! `--tokens` names the token source of the model's token block: `tf1` (words
-//! and fact tokens), `words` (`T:` words only) or `none` (char n-grams only).
+//! `--tokens` names the token source of the model's token block: `tf1` (the
+//! model's own: words and fact tokens, or the fact tokens of a fastText-type
+//! model), `words` (`T:` words only) or `none` (char n-grams only).
 //!
 //! Run: `cargo run --release -q -p patronus-ark-core --example text_model_latency -- MODEL.json WINDOWS.jsonl --tokens words`
 
 use std::time::Instant;
 
-use patronus_ark_core::detectors::facts_common::model::TfidfLrModel;
-use patronus_ark_core::detectors::text::{extract, model, visit_tf1, TEXT_MODEL};
+use patronus_ark_core::detectors::text::{extract, visit_tf1, CategoryModel};
 use serde_json::{json, Value};
 
 const SAMPLES: usize = 5;
@@ -45,7 +45,7 @@ fn main() -> Result<(), String> {
         return Err(format!("unknown --tokens {tokens}"));
     }
     let bytes = std::fs::read(model_path).map_err(|e| format!("{model_path}: {e}"))?;
-    let model = TfidfLrModel::from_json_slice(&bytes, TEXT_MODEL)?;
+    let model = CategoryModel::from_json_slice(&bytes)?;
     let windows =
         std::fs::read_to_string(windows_path).map_err(|e| format!("{windows_path}: {e}"))?;
     let mut samples = Vec::new();
@@ -56,16 +56,16 @@ fn main() -> Result<(), String> {
         let scale = WINDOW_BYTES / text.len().max(1) as f64;
         for _ in 0..=SAMPLES {
             let start = Instant::now();
-            let (score, _) = match tokens {
-                "tf1" => model::score(&model, text, &facts),
-                "words" => model.score(text, |emit| {
+            let score = match tokens {
+                "tf1" => model.logit(text, &facts),
+                "words" => model.logit_tokens(text, |emit| {
                     visit_tf1(text, &facts, &mut |t| {
                         if t.starts_with("T:") {
                             emit(t)
                         }
                     })
                 }),
-                _ => model.score(text, |_| {}),
+                _ => model.logit_tokens(text, |_| {}),
             };
             samples.push(start.elapsed().as_secs_f64() * 1000.0 * scale);
             std::hint::black_box(score);
