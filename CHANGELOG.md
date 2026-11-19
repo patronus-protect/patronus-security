@@ -87,6 +87,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   zero-width characters inside them are removed (`aWdu\u200bb3Jl…`), and a decoded run that holds
   fewer than three words (`ignore instructions`) is still read for instructions; such a short run
   does not count for the `decoded` text fact, while a zero-width-split prose run now does.
+- **Detection change:** (`injection`, `prompt_extraction`) a folded view (letter spacing, look-alike
+  letters, leetspeak) now covers only the lines a fold changed, one view per run of changed lines;
+  the plain lines around it are no longer scanned a second time, so a phrase is matched in the
+  folded view only when it lies inside the changed lines. Long German text with two Polish or
+  Turkish names (`Wrocław`, `Białystok`) no longer hands the whole text to the rules again. L1
+  latency at 100 KiB (64 German windows, p95 against the base): `all` +3.0 %, `injection` −1.6 %,
+  `threat` +2.0 %.
 
 - **Detection change:** (`agent_config_tampering`, opt-in) a new rule
   (`ark.threat.ac_config_write`) reports a shell or patch call that writes a permission widening

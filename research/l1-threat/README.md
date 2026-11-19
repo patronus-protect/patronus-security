@@ -186,10 +186,15 @@ gemeldeter Klartext-Quelle auch obfuskiert gemeldet werden (`obfuscation_invaria
 Goldens: 24 Positive + 22 Hard Negatives (`obfuscated`, `instruction_injection`/`prompt_extraction`, DE + EN).
 Dev (`obfuscation_slices`, Quelle gemeldet → obfuskiert gemeldet): base64 16/16, hex 8/8, rot13 13/14,
 homoglyph 13/13, leetspeak 15/15, spaced 9/9 (vorher je 0); keine obfuskierte Benign-Zwillingszeile gemeldet.
-**Offen:** L1-Latenz 100 KiB (12 deutsche Dev-Fenster, Python-Gateway, A/B gegen die Basis): p50 unverändert
-(89 vs. 88 ms), p95 etwa 1,8× (321 vs. 171 ms) — mindestens ein normales Fenster öffnet noch eine Sicht über
-den ganzen Text (Ziffern-Tabellen für `spaced` sind schon ausgeschlossen); Kandidaten: Leetspeak-/ROT13-Tor,
-lange Fragmente. Muss vor dem Merge auf ≤ +5 % zurück (Sichten auf die geänderten Abschnitte begrenzen).
+Gefaltete Sichten decken nur die Zeilen ab, die eine Faltung geändert hat (je Lauf aufeinanderfolgender
+geänderter Zeilen eine Sicht): öffnet ein Tor auf langem Klartext — etwa `homoglyph` durch zwei polnische
+oder türkische Namen (`Wrocław`, `Białystok`: `ł`/`ı` in lateinischen Wörtern) —, lesen die Regeln nur diese
+Zeilen ein zweites Mal. Im 100-KiB-Latenzkorpus (`scripts/l1_threat/latency.py`, 64 deutsche Fenster) öffnet
+kein Fenster eine Faltung; die versteckten Sichten sind dort höchstens fünf base64-Fragmente zu 9 Byte je
+Fenster. **Latenz** (A/B gegen die Basis `ce5ad57f`, nativer Gateway, je 3 Läufe, Median-p95): `all`
+171,5 → 176,7 ms (+3,0 %), `injection` 189,2 → 186,1 ms (−1,6 %), `threat` 42,9 → 43,7 ms (+2,0 %);
+`compare` PASS (≤ +5 %). Die frühere Messung (p95 321 vs. 171 ms, 12 Fenster über das Python-Gateway)
+ist damit nicht bestätigt.
 
 **Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
 `text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
