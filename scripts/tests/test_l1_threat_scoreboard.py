@@ -451,3 +451,120 @@ def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(sp
     assert "FAIL hard-benign new fp tool_poisoning" in holdout_part and "gen:" not in holdout_part
     reports = list((tmp_path / "cache2" / "threat-scoreboard" / "reports").glob("*/holdout.json"))
     assert len(reports) == 1
+
+
+# --- full stack (L1 + L2) ----------------------------------------------------------------------
+
+
+def test_predict_rows_with_l2_keep_the_l1_view_and_time_each_layer():
+    ticks = iter([0.0, 0.002, 0.012, 1.0, 1.001, 1.0015])
+    stack = [result("injection", "safe", 1.0, {"score": 0.4}),
+             result("injection", "instruction_override", 0.97, {"score": 0.97}, layer_type="l2_ntdb")]
+    out = MODULE.predict_rows([row("a", 0), row("a", 1)],
+                              lambda text: stack if text.endswith("0") else [],
+                              lambda text: stack[:1] if text.endswith("0") else [],
+                              clock=lambda: next(ticks))
+    assert out[0] == {"id": "a:0000000", "scores": {"instruction_injection": 0.97},
+                      "flagged": ["instruction_injection"],
+                      "l1": {"scores": {"instruction_injection": 0.4}, "flagged": []},
+                      "ms": {"l1": 2.0, "l2": 8.0}}
+    # L2 is the full scan minus the L1 scan of the same row and never negative.
+    assert out[1]["ms"] == {"l1": 1.0, "l2": 0.0}
+
+
+def test_layer_view_picks_l1_from_a_full_stack_prediction():
+    full = {"id": "a", "scores": {"jailbreak": 0.9}, "flagged": ["jailbreak"],
+            "l1": {"scores": {}, "flagged": []}, "ms": {"l1": 1.0, "l2": 5.0}}
+    assert MODULE.layer_view(full, "l1") == {"id": "a", "scores": {}, "flagged": []}
+    assert MODULE.layer_view(full, "l1+l2") is full
+    plain = {"id": "b", "scores": {}, "flagged": []}
+    assert MODULE.layer_view(plain, "l1") is plain
+    with pytest.raises(ValueError):
+        MODULE.layer_view(plain, "l1+l2")
+
+
+def test_prediction_paths_keep_the_layer_choices_apart(split, tmp_path):
+    entry = MODULE.split_sets(split)[0]
+    l1, stack = (MODULE.prediction_path(tmp_path, entry, layers) for layers in MODULE.LAYERS)
+    assert l1 == MODULE.prediction_path(tmp_path, entry) and l1 != stack and stack.name.endswith("-l1l2.jsonl")
+
+
+def fake_full_stack(sets, out, l2_catches=("exfiltration",), l2_flags_twin=False):
+    """L1 scores half of every positive class, L2 lifts the classes in ``l2_catches`` to 0.9."""
+    out.mkdir(parents=True, exist_ok=True)
+    for entry in sets:
+        preds = []
+        for r in MODULE.BASELINES.read_rows(entry.path):
+            l1 = {c: 0.5 for c in r["classes"]}
+            stack = {c: 0.9 if c in l2_catches else s for c, s in l1.items()}
+            flagged = [c for c in stack if stack[c] > 0.5]
+            if l2_flags_twin and r["id"] == "gen:0000001":
+                stack, flagged = {"tool_poisoning": 0.7}, ["tool_poisoning"]
+            preds.append({"id": r["id"], "scores": stack, "flagged": flagged,
+                          "l1": {"scores": l1, "flagged": []}, "ms": {"l1": 1.0, "l2": 9.0}})
+        MODULE.prediction_path(out, entry, "l1+l2").write_text("".join(json.dumps(p) + "\n" for p in preds))
+
+
+def test_layer_latency_is_ms_per_100_kib_per_layer_and_language():
+    pairs = [({"text": "x" * 1024, "language": "de"}, {"id": "a", "ms": {"l1": 1.0, "l2": 10.0}}, "dev"),
+             ({"text": "x" * 1024, "language": "en"}, {"id": "b", "ms": {"l1": 3.0, "l2": 30.0}}, "dev")]
+    latency = MODULE.layer_latency(pairs)
+    assert latency["all"]["l1"]["ms_per_100kib"] == 200.0 and latency["all"]["l2"]["ms_per_100kib"] == 2000.0
+    assert latency["de"]["l1"] == {"rows": 1, "bytes": 1024, "ms_per_100kib": 100.0, "p95_ms": 1.0}
+    with pytest.raises(ValueError):
+        MODULE.layer_latency([({"text": "x"}, {"id": "c", "scores": {}}, "dev")])
+
+
+def test_score_by_layer_reads_the_full_stack_predictions(split, tmp_path):
+    sets = MODULE.split_sets(split)
+    fake_full_stack(sets, tmp_path / "pred")
+    predictions = MODULE.ark_predictions(sets, tmp_path / "pred", "l1+l2")
+    assert MODULE.ark_predictions(sets, tmp_path / "pred") == {}
+    l1, stack = (MODULE.score_split(sets, predictions, bootstrap=False, layers=layers) for layers in MODULE.LAYERS)
+    assert stack["gated"]["exfiltration"]["all"]["all"]["0.01"]["tpr"] == 1.0
+    assert l1["gated"]["exfiltration"]["all"]["all"]["0.01"]["tp"] == 2
+    out = tmp_path / "stack.json"
+    assert MODULE.main(["score", "--split", str(split), "--predictions", str(tmp_path / "pred"),
+                        "--layers", "l1+l2", "--output", str(out)]) == 0
+    assert json.loads(out.read_text())["gated"]["exfiltration"]["all"]["all"]["0.01"]["tpr"] == 1.0
+    # Without L1-only predictions the L1 score has nothing to read.
+    assert MODULE.main(["score", "--split", str(split), "--predictions", str(tmp_path / "pred")]) == 2
+
+
+def test_cli_full_stack_report_puts_l1_next_to_l1_l2_with_baselines_and_latency(split, tmp_path):
+    sets = MODULE.split_sets(split)
+    fake_full_stack(sets, tmp_path / "pred", l2_flags_twin=True)
+    cache = tmp_path / "cache"
+    cache_baseline(cache, "atr", "v1", sets, 1)
+    cache_baseline(cache, "prompt_guard_2_86m", "v1", sets, 0.9)
+    cache_baseline(cache, "protectai_v2", "v1", sets, 1)
+    md = tmp_path / "full-stack.md"
+    assert MODULE.main(["report", "--layers", "l1+l2", "--split", str(split), "--predictions", str(tmp_path / "pred"),
+                        "--baseline-cache", str(cache), "--out", str(md)]) == 0
+    text = md.read_text()
+    assert ("| class | lang | pos | neg | TPR@1% L1 | TPR@1% L1+L2 | TPR@0.1% L1 | TPR@0.1% L1+L2 | "
+            "hard-benign FPR L1 | hard-benign FPR L1+L2 | best heuristic TPR@1% / 0.1% | "
+            "best Prompt Guard 2 TPR@1% / 0.1% |") in text
+    assert "| exfiltration | de | 1 | 1 | 100.0 | 100.0 | 100.0 | 100.0 | – | – | 100.0 / 100.0 (atr) | " \
+           "100.0 / 100.0 (prompt_guard_2_86m) |" in text
+    # The twin L2 scores above the positive costs L1+L2 its TPR and shows as a hard-benign flag.
+    assert "| tool_poisoning | all | 1 | 3 | 100.0 | 0.0 | 100.0 | 0.0 | 0.0 (0/1) | 100.0 (1/1) |" in text
+    assert "| tool_poisoning | 0 | 1 |" in text
+    assert "## Latency per layer" in text and "| all | L1 | 8 | 0 |" in text and "| all | L2 | 8 |" in text
+    assert "## Report-only sets" in text
+
+
+def test_cli_full_stack_counts_only_leaves_rates_latency_and_baselines_out(split, tmp_path):
+    sets = MODULE.split_sets(split)
+    fake_full_stack(sets, tmp_path / "pred", l2_flags_twin=True)
+    cache = tmp_path / "cache"
+    cache_baseline(cache, "atr", "v1", sets, 1)
+    md = tmp_path / "counts.md"
+    assert MODULE.main(["report", "--layers", "l1+l2", "--counts-only", "--split", str(split), "--predictions",
+                        str(tmp_path / "pred"), "--baseline-cache", str(cache), "--out", str(md)]) == 0
+    text = md.read_text()
+    assert "| exfiltration | all | 2 | 3 | 2 / 0 | 2 / 0 | 2 / 0 | 2 / 0 | 0/1 | 0/1 |" in text
+    assert "| tool_poisoning | all | 1 | 3 | 1 / 0 | 0 / 0 | 1 / 0 | 0 / 0 | 0/1 | 1/1 |" in text
+    assert "Latency" not in text and "(atr)" not in text and "100.0" not in text
+    assert MODULE.main(["report", "--counts-only", "--split", str(split), "--predictions", str(tmp_path / "pred"),
+                        "--out", str(md)]) == 2
