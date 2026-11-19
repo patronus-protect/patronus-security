@@ -824,7 +824,7 @@ def test_gate_reports_milestones_per_split_in_the_tail_of_a_passing_run(monkeypa
     code, out, engine = run_gate(monkeypatch, capsys, tmp_path, splits)
     assert code == 0
     lines = out.rstrip().splitlines()
-    # The runner keeps the last 15 lines of a green scoreboard in the gate report.
+    # The runner keeps the tail of a green scoreboard in the gate report (at least its last 15 lines).
     tail = lines[-15:]
     milestones = [line for line in tail if line.startswith("milestones ")]
     assert [line.split(" ")[1] for line in milestones] == ["dev", "holdout"]

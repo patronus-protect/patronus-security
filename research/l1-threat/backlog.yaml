@@ -30,7 +30,7 @@
 #                 attack payloads copied from datasets; third-party data only fetched at eval time.
 #   points:       rule/anchor weights >= 0, damping <= 0, n-gram share capped; integer points; Python
 #                 training and Rust inference bit-identical (golden parity cases).
-#   gate:         same steps as CI; threat scoreboard without regression (> 0.5 pp TPR@1%FPR per class),
+#   gate:         same steps as CI; threat scoreboard without regression (> 0.5 pp TPR@1%FPR or TPR@0.1%FPR per class, E08),
 #                 0 new FP on hard negatives, L1 100 KiB p95 on the real-DE corpus at most +5 %.
 #   docs:         CHANGELOG "Detection change", rule catalog via scripts/generate_docs.py.
 #   no_relax:     never lower a threshold to buy recall; recall comes from rules, anchors, structure.
@@ -313,6 +313,7 @@ tasks:
   # classes (IJ01 +0, JB01 +3.9 at dev TPR@1%). The gate reports the deciding metric TPR at 0.1% FPR first,
   # the full-stack numbers come next, then the scorer candidates (incl. fastText-style) per class.
   - id: E08
+    status: done
     title: Scoreboard gate on the deciding metric — the gate summary, PR tables and the regression check report TPR at 0.1% FPR per class (and language) next to TPR at 1% FPR; the holdout verdict checks the 0.1% values too
     type: eval-infra
     deps: [E06]

@@ -76,6 +76,6 @@ irgendeiner Stelle. Nach dem Gate muss zusätzlich die GitHub-CI auf dem Branch 
 gibt es keinen PR und du bekommst das CI-Log.
 
 Nach deinem Lauf prüft ein unabhängiges Gate (dieselben Checks, ab E06 zusätzlich das
-Threat-Scoreboard auf einem verborgenen Holdout: keine Regression > 0,5 pp TPR@1 % FPR je Klasse, keine
+Threat-Scoreboard auf einem verborgenen Holdout: keine Regression > 0,5 pp TPR@1 % oder TPR@0,1 % FPR je Klasse, keine
 neuen FP auf Hard Negatives, L1-Latenz 100 KiB p95 höchstens +5 %). Ist es rot, bekommst du den Bericht
 und eine weitere Runde. Suche oder lies keine Holdout-Daten, ändere nichts außerhalb des Worktrees.

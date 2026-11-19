@@ -332,8 +332,8 @@ Injection-Scorers); 0, wenn ARK nichts meldet. Je Klasse, Sprache (`all`, `de`, 
 `native`, `translated`; Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map als `translated`
 markierten Satzes, wie in `generators.py`):
 
-- TPR bei gleicher Dokument-FPR 1 % und 0,1 % auf den Benign-Zeilen (`run_baselines.matched_fpr`), dazu ein
-  Perzentil-Bootstrap-95-%-KI der TPR@1 % (200 Runden, fester Seed; Positive und Negative getrennt gezogen,
+- TPR bei gleicher Dokument-FPR 1 % und 0,1 % auf den Benign-Zeilen (`run_baselines.matched_fpr`), je mit
+  Perzentil-Bootstrap-95-%-KI (200 Runden, fester Seed; Positive und Negative getrennt gezogen,
   Schwelle in jeder Runde neu gewählt);
 - AUPRC (Average Precision der Positiven gegen die Benign-Zeilen, Gleichstände als eine Stufe);
 - Hard-Benign-FPR beim ARK-Urteil: harmlose Doppelgänger (`twin_of`) und die Benign-Zeilen von `notinject`,
@@ -353,9 +353,12 @@ python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DEV 
 
 `gate` baut Head und Base (Release-Modul von `python/`, offline, über `ensure_build` des DLP-Scoreboards; gleiche
 Detektor-Quellen teilen einen Build), sagt jeden Satz in einem eigenen Prozess vorher (Cache je Build-Schlüssel,
-Skript-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich `gated` eine Klasse bei TPR@1 % (`all`, `de`, `en`;
-Herkunft `all`) mehr als 0,5 pp verliert oder der Head eine Hard-Benign-Zeile einer Klasse meldet, die die Base
-nicht meldet. Eine Klasse ohne Positive in der Base ist neu, keine Regression. stdout zeigt Dev-Zahlen; der
+Skript-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich `gated` eine Klasse bei TPR@1 % oder bei TPR@0,1 %
+(`all`, `de`, `en`; Herkunft `all`) mehr als 0,5 pp verliert oder der Head eine Hard-Benign-Zeile einer Klasse
+meldet, die die Base nicht meldet; `compare` prüft dieselben Werte. Eine Klasse ohne Positive in der Base ist neu,
+keine Regression. stdout zeigt die Dev-Zahlen als Markdown-Tabelle je Klasse und Sprache (TPR@1 % und TPR@0,1 %,
+Base -> Head mit dem Bootstrap-KI des Heads, AUPRC); der Runner übernimmt bei Erfolg die letzten 60 Zeilen
+(`GATE_SCOREBOARD_LINES` in `ark-l1`), also die ganze Tabelle mit den Urteilen, in die PR-Tabelle. Der
 Holdout verlässt die Sandbox nur als Urteil mit den Namen fehlschlagender Prüfungen, sein Bericht bleibt unter
 `CACHE/threat-scoreboard/reports/`. Die Latenz prüft der Runner getrennt (`latency.py`, `latency_ab`). Exit 0 =
 bestanden, 1 = Regression, 2 = Fehler. `report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle

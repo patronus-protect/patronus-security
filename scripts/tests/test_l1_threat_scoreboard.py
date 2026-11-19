@@ -205,8 +205,9 @@ def test_compare_fails_a_drop_beyond_tolerance_and_new_hard_benign_fp():
     worse.append((row("dev_b", 3, benign=True, twin_of="dev_b:0000000"), 0.0, ("exfiltration",)))
     head = MODULE.score_pairs(pairs(worse), bootstrap=False)
     failed = {check["name"]: check for check in MODULE.compare(base, head) if not check["ok"]}
-    # only the translated German positive passes the cut above the 0.92 twin
+    # only the translated German positive passes the cut above the 0.92 twin, at either FPR
     assert set(failed) == {"tpr@1%fpr exfiltration all", "tpr@1%fpr exfiltration de",
+                           "tpr@0.1%fpr exfiltration all", "tpr@0.1%fpr exfiltration de",
                            "hard-benign new fp exfiltration"}
     assert failed["hard-benign new fp exfiltration"]["rows"] == ["dev_b:0000003"]
     assert failed["tpr@1%fpr exfiltration de"]["delta_pp"] == -50.0
@@ -225,13 +226,59 @@ def test_compare_tolerates_half_a_point():
     assert MODULE.compare(head, base) and all(c["ok"] for c in MODULE.compare({"gated": {}, "hard_benign_flags": {}}, head))
 
 
+def gate_report(tpr_1, tpr_01, ci=None):
+    cell = {"positives": 1000, "negatives": 5000, "auprc": 0.8, "0.01": {"tpr": tpr_1}, "0.001": {"tpr": tpr_01}}
+    if ci:
+        cell["tpr_ci95"] = ci
+    return {"gated": {"jailbreak": {"all": {"all": cell}}}, "hard_benign_flags": {}}
+
+
+def test_compare_gates_tpr_at_one_per_mille_like_one_percent():
+    base = gate_report(0.600, 0.300)
+    checks = {c["name"]: c for c in MODULE.compare(base, gate_report(0.600, 0.295))}
+    assert list(checks)[:2] == ["tpr@1%fpr jailbreak all", "tpr@0.1%fpr jailbreak all"]
+    assert all(c["ok"] for c in checks.values())  # half a point is tolerated at 0.1 % too
+    failed = [c for c in MODULE.compare(base, gate_report(0.610, 0.290)) if not c["ok"]]
+    # a 0.1 % drop beyond tolerance fails even when TPR@1 % improves
+    assert [(c["name"], c["base"], c["head"], c["delta_pp"], c["positives"]) for c in failed] == [
+        ("tpr@0.1%fpr jailbreak all", 0.3, 0.29, -1.0, 1000)]
+    assert MODULE.compare(base, gate_report(0.600, 0.290), tolerance_pp=1.0)[1]["ok"]
+    lost = {"gated": {"jailbreak": {"all": {"all": {"positives": 1000, "0.01": {"tpr": 0.6}, "0.001": None}}}},
+            "hard_benign_flags": {}}
+    assert not {c["name"]: c for c in MODULE.compare(base, lost)}["tpr@0.1%fpr jailbreak all"]["ok"]
+
+
+def test_cell_metrics_bootstrap_both_operating_points():
+    pos = [0.9] * 30 + [0.6] * 30 + [0.2] * 40
+    neg = [0.1] * 990 + [0.5] * 8 + [0.7] * 2
+    cell = MODULE.cell_metrics(pos, neg, [])
+    assert set(cell["tpr_ci95"]) == {"0.01", "0.001"}
+    assert cell["tpr_ci95"]["0.01"] == MODULE.bootstrap_ci(pos, neg, 0.01)
+    assert cell["tpr_ci95"]["0.001"] == MODULE.bootstrap_ci(pos, neg, 0.001)
+    # 1 % allows ten false positives (cut 0.1), 0.1 % one (cut 0.7)
+    assert (cell["0.01"]["tpr"], cell["0.001"]["tpr"]) == (1.0, 0.3)
+    assert "tpr_ci95" not in MODULE.cell_metrics(pos, neg, [], bootstrap=False)
+
+
+def test_summary_table_shows_both_tprs_base_to_head_with_the_head_ci():
+    head = gate_report(0.61, 0.29, ci={"0.01": [0.58, 0.64], "0.001": [0.25, 0.33]})
+    lines = MODULE.summary_lines(gate_report(0.6, 0.3), head)
+    assert "| class | lang | pos | TPR@1% base -> head [95% CI] | TPR@0.1% base -> head [95% CI] | AUPRC head |" in lines
+    assert "| jailbreak | all | 1000 | 60.0 -> 61.0 [58.0–64.0] | 30.0 -> 29.0 [25.0–33.0] | 0.800 |" in lines
+    # a class new in the head shows no base value
+    new = MODULE.summary_lines({"gated": {}, "hard_benign_flags": {}}, head)
+    assert "| jailbreak | all | 1000 | – -> 61.0 [58.0–64.0] | – -> 29.0 [25.0–33.0] | 0.800 |" in new
+
+
 def test_holdout_verdict_names_checks_without_numbers():
     checks = [{"name": "tpr@1%fpr jailbreak de", "base": 0.5, "head": 0.4, "delta_pp": -10.0, "positives": 50,
                "ok": False},
+              {"name": "tpr@0.1%fpr jailbreak de", "base": 0.2, "head": 0.1, "delta_pp": -10.0, "positives": 50,
+               "ok": False},
               {"name": "hard-benign new fp jailbreak", "base": 0, "head": 1, "new": 1, "rows": ["h:1"], "ok": False}]
     lines = MODULE.verdict_lines("holdout", checks, numbers=False)
-    assert lines == ["holdout: regression (0/2 checks pass)", "  FAIL tpr@1%fpr jailbreak de",
-                     "  FAIL hard-benign new fp jailbreak"]
+    assert lines == ["holdout: regression (0/3 checks pass)", "  FAIL tpr@1%fpr jailbreak de",
+                     "  FAIL tpr@0.1%fpr jailbreak de", "  FAIL hard-benign new fp jailbreak"]
     dev = "\n".join(MODULE.verdict_lines("dev", checks, numbers=True))
     assert "-10.0 pp" in dev and "h:1" in dev
 
@@ -365,6 +412,9 @@ def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(sp
     assert MODULE.gate(tmp_path, "base", split, holdout, tmp_path / "cache") == 0
     out = capsys.readouterr().out
     assert "dev: no regression" in out and "holdout: no regression" in out and out.endswith("PASS\n")
+    assert "| exfiltration | de | 1 | 100.0 -> 100.0 [100.0–100.0] | 100.0 -> 100.0 [100.0–100.0] | 1.000 |" in out
+    dev = json.loads(next((tmp_path / "cache" / "threat-scoreboard" / "reports").glob("*/dev.json")).read_text())
+    assert {"tpr@1%fpr exfiltration de", "tpr@0.1%fpr exfiltration de"} <= {c["name"] for c in dev["checks"]}
 
     def flagging(sets, out, package=None, jobs=1):
         fake_predict(sets, out, flag=("tool_poisoning",) if package == tmp_path / "h" else ())

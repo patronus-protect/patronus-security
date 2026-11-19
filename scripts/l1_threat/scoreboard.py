@@ -16,7 +16,7 @@ in the golden evaluation). Metrics per class, language (``all``, ``de``, ``en``)
 the entity map, as in ``generators.py``):
 
 - TPR at matched document FPR 1 % and 0.1 % on the benign rows (lowest threshold whose FPR is within
-  the target, ``run_baselines.matched_fpr``), with a seeded percentile bootstrap 95 % CI of TPR@1 %
+  the target, ``run_baselines.matched_fpr``), each with a seeded percentile bootstrap 95 % CI
   (positives and negatives resampled, threshold re-chosen in every replicate);
 - AUPRC (average precision of the class positives against the benign rows);
 - hard-benign FPR at ARK's own verdict: benign look-alike twins (``twin_of``) and the benign rows of
@@ -26,9 +26,10 @@ the entity map, as in ``generators.py``):
 
 ``gate`` builds the head and the base commit (the release module of ``python/``, offline, shared
 with the DLP scoreboard), predicts every split with both and fails on a regression in the gated scope:
-TPR@1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp below the base, or a
-hard-benign row of a class that the head flags and the base does not. stdout carries dev numbers;
-the holdout leaves as a verdict and the names of failing checks only, its report stays in the cache.
+TPR@1 % or TPR@0.1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp below the
+base, or a hard-benign row of a class that the head flags and the base does not. stdout carries the
+dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the holdout leaves as a
+verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
 2 = error.
 
@@ -74,11 +75,12 @@ CLASSES = tuple(CORPORA.taxonomy.CLASSES)
 DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
     "_ark_l1_dlp_scoreboard", ROOT / "scripts" / "l1_dlp" / "scoreboard.py")
 
-REPORT_SCHEMA = "ark-l1-threat-scoreboard-v1"
+REPORT_SCHEMA = "ark-l1-threat-scoreboard-v2"
 PREDICTIONS_SCHEMA = "ark-l1-threat-ark-predictions-v1"
 PREDICTOR_VERSION = "1"
 FPRS = (0.01, 0.001)
-GATE_FPR = "0.01"
+# Report keys of the gated operating points; both gate with the same tolerance, 1 % first.
+GATE_FPRS = tuple(f"{fpr:g}" for fpr in FPRS)
 GATE_LANGUAGES = ("all", "de", "en")
 LANGUAGES = ("all", "de", "en")
 ORIGINS = ("all", "native", "translated")
@@ -312,14 +314,14 @@ def average_precision(pos: list[float], neg: list[float]) -> float | None:
 
 
 def cell_metrics(pos: list[float], neg: list[float], hard: list[bool], bootstrap: bool = True) -> dict[str, Any]:
-    """Matched-FPR TPRs, AUPRC, bootstrap CI of TPR@1 % and hard-benign FPR of one cell."""
+    """Matched-FPR TPRs, AUPRC, bootstrap CI of each TPR and hard-benign FPR of one cell."""
     out: dict[str, Any] = {"positives": len(pos), "negatives": len(neg)}
     for fpr in FPRS:
         cell = BASELINES.matched_fpr(pos, neg, fpr)
         out[f"{fpr:g}"] = None if cell is None else {k: cell[k] for k in ("threshold", "tpr", "fpr", "tp", "fp")}
     out["auprc"] = average_precision(pos, neg)
     if bootstrap:
-        out["tpr_ci95"] = bootstrap_ci(pos, neg, FPRS[0])
+        out["tpr_ci95"] = {f"{fpr:g}": bootstrap_ci(pos, neg, fpr) for fpr in FPRS}
     out["hard_benign"] = {"rows": len(hard), "fp": sum(hard), "fpr": sum(hard) / len(hard) if hard else None}
     return out
 
@@ -371,7 +373,7 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
             folds[left_out] = None if cell is None else cell["tpr"]
         measured = {d: v for d, v in folds.items() if v is not None}
         low = min(measured.values(), default=None)
-        full = report[scope][cls]["all"]["all"][GATE_FPR]
+        full = report[scope][cls]["all"]["all"][GATE_FPRS[0]]
         # Only a set whose removal lowers the TPR is named; on a tie the first such set wins.
         worst = next((d for d in sorted(measured) if measured[d] == low), None) \
             if low is not None and full is not None and low < full["tpr"] else None
@@ -389,26 +391,30 @@ def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bo
             "rows": len(pairs), **score_pairs(pairs, bootstrap=bootstrap)}
 
 
-def _tpr(report: dict[str, Any], cls: str, language: str) -> tuple[float | None, int]:
-    cell = report["gated"].get(cls, {}).get(language, {}).get("all")
-    if not cell or not cell.get(GATE_FPR):
-        return None, 0
-    return cell[GATE_FPR]["tpr"], cell["positives"]
+def _gate_cell(report: dict[str, Any], cls: str, language: str) -> dict[str, Any] | None:
+    return report["gated"].get(cls, {}).get(language, {}).get("all")
+
+
+def _fpr_label(fpr: str) -> str:
+    return f"{float(fpr) * 100:g}%"
 
 
 def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TOLERANCE_PP) -> list[dict[str, Any]]:
-    """Gate checks of head against base on the gated scope."""
+    """Gate checks of head against base on the gated scope: TPR at every gated FPR, then hard-benign rows."""
     checks = []
     for cls in CLASSES:
         for language in GATE_LANGUAGES:
-            before, _ = _tpr(base, cls, language)
-            after, positives = _tpr(head, cls, language)
-            if before is None and after is None:
-                continue
-            delta = None if before is None or after is None else (after - before) * 100
-            ok = before is None or (after is not None and delta >= -tolerance_pp - 1e-9)
-            checks.append({"name": f"tpr@1%fpr {cls} {language}", "base": before, "head": after,
-                           "delta_pp": None if delta is None else round(delta, 4), "positives": positives, "ok": ok})
+            for fpr in GATE_FPRS:
+                before = _tpr_of(_gate_cell(base, cls, language), fpr)
+                head_cell = _gate_cell(head, cls, language)
+                after = _tpr_of(head_cell, fpr)
+                if before is None and after is None:
+                    continue
+                delta = None if before is None or after is None else (after - before) * 100
+                ok = before is None or (after is not None and delta >= -tolerance_pp - 1e-9)
+                checks.append({"name": f"tpr@{_fpr_label(fpr)}fpr {cls} {language}", "base": before, "head": after,
+                               "delta_pp": None if delta is None else round(delta, 4),
+                               "positives": head_cell["positives"] if after is not None else 0, "ok": ok})
     for cls in CLASSES:
         new = sorted(set(head["hard_benign_flags"].get(cls, [])) - set(base["hard_benign_flags"].get(cls, [])))
         checks.append({"name": f"hard-benign new fp {cls}", "base": len(base["hard_benign_flags"].get(cls, [])),
@@ -424,8 +430,8 @@ def _pct(value: float | None) -> str:
     return "–" if value is None else f"{value * 100:.1f}"
 
 
-def _ci(cell: dict[str, Any]) -> str:
-    ci = cell.get("tpr_ci95")
+def _ci(cell: dict[str, Any], fpr: str) -> str:
+    ci = (cell.get("tpr_ci95") or {}).get(fpr)
     return "–" if not ci else f"{ci[0] * 100:.1f}–{ci[1] * 100:.1f}"
 
 
@@ -448,7 +454,8 @@ def _best_baseline(baselines: dict[str, dict[str, Any]], kind: str, scope: str, 
 
 def table_lines(report: dict[str, Any], scope: str, baselines: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """Markdown table of one scope: per class, language and origin; best heuristic and reference if given."""
-    header = ["class", "lang", "origin", "pos", "neg", "TPR@1%", "95% CI", "TPR@0.1%", "AUPRC", "hard-benign FPR"]
+    header = ["class", "lang", "origin", "pos", "neg", "TPR@1%", "95% CI", "TPR@0.1%", "95% CI", "AUPRC",
+              "hard-benign FPR"]
     if baselines is not None:
         header += ["best heuristic TPR@1% / 0.1%", "best reference TPR@1% / 0.1%"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
@@ -462,7 +469,8 @@ def table_lines(report: dict[str, Any], scope: str, baselines: dict[str, dict[st
                     continue
                 hard = cell["hard_benign"]
                 values = [cls, language, origin, str(cell["positives"]), str(cell["negatives"]),
-                          _pct(_tpr_of(cell, "0.01")), _ci(cell), _pct(_tpr_of(cell, "0.001")),
+                          _pct(_tpr_of(cell, "0.01")), _ci(cell, "0.01"), _pct(_tpr_of(cell, "0.001")),
+                          _ci(cell, "0.001"),
                           "–" if cell["auprc"] is None else f"{cell['auprc']:.3f}",
                           f"{_pct(hard['fpr'])} ({hard['fp']}/{hard['rows']})" if hard["rows"] else "–"]
                 if baselines is not None:
@@ -490,7 +498,7 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
              "Generated by `scripts/l1_threat/scoreboard.py report`; do not edit by hand.", "",
              f"Sets: {json.dumps(report['sets'], sort_keys=True)}; rows: {report['rows']}.", "",
              "TPR at matched document FPR on the benign rows of the same scope; 95 % CI: percentile bootstrap "
-             f"({BOOTSTRAP} rounds) of TPR@1%; hard-benign FPR at ARK's own verdict (look-alike twins and "
+             f"({BOOTSTRAP} rounds) of the TPR to its left; hard-benign FPR at ARK's own verdict (look-alike twins and "
              "security-adjacent benign sets). `–`: no negatives or no rows in the cell.", ""]
     if baselines is None:
         lines += ["Baselines: no cached predictions given; the column is left out.", ""]
@@ -555,15 +563,22 @@ def verdict_lines(split: str, checks: list[dict[str, Any]], numbers: bool) -> li
 
 
 def summary_lines(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
-    lines = ["dev TPR@1%FPR (all languages): class base -> head [95% CI head], AUPRC head"]
+    """Markdown table of the gated dev cells: TPR at every gated FPR, base -> head [95 % CI of the head]."""
+    header = ["class", "lang", "pos", *(f"TPR@{_fpr_label(fpr)} base -> head [95% CI]" for fpr in GATE_FPRS),
+              "AUPRC head"]
+    lines = ["dev TPR at matched FPR (origin all):", "", "| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for cls in CLASSES:
-        cell = head["gated"].get(cls, {}).get("all", {}).get("all")
-        if cell is None:
-            continue
-        before, _ = _tpr(base, cls, "all")
-        lines.append(f"  {cls}: {_pct(before)} -> {_pct(_tpr_of(cell, '0.01'))} [{_ci(cell)}], "
-                     f"AUPRC {cell['auprc']}")
-    return lines
+        for language in GATE_LANGUAGES:
+            cell = _gate_cell(head, cls, language)
+            if cell is None:
+                continue
+            before = _gate_cell(base, cls, language)
+            values = [cls, language, str(cell["positives"]),
+                      *(f"{_pct(_tpr_of(before, fpr))} -> {_pct(_tpr_of(cell, fpr))} [{_ci(cell, fpr)}]"
+                        for fpr in GATE_FPRS),
+                      "–" if cell["auprc"] is None else f"{cell['auprc']:.3f}"]
+            lines.append("| " + " | ".join(values) + " |")
+    return lines + [""]
 
 
 # ── gate ─────────────────────────────────────────────────────────────────────

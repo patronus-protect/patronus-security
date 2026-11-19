@@ -402,6 +402,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- The threat scoreboard gate (`scripts/l1_threat/scoreboard.py gate` and `compare`) now also checks
+  the detection rate at 0.1 % false positives: a change fails when a class (German, English or both)
+  loses more than 0.5 percentage points at 0.1 %, just as at 1 %. The gate summary is a Markdown
+  table per class and language with both detection rates (base -> change, with a bootstrap 95 %
+  confidence interval each), and the scoreboard report gives the interval for the 0.1 % figure too.
+  The research runner now keeps the last 60 lines of a passing scoreboard in its gate report
+  (was 15), so the pull request shows the table row of every class and language.
+  **Detection change:** none; this is evaluation tooling only.
 - **Detection change:** (`jailbreak`) four jailbreak framings that steer the model's answer are now
   reported, in German and English: a prescribed compliant opener ("start your response with 'Sure,
   here is'", "Beginne deine Antwort mit „Klar, hier ist“"), a ban on refusing ("never refuse to
