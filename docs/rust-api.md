@@ -706,25 +706,51 @@ pub enum StageOutcome {
 A stage's answer for one module.
 
 ```rust
-pub fn from_cuts(detected: bool, score: f64, clear_threshold: Option<f64>) -> Self;
+pub enum CutRule {
+    /// `score >= cut`: the heuristic's rule scorers (and Core's native
+    /// acceptance).
+    AtOrAbove,
+    /// `score > cut`: the L1 models, whose files declare
+    /// `decision_rule: "score > threshold"`.
+    Above,
+}
 ```
 
-The one cut rule of every L1 stage, heuristic and L1 model alike: a
-score above the stage's detect cut (`detected`) is Detected, a score at
-or below its clear cut is Clear, anything else escalates. A `None`
-clear cut switches clearing off.
+When a score counts against a cut: the comparison a stage's scorer
+declares.
+
+```rust
+pub fn counts(self, score: f64, cut: f64) -> bool;
+```
+
+Whether `score` counts against `cut`.
+
+```rust
+pub fn from_cuts(
+    detected: bool,
+    score: f64,
+    clear_threshold: Option<f64>,
+    rule: CutRule,
+) -> Self;
+```
+
+The one cut rule of every L1 stage, heuristic and L1 model alike, under
+the stage's [`CutRule`]: a score that counts against the detect cut
+(`detected`) is Detected, a score that does not count against the
+clear cut is Clear, anything else escalates. A `None` clear cut
+switches clearing off.
 
 ```rust
 pub struct ModuleConfig {
     /// The heuristic's detect cut on its decision score (`0.0..=1.0`, the
-    /// probability of its rule scorer): a score above it is Detected. This is
+    /// probability of its rule scorer): a score at or above it is Detected. This is
     /// the one per-class operating point of the heuristic. `None` (the
     /// default) keeps the scorer's shipped acceptance (score at or above its
     /// own cut, as reported in the native results), so results stay identical.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_threshold: Option<f64>,
-    /// The heuristic's clear cut on the same scale: an undetected score at or
-    /// below it is Clear without a later stage. `None` (the default) switches
+    /// The heuristic's clear cut on the same scale: an undetected score below
+    /// it is Clear without a later stage. `None` (the default) switches
     /// it off, so every undetected input escalates.
     pub clear_threshold: Option<f64>,
     /// The module's optional L1 model (cuts on its logit scale), run on what
@@ -830,7 +856,7 @@ The heuristic's outcome for `module` from its L1 results, by
 [`StageOutcome::from_cuts`] on its decision score: the best score of
 its results, also below the scorer's own cut (the candidate score of a
 decision envelope, else the raw `score` of the native layer details,
-else the confidence of a result with evidence). Detected: above the module's
+else the confidence of a result with evidence). Detected: at or above the module's
 `detect_threshold`, or, unset, a result its scorer accepted (or that
 has evidence without a decision envelope).
 

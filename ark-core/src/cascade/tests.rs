@@ -145,8 +145,8 @@ fn l1_detection_is_final_and_skips_l3() {
 
 #[test]
 fn l1_clear_below_the_clear_threshold_skips_l3() {
-    // At or below the clear cut, as for the L1 model.
-    for score in [0.1, 0.3] {
+    // Below the clear cut: the heuristic counts a score at or above a cut.
+    for score in [0.1, 0.29] {
         let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
         let decision = run(&cascade(Some(0.3)), &l1(score, false), &mut l3);
         assert_eq!(l3.calls, 0);
@@ -159,7 +159,7 @@ fn l1_clear_below_the_clear_threshold_skips_l3() {
 
 #[test]
 fn undecided_l1_escalates_to_l3() {
-    for (clear, score) in [(None, 0.0), (Some(0.3), 0.31), (Some(0.3), 0.5)] {
+    for (clear, score) in [(None, 0.0), (Some(0.3), 0.3), (Some(0.3), 0.5)] {
         let mut l3 = Fake::new(SecurityLevel::L3, 0.95);
         let decision = run(&cascade(clear), &l1(score, false), &mut l3);
         assert_eq!(l3.calls, 1, "clear {clear:?} score {score}");
@@ -349,22 +349,29 @@ fn cascade_config_serde_round_trips_and_validates() {
 
 #[test]
 fn one_cut_rule_for_every_l1_stage() {
+    use CutRule::{Above, AtOrAbove};
     assert_eq!(
-        StageOutcome::from_cuts(true, 0.0, Some(1.0)),
+        StageOutcome::from_cuts(true, 0.0, Some(1.0), AtOrAbove),
         StageOutcome::Detected
     );
+    // Clear: the score does not count against the clear cut.
     assert_eq!(
-        StageOutcome::from_cuts(false, 0.5, Some(0.5)),
+        StageOutcome::from_cuts(false, 0.49, Some(0.5), AtOrAbove),
         StageOutcome::Clear
     );
     assert_eq!(
-        StageOutcome::from_cuts(false, 0.51, Some(0.5)),
+        StageOutcome::from_cuts(false, 0.5, Some(0.5), AtOrAbove),
         StageOutcome::Escalate
     );
     assert_eq!(
-        StageOutcome::from_cuts(false, -9.0, None),
+        StageOutcome::from_cuts(false, 0.5, Some(0.5), Above),
+        StageOutcome::Clear
+    );
+    assert_eq!(
+        StageOutcome::from_cuts(false, -9.0, None, Above),
         StageOutcome::Escalate
     );
+    assert!(AtOrAbove.counts(0.5, 0.5) && !Above.counts(0.5, 0.5));
 }
 
 /// The synthetic L1 model at cuts around its own score on the test text:
@@ -566,13 +573,17 @@ fn detect_threshold_is_the_per_module_heuristic_cut() {
         module_stage(None, None, &threat(0.05, false)).outcome,
         StageOutcome::Escalate
     );
-    // Set: the raw score above it detects, at or below it does not, accepted or not.
+    // Set: the raw score at or above it detects, below it does not, accepted or not.
     assert_eq!(
         module_stage(Some(0.04), None, &threat(0.05, false)).outcome,
         StageOutcome::Detected
     );
     assert_eq!(
-        module_stage(Some(0.4), Some(0.2), &threat(0.4, true)).outcome,
+        module_stage(Some(0.4), None, &threat(0.4, true)).outcome,
+        StageOutcome::Detected
+    );
+    assert_eq!(
+        module_stage(Some(0.41), Some(0.2), &threat(0.4, true)).outcome,
         StageOutcome::Escalate
     );
     let config: CascadeConfig = serde_json::from_value(serde_json::json!({

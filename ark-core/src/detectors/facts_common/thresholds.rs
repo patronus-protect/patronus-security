@@ -6,7 +6,8 @@
 //! The model files declare `decision_rule: "score > threshold"`: a score above
 //! the detect cut is detected, a score at or below the clear cut is clear, and
 //! a score in between escalates to the next configured layer
-//! ([`StageOutcome::from_cuts`], the rule the heuristic follows too). Without a
+//! ([`StageOutcome::from_cuts`] under [`CutRule::Above`]; the heuristic uses
+//! the same rule under its scorers' `score >= cut`). Without a
 //! clear cut nothing is cleared by the model. Cat reads the same three outcomes
 //! as `block`, `allow` and `ask`.
 
@@ -15,7 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::model::ModelForm;
-use crate::cascade::StageOutcome;
+use crate::cascade::{CutRule, StageOutcome};
 
 /// The detect and clear cuts of an L1 model, on its decision-score (logit)
 /// scale. The heuristic's cuts live on its probability scale instead
@@ -51,7 +52,13 @@ impl L1Thresholds {
 
     /// The outcome of decision score `score`.
     pub fn outcome(&self, score: f64) -> StageOutcome {
-        StageOutcome::from_cuts(score > self.detect_threshold, score, self.clear_threshold)
+        let rule = CutRule::Above;
+        StageOutcome::from_cuts(
+            rule.counts(score, self.detect_threshold),
+            score,
+            self.clear_threshold,
+            rule,
+        )
     }
 }
 

@@ -74,15 +74,43 @@ pub enum StageOutcome {
     Escalate,
 }
 
+/// When a score counts against a cut: the comparison a stage's scorer
+/// declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CutRule {
+    /// `score >= cut`: the heuristic's rule scorers (and Core's native
+    /// acceptance).
+    AtOrAbove,
+    /// `score > cut`: the L1 models, whose files declare
+    /// `decision_rule: "score > threshold"`.
+    Above,
+}
+
+impl CutRule {
+    /// Whether `score` counts against `cut`.
+    pub fn counts(self, score: f64, cut: f64) -> bool {
+        match self {
+            Self::AtOrAbove => score >= cut,
+            Self::Above => score > cut,
+        }
+    }
+}
+
 impl StageOutcome {
-    /// The one cut rule of every L1 stage, heuristic and L1 model alike: a
-    /// score above the stage's detect cut (`detected`) is Detected, a score at
-    /// or below its clear cut is Clear, anything else escalates. A `None`
-    /// clear cut switches clearing off.
-    pub fn from_cuts(detected: bool, score: f64, clear_threshold: Option<f64>) -> Self {
+    /// The one cut rule of every L1 stage, heuristic and L1 model alike, under
+    /// the stage's [`CutRule`]: a score that counts against the detect cut
+    /// (`detected`) is Detected, a score that does not count against the
+    /// clear cut is Clear, anything else escalates. A `None` clear cut
+    /// switches clearing off.
+    pub fn from_cuts(
+        detected: bool,
+        score: f64,
+        clear_threshold: Option<f64>,
+        rule: CutRule,
+    ) -> Self {
         if detected {
             Self::Detected
-        } else if clear_threshold.is_some_and(|clear| score <= clear) {
+        } else if clear_threshold.is_some_and(|clear| !rule.counts(score, clear)) {
             Self::Clear
         } else {
             Self::Escalate
@@ -95,14 +123,14 @@ impl StageOutcome {
 #[serde(default, deny_unknown_fields)]
 pub struct ModuleConfig {
     /// The heuristic's detect cut on its decision score (`0.0..=1.0`, the
-    /// probability of its rule scorer): a score above it is Detected. This is
+    /// probability of its rule scorer): a score at or above it is Detected. This is
     /// the one per-class operating point of the heuristic. `None` (the
     /// default) keeps the scorer's shipped acceptance (score at or above its
     /// own cut, as reported in the native results), so results stay identical.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_threshold: Option<f64>,
-    /// The heuristic's clear cut on the same scale: an undetected score at or
-    /// below it is Clear without a later stage. `None` (the default) switches
+    /// The heuristic's clear cut on the same scale: an undetected score below
+    /// it is Clear without a later stage. `None` (the default) switches
     /// it off, so every undetected input escalates.
     pub clear_threshold: Option<f64>,
     /// The module's optional L1 model (cuts on its logit scale), run on what
@@ -233,7 +261,7 @@ impl Cascade {
     /// [`StageOutcome::from_cuts`] on its decision score: the best score of
     /// its results, also below the scorer's own cut (the candidate score of a
     /// decision envelope, else the raw `score` of the native layer details,
-    /// else the confidence of a result with evidence). Detected: above the module's
+    /// else the confidence of a result with evidence). Detected: at or above the module's
     /// `detect_threshold`, or, unset, a result its scorer accepted (or that
     /// has evidence without a decision envelope).
     pub fn l1_stage<'a, R: LayeredResult + 'a>(
@@ -259,12 +287,13 @@ impl Cascade {
         }
         let (source, score) = best.unwrap_or((module.as_str(), 0.0));
         let config = self.config.modules.get(&module);
+        let rule = CutRule::AtOrAbove;
         let detected = match config.and_then(|config| config.detect_threshold) {
-            Some(detect) => score > detect,
+            Some(detect) => rule.counts(score, detect),
             None => accepted,
         };
         let clear_threshold = config.and_then(|config| config.clear_threshold);
-        let outcome = StageOutcome::from_cuts(detected, score, clear_threshold);
+        let outcome = StageOutcome::from_cuts(detected, score, clear_threshold, rule);
         L1Stage {
             outcome,
             score,

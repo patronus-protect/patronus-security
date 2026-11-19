@@ -793,10 +793,9 @@ mod cascade_tests {
         let (outcome, score, raw) = decide(None, None);
         assert_eq!(outcome, StageOutcome::Clear);
         assert!(score > 0.0 && score == raw);
-        assert_eq!(decide(Some(score - 0.01), None).0, StageOutcome::Detected);
-        assert_eq!(decide(Some(score), None).0, StageOutcome::Clear);
-        // The sub-threshold score meets the clear cut.
-        assert_eq!(decide(Some(score), Some(score)).0, StageOutcome::Clear);
+        // Like the native acceptance, a score at the cut detects.
+        assert_eq!(decide(Some(score), None).0, StageOutcome::Detected);
+        assert_eq!(decide(Some(score + 0.01), None).0, StageOutcome::Clear);
         assert!(Scanner::new(
             serde_json::from_value(serde_json::json!({"cascade": {"modules": {
                 "injection": {"detect_threshold": 0.2, "clear_threshold": 0.3}
