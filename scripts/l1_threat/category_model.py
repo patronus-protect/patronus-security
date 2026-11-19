@@ -27,7 +27,7 @@ inference matches bit for bit.
 - ``score``: the decision score (logit) and the top positive feature contributions of every row,
   in scikit-learn's float32 feature pipeline and scipy's summation order.
 - ``train --fasttext``: the fastText-type candidate instead (``FastTextModel``): hashed word,
-  word-bigram and ``<word>`` char n-gram features plus the ``tf1`` tokens share one embedding table
+  word-bigram and ``<word>`` char n-gram features plus the ``tf1`` fact tokens share one embedding table
   (``--buckets`` x ``--dim``); a text's vector is the average of its feature embeddings, followed
   by a linear softmax over the classes (negative, positive). Fitted by deterministic mini-batch Adam
   with balanced class weights; the decision score is the positive minus the negative logit.
@@ -52,7 +52,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from text_facts import PARITY_PATH as FACTS_PARITY_PATH  # noqa: E402
-from text_facts import read_rows, render, tf1  # noqa: E402
+from text_facts import fact_tokens, read_rows, render, tf1  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTDATA = ROOT / "ark-core" / "src" / "detectors" / "text" / "testdata"
@@ -184,6 +184,8 @@ class Block:
 
 class Model:
     """A ``format_version: 2`` text model: ``char_wb`` block, ``tf1`` block, LR weights."""
+
+    tokens_of = staticmethod(row_tokens)
 
     def __init__(self, document: dict) -> None:
         if document["format_version"] != FORMAT_VERSION:
@@ -349,11 +351,12 @@ def train(
     return document
 
 
-def fasttext_features(text: str, tokens: list[str], min_n: int, max_n: int) -> Iterable[str]:
+def fasttext_features(text: str, tokens: Iterable[str], min_n: int, max_n: int) -> Iterable[str]:
     """Features of the fastText-type model in their fixed order: per word of ``str.split()``
     (lowercased) ``w:<word>``, ``b:<previous> <word>`` from the second word on, the char n-grams
-    ``c:<gram>`` of ``<word>`` (``min_n``..``max_n`` characters, a padded word shorter than
-    ``min_n`` once whole); then every ``tf1`` token as is."""
+    ``c:<gram>`` of ``<word>`` by start offset, then length (``min_n``..``max_n`` characters; a
+    padded word shorter than ``min_n`` once whole); then the ``tokens`` (the fact tokens) as
+    they are."""
     previous = None
     for word in text.split():
         word = word.lower()
@@ -365,10 +368,16 @@ def fasttext_features(text: str, tokens: list[str], min_n: int, max_n: int) -> I
         if len(padded) < min_n:
             yield f"c:{padded}"
             continue
-        for n in range(min_n, max_n + 1):
-            for offset in range(len(padded) - n + 1):
+        for offset in range(len(padded) - min_n + 1):
+            for n in range(min_n, min(max_n, len(padded) - offset) + 1):
                 yield f"c:{padded[offset : offset + n]}"
     yield from tokens
+
+
+def fasttext_tokens(row: dict) -> list[str]:
+    """The tokens of a row for the fastText-type model: the ``tf1`` fact tokens in sorted order
+    (its word tokens repeat the ``w:`` features)."""
+    return sorted(fact_tokens(row["facts"]))
 
 
 class FastTextModel:
@@ -380,6 +389,8 @@ class FastTextModel:
     (double precision, ``j`` in order); the decision score (``logit``) is the mean value of the
     text's features' buckets plus ``bias[1] - bias[0]``, i.e.
     the positive minus the negative softmax logit."""
+
+    tokens_of = staticmethod(fasttext_tokens)
 
     def __init__(self, document: dict) -> None:
         if document.get("kind") != FASTTEXT_KIND or document["format_version"] != FASTTEXT_FORMAT_VERSION:
@@ -524,7 +535,7 @@ def train_fasttext(
     batch: int = 256,
     weight_decay: float = 1e-6,
     seed: int = 0,
-    tokens: Callable[[dict], list[str]] = row_tokens,
+    tokens: Callable[[dict], list[str]] = fasttext_tokens,
 ) -> dict:
     """A fastText-type model document trained on rows with text, facts and label, with the
     ``1pct_fpr`` / ``0_1pct_fpr`` cuts on the negative rows' scores. Embeddings and output
@@ -602,7 +613,7 @@ def parity_scores() -> str:
     for row in synthetic_rows():
         scores = {}
         for name, model in models.items():
-            score, top = model.score(row["text"], row_tokens(row))
+            score, top = model.score(row["text"], model.tokens_of(row))
             scores[name] = {"score": score, "top": top}
         expected.append({"id": row["id"], "text": row["text"], "facts": row["facts"], "models": scores})
     return render(expected)
@@ -658,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "score":
         model = load_model(json.loads(args.model.read_text(encoding="utf-8")))
         for row in read_rows(args.rows):
-            value, top = model.score(row["text"], row_tokens(row))
+            value, top = model.score(row["text"], model.tokens_of(row))
             print(json.dumps({"id": row.get("id"), "score": value, "top": top}, ensure_ascii=False))
         return 0
     if args.retrain:

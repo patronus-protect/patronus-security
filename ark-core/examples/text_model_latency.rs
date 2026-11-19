@@ -7,8 +7,9 @@
 //! model stage and prints `{"p50_ms", "p95_ms", "samples"}` normalised to
 //! 100 KiB.
 //!
-//! `--tokens` names the token source of the model's token block: `tf1` (words
-//! and fact tokens), `words` (`T:` words only) or `none` (char n-grams only).
+//! `--tokens` names the token source of the model's token block: `tf1` (the
+//! model's own: words and fact tokens, or the fact tokens of a fastText-type
+//! model), `words` (`T:` words only) or `none` (char n-grams only).
 //!
 //! Run: `cargo run --release -q -p patronus-ark-core --example text_model_latency -- MODEL.json WINDOWS.jsonl --tokens words`
 
@@ -56,7 +57,7 @@ fn main() -> Result<(), String> {
         for _ in 0..=SAMPLES {
             let start = Instant::now();
             let score = match tokens {
-                "tf1" => model.logit_tokens(text, |emit| visit_tf1(text, &facts, emit)),
+                "tf1" => model.logit(text, &facts),
                 "words" => model.logit_tokens(text, |emit| {
                     visit_tf1(text, &facts, &mut |t| {
                         if t.starts_with("T:") {

@@ -8,7 +8,7 @@
 //! `testdata/model_parity.jsonl` holds its exact scores.
 
 use super::facts::TextFacts;
-use super::tf1::visit_tf1;
+use super::tf1::{fact_tokens, visit_tf1};
 use crate::detectors::facts_common::fasttext::{is_fasttext, FastTextModel};
 use crate::detectors::facts_common::model::{ModelForm, TfidfLrModel, TopFeature};
 
@@ -56,13 +56,29 @@ impl CategoryModel {
     }
 
     /// Decision score (logit) of `text` with its `facts`, and the top
-    /// positive feature contributions.
+    /// positive feature contributions. The K26 form reads every `tf1`
+    /// token, the fastText-type form only the fact tokens.
     pub fn score(&self, text: &str, facts: &TextFacts) -> (f64, Vec<TopFeature>) {
-        self.score_tokens(text, |emit| visit_tf1(text, facts, emit))
+        match self {
+            Self::TfidfLr(_) => self.score_tokens(text, |emit| visit_tf1(text, facts, emit)),
+            Self::FastText(_) => self.score_tokens(text, |emit| {
+                fact_tokens(facts).iter().for_each(|token| emit(token))
+            }),
+        }
     }
 
-    /// [`Self::score`] with the token block fed by `tokens` instead of the
-    /// full `tf1` stream (the ablation's word-only and n-gram-only stages).
+    /// The decision score of [`Self::score`] alone.
+    pub fn logit(&self, text: &str, facts: &TextFacts) -> f64 {
+        match self {
+            Self::TfidfLr(model) => model.score(text, |emit| visit_tf1(text, facts, emit)).0,
+            Self::FastText(model) => model.logit(text, |emit| {
+                fact_tokens(facts).iter().for_each(|token| emit(token))
+            }),
+        }
+    }
+
+    /// [`Self::score`] with the token features fed by `tokens` instead of
+    /// the facts (the ablation's word-only and n-gram-only stages).
     pub fn score_tokens(
         &self,
         text: &str,

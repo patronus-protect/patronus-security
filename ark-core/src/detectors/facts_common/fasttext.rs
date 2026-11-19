@@ -4,8 +4,9 @@
 //!
 //! Features of a text, in order: per word of Python's `str.split()`
 //! (lowercased) `w:<word>`, `b:<previous> <word>` from the second word on and
-//! the char n-grams `c:<gram>` of `<word>`; then the analyzer tokens as they
-//! are. A feature's bucket is the 32-bit FNV-1a hash of its UTF-8 bytes
+//! the char n-grams `c:<gram>` of `<word>` by start offset, then length; then
+//! the fact tokens of the analyzer as they are (its word tokens repeat the
+//! `w:` features). A feature's bucket is the 32-bit FNV-1a hash of its UTF-8 bytes
 //! modulo `buckets`; a text's vector is the average of its buckets'
 //! embeddings, followed by a linear softmax over (negative, positive).
 //!
@@ -144,12 +145,20 @@ impl FastTextModel {
     /// by the feature count, plus the bias difference. One lookup per
     /// feature, no allocation beyond the reused word buffers.
     pub fn logit(&self, text: &str, tokens: impl FnOnce(&mut dyn FnMut(&str))) -> f64 {
-        let buckets = self.values.len() as u32;
         let (mut dot, mut total) = (0.0, 0u64);
-        visit_feature_hashes(text, self.char_ngrams, tokens, |hash| {
-            dot += self.values[(hash % buckets) as usize];
-            total += 1;
-        });
+        if self.values.len().is_power_of_two() {
+            let mask = self.values.len() as u32 - 1;
+            visit_feature_hashes(text, self.char_ngrams, tokens, |hash| {
+                dot += self.values[(hash & mask) as usize];
+                total += 1;
+            });
+        } else {
+            let buckets = self.values.len() as u32;
+            visit_feature_hashes(text, self.char_ngrams, tokens, |hash| {
+                dot += self.values[(hash % buckets) as usize];
+                total += 1;
+            });
+        }
         if total == 0 {
             return self.bias;
         }
@@ -242,16 +251,20 @@ fn visit_feature_hashes(
         bounds.extend(padded.char_indices().map(|(index, _)| index));
         bounds.push(padded.len());
         let chars = bounds.len() - 1;
+        let bytes = padded.as_bytes();
         let grams = prefixed(b"c:");
-        let gram = |start: usize, end: usize| {
-            fnv1a_32_extend(grams, &padded.as_bytes()[bounds[start]..bounds[end]])
-        };
         if chars < min_n {
-            visit(gram(0, chars));
+            visit(fnv1a_32_extend(grams, bytes));
         } else {
-            for n in min_n..=max_n.min(chars) {
-                for offset in 0..=chars - n {
-                    visit(gram(offset, offset + n));
+            // The n-grams from one offset extend each other: hash the shortest,
+            // then one more character per length.
+            for offset in 0..=chars - min_n {
+                let longest = max_n.min(chars - offset);
+                let mut hash =
+                    fnv1a_32_extend(grams, &bytes[bounds[offset]..bounds[offset + min_n - 1]]);
+                for end in offset + min_n..=offset + longest {
+                    hash = fnv1a_32_extend(hash, &bytes[bounds[end - 1]..bounds[end]]);
+                    visit(hash);
                 }
             }
         }
@@ -301,7 +314,7 @@ mod tests {
         assert_eq!(
             hashes("Ab  ÄB", (3, 4), "F:X=1"),
             expected(&[
-                "w:ab", "c:<ab", "c:ab>", "c:<ab>", "w:äb", "b:ab äb", "c:<äb", "c:äb>", "c:<äb>",
+                "w:ab", "c:<ab", "c:<ab>", "c:ab>", "w:äb", "b:ab äb", "c:<äb", "c:<äb>", "c:äb>",
                 "F:X=1",
             ])
         );

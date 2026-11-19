@@ -138,8 +138,10 @@ def test_parity_goldens_are_fresh():
 
 def test_fasttext_features_order_and_names():
     assert list(MODULE.fasttext_features("Ab  ÄB", ["F:X=1"], 3, 4)) == [
-        "w:ab", "c:<ab", "c:ab>", "c:<ab>", "w:äb", "b:ab äb", "c:<äb", "c:äb>", "c:<äb>", "F:X=1",
+        "w:ab", "c:<ab", "c:<ab>", "c:ab>", "w:äb", "b:ab äb", "c:<äb", "c:<äb>", "c:äb>", "F:X=1",
     ]
+    assert MODULE.fasttext_tokens(row("x", 0, carrier=["email", "chat"])) == [
+        "F:CAR=chat", "F:CAR=email", "F:LANG=en"]
     # A padded word shorter than the smallest n counts once, whole.
     assert list(MODULE.fasttext_features("é", ["T"], 4, 5)) == ["w:é", "c:<é>", "T"]
 
@@ -175,8 +177,8 @@ def test_train_fasttext_separates_toy_rows_and_sets_cuts():
     document = MODULE.train_fasttext(rows, "toy-ft", buckets=256, dim=4, lr=0.05, epochs=50, batch=4)
     assert document["kind"] == "fasttext" and len(document["embeddings"]) == 256 * 4
     model = MODULE.FastTextModel(document)
-    positives = [model.logit(r["text"], MODULE.row_tokens(r)) for r in rows if r["label"]]
-    negatives = [model.logit(r["text"], MODULE.row_tokens(r)) for r in rows if not r["label"]]
+    positives = [model.logit(r["text"], model.tokens_of(r)) for r in rows if r["label"]]
+    negatives = [model.logit(r["text"], model.tokens_of(r)) for r in rows if not r["label"]]
     assert min(positives) > max(negatives)
     assert document["thresholds"]["1pct_fpr"] == max(negatives)
     # Deterministic for a seed.

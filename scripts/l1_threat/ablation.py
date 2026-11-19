@@ -13,7 +13,7 @@ Every stage scores the same rows; the comparison shows what each building block 
 | ``B1`` | char n-gram TF-IDF + LR alone (``category_model.py``, vocabulary, no token features) |
 | ``B4`` | hashed char n-gram + word TF-IDF + LR alone (``tf1`` words without fact tokens) |
 | ``B5`` | ``R+A`` plus the ``B4`` logit as points, capped at ``NGRAM_CAP`` |
-| ``FT`` | fastText-type model alone (``category_model.FastTextModel``: hashed word, bigram and char n-gram embeddings plus the ``tf1`` tokens, averaged, linear softmax) |
+| ``FT`` | fastText-type model alone (``category_model.FastTextModel``: hashed word, bigram and char n-gram embeddings plus the fact tokens, averaged, linear softmax) |
 
 Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``text_facts`` example),
 ``classes``, ``benign``, ``language`` and ``dataset``, as in the frozen corpora. A row is a positive
@@ -275,7 +275,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
         ft_doc = MODEL.train_fasttext(model_rows, f"ablation-{cls}-fasttext", buckets=FASTTEXT_SHAPE[0],
                                       dim=FASTTEXT_SHAPE[1])
         ft = MODEL.FastTextModel(ft_doc)
-        fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.row_tokens(row))), model=ft_doc,
+        fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.fasttext_tokens(row))), model=ft_doc,
                             ram_bytes=model_ram_bytes(ft_doc)))
     fitted = [stage for stage in fitted if stage.name in wanted]
     for stage in fitted:
