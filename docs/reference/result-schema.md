@@ -743,9 +743,10 @@ command.
 
 One request can emit **several** `result` events. L1 results are visible as soon as L1
 finishes; L2 and a later promoted L3 result follow independently, and L3 runs only when L2
-promotes. With the opt-in gate key `cascade`, a category L1 detects is final at L1: its results
-carry `decided_by: "heuristic"` and it gets no L2 or L3 result. So does a category L1 did not
-detect when no later layer can run for it (`max_level` `l1`, its L2 and L3 gated off, or no model
+promotes. With the opt-in gate key `cascade`, a category L1 decides is final at L1 (it detects,
+or its score is below a configured `clear_threshold`): its results carry `decided_by:
+"heuristic"` and it gets no L2 or L3 result. So does a category L1 left undecided when no later
+layer can run for it (`max_level` `l1`, its L2 and L3 gated off, or no model
 for it): its L1 result is its clear answer. Only the other categories go on to L2. The queue and
 the distributed plan mark results the same way. Without `cascade`, results carry no
 `decided_by`.

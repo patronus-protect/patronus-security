@@ -589,7 +589,7 @@ These rules use the shared source-bound component contract and emit finding span
 | `dlp_mcp_policy` | `native:mcp_policy` | `dlp` | off |
 | `dlp_destructive_operation` | `native:destructive_operation` | `unsafe_action` | off |
 
-## Injection rules (57)
+## Injection rules (57) { #injection-rules }
 
 Injection rule IDs gate versioned catalog entries, native evidence producers, and the structural producer. Several source rules can intentionally share one canonical ID; the table lists each effective gate once.
 

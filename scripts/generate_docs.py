@@ -708,7 +708,7 @@ def generate_l1_rule_catalog_doc() -> str:
             for rule_id, gate, category, default in DLP_RELATIONSHIP_RULES
         ),
         "",
-        f"## Injection rules ({len(injection)})",
+        f"## Injection rules ({len(injection)}) {{ #injection-rules }}",
         "",
         "Injection rule IDs gate versioned catalog entries, native evidence producers, and the structural producer. Several source rules can intentionally share one canonical ID; the table lists each effective gate once.",
         "",

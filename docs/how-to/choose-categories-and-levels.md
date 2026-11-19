@@ -20,8 +20,8 @@ for what each one classifies and which layers back it.
 ## Pick a level
 
 `max_level` is the hard ceiling on escalation. With the opt-in `cascade` gate key, each layer runs
-only on what the layers below it left undecided (in Ark, every category L1 did not detect), and
-the last layer you allow gives the final answer: with `l1`, what L1 does not detect is clear (see [Analysis framework](../concepts/layered-scanning.md)):
+only on what the layers below it left undecided (in Ark, every category L1 did not detect or
+clear), and the last layer you allow gives the final answer: with `l1`, what L1 does not detect is clear (see [Analysis framework](../concepts/layered-scanning.md)):
 
 | `max_level` | Use when |
 | --- | --- |
