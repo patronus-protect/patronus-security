@@ -25,12 +25,15 @@ use std::{
 pub const CONTENT_TOKENS: usize = 254;
 pub const SEQUENCE_TOKENS: usize = 256;
 
+/// The Wolf Defender L3 of the injection module: bundle, model size,
+/// precision, backend and the attack-probability threshold it detects at
+/// (default 0.93 for base, small and edge).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "WolfConfigFields")]
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
     /// Attack-probability threshold; a serialized config without one gets
-    /// [`WolfModel::default_threshold`] of its `model`.
+    /// [`WolfModel::default_threshold`] of its `model` (0.93 for every size).
     pub threshold: f64,
     pub model: WolfModel,
     pub precision: WolfPrecision,
