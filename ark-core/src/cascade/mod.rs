@@ -292,6 +292,8 @@ pub struct L1Stage {
     /// Set when the outcome is [`StageOutcome::Escalate`].
     pub escalation: Option<EscalationSignal>,
     layers: Vec<LayerResult>,
+    /// Whether an L1 stage ran (not with L1 switched off).
+    ran: bool,
 }
 
 impl L1Stage {
@@ -325,8 +327,9 @@ impl Cascade {
         self.config.allows_level(level)
     }
 
-    /// L1's answer for `module` when L1 is switched off: nothing decided, the
-    /// input escalates to the next layer that runs.
+    /// L1's answer for `module` when L1 is switched off: no stage ran, the
+    /// input escalates to the next layer that runs; if none does,
+    /// [`Self::decide`] reports no decision for the module.
     pub fn l1_off(&self, module: SecurityCategory) -> L1Stage {
         L1Stage {
             outcome: StageOutcome::Escalate,
@@ -334,6 +337,7 @@ impl Cascade {
             decided_by: Stage::Heuristic,
             escalation: Some(EscalationSignal::above(0.0, None, module.as_str())),
             layers: Vec::new(),
+            ran: false,
         }
     }
 
@@ -383,6 +387,7 @@ impl Cascade {
             escalation: (outcome == StageOutcome::Escalate)
                 .then(|| EscalationSignal::above(score, clear_threshold, source)),
             layers: Vec::new(),
+            ran: true,
         }
     }
 
@@ -418,7 +423,9 @@ impl Cascade {
     /// Final decision of `module`: L1's Detected or Clear stands; an
     /// escalation runs the first allowed L2 model of the module, then the L3
     /// executor, each only while the previous layer escalates. An escalation
-    /// no configured layer answers ends Clear, decided by the last stage that ran.
+    /// no configured layer answers ends Clear, decided by the last stage that
+    /// ran. `None` when no stage ran at all (L1 switched off and no later
+    /// layer answered): the module has no decision.
     /// `l1_results` are the L1 gate results of every scanned module, read
     /// only when [`Self::has_conditional_gates`].
     #[allow(clippy::too_many_arguments)]
@@ -431,9 +438,9 @@ impl Cascade {
         l2: &mut [&mut dyn LayerModel],
         mut l3: Option<&mut dyn L3Executor>,
         control: &ScanControl,
-    ) -> Result<ModuleDecision, ScanError> {
+    ) -> Result<Option<ModuleDecision>, ScanError> {
         if let Some(decision) = l1.decision(module) {
-            return Ok(decision);
+            return Ok(Some(decision));
         }
         let L1Stage {
             mut outcome,
@@ -441,6 +448,7 @@ impl Cascade {
             mut decided_by,
             mut escalation,
             mut layers,
+            mut ran,
         } = l1;
         let gated = self.has_conditional_gates();
         let mut results = Vec::new();
@@ -488,6 +496,7 @@ impl Cascade {
                 continue;
             };
             decided_by = Stage::from(level);
+            ran = true;
             score = output.result.confidence;
             if gated {
                 results.push(GateResult {
@@ -512,13 +521,13 @@ impl Cascade {
         if outcome == StageOutcome::Escalate {
             outcome = StageOutcome::Clear;
         }
-        Ok(ModuleDecision {
+        Ok(ran.then_some(ModuleDecision {
             module,
             outcome,
             decided_by,
             score,
             layers,
-        })
+        }))
     }
 }
 

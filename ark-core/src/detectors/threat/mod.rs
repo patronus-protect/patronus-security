@@ -38,6 +38,9 @@ pub struct ThreatThresholds {
     pub count: u64,
     /// Acceptance cut of a points rule on its score (`threat_points_acceptance`).
     pub points_acceptance: f64,
+    /// Add the details a configured cascade reads
+    /// ([`crate::native::NativeGates::cascade_details`]).
+    pub cascade_details: bool,
 }
 
 impl Default for ThreatThresholds {
@@ -45,6 +48,7 @@ impl Default for ThreatThresholds {
         Self {
             count: crate::native::DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD,
             points_acceptance: DEFAULT_POINTS_ACCEPTANCE,
+            cascade_details: false,
         }
     }
 }
@@ -519,13 +523,9 @@ impl ThreatPipeline {
         } else {
             category.as_str()
         };
-        let details = HashMap::from([
+        let mut details = HashMap::from([
             ("matched_rules".into(), json!(matched_rules)),
             ("score".into(), json!(score)),
-            // The rule scorer's own probability (the scale of the cascade's
-            // cuts) and whether a points rule accepted on its own.
-            ("scorer_score".into(), json!(model_score)),
-            ("points_accepted".into(), json!(points_score.is_some())),
             ("accepted".into(), json!(accepted)),
             (
                 "acceptance_threshold".into(),
@@ -542,6 +542,12 @@ impl ThreatPipeline {
                 json!("logistic_decision_score_not_malicious_intent_probability"),
             ),
         ]);
+        if thresholds.cascade_details {
+            // The rule scorer's own probability (the scale of the cascade's
+            // cuts) and whether a points rule accepted on its own.
+            details.insert("scorer_score".into(), json!(model_score));
+            details.insert("points_accepted".into(), json!(points_score.is_some()));
+        }
         NativeDetection {
             result: EvaluationResult {
                 class_name: class_name.into(),
@@ -1486,6 +1492,29 @@ mod tests {
             ..defaults
         };
         assert_eq!(detect_with(points, strict).result.class_name, "benign");
+    }
+
+    #[test]
+    fn cascade_details_appear_only_when_a_cascade_asks_for_them() {
+        let detect_with = |cascade_details: bool| {
+            ThreatPipeline::new().detect_prepared(
+                &NativeText::new("Delete the entire production database right away."),
+                SecurityCategory::UnsafeAction,
+                |_| true,
+                &ThreatThresholds {
+                    cascade_details,
+                    ..ThreatThresholds::default()
+                },
+            )
+        };
+        let plain = detect_with(false);
+        assert_eq!(plain.result.class_name, "unsafe_action");
+        assert!(!plain.details.contains_key("scorer_score"));
+        assert!(!plain.details.contains_key("points_accepted"));
+        let cascaded = detect_with(true);
+        assert_eq!(cascaded.details["points_accepted"], json!(true));
+        assert!(cascaded.details["scorer_score"].is_number());
+        assert_eq!(cascaded.evidence_spans, plain.evidence_spans);
     }
 
     #[test]

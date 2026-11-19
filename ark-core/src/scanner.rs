@@ -136,7 +136,8 @@ pub struct ScanReport {
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfResult>,
     /// Final answer and deciding stage per scanned module; set when
-    /// [`ScannerConfig::cascade`] is configured.
+    /// [`ScannerConfig::cascade`] is configured. A module no stage ran for
+    /// (L1 switched off and no later layer answered) has no entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<Vec<ModuleDecision>>,
 }
@@ -161,6 +162,8 @@ impl Scanner {
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
+        let mut config = config;
+        config.gates.cascade_details = config.cascade.is_some();
         let mut native = NativeEngine::new(&config.categories);
         if let Some(cascade) = &config.cascade {
             native
@@ -332,7 +335,8 @@ impl Scanner {
             } else {
                 self.cascade.l1_off(module)
             };
-            decisions.push(self.cascade.decide(
+            // A module no stage ran for (L1 off, nothing later) has no decision.
+            decisions.extend(self.cascade.decide(
                 module,
                 text,
                 stage,
@@ -921,6 +925,20 @@ mod cascade_tests {
             );
         }
         // A cascade with L1 on leaves the native results as they are.
+        // The default details carry no cascade keys.
+        let mut scanner = Scanner::new(ScannerConfig {
+            categories: vec![SecurityCategory::UnsafeAction],
+            ..ScannerConfig::default()
+        })
+        .unwrap();
+        let threat = scanner
+            .scan("Delete the entire production database right away.")
+            .unwrap();
+        assert!(!threat.native.is_empty());
+        for layer in threat.native.iter().flat_map(|r| &r.layers) {
+            assert!(!layer.details.contains_key("scorer_score"));
+            assert!(!layer.details.contains_key("points_accepted"));
+        }
         let cascaded = scan_with(Some(serde_json::json!({})));
         let view = |report: &ScanReport| {
             report
@@ -951,10 +969,7 @@ mod cascade_tests {
         // L1 off: no native producer runs; nothing later is configured.
         let off = scan_with(Some(serde_json::json!({"l1": false})));
         assert!(off.native.is_empty());
-        assert_eq!(
-            decided(&off, SecurityCategory::Pii),
-            (StageOutcome::Clear, Stage::Heuristic)
-        );
+        assert_eq!(off.decision.as_deref().map(<[_]>::len), Some(0));
         // One module's rules off with the existing models gate.
         let mut config = ScannerConfig {
             cascade: Some(Default::default()),
@@ -971,6 +986,55 @@ mod cascade_tests {
             decided(&report, SecurityCategory::Injection).0,
             StageOutcome::Detected
         );
+    }
+
+    #[test]
+    fn the_l1_model_alone_decides_with_the_rules_switched_off() {
+        let bundle = crate::detectors::text::l1_model::tests::bundle("scanner_l1_model_only");
+        let text = crate::detectors::text::l1_model::tests::TEXT;
+        let scan = |detect: f64, clear: Option<f64>, clear_enabled: bool| {
+            let mut config = ScannerConfig {
+                cascade: Some(Default::default()),
+                ..ScannerConfig::default()
+            };
+            config
+                .gates
+                .models
+                .insert("native:injection_l1".into(), false);
+            config.cascade.as_mut().unwrap().modules.insert(
+                SecurityCategory::Injection,
+                crate::cascade::ModuleConfig {
+                    l1_model: Some(crate::detectors::text::L1ModelConfig {
+                        detect_threshold: Some(detect),
+                        clear_threshold: clear,
+                        clear_enabled,
+                        ..bundle.clone()
+                    }),
+                    ..Default::default()
+                },
+            );
+            let report = Scanner::new(config)
+                .unwrap()
+                .scan_categories(text, &[SecurityCategory::Injection])
+                .unwrap();
+            assert!(report.native.is_empty(), "the rules are off");
+            let decision = injection_decision(&report).clone();
+            (decision.outcome, decision.decided_by, decision.layers.len())
+        };
+        assert_eq!(
+            scan(-1e6, None, false),
+            (StageOutcome::Detected, Stage::L1Model, 1)
+        );
+        assert_eq!(
+            scan(1e6, Some(1e5), true),
+            (StageOutcome::Clear, Stage::L1Model, 1)
+        );
+        // Undecided by the model and no L3: clear, decided by the model.
+        assert_eq!(
+            scan(1e6, None, false),
+            (StageOutcome::Clear, Stage::L1Model, 1)
+        );
+        std::fs::remove_dir_all(&bundle.bundle_dir).ok();
     }
 
     #[test]

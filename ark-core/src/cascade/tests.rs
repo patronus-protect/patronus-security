@@ -133,6 +133,7 @@ fn run(cascade: &Cascade, l1_result: &NativeResult, l3: &mut Fake) -> ModuleDeci
             &ScanControl::default(),
         )
         .unwrap()
+        .expect("a stage ran")
 }
 
 #[test]
@@ -197,7 +198,8 @@ fn escalation_without_a_configured_later_layer_is_clear() {
             None,
             &ScanControl::default(),
         )
-        .unwrap();
+        .unwrap()
+        .expect("a stage ran");
     assert_eq!(
         (decision.outcome, decision.decided_by),
         (StageOutcome::Clear, Stage::Heuristic)
@@ -235,7 +237,8 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
             Some(&mut l3),
             &ScanControl::default(),
         )
-        .unwrap();
+        .unwrap()
+        .expect("a stage ran");
     assert_eq!((l2.calls, l3.calls), (1, 0));
     assert_eq!(
         (decision.outcome, decision.decided_by),
@@ -259,7 +262,8 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
             Some(&mut l3),
             &ScanControl::default(),
         )
-        .unwrap();
+        .unwrap()
+        .expect("a stage ran");
     assert_eq!((l2.calls, l3.calls), (1, 1));
     assert_eq!(
         (decision.outcome, decision.decided_by),
@@ -303,7 +307,8 @@ fn conditional_gates_read_every_modules_l1_results() {
                 Some(&mut l3),
                 &ScanControl::default(),
             )
-            .unwrap();
+            .unwrap()
+            .expect("a stage ran");
         assert_eq!(l3.calls, runs);
         assert_eq!(
             decision.decided_by,
@@ -480,6 +485,7 @@ fn run_with_model(
             &ScanControl::default(),
         )
         .unwrap()
+        .expect("a stage ran")
 }
 
 #[test]
@@ -814,11 +820,25 @@ fn level_switches_turn_single_layers_off() {
             Some(&mut l3),
             &ScanControl::default(),
         )
-        .unwrap();
+        .unwrap()
+        .expect("a stage ran");
     assert_eq!((l2.calls, l3.calls), (0, 1));
     assert_eq!(decision.decided_by, Stage::L3);
     // L1 off escalates whatever the clear threshold.
     let stage = cascade(Some(1.0)).l1_off(SecurityCategory::Injection);
     assert_eq!(stage.outcome, StageOutcome::Escalate);
-    assert!(stage.escalation.unwrap().escalates());
+    assert!(stage.escalation.as_ref().unwrap().escalates());
+    // No stage ran at all: no decision, never one "by the heuristic".
+    let none = cascade(None)
+        .decide(
+            SecurityCategory::Injection,
+            "text",
+            stage,
+            &[],
+            &mut [],
+            None,
+            &ScanControl::default(),
+        )
+        .unwrap();
+    assert!(none.is_none());
 }

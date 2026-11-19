@@ -856,6 +856,8 @@ pub struct L1Stage {
     /// Set when the outcome is [`StageOutcome::Escalate`].
     pub escalation: Option<EscalationSignal>,
     layers: Vec<LayerResult>,
+    /// Whether an L1 stage ran (not with L1 switched off).
+    ran: bool,
 }
 ```
 
@@ -894,8 +896,9 @@ Whether `level` may run in this cascade.
 pub fn l1_off(&self, module: SecurityCategory) -> L1Stage;
 ```
 
-L1's answer for `module` when L1 is switched off: nothing decided, the
-input escalates to the next layer that runs.
+L1's answer for `module` when L1 is switched off: no stage ran, the
+input escalates to the next layer that runs; if none does,
+[`Self::decide`] reports no decision for the module.
 
 ```rust
 pub fn has_conditional_gates(&self) -> bool;
@@ -946,13 +949,15 @@ pub fn decide(
     l2: &mut [&mut dyn LayerModel],
     mut l3: Option<&mut dyn L3Executor>,
     control: &ScanControl,
-) -> Result<ModuleDecision, ScanError>;
+) -> Result<Option<ModuleDecision>, ScanError>;
 ```
 
 Final decision of `module`: L1's Detected or Clear stands; an
 escalation runs the first allowed L2 model of the module, then the L3
 executor, each only while the previous layer escalates. An escalation
-no configured layer answers ends Clear, decided by the last stage that ran.
+no configured layer answers ends Clear, decided by the last stage that
+ran. `None` when no stage ran at all (L1 switched off and no later
+layer answered): the module has no decision.
 `l1_results` are the L1 gate results of every scanned module, read
 only when [`Self::has_conditional_gates`].
 
@@ -2185,7 +2190,8 @@ pub struct ScanReport {
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfResult>,
     /// Final answer and deciding stage per scanned module; set when
-    /// [`ScannerConfig::cascade`] is configured.
+    /// [`ScannerConfig::cascade`] is configured. A module no stage ran for
+    /// (L1 switched off and no later layer answered) has no entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<Vec<ModuleDecision>>,
 }
@@ -2406,6 +2412,12 @@ pub struct NativeGates {
     pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
+    /// Set by a host that runs a configured cascade: producers then add the
+    /// details the cascade reads (the Threat rules' `scorer_score` and
+    /// `points_accepted`). Off by default, so results stay as they are; not
+    /// serialized.
+    #[serde(skip)]
+    pub cascade_details: bool,
 }
 ```
 
