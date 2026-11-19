@@ -342,6 +342,7 @@ def test_calibration_rows_drop_every_train_row():
 
 def test_calibrate_reads_the_cuts_off_the_benign_rows_not_the_train_negatives():
     document = ft_model(toy_rows())
+    train_cuts = dict(document["thresholds"])
     rows = toy_rows() + benign_pool()
     calibrated, report = MODULE.calibrate(document, rows, CLS, target_fpr=0.1, clear_fpr=0.2)
     model = MODULE.MODEL.load_model(calibrated)
@@ -357,7 +358,7 @@ def test_calibrate_reads_the_cuts_off_the_benign_rows_not_the_train_negatives():
     assert calibrated["calibration"]["benign_rows"] == len(benign)
     assert report["train_negative_cut"]["threshold"] == document["thresholds"]["0_1pct_fpr"]
     # The input document keeps its train-negative cuts.
-    assert document["thresholds"] != calibrated["thresholds"] or detect == document["thresholds"]["0_1pct_fpr"]
+    assert document["thresholds"] == train_cuts
     assert "calibration" not in document
 
 
