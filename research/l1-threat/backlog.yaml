@@ -352,6 +352,18 @@ tasks:
       a runner step (or task) re-renders research/l1-threat/scoreboard/baseline.md on main after each merged
       detector, scorer or gold change, in the same PR or a follow-up; the table shows TPR@0.1% and @1%,
       hard-benign FPR and the baseline columns; README links it as the current state
+  # Owner, 2026-11-19 (E07 numbers): with Wolf on L2 the stack gets worse at the deciding metric —
+  # instruction_injection dev TPR@0.1% drops from 60.2 (L1) to 36.2 (L1+L2) while hard-benign FPR rises from
+  # 0/2313 to 524/2313 (22.7%); jailbreak and prompt_extraction gain nothing. L2 needs the same benign-data
+  # calibration as the L1 models before decision (a) can hold.
+  - id: E10
+    title: Calibrate the L2 escalation on benign data — Wolf Defender's thresholds (and the stack's escalation rule) per class set so that the full stack's FPR, measured on the dev benign pool incl. the hard-benign sets, stays at the 0.1% operating point; full-stack.md re-rendered; the class's default config only ships L2 where L1+L2 beats L1 at 0.1% FPR
+    type: scorer
+    deps: [E07]
+    accept: >-
+      per class: L1+L2 TPR@0.1% >= L1 TPR@0.1% on dev, or L2 is not escalated for that class by default (decision
+      named); hard-benign FPR of L1+L2 at the operating point <= 0.1% and reported per benign source; latency of
+      the L2 path named; the owner's holdout run follows with the same command
   - id: JB02
     title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
     type: scorer
