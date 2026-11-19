@@ -50,6 +50,14 @@ pub struct NativeDetection {
     pub details: HashMap<String, serde_json::Value>,
 }
 
+impl NativeDetection {
+    /// Drops the evidence spans that `mode`'s floor refuses
+    /// ([`ScoreMode::admits`](crate::native::ScoreMode::admits)).
+    pub(crate) fn retain_admitted(&mut self, mode: crate::native::ScoreMode) {
+        self.evidence_spans.retain(|span| mode.admits(span.score));
+    }
+}
+
 /// Shared contract of the native (L1) detectors: a prepared text in, one
 /// detection out. Implementors write `detect_prepared`; the rest follows.
 pub trait NativeDetector: Sync {

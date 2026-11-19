@@ -31,6 +31,14 @@ impl ScoreMode {
         }
     }
 
+    /// Whether a finding scoring `score` passes the mode's floor; `strict`
+    /// keeps every finding. The one floor rule of every category: PII applies
+    /// it per match before overlap resolution, DLP per text view after it,
+    /// the attack classes per producer detection.
+    pub fn admits(self, score: f64) -> bool {
+        self.min_score().is_none_or(|min| score >= min)
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Strict => "strict",
@@ -336,6 +344,9 @@ mod tests {
             (ScoreMode::Recall, Some(0.3)),
         ] {
             assert_eq!(mode.min_score(), min_score);
+            let floor = min_score.unwrap_or(0.0);
+            assert!(mode.admits(floor) && mode.admits(1.0));
+            assert_eq!(mode.admits(floor - 0.01), mode == ScoreMode::Strict);
             assert_eq!(mode.as_str().parse::<ScoreMode>(), Ok(mode));
             assert_eq!(mode.to_string(), mode.as_str());
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.as_str());

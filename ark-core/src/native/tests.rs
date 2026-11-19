@@ -414,3 +414,35 @@ fn every_injection_rule_reports_under_exactly_its_taxonomy_class() {
         );
     }
 }
+
+#[test]
+fn score_floor_drops_refused_evidence_and_turns_an_empty_detection_benign() {
+    let span = |score: f64| crate::EvidenceSpan {
+        label: "jailbreak".into(),
+        text: "x".into(),
+        score,
+        start_byte: 0,
+        end_byte: 1,
+        start_char: 0,
+        end_char: 1,
+    };
+    let detection = |scores: &[f64]| NativeDetection {
+        result: crate::EvaluationResult {
+            class_name: "jailbreak".into(),
+            confidence: 0.4,
+            level: "L1".into(),
+        },
+        evidence_spans: scores.iter().copied().map(span).collect(),
+        details: HashMap::from([("accepted".into(), true.into())]),
+    };
+    let strict = apply_score_floor(detection(&[0.2]), ScoreMode::Strict);
+    assert_eq!(strict.evidence_spans.len(), 1);
+    let mixed = apply_score_floor(detection(&[0.2, 0.6]), ScoreMode::Balanced);
+    assert_eq!(mixed.evidence_spans.len(), 1);
+    assert_eq!(mixed.result.class_name, "jailbreak");
+    let refused = apply_score_floor(detection(&[0.2]), ScoreMode::Recall);
+    assert!(refused.evidence_spans.is_empty());
+    assert_eq!(refused.result.class_name, "benign");
+    assert!((refused.result.confidence - 0.6).abs() < 1e-12);
+    assert_eq!(refused.details["accepted"], false);
+}

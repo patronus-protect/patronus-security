@@ -529,7 +529,7 @@ fn merge_deobfuscated(
         let spelled_out = kinds.iter().any(|kind| kind.level() == Level::SpelledOut);
         if spelled_out {
             score = score::normalised_score(span.score, Category::Pii);
-            if mode.min_score().is_some_and(|threshold| score < threshold) {
+            if !mode.admits(score) {
                 continue;
             }
         }
