@@ -28,7 +28,8 @@ impl EscalationSignal {
     }
 }
 
-/// The one escalation predicate of every layer: `score >= threshold`.
+/// The escalation predicate of L2 and L3 signals: `score >= threshold`. L1
+/// stages decide by [`super::StageOutcome::from_cuts`] instead.
 pub fn escalates(score: f64, threshold: f64) -> bool {
     score >= threshold
 }

@@ -20,9 +20,10 @@ use super::facts::{extract, Facts, ShellContext};
 use super::kf1::visit_kf1;
 use super::model::{ASK_THRESHOLD, SHELL_RISK_CLASS};
 use super::policies::{Decision, Lowered, PolicyHit, ShellPolicies, ShellPolicyConfig};
+use crate::cascade::StageOutcome;
 use crate::detectors::facts_common::model::{TfidfLrModel, TopFeature};
 use crate::detectors::facts_common::pyjson::{self, py_round};
-use crate::detectors::facts_common::thresholds::{L1Thresholds, ModelOutcome};
+use crate::detectors::facts_common::thresholds::L1Thresholds;
 use crate::detectors::{NativeDetection, NativeDetector};
 use crate::threat::NativeText;
 use crate::EvaluationResult;
@@ -152,9 +153,9 @@ pub struct ShellRiskPipeline {
 /// band between the cuts asks.
 fn decide(score: f64, thresholds: &L1Thresholds) -> Decision {
     match thresholds.outcome(score) {
-        ModelOutcome::Detected => Decision::Block,
-        ModelOutcome::Escalate => Decision::Ask,
-        ModelOutcome::Clear => Decision::Allow,
+        StageOutcome::Detected => Decision::Block,
+        StageOutcome::Escalate => Decision::Ask,
+        StageOutcome::Clear => Decision::Allow,
     }
 }
 

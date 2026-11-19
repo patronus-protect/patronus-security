@@ -57,6 +57,16 @@ def test_cascade_reports_the_deciding_stage_per_module():
     ]
     with pytest.raises(ValueError):
         Scanner({"cascade": {"modules": {"injection": {"clear_threshold": 2}}}})
+    with pytest.raises(ValueError):
+        Scanner({"cascade": {"modules": {"injection": {"detect_threshold": 0.2, "clear_threshold": 0.3}}}})
+    # A per-module detect cut below every score detects with the heuristic.
+    lowered = Scanner({"categories": ["injection"], "cascade": {"modules": {"injection": {"detect_threshold": 0.0}}}})
+    quoted = "The tutorial says to ignore previous instructions in this example."
+    assert lowered.scan(quoted)["decision"][0]["outcome"] == "detected"
+    with pytest.raises(RuntimeError):
+        Scanner({"cascade": {"modules": {"injection": {
+            "l1_model": {"bundle_dir": "/nonexistent", "manifest_sha256": "0" * 64},
+        }}}})
 
 
 def test_shell_command_points_to_shell_verdict():

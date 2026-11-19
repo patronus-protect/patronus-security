@@ -451,16 +451,15 @@ fn score_floor_drops_refused_evidence_and_turns_an_empty_detection_benign() {
 fn l1_models_are_off_by_default_and_refuse_unknown_categories() {
     let mut engine = NativeEngine::new(&[SecurityCategory::Injection]);
     assert!(engine.l1_model(SecurityCategory::Injection).is_none());
-    engine.load_l1_models(&Default::default()).unwrap();
+    engine.load_l1_models([]).unwrap();
     assert!(engine.l1_model(SecurityCategory::Injection).is_none());
     let config = crate::detectors::text::L1ModelConfig::new("missing", "00");
-    for name in ["threat", "shell_command"] {
-        let configs = std::collections::BTreeMap::from([(name.to_string(), config.clone())]);
-        assert!(engine.load_l1_models(&configs).is_err(), "{name}");
-    }
-    let configs = std::collections::BTreeMap::from([("injection".to_string(), config)]);
     assert!(engine
-        .load_l1_models(&configs)
+        .load_l1_models([(SecurityCategory::ShellCommand, &config)])
+        .unwrap_err()
+        .contains("non-native"));
+    assert!(engine
+        .load_l1_models([(SecurityCategory::Injection, &config)])
         .unwrap_err()
         .contains("missing"));
 }

@@ -111,8 +111,9 @@ fn cascade(clear: Option<f64>) -> Cascade {
     let mut config = CascadeConfig::default();
     config.modules.insert(
         SecurityCategory::Injection,
-        ModuleThresholds {
+        ModuleConfig {
             clear_threshold: clear,
+            ..ModuleConfig::default()
         },
     );
     Cascade::new(config).unwrap()
@@ -144,18 +145,21 @@ fn l1_detection_is_final_and_skips_l3() {
 
 #[test]
 fn l1_clear_below_the_clear_threshold_skips_l3() {
-    let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
-    let decision = run(&cascade(Some(0.3)), &l1(0.1, false), &mut l3);
-    assert_eq!(l3.calls, 0);
-    assert_eq!(
-        (decision.outcome, decision.decided_by),
-        (StageOutcome::Clear, Stage::Heuristic)
-    );
+    // At or below the clear cut, as for the L1 model.
+    for score in [0.1, 0.3] {
+        let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
+        let decision = run(&cascade(Some(0.3)), &l1(score, false), &mut l3);
+        assert_eq!(l3.calls, 0);
+        assert_eq!(
+            (decision.outcome, decision.decided_by),
+            (StageOutcome::Clear, Stage::Heuristic)
+        );
+    }
 }
 
 #[test]
 fn undecided_l1_escalates_to_l3() {
-    for (clear, score) in [(None, 0.0), (Some(0.3), 0.3), (Some(0.3), 0.5)] {
+    for (clear, score) in [(None, 0.0), (Some(0.3), 0.31), (Some(0.3), 0.5)] {
         let mut l3 = Fake::new(SecurityLevel::L3, 0.95);
         let decision = run(&cascade(clear), &l1(score, false), &mut l3);
         assert_eq!(l3.calls, 1, "clear {clear:?} score {score}");
@@ -335,9 +339,250 @@ fn cascade_config_serde_round_trips_and_validates() {
         outcome: StageOutcome::Detected,
         decided_by: Stage::L1Model,
         score: 0.5,
+        layers: Vec::new(),
     };
     assert_eq!(
         serde_json::to_value(decision).unwrap(),
         serde_json::json!({"module": "injection", "outcome": "detected", "decided_by": "l1_model", "score": 0.5})
     );
+}
+
+#[test]
+fn one_cut_rule_for_every_l1_stage() {
+    assert_eq!(
+        StageOutcome::from_cuts(true, 0.0, Some(1.0)),
+        StageOutcome::Detected
+    );
+    assert_eq!(
+        StageOutcome::from_cuts(false, 0.5, Some(0.5)),
+        StageOutcome::Clear
+    );
+    assert_eq!(
+        StageOutcome::from_cuts(false, 0.51, Some(0.5)),
+        StageOutcome::Escalate
+    );
+    assert_eq!(
+        StageOutcome::from_cuts(false, -9.0, None),
+        StageOutcome::Escalate
+    );
+}
+
+/// The synthetic L1 model at cuts around its own score on the test text:
+/// `Detected`, `Clear` or `Escalate` (clearing on), or `None` for clearing off.
+fn l1_model(name: &str, outcome: Option<StageOutcome>) -> L1TextModel {
+    use crate::detectors::text::l1_model::tests::{bundle, TEXT};
+    let config = bundle(name);
+    let score = L1TextModel::load(SecurityCategory::Injection, &config)
+        .unwrap()
+        .evaluate(TEXT, &[], &[])
+        .score;
+    let (detect, clear, clear_enabled) = match outcome {
+        Some(StageOutcome::Detected) => (score - 1.0, score - 2.0, true),
+        Some(StageOutcome::Clear) => (score + 2.0, score, true),
+        Some(StageOutcome::Escalate) => (score + 2.0, score - 1.0, true),
+        None => (score + 2.0, score + 1.0, false),
+    };
+    let model = L1TextModel::load(
+        SecurityCategory::Injection,
+        &L1ModelConfig {
+            detect_threshold: Some(detect),
+            clear_threshold: Some(clear),
+            clear_enabled,
+            ..config.clone()
+        },
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&config.bundle_dir).ok();
+    model
+}
+
+/// Heuristic escalation, then the L1 model, then `l3` when given.
+fn run_with_model(
+    model: &L1TextModel,
+    heuristic: &NativeResult,
+    l3: Option<&mut Fake>,
+) -> ModuleDecision {
+    use crate::detectors::text::l1_model::tests::TEXT;
+    let cascade = cascade(None);
+    let stage = cascade.l1_stage(SecurityCategory::Injection, [heuristic]);
+    let stage = cascade.l1_model_stage(stage, Some(model), TEXT, &[]);
+    cascade
+        .decide(
+            SecurityCategory::Injection,
+            TEXT,
+            stage,
+            &mut [],
+            l3.map(|l3| l3 as &mut dyn L3Executor),
+            &ScanControl::default(),
+        )
+        .unwrap()
+}
+
+#[test]
+fn l1_model_answers_what_the_heuristic_escalates() {
+    let detected = l1_model("cascade_model_detected", Some(StageOutcome::Detected));
+    let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
+    let decision = run_with_model(&detected, &l1(0.5, false), Some(&mut l3));
+    assert_eq!(l3.calls, 0);
+    assert_eq!(
+        (decision.outcome, decision.decided_by),
+        (StageOutcome::Detected, Stage::L1Model)
+    );
+    assert_eq!(decision.layers.len(), 1);
+    assert_eq!(
+        decision.layers[0].layer_type,
+        crate::detectors::text::L1_MODEL_LAYER
+    );
+    assert!(decision.layers[0].matched);
+
+    let clear = l1_model("cascade_model_clear", Some(StageOutcome::Clear));
+    let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
+    let decision = run_with_model(&clear, &l1(0.5, false), Some(&mut l3));
+    assert_eq!(l3.calls, 0);
+    assert_eq!(
+        (decision.outcome, decision.decided_by),
+        (StageOutcome::Clear, Stage::L1Model)
+    );
+
+    // A heuristic detection is final: the model does not run.
+    let decision = run_with_model(&clear, &l1(0.8, true), None);
+    assert_eq!(
+        (decision.outcome, decision.decided_by, decision.layers.len()),
+        (StageOutcome::Detected, Stage::Heuristic, 0)
+    );
+}
+
+#[test]
+fn l1_model_escalation_runs_l3_or_ends_clear() {
+    for (name, outcome) in [
+        ("cascade_model_escalate", Some(StageOutcome::Escalate)),
+        ("cascade_model_no_clear", None),
+    ] {
+        let model = l1_model(name, outcome);
+        let decision = run_with_model(&model, &l1(0.5, false), None);
+        assert_eq!(
+            (decision.outcome, decision.decided_by),
+            (StageOutcome::Clear, Stage::L1Model),
+            "{name}"
+        );
+        let mut l3 = Fake::new(SecurityLevel::L3, 0.95);
+        let decision = run_with_model(&model, &l1(0.5, false), Some(&mut l3));
+        assert_eq!(l3.calls, 1, "{name}");
+        assert_eq!(
+            (decision.outcome, decision.decided_by, decision.score),
+            (StageOutcome::Detected, Stage::L3, 0.95),
+            "{name}"
+        );
+        let types: Vec<_> = decision
+            .layers
+            .iter()
+            .map(|l| l.layer_type.as_str())
+            .collect();
+        assert_eq!(types, [crate::detectors::text::L1_MODEL_LAYER, "fake"]);
+    }
+}
+
+#[test]
+fn cascade_config_carries_the_l1_model_per_module() {
+    let config: CascadeConfig = serde_json::from_value(serde_json::json!({
+        "modules": {
+            "injection": {"l1_model": {"bundle_dir": "m", "manifest_sha256": "ab", "clear_enabled": false}},
+            "pii": {"clear_threshold": 0.1}
+        }
+    }))
+    .unwrap();
+    let models: Vec<_> = config.l1_models().collect();
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].0, SecurityCategory::Injection);
+    assert!(!models[0].1.clear_enabled);
+}
+
+/// A Threat-style result: no decision envelope, the scorer's raw score in
+/// the layer details, evidence only when accepted.
+fn threat(score: f64, accepted: bool) -> NativeResult {
+    let mut result = l1(score, accepted);
+    result.decision = None;
+    result.category = "exfiltration".into();
+    result.layers.push(LayerResult {
+        level: "L1".into(),
+        layer_type: "native".into(),
+        class_name: if accepted { "exfiltration" } else { "benign" }.into(),
+        confidence: 1.0,
+        matched: true,
+        duration_ms: 0.0,
+        thresholds: HashMap::new(),
+        details: HashMap::from([("score".to_string(), score.into())]),
+    });
+    if accepted {
+        result.evidence_spans.push(crate::EvidenceSpan {
+            label: "exfiltration".into(),
+            text: "x".into(),
+            score,
+            start_byte: 0,
+            end_byte: 1,
+            start_char: 0,
+            end_char: 1,
+        });
+    }
+    result
+}
+
+fn module_stage(detect: Option<f64>, clear: Option<f64>, result: &NativeResult) -> L1Stage {
+    let mut config = CascadeConfig::default();
+    config.modules.insert(
+        SecurityCategory::Exfiltration,
+        ModuleConfig {
+            detect_threshold: detect,
+            clear_threshold: clear,
+            l1_model: None,
+        },
+    );
+    Cascade::new(config)
+        .unwrap()
+        .l1_stage(SecurityCategory::Exfiltration, [result])
+}
+
+#[test]
+fn clear_threshold_reads_the_raw_score_of_results_without_an_envelope() {
+    let below = threat(0.05, false);
+    let stage = module_stage(None, Some(0.1), &below);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Clear, 0.05));
+    // Above the clear cut it escalates instead of being cleared as 0.
+    assert_eq!(
+        module_stage(None, Some(0.01), &below).outcome,
+        StageOutcome::Escalate
+    );
+    let accepted = threat(0.4, true);
+    assert_eq!(
+        module_stage(None, Some(0.1), &accepted).outcome,
+        StageOutcome::Detected
+    );
+}
+
+#[test]
+fn detect_threshold_is_the_per_module_heuristic_cut() {
+    // Unset: the scorer's own acceptance.
+    assert_eq!(
+        module_stage(None, None, &threat(0.05, false)).outcome,
+        StageOutcome::Escalate
+    );
+    // Set: the raw score above it detects, at or below it does not, accepted or not.
+    assert_eq!(
+        module_stage(Some(0.04), None, &threat(0.05, false)).outcome,
+        StageOutcome::Detected
+    );
+    assert_eq!(
+        module_stage(Some(0.4), Some(0.2), &threat(0.4, true)).outcome,
+        StageOutcome::Escalate
+    );
+    let config: CascadeConfig = serde_json::from_value(serde_json::json!({
+        "modules": {"exfiltration": {"detect_threshold": 0.3, "clear_threshold": 0.4}}
+    }))
+    .unwrap();
+    assert!(config.validate().is_err());
+    let config: CascadeConfig = serde_json::from_value(serde_json::json!({
+        "modules": {"exfiltration": {"detect_threshold": 1.3}}
+    }))
+    .unwrap();
+    assert!(config.validate().is_err());
 }

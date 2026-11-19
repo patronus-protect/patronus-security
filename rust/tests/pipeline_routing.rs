@@ -866,18 +866,21 @@ fn sync_wrappers_are_consistent_for_requested_categories() {
 
 #[test]
 fn l3_scheduler_defaults_match_cpu_ttl_policy() {
+    use patronus_ark::pipeline::{estimated_cost_ms, priority_index, ttl_ms};
+    // Ark's effective defaults: the core policy leaves the model table empty
+    // and Ark's L3 routing table fills it.
     let policy = L3SchedulerPolicy::default();
 
-    assert_eq!(policy.ttl_ms["injection"], 15_000);
-    assert_eq!(policy.ttl_ms["dynamic-pii"], 12_000);
-    assert_eq!(policy.ttl_ms["sensitive_document"], 12_000);
-    assert_eq!(policy.ttl_ms["routing"], 10_500);
-    assert_eq!(policy.ttl_ms["tool_class"], 10_500);
-    assert_eq!(policy.priority[0], "injection");
-    assert_eq!(policy.priority[2], "unsafe_action");
-    assert_eq!(policy.priority[4], "dynamic-pii");
-    assert_eq!(policy.estimated_cost_ms["injection"], 200);
-    assert_eq!(policy.estimated_cost_ms["dynamic-pii"], 240);
+    assert_eq!(ttl_ms(&policy, "injection", ""), 15_000);
+    assert_eq!(ttl_ms(&policy, "dynamic-pii", ""), 12_000);
+    assert_eq!(ttl_ms(&policy, "sensitive_document", ""), 12_000);
+    assert_eq!(ttl_ms(&policy, "routing", ""), 10_500);
+    assert_eq!(ttl_ms(&policy, "tool_class", ""), 10_500);
+    assert_eq!(priority_index(&policy, "injection", ""), 0);
+    assert_eq!(priority_index(&policy, "unsafe_action", ""), 2);
+    assert_eq!(priority_index(&policy, "dynamic-pii", ""), 4);
+    assert_eq!(estimated_cost_ms(&policy, "injection", ""), 200);
+    assert_eq!(estimated_cost_ms(&policy, "dynamic-pii", ""), 240);
     assert_eq!(policy.fairness_quantum_ms, 50);
     assert_eq!(policy.max_wait_ms, 2_000);
 }

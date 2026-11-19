@@ -80,6 +80,7 @@ class ModuleDecision(TypedDict):
     outcome: Literal["detected", "clear"]
     decided_by: Stage
     score: float
+    layers: NotRequired[list[LayerResult]]
 
 
 class ScanReport(TypedDict):
@@ -159,15 +160,27 @@ class ShellConfig(TypedDict):
 ScoreMode = Literal["strict", "balanced", "recall"]
 
 
-class ModuleThresholds(TypedDict, total=False):
+class L1ModelConfig(TypedDict):
+    """A module's L1 text model: a pinned release; cuts on its logit scale."""
+    bundle_dir: str
+    manifest_sha256: str
+    detect_threshold: NotRequired[float]
+    clear_threshold: NotRequired[float]
+    clear_enabled: NotRequired[bool]
+
+
+class ModuleConfig(TypedDict, total=False):
+    """One module's cascade settings; heuristic cuts on its 0..1 rule score."""
+    detect_threshold: float | None
     clear_threshold: float | None
+    l1_model: L1ModelConfig
 
 
 class CascadeConfig(TypedDict, total=False):
-    """Layers that may run after L1 and per-module L1 clear thresholds."""
+    """Layers that may run after L1, per-module L1 cuts and optional L1 models."""
     max_level: Literal["L1", "L2", "L3"]
     conditional: list[dict[str, object]]
-    modules: dict[str, ModuleThresholds]
+    modules: dict[str, ModuleConfig]
 
 
 class ScannerConfig(TypedDict, total=False):
@@ -186,8 +199,6 @@ class ScannerConfig(TypedDict, total=False):
     unsafe_action_mode: ScoreMode
     resource_exhaustion_mode: ScoreMode
     resource_exhaustion_count_threshold: int
-    injection_acceptance_threshold: float
-    threat_acceptance_threshold: float
     threat_points_acceptance: float
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode

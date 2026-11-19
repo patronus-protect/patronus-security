@@ -71,13 +71,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
-- Three optional acceptance cuts (Rust `NativeGates`, Python `ScannerConfig`):
-  `injection_acceptance_threshold` (default `0.96`), `threat_acceptance_threshold` (default `0.1`)
-  and `threat_points_acceptance` (default `0.5`), each between `0.0` and `1.0`. Unset, results
+- An optional `threat_points_acceptance` (Rust `NativeGates`, Python `ScannerConfig`): the least
+  score of an accepted threat points rule, between `0.0` and `1.0` (default `0.5`). Unset, results
   are unchanged.
-- An optional L1 text model per category (Rust `L1ModelConfig`, `NativeEngine::load_l1_models`):
-  a pinned model release, loaded once, with a detect and a clear cut that default to the model's
-  own and can be overridden; clearing can be switched off. Off unless configured; no model ships.
+- An optional `cascade` (Rust `ScannerConfig::cascade`, Python `ScannerConfig["cascade"]`): per
+  category a `detect_threshold` and a `clear_threshold` on the rule score (both between `0.0` and
+  `1.0`), an optional L1 text model (`l1_model`) and which later layers may run. The scan report
+  then gives each category's final answer (`decision`: `detected` or `clear`) and the stage that
+  decided it (`decided_by`). Unset thresholds keep today's results.
+- The optional L1 text model of a category (`cascade.modules.<category>.l1_model`, Rust
+  `L1ModelConfig`): a pinned model release, loaded once when the scanner is created, that answers
+  what the rules leave undecided. Its detect and clear cuts default to the model's own and can be
+  overridden; clearing can be switched off. Off unless configured; no model ships.
 - Python: `NativeCategory` lists every native category.
 
 - **Detection change:** (`injection`, `prompt_extraction`) the injection rules now also read text

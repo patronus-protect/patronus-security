@@ -9,7 +9,6 @@ use crate::{
     ScanControl, ScanError, SecurityCategory,
 };
 use std::{
-    collections::BTreeMap,
     panic::{catch_unwind, AssertUnwindSafe},
     time::Instant,
 };
@@ -63,19 +62,17 @@ impl NativeEngine {
         }
     }
 
-    /// Load the configured L1 models, keyed by category name, once; each
-    /// replaces the module's earlier model. Unknown or non-native categories
-    /// are refused. No model is loaded unless configured.
-    pub fn load_l1_models(
+    /// Load the configured L1 models once (for example
+    /// [`crate::cascade::CascadeConfig::l1_models`]); each replaces the
+    /// module's earlier model. Non-native categories are refused. No model is
+    /// loaded unless configured.
+    pub fn load_l1_models<'a>(
         &mut self,
-        configs: &BTreeMap<String, L1ModelConfig>,
+        configs: impl IntoIterator<Item = (SecurityCategory, &'a L1ModelConfig)>,
     ) -> Result<(), String> {
-        for (name, config) in configs {
-            let category: SecurityCategory = name
-                .parse()
-                .map_err(|_| format!("l1 model for unknown category {name:?}"))?;
+        for (category, config) in configs {
             let slot = index(category)
-                .ok_or_else(|| format!("l1 model for non-native category {name:?}"))?;
+                .ok_or_else(|| format!("l1 model for non-native category {}", category.as_str()))?;
             self.l1_models[slot] = Some(L1TextModel::load(category, config)?);
         }
         Ok(())

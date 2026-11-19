@@ -161,10 +161,10 @@ scanner.set_execution_gates({
 - `resource_exhaustion_count_threshold` — least repetition count (`500000 times`, `2 million
   words`, `zwei Millionen Wörter`) that makes an output request a `resource_exhaustion` finding;
   a positive integer, default `10000`. Raise it when users legitimately ask for long outputs.
-- `injection_acceptance_threshold`, `threat_acceptance_threshold`, `threat_points_acceptance` —
-  acceptance cuts of the injection rule scorer (default `0.96`), the threat rule scorer (default
-  `0.1`) and the threat points rules (default `0.5`), each between `0.0` and `1.0`. Unset keeps
-  the defaults; a lower cut finds more and flags more benign text.
+- `threat_points_acceptance` — least score of an accepted threat points rule, between `0.0` and
+  `1.0` (default `0.5`). Unset keeps the default; a lower cut finds more and flags more benign
+  text. The per-category detect cut of the rule scorers is set in
+  `cascade.modules.<category>.detect_threshold`.
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.

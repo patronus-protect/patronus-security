@@ -1,6 +1,9 @@
 use crate::{
-    cascade::{Cascade, CascadeConfig, L3Executor, ModuleDecision},
-    detectors::shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
+    cascade::{Cascade, CascadeConfig, L3Executor, ModuleDecision, StageOutcome},
+    detectors::{
+        shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
+        text::{data_refs, DataRef},
+    },
     native::{NativeEngine, NativeGates, NativeProducerOutcome, NATIVE_CATEGORIES},
     threat::NativeText,
     LayerResult, NativeResult, SecurityCategory,
@@ -31,8 +34,8 @@ pub struct ScannerConfig {
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
     pub shell: Option<ShellConfig>,
-    /// Which layers may run after L1 and the per-module clear thresholds; see
-    /// [`crate::cascade`]. Wolf, the injection L3, runs only on scans whose
+    /// Which layers may run after L1, the per-module clear thresholds and
+    /// optional L1 models (loaded once here); see [`crate::cascade`]. Wolf, the injection L3, runs only on scans whose
     /// injection L1 did not detect, with or without this key. When set,
     /// [`ScanReport::decision`] reports each scanned module's final answer.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,8 +150,14 @@ impl Scanner {
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
+        let mut native = NativeEngine::new(&config.categories);
+        if let Some(cascade) = &config.cascade {
+            native
+                .load_l1_models(cascade.l1_models())
+                .map_err(ScanError::Asset)?;
+        }
         Ok(Self {
-            native: NativeEngine::new(&config.categories),
+            native,
             cascade: Cascade::new(config.cascade.clone().unwrap_or_default())?,
             #[cfg(feature = "wolf")]
             wolf: config
@@ -242,6 +251,13 @@ impl Scanner {
                     module,
                     native.iter().filter(|r| r.category == module.as_str()),
                 );
+                let model = self.native.l1_model(module);
+                let data = if model.is_some() && stage.outcome == StageOutcome::Escalate {
+                    scan_data(&native)
+                } else {
+                    Vec::new()
+                };
+                let stage = self.cascade.l1_model_stage(stage, model, text, &data);
                 let answer = self
                     .cascade
                     .decide(module, text, stage, &mut [], l3, control)?;
@@ -356,6 +372,14 @@ impl Scanner {
         }
         Ok(results)
     }
+}
+/// The PII and DLP findings of a scan, an input of the L1 models.
+fn scan_data(native: &[NativeResult]) -> Vec<DataRef<'_>> {
+    native
+        .iter()
+        .filter(|result| matches!(result.category.as_str(), "pii" | "dlp"))
+        .flat_map(|result| data_refs(&result.category, &result.evidence_spans))
+        .collect()
 }
 /// Wolf as the injection L3 [`crate::cascade::LayerModel`]; it keeps the
 /// full [`crate::wolf::WolfResult`] for [`ScanReport::wolf`].
@@ -734,5 +758,100 @@ mod cascade_tests {
             serde_json::json!({"cascade": {"max_level": "L9"}})
         )
         .is_err());
+    }
+
+    #[test]
+    fn per_module_detect_threshold_moves_the_heuristic_cut() {
+        // A quoted override scores below the scorer's own cut.
+        const QUOTED: &str = "The tutorial says to ignore previous instructions in this example.";
+        let decide = |detect: Option<f64>, clear: Option<f64>| {
+            let mut config: ScannerConfig =
+                serde_json::from_value(serde_json::json!({"cascade": {}})).unwrap();
+            config.cascade.as_mut().unwrap().modules.insert(
+                SecurityCategory::Injection,
+                crate::cascade::ModuleConfig {
+                    detect_threshold: detect,
+                    clear_threshold: clear,
+                    l1_model: None,
+                },
+            );
+            let mut scanner = Scanner::new(config).unwrap();
+            let report = scanner
+                .scan_categories(QUOTED, &[SecurityCategory::Injection])
+                .unwrap();
+            let native = report
+                .native
+                .iter()
+                .find(|r| r.model == crate::injection_l1::MODEL)
+                .unwrap();
+            let candidate = native.decision.as_ref().unwrap();
+            let candidate = candidate.decision_candidate.as_ref().unwrap();
+            assert!(!candidate.accepted, "native results keep the shipped cut");
+            let decision = injection_decision(&report);
+            (decision.outcome, decision.score, candidate.confidence)
+        };
+        let (outcome, score, raw) = decide(None, None);
+        assert_eq!(outcome, StageOutcome::Clear);
+        assert!(score > 0.0 && score == raw);
+        assert_eq!(decide(Some(score - 0.01), None).0, StageOutcome::Detected);
+        assert_eq!(decide(Some(score), None).0, StageOutcome::Clear);
+        // The sub-threshold score meets the clear cut.
+        assert_eq!(decide(Some(score), Some(score)).0, StageOutcome::Clear);
+        assert!(Scanner::new(
+            serde_json::from_value(serde_json::json!({"cascade": {"modules": {
+                "injection": {"detect_threshold": 0.2, "clear_threshold": 0.3}
+            }}}))
+            .unwrap()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn configured_l1_model_decides_what_the_heuristic_escalates() {
+        let bundle = crate::detectors::text::l1_model::tests::bundle("scanner_l1_model");
+        let scan = |detect: f64, clear: Option<f64>, clear_enabled: bool| {
+            let mut config: ScannerConfig =
+                serde_json::from_value(serde_json::json!({"cascade": {}})).unwrap();
+            let model = crate::detectors::text::L1ModelConfig {
+                detect_threshold: Some(detect),
+                clear_threshold: clear,
+                clear_enabled,
+                ..bundle.clone()
+            };
+            config.cascade.as_mut().unwrap().modules.insert(
+                SecurityCategory::Injection,
+                crate::cascade::ModuleConfig {
+                    l1_model: Some(model),
+                    ..Default::default()
+                },
+            );
+            let mut scanner = Scanner::new(config).unwrap();
+            let report = scanner.scan("Please summarize the meeting notes.").unwrap();
+            let decision = injection_decision(&report).clone();
+            (decision.outcome, decision.decided_by, decision.layers.len())
+        };
+        assert_eq!(
+            scan(-1e6, None, false),
+            (StageOutcome::Detected, Stage::L1Model, 1)
+        );
+        assert_eq!(
+            scan(1e6, Some(1e5), true),
+            (StageOutcome::Clear, Stage::L1Model, 1)
+        );
+        let missing = crate::detectors::text::L1ModelConfig {
+            manifest_sha256: "0".repeat(64),
+            ..bundle.clone()
+        };
+        let mut config: ScannerConfig =
+            serde_json::from_value(serde_json::json!({"cascade": {}})).unwrap();
+        config.cascade.as_mut().unwrap().modules.insert(
+            SecurityCategory::Injection,
+            crate::cascade::ModuleConfig {
+                l1_model: Some(missing),
+                ..Default::default()
+            },
+        );
+        assert!(matches!(Scanner::new(config), Err(ScanError::Asset(_))));
+        std::fs::remove_dir_all(&bundle.bundle_dir).ok();
     }
 }

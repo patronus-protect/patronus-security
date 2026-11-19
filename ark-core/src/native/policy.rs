@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::detectors::dlp::dlp::{DEFAULT_ON_DOCUMENT_GROUPS, DLP_PATTERNS, SECRET_GROUPS};
-use crate::detectors::injection::scorer::scorer_config as injection_scorer;
 use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
 use crate::detectors::threat::ThreatThresholds;
 use crate::SecurityCategory;
@@ -147,20 +146,6 @@ pub struct NativeGates {
     /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
-    /// Acceptance cut of the injection L1 rule scorer on its probability;
-    /// unset means the scorer's own cut (0.96).
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "probability"
-    )]
-    pub injection_acceptance_threshold: Option<f64>,
-    /// Acceptance cut of the Threat rule scorer on its probability; unset
-    /// means the scorer's own cut (0.1).
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "probability"
-    )]
-    pub threat_acceptance_threshold: Option<f64>,
     /// Least score of an accepted Threat points rule; unset means
     /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
     #[serde(
@@ -220,20 +205,11 @@ impl NativeGates {
             .map_or(DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD, NonZeroU64::get)
     }
 
-    /// The injection L1 scorer's acceptance cut in effect.
-    pub fn injection_acceptance_threshold(&self) -> f64 {
-        self.injection_acceptance_threshold
-            .unwrap_or_else(|| injection_scorer().acceptance_threshold)
-    }
-
     /// The Threat cuts in effect.
     pub fn threat_thresholds(&self) -> ThreatThresholds {
         let defaults = ThreatThresholds::default();
         ThreatThresholds {
             count: self.resource_exhaustion_count_threshold(),
-            scorer_acceptance: self
-                .threat_acceptance_threshold
-                .unwrap_or(defaults.scorer_acceptance),
             points_acceptance: self
                 .threat_points_acceptance
                 .unwrap_or(defaults.points_acceptance),
@@ -305,29 +281,21 @@ mod tests {
     #[test]
     fn acceptance_cuts_default_to_the_shipped_values_and_reject_non_probabilities() {
         let gates = NativeGates::default();
-        assert_eq!(gates.injection_acceptance_threshold(), 0.96);
         assert_eq!(gates.threat_thresholds(), ThreatThresholds::default());
         let serialized = serde_json::to_string(&gates).unwrap();
         assert!(!serialized.contains("acceptance"), "{serialized}");
         let gates: NativeGates = serde_json::from_str(
-            r#"{"injection_acceptance_threshold":0.9,"threat_acceptance_threshold":0.2,
-                "threat_points_acceptance":0.6,"resource_exhaustion_count_threshold":5}"#,
+            r#"{"threat_points_acceptance":0.6,"resource_exhaustion_count_threshold":5}"#,
         )
         .unwrap();
-        assert_eq!(gates.injection_acceptance_threshold(), 0.9);
         assert_eq!(
             gates.threat_thresholds(),
             ThreatThresholds {
                 count: 5,
-                scorer_acceptance: 0.2,
                 points_acceptance: 0.6
             }
         );
-        for key in [
-            "injection_acceptance_threshold",
-            "threat_acceptance_threshold",
-            "threat_points_acceptance",
-        ] {
+        for key in ["threat_points_acceptance"] {
             for bad in ["1.5", "-0.1"] {
                 let json = format!(r#"{{"{key}":{bad}}}"#);
                 assert!(

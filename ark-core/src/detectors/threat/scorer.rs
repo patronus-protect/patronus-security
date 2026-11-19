@@ -22,9 +22,9 @@ pub(crate) fn config() -> &'static RuleScorer {
     })
 }
 /// Scores the findings of the rules the model was trained on against the
-/// acceptance cut `threshold`; findings of points rules are not features of
+/// model's acceptance cut; findings of points rules are not features of
 /// the model.
-pub(super) fn score(findings: &[Value], threshold: f64) -> (f64, bool) {
+pub(super) fn score(findings: &[Value]) -> (f64, bool) {
     let c = config();
     let findings: Vec<_> = findings
         .iter()
@@ -61,14 +61,12 @@ pub(super) fn score(findings: &[Value], threshold: f64) -> (f64, bool) {
         classes.len() as f64,
     ]);
     let score = c.probability(&features);
-    (score, score >= threshold)
+    (score, score >= c.acceptance_threshold)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const T: f64 = 0.1;
 
     #[test]
     fn model_covers_exactly_the_rules_without_points() {
@@ -92,35 +90,26 @@ mod tests {
     }
 
     #[test]
-    fn the_acceptance_cut_is_the_callers() {
-        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
-        let findings = std::slice::from_ref(&finding);
-        let (s, _) = score(findings, 0.0);
-        assert_eq!(score(findings, s), (s, true));
-        assert_eq!(score(findings, s + 1e-9), (s, false));
-    }
-
-    #[test]
     fn no_findings_cannot_be_accepted() {
-        assert_eq!(score(&[], T), (0.0, false));
+        assert_eq!(score(&[]), (0.0, false));
     }
     #[test]
     fn findings_of_points_rules_do_not_change_the_model_score() {
         let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
         let points = serde_json::json!({"rule_id": "ark.threat.ua_destructive_request", "class_name": "unsafe_action", "start_byte": 0, "end_byte": 300});
         assert_eq!(
-            score(std::slice::from_ref(&finding), T),
-            score(&[finding, points.clone()], T)
+            score(std::slice::from_ref(&finding)),
+            score(&[finding, points.clone()])
         );
-        assert_eq!(score(&[points], T), (0.0, false));
+        assert_eq!(score(&[points]), (0.0, false));
     }
 
     #[test]
     fn repeated_rule_matches_do_not_reduce_score() {
         let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
         assert_eq!(
-            score(std::slice::from_ref(&finding), T),
-            score(&vec![finding; 256], T)
+            score(std::slice::from_ref(&finding)),
+            score(&vec![finding; 256])
         );
     }
 }

@@ -17,7 +17,7 @@ pub use l3_result::{
     degraded_error_result, degraded_fallback_confidence, degraded_timeout_result, has_l3_pending,
     l3_metadata_layer, l3_pending_layer,
 };
-pub use l3_routing::{priority_index, ttl_ms};
+pub use l3_routing::{estimated_cost_ms, priority_index, ttl_ms};
 pub use l3_worker::DistributedL3ChunkInference;
 pub use security::{DistributedL2Pipeline, DistributedL2Plan, DistributedL3Plan, SecurityGateway};
 

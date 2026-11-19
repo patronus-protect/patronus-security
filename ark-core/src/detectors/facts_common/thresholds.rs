@@ -5,29 +5,21 @@
 //!
 //! The model files declare `decision_rule: "score > threshold"`: a score above
 //! the detect cut is detected, a score at or below the clear cut is clear, and
-//! a score in between escalates to the next configured layer. Without a clear
-//! cut nothing is cleared by the model. Cat reads the same three outcomes as
-//! `block`, `allow` and `ask`.
+//! a score in between escalates to the next configured layer
+//! ([`StageOutcome::from_cuts`], the rule the heuristic follows too). Without a
+//! clear cut nothing is cleared by the model. Cat reads the same three outcomes
+//! as `block`, `allow` and `ask`.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use super::model::ModelForm;
+use crate::cascade::StageOutcome;
 
-/// What an L1 model says about one score.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelOutcome {
-    /// Above the detect cut.
-    Detected,
-    /// At or below the clear cut.
-    Clear,
-    /// Between the cuts, or not detected while the clear cut is off.
-    Escalate,
-}
-
-/// The detect and clear cuts of an L1 model.
+/// The detect and clear cuts of an L1 model, on its decision-score (logit)
+/// scale. The heuristic's cuts live on its probability scale instead
+/// ([`crate::cascade::ModuleConfig`]); both follow [`StageOutcome::from_cuts`].
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct L1Thresholds {
     /// Upper cut: a score above it is detected (Cat: `block`, the 0.1 % FPR cut).
@@ -58,14 +50,8 @@ impl L1Thresholds {
     }
 
     /// The outcome of decision score `score`.
-    pub fn outcome(&self, score: f64) -> ModelOutcome {
-        if score > self.detect_threshold {
-            ModelOutcome::Detected
-        } else if self.clear_threshold.is_some_and(|clear| score <= clear) {
-            ModelOutcome::Clear
-        } else {
-            ModelOutcome::Escalate
-        }
+    pub fn outcome(&self, score: f64) -> StageOutcome {
+        StageOutcome::from_cuts(score > self.detect_threshold, score, self.clear_threshold)
     }
 }
 
@@ -102,16 +88,16 @@ mod tests {
             detect_threshold: 2.0,
             clear_threshold: Some(0.5),
         };
-        assert_eq!(cuts.outcome(2.1), ModelOutcome::Detected);
-        assert_eq!(cuts.outcome(2.0), ModelOutcome::Escalate);
-        assert_eq!(cuts.outcome(0.6), ModelOutcome::Escalate);
-        assert_eq!(cuts.outcome(0.5), ModelOutcome::Clear);
-        assert_eq!(cuts.outcome(-3.0), ModelOutcome::Clear);
+        assert_eq!(cuts.outcome(2.1), StageOutcome::Detected);
+        assert_eq!(cuts.outcome(2.0), StageOutcome::Escalate);
+        assert_eq!(cuts.outcome(0.6), StageOutcome::Escalate);
+        assert_eq!(cuts.outcome(0.5), StageOutcome::Clear);
+        assert_eq!(cuts.outcome(-3.0), StageOutcome::Clear);
         let no_clear = L1Thresholds {
             clear_threshold: None,
             ..cuts
         };
-        assert_eq!(no_clear.outcome(-3.0), ModelOutcome::Escalate);
-        assert_eq!(no_clear.outcome(2.1), ModelOutcome::Detected);
+        assert_eq!(no_clear.outcome(-3.0), StageOutcome::Escalate);
+        assert_eq!(no_clear.outcome(2.1), StageOutcome::Detected);
     }
 }

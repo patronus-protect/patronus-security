@@ -18,7 +18,6 @@ use std::ops::Range;
 
 use super::super::context_lexica::ContextLexica;
 use super::super::text_views::TextViews;
-use super::super::NativeDetection;
 
 mod carrier;
 pub(crate) use carrier::{is_agent_config, is_tool_metadata, listing_tool_name};
@@ -87,12 +86,13 @@ pub struct TextFacts<'a> {
     pub counter: Vec<&'a str>,
 }
 
-/// The data references of a PII or DLP detection (`source` `pii` or `dlp`).
+/// The data references of the evidence `spans` of a PII or DLP detection or
+/// result (`source` `pii` or `dlp`).
 pub fn data_refs<'a>(
     source: &'a str,
-    detection: &'a NativeDetection,
+    spans: &'a [crate::EvidenceSpan],
 ) -> impl Iterator<Item = DataRef<'a>> + 'a {
-    detection.evidence_spans.iter().map(move |span| DataRef {
+    spans.iter().map(move |span| DataRef {
         source,
         label: &span.label,
         span: span.start_byte..span.end_byte,
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn data_refs_come_from_detector_evidence() {
-        let detection = NativeDetection {
+        let detection = crate::detectors::NativeDetection {
             result: EvaluationResult {
                 class_name: "pii".into(),
                 confidence: 1.0,
@@ -192,7 +192,7 @@ mod tests {
             }],
             details: Default::default(),
         };
-        let data: Vec<_> = data_refs("pii", &detection).collect();
+        let data: Vec<_> = data_refs("pii", &detection.evidence_spans).collect();
         let facts = extract("to a@b.example", &[], &data);
         assert_eq!(
             facts.data,
