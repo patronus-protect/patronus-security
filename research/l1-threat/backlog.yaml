@@ -333,15 +333,17 @@ tasks:
   # Owner, plan review 2026-11-19: S09's fastText-type candidates beat rules and the heuristics on dev
   # (prompt_extraction 76.2/52.9 at TPR@1/0.1% — above Prompt Guard 2's 23.5 at 0.1%; injection 72.1/64.8),
   # but the threshold from train negatives does not carry (hard-benign FPR 27-70% at the operating point) and
-  # p95 is 3.8 ms per 100 KiB (budget 1 ms per model). S10 fixes both before the class scorers pick it.
+  # p95 is 3.8 ms per 100 KiB (owner 2026-11-19: accepted). S10 fixes the calibration before the class scorers pick it.
   - id: S10
-    title: fastText-type candidates ready to ship — threshold calibrated per class on held-out negatives incl. the hard-benign pool (operating point at 0.1% FPR), int8-quantised embeddings and a lean feature path (e.g. 3-4-grams only) to meet the 1 ms per 100 KiB model budget; parity goldens updated
+    title: fastText-type candidates ready to ship — threshold calibrated per class so that the FPR is measured on benign data (the dev benign pool incl. the hard-benign sets, never train negatives) at the 0.1% FPR operating point; latency up to about 4 ms per 100 KiB per model is accepted (owner 2026-11-19, S09 measured 3.8 ms), int8 quantisation optional; parity goldens updated
     type: scorer
     deps: [S09]
     accept: >-
-      per class: hard-benign FPR at the calibrated operating point <= 0.1% (or the gap named); dev TPR@0.1% for
-      the calibrated, quantised candidate vs the S09 float model (loss stated); p95 <= 1 ms per 100 KiB on the
-      E03 latency corpus; Rust parity bit-exact; nothing wired into the scan path before a class task picks it
+      per class: FPR at the calibrated operating point measured on benign data (dev benign pool incl. hard
+      benigns) <= 0.1%, reported per benign source (owner 2026-11-19: FPR must be measured on benign data);
+      dev TPR@0.1% for the calibrated candidate; p95 <= ~4 ms per 100 KiB per model on the E03 latency corpus,
+      and the summed L1 latency of every model a default-on class ships stays named in the PR; Rust parity
+      bit-exact; nothing wired into the scan path before a class task picks it
   - id: E09
     title: Scoreboard of main after every merge — baseline.md (and full-stack.md once E07 lands) re-rendered from main's current dev split with TPR@0.1% and @1% per class and language, so every class has one current number instead of per-PR bases
     type: eval-infra
