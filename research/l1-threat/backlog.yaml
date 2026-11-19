@@ -382,6 +382,7 @@ tasks:
   # carrier_insertion (25.0%) and obfuscation_slices (9.6%) sets failing because tool_poisoning payloads
   # were placed into non-tool carriers; this blocks jailbreak, prompt_extraction and tool_poisoning in gold.md.
   - id: M08
+    status: done
     title: Generators — tool_poisoning payloads only in tool-metadata carriers (JSON tool definition, MCP tools/list entry, 'Tool <name>:' listing line — forms the tool_description carrier mark in ark-core/src/detectors/text/facts/carrier.rs recognises), never in mail, forum, invoice, search-result, code-comment or attachment carriers; obfuscation slices of tool_poisoning payloads keep that wrapper; dev and holdout template families stay disjoint
     type: eval-infra
     deps: [M07]
@@ -390,6 +391,11 @@ tasks:
       the existing carriers; unit tests pin the carrier choice per class; generator version bumped so the next
       gate re-generates dev; the dev re-review of carrier_insertion and obfuscation_slices passes the 5% bar;
       the owner regenerates and re-reviews the holdout side
+    # Runner, 2026-11-19: generator version 5. The dev inputs hold no tool_poisoning attack rows, and rows of the
+    # other classes keep their random draws, so the regenerated dev carrier_insertion and obfuscation_slices are
+    # byte-identical to version 4 (checked on the dev inputs); the dev review of gold.md (1.8 % and 3.6 %) stands.
+    # Only the holdout side changes (tool_poisoning carrier and obfuscation rows, and the holdout class template
+    # openapi_summary, now a JSON OpenAPI operation with a "description" key); its re-review is the owner's.
   # Go-flip priority (owner, 2026-11-17): the class no-gos in gold.md are dev-side now (holdout
   # validated through generation 9). T20, T07 and T08 come first because every blocked rule family
   # (IJ01, JB01, PX01, TX01, HC01) waits on them; the runner unblocks nothing itself, the owner

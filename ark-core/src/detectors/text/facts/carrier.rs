@@ -145,6 +145,8 @@ mod tests {
             r#"{"name": "add", "description": "x"}"#,
             r#"{"skills": [{"id": "book", "description": "x"}]}"#,
             r#"{"inputSchema": {}}"#,
+            r#"{"result": {"tools": [{"name": "read_calendar", "description": "x"}]}}"#,
+            r#"{"paths": {"/lookup": {"get": {"summary": "x", "description": "x"}}}}"#,
         ] {
             assert!(is_tool_metadata(text), "{text}");
             assert!(carriers(text).contains(&"tool_description"), "{text}");
@@ -154,6 +156,8 @@ mod tests {
             "Tool add_numbers: adds two numbers.",
             "Tools:\nFunction `get_weather`: returns the forecast.",
             "Werkzeug summe_zahlen: addiert zwei Zahlen.",
+            "Functions exposed by the server:\nFunction convert_units_3: converts units.",
+            "Vom Server bereitgestellte Funktionen:\nFunktion einheiten_umrechnen_3: rechnet um.",
         ] {
             assert!(is_tool_metadata(text), "{text}");
             assert!(carriers(text).contains(&"tool_description"), "{text}");

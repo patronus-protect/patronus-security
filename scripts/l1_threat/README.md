@@ -199,11 +199,16 @@ sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
 
 - `carrier_insertion`: eine Angriffszeile des Eingabekorpus in einem Träger (Web, PDF-Text, Ticket,
   Code-Kommentar, RAG-Chunk, Mail), der Zwilling trägt an derselben Stelle einen harmlosen Satz;
+  eine `tool_poisoning`-Zeile landet nur in Tool-Metadaten (`carrier_kind: tool_metadata`: JSON-Tool-Definition,
+  MCP-`tools/list`-Eintrag, Listenzeile `Tool <name>:`/`Function <name>:` — die Formen der Trägermarke
+  `tool_description` in `ark-core/src/detectors/text/facts/carrier.rs`), ihr Zwilling mit einem harmlosen
+  Nutzungshinweis im selben Rahmen (`carriers_for`);
 - `exfil_lookalikes`: Tool-Ausgabe (JSON, CLI-Log, Datei, MCP-Ergebnis, Suchtreffer) mit einer Anweisung,
   Daten an eine Senke unter `example.invalid` zu schicken, und derselbe Rahmen mit Doppelgänger (Upload-Log,
   Webhook-Konfiguration, Bitte an Menschen), DE und EN nativ;
 - `obfuscation_slices`: Angriffs- und Benign-Zeilen unter je einer Verschleierung (`base64`, `hex`,
   `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`;
+  eine `tool_poisoning`-Zeile und ihr Zwilling behalten einen Tool-Metadaten-Rahmen als Hülle;
 - `class_templates`: dokumentierte synthetische Angriffe für die Klassen ohne öffentliche Dev-Daten
   (`jailbreak`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
   `resource_exhaustion`), DE und EN nativ. Jede Template-Familie hat die Form öffentlicher Beispiele, die
