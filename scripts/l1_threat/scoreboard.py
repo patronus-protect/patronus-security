@@ -8,8 +8,12 @@ corpora, ``generators.py`` output) counts, e.g. ``DEV/{train_dev,report,generate
 classes do not count) and a negative of every class when ``benign``. Sets with the role ``report``
 are scored in their own scope and never gate.
 
-ARK runs on L1 only, one category per class (``instruction_injection`` is the category
-``injection``); the score of a class is the highest attack confidence ARK reports for it (0 when it
+ARK runs one category per class (``instruction_injection`` is the category ``injection``) on the
+layers ``--layers`` names: ``l1`` (default, the gated stack) or ``l1+l2``, the native L1 detectors and
+then the L2 models of the categories (Wolf Defender for ``injection``) on every row, as the default
+configuration runs them (no conditional L2 gate); an ``l1+l2`` prediction keeps the L1-only view of
+the same row and the milliseconds of each layer (L1 alone, and the rest of the stack scan as L2).
+The score of a class is the highest attack confidence ARK reports for it (0 when it
 reports nothing), the verdict is ARK's own decision (any result that is not ``benign``/``safe``, as
 in the golden evaluation). Metrics per class, language (``all``, ``de``, ``en``) and origin (``all``,
 ``native``, ``translated``; runner translations and the German part of a set marked ``translated`` in
@@ -35,11 +39,18 @@ verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
 2 = error.
 
-    python3 scripts/l1_threat/scoreboard.py predict --split DIR --out PRED_DIR
-    python3 scripts/l1_threat/scoreboard.py score --split DIR --predictions PRED_DIR [--output REPORT]
+    python3 scripts/l1_threat/scoreboard.py predict --split DIR --out PRED_DIR [--layers l1+l2]
+    python3 scripts/l1_threat/scoreboard.py score --split DIR --predictions PRED_DIR [--layers l1+l2] [--output REPORT]
     python3 scripts/l1_threat/scoreboard.py compare --base REPORT --head REPORT
     python3 scripts/l1_threat/scoreboard.py report --split DIR --predictions PRED_DIR \
         [--baseline-cache CACHE] --out research/l1-threat/scoreboard/baseline.md
+    python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 [--counts-only] --split DIR \
+        --predictions PRED_DIR [--baseline-cache CACHE] --out research/l1-threat/scoreboard/full-stack.md
+
+``report --layers l1+l2`` renders the full-stack table: L1 next to L1+L2 per class and language (both
+TPRs and the hard-benign FPR), the best heuristic and the best Prompt Guard 2 baseline, and ms per
+100 KiB per layer; ``--counts-only`` leaves only row counts (true and false positives at each matched
+FPR, hard-benign flags) and no rates, latency or baselines.
     python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DIR [--holdout DIR] --cache DIR
 """
 
@@ -52,6 +63,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
@@ -95,6 +107,10 @@ BOOTSTRAP_SEED = 20261114
 HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens"})
 BENIGN_CLASSES = frozenset({"benign", "safe"})
 JOBS = 4
+# Layer choices: L1 alone (the gated stack) or L1 and then L2 on every row (the default configuration
+# has no conditional L2 gate); the file suffix keeps their predictions apart in one directory.
+LAYERS = {"l1": "", "l1+l2": "-l1l2"}
+KIB_100 = 100 * 1024
 
 
 def category(cls: str) -> str:
@@ -174,49 +190,82 @@ def ark_class_scores(results: Iterable[dict[str, Any]]) -> tuple[dict[str, float
     return scores, sorted(flagged)
 
 
-def predict_rows(rows: Iterable[dict[str, Any]], scan) -> list[dict[str, Any]]:
-    """One prediction per row: ``{"id", "scores", "flagged"}``; ``scan(text)`` returns ARK results."""
+def predict_rows(rows: Iterable[dict[str, Any]], scan, scan_l1=None, clock=time.perf_counter) -> list[dict[str, Any]]:
+    """One prediction per row: ``{"id", "scores", "flagged"}``; ``scan(text)`` returns ARK results.
+
+    With ``scan_l1`` (the L1-only stack), ``scan`` is the full stack: the prediction also keeps the
+    L1 view (``"l1": {"scores", "flagged"}``) and the milliseconds per layer (``"ms": {"l1", "l2"}``;
+    L2 is the full scan minus the L1-only scan of the same row, never below 0).
+    """
     out = []
     for row in rows:
+        if scan_l1 is None:
+            scores, flagged = ark_class_scores(scan(row["text"]))
+            out.append({"id": row["id"], "scores": scores, "flagged": flagged})
+            continue
+        start = clock()
+        l1_scores, l1_flagged = ark_class_scores(scan_l1(row["text"]))
+        middle = clock()
         scores, flagged = ark_class_scores(scan(row["text"]))
-        out.append({"id": row["id"], "scores": scores, "flagged": flagged})
+        end = clock()
+        l1_ms = (middle - start) * 1000
+        out.append({"id": row["id"], "scores": scores, "flagged": flagged,
+                    "l1": {"scores": l1_scores, "flagged": l1_flagged},
+                    "ms": {"l1": round(l1_ms, 4), "l2": round(max((end - middle) * 1000 - l1_ms, 0.0), 4)}})
     return out
 
 
-def _predict_file(source: Path, output: Path) -> None:
+def layer_view(prediction: dict[str, Any], layers: str) -> dict[str, Any]:
+    """The prediction of one layer choice: the L1 view of a full-stack prediction for ``l1``."""
+    if layers == "l1" and "l1" in prediction:
+        return {"id": prediction["id"], **prediction["l1"]}
+    if layers == "l1+l2" and "ms" not in prediction:
+        raise ValueError(f"prediction {prediction['id']} has no L2 layer")
+    return prediction
+
+
+def _predict_file(source: Path, output: Path, layers: str = "l1") -> None:
     """Predict one corpus file with the ``patronus_ark`` on ``sys.path``."""
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway(categories=sorted(CATEGORIES), max_level="l1", download_files=False)
     categories = sorted(CATEGORIES)
-    predictions = predict_rows(BASELINES.read_rows(source), lambda text: gateway.scan_categories(categories, text))
+    gateway = SecurityGateway(categories=categories, max_level="l1", download_files=False)
+    if layers == "l1":
+        predictions = predict_rows(BASELINES.read_rows(source),
+                                   lambda text: gateway.scan_categories(categories, text))
+    else:
+        stack = SecurityGateway(categories=categories, max_level="l2", download_files=False)
+        stack.warmup()
+        predictions = predict_rows(BASELINES.read_rows(source), lambda text: stack.scan_categories(categories, text),
+                                   lambda text: gateway.scan_categories(categories, text))
     tmp = output.with_suffix(".part")
     tmp.write_text("".join(json.dumps(p, sort_keys=True) + "\n" for p in predictions), encoding="utf-8")
     tmp.replace(output)
 
 
-def _predict_worker(package: Path | None, source: Path, output: Path) -> int:
+def _predict_worker(package: Path | None, source: Path, output: Path, layers: str = "l1") -> int:
     if package is not None:
         sys.path.insert(0, str(package))
     import patronus_ark
 
     if package is not None and Path(patronus_ark.__file__).resolve().parent != (package / "patronus_ark").resolve():
         raise RuntimeError(f"patronus_ark resolved outside the build: {patronus_ark.__file__}")
-    _predict_file(source, output)
+    _predict_file(source, output, layers)
     return 0
 
 
-def prediction_path(out: Path, entry: SetFile) -> Path:
-    return out / f"{entry.set_id}-{entry.sha256[:12]}.jsonl"
+def prediction_path(out: Path, entry: SetFile, layers: str = "l1") -> Path:
+    return out / f"{entry.set_id}-{entry.sha256[:12]}{LAYERS[layers]}.jsonl"
 
 
-def predict_split(sets: list[SetFile], out: Path, package: Path | None = None, jobs: int = JOBS) -> None:
+def predict_split(sets: list[SetFile], out: Path, package: Path | None = None, jobs: int = JOBS,
+                  layers: str = "l1") -> None:
     """Predict every set not yet in ``out``; each set runs in its own process."""
     out.mkdir(parents=True, exist_ok=True)
 
     def one(entry: SetFile) -> None:
         cmd = [sys.executable, str(HERE / "scoreboard.py"), "_predict", "--input", str(entry.path),
-               "--output", str(prediction_path(out, entry))]
+               "--output", str(prediction_path(out, entry, layers)), "--layers", layers]
         if package is not None:
             cmd += ["--package", str(package)]
         env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
@@ -227,22 +276,23 @@ def predict_split(sets: list[SetFile], out: Path, package: Path | None = None, j
             # Errors name the set but never echo corpus text.
             raise RuntimeError(f"ARK prediction of {entry.set_id} failed (exit {result.returncode})")
 
-    todo = [entry for entry in sets if not prediction_path(out, entry).is_file()]
+    todo = [entry for entry in sets if not prediction_path(out, entry, layers).is_file()]
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for future in [pool.submit(one, entry) for entry in todo]:
             future.result()
 
 
-def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
+def load_pairs(sets: list[SetFile], predictions: dict[str, Path],
+               layers: str | None = None) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
     """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``); a set
-    without predictions is an error."""
+    without predictions is an error. ``layers`` picks the ``layer_view`` of every prediction."""
     translated = GENERATORS.translated_sets(CORPORA.entity_map.load())
     pairs = []
     for entry in sets:
         path = predictions.get(entry.set_id)
         if path is None:
             raise ValueError(f"no predictions for set {entry.set_id}")
-        preds = {p["id"]: p for p in BASELINES.read_rows(path)}
+        preds = {p["id"]: p if layers is None else layer_view(p, layers) for p in BASELINES.read_rows(path)}
         for row in BASELINES.read_rows(entry.path):
             if row["id"] not in preds:
                 raise ValueError(f"set {entry.set_id}: no prediction for row {row['id']}")
@@ -250,8 +300,9 @@ def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[
     return pairs
 
 
-def ark_predictions(sets: list[SetFile], out: Path) -> dict[str, Path]:
-    return {entry.set_id: prediction_path(out, entry) for entry in sets if prediction_path(out, entry).is_file()}
+def ark_predictions(sets: list[SetFile], out: Path, layers: str = "l1") -> dict[str, Path]:
+    return {entry.set_id: prediction_path(out, entry, layers) for entry in sets
+            if prediction_path(out, entry, layers).is_file()}
 
 
 # ── metrics ──────────────────────────────────────────────────────────────────
@@ -410,8 +461,9 @@ def invariance_lines(report: dict[str, Any]) -> list[str]:
             *(f"| {kind} | {c['source_flagged']} | {c['kept']} |" for kind, c in cells.items())]
 
 
-def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bool = True) -> dict[str, Any]:
-    pairs = load_pairs(sets, predictions)
+def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bool = True,
+                layers: str | None = None) -> dict[str, Any]:
+    pairs = load_pairs(sets, predictions, layers)
     roles: dict[str, list[str]] = defaultdict(list)
     for entry in sets:
         roles[entry.role].append(entry.set_id)
@@ -468,12 +520,19 @@ def _tpr_of(cell: dict[str, Any] | None, fpr: str) -> float | None:
     return None if not cell or not cell.get(fpr) else cell[fpr]["tpr"]
 
 
+BASELINE_KINDS = {
+    "heuristic": lambda name: name not in BASELINES.REFERENCE_MODELS,
+    "reference": lambda name: name in BASELINES.REFERENCE_MODELS,
+    "prompt_guard_2": lambda name: name.startswith("prompt_guard_2_"),
+}
+
+
 def _best_baseline(baselines: dict[str, dict[str, Any]], kind: str, scope: str, cls: str, language: str,
                    origin: str) -> str:
-    """``TPR@1% / TPR@0.1% (id)`` of the baseline of one kind with the highest TPR@1 % in the cell, among
-    the baselines that score the class."""
+    """``TPR@1% / TPR@0.1% (id)`` of the baseline of one kind (``BASELINE_KINDS``) with the highest
+    TPR@1 % in the cell, among the baselines that score the class."""
     cells = [(name, b[scope].get(cls, {}).get(language, {}).get(origin)) for name, b in baselines.items()
-             if (name in BASELINES.REFERENCE_MODELS) == (kind == "reference") and cls in b["classes"]]
+             if BASELINE_KINDS[kind](name) and cls in b["classes"]]
     cells = [(name, cell) for name, cell in cells if _tpr_of(cell, "0.01") is not None]
     if not cells:
         return "–"
@@ -552,6 +611,110 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
               "many of them ARK flags for such a class in the obfuscated form too.", "",
               *invariance_lines(report), ""]
     return "\n".join(lines)
+
+
+def layer_latency(pairs: list[tuple[dict[str, Any], dict[str, Any], str]]) -> dict[str, dict[str, Any]]:
+    """Per language (``all``, ``de``, ``en``) and layer of full-stack predictions: rows, UTF-8 bytes, ms
+    per 100 KiB (summed ms over summed bytes) and the p95 of the per-row ms."""
+    ms: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    size: dict[str, int] = defaultdict(int)
+    for row, prediction, _ in pairs:
+        if "ms" not in prediction:
+            raise ValueError(f"prediction {prediction['id']} has no layer timing")
+        for language in ("all", row.get("language") or "unknown"):
+            size[language] += len(row["text"].encode("utf-8"))
+            for layer, value in prediction["ms"].items():
+                ms[language][layer].append(float(value))
+    return {language: {layer: {"rows": len(values), "bytes": size[language],
+                               "ms_per_100kib": round(sum(values) / size[language] * KIB_100, 3) if size[language] else None,
+                               "p95_ms": round(float(np.percentile(values, 95)), 3)}
+                       for layer, values in sorted(ms[language].items())}
+            for language in LANGUAGES if language in ms}
+
+
+def full_stack_lines(l1: dict[str, Any], stack: dict[str, Any], scope: str,
+                     baselines: dict[str, dict[str, Any]] | None, counts_only: bool) -> list[str]:
+    """Markdown table of one scope, origin ``all``: L1 next to L1+L2 per class and language."""
+    if counts_only:
+        header = ["class", "lang", "pos", "neg", *(f"TP / FP@{_fpr_label(fpr)} {layer}"
+                                                  for fpr in GATE_FPRS for layer in ("L1", "L1+L2")),
+                  "hard-benign FP L1", "hard-benign FP L1+L2"]
+    else:
+        header = ["class", "lang", "pos", "neg", *(f"TPR@{_fpr_label(fpr)} {layer}"
+                                                  for fpr in GATE_FPRS for layer in ("L1", "L1+L2")),
+                  "hard-benign FPR L1", "hard-benign FPR L1+L2"]
+        if baselines is not None:
+            header += ["best heuristic TPR@1% / 0.1%", "best Prompt Guard 2 TPR@1% / 0.1%"]
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for cls in CLASSES:
+        for language in LANGUAGES:
+            cells = [report[scope].get(cls, {}).get(language, {}).get("all") for report in (l1, stack)]
+            if cells[1] is None:
+                continue
+            values = [cls, language, str(cells[1]["positives"]), str(cells[1]["negatives"])]
+            for fpr in GATE_FPRS:
+                for cell in cells:
+                    point = cell.get(fpr) if cell else None
+                    values.append("–" if point is None else f"{point['tp']} / {point['fp']}" if counts_only
+                                  else _pct(point["tpr"]))
+            for cell in cells:
+                hard = cell["hard_benign"] if cell else {"rows": 0}
+                values.append("–" if not hard["rows"] else f"{hard['fp']}/{hard['rows']}" if counts_only
+                              else f"{_pct(hard['fpr'])} ({hard['fp']}/{hard['rows']})")
+            if baselines is not None and not counts_only:
+                values += [_best_baseline(baselines, kind, scope, cls, language, "all")
+                           for kind in ("heuristic", "prompt_guard_2")]
+            lines.append("| " + " | ".join(values) + " |")
+    return lines
+
+
+def render_full_stack(l1: dict[str, Any], stack: dict[str, Any], latency: dict[str, dict[str, Any]] | None,
+                      baselines: dict[str, dict[str, Any]] | None, title: str,
+                      left_out: dict[str, str] | None = None) -> str:
+    """Full-stack report; without ``latency`` it is the counts-only form (no rates, latency or baselines)."""
+    counts_only = latency is None
+    lines = [f"# {title}", "",
+             "Generated by `scripts/l1_threat/scoreboard.py report --layers l1+l2"
+             + (" --counts-only" if counts_only else "") + "`; do not edit by hand.", "",
+             f"Sets: {json.dumps(stack['sets'], sort_keys=True)}; rows: {stack['rows']}.", "",
+             "L1: the native detectors alone; L1+L2: the same rows through L1 and then the L2 models of each "
+             "category on every row (Wolf Defender for `injection`), as the default configuration runs them. "
+             + ("True and false positives at the threshold matched to each FPR on the benign rows of the same "
+                "scope; hard-benign FP: look-alike twins and security-adjacent benign rows flagged by ARK's own "
+                "verdict, of all such rows." if counts_only else
+                "TPR at matched document FPR on the benign rows of the same scope; hard-benign FPR at ARK's own "
+                "verdict (look-alike twins and security-adjacent benign sets). `–`: no negatives or no rows in "
+                "the cell."), ""]
+    if not counts_only:
+        if baselines is None:
+            lines += ["Baselines: no cached predictions given; the columns are left out.", ""]
+        else:
+            lines += ["Baselines at the same matched FPR on the same benign rows "
+                      "(`scripts/l1_threat/run_baselines.py`): "
+                      + (", ".join(f"{name} `{b['version']}`" for name, b in baselines.items()) or "none") + ".", ""]
+            if left_out:
+                lines += ["Not in the columns: " + "; ".join(f"{name} ({why})" for name, why in left_out.items())
+                          + ".", ""]
+    for scope, name in (("gated", "Gated sets (dev and decisive)"), ("report", "Report-only sets")):
+        if stack[scope]:
+            lines += [f"## {name}", "", *full_stack_lines(l1, stack, scope, baselines, counts_only), ""]
+    if not counts_only:
+        lines += ["## Latency per layer", "",
+                  "Milliseconds per 100 KiB of row text (summed per-row ms over summed UTF-8 bytes) and the p95 "
+                  "of the per-row ms, measured in the prediction run (one process per set); L2 is the full "
+                  "stack scan minus the L1-only scan of the same row.", "",
+                  "| lang | layer | rows | KiB | ms per 100 KiB | p95 ms per row |", "|---|---|---|---|---|---|"]
+        for language, layers in latency.items():
+            for layer, cell in layers.items():
+                rate = "–" if cell["ms_per_100kib"] is None else f"{cell['ms_per_100kib']:.1f}"
+                lines.append(f"| {language} | {layer.upper()} | {cell['rows']} | {cell['bytes'] / 1024:.0f} | "
+                             f"{rate} | {cell['p95_ms']:.2f} |")
+        lines.append("")
+    lines += ["## Hard-benign rows flagged", "", "| class | L1 | L1+L2 |", "|---|---|---|"]
+    flagged = sorted(set(l1["hard_benign_flags"]) | set(stack["hard_benign_flags"]))
+    lines += [f"| {cls} | {len(l1['hard_benign_flags'].get(cls, []))} | {len(stack['hard_benign_flags'].get(cls, []))} |"
+              for cls in flagged] or ["| none | 0 | 0 |"]
+    return "\n".join(lines) + "\n"
 
 
 def baseline_reports(sets: list[SetFile], cache: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -663,6 +826,25 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
+def report_command(args: argparse.Namespace) -> int:
+    sets = split_sets(args.split)
+    baselines, left_out = (baseline_reports(sets, args.baseline_cache)
+                           if args.baseline_cache and not args.counts_only else (None, None))
+    if args.layers == "l1":
+        if args.counts_only:
+            raise ValueError("--counts-only needs --layers l1+l2")
+        report = score_split(sets, ark_predictions(sets, args.predictions))
+        text = render_baseline(report, baselines, args.title or "Threat scoreboard: baseline", left_out)
+    else:
+        predictions = ark_predictions(sets, args.predictions, "l1+l2")
+        l1, stack = (score_split(sets, predictions, bootstrap=False, layers=layers) for layers in LAYERS)
+        latency = None if args.counts_only else layer_latency(load_pairs(sets, predictions))
+        text = render_full_stack(l1, stack, latency, baselines, args.title or "Threat scoreboard: full stack",
+                                 left_out)
+    args.out.write_text(text, encoding="utf-8")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -677,9 +859,11 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--split", type=Path, required=True)
     pr.add_argument("--out", type=Path, required=True)
     pr.add_argument("--jobs", type=int, default=JOBS)
+    pr.add_argument("--layers", choices=list(LAYERS), default="l1")
     s = commands.add_parser("score", help="score ARK predictions on one split")
     s.add_argument("--split", type=Path, required=True)
     s.add_argument("--predictions", type=Path, required=True, help="directory written by predict")
+    s.add_argument("--layers", choices=list(LAYERS), default="l1")
     s.add_argument("--output", type=Path)
     c = commands.add_parser("compare", help="gate checks of two score reports of the same split")
     c.add_argument("--base", type=Path, required=True)
@@ -689,23 +873,27 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--split", type=Path, required=True)
     r.add_argument("--predictions", type=Path, required=True, help="directory written by predict")
     r.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache")
-    r.add_argument("--title", default="Threat scoreboard: baseline")
+    r.add_argument("--layers", choices=list(LAYERS), default="l1",
+                   help="l1+l2: the full-stack report (L1 next to L1+L2, latency per layer)")
+    r.add_argument("--counts-only", action="store_true", help="full-stack report with row counts only")
+    r.add_argument("--title")
     r.add_argument("--out", type=Path, required=True)
     p = commands.add_parser("_predict", help=argparse.SUPPRESS)
     p.add_argument("--package", type=Path)
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--layers", choices=list(LAYERS), default="l1")
     args = parser.parse_args(argv)
 
     try:
         if args.command == "gate":
             return gate(args.head, args.base_sha, args.dev, args.holdout, args.cache, args.jobs)
         if args.command == "predict":
-            predict_split(split_sets(args.split), args.out, jobs=args.jobs)
+            predict_split(split_sets(args.split), args.out, jobs=args.jobs, layers=args.layers)
             return 0
         if args.command == "score":
             sets = split_sets(args.split)
-            report = score_split(sets, ark_predictions(sets, args.predictions))
+            report = score_split(sets, ark_predictions(sets, args.predictions, args.layers), layers=args.layers)
             text = json.dumps(report, indent=1, sort_keys=True) + "\n"
             if args.output:
                 args.output.write_text(text, encoding="utf-8")
@@ -719,12 +907,8 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(verdict_lines("split", checks, numbers=True)))
             return 1 if any(not c["ok"] for c in checks) else 0
         if args.command == "report":
-            sets = split_sets(args.split)
-            report = score_split(sets, ark_predictions(sets, args.predictions))
-            baselines, left_out = baseline_reports(sets, args.baseline_cache) if args.baseline_cache else (None, None)
-            args.out.write_text(render_baseline(report, baselines, args.title, left_out), encoding="utf-8")
-            return 0
-        return _predict_worker(args.package, args.input, args.output)
+            return report_command(args)
+        return _predict_worker(args.package, args.input, args.output, args.layers)
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"threat scoreboard: error: {exc}", file=sys.stderr)
         return 2

@@ -330,7 +330,8 @@ Klassen in `classes` (nur berichtete Klassen zählen nicht), negativ jede `benig
 `report` laufen im eigenen Bereich `report` und gaten nie; alle übrigen (`dev`, `decisive`) bilden den Bereich
 `gated`.
 
-ARK läuft nur auf L1, je Klasse ihre Kategorie (`instruction_injection` heißt `injection`). Urteil einer Klasse:
+ARK läuft je Klasse in ihrer Kategorie (`instruction_injection` heißt `injection`), standardmäßig nur auf L1
+(`--layers l1`, der gegatete Stack); `--layers l1+l2` siehe „Voller Stack“ unten. Urteil einer Klasse:
 ein Ergebnis, das nicht `benign`/`safe` ist (wie im Golden-Eval). Score: das Höchste aus der Konfidenz eines
 solchen Ergebnisses und den Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des
 Injection-Scorers); 0, wenn ARK nichts meldet. Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`,
@@ -374,6 +375,32 @@ der Klon nicht geholt werden konnte, oder die fehlenden Sätze); die übrigen Sp
 Den Cache legt man außerhalb des Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe
 wiederverwenden.
 Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+
+### Voller Stack (L1 + L2)
+
+```bash
+python3 scripts/l1_threat/scoreboard.py predict --layers l1+l2 --split DEV --out PRED   # Modelle im Asset-Cache, offline
+python3 scripts/l1_threat/scoreboard.py score --layers l1+l2 --split DEV --predictions PRED [--output report.json]
+python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 --split DEV --predictions PRED \
+    [--baseline-cache CACHE] --out research/l1-threat/scoreboard/full-stack.md
+python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 --counts-only --split HOLDOUT --predictions PRED \
+    --out holdout-counts.md                                                               # nur Zählungen
+```
+
+`predict --layers l1+l2` scannt jede Zeile zweimal: mit einem L1-Gateway (`max_level="l1"`) und mit dem Stack
+bis L2 (`max_level="l2"`, `warmup()` ohne Download; L2 läuft auf jeder Zeile, weil die Standardkonfiguration für
+L2 kein bedingtes Gate hat: Wolf Defender Small für `injection`, der NTDB-L2-Kopf des Threat-Modells für die
+übrigen Klassen). Die Vorhersage (`SET-SHA12-l1l2.jsonl`, neben den L1-Dateien im selben Verzeichnis möglich)
+trägt den Stack-Score, die L1-Sicht (`l1`) und die Millisekunden je Ebene (`ms.l1`: L1-Scan; `ms.l2`: Stack-Scan
+minus L1-Scan derselben Zeile, nie unter 0). Der Score einer Klasse folgt derselben Regel wie auf L1: ein
+L2-Ergebnis zählt mit seiner Konfidenz, wenn der Stack die Klasse meldet. `score --layers` wählt die Ebene;
+`report --layers l1+l2` stellt je Klasse und Sprache (Bereich `gated` und `report`, Herkunft `all`) L1 neben
+L1+L2 (TPR@1 %, TPR@0,1 %, Hard-Benign-FPR), dazu die beste Heuristik und die beste Prompt-Guard-2-Zeile und die
+Latenz je Ebene (ms je 100 KiB = Summe der ms über Summe der UTF-8-Bytes, p95 je Zeile; gemessen im
+Vorhersagelauf, ein Prozess je Satz). `--counts-only` lässt Raten, Latenz und Baselines weg und zeigt je Zelle nur
+TP / FP an jedem Arbeitspunkt und die Hard-Benign-Meldungen — die Form, in der der Owner den Holdout außerhalb der
+Sandbox nachträgt.
+Ergebnis auf Dev: [`research/l1-threat/scoreboard/full-stack.md`](../../research/l1-threat/scoreboard/full-stack.md).
 
 Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
 
