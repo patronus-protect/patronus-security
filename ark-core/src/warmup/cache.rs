@@ -92,6 +92,52 @@ fn local_present(
     let manifest = crate::wolf::asset_manifest_at(dir, model, precision)?;
     Ok(dir.join(&manifest.model.path).is_file() && dir.join(&manifest.tokenizer.path).is_file())
 }
+/// Rewrite the selected graph of a cache to external data (see
+/// [`crate::onnx::externalize_weights`]); the caller holds the exclusive bundle lock.
+fn externalize_graph(
+    dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<(), ScanError> {
+    let graph = dir.join(
+        crate::wolf::asset_manifest_at(dir, model, precision)?
+            .model
+            .path,
+    );
+    if crate::onnx::externalize_weights(&graph).map_err(asset)? {
+        log::info!("moved the weights of {} to external data", graph.display());
+    }
+    Ok(())
+}
+/// Rewrite the selected graph of a complete managed cache to external data, once, under the
+/// exclusive bundle lock. Unmanaged local bundles, and with them the files a supplied manifest
+/// pins, are never rewritten. A failure is logged and leaves the inline graph, which loads as
+/// before.
+fn externalize_cached(dir: &Path, model: WolfModel, precision: WolfPrecision, deadline: Instant) {
+    let result = (|| {
+        if other_pin(dir, model)? || !dir.join(REVISION).is_file() {
+            return Ok(());
+        }
+        let graph = dir.join(
+            crate::wolf::asset_manifest_at(dir, model, precision)?
+                .model
+                .path,
+        );
+        if !crate::onnx::has_inline_weights(&graph).map_err(asset)? {
+            return Ok(());
+        }
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(dir.join(LOCK))
+            .map_err(asset)?;
+        wait_lock(&lock, true, deadline)?;
+        externalize_graph(dir, model, precision)
+    })();
+    if let Err(error) = result {
+        log::warn!("Wolf weights in {} stay inline: {error}", dir.display());
+    }
+}
 /// Nonblocking readiness. A cache being prepared, or an unfinished managed cache, is not ready.
 pub fn wolf_assets_present(
     dir: &Path,
@@ -128,6 +174,8 @@ pub fn prepare_wolf_cache(
             wait_lock(lock, false, deadline)?;
         }
         if !dir.join(PENDING).exists() && local_present(dir, model, precision)? {
+            drop(lock);
+            externalize_cached(dir, model, precision, deadline);
             if let Some(callback) = progress {
                 callback(4, 4);
             }
@@ -245,12 +293,20 @@ fn clear_managed(dir: &Path) -> Result<(), ScanError> {
             .filter_map(move |precision| model.spec().graph(precision))
     });
     let generated = ["tokenizer.mmbpe", "tokenizer.mmbpe.meta.json"];
-    for file in graphs
-        .chain(crate::wolf::SUPPORT_FILES)
-        .chain(generated)
-        .chain([REVISION])
-    {
-        match fs::remove_file(dir.join(file)) {
+    let files = graphs
+        .flat_map(|graph| {
+            let graph = dir.join(graph);
+            [crate::onnx::external_data_path(&graph), graph]
+        })
+        .chain(
+            crate::wolf::SUPPORT_FILES
+                .into_iter()
+                .chain(generated)
+                .chain([REVISION])
+                .map(|file| dir.join(file)),
+        );
+    for file in files {
+        match fs::remove_file(file) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(asset(e)),
@@ -345,6 +401,9 @@ fn download(
     // The pin is written last; until then the old marker is gone and PENDING names the origin.
     if !local_present(dir, model, precision)? {
         return Err(asset("Wolf preparation did not produce complete assets"));
+    }
+    if let Err(error) = externalize_graph(dir, model, precision) {
+        log::warn!("Wolf weights in {} stay inline: {error}", dir.display());
     }
     atomic_marker(dir, REVISION, spec.revision)?;
     fs::remove_file(dir.join(PENDING)).map_err(asset)?;
@@ -492,6 +551,8 @@ mod tests {
         let old_graph = "onnx/int8_int4_embeddings/model.onnx";
         fs::create_dir_all(dir.0.join("onnx/int8_int4_embeddings")).unwrap();
         fs::write(dir.0.join(old_graph), b"previous release").unwrap();
+        let old_data = crate::onnx::external_data_path(&dir.0.join(old_graph));
+        fs::write(&old_data, b"previous weights").unwrap();
         // Real downloads leave their per-file transport locks behind.
         for file in [old_graph, "config.json", "tokenizer.json"] {
             fs::write(dir.0.join(format!("{file}.patronus-download.lock")), b"").unwrap();
@@ -507,6 +568,7 @@ mod tests {
         for file in [old_graph, FP16, "tokenizer.mmbpe", "config.json", REVISION] {
             assert!(!dir.0.join(file).exists(), "{file} survived the upgrade");
         }
+        assert!(!old_data.exists());
         assert_eq!(
             fs::read_to_string(dir.0.join(PENDING)).unwrap(),
             pending_origin(SMALL)
@@ -515,6 +577,52 @@ mod tests {
         fs::write(dir.0.join(REVISION), SMALL.spec().revision).unwrap();
         assert!(other_pin(&dir.0, WolfModel::Edge).unwrap());
         assert!(!other_pin(&dir.0, SMALL).unwrap());
+    }
+    fn with_weights(dir: &Directory) -> PathBuf {
+        let graph = dir.0.join(FP16);
+        fs::write(&graph, crate::onnx::testing::model_with_weights()).unwrap();
+        graph
+    }
+    fn externalized(graph: &Path) -> bool {
+        !crate::onnx::has_inline_weights(graph).unwrap()
+            && crate::onnx::external_data_path(graph).is_file()
+    }
+    #[test]
+    fn a_completed_download_moves_the_graph_weights_before_the_pin() {
+        let dir = Directory::new();
+        establish_origin(&dir.0, SMALL).unwrap();
+        dir.complete();
+        let graph = with_weights(&dir);
+        prepare_wolf_cache(&dir.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
+        assert!(externalized(&graph));
+        assert_eq!(
+            fs::read_to_string(dir.0.join(REVISION)).unwrap(),
+            SMALL.spec().revision
+        );
+    }
+    #[test]
+    fn a_managed_cache_moves_its_graph_weights_once_and_local_bundles_keep_theirs() {
+        let managed = Directory::new();
+        managed.complete();
+        let graph = with_weights(&managed);
+        fs::write(managed.0.join(REVISION), SMALL.spec().revision).unwrap();
+        fs::write(managed.0.join(LOCK), b"").unwrap();
+        // Offline preparation of a cache prepared before the rewrite existed.
+        let offline = WarmupOptions::default();
+        prepare_wolf_cache(&managed.0, SMALL, WolfPrecision::Fp16, &offline, None).unwrap();
+        assert!(externalized(&graph));
+        let rewritten = fs::read(&graph).unwrap();
+        prepare_wolf_cache(&managed.0, SMALL, WolfPrecision::Fp16, &offline, None).unwrap();
+        assert_eq!(fs::read(&graph).unwrap(), rewritten);
+        assert!(wolf_assets_present(&managed.0, SMALL, WolfPrecision::Fp16).unwrap());
+
+        // An unmanaged local bundle, which a supplied manifest may pin, is never rewritten.
+        let local = Directory::new();
+        local.complete();
+        let graph = with_weights(&local);
+        prepare_wolf_cache(&local.0, SMALL, WolfPrecision::Fp16, &missing(), None).unwrap();
+        assert!(crate::onnx::has_inline_weights(&graph).unwrap());
+        assert!(!crate::onnx::external_data_path(&graph).exists());
     }
     #[test]
     fn offline_preparation_honors_held_bundle_lock() {

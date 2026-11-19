@@ -14,8 +14,8 @@ pub use download::{
 pub(crate) use download::{
     download_dynamic_pii_assets_with_progress, download_ntdb_l2_package_with_progress,
     download_shell_command_assets_with_progress, download_unified_l3_assets_with_progress,
-    prefer_fp16_l3, prepare_cached_ntdb_l2_compact_tokenizer,
-    prepare_cached_pipeline_model_compact_tokenizer, selected_pipeline_model_files,
+    prefer_fp16_l3, prepare_cached_ntdb_l2_compact_tokenizer, prepare_cached_pipeline_model,
+    selected_pipeline_model_files,
 };
 pub use specs::{
     AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST, DEDICATED_L3_ASSETS,

@@ -10,23 +10,19 @@
 
 use std::collections::{HashMap, HashSet};
 
-const WIRE_VARINT: u8 = 0;
-const WIRE_FIXED64: u8 = 1;
-const WIRE_LEN: u8 = 2;
-const WIRE_FIXED32: u8 = 5;
+use super::proto::{
+    fields, read_varint, text, write_len_field, write_varint, Field, GRAPH_INITIALIZER,
+    MODEL_GRAPH, TENSOR_DATA_LOCATION, TENSOR_RAW_DATA, WIRE_LEN,
+};
 
 // ONNX protobuf field numbers (onnx.proto3) and tensor element types.
-const MODEL_GRAPH: u32 = 7;
 const GRAPH_NODE: u32 = 1;
-const GRAPH_INITIALIZER: u32 = 5;
 const NODE_INPUT: u32 = 1;
 const NODE_OUTPUT: u32 = 2;
 const NODE_OP_TYPE: u32 = 4;
 const TENSOR_DATA_TYPE: u32 = 2;
 const TENSOR_INT32_DATA: u32 = 5;
 const TENSOR_NAME: u32 = 8;
-const TENSOR_RAW_DATA: u32 = 9;
-const TENSOR_DATA_LOCATION: u32 = 14;
 const UINT8: u64 = 2;
 const INT8: u64 = 3;
 
@@ -42,89 +38,6 @@ pub(crate) fn u8s8_saturates() -> bool {
     {
         false
     }
-}
-
-struct Field<'a> {
-    number: u32,
-    wire: u8,
-    /// The varint value, or the length of a length-delimited payload.
-    value: u64,
-    /// The payload of a length-delimited field.
-    payload: &'a [u8],
-    /// The whole encoded field, tag included.
-    encoded: &'a [u8],
-}
-
-fn read_varint(buf: &[u8], pos: &mut usize) -> Result<u64, String> {
-    let mut value = 0u64;
-    for shift in (0..64).step_by(7) {
-        let byte = *buf.get(*pos).ok_or("truncated varint")?;
-        *pos += 1;
-        value |= u64::from(byte & 0x7f) << shift;
-        if byte & 0x80 == 0 {
-            return Ok(value);
-        }
-    }
-    Err("varint longer than 10 bytes".into())
-}
-
-fn fields(buf: &[u8]) -> Result<Vec<Field<'_>>, String> {
-    let mut out = Vec::new();
-    let mut pos = 0;
-    while pos < buf.len() {
-        let start = pos;
-        let tag = read_varint(buf, &mut pos)?;
-        let number = u32::try_from(tag >> 3).map_err(|_| "field number out of range")?;
-        let wire = (tag & 7) as u8;
-        let (value, payload) = match wire {
-            WIRE_VARINT => (read_varint(buf, &mut pos)?, &buf[0..0]),
-            WIRE_LEN => {
-                let len = read_varint(buf, &mut pos)?;
-                let end = usize::try_from(len)
-                    .ok()
-                    .and_then(|len| pos.checked_add(len))
-                    .filter(|end| *end <= buf.len())
-                    .ok_or("length-delimited field overruns its message")?;
-                let payload = &buf[pos..end];
-                pos = end;
-                (len, payload)
-            }
-            WIRE_FIXED64 | WIRE_FIXED32 => {
-                pos += if wire == WIRE_FIXED64 { 8 } else { 4 };
-                if pos > buf.len() {
-                    return Err("truncated fixed-width field".into());
-                }
-                (0, &buf[0..0])
-            }
-            _ => return Err(format!("unsupported wire type {wire}")),
-        };
-        out.push(Field {
-            number,
-            wire,
-            value,
-            payload,
-            encoded: &buf[start..pos],
-        });
-    }
-    Ok(out)
-}
-
-fn write_varint(out: &mut Vec<u8>, mut value: u64) {
-    while value >= 0x80 {
-        out.push((value as u8) | 0x80);
-        value >>= 7;
-    }
-    out.push(value as u8);
-}
-
-fn write_len_field(out: &mut Vec<u8>, number: u32, payload: &[u8]) {
-    write_varint(out, (u64::from(number) << 3) | u64::from(WIRE_LEN));
-    write_varint(out, payload.len() as u64);
-    out.extend_from_slice(payload);
-}
-
-fn text<'a>(field: &Field<'a>) -> Result<&'a str, String> {
-    std::str::from_utf8(field.payload).map_err(|_| "non-UTF-8 name in ONNX graph".into())
 }
 
 struct Node<'a> {

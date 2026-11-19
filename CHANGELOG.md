@@ -576,6 +576,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
   to the same detector.
+- Model weights are memory-mapped instead of copied onto the heap. Asset preparation (`warmup`
+  with downloads allowed, and Core's Wolf preparation) now moves the weights of each downloaded
+  ONNX graph of Wolf Defender, the unified L3 classifier, the dedicated L3 classifiers and GLiNER
+  into a data file next to it (`model.onnx` → `model.onnx.data`), once. The weights are copied
+  byte for byte, and the rewrite is kept only when the original file can be rebuilt from it
+  exactly. Caches downloaded by an earlier release are rewritten the next time they are
+  prepared. Local Wolf bundles that Ark did not download, including those with an integrity
+  manifest, are left as they are.
+  **Detection change:** none; the models compute the same results.
 ## [0.1.17] - 2026-11-16
 
 This release changes only the prompt-injection model (Wolf Defender) on top of 0.1.16.
