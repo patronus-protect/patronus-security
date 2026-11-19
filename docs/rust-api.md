@@ -1806,6 +1806,8 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 ```rust
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
+    /// Each module's optional L1 model ([`Self::load_l1_models`]).
+    l1_models: [Option<L1TextModel>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -1817,6 +1819,23 @@ pub fn new(categories: &[SecurityCategory]) -> Self;
 
 Initialize only configured native categories; other categories have no
 native producers. An empty selection creates no pipelines.
+
+```rust
+pub fn load_l1_models(
+    &mut self,
+    configs: &BTreeMap<String, L1ModelConfig>,
+) -> Result<(), String>;
+```
+
+Load the configured L1 models, keyed by category name, once; each
+replaces the module's earlier model. Unknown or non-native categories
+are refused. No model is loaded unless configured.
+
+```rust
+pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel>;
+```
+
+The loaded L1 model of `category`'s module, if one is configured.
 
 ```rust
 pub fn producers(&self, category: SecurityCategory) -> &[NativeProducerSpec];
@@ -1854,6 +1873,15 @@ pub enum ScoreMode {
 
 Output mode of a native category (`<category>_mode`). `Strict` is the
 default and the pre-score behaviour.
+
+```rust
+pub fn admits(self, score: f64) -> bool;
+```
+
+Whether a finding scoring `score` passes the mode's floor; `strict`
+keeps every finding. The one floor rule of every category: PII applies
+it per match before overlap resolution, DLP per text view after it,
+the attack classes per producer detection.
 
 ```rust
 pub fn default_rule_enabled(rule_id: &str) -> bool;
@@ -1894,6 +1922,27 @@ pub struct NativeGates {
     /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
+    /// Acceptance cut of the injection L1 rule scorer on its probability;
+    /// unset means the scorer's own cut (0.96).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "probability"
+    )]
+    pub injection_acceptance_threshold: Option<f64>,
+    /// Acceptance cut of the Threat rule scorer on its probability; unset
+    /// means the scorer's own cut (0.1).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "probability"
+    )]
+    pub threat_acceptance_threshold: Option<f64>,
+    /// Least score of an accepted Threat points rule; unset means
+    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "probability"
+    )]
+    pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -1921,6 +1970,18 @@ pub fn resource_exhaustion_count_threshold(&self) -> u64;
 ```
 
 The `resource_exhaustion_count_threshold` in effect.
+
+```rust
+pub fn injection_acceptance_threshold(&self) -> f64;
+```
+
+The injection L1 scorer's acceptance cut in effect.
+
+```rust
+pub fn threat_thresholds(&self) -> ThreatThresholds;
+```
+
+The Threat cuts in effect.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;
