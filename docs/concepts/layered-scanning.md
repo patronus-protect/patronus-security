@@ -62,7 +62,7 @@ Early exit
 :   What one stage says: `Detected`, `Clear` or `Escalate`.
 
 `decided_by`
-:   The stage that produced a module's verdict: `Heuristic`, `L1Model`, `Policy`, `L2` or `L3`.
+:   The stage that produced a module's verdict: `heuristic`, `l1_model`, `policy` (reserved), `l2` or `l3`.
 
 Max level
 :   `max_level` (`l1`, `l2`, `l3`) is the highest layer a run may use, a hard ceiling.
