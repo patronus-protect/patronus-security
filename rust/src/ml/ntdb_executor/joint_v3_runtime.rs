@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use crate::NtdbOperatingPoint;
 
 use super::{
-    lightgbm::LightGbmModel,
+    lightgbm::{LightGbmModel, LightGbmStore},
     manifest::{JointV3Manifest, TaskManifest},
     ntdb_error,
     package::{
@@ -40,11 +40,11 @@ pub(super) struct JointV3Runtime {
 struct JointV3HeadRuntime {
     id: String,
     class_count: usize,
-    lightgbm: LightGbmModel,
+    lightgbm: Arc<LightGbmModel>,
 }
 
 struct JointV3PromoterRuntime {
-    models: HashMap<String, LightGbmModel>,
+    models: HashMap<String, Arc<LightGbmModel>>,
     utility: ActionablePolicy,
     best_promote: ActionablePolicy,
 }
@@ -69,7 +69,11 @@ struct JointPrediction {
 }
 
 impl JointV3Runtime {
-    pub(super) fn load(package_dir: &Path, manifest: &JointV3Manifest) -> NtdbResult<Self> {
+    pub(super) fn load(
+        package_dir: &Path,
+        manifest: &JointV3Manifest,
+        lightgbm_store: &LightGbmStore,
+    ) -> NtdbResult<Self> {
         let mut head_by_id = manifest
             .heads
             .iter()
@@ -84,7 +88,7 @@ impl JointV3Runtime {
                 let head = head_by_id
                     .remove(id.as_str())
                     .ok_or_else(|| ntdb_error(format!("NTDB package v4 is missing head {id}")))?;
-                let lightgbm = LightGbmModel::load(package_dir.join(&head.frozen_lightgbm))?;
+                let lightgbm = lightgbm_store.load(package_dir.join(&head.frozen_lightgbm))?;
                 if lightgbm.feature_count() != 384 {
                     return Err(ntdb_error(format!(
                         "NTDB package v4 head {id} LightGBM expects {} features, expected 384",
@@ -98,7 +102,7 @@ impl JointV3Runtime {
                 })
             })
             .collect::<NtdbResult<Vec<_>>>()?;
-        let promoter = JointV3PromoterRuntime::load(package_dir, manifest)?;
+        let promoter = JointV3PromoterRuntime::load(package_dir, manifest, lightgbm_store)?;
         Ok(Self {
             neural: load_single_thread_session(package_dir.join(&manifest.neural_stack.onnx))?,
             neural_inputs: manifest.neural_stack.input_names.clone(),
@@ -489,7 +493,11 @@ pub(crate) fn aggregate_probabilities(values: &[Vec<f32>], method: &str) -> Ntdb
 }
 
 impl JointV3PromoterRuntime {
-    fn load(package_dir: &Path, manifest: &JointV3Manifest) -> NtdbResult<Self> {
+    fn load(
+        package_dir: &Path,
+        manifest: &JointV3Manifest,
+        lightgbm_store: &LightGbmStore,
+    ) -> NtdbResult<Self> {
         if manifest.promoter.scope != "per_chunk" {
             return Err(ntdb_error(
                 "NTDB package v4 promoter must have per_chunk scope",
@@ -521,7 +529,12 @@ impl JointV3PromoterRuntime {
         }
         let models = required
             .into_iter()
-            .map(|name| Ok((name.to_string(), load_gate(package_dir, manifest, name)?)))
+            .map(|name| {
+                Ok((
+                    name.to_string(),
+                    load_gate(package_dir, manifest, name, lightgbm_store)?,
+                ))
+            })
             .collect::<NtdbResult<HashMap<_, _>>>()?;
         Ok(Self {
             models,
@@ -594,14 +607,15 @@ fn load_gate(
     package_dir: &Path,
     manifest: &JointV3Manifest,
     name: &str,
-) -> NtdbResult<LightGbmModel> {
+    lightgbm_store: &LightGbmStore,
+) -> NtdbResult<Arc<LightGbmModel>> {
     let gate = gate_manifest(manifest, name)?;
     validate_promoter_dim(gate.n_features, manifest)?;
     let path = gate
         .lightgbm_model
         .as_ref()
         .ok_or_else(|| ntdb_error(format!("NTDB package v4 gate {name} has no LightGBM model")))?;
-    let model = LightGbmModel::load(package_dir.join(path))?;
+    let model = lightgbm_store.load(package_dir.join(path))?;
     validate_model_dim(&model, gate.n_features, path)?;
     Ok(model)
 }

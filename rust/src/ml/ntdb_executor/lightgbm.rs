@@ -1,7 +1,50 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::{fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use super::{ntdb_error, NtdbResult};
+
+/// Parsed LightGBM models keyed by the BLAKE3 hash of their file content.
+///
+/// Packages publish some heads twice under different names (byte-identical
+/// files); the store parses and holds each distinct model once, shared across
+/// the heads and packages of one loader.
+#[derive(Default)]
+pub(super) struct LightGbmStore {
+    models: Mutex<HashMap<blake3::Hash, Arc<LightGbmModel>>>,
+}
+
+impl LightGbmStore {
+    pub(super) fn load(&self, path: impl AsRef<Path>) -> NtdbResult<Arc<LightGbmModel>> {
+        let path = path.as_ref();
+        let text = fs::read_to_string(path).map_err(|err| {
+            ntdb_error(format!(
+                "failed to read LightGBM model {}: {err}",
+                path.display()
+            ))
+        })?;
+        let key = blake3::hash(text.as_bytes());
+        if let Some(model) = self.lock()?.get(&key) {
+            return Ok(Arc::clone(model));
+        }
+        // Parse outside the lock so packages loading in parallel do not wait on
+        // each other; a concurrent duplicate parse keeps the first inserted model.
+        let model = Arc::new(LightGbmModel::parse(&text)?);
+        Ok(Arc::clone(self.lock()?.entry(key).or_insert(model)))
+    }
+
+    fn lock(
+        &self,
+    ) -> NtdbResult<std::sync::MutexGuard<'_, HashMap<blake3::Hash, Arc<LightGbmModel>>>> {
+        self.models
+            .lock()
+            .map_err(|_| ntdb_error("LightGBM model store lock poisoned"))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct LightGbmModel {
@@ -20,19 +63,12 @@ pub struct Tree {
 }
 
 impl LightGbmModel {
-    pub fn load(path: impl AsRef<Path>) -> NtdbResult<Self> {
-        let path = path.as_ref();
-        let text = fs::read_to_string(path).map_err(|err| {
-            ntdb_error(format!(
-                "failed to read LightGBM model {}: {err}",
-                path.display()
-            ))
-        })?;
-        let num_class = get_value(&text, "num_class")
+    fn parse(text: &str) -> NtdbResult<Self> {
+        let num_class = get_value(text, "num_class")
             .unwrap_or("1")
             .parse::<usize>()
             .map_err(|err| ntdb_error(format!("invalid LightGBM num_class: {err}")))?;
-        let feature_count = get_value(&text, "max_feature_idx")
+        let feature_count = get_value(text, "max_feature_idx")
             .ok_or_else(|| ntdb_error("LightGBM model is missing max_feature_idx"))?
             .parse::<usize>()
             .map_err(|err| ntdb_error(format!("invalid LightGBM max_feature_idx: {err}")))?
@@ -218,4 +254,38 @@ fn softmax(values: &[f64]) -> Vec<f32> {
         .drain(..)
         .map(|value| (value / denom) as f32)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stump_model(leaf_value: f64) -> String {
+        format!(
+            "tree\nnum_class=1\nmax_feature_idx=0\nobjective=binary sigmoid:1\n\n\
+             Tree=0\nnum_leaves=1\nnum_cat=0\nsplit_feature=\nthreshold=\nleft_child=\n\
+             right_child=\nleaf_value={leaf_value}\nis_linear=0\n\nend of trees\n"
+        )
+    }
+
+    #[test]
+    fn store_shares_byte_identical_models_across_paths() {
+        let root = std::env::temp_dir().join(format!("ark-lightgbm-store-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let (first, copy, other) = (root.join("a.txt"), root.join("b.txt"), root.join("c.txt"));
+        fs::write(&first, stump_model(0.5)).unwrap();
+        fs::write(&copy, stump_model(0.5)).unwrap();
+        fs::write(&other, stump_model(-0.5)).unwrap();
+
+        let store = LightGbmStore::default();
+        let first = store.load(&first).unwrap();
+        let copy = store.load(&copy).unwrap();
+        let other = store.load(&other).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+
+        assert!(Arc::ptr_eq(&first, &copy));
+        assert!(!Arc::ptr_eq(&first, &other));
+        assert_eq!(first.predict_probability(&[0.0]), sigmoid(0.5) as f32);
+        assert_eq!(other.predict_probability(&[0.0]), sigmoid(-0.5) as f32);
+    }
 }
