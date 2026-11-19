@@ -1,7 +1,6 @@
 //! Shared ONNX Runtime initialization and provider/session selection.
 mod external_data;
 mod proto;
-mod u8u8;
 
 #[cfg(any(test, feature = "test-util"))]
 pub use external_data::testing;
@@ -100,26 +99,10 @@ pub fn warmup_runtime() -> bool {
 ///
 /// The model is loaded from its file, so ONNX Runtime memory-maps the weights of a graph that
 /// asset preparation rewrote to external data (see [`externalize_weights`]).
-///
-/// On x86-64 CPUs without VNNI, ONNX Runtime's U8S8 `MatMulInteger` kernels saturate and our
-/// dynamically quantized models return wrong logits; there the int8 weights are rewritten to
-/// the equivalent uint8 form before the session is created (see [`u8u8`]), on the inline model
-/// rebuilt from the graph and its data file. Elsewhere, and for models without U8S8 weights,
-/// the file is loaded as is.
 pub fn commit_session(
     mut builder: SessionBuilder,
     path: &Path,
 ) -> Result<Session, Box<dyn std::error::Error>> {
-    if u8u8::u8s8_saturates() {
-        match u8u8::rewrite_u8s8_weights(&external_data::inline_model(path)?) {
-            Ok(Some(model)) => return Ok(builder.commit_from_memory(&model)?),
-            Ok(None) => {}
-            Err(error) => log::warn!(
-                "ONNX model {} left as is; U8U8 weight rewrite failed: {error}",
-                path.display()
-            ),
-        }
-    }
     Ok(builder.commit_from_file(path)?)
 }
 

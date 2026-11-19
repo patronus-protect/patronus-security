@@ -90,8 +90,9 @@ bleiben byte-identisch. `scoreboard.py ner` liest sie als `<Vorhersage-Stem>.lat
 ```
 
 Die GLiNER- und L3-Assets rechnen `MatMulInteger` mit U8S8, was auf x86_64 ohne VNNI (AVX2, z. B.
-Haswell-VPS) sättigt. Seit #280 schreibt ARK die Gewichte dort beim Laden auf U8U8 um; Messungen auf
-dem VPS brauchen einen Build ab diesem Stand (auf dem VPS: F1 wie auf arm64, ±0,3 pp).
+Haswell-VPS) sättigt. ARK schreibt die Gewichte dort nicht mehr auf U8U8 um; ohne eigene x86-Quants
+weichen GLiNER und die L3-Klassifikatoren auf solchen Hosts ab. Messungen auf dem VPS daher mit
+`PATRONUS_L3_PRECISION=fp16` (FP16-Graphen rechnen ohne `MatMulInteger`).
 
 `scoreboard.py ner` wertet die semantischen IDs mit `dynamic_pii`-Labels (PERSON, LOCATION,
 ORGANIZATION) für ARK L1 + L3 gegen beide Presidio-Profile: rohes Gold, exaktes P/R/F1 je

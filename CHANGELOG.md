@@ -585,6 +585,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   prepared. Local Wolf bundles that Ark did not download, including those with an integrity
   manifest, are left as they are.
   **Detection change:** none; the models compute the same results.
+- On x86-64 CPUs without VNNI (Intel before Cascade Lake or Alder Lake, AMD before Zen 4), Ark no
+  longer rewrites int8 model weights to uint8 when it loads a model. Wolf Defender selects its
+  published x86 exports there. GLiNER (`dynamic_pii`), the unified L3 classifier and the dedicated
+  L3 classifiers publish no x86 export yet: on these CPUs, use `PATRONUS_L3_PRECISION=fp16`.
+  **Detection change:** yes, on x86-64 CPUs without VNNI for the int8 GLiNER and L3 classifier
+  exports, whose scores drift there; none elsewhere.
 ## [0.1.17] - 2026-11-16
 
 This release changes only the prompt-injection model (Wolf Defender) on top of 0.1.16.

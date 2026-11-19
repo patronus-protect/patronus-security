@@ -128,22 +128,6 @@ pub fn externalize_weights(path: &Path) -> io::Result<bool> {
     Ok(true)
 }
 
-/// The model at `path` with its weights inline, as downloaded: rebuilt from the graph and its
-/// data file after [`externalize_weights`], the file itself otherwise.
-pub(crate) fn inline_model(path: &Path) -> io::Result<Vec<u8>> {
-    let model = fs::read(path)?;
-    let data_path = external_data_path(path);
-    let mut data = match File::open(&data_path) {
-        Ok(data) => data,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(model),
-        Err(error) => return Err(error),
-    };
-    let mut out =
-        Vec::with_capacity(model.len() + usize::try_from(data.metadata()?.len()).unwrap_or(0));
-    rebuild(&model, &mut data, &location(&data_path)?, &mut out)?;
-    Ok(out)
-}
-
 fn location(data_path: &Path) -> io::Result<String> {
     data_path
         .file_name()
@@ -792,6 +776,20 @@ mod tests {
         }
     }
 
+    /// The model at `path` rebuilt from the graph and its data file.
+    fn inline_model(path: &Path) -> Vec<u8> {
+        let data_path = external_data_path(path);
+        let mut out = Vec::new();
+        rebuild(
+            &fs::read(path).unwrap(),
+            &mut File::open(&data_path).unwrap(),
+            &location(&data_path).unwrap(),
+            &mut out,
+        )
+        .unwrap();
+        out
+    }
+
     /// `(name, offset, length)` of every external initializer.
     fn external_tensors(model: &[u8]) -> Vec<(String, u64, u64)> {
         let graph = fields(model)
@@ -849,7 +847,7 @@ mod tests {
         let data = fs::read(external_data_path(&path)).unwrap();
         assert_eq!(data.len(), 65536 + (1 << 20));
         assert!(data[8192..65536].iter().all(|byte| *byte == 0));
-        assert_eq!(inline_model(&path).unwrap(), source);
+        assert_eq!(inline_model(&path), source);
         // Only the graph and its data file remain; no temporaries.
         assert_eq!(dir.entries(), 2);
 
@@ -903,15 +901,6 @@ mod tests {
             assert_eq!(fs::read(&path).unwrap(), bytes);
         }
         assert_eq!(dir.entries(), 1);
-    }
-
-    #[test]
-    fn an_inline_graph_next_to_a_stale_data_file_is_its_own_inline_model() {
-        let dir = Directory::new();
-        let source = model_with_weights();
-        let path = dir.write("model.onnx", &source);
-        dir.write("model.onnx.data", b"stale");
-        assert_eq!(inline_model(&path).unwrap(), source);
     }
 
     fn run(path: &Path) -> Vec<f32> {

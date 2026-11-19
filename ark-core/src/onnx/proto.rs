@@ -110,7 +110,3 @@ pub(crate) fn write_varint_field(out: &mut Vec<u8>, number: u32, value: u64) {
     write_varint(out, u64::from(number) << 3);
     write_varint(out, value);
 }
-
-pub(crate) fn text<'a>(field: &Field<'a>) -> Result<&'a str, String> {
-    std::str::from_utf8(field.payload).map_err(|_| "non-UTF-8 name in ONNX graph".into())
-}
