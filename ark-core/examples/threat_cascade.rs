@@ -16,8 +16,9 @@
 //!   native results (the confidence of a flagged result and the scorer values
 //!   below the decision); classes at 0 are left out;
 //! - `flagged`: the classes L1 detected;
-//! - `cascade`: `l1` (L1's outcome), `l1_score` (the score the clear threshold
-//!   compares), `decision` (final outcome) and `decided_by` (deciding stage);
+//! - `cascade`: `l1` (L1's outcome), `l1_score` (at full precision, since
+//!   `scoreboard.py calibrate` cuts on it: the score the detect and clear thresholds
+//!   compare), `decision` (final outcome) and `decided_by` (deciding stage);
 //! - `wolf`: Wolf's attack probability, only when Wolf ran;
 //! - `ms`: `scan` (wall clock of the scan), `l1` (the native producers) and,
 //!   when Wolf ran, `l3` (the L3 layer durations of the module decisions).
@@ -120,7 +121,7 @@ fn predict(
             .ok_or_else(|| format!("row {id}: no decision for {class}"))?;
         stages.insert(
             class.into(),
-            json!({"l1": l1.outcome, "l1_score": round6(l1.score),
+            json!({"l1": l1.outcome, "l1_score": l1.score,
                    "decision": decision.outcome, "decided_by": decision.decided_by}),
         );
     }

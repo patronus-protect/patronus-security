@@ -18,7 +18,7 @@ use crate::{
     assets::DYNAMIC_PII_ASSET, ChunkOverlapTokens, DynamicPiiConfig, ExternalL1Input, GateResult,
     QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityRequestState, SecurityScanResult,
+    SecurityRequestState, SecurityScanResult, StageOutcome,
 };
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
@@ -1241,6 +1241,7 @@ impl SecurityGateway {
             ],
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1335,21 +1336,23 @@ pub(super) fn l1_undecided_inputs(
                 .iter()
                 .filter(|result| result.category == module.as_str()),
         );
-        let decided_by = match stage.decision(module) {
-            Some(decision) => decision.decided_by,
-            None if !later_layer_may_run(execution, metadata, gate_results, module) => {
-                stage.decided_by
-            }
-            None => {
+        // Undecided with no later layer to run: L1's answer is final and clear.
+        let outcome = match stage.outcome {
+            StageOutcome::Escalate
+                if later_layer_may_run(execution, metadata, gate_results, module) =>
+            {
                 undecided.push(input.clone());
                 continue;
             }
+            StageOutcome::Escalate => StageOutcome::Clear,
+            decided => decided,
         };
         for result in l1_results
             .iter_mut()
             .filter(|result| result.category == module.as_str())
         {
-            result.decided_by = Some(decided_by);
+            result.decided_by = Some(stage.decided_by);
+            result.l1_outcome = Some(outcome);
         }
     }
     undecided
@@ -1538,6 +1541,7 @@ mod tests {
             layers: Vec::new(),
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1668,6 +1672,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![Some(crate::Stage::Heuristic), None]
         );
+        assert_eq!(
+            results
+                .iter()
+                .map(|result| result.l1_outcome)
+                .collect::<Vec<_>>(),
+            vec![Some(StageOutcome::Detected), None]
+        );
     }
 
     #[test]
@@ -1761,6 +1772,7 @@ mod tests {
             }],
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1928,6 +1940,7 @@ mod tests {
             ],
             internal_l2_chunk_outputs: l2_chunk_outputs,
             decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

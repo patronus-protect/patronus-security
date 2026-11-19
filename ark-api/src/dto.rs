@@ -26,6 +26,9 @@ pub struct ScanResultDto {
     /// layer still answers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decided_by: Option<Stage>,
+    /// L1's answer when L1 decided the category under the cascade.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1_outcome: Option<patronus_ark::StageOutcome>,
     pub evidence_spans: Vec<EvidenceSpanDto>,
     pub label_scores: Vec<LabelScoreDto>,
     pub layers: Vec<LayerResultDto>,
@@ -97,6 +100,7 @@ impl From<SecurityScanResult> for ScanResultDto {
             duration_ms: result.duration_ms,
             decision: result.decision,
             decided_by: result.decided_by,
+            l1_outcome: result.l1_outcome,
             evidence_spans: result.evidence_spans.into_iter().map(Into::into).collect(),
             label_scores: result.label_scores.into_iter().map(Into::into).collect(),
             layers: result.layers.into_iter().map(Into::into).collect(),
@@ -194,6 +198,7 @@ mod tests {
             layers: Vec::new(),
             internal_l2_chunk_outputs: Vec::new(),
             decided_by,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

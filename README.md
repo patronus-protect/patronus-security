@@ -144,6 +144,8 @@ Setup and responses: [Deploy the HTTP API](https://patronus-protect.github.io/pa
 
 ## How scanning works
 
+<a href="https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/"><img src="https://raw.githubusercontent.com/patronus-protect/patronus-security/main/docs/img/architecture/analysis-grid.svg" alt="Analysis modules (PII, DLP, Cat, injection, threat classes) by layers L1, L2 and L3" width="100%"></a>
+
 Categories use the layers that fit their detector contract:
 
 | Layer | What it is | Cost | Availability |

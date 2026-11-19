@@ -335,6 +335,45 @@ mod distributed_plan_tests {
     }
 
     #[test]
+    fn a_cascade_detection_below_the_native_cut_is_kept_in_both_paths() {
+        // detect_threshold 0: L1's cascade detects prose the native scorer calls safe.
+        let gates = || {
+            serde_json::from_value::<crate::ScanGateMatrix>(serde_json::json!({
+                "cascade": {"modules": {"injection": {"detect_threshold": 0.0}}}
+            }))
+            .unwrap()
+        };
+        let gateway = injection_gateway();
+        let prose = [ExternalL1Input::new(
+            SecurityCategory::Injection,
+            "ordinary prose",
+        )];
+        let plan = gateway.plan_distributed_l2(
+            &prose,
+            &serde_json::json!({}),
+            &ScanExecution::with_gates(SecurityLevel::L2, gates()),
+        );
+        assert!(plan.categories.is_empty());
+        let l1 = plan
+            .l1_results
+            .iter()
+            .find(|result| result.model == "native:injection_l1")
+            .unwrap();
+        assert_eq!(l1.class_name, "safe");
+        assert_eq!(l1.l1_outcome, Some(crate::StageOutcome::Detected));
+        assert_eq!(l1.decided_by, Some(crate::Stage::Heuristic));
+
+        gateway.set_execution_gates(gates());
+        let queued = queued_events(&gateway, "ordinary prose", |result| {
+            format!("{}:{:?}", result.level, result.l1_outcome)
+        });
+        assert!(
+            queued.iter().all(|event| event == "L1:Some(Detected)"),
+            "{queued:?}"
+        );
+    }
+
+    #[test]
     fn without_a_cascade_l2_runs_as_before_and_nothing_is_marked() {
         // An L1 detection does not stop L2, in the queue and the distributed plan.
         let gateway = injection_gateway();
@@ -532,6 +571,7 @@ fn scan_result(
         layers,
         internal_l2_chunk_outputs: Vec::new(),
         decided_by: None,
+        l1_outcome: None,
         evidence_spans: Vec::new(),
         label_scores: Vec::new(),
         decision: None,

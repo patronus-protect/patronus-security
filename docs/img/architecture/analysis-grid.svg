@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 415" width="1000" height="415" role="img" aria-labelledby="t">
+<title id="t">Analysis modules by layer</title>
+<style>
+:root{--fg:#1a2130;--muted:#5a6477;--line:#d5dbe4;--panel:#ffffff;--soft:#eef1f5;--l1:#0f7b74;--l1b:#dff1ee;--l2:#a3620a;--l2b:#fbeedb;--l3:#6a3fb5;--l3b:#ece4fa;--ok:#2f7d32;--okb:#e4f1e4;--bad:#b3261e;--badb:#fae5e3;--esc:#8a6100;--escb:#fff2cf}
+@media (prefers-color-scheme:dark){:root{--fg:#e3e8ef;--muted:#9aa4b5;--line:#2d3543;--panel:#191f28;--soft:#20272f;--l1:#4cc3b9;--l1b:#11332f;--l2:#e3a54a;--l2b:#38290f;--l3:#b394ee;--l3b:#291e40;--ok:#7cc47f;--okb:#172e18;--bad:#f08a82;--badb:#3b1613;--esc:#e7c35c;--escb:#33290c}}
+text{font-family:-apple-system,"Segoe UI",system-ui,Helvetica,Arial,sans-serif;fill:var(--fg)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.mu{fill:var(--muted)} .c1{fill:var(--l1)} .c2{fill:var(--l2)} .c3{fill:var(--l3)} .cok{fill:var(--ok)} .cbad{fill:var(--bad)} .cesc{fill:var(--esc)}
+.bg{fill:var(--panel)} .p{fill:var(--panel);stroke:var(--line)} .s{fill:var(--soft);stroke:var(--line)}
+.b1{fill:var(--l1b);stroke:var(--l1)} .b2{fill:var(--l2b);stroke:var(--l2)} .b3{fill:var(--l3b);stroke:var(--l3)}
+.bok{fill:var(--okb);stroke:var(--ok)} .bbad{fill:var(--badb);stroke:var(--bad)} .besc{fill:var(--escb);stroke:var(--esc)}
+.ln{stroke:var(--muted);fill:none;stroke-width:1.5} .lok{stroke:var(--ok);fill:none;stroke-width:1.5} .lesc{stroke:var(--esc);fill:none;stroke-width:1.5;stroke-dasharray:5 4}
+.ar{fill:var(--muted)} .aok{fill:var(--ok)} .aesc{fill:var(--esc)}
+</style>
+<rect class="bg" x="0" y="0" width="1000" height="415" rx="10"/>
+<rect x="170" y="10" width="470" height="34" rx="6" class="b1"/><text x="405" y="32" text-anchor="middle" font-weight="600" class="c1">L1 · analysis module · Ark Core (MIT/Apache)</text>
+<rect x="655" y="10" width="150" height="34" rx="6" class="b2"/><text x="730" y="32" text-anchor="middle" font-weight="600" class="c2">L2 · Ark only (NTDB)</text>
+<rect x="820" y="10" width="170" height="34" rx="6" class="b3"/><text x="905" y="32" text-anchor="middle" font-weight="600" class="c3">L3 · deep learning</text>
+<text x="250" y="66" text-anchor="middle" font-size="12" class="mu">Anchor heuristic</text>
+<text x="405" y="66" text-anchor="middle" font-size="12" class="mu">L1 model (optional)</text>
+<text x="560" y="66" text-anchor="middle" font-size="12" class="mu">Cedar policies</text>
+<text x="10" y="102" font-weight="600" font-size="13">PII</text>
+<rect x="175" y="84" width="150" height="30" rx="5" class="b1"/><text x="250.0" y="104" text-anchor="middle" font-size="12.5" >Anchors, validators</text>
+<rect x="335" y="84" width="140" height="30" rx="5" class="s"/><text x="405.0" y="104" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="485" y="84" width="150" height="30" rx="5" class="s"/><text x="560.0" y="104" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="660" y="84" width="140" height="30" rx="5" class="s"/><text x="730.0" y="104" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="825" y="84" width="160" height="30" rx="5" class="b3"/><text x="905.0" y="104" text-anchor="middle" font-size="12.5" >GLiNER · Ark only</text>
+<text x="10" y="150" font-weight="600" font-size="13">DLP</text>
+<rect x="175" y="132" width="150" height="30" rx="5" class="b1"/><text x="250.0" y="152" text-anchor="middle" font-size="12.5" >Keywords, value runs</text>
+<rect x="335" y="132" width="140" height="30" rx="5" class="s"/><text x="405.0" y="152" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="485" y="132" width="150" height="30" rx="5" class="s"/><text x="560.0" y="152" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="660" y="132" width="140" height="30" rx="5" class="b2"/><text x="730.0" y="152" text-anchor="middle" font-size="12.5" >orca document</text>
+<rect x="825" y="132" width="160" height="30" rx="5" class="b3"/><text x="905.0" y="152" text-anchor="middle" font-size="12.5" >orca · Ark only</text>
+<text x="10" y="198" font-weight="600" font-size="13">Cat (shell)</text>
+<text x="10" y="213" font-size="11" class="mu">own interface</text>
+<rect x="175" y="180" width="150" height="30" rx="5" class="b1"/><text x="250.0" y="200" text-anchor="middle" font-size="12.5" >Tokens + facts</text>
+<rect x="335" y="180" width="140" height="30" rx="5" class="b1"/><text x="405.0" y="200" text-anchor="middle" font-size="12.5" >TF-IDF/LR, two cuts</text>
+<rect x="485" y="180" width="150" height="30" rx="5" class="b1"/><text x="560.0" y="200" text-anchor="middle" font-size="12.5" >Cedar, three tiers</text>
+<rect x="660" y="180" width="140" height="30" rx="5" class="b2"/><text x="730.0" y="200" text-anchor="middle" font-size="12.5" >tool class / action</text>
+<rect x="825" y="180" width="160" height="30" rx="5" class="b3"/><text x="905.0" y="200" text-anchor="middle" font-size="12.5" >husky · Ark only</text>
+<text x="10" y="246" font-weight="600" font-size="13">Injection</text>
+<rect x="175" y="228" width="150" height="30" rx="5" class="b1"/><text x="250.0" y="248" text-anchor="middle" font-size="12.5" >Rules + scorer</text>
+<rect x="335" y="228" width="140" height="30" rx="5" class="b1"/><text x="405.0" y="248" text-anchor="middle" font-size="12.5" >Text model (optional)</text>
+<rect x="485" y="228" width="150" height="30" rx="5" class="s"/><text x="560.0" y="248" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="660" y="228" width="140" height="30" rx="5" class="b2"/><text x="730.0" y="248" text-anchor="middle" font-size="12.5" >NTDB L2 package</text>
+<rect x="825" y="228" width="160" height="30" rx="5" class="b3"/><text x="905.0" y="248" text-anchor="middle" font-size="12.5" font-weight="600">Wolf Defender · Core</text>
+<text x="10" y="294" font-weight="600" font-size="13">Threat classes</text>
+<text x="10" y="309" font-size="11" class="mu">jailbreak, exfiltration, …</text>
+<rect x="175" y="276" width="150" height="30" rx="5" class="b1"/><text x="250.0" y="296" text-anchor="middle" font-size="12.5" >rules.json + scorer</text>
+<rect x="335" y="276" width="140" height="30" rx="5" class="b1"/><text x="405.0" y="296" text-anchor="middle" font-size="12.5" >Text model (optional)</text>
+<rect x="485" y="276" width="150" height="30" rx="5" class="s"/><text x="560.0" y="296" text-anchor="middle" font-size="12.5" class="mu">–</text>
+<rect x="660" y="276" width="140" height="30" rx="5" class="b2"/><text x="730.0" y="296" text-anchor="middle" font-size="12.5" >threat head (unsafe)</text>
+<rect x="825" y="276" width="160" height="30" rx="5" class="b3"/><text x="905.0" y="296" text-anchor="middle" font-size="12.5" >unified · Ark only</text>
+<line x1="175" y1="345" x2="975" y2="345" class="ln"/><polygon points="985,345 973,339 973,351" class="ar"/>
+<text x="175" y="367" font-size="12" class="mu">light · microseconds to milliseconds · high specificity (≈ 0.1 % FPR)</text>
+<text x="985" y="367" text-anchor="end" font-size="12" class="mu">heavy · models · only when needed</text>
+<text x="10" y="398" font-size="12" class="mu">A dash marks a stage the module does not have. Every stage that exists is switched on or off by configuration.</text>
+</svg>

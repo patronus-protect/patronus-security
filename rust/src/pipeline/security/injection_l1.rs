@@ -61,6 +61,7 @@ mod tests {
             }],
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

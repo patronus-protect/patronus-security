@@ -48,5 +48,5 @@ pub use types::{
     SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
     SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, Stage, WolfSelection,
+    SecurityRuntimeReadiness, SecurityScanResult, Stage, StageOutcome, WolfSelection,
 };

@@ -694,6 +694,10 @@ struct PyEvaluationResult {
     /// Stage that gave the category its final answer, e.g. `heuristic`.
     #[pyo3(get)]
     decided_by: Option<String>,
+    /// L1's answer when L1 decided the category under the cascade:
+    /// `detected` or `clear`.
+    #[pyo3(get)]
+    l1_outcome: Option<String>,
 }
 
 #[pymethods]
@@ -956,6 +960,10 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
             decided_by: result
                 .decided_by
                 .and_then(|stage| serde_json::to_value(stage).ok())
+                .and_then(|value| value.as_str().map(str::to_string)),
+            l1_outcome: result
+                .l1_outcome
+                .and_then(|outcome| serde_json::to_value(outcome).ok())
                 .and_then(|value| value.as_str().map(str::to_string)),
         }
     }

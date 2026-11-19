@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::detectors::text::{DataRef, L1ModelConfig, L1TextModel};
+use crate::detectors::text::{Finding, L1ModelConfig, L1TextModel};
 use crate::native::ScoreMode;
 use crate::{LayerResult, ScanControl, ScanError, SecurityCategory};
 
@@ -395,18 +395,20 @@ impl Cascade {
     /// Run `model`, the module's L1 model, on an input the heuristic
     /// escalated; its Detected or Clear replaces the escalation, its
     /// Escalate passes on. A decided stage or no model leaves `stage` as is.
-    /// `data` are the PII/DLP findings of the scan, a model input.
+    /// `findings` are the scan's rule findings as the model is trained on
+    /// them (the accepted Threat points findings, see
+    /// [`crate::detectors::threat::facts_findings`]).
     pub fn l1_model_stage(
         &self,
         mut stage: L1Stage,
         model: Option<&L1TextModel>,
         text: &str,
-        data: &[DataRef<'_>],
+        findings: &[Finding<'_>],
     ) -> L1Stage {
         let Some(model) = model.filter(|_| stage.outcome == StageOutcome::Escalate) else {
             return stage;
         };
-        let answer = model.evaluate(text, &[], data);
+        let answer = model.evaluate(text, findings, &[]);
         stage.layers.push(answer.layer_result());
         stage.outcome = answer.outcome;
         stage.score = answer.score;

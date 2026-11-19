@@ -57,6 +57,9 @@ def _to_dict(result):
     decided_by = getattr(result, "decided_by", None)
     if decided_by is not None:
         output["decided_by"] = decided_by
+    l1_outcome = getattr(result, "l1_outcome", None)
+    if l1_outcome is not None:
+        output["l1_outcome"] = l1_outcome
     return output
 
 

@@ -74,76 +74,36 @@ Conditional gates
 
 ## The grid: modules × layers
 
-Each row is an analysis module, each column a layer. L1 has three stages inside the module.
+Each row is an analysis module, each column a layer. L1 has up to three stages inside the module.
 
-```mermaid
-flowchart LR
-    subgraph L1["L1 · Ark Core (MIT / Apache-2.0)"]
-        direction TB
-        PII_H["PII<br/>heuristic"]
-        DLP_H["DLP<br/>heuristic"]
-        CAT_H["CAT<br/>heuristic → L1 model → Cedar"]
-        INJ_H["Threat: injection<br/>heuristic → L1 model"]
-        THR_H["Threat: other classes<br/>heuristic → L1 model"]
-    end
-    subgraph L2["L2 · full Ark only (NTDB)"]
-        direction TB
-        DLP_2["sensitive_document package"]
-        CAT_2["tool-class / tool-action package"]
-        INJ_2["injection package"]
-        THR_2["unsafe_action package"]
-    end
-    subgraph L3["L3 · deep learning"]
-        direction TB
-        PII_3["GLiNER dynamic PII<br/>(full Ark)"]
-        DLP_3["Orca<br/>(full Ark)"]
-        CAT_3["Husky / unified<br/>(full Ark)"]
-        INJ_3["Wolf Defender<br/>(Ark Core)"]
-        THR_3["unified multitask / threat classifier<br/>(full Ark)"]
-    end
-    PII_H --> PII_3
-    DLP_H --> DLP_2 --> DLP_3
-    CAT_H --> CAT_2 --> CAT_3
-    INJ_H --> INJ_2 --> INJ_3
-    THR_H --> THR_2 --> THR_3
-```
+![Analysis modules (rows) by layers L1, L2 and L3 (columns), with the stages each module has](../img/architecture/analysis-grid.svg)
 
 | Module | Heuristic (L1) | L1 model (L1) | Policies (L1) | L2 (full Ark, NTDB) | L3 |
 | --- | --- | --- | --- | --- | --- |
-| **PII** | anchors, validators, context, points (`pii_mode`, `rules`) | none yet; possible later | later, via a facts schema | none | GLiNER dynamic PII (full Ark) |
-| **DLP** | anchors, rule keywords, value runs, points (`dlp_mode`, `rules`) | none yet; possible later | later, via a facts schema | Orca Sonar document package (`sensitive_document`) | Orca dedicated or unified (full Ark) |
+| **PII** | anchors, validators, context, points (`pii_mode`, `rules`) | – | – | none | GLiNER dynamic PII (full Ark) |
+| **DLP** | anchors, rule keywords, value runs, points (`dlp_mode`, `rules`) | – | – | Orca Sonar document package (`sensitive_document`) | Orca dedicated or unified (full Ark) |
 | **CAT** (shell) | tokens and facts (`patronus.facts/1`) | TF-IDF / logistic regression, two thresholds (1 % and 0.1 % false positives) | Cedar, three tiers: core, bundle, user (`policy_dirs`, `cat.*` rules) | unified tool-class / tool-action package | Husky or unified (full Ark) |
-| **Threat: injection** | rule catalog and families behind the anchor gate (`injection_mode`) | text model, two thresholds: detect at 0.1 %, clear at 1 % false positives; clear switchable off | later, via text facts | injection package (published in the Wolf Defender small repository) | Wolf Defender base / small / edge (Ark Core, default threshold) |
-| **Threat: other classes** (`jailbreak`, `prompt_extraction`, `tool_poisoning`, `exfiltration`, `unsafe_action`, …) | class rules behind the anchor gate, points (`<class>_mode`) | text model per class, two thresholds, where it measures better | later, via text facts | unified threat package (`unsafe_action` only) | unified multitask or threat classifier (full Ark) |
+| **Threat: injection** | rule catalog and families behind the anchor gate (`injection_mode`) | text model, two thresholds: detect at 0.1 %, clear at 1 % false positives; clear switchable off | – | injection package (published in the Wolf Defender small repository) | Wolf Defender base / small / edge (Ark Core, default threshold) |
+| **Threat: other classes** (`jailbreak`, `prompt_extraction`, `tool_poisoning`, `exfiltration`, `unsafe_action`, …) | class rules behind the anchor gate, points (`<class>_mode`) | text model per class, two thresholds, where it measures better | – | unified threat package (`unsafe_action` only) | unified multitask or threat classifier (full Ark) |
 
 The L2 injection package is an NTDB L2 model; it only shares a repository with Wolf Defender.
 Wolf Defender itself is an L3 model.
 
 ## Flow inside one module
 
-Every stage either decides or hands on. The next stage runs only if it is configured and the
-previous one did not decide.
+Without a cascade, every enabled producer and model runs, as before. With a cascade, every stage
+either decides or hands on: the next stage runs only if it is switched on and the previous one did
+not decide.
 
-```mermaid
-flowchart TB
-    IN([input]) --> PREP["prepare text once<br/>(normalisation, shared anchor automaton)"]
-    PREP --> H{"heuristic<br/>score ≥ detect threshold?"}
-    H -- yes --> DET([detected])
-    H -- no --> M{"L1 model<br/>configured?"}
-    M -- no --> P
-    M -- yes --> MS{"model score"}
-    MS -- "> detect threshold" --> DET
-    MS -- "≤ clear threshold" --> CLR([clear])
-    MS -- "in between,<br/>or clear threshold off" --> P{"policies<br/>configured?"}
-    P -- "forbid" --> DET
-    P -- "no decision / not configured" --> NX{"next layer<br/>configured and<br/>≤ max level?"}
-    NX -- no --> CLR
-    NX -- yes --> L2["L2 (full Ark)<br/>promote ≥ threshold → L3"]
-    L2 -- decided --> OUT([L2 verdict])
-    L2 -- promote --> L3["L3<br/>model at its default threshold"]
-    NX -- "yes, no L2" --> L3
-    L3 --> OUT3([L3 verdict])
-```
+![Without a cascade every enabled producer and model runs; with a cascade the stages run one after another per module with early exit](../img/architecture/cascade-modes.svg)
+
+Each L1 stage compares its score with two cuts:
+
+![A score at or above the detect threshold is detected, below the clear threshold clear, in between it goes to the next stage](../img/architecture/stage-cuts.svg)
+
+The heuristic counts a score at its cut (`score >= detect_threshold` detects, `score <
+clear_threshold` clears); the L1 model compares as its model file declares (`score >
+detect_threshold` detects, `score <= clear_threshold` clears).
 
 The rules behind the diagram:
 
@@ -245,6 +205,8 @@ a category's answer is final, in the queue and the distributed plan alike; see t
 
 ## Where the parts live
 
+![Ark Core holds the analysis modules, the execution logic, Wolf Defender and the extension traits; Ark adds NTDB L2, the Ark-only L3 models and serving](../img/architecture/core-and-ark.svg)
+
 | Part | Package | Licence |
 | --- | --- | --- |
 | Analysis modules (heuristics, L1 models, Cedar policies, facts), Wolf Defender runner, CAT | Ark Core (`patronus-ark-core`) | MIT OR Apache-2.0 |
@@ -271,7 +233,7 @@ PII, DLP and CAT keep their interfaces. In Rust: `Scanner::new`, `scan`, `scan_c
 `LayerResult`, `DecisionEnvelope`, `PiiPipeline`, `DlpPipeline` and `ShellRiskPipeline`. In
 Python: `Scanner(...).scan` and `.shell_verdict` with their types. The framework adds an
 optional cascade block to the configuration and an optional verdict to the report; nothing
-existing is removed or renamed.
+existing is removed or renamed. Without a cascade, scans and their results are exactly as before.
 
 ## The layers in full Ark
 
@@ -316,7 +278,7 @@ L3 input. Invalid chunks report an error; there is no tokenization fallback.
 ```mermaid
 flowchart LR
     IN([text]) --> L1
-    L1 -- decided --> OUT0([L1 result])
+    L1 -- "decided (with cascade)" --> OUT0([L1 result])
     L1 -- undecided --> L2{L2 assets<br/>ready?}
     L2 -- no --> OUT1([L1 result])
     L2 -- yes --> L2R[L2 classifier]
@@ -327,8 +289,9 @@ flowchart LR
     W --> OUT3([final L3 result])
 ```
 
-1. **L1 always runs first.** If it decides, the request ends there (early exit).
-2. **L2 runs on what L1 left undecided** when its assets are cached and the level allows it
+1. **L1 always runs first.** With the gate key `cascade`, a category L1 decides ends there
+   (early exit); without it, every category goes on to L2.
+2. **L2 runs on what L1 hands on** when its assets are cached and the level allows it
    (`max_level` ≥ L2).
 3. **Promotion to L3** happens when L2 is not confident enough to settle the case on its own
    and the level allows it (`max_level` = L3). The exact promotion behavior depends on the

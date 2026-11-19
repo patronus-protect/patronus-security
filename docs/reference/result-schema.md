@@ -48,6 +48,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `duration_ms` | float | Wall-clock time spent producing this result. |
 | `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
 | `decided_by` | str | Only with the opt-in gate key `cascade`: the stage that gave the category its final answer, `heuristic` (L1), `l2` or `l3`. Absent without a cascade and while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3). Rust exposes `SecurityScanResult.decided_by: Option<Stage>`. |
+| `l1_outcome` | str | Only with the opt-in gate key `cascade`, on the L1 results of a category L1 decided: `detected` or `clear`. A detection at a lowered `cascade.modules.<category>.detect_threshold` shows here even when `class_name` stays `safe`. |
 | `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |

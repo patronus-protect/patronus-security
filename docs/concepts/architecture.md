@@ -5,6 +5,8 @@ flows through them, and why the design looks the way it does. The analysis model
 modules × layers, the stages inside a module, escalation and early exit, and which parts live in
 Ark Core — is described once on [Analysis framework](layered-scanning.md).
 
+[![Analysis modules by layers L1, L2 and L3](../img/architecture/analysis-grid.svg)](layered-scanning.md)
+
 ## The big picture
 
 Patronus Ark is a **Rust core** with a thin **Python binding**. The core owns all

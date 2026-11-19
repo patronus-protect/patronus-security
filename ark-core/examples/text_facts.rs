@@ -53,7 +53,10 @@ fn main() -> io::Result<()> {
         } else {
             Vec::new()
         };
-        let findings: Vec<_> = detections.iter().flat_map(facts_findings).collect();
+        let findings: Vec<_> = detections
+            .iter()
+            .flat_map(|detection| facts_findings(&detection.details))
+            .collect();
         let facts = extract(text, &findings, &[]).to_json();
         row["facts"] = facts;
         serde_json::to_writer(&mut out, &row)?;

@@ -227,6 +227,11 @@ pub struct SecurityScanResult {
     /// Stage that gave the category its final answer (`heuristic` for an L1
     /// result, `l2`, `l3`); `None` while a later layer still answers.
     pub decided_by: Option<Stage>,
+    /// With the opt-in cascade, L1's answer (`detected` or `clear`) when L1
+    /// decided the category, as Core's `ModuleDecision::outcome`: a detection
+    /// at a lowered `detect_threshold` shows here even when the native class
+    /// stays `safe`. `None` otherwise.
+    pub l1_outcome: Option<StageOutcome>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -565,7 +570,7 @@ pub use patronus_ark_core::cascade::{
     ConditionalPipelineGate, EffectiveL3PipelinePolicy, GateExpression, GateResult,
     L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
     L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, LayerExecution, MetadataCondition,
-    ResultCondition, ScanGateMatrix, SecurityLevel, Stage,
+    ResultCondition, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
 };
 
 pub use patronus_ark_core::{
@@ -589,6 +594,7 @@ impl From<patronus_ark_core::NativeResult> for SecurityScanResult {
             decision: value.decision,
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
+            l1_outcome: None,
         }
     }
 }

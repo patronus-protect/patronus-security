@@ -91,7 +91,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   - Ark: the same `cascade` key in the gates (Python `execution_gates`, Ark API `gates`) with
     per-category `modules` turns on early exit: a category L1 decides, or one no later layer can
     run for, skips L2 and L3, and results carry `decided_by` (`heuristic`, `l2` or `l3`) once
-    final, in the queue and the distributed plan alike. Levels and conditional gates stay the
+    final, in the queue and the distributed plan alike. A category L1 decides also carries
+    `l1_outcome` (`detected` or `clear`), which keeps a detection at a lowered
+    `detect_threshold` even where the rule result itself stays `safe`. Levels and conditional gates stay the
     existing gate keys.
   - Wolf Defender's `threshold` is optional; without it the default is `0.93` for base, small and
     edge.
