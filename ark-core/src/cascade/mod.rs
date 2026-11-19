@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{NativeResult, ScanControl, ScanError, SecurityCategory};
+use crate::{ScanControl, ScanError, SecurityCategory};
 
 mod arbiter;
 mod chunks;
@@ -50,6 +50,17 @@ pub enum Stage {
     Policy,
     L2,
     L3,
+}
+
+impl From<SecurityLevel> for Stage {
+    /// The stage that answers at `level`; L1's answer is the heuristic's.
+    fn from(level: SecurityLevel) -> Self {
+        match level {
+            SecurityLevel::L1 => Self::Heuristic,
+            SecurityLevel::L2 => Self::L2,
+            SecurityLevel::L3 => Self::L3,
+        }
+    }
 }
 
 /// A stage's answer for one module.
@@ -136,6 +147,19 @@ pub struct L1Stage {
     gate_results: Vec<GateResult>,
 }
 
+impl L1Stage {
+    /// The module's final decision when L1 answered Detected or Clear;
+    /// `None` when it escalates to the next configured layer.
+    pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision> {
+        (self.outcome != StageOutcome::Escalate).then_some(ModuleDecision {
+            module,
+            outcome: self.outcome,
+            decided_by: Stage::from(SecurityLevel::L1),
+            score: self.score,
+        })
+    }
+}
+
 /// Runs the configured layers per module with early exit.
 #[derive(Debug, Clone, Default)]
 pub struct Cascade {
@@ -151,16 +175,16 @@ impl Cascade {
     /// L1's outcome for `module` from its native results: Detected when a
     /// result is accepted (or, without a decision envelope, has evidence);
     /// otherwise Escalate unless the score is below the clear threshold.
-    pub fn l1_stage<'a>(
+    pub fn l1_stage<'a, R: LayeredResult + 'a>(
         &self,
         module: SecurityCategory,
-        results: impl IntoIterator<Item = &'a NativeResult>,
+        results: impl IntoIterator<Item = &'a R>,
     ) -> L1Stage {
         let mut detected = false;
         let mut best: Option<(&str, f64)> = None;
         let mut gate_results = Vec::new();
         for result in results {
-            let (accepted, score) = match &result.decision {
+            let (accepted, score) = match result.decision() {
                 Some(decision) => (
                     decision.recommendation.accepted,
                     decision
@@ -168,17 +192,17 @@ impl Cascade {
                         .as_ref()
                         .map_or(0.0, |candidate| candidate.confidence),
                 ),
-                None if result.evidence_spans.is_empty() => (false, 0.0),
-                None => (true, result.confidence),
+                None if !result.has_evidence() => (false, 0.0),
+                None => (true, result.confidence()),
             };
             detected |= accepted;
             if best.is_none_or(|(_, top)| score > top) {
-                best = Some((&result.model, score));
+                best = Some((result.model(), score));
             }
             gate_results.push(GateResult {
-                pipeline: result.category.clone(),
-                class_name: result.class_name.clone(),
-                confidence: result.confidence,
+                pipeline: module.as_str().to_string(),
+                class_name: result.class_name().to_string(),
+                confidence: result.confidence(),
                 level: SecurityLevel::L1,
             });
         }
@@ -228,13 +252,16 @@ impl Cascade {
         mut l3: Option<&mut dyn L3Executor>,
         control: &ScanControl,
     ) -> Result<ModuleDecision, ScanError> {
+        if let Some(decision) = l1.decision(module) {
+            return Ok(decision);
+        }
         let L1Stage {
             mut outcome,
             mut score,
             mut escalation,
             gate_results: mut results,
         } = l1;
-        let mut decided_by = Stage::Heuristic;
+        let mut decided_by = Stage::from(SecurityLevel::L1);
         for level in [SecurityLevel::L2, SecurityLevel::L3] {
             let Some(signal) = escalation.take() else {
                 break;
@@ -266,11 +293,7 @@ impl Cascade {
                 escalation = Some(signal);
                 continue;
             };
-            decided_by = if level == SecurityLevel::L2 {
-                Stage::L2
-            } else {
-                Stage::L3
-            };
+            decided_by = Stage::from(level);
             score = output.result.confidence;
             results.push(GateResult {
                 pipeline: module.as_str().to_string(),

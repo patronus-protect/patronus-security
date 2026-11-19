@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::*;
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, LayerResult,
+    DecisionResult, DecisionTerminality, LayerResult, NativeResult,
 };
 
 /// A fake model that counts its calls and answers with a fixed score.
@@ -339,5 +339,30 @@ fn cascade_config_serde_round_trips_and_validates() {
     assert_eq!(
         serde_json::to_value(decision).unwrap(),
         serde_json::json!({"module": "injection", "outcome": "detected", "decided_by": "l1_model", "score": 0.5})
+    );
+}
+
+#[test]
+fn l1_stage_decision_is_final_only_when_l1_does_not_escalate() {
+    let cascade = Cascade::default();
+    let detected = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.95, true)]);
+    assert_eq!(
+        detected.decision(SecurityCategory::Injection),
+        Some(ModuleDecision {
+            module: SecurityCategory::Injection,
+            outcome: StageOutcome::Detected,
+            decided_by: Stage::Heuristic,
+            score: 0.95,
+        })
+    );
+    let undecided = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    assert_eq!(undecided.decision(SecurityCategory::Injection), None);
+}
+
+#[test]
+fn each_level_maps_to_the_stage_that_answers_there() {
+    assert_eq!(
+        [SecurityLevel::L1, SecurityLevel::L2, SecurityLevel::L3].map(Stage::from),
+        [Stage::Heuristic, Stage::L2, Stage::L3]
     );
 }

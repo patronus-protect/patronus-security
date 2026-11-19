@@ -51,6 +51,8 @@ pub trait LayeredResult: Clone {
     fn layers_mut(&mut self) -> &mut Vec<LayerResult>;
     fn label_scores(&self) -> &[LabelScore];
     fn decision(&self) -> Option<&DecisionEnvelope>;
+    /// Whether the result carries evidence spans.
+    fn has_evidence(&self) -> bool;
     fn set_class(&mut self, class_name: String, confidence: f64);
     fn set_level(&mut self, level: &str);
     fn set_decision(&mut self, decision: DecisionEnvelope);
@@ -80,6 +82,9 @@ impl LayeredResult for NativeResult {
     }
     fn decision(&self) -> Option<&DecisionEnvelope> {
         self.decision.as_ref()
+    }
+    fn has_evidence(&self) -> bool {
+        !self.evidence_spans.is_empty()
     }
     fn set_class(&mut self, class_name: String, confidence: f64) {
         self.class_name = class_name;
