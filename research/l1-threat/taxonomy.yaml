@@ -761,13 +761,8 @@ classes:
       gap: Decoded extraction requests are not rescanned today.
     lexicons:
     - {id: extraction.reveal_verb, kind: support, task: PX01, title: 'Show, print, repeat, reveal, dump'}
-    - {id: extraction.hidden_target, kind: support, task: PX01, title: 'System prompt, hidden/initial instructions,
-        everything above'}
     - {id: extraction.verbatim, kind: support, task: PX01, title: 'Verbatim, word for word, in full'}
     - {id: extraction.transform, kind: support, task: PX01, title: 'Translate, encode, summarize, rewrite as'}
-    - {id: extraction.tool_schema, kind: support, task: PX01, title: 'Tool definitions, function schemas'}
-    - {id: extraction.guardrail, kind: support, task: PX01, title: 'Safety rules, filters, content policy'}
-    - {id: extraction.guarded_secret, kind: support, task: PX01, title: 'Password, passphrase, secret word'}
     - {id: extraction.capability_question, kind: counter, task: PX01, title: General capability questions}
     - {id: extraction.own_prompt, kind: counter, task: PX01, title: Work on the user's own prompt}
 
