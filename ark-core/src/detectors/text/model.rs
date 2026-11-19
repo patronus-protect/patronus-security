@@ -73,6 +73,15 @@ impl CategoryModel {
             Self::FastText(model) => model.score(text, tokens),
         }
     }
+
+    /// The decision score alone, without the top features (the scan path's
+    /// cost; explanations are built only for flagged texts).
+    pub fn logit_tokens(&self, text: &str, tokens: impl FnOnce(&mut dyn FnMut(&str))) -> f64 {
+        match self {
+            Self::TfidfLr(model) => model.score(text, tokens).0,
+            Self::FastText(model) => model.logit(text, tokens),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -113,6 +122,10 @@ mod tests {
                 text.split_whitespace().for_each(emit);
             });
             assert_ne!(with_facts, words_only);
+            let logit = model.logit_tokens(text, |emit| {
+                text.split_whitespace().for_each(emit);
+            });
+            assert_eq!(logit.to_bits(), words_only.to_bits());
             assert!(top.iter().any(|f| f.feature.starts_with(prefix)));
             assert!(top.windows(2).all(|w| w[0].weight >= w[1].weight));
         }

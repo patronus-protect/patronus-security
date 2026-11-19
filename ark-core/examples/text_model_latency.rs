@@ -55,16 +55,16 @@ fn main() -> Result<(), String> {
         let scale = WINDOW_BYTES / text.len().max(1) as f64;
         for _ in 0..=SAMPLES {
             let start = Instant::now();
-            let (score, _) = match tokens {
-                "tf1" => model.score(text, &facts),
-                "words" => model.score_tokens(text, |emit| {
+            let score = match tokens {
+                "tf1" => model.logit_tokens(text, |emit| visit_tf1(text, &facts, emit)),
+                "words" => model.logit_tokens(text, |emit| {
                     visit_tf1(text, &facts, &mut |t| {
                         if t.starts_with("T:") {
                             emit(t)
                         }
                     })
                 }),
-                _ => model.score_tokens(text, |_| {}),
+                _ => model.logit_tokens(text, |_| {}),
             };
             samples.push(start.elapsed().as_secs_f64() * 1000.0 * scale);
             std::hint::black_box(score);

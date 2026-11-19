@@ -39,6 +39,7 @@ inference matches bit for bit.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import sys
@@ -97,6 +98,12 @@ def char_wb_ngrams(text: str, min_n: int, max_n: int) -> Iterable[str]:
 def row_tokens(row: dict) -> list[str]:
     """The ``tf1`` tokens of a row with its text and facts document."""
     return tf1(row["text"], row["facts"])
+
+
+@functools.lru_cache(maxsize=1 << 22)
+def bucket_of(feature: str, buckets: int) -> int:
+    """The hashed bucket of a feature (cached: n-grams repeat across rows)."""
+    return fnv1a_32(feature) % buckets
 
 
 def fnv1a_32(feature: str) -> int:
@@ -370,9 +377,9 @@ class FastTextModel:
     a linear softmax over ``labels`` (negative, positive).
 
     Inference folds the output layer into one value per bucket, ``Σ_j E[b][j] * (W[1][j] - W[0][j])``
-    (double precision, ``j`` in order); the decision score is ``Σ_b count_b * value_b`` over the
-    text's buckets in index order, divided by the feature count, plus ``bias[1] - bias[0]``, i.e.
-    the positive minus the negative softmax logit. No feature: the bias difference alone."""
+    (double precision, ``j`` in order); the decision score (``logit``) is the mean value of the
+    text's features' buckets plus ``bias[1] - bias[0]``, i.e.
+    the positive minus the negative softmax logit."""
 
     def __init__(self, document: dict) -> None:
         if document.get("kind") != FASTTEXT_KIND or document["format_version"] != FASTTEXT_FORMAT_VERSION:
@@ -400,24 +407,28 @@ class FastTextModel:
         bias = document["bias"]
         self.bias = float(bias[1]) - float(bias[0])
 
-    def counts(self, text: str, tokens: list[str]) -> tuple[Counter, int]:
-        counts: Counter = Counter()
-        for feature in fasttext_features(text, tokens, *self.ngrams):
-            counts[fnv1a_32(feature) % self.buckets] += 1
-        return counts, sum(counts.values())
+    def buckets_of(self, text: str, tokens: list[str]) -> list[int]:
+        return [bucket_of(feature, self.buckets) for feature in fasttext_features(text, tokens, *self.ngrams)]
+
+    def logit(self, text: str, tokens: list[str]) -> float:
+        """Decision score: the bucket values summed in feature order from zero, divided by the
+        feature count, plus the bias difference (the bias difference alone without a feature)."""
+        buckets = self.buckets_of(text, tokens)
+        if not buckets:
+            return self.bias
+        dot = 0.0
+        for bucket in buckets:
+            dot += self.values[bucket]
+        return dot / float(len(buckets)) + self.bias
 
     def score(self, text: str, tokens: list[str]) -> tuple[float, list[dict]]:
-        """Decision score and the top positive bucket contributions (``#<bucket>``), strongest
-        first, ties by name, rounded to four decimals."""
-        counts, total = self.counts(text, tokens)
-        if not total:
-            return self.bias, []
-        dot = 0.0
+        """``logit`` and the top positive bucket contributions (``#<bucket>``, count x value over
+        the feature count), strongest first, ties by name, rounded to four decimals."""
+        buckets = self.buckets_of(text, tokens)
+        counts = Counter(buckets)
         contributions = []
         for bucket in sorted(counts):
-            value = float(counts[bucket]) * self.values[bucket]
-            dot += value
-            contribution = value / float(total)
+            contribution = float(counts[bucket]) * self.values[bucket] / float(len(buckets))
             if contribution > 0.0:
                 contributions.append((f"#{bucket}", contribution))
         contributions.sort(key=lambda item: (-item[1], item[0]))
@@ -425,7 +436,7 @@ class FastTextModel:
             {"feature": name, "weight": round(weight, 4)}
             for name, weight in contributions[:TOP_FEATURES]
         ]
-        return dot / float(total) + self.bias, top
+        return self.logit(text, tokens), top
 
 
 def load_model(document: dict) -> "Model | FastTextModel":
@@ -514,7 +525,7 @@ def train_fasttext(
     weights are stored as float32 values."""
     token_docs = [tokens(row) for row in rows]
     docs = [
-        [fnv1a_32(f) % buckets for f in fasttext_features(row["text"], toks, *ngram_range)]
+        [bucket_of(f, buckets) for f in fasttext_features(row["text"], toks, *ngram_range)]
         for row, toks in zip(rows, token_docs)
     ]
     keep = [i for i, doc in enumerate(docs) if doc]
@@ -542,7 +553,7 @@ def train_fasttext(
     }
     model = FastTextModel(document)
     negatives = [
-        model.score(row["text"], toks)[0]
+        model.logit(row["text"], toks)
         for row, toks in zip(rows, token_docs)
         if int(row["label"]) == 0
     ]

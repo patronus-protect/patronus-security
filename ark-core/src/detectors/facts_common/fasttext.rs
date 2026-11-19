@@ -140,37 +140,48 @@ impl FastTextModel {
     }
 
     /// Decision score of `text` given its analyzer tokens (passed to the
-    /// visitor), and the top positive bucket contributions (`#<bucket>`).
+    /// visitor): the bucket values summed in feature order from zero, divided
+    /// by the feature count, plus the bias difference. One lookup per
+    /// feature, no allocation beyond the reused word buffers.
+    pub fn logit(&self, text: &str, tokens: impl FnOnce(&mut dyn FnMut(&str))) -> f64 {
+        let buckets = self.values.len() as u32;
+        let (mut dot, mut total) = (0.0, 0u64);
+        visit_feature_hashes(text, self.char_ngrams, tokens, |hash| {
+            dot += self.values[(hash % buckets) as usize];
+            total += 1;
+        });
+        if total == 0 {
+            return self.bias;
+        }
+        dot / total as f64 + self.bias
+    }
+
+    /// [`Self::logit`] and the top positive bucket contributions
+    /// (`#<bucket>`: count x value over the feature count).
     pub fn score(
         &self,
         text: &str,
         tokens: impl FnOnce(&mut dyn FnMut(&str)),
     ) -> (f64, Vec<TopFeature>) {
-        let counts = self.counts(text, tokens);
-        let total = counts.values().map(|&count| u64::from(count)).sum::<u64>();
-        if total == 0 {
-            return (self.bias, Vec::new());
-        }
-        let total = total as f64;
+        let mut seen = Vec::new();
+        let counts = self.counts(text, |emit| {
+            tokens(&mut |token| {
+                seen.push(token.to_string());
+                emit(token)
+            })
+        });
+        let logit = self.logit(text, |emit| seen.iter().for_each(|t| emit(t)));
+        let total = counts.values().map(|&count| f64::from(count)).sum::<f64>();
         let mut buckets: Vec<(u32, u32)> = counts.into_iter().collect();
         buckets.sort_unstable_by_key(|(bucket, _)| *bucket);
-        let mut dot = 0.0;
-        let mut contributions = Vec::new();
-        for (bucket, count) in buckets {
-            let value = f64::from(count) * self.values[bucket as usize];
-            dot += value;
-            let contribution = value / total;
-            if contribution > 0.0 {
-                contributions.push((bucket, contribution));
-            }
-        }
         // Strongest first; equal contributions in feature-name order.
-        let mut top: Vec<TopFeature> = contributions
+        let mut top: Vec<TopFeature> = buckets
             .into_iter()
-            .map(|(bucket, weight)| TopFeature {
+            .map(|(bucket, count)| TopFeature {
                 feature: format!("#{bucket}"),
-                weight,
+                weight: f64::from(count) * self.values[bucket as usize] / total,
             })
+            .filter(|feature| feature.weight > 0.0)
             .collect();
         top.sort_by(|a, b| {
             b.weight
@@ -181,7 +192,7 @@ impl FastTextModel {
         for feature in &mut top {
             feature.weight = py_round(feature.weight, 4);
         }
-        (dot / total + self.bias, top)
+        (logit, top)
     }
 
     /// Bucket counts of every feature of `text` and its tokens.
