@@ -438,6 +438,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- The threat scoreboard measures `patronus-ark-core` alone instead of the full Ark package: a new
+  example, `threat_cascade`, scans every evaluation row once with the Core scanner and a layer
+  configuration, so a later layer (Wolf for prompt injection) runs only on what the rule layer left
+  open. `scoreboard.py report --cascade` shows, per class and language at that configuration's
+  operating point, the detection rate, the false-positive rate on benign data and on hard benign
+  look-alikes at the same decision, which layer decided how many rows, and the time per layer.
+  `scoreboard.py calibrate` writes per-class thresholds for a 0.1 % false-positive rate on the benign
+  evaluation data into such a configuration; it never changes the Core defaults. The hard-benign
+  false-positive rate in the scoreboard report is now taken at the same threshold as each detection
+  rate. The earlier layer option (`--layers l1+l2`), which ran every layer on every row, is removed.
+  **Detection change:** none; this is evaluation tooling only.
 - The threat scoreboard gate (`scripts/l1_threat/scoreboard.py gate` and `compare`) now also checks
   the detection rate at 0.1 % false positives: a change fails when a class (German, English or both)
   loses more than 0.5 percentage points at 0.1 %, just as at 1 %. The gate summary is a Markdown

@@ -345,7 +345,7 @@ tasks:
       and the summed L1 latency of every model a default-on class ships stays named in the PR; Rust parity
       bit-exact; nothing wired into the scan path before a class task picks it
   - id: E09
-    title: Scoreboard of main after every merge — baseline.md (and full-stack.md once E07 lands) re-rendered from main's current dev split with TPR@0.1% and @1% per class and language, so every class has one current number instead of per-PR bases
+    title: Scoreboard of main after every merge — baseline.md (and cascade.md, the core cascade report) re-rendered from main's current dev split with TPR@0.1% and @1% per class and language, so every class has one current number instead of per-PR bases
     type: eval-infra
     deps: [E08]
     accept: >-
@@ -370,6 +370,8 @@ tasks:
       reachable value
   # Owner, 2026-11-18 (decision a): L1 stays the fast pre-filter (IJ02: no in-budget candidate reaches 80);
   # the injection gap is closed by the full stack. The deciding metric is TPR at 0.1% FPR.
+  # Owner, 2026-11-19: E07's l1+l2 measurement (every layer on every row, full-stack.md) is replaced by the core
+  # cascade report (scoreboard.py report --cascade, cascade.md): ark-core only, L1 heuristic -> L1 model -> L3 Wolf.
   - id: E07
     status: done
     title: Full-stack scoreboard — scoreboard.py predict/score/report gain a layer choice (l1, l1+l2) that runs the native L1 detectors and then the L2 Wolf Defender model (release 0.1.17, the variant the ARK default config ships) on every row, with the stack's own decision rule (L2 only where the default config escalates, or on every row if that is the default); report TPR at 0.1% and 1% FPR per class and language, hard-benign FPR, and ms per 100 KiB per layer

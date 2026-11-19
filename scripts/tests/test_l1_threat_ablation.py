@@ -171,21 +171,16 @@ def test_lr_stages_score_as_probabilities():
 def test_evaluate_reports_tpr_hard_benign_fpr_per_language():
     rows = toy_rows()
     stage = MODULE.Stage("R", lambda r: MODULE.rule_points(r["facts"], CLS))
-    stage.cut = 0.0
     result = MODULE.evaluate(stage, MODULE.labelled(rows, CLS))
     assert result["stage"] == "R"
     assert result["all"]["positives"] == 8 and result["all"]["negatives"] == 9
-    # Two of eight positives have no finding; the only hard benign has one.
+    # Two of eight positives have no finding; the only hard benign has one, but it scores below the
+    # matched threshold, so it is no false positive at the operating point of the TPR.
     assert result["all"]["0.01"]["tpr"] == pytest.approx(6 / 8)
-    assert result["all"]["hard_benign"] == {"rows": 1, "fp": 1, "fpr": 1.0}
+    hard_score = max(MODULE.rule_points(r["facts"], CLS) for r in rows if MODULE.SCOREBOARD.is_hard_benign(r))
+    assert 0 < hard_score < result["all"]["0.01"]["threshold"]
+    assert result["all"]["hard_benign"] == {"rows": 1, "0.01": {"fp": 0, "fpr": 0.0}, "0.001": {"fp": 0, "fpr": 0.0}}
     assert set(result) >= {"all", "de", "en"}
-
-
-def test_operating_cut_holds_one_percent_of_training_negatives():
-    scored = [(0.0, 0)] * 99 + [(5.0, 0), (9.0, 1)]
-    assert MODULE.operating_cut(scored) == 0.0
-    scored = [(float(i), 0) for i in range(10)]
-    assert MODULE.operating_cut(scored) == 9.0
 
 
 # ── selection rule ──────────────────────────────────────────────────────────
@@ -262,7 +257,7 @@ def test_markdown_lists_every_stage_and_the_choice():
     results = [measured("R", 0.5), measured("B5", 0.9, ms=0.25, ram=1024)]
     for r in results:
         r["0.001"] = None
-        r["all"]["hard_benign"] = {"rows": 0, "fp": 0, "fpr": None}
+        r["all"]["hard_benign"] = {"rows": 0, "0.01": {"fp": 0, "fpr": None}, "0.001": {"fp": 0, "fpr": None}}
         r["all"]["0.001"] = None
     report = {"class": CLS, "stages": results, "selection": MODULE.select(results),
               "rows": {"train": 10, "eval": 10}}

@@ -58,3 +58,8 @@ required-features = ["wolf"]
 [[example]]
 name = "core_scanner"
 required-features = ["download"]
+
+# Its unit tests run with `cargo test -p patronus-ark-core`.
+[[example]]
+name = "threat_cascade"
+test = true

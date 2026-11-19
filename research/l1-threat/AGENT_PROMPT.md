@@ -21,6 +21,8 @@ auf L1 (CPU, ohne Transformer) in den elf Klassen aus `research/l1-threat/README
 `toxic_language`) und ist gegen die offenen heuristischen Baselines und klassische kleine ML-Verfahren
 (TF-IDF/Zeichen-n-Gramme + LogReg, lineare SVM, NB-SVM) messbar besser, auf Deutsch deutlich. Nur
 Eingabe-Scanning; L2/L3-Modelle werden nicht geändert oder neu trainiert, nur ihre Labels gemappt.
+Gemessen wird mit ark-core allein als Kaskade (L1-Heuristik → L1-Modell → L3 Wolf, jede Ebene nur auf dem, was
+die vorige offen lässt; `scoreboard.py`, Gate auf L1); L2 gibt es nur in ARK und wird hier nicht gemessen.
 Du erledigst in diesem Lauf genau die unten angehängte Aufgabe, keine weitere.
 
 1. Lies `research/l1-threat/README.md`, deine Aufgabe samt „Shared acceptance“ in
