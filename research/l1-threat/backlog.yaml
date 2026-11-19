@@ -361,6 +361,7 @@ tasks:
   # carrier_insertion (25.0%) and obfuscation_slices (9.6%) sets failing because tool_poisoning payloads
   # were placed into non-tool carriers; this blocks jailbreak, prompt_extraction and tool_poisoning in gold.md.
   - id: M08
+    status: done
     title: Generators — tool_poisoning payloads only in tool-metadata carriers (JSON tool definition, MCP tools/list entry, 'Tool <name>:' listing line — forms the tool_description carrier mark in ark-core/src/detectors/text/facts/carrier.rs recognises), never in mail, forum, invoice, search-result, code-comment or attachment carriers; obfuscation slices of tool_poisoning payloads keep that wrapper; dev and holdout template families stay disjoint
     type: eval-infra
     deps: [M07]
