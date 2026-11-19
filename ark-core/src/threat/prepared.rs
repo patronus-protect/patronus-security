@@ -73,9 +73,9 @@ impl<'a> NativeText<'a> {
         })
     }
 
-    /// The decoded views (Unicode tags, base64, hex, ROT13) and the folded view
-    /// (letter spacing, look-alike letters, leetspeak) of the text, each behind
-    /// its own prefilter; empty for ordinary text.
+    /// The decoded views (Unicode tags, base64, hex, ROT13) and the folded views
+    /// (letter spacing, look-alike letters, leetspeak; one per run of changed
+    /// lines) of the text, each behind its own prefilter; empty for ordinary text.
     pub fn hidden(&self) -> &[HiddenView<'a>] {
         self.hidden.get_or_init(|| {
             let text = self.text();
@@ -87,7 +87,10 @@ impl<'a> NativeText<'a> {
                     text: Self::from_text(Cow::Owned(view.text)),
                 })
                 .collect();
-            views.extend(text_views::fold::folded(text).map(|folded| HiddenView {
+            let lines = text_views::fold::folded(text)
+                .map(|folded| folded.changed_lines(text))
+                .unwrap_or_default();
+            views.extend(lines.into_iter().map(|folded| HiddenView {
                 kind: folded.kinds[0].as_str(),
                 text: Self::from_text(Cow::Owned(folded.text.clone())),
                 origin: Origin::Folded(folded),
@@ -199,5 +202,27 @@ mod tests {
         assert!(NativeText::new("Plain text for the team.")
             .hidden()
             .is_empty());
+    }
+
+    #[test]
+    fn a_fold_gate_on_clean_prose_does_not_open_a_whole_text_view() {
+        // Two Polish names open the look-alike fold (`ł` inside Latin words); the
+        // clean paragraphs around them are not handed to the rules a second time.
+        let paragraph = "Die Stadt liegt an der Oder und hat eine lange Geschichte.\n";
+        let text = format!(
+            "{}Partnerstädte sind Wrocław und Białystok.\n{}",
+            paragraph.repeat(200),
+            paragraph.repeat(200)
+        );
+        let prepared = NativeText::new(&text);
+        let views = prepared.hidden();
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].kind, "homoglyph");
+        assert_eq!(
+            views[0].text.text(),
+            "Partnerstädte sind Wroclaw und Bialystok."
+        );
+        let source = views[0].source(0..views[0].text.text().len());
+        assert_eq!(&text[source], "Partnerstädte sind Wrocław und Białystok.");
     }
 }
