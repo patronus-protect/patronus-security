@@ -6,11 +6,12 @@ use crate::{
     threat::NativeText,
     SecurityCategory,
 };
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, OnceLock};
 
 const INJECTION_L1: &str = crate::injection_l1::MODEL;
 
 type Detect = Box<dyn Fn(&NativeText<'_>, &NativeGates) -> NativeDetection + Send + Sync>;
+type Prepare = Box<dyn Fn(&NativeGates) + Send + Sync>;
 
 /// An opaque producer and its shared outer gates. Pipeline state lives with the spec.
 pub struct NativeProducerSpec {
@@ -19,6 +20,10 @@ pub struct NativeProducerSpec {
     parent: Option<&'static str>,
     rule: Option<&'static str>,
     detect: Detect,
+    /// Builds what a scan under the gates runs (the enabled rules, the
+    /// pipeline itself), so that the scan builds nothing; see
+    /// [`super::NativeEngine::prepare`].
+    prepare: Prepare,
 }
 
 impl NativeProducerSpec {
@@ -40,6 +45,11 @@ impl NativeProducerSpec {
         self.parent.is_none_or(|id| gates.allows_model(id))
             && gates.allows_model(self.id)
             && self.rule.is_none_or(|id| gates.allows_rule(id))
+    }
+
+    /// Builds what a scan under `gates` runs; call it for an enabled producer.
+    pub(super) fn prepare(&self, gates: &NativeGates) {
+        (self.prepare)(gates);
     }
 
     /// PII and DLP apply their mode inside the pipeline (per match before
@@ -71,11 +81,27 @@ fn apply_score_floor(mut detection: NativeDetection, mode: ScoreMode) -> NativeD
     detection
 }
 
-/// The PII pipeline, compiled once per process: every engine and gateway
+/// The PII pipeline, set up once per process: every engine and gateway
 /// shares its rules instead of compiling them again.
 fn pii_pipeline() -> &'static pii::pii::PiiPipeline {
     static PIPELINE: LazyLock<pii::pii::PiiPipeline> = LazyLock::new(pii::pii::PiiPipeline::new);
     &PIPELINE
+}
+
+/// A family pipeline built on first use: a producer that the gates keep off
+/// costs no memory. Returns its detection and its preparation.
+fn lazy_pipeline<P>(detect: fn(&P, &NativeText<'_>) -> NativeDetection) -> (Detect, Prepare)
+where
+    P: Default + Send + Sync + 'static,
+{
+    let pipeline = Arc::new(OnceLock::<P>::new());
+    let built = Arc::clone(&pipeline);
+    (
+        Box::new(move |prepared, _gates| detect(pipeline.get_or_init(P::default), prepared)),
+        Box::new(move |_gates| {
+            built.get_or_init(P::default);
+        }),
+    )
 }
 
 /// The bounded attack-class rules of `category`, gated per rule by the rules map.
@@ -94,6 +120,7 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
                 &gates.threat_thresholds(),
             )
         }),
+        prepare: Box::new(move |gates| PIPELINE.prepare(category, |id| gates.allows_rule(id))),
     });
 }
 
@@ -103,18 +130,23 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
 fn add_injection_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCategory) {
     macro_rules! add {
         ($ty:path, $id:literal, $rule:expr) => {{
-            let pipeline = <$ty>::new();
+            let (detect, prepare) =
+                lazy_pipeline::<$ty>(|pipeline, prepared| pipeline.detect_prepared(prepared));
             specs.push(NativeProducerSpec {
                 category,
                 id: $id,
                 parent: Some(INJECTION_L1),
                 rule: Some($rule),
-                detect: Box::new(move |prepared, _gates| pipeline.detect_prepared(prepared)),
+                detect,
+                prepare,
             });
         }};
     }
-    let catalog = rule_catalog::InjectionRuleCatalogPipeline::for_category(category);
+    let catalog = Arc::new(rule_catalog::InjectionRuleCatalogPipeline::for_category(
+        category,
+    ));
     if !catalog.is_empty() {
+        let prepared_catalog = Arc::clone(&catalog);
         specs.push(NativeProducerSpec {
             category,
             id: "native:injection_rule_catalog",
@@ -123,6 +155,7 @@ fn add_injection_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCa
             detect: Box::new(move |prepared, gates| {
                 catalog.detect_prepared(prepared, |id| gates.allows_rule(id))
             }),
+            prepare: Box::new(move |gates| prepared_catalog.prepare(|id| gates.allows_rule(id))),
         });
     }
     macro_rules! injection {
@@ -219,13 +252,15 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
     let mut specs = Vec::new();
     macro_rules! add {
         ($ty:path, $id:literal, $parent:expr, $rule:expr) => {{
-            let pipeline = <$ty>::new();
+            let (detect, prepare) =
+                lazy_pipeline::<$ty>(|pipeline, prepared| pipeline.detect_prepared(prepared));
             specs.push(NativeProducerSpec {
                 category,
                 id: $id,
                 parent: $parent,
                 rule: $rule,
-                detect: Box::new(move |prepared, _gates| pipeline.detect_prepared(prepared)),
+                detect,
+                prepare,
             });
         }};
     }
@@ -245,6 +280,9 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                         gates.pii_mode,
                     )
                 }),
+                prepare: Box::new(move |gates| {
+                    pipeline.prepare(|id| gates.allows_rule(id), gates.pii_mode)
+                }),
             });
         }
         SecurityCategory::Dlp => {
@@ -262,6 +300,7 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
                         gates.dlp_mode,
                     )
                 }),
+                prepare: Box::new(move |gates| pipeline.prepare(|id| gates.allows_rule(id))),
             });
             add!(
                 mcp::mcp_policy::McpPolicyPipeline,

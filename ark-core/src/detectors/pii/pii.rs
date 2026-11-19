@@ -25,6 +25,10 @@ use crate::EvidenceSpan;
 use regex::Regex;
 use regex_automata::meta;
 use std::ops::Range;
+use std::sync::OnceLock;
+
+/// The payment-card rule, which also couples CVVs and expiry dates to a card.
+const CARD_RULE: &str = "pii_credit_card";
 
 /// A single PII heuristic pattern.
 pub struct PiiPattern {
@@ -303,12 +307,10 @@ pub fn is_bare_rule(rule_id: &str) -> bool {
 }
 
 pub struct PiiPipeline {
-    regexes: Vec<Regex>,
+    /// Per rule, its automata, compiled on first use: a rule that the gates
+    /// keep off costs no memory ([`Self::prepare`]).
+    rules: Vec<OnceLock<CompiledRule>>,
     anchor_gates: Vec<AnchorGate>,
-    /// Per rule with a Unicode word boundary: the rule without it, the
-    /// candidate search, and the rule's own regex for anchored probes (H03).
-    prefilters: Vec<Option<Regex>>,
-    anchored: Vec<Option<meta::Regex>>,
     /// Per rule without a lexical anchor or word boundary: a run of value
     /// characters that every match contains (H03).
     value_runs: Vec<Option<ValueRun>>,
@@ -317,10 +319,42 @@ pub struct PiiPipeline {
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
-    capture_groups: Vec<Option<usize>>,
-    structured_regexes: Vec<Option<Regex>>,
-    structured_keys: Vec<Option<Regex>>,
     anchor_regexes: Vec<BoundarySearch>,
+}
+
+/// The automata of one PII rule.
+struct CompiledRule {
+    regex: Regex,
+    /// For a rule with a Unicode word boundary: the rule without it, the
+    /// candidate search, and the rule's own regex for anchored probes (H03).
+    relaxed: Option<(Regex, meta::Regex)>,
+    /// The `value` group: field-bound rules capture their value after the
+    /// field name, the IPv6 rules after what opens the address (B-IP).
+    capture_group: Option<usize>,
+    /// For a field-bound rule: its structural value and key regexes (K04).
+    structured: Option<(Regex, Regex)>,
+}
+
+impl CompiledRule {
+    fn new(pattern: &PiiPattern) -> Self {
+        let regex = Regex::new(pattern.pattern).unwrap();
+        let relaxed = without_unicode_word_boundaries(pattern.pattern).map(|relaxed| {
+            (
+                Regex::new(&relaxed).expect("a pattern without assertions stays valid"),
+                meta::Regex::new(pattern.pattern).unwrap(),
+            )
+        });
+        let capture_group = regex.capture_names().position(|name| name == Some("value"));
+        debug_assert!(!pattern.captured_value || capture_group == Some(1));
+        Self {
+            regex,
+            relaxed,
+            capture_group,
+            structured: pattern
+                .captured_value
+                .then(|| structured_regexes_of(pattern.pattern)),
+        }
+    }
 }
 
 impl Default for PiiPipeline {
@@ -330,75 +364,73 @@ impl Default for PiiPipeline {
 }
 
 impl PiiPipeline {
+    /// Sets up every rule; each rule's automata are compiled on first use
+    /// ([`Self::prepare`]).
     pub fn new() -> Self {
-        let mut regexes = Vec::new();
-        let mut anchor_gates = Vec::new();
-        let mut prefilters = Vec::new();
-        let mut anchored = Vec::new();
-        let mut value_runs = Vec::new();
-        let mut word_shapes = Vec::new();
-        let mut entity_groups = Vec::new();
-        let mut rule_ids = Vec::new();
-        let mut validators = Vec::new();
-        let mut capture_groups = Vec::new();
-        let mut structured_regexes = Vec::new();
-        let mut structured_keys = Vec::new();
-
-        for p in PII_PATTERNS {
-            regexes.push(Regex::new(p.pattern).unwrap());
-            anchor_gates.push(AnchorGate::regex(p.pattern, false));
-            let relaxed = without_unicode_word_boundaries(p.pattern).map(|relaxed| {
-                Regex::new(&relaxed).expect("a pattern without assertions stays valid")
-            });
-            anchored.push(
-                relaxed
-                    .is_some()
-                    .then(|| meta::Regex::new(p.pattern).unwrap()),
-            );
-            value_runs.push(
-                (anchor_gates
-                    .last()
-                    .is_some_and(AnchorGate::is_unconditional)
-                    && relaxed.is_none())
-                .then(|| value_run(p.pattern))
-                .flatten(),
-            );
-            word_shapes.push(WordShape::of(p.pattern));
-            prefilters.push(relaxed);
-            entity_groups.push(p.entity_group);
-            rule_ids.push(p.name);
-            validators.push(p.validator);
-            // Field-bound rules capture their value after the field name, the IPv6
-            // rules after what opens the address (B-IP); both name it `value`.
-            capture_groups.push(regexes.last().and_then(|regex: &Regex| {
-                regex.capture_names().position(|name| name == Some("value"))
-            }));
-            debug_assert!(!p.captured_value || capture_groups.last() == Some(&Some(1)));
-            let structured = p.captured_value.then(|| structured_regexes_of(p.pattern));
-            let (value, key) = structured.unzip();
-            structured_regexes.push(value);
-            structured_keys.push(key);
-        }
-
-        let anchor_regexes = PII_ANCHOR_PATTERNS
+        let anchor_gates: Vec<_> = PII_PATTERNS
             .iter()
-            .map(|anchor| BoundarySearch::new(anchor.pattern))
+            .map(|p| AnchorGate::regex(p.pattern, false))
+            .collect();
+        let value_runs = PII_PATTERNS
+            .iter()
+            .zip(&anchor_gates)
+            .map(|(p, gate)| {
+                (gate.is_unconditional() && without_unicode_word_boundaries(p.pattern).is_none())
+                    .then(|| value_run(p.pattern))
+                    .flatten()
+            })
             .collect();
         PiiPipeline {
-            regexes,
+            rules: PII_PATTERNS.iter().map(|_| OnceLock::new()).collect(),
             anchor_gates,
-            prefilters,
-            anchored,
             value_runs,
-            word_shapes,
-            rule_ids,
-            entity_groups,
-            validators,
-            capture_groups,
-            structured_regexes,
-            structured_keys,
-            anchor_regexes,
+            word_shapes: PII_PATTERNS
+                .iter()
+                .map(|p| WordShape::of(p.pattern))
+                .collect(),
+            rule_ids: PII_PATTERNS.iter().map(|p| p.name).collect(),
+            entity_groups: PII_PATTERNS.iter().map(|p| p.entity_group).collect(),
+            validators: PII_PATTERNS.iter().map(|p| p.validator).collect(),
+            anchor_regexes: PII_ANCHOR_PATTERNS
+                .iter()
+                .map(|anchor| BoundarySearch::new(anchor.pattern))
+                .collect(),
         }
+    }
+
+    /// The automata of rule `index`, compiled on first use.
+    fn rule(&self, index: usize) -> &CompiledRule {
+        self.rules[index].get_or_init(|| CompiledRule::new(&PII_PATTERNS[index]))
+    }
+
+    /// Compiles the rules that a scan in `mode` runs under `allows_rule`, so
+    /// that no scan under these gates compiles one; a rule other gates enable
+    /// later is compiled on its first scan. `strict` never runs the
+    /// scored-only rules. The card rule always runs: it couples CVVs and
+    /// expiry dates to a card.
+    pub fn prepare(&self, allows_rule: impl Fn(&str) -> bool, mode: ScoreMode) {
+        let strict = mode.min_score().is_none();
+        for (index, pattern) in PII_PATTERNS.iter().enumerate() {
+            if pattern.name == CARD_RULE
+                || (allows_rule(pattern.name) && !(strict && pattern.scored_only))
+            {
+                self.rule(index);
+            }
+        }
+    }
+
+    /// Whether rule `index` is compiled; see [`Self::prepare`].
+    #[cfg(test)]
+    fn compiled(&self, index: usize) -> bool {
+        self.rules[index].get().is_some()
+    }
+
+    /// The index of the card rule.
+    fn card_index(&self) -> usize {
+        self.rule_ids
+            .iter()
+            .position(|id| *id == CARD_RULE)
+            .expect("PII credit-card rule must be present")
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
@@ -475,7 +507,7 @@ impl PiiPipeline {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
         let value = captures
-            .get(self.capture_groups[index].unwrap_or(0))
+            .get(self.rule(index).capture_group.unwrap_or(0))
             .unwrap();
         let value = self.context_range(index, text, value.range());
         let structure =
@@ -682,7 +714,7 @@ impl PiiPipeline {
         prepared: &crate::threat::NativeText<'_>,
         value: std::ops::Range<usize>,
     ) -> Option<std::ops::Range<usize>> {
-        let key = self.structured_keys[index].as_ref()?;
+        let (_, key) = self.rule(index).structured.as_ref()?;
         let fields = prepared.structure();
         fields
             .at(value)
@@ -707,8 +739,7 @@ impl PiiPipeline {
         text: &'t str,
         at: usize,
     ) -> Option<regex::Captures<'t>> {
-        let (Some(relaxed), Some(anchored)) = (&self.prefilters[index], &self.anchored[index])
-        else {
+        let Some((relaxed, anchored)) = &self.rule(index).relaxed else {
             return regex.captures_at(text, at);
         };
         regex.captures_at(
@@ -813,7 +844,7 @@ impl NativeRegexDetector for PiiPipeline {
         // no subscript in code, and the bare `::` also ends its line.
         if is_bare_rule(self.rule_ids[index]) {
             let value = captures
-                .get(self.capture_groups[index].unwrap_or(0))
+                .get(self.rule(index).capture_group.unwrap_or(0))
                 .unwrap()
                 .range();
             if vat_body(self.rule_ids[index], text, value.start)
@@ -1042,18 +1073,11 @@ impl NativeRegexDetector for PiiPipeline {
                     || text[field.unwrap()].contains([':', '#', '='])
                     || !value.as_str().bytes().any(|byte| byte.is_ascii_lowercase())
             }
-            "pii_credit_card_expiry" => {
-                let card_index = self
-                    .rule_ids
-                    .iter()
-                    .position(|id| *id == "pii_credit_card")
-                    .expect("PII credit-card rule must be present");
-                context::payment_expiry(
-                    text,
-                    captures.get(0).unwrap().start(),
-                    &self.regexes[card_index],
-                )
-            }
+            "pii_credit_card_expiry" => context::payment_expiry(
+                text,
+                captures.get(0).unwrap().start(),
+                &self.rule(self.card_index()).regex,
+            ),
             "pii_employee_id" | "pii_employee_id_ocr_field" => {
                 let field = field.unwrap();
                 let field_text = &text[field.clone()];
@@ -1120,11 +1144,14 @@ impl NativeRegexDetector for PiiPipeline {
                 .collect(),
         ))
     }
-    fn prefilters(&self) -> Option<&[Option<Regex>]> {
-        Some(&self.prefilters)
+    fn prefilter(&self, index: usize) -> Option<&Regex> {
+        self.rule(index)
+            .relaxed
+            .as_ref()
+            .map(|(relaxed, _)| relaxed)
     }
-    fn regexes(&self) -> &[Regex] {
-        &self.regexes
+    fn regex(&self, index: usize) -> &Regex {
+        &self.rule(index).regex
     }
 
     fn entity_groups(&self) -> &[&'static str] {
@@ -1139,12 +1166,12 @@ impl NativeRegexDetector for PiiPipeline {
         &self.validators
     }
 
-    fn capture_groups(&self) -> Option<&[Option<usize>]> {
-        Some(&self.capture_groups)
+    fn capture_group(&self, index: usize) -> Option<usize> {
+        self.rule(index).capture_group
     }
 
-    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
-        Some(&self.structured_regexes)
+    fn structured_regex(&self, index: usize) -> Option<&Regex> {
+        self.rule(index).structured.as_ref().map(|(value, _)| value)
     }
 
     fn structured_values(
@@ -1156,7 +1183,7 @@ impl NativeRegexDetector for PiiPipeline {
         if fields.is_empty() {
             return Vec::new();
         }
-        let Some(key) = &self.structured_keys[index] else {
+        let Some((_, key)) = &self.rule(index).structured else {
             return Vec::new();
         };
         let names: Vec<bool> = fields
@@ -1204,9 +1231,8 @@ impl NativeRegexDetector for PiiPipeline {
                 .position(|rule_id| *rule_id == name)
                 .expect("PII payment-card rules must be present")
         };
-        let card_index = rule_index("pii_credit_card");
-        let has_payment_card =
-            context::has_payment_card(text, 0..text.len(), &self.regexes[card_index]);
+        let card = &self.rule(self.card_index()).regex;
+        let has_payment_card = context::has_payment_card(text, 0..text.len(), card);
         // A table column headed `cvc`/`cvv` types its values; a CVV field elsewhere
         // (`CVV: 123`, a `cvv` key) still needs a reported card or a card term in
         // its clause (`Credit Card Security Code: 279`, Q-FIN).
@@ -1223,11 +1249,7 @@ impl NativeRegexDetector for PiiPipeline {
             let coupled_cvv = span.label == "CREDITCARD_CVV"
                 && (has_payment_card
                     || column_cvvs.contains(&(span.start_byte..span.end_byte))
-                    || context::card_term_without_number(
-                        text,
-                        span.start_byte,
-                        &self.regexes[card_index],
-                    ));
+                    || context::card_term_without_number(text, span.start_byte, card));
             // Only a coupled CVV and an IP address of the compatibility rules
             // (`::`, `::1`, T38) are shorter than four bytes.
             (span.end_byte - span.start_byte >= 4 || coupled_cvv || span.label == "IP_ADDRESS")
@@ -1256,7 +1278,11 @@ mod prefilter_tests {
     fn pii_prefilters_preserve_bilingual_results_and_captures() {
         let optimized = PiiPipeline::new();
         let mut reference = PiiPipeline::new();
-        reference.prefilters.iter_mut().for_each(|p| *p = None);
+        for (rule, pattern) in reference.rules.iter_mut().zip(PII_PATTERNS) {
+            let mut compiled = CompiledRule::new(pattern);
+            compiled.relaxed = None;
+            *rule = OnceLock::from(compiled);
+        }
         reference.value_runs.iter_mut().for_each(|run| *run = None);
         reference
             .word_shapes
@@ -1285,8 +1311,9 @@ mod prefilter_tests {
                             serde_json::to_value(&b.evidence_spans).unwrap(),
                             "{text}"
                         );
-                        for (re, pre) in optimized.regexes.iter().zip(&optimized.prefilters) {
-                            if let Some(pre) = pre {
+                        for index in 0..PII_PATTERNS.len() {
+                            if let Some(pre) = optimized.prefilter(index) {
+                                let re = optimized.regex(index);
                                 assert!(!re.is_match(&text) || pre.is_match(&text), "{text}");
                             }
                         }
@@ -1319,7 +1346,7 @@ mod parallel_tests {
             }
         }
         let prepared = crate::threat::NativeText::new(&text);
-        let allowed = vec![true; pipeline.regexes.len()];
+        let allowed = vec![true; PII_PATTERNS.len()];
         // Both modes, so the scored entries (`score`, `context`) are compared too.
         let findings = |min_score, parallel| {
             pipeline
@@ -1356,7 +1383,7 @@ mod gate_tests {
             .enumerate()
             .filter(|(index, _)| {
                 pipeline.anchor_gates[*index].is_unconditional()
-                    && pipeline.prefilters[*index].is_none()
+                    && pipeline.prefilter(*index).is_none()
                     && pipeline.value_runs[*index].is_none()
             })
             .map(|(_, pattern)| pattern.name)
@@ -1397,7 +1424,7 @@ mod gate_tests {
         for text in &texts {
             let shapes = WordShapes::of(text);
             for &(index, shape) in &shaped {
-                if pipeline.regexes[index].is_match(text) {
+                if pipeline.regex(index).is_match(text) {
                     matched += 1;
                     assert!(
                         shapes.contain(shape),
@@ -1408,5 +1435,43 @@ mod gate_tests {
             }
         }
         assert!(matched > 100, "{matched} matches of shaped rules");
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+
+    /// Only the rules a scan under the gates runs are compiled: the default
+    /// gates keep the bare and compatibility forms off, `strict` the
+    /// scored-only rules. A rule that later gates enable compiles on its
+    /// first scan and finds what a fully compiled pipeline finds.
+    #[test]
+    fn prepare_compiles_only_the_rules_the_gates_run() {
+        let pipeline = PiiPipeline::new();
+        assert!((0..PII_PATTERNS.len()).all(|index| !pipeline.compiled(index)));
+        pipeline.prepare(crate::native::default_rule_enabled, ScoreMode::Strict);
+        for (index, pattern) in PII_PATTERNS.iter().enumerate() {
+            let runs =
+                pattern.name == CARD_RULE || (!is_bare_rule(pattern.name) && !pattern.scored_only);
+            assert_eq!(pipeline.compiled(index), runs, "{}", pattern.name);
+        }
+        let bare = PII_PATTERNS
+            .iter()
+            .position(|pattern| pattern.name == "pii_ssn_us_bare")
+            .unwrap();
+        assert!(!pipeline.compiled(bare));
+        let text = "my number 078-05-1120 here";
+        let all = |_: &str| true;
+        let expected = PiiPipeline::new();
+        expected.prepare(all, ScoreMode::Recall);
+        for mode in [ScoreMode::Strict, ScoreMode::Recall] {
+            let prepared = crate::threat::NativeText::new(text);
+            let lazy = pipeline.detect_prepared_with_mode(&prepared, all, true, mode);
+            let full = expected.detect_prepared_with_mode(&prepared, all, true, mode);
+            assert_eq!(lazy.evidence_spans, full.evidence_spans, "{mode}");
+            assert_eq!(lazy.details, full.details, "{mode}");
+        }
+        assert!(pipeline.compiled(bare));
     }
 }

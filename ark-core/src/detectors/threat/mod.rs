@@ -124,12 +124,44 @@ struct CompiledRule {
     rule: Rule,
     /// The attack class of the rule, parsed from its `class_name`.
     category: SecurityCategory,
+    /// The rule's regexes, compiled on first use: a rule that the gates keep
+    /// off, or of a class no engine runs, costs no memory
+    /// ([`ThreatPipeline::prepare`]).
+    regexes: OnceLock<RuleRegexes>,
+    anchor_gate: super::anchor_gate::AnchorGate,
+    points: RulePoints,
+}
+
+struct RuleRegexes {
     regex: Regex,
     /// The rule without its `record` source branch: a business record
     /// yields to a sensitive source later in the same transfer.
     sources: Option<Regex>,
-    anchor_gate: super::anchor_gate::AnchorGate,
-    points: RulePoints,
+}
+
+impl CompiledRule {
+    fn regexes(&self) -> &RuleRegexes {
+        self.regexes.get_or_init(|| {
+            // The lazy DFA of a long bounded rule needs room for its
+            // states; a full cache would fall back to a slow search.
+            let build = |pattern: &str| {
+                RegexBuilder::new(pattern)
+                    .case_insensitive(true)
+                    .dfa_size_limit(super::dlp::prefilter::RULE_DFA_CACHE_BYTES)
+                    .build()
+                    .expect("valid bounded Threat regex")
+            };
+            let regex = build(&self.rule.pattern);
+            assert!(
+                regex.capture_names().flatten().count() >= 2,
+                "Threat rules require components"
+            );
+            RuleRegexes {
+                sources: without_record_branch(&self.rule.pattern).map(|p| build(&p)),
+                regex,
+            }
+        })
+    }
 }
 
 fn catalog() -> &'static (String, Vec<CompiledRule>) {
@@ -143,21 +175,6 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
             .into_iter()
             .map(|rule| {
                 assert!(ids.insert(rule.id.clone()), "duplicate Threat rule");
-                // The lazy DFA of a long bounded rule needs room for its
-                // states; a full cache would fall back to a slow search.
-                let build = |pattern: &str| {
-                    RegexBuilder::new(pattern)
-                        .case_insensitive(true)
-                        .dfa_size_limit(super::dlp::prefilter::RULE_DFA_CACHE_BYTES)
-                        .build()
-                        .expect("valid bounded Threat regex")
-                };
-                let regex = build(&rule.pattern);
-                let sources = without_record_branch(&rule.pattern).map(|p| build(&p));
-                assert!(
-                    regex.capture_names().flatten().count() >= 2,
-                    "Threat rules require components"
-                );
                 let anchor_gate = super::anchor_gate::AnchorGate::regex(&rule.pattern, true);
                 let points = match &rule.points {
                     Some(spec) => {
@@ -196,8 +213,7 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
                 CompiledRule {
                     category,
                     rule,
-                    regex,
-                    sources,
+                    regexes: OnceLock::new(),
                     anchor_gate,
                     points,
                 }
@@ -217,6 +233,18 @@ impl ThreatPipeline {
     pub fn new() -> Self {
         let _ = catalog();
         Self
+    }
+
+    /// Compiles the rules of `category` that `allows_rule` enables, so that
+    /// no scan under these gates compiles one; a rule other gates enable
+    /// later is compiled on its first scan.
+    pub fn prepare(&self, category: SecurityCategory, allows_rule: impl Fn(&str) -> bool) {
+        let (_, rules) = catalog();
+        for rule in rules {
+            if rule.category == category && allows_rule(&rule.rule.id) {
+                rule.regexes();
+            }
+        }
     }
 
     /// Run the rules of one attack class (`category`) with the cuts of
@@ -273,14 +301,14 @@ impl ThreatPipeline {
             let window = &text[window_start..window_end];
             for compiled in &enabled {
                 let mut from = 0;
-                while let Some(captures) = compiled.regex.captures_at(window, from) {
+                while let Some(captures) = compiled.regexes().regex.captures_at(window, from) {
                     let m = captures.get(0).unwrap();
                     from = m.end();
                     // The regex takes the first source after the verb; a
                     // sensitive source behind a business record in the same
                     // transfer ("the customer list and the full
                     // conversation") stands without the record's extra context.
-                    let captures = match (&compiled.sources, captures.name("record")) {
+                    let captures = match (&compiled.regexes().sources, captures.name("record")) {
                         (Some(sources), Some(_)) => sources
                             .captures_at(&window[..m.end()], m.start())
                             .filter(|c| c.get(0).unwrap().start() == m.start())
@@ -471,7 +499,8 @@ impl ThreatPipeline {
                         capped = true;
                         break 'windows;
                     }
-                    let mut evidence = L1Match::from_captures(&compiled.regex, &captures, None);
+                    let mut evidence =
+                        L1Match::from_captures(&compiled.regexes().regex, &captures, None);
                     for component in &mut evidence.components {
                         component.start_byte += window_start;
                         component.end_byte += window_start;
@@ -2939,5 +2968,26 @@ mod tests {
             ),
             Context::Counter
         );
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+
+    /// Every rule compiles, with components; `prepare` compiles the enabled
+    /// rules of its class.
+    #[test]
+    fn every_rule_compiles_and_prepare_compiles_the_enabled_rules_of_its_class() {
+        let pipeline = ThreatPipeline::new();
+        let (_, rules) = catalog();
+        let gated = "ark.threat.ssrf_metadata";
+        pipeline.prepare(SecurityCategory::UnsafeAction, |id| id != gated);
+        for rule in rules {
+            if rule.category == SecurityCategory::UnsafeAction && rule.rule.id != gated {
+                assert!(rule.regexes.get().is_some(), "{}", rule.rule.id);
+            }
+            assert!(rule.regexes().regex.capture_names().flatten().count() >= 2);
+        }
     }
 }
