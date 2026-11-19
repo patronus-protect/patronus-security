@@ -633,11 +633,16 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
 # ── cascade ──────────────────────────────────────────────────────────────────
 
 
+# A class the cascade left without a decision (no stage of it ran, e.g. a class without rules and
+# without a later layer): not flagged, clear, decided by no stage.
+NO_DECISION = {"l1": "none", "l1_score": 0.0, "decision": "clear", "decided_by": None}
+
+
 def _stage(prediction: dict[str, Any], cls: str) -> dict[str, Any]:
-    stage = (prediction.get("cascade") or {}).get(cls)
-    if stage is None:
-        raise ValueError(f"prediction {prediction['id']} has no cascade answer for {cls}")
-    return stage
+    cascade = prediction.get("cascade")
+    if cascade is None:
+        raise ValueError(f"prediction {prediction['id']} has no cascade answers")
+    return cascade.get(cls, NO_DECISION)
 
 
 def _benign_source(row: dict[str, Any]) -> str:
@@ -715,7 +720,8 @@ def cascade_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
                 else:
                     cell["negatives"] += 1
                     cell["fp"] += detected
-                cell["decided_by"][stage["decided_by"]] += 1
+                if stage["decided_by"] is not None:
+                    cell["decided_by"][stage["decided_by"]] += 1
                 cell["escalated"] += stage["l1"] == "escalate"
                 if hard_row:
                     source = cell["hard_benign"].setdefault(_benign_source(row), {"rows": 0, "fp": 0})

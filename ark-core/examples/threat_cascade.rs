@@ -16,7 +16,9 @@
 //!   native results (the confidence of a flagged result and the scorer values
 //!   below the decision); classes at 0 are left out;
 //! - `flagged`: the classes L1 detected;
-//! - `cascade`: `l1` (L1's outcome), `l1_score` (at full precision, since
+//! - `cascade`, for every class with a decision (a class no stage ran for, for
+//!   example one without rules and without a later layer, is left out and
+//!   counts as clear): `l1` (L1's outcome), `l1_score` (at full precision, since
 //!   `scoreboard.py calibrate` cuts on it: the score the detect and clear thresholds
 //!   compare), `decision` (final outcome) and `decided_by` (deciding stage);
 //! - `wolf`: Wolf's attack probability, only when Wolf ran;
@@ -111,14 +113,15 @@ fn predict(
         if score > 0.0 {
             scores.insert(class.into(), json!(score));
         }
+        // A module no stage ran for has no decision: it is left out of
+        // `cascade` and `flagged`.
+        let Some(decision) = decisions.iter().find(|d| d.module == module) else {
+            continue;
+        };
         let l1 = cascade.l1_stage(module, gates.mode(module), results());
         if l1.outcome == patronus_ark_core::cascade::StageOutcome::Detected {
             flagged.push(class);
         }
-        let decision = decisions
-            .iter()
-            .find(|d| d.module == module)
-            .ok_or_else(|| format!("row {id}: no decision for {class}"))?;
         stages.insert(
             class.into(),
             json!({"l1": l1.outcome, "l1_score": l1.score,
@@ -268,7 +271,15 @@ mod tests {
         assert_eq!(out["id"], "a:1");
         assert_eq!(out["flagged"], json!([]));
         let stages = out["cascade"].as_object().unwrap();
-        assert_eq!(stages.len(), 11);
+        // One entry per module with a decision.
+        let decided = scanner
+            .scan_categories(row["text"].as_str().unwrap(), &modules())
+            .unwrap()
+            .decision
+            .unwrap()
+            .len();
+        assert!(decided > 0);
+        assert_eq!(stages.len(), decided);
         for stage in stages.values() {
             assert_eq!(stage["decision"], "clear");
             assert_eq!(stage["decided_by"], "heuristic");
@@ -305,5 +316,18 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("a:3"));
+    }
+
+    #[test]
+    fn a_module_without_a_decision_is_left_out() {
+        // toxic_language has no rule and no later layer: no stage runs for it.
+        let (mut scanner, cascade, gates) = l1_only();
+        let row = json!({"id": "a:4", "text": "Please summarise the attached meeting notes."});
+        let out = predict(&mut scanner, (&cascade, &gates), &modules(), &row).unwrap();
+        assert!(out["cascade"].get("toxic_language").is_none());
+        assert!(!out["flagged"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("toxic_language")));
     }
 }
