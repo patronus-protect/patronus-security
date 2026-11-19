@@ -446,7 +446,11 @@ Befund auf Dev: L2 hebt `instruction_injection` bei 1 % FPR (60,2 → 68,5, DE 2
 0 → 22,7 %, 524 von 2313). `harmful_content` und `toxic_language` deckt nur L2 ab (EN 46,8 bzw. 64,7 bei 1 %, fast
 0 bei 0,1 %, DE 0); `unsafe_action` 21,0 → 33,7 (1 %) bzw. 25,1 (0,1 %); die übrigen Klassen bleiben gleich (kein
 L2-Label). Auf der entscheidenden Kennzahl ist der Stack in Standardkonfiguration für Injection damit
-schlechter als L1 allein; L2 hilft erst mit einer Schwelle bzw. einem Gate, das seine Benign-Treffer abfängt.
+schlechter als L1 allein: L2s sichere Benign-Treffer liegen in der Rangfolge über den meisten Positiven.
+Prompt Guard 2 22M liegt bei Injection EN darüber (84,4 / 80,6), auf Deutsch darunter (12,0 / 5,0 gegen L1 23,0 /
+23,0); Prompt Guard 2 86M und ProtectAI v2 fehlen in der Spalte (kein Dev-Cache für die aktuellen Sätze). Latenz
+im Vorhersagelauf (kurze Zeilen, 4 Prozesse auf 5 Kernen, also vom Fixaufwand je Zeile bestimmt): L2 kostet je
+Zeile etwa das Doppelte von L1 (p95 8,7 gegen 5,1 ms); das 100-KiB-Budget misst weiter `latency.py`.
 
 ## Herkunft: Regeln, Train, Gold, Holdout
 

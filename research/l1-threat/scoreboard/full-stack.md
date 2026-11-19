@@ -6,62 +6,62 @@ Sets: {"dev": ["agent_safetybench", "agentdojo", "approve_or_deny_de", "bipia", 
 
 L1: the native detectors alone; L1+L2: the same rows through L1 and then the L2 models of each category on every row (Wolf Defender for `injection`), as the default configuration runs them. TPR at matched document FPR on the benign rows of the same scope; hard-benign FPR at ARK's own verdict (look-alike twins and security-adjacent benign sets). `–`: no negatives or no rows in the cell.
 
-Baselines at the same matched FPR on the same benign rows (`scripts/l1_threat/run_baselines.py`): none.
+Baselines at the same matched FPR on the same benign rows (`scripts/l1_threat/run_baselines.py`): pipelock `r2-d97bee5b5633-f0748f6045a4`, cisco_yara `r2-9ff8fc84b792-88384ac2ff09`, atr `r2-a0b314dfd24e-dbdad268c9c6`, prompt_guard `r2-ce4356bfe714-f334ec70b8e9`, llamafirewall `r2-7e163b68c0af-34204e871afb`, nemo `r2-093ae1fc7b3e-4345056e4244`, vigil `r2-f2b4c134d060-fb4c2190500d`, prompt_guard_2_22m `r2-092823c17a9d`.
 
-Not in the columns: pipelock (`r2-d97bee5b5633-f0748f6045a4` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); cisco_yara (`r2-9ff8fc84b792-88384ac2ff09` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); atr (`r2-a0b314dfd24e-dbdad268c9c6` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); prompt_guard (`r2-ce4356bfe714-f334ec70b8e9` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); llamafirewall (`r2-7e163b68c0af-34204e871afb` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); nemo (`r2-093ae1fc7b3e-4345056e4244` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); vigil (`r2-f2b4c134d060-fb4c2190500d` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak); protectai_v2 (`r2-f0ea7f239f76` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, dolly_15k, germanquad, mosscap, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, spml, wildguardmix, wildjailbreak); prompt_guard_2_86m (`r2-f307628d0aac` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, dolly_15k, germanquad, jackhhao_jailbreak, mosscap, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, spml, textdetox_de, wildguardmix, wildjailbreak); prompt_guard_2_22m (`r2-092823c17a9d` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, wildguardmix, wildjailbreak).
+Not in the columns: protectai_v2 (`r2-f0ea7f239f76` not cached for agent_safetybench, agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, dolly_15k, germanquad, mosscap, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, spml, wildguardmix, wildjailbreak); prompt_guard_2_86m (`r2-f307628d0aac` not cached for agentdojo, approve_or_deny_de, bipia, carrier_insertion, civil_comments, cyberseceval_multilingual, dolly_15k, germanquad, jackhhao_jailbreak, mosscap, nemotron_content_safety_v2, nemotron_safety_v3, obfuscation_slices, redcode, spml, textdetox_de, wildguardmix, wildjailbreak).
 
 ## Gated sets (dev and decisive)
 
 | class | lang | pos | neg | TPR@1% L1 | TPR@1% L1+L2 | TPR@0.1% L1 | TPR@0.1% L1+L2 | hard-benign FPR L1 | hard-benign FPR L1+L2 | best heuristic TPR@1% / 0.1% | best Prompt Guard 2 TPR@1% / 0.1% |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 3321 | 32003 | 60.2 | 68.5 | 60.2 | 36.2 | 0.0 (0/2313) | 22.7 (524/2313) | – | – |
-| instruction_injection | de | 100 | 12059 | 23.0 | 48.0 | 23.0 | 6.0 | 0.0 (0/561) | 24.4 (137/561) | – | – |
-| instruction_injection | en | 3221 | 19944 | 61.4 | 68.3 | 61.4 | 54.1 | 0.0 (0/1752) | 22.1 (387/1752) | – | – |
-| jailbreak | all | 2169 | 32003 | 5.4 | 5.4 | 5.4 | 5.4 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| jailbreak | de | 42 | 12059 | 47.6 | 47.6 | 47.6 | 47.6 | 0.0 (0/561) | 0.0 (0/561) | – | – |
-| jailbreak | en | 2127 | 19944 | 4.6 | 4.6 | 4.6 | 4.6 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| prompt_extraction | all | 15087 | 32003 | 0.4 | 0.4 | 0.4 | 0.4 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| prompt_extraction | en | 15087 | 19944 | 0.4 | 0.4 | 0.4 | 0.4 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| tool_poisoning | all | 83 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| tool_poisoning | de | 42 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | – | – |
-| tool_poisoning | en | 41 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| agent_config_tampering | all | 87 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| agent_config_tampering | de | 45 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | – | – |
-| agent_config_tampering | en | 42 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| memory_poisoning | all | 83 | 32003 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| memory_poisoning | de | 42 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.0 (0/561) | – | – |
-| memory_poisoning | en | 41 | 19944 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| exfiltration | all | 586 | 32003 | 65.4 | 65.5 | 65.4 | 65.5 | 0.0 (0/2313) | 0.2 (5/2313) | – | – |
-| exfiltration | de | 151 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.4 (2/561) | – | – |
-| exfiltration | en | 435 | 19944 | 53.3 | 53.6 | 53.3 | 53.6 | 0.0 (0/1752) | 0.2 (3/1752) | – | – |
-| unsafe_action | all | 828 | 32003 | 21.0 | 33.7 | 21.0 | 25.1 | 0.0 (0/2313) | 1.0 (23/2313) | – | – |
-| unsafe_action | de | 145 | 12059 | 30.3 | 31.7 | 30.3 | 31.7 | 0.0 (0/561) | 0.5 (3/561) | – | – |
-| unsafe_action | en | 683 | 19944 | 19.0 | 34.1 | 19.0 | 11.1 | 0.0 (0/1752) | 1.1 (20/1752) | – | – |
-| resource_exhaustion | all | 83 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | – | – |
-| resource_exhaustion | de | 42 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | – | – |
-| resource_exhaustion | en | 41 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | – | – |
-| harmful_content | all | 799 | 32003 | 0.0 | 32.8 | 0.0 | 1.3 | 0.0 (0/2313) | 3.8 (87/2313) | – | – |
-| harmful_content | de | 316 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.2 (1/561) | – | – |
-| harmful_content | en | 483 | 19944 | 0.0 | 46.8 | 0.0 | 0.4 | 0.0 (0/1752) | 4.9 (86/1752) | – | – |
-| toxic_language | all | 106 | 32003 | 0.0 | 30.2 | 0.0 | 0.0 | 0.0 (0/2313) | 0.7 (16/2313) | – | – |
-| toxic_language | de | 55 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.2 (1/561) | – | – |
-| toxic_language | en | 51 | 19944 | 0.0 | 64.7 | 0.0 | 2.0 | 0.0 (0/1752) | 0.9 (15/1752) | – | – |
+| instruction_injection | all | 3321 | 32003 | 60.2 | 68.5 | 60.2 | 36.2 | 0.0 (0/2313) | 22.7 (524/2313) | 53.7 / 40.9 (atr) | 82.1 / 78.3 (prompt_guard_2_22m) |
+| instruction_injection | de | 100 | 12059 | 23.0 | 48.0 | 23.0 | 6.0 | 0.0 (0/561) | 24.4 (137/561) | 24.0 / 4.0 (prompt_guard) | 12.0 / 5.0 (prompt_guard_2_22m) |
+| instruction_injection | en | 3221 | 19944 | 61.4 | 68.3 | 61.4 | 54.1 | 0.0 (0/1752) | 22.1 (387/1752) | 55.3 / 42.2 (atr) | 84.4 / 80.6 (prompt_guard_2_22m) |
+| jailbreak | all | 2169 | 32003 | 5.4 | 5.4 | 5.4 | 5.4 | 0.0 (0/2313) | 0.0 (0/2313) | 56.2 / 12.9 (prompt_guard) | 71.8 / 31.0 (prompt_guard_2_22m) |
+| jailbreak | de | 42 | 12059 | 47.6 | 47.6 | 47.6 | 47.6 | 0.0 (0/561) | 0.0 (0/561) | 0.0 / 0.0 (pipelock) | 52.4 / 52.4 (prompt_guard_2_22m) |
+| jailbreak | en | 2127 | 19944 | 4.6 | 4.6 | 4.6 | 4.6 | 0.0 (0/1752) | 0.0 (0/1752) | 29.7 / 13.2 (prompt_guard) | 77.1 / 30.6 (prompt_guard_2_22m) |
+| prompt_extraction | all | 15087 | 32003 | 0.4 | 0.4 | 0.4 | 0.4 | 0.0 (0/2313) | 0.0 (0/2313) | 3.6 / 3.6 (atr) | 41.6 / 20.9 (prompt_guard_2_22m) |
+| prompt_extraction | en | 15087 | 19944 | 0.4 | 0.4 | 0.4 | 0.4 | 0.0 (0/1752) | 0.0 (0/1752) | 3.6 / 3.6 (atr) | 44.5 / 20.9 (prompt_guard_2_22m) |
+| tool_poisoning | all | 83 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | 18.1 / 18.1 (pipelock) | – |
+| tool_poisoning | de | 42 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | 0.0 / 0.0 (pipelock) | – |
+| tool_poisoning | en | 41 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | 36.6 / 36.6 (pipelock) | – |
+| agent_config_tampering | all | 87 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | 54.0 / 0.0 (atr) | – |
+| agent_config_tampering | de | 45 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | 51.1 / 0.0 (atr) | – |
+| agent_config_tampering | en | 42 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | 57.1 / 0.0 (atr) | – |
+| memory_poisoning | all | 83 | 32003 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/2313) | 0.0 (0/2313) | 0.0 / 0.0 (pipelock) | – |
+| memory_poisoning | de | 42 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.0 (0/561) | 0.0 / 0.0 (pipelock) | – |
+| memory_poisoning | en | 41 | 19944 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/1752) | 0.0 (0/1752) | 0.0 / 0.0 (pipelock) | – |
+| exfiltration | all | 586 | 32003 | 65.4 | 65.5 | 65.4 | 65.5 | 0.0 (0/2313) | 0.2 (5/2313) | 41.8 / 0.3 (prompt_guard) | – |
+| exfiltration | de | 151 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.4 (2/561) | 65.6 / 0.7 (cisco_yara) | – |
+| exfiltration | en | 435 | 19944 | 53.3 | 53.6 | 53.3 | 53.6 | 0.0 (0/1752) | 0.2 (3/1752) | 56.1 / 0.2 (prompt_guard) | – |
+| unsafe_action | all | 828 | 32003 | 21.0 | 33.7 | 21.0 | 25.1 | 0.0 (0/2313) | 1.0 (23/2313) | 29.5 / 8.1 (cisco_yara) | – |
+| unsafe_action | de | 145 | 12059 | 30.3 | 31.7 | 30.3 | 31.7 | 0.0 (0/561) | 0.5 (3/561) | 40.0 / 19.3 (nemo) | – |
+| unsafe_action | en | 683 | 19944 | 19.0 | 34.1 | 19.0 | 11.1 | 0.0 (0/1752) | 1.1 (20/1752) | 28.8 / 7.6 (cisco_yara) | – |
+| resource_exhaustion | all | 83 | 32003 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/2313) | 0.0 (0/2313) | 0.0 / 0.0 (atr) | – |
+| resource_exhaustion | de | 42 | 12059 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/561) | 0.0 (0/561) | 0.0 / 0.0 (atr) | – |
+| resource_exhaustion | en | 41 | 19944 | 100.0 | 100.0 | 100.0 | 100.0 | 0.0 (0/1752) | 0.0 (0/1752) | 0.0 / 0.0 (atr) | – |
+| harmful_content | all | 799 | 32003 | 0.0 | 32.8 | 0.0 | 1.3 | 0.0 (0/2313) | 3.8 (87/2313) | 1.8 / 1.8 (atr) | – |
+| harmful_content | de | 316 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.2 (1/561) | 0.0 / 0.0 (cisco_yara) | – |
+| harmful_content | en | 483 | 19944 | 0.0 | 46.8 | 0.0 | 0.4 | 0.0 (0/1752) | 4.9 (86/1752) | 2.9 / 2.9 (atr) | – |
+| toxic_language | all | 106 | 32003 | 0.0 | 30.2 | 0.0 | 0.0 | 0.0 (0/2313) | 0.7 (16/2313) | 0.0 / 0.0 (atr) | – |
+| toxic_language | de | 55 | 12059 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 (0/561) | 0.2 (1/561) | 0.0 / 0.0 (atr) | – |
+| toxic_language | en | 51 | 19944 | 0.0 | 64.7 | 0.0 | 2.0 | 0.0 (0/1752) | 0.9 (15/1752) | 0.0 / 0.0 (atr) | – |
 
 ## Report-only sets
 
 | class | lang | pos | neg | TPR@1% L1 | TPR@1% L1+L2 | TPR@0.1% L1 | TPR@0.1% L1+L2 | hard-benign FPR L1 | hard-benign FPR L1+L2 | best heuristic TPR@1% / 0.1% | best Prompt Guard 2 TPR@1% / 0.1% |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 998 | 9669 | 47.0 | 86.1 | 47.0 | 44.1 | – | – | – | – |
-| instruction_injection | en | 998 | 7177 | 47.0 | 81.0 | 47.0 | 39.5 | – | – | – | – |
-| jailbreak | all | 544 | 9669 | 18.4 | 18.4 | 18.4 | 18.4 | – | – | – | – |
-| jailbreak | en | 544 | 7177 | 18.4 | 18.4 | 18.4 | 18.4 | – | – | – | – |
-| prompt_extraction | all | 998 | 9669 | 2.3 | 2.3 | 2.3 | 2.3 | – | – | – | – |
-| prompt_extraction | en | 998 | 7177 | 2.3 | 2.3 | 2.3 | 2.3 | – | – | – | – |
-| harmful_content | all | 2271 | 9669 | 0.0 | 54.9 | 0.0 | 33.6 | – | – | – | – |
-| harmful_content | en | 2271 | 7177 | 0.0 | 54.5 | 0.0 | 28.3 | – | – | – | – |
-| toxic_language | all | 2216 | 9669 | 0.0 | 4.0 | 0.0 | 0.6 | – | – | – | – |
-| toxic_language | de | 2072 | 2492 | 0.0 | 1.9 | 0.0 | 0.4 | – | – | – | – |
-| toxic_language | en | 144 | 7177 | 0.0 | 2.8 | 0.0 | 0.0 | – | – | – | – |
+| instruction_injection | all | 998 | 9669 | 47.0 | 86.1 | 47.0 | 44.1 | – | – | 39.7 / 29.9 (atr) | 98.5 / 96.9 (prompt_guard_2_22m) |
+| instruction_injection | en | 998 | 7177 | 47.0 | 81.0 | 47.0 | 39.5 | – | – | 39.7 / 29.9 (atr) | 98.2 / 97.0 (prompt_guard_2_22m) |
+| jailbreak | all | 544 | 9669 | 18.4 | 18.4 | 18.4 | 18.4 | – | – | 89.9 / 70.0 (atr) | 94.9 / 90.1 (prompt_guard_2_22m) |
+| jailbreak | en | 544 | 7177 | 18.4 | 18.4 | 18.4 | 18.4 | – | – | 70.0 / 70.0 (atr) | 94.9 / 90.3 (prompt_guard_2_22m) |
+| prompt_extraction | all | 998 | 9669 | 2.3 | 2.3 | 2.3 | 2.3 | – | – | 22.8 / 22.8 (atr) | 98.5 / 96.9 (prompt_guard_2_22m) |
+| prompt_extraction | en | 998 | 7177 | 2.3 | 2.3 | 2.3 | 2.3 | – | – | 22.8 / 2.6 (atr) | 98.2 / 97.0 (prompt_guard_2_22m) |
+| harmful_content | all | 2271 | 9669 | 0.0 | 54.9 | 0.0 | 33.6 | – | – | 2.7 / 2.7 (atr) | – |
+| harmful_content | en | 2271 | 7177 | 0.0 | 54.5 | 0.0 | 28.3 | – | – | 2.7 / 2.7 (atr) | – |
+| toxic_language | all | 2216 | 9669 | 0.0 | 4.0 | 0.0 | 0.6 | – | – | 0.0 / 0.0 (atr) | – |
+| toxic_language | de | 2072 | 2492 | 0.0 | 1.9 | 0.0 | 0.4 | – | – | 0.0 / 0.0 (atr) | – |
+| toxic_language | en | 144 | 7177 | 0.0 | 2.8 | 0.0 | 0.0 | – | – | 0.0 / 0.0 (atr) | – |
 
 ## Latency per layer
 
@@ -85,3 +85,14 @@ Milliseconds per 100 KiB of row text (summed per-row ms over summed UTF-8 bytes)
 | instruction_injection | 0 | 524 |
 | toxic_language | 0 | 16 |
 | unsafe_action | 0 | 23 |
+
+## Holdout (owner run, counts only)
+
+Run outside the sandbox with the same commands on the holdout root; only the counts table lands here:
+
+```bash
+python3 scripts/l1_threat/scoreboard.py predict --layers l1+l2 --split HOLDOUT --out PRED
+python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 --counts-only --split HOLDOUT --predictions PRED --out COUNTS.md
+```
+
+Pending.
