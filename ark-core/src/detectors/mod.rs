@@ -251,7 +251,7 @@ pub trait NativeRegexDetector: Sync {
             || self
                 .anchor_gates()
                 .get(index)
-                .is_some_and(|gate| !gate.is_unconditional() && !gate.allows(prepared.anchors()))
+                .is_some_and(|gate| !prepared.admits(gate))
             || self
                 .prefilters()
                 .and_then(|filters| filters[index].as_ref())

@@ -629,7 +629,7 @@ impl DlpPipeline {
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
         let gate = &self.anchor_gates[index];
-        if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+        if !prepared.admits(gate) {
             return Vec::new();
         }
         let text = prepared.text();

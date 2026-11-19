@@ -279,9 +279,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, regex, prefilter) in &compiled.regexes {
                 let gate = &compiled.anchor_gates[*rule_index];
                 let rule = &compiled.catalog.rules[*rule_index];
-                if !allows_rule(rule.rule_id())
-                    || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
-                {
+                if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
                 if prefilter
@@ -295,9 +293,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, relation) in &compiled.ordered_relations {
                 let rule = &compiled.catalog.rules[*rule_index];
                 let gate = &compiled.anchor_gates[*rule_index];
-                if !allows_rule(rule.rule_id())
-                    || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
-                {
+                if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
                 for matched in relation.find_with_tokens(text, &tokens) {
@@ -316,9 +312,7 @@ impl InjectionRuleCatalogPipeline {
                 for (rule_index, regex, _) in &compiled.regexes {
                     let gate = &compiled.anchor_gates[*rule_index];
                     let rule = &compiled.catalog.rules[*rule_index];
-                    if !allows_rule(rule.rule_id())
-                        || (!gate.is_unconditional() && !gate.allows(decoded_view.anchors()))
-                    {
+                    if !allows_rule(rule.rule_id()) || !decoded_view.admits(gate) {
                         continue;
                     }
                     let mut hidden_matches = Vec::new();

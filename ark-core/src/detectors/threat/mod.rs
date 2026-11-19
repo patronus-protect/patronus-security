@@ -208,10 +208,7 @@ impl ThreatPipeline {
         let mut enabled: Vec<_> = rules
             .iter()
             .filter(|r| {
-                r.category == category
-                    && allows_rule(&r.rule.id)
-                    && (r.anchor_gate.is_unconditional()
-                        || r.anchor_gate.allows(prepared.anchors()))
+                r.category == category && allows_rule(&r.rule.id) && prepared.admits(&r.anchor_gate)
             })
             .collect();
         // Tool poisoning lives in tool metadata only; the same instruction in
