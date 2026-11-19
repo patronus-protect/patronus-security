@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::detectors::text::{DataRef, L1ModelConfig, L1TextModel};
-use crate::{LayerResult, NativeResult, ScanControl, ScanError, SecurityCategory};
+use crate::{LayerResult, ScanControl, ScanError, SecurityCategory};
 
 mod arbiter;
 mod chunks;
@@ -51,6 +51,17 @@ pub enum Stage {
     Policy,
     L2,
     L3,
+}
+
+impl From<SecurityLevel> for Stage {
+    /// The stage that answers at `level`; L1's answer is the heuristic's.
+    fn from(level: SecurityLevel) -> Self {
+        match level {
+            SecurityLevel::L1 => Self::Heuristic,
+            SecurityLevel::L2 => Self::L2,
+            SecurityLevel::L3 => Self::L3,
+        }
+    }
 }
 
 /// A stage's answer for one module.
@@ -192,6 +203,20 @@ pub struct L1Stage {
     gate_results: Vec<GateResult>,
 }
 
+impl L1Stage {
+    /// The module's final decision when L1 answered Detected or Clear;
+    /// `None` when it escalates to the next configured layer.
+    pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision> {
+        (self.outcome != StageOutcome::Escalate).then_some(ModuleDecision {
+            module,
+            outcome: self.outcome,
+            decided_by: self.decided_by,
+            score: self.score,
+            layers: self.layers.clone(),
+        })
+    }
+}
+
 /// Runs the configured layers per module with early exit.
 #[derive(Debug, Clone, Default)]
 pub struct Cascade {
@@ -204,17 +229,17 @@ impl Cascade {
         Ok(Self { config })
     }
 
-    /// The heuristic's outcome for `module` from its native results, by
+    /// The heuristic's outcome for `module` from its L1 results, by
     /// [`StageOutcome::from_cuts`] on its decision score: the best score of
     /// its results, also below the scorer's own cut (the candidate score of a
     /// decision envelope, else the raw `score` of the native layer details,
     /// else the confidence of a result with evidence). Detected: above the module's
     /// `detect_threshold`, or, unset, a result its scorer accepted (or that
     /// has evidence without a decision envelope).
-    pub fn l1_stage<'a>(
+    pub fn l1_stage<'a, R: LayeredResult + 'a>(
         &self,
         module: SecurityCategory,
-        results: impl IntoIterator<Item = &'a NativeResult>,
+        results: impl IntoIterator<Item = &'a R>,
     ) -> L1Stage {
         let mut accepted = false;
         let mut best: Option<(&str, f64)> = None;
@@ -223,12 +248,12 @@ impl Cascade {
             let (result_accepted, score) = heuristic_score(result);
             accepted |= result_accepted;
             if best.is_none_or(|(_, top)| score > top) {
-                best = Some((&result.model, score));
+                best = Some((result.model(), score));
             }
             gate_results.push(GateResult {
-                pipeline: result.category.clone(),
-                class_name: result.class_name.clone(),
-                confidence: result.confidence,
+                pipeline: module.as_str().to_string(),
+                class_name: result.class_name().to_string(),
+                confidence: result.confidence(),
                 level: SecurityLevel::L1,
             });
         }
@@ -303,6 +328,9 @@ impl Cascade {
         mut l3: Option<&mut dyn L3Executor>,
         control: &ScanControl,
     ) -> Result<ModuleDecision, ScanError> {
+        if let Some(decision) = l1.decision(module) {
+            return Ok(decision);
+        }
         let L1Stage {
             mut outcome,
             mut score,
@@ -342,11 +370,7 @@ impl Cascade {
                 escalation = Some(signal);
                 continue;
             };
-            decided_by = if level == SecurityLevel::L2 {
-                Stage::L2
-            } else {
-                Stage::L3
-            };
+            decided_by = Stage::from(level);
             score = output.result.confidence;
             results.push(GateResult {
                 pipeline: module.as_str().to_string(),
@@ -384,8 +408,8 @@ impl Cascade {
 /// a decision envelope, else the scorer's raw `score` in the native layer
 /// details (Threat rules), else the confidence of a result with evidence;
 /// a result without any of them scores 0.
-fn heuristic_score(result: &NativeResult) -> (bool, f64) {
-    if let Some(decision) = &result.decision {
+fn heuristic_score(result: &impl LayeredResult) -> (bool, f64) {
+    if let Some(decision) = result.decision() {
         return (
             decision.recommendation.accepted,
             decision
@@ -394,14 +418,14 @@ fn heuristic_score(result: &NativeResult) -> (bool, f64) {
                 .map_or(0.0, |candidate| candidate.confidence),
         );
     }
-    let accepted = !result.evidence_spans.is_empty();
+    let accepted = result.has_evidence();
     let raw = result
-        .layers
+        .layers()
         .iter()
         .find_map(|layer| layer.details.get("score")?.as_f64());
     let score = match raw {
         Some(score) => score,
-        None if accepted => result.confidence,
+        None if accepted => result.confidence(),
         None => 0.0,
     };
     (accepted, score)

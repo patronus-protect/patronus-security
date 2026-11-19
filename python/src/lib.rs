@@ -34,7 +34,7 @@ struct SecurityGateway {
 impl SecurityGateway {
     #[new]
     #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None, wolf_model="small", wolf_precision="auto"))]
+    #[pyo3(signature = (categories, max_level=patronus_ark::defaults::PYTHON_MAX_LEVEL, model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point=patronus_ark::defaults::PYTHON_NTDB_OPERATING_POINT, l3_strategy=patronus_ark::defaults::PYTHON_L3_STRATEGY, dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None, wolf_model="small", wolf_precision="auto"))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -691,6 +691,9 @@ struct PyEvaluationResult {
     label_scores: Vec<PyLabelScore>,
     #[pyo3(get)]
     decision_json: Option<String>,
+    /// Stage that gave the category its final answer, e.g. `heuristic`.
+    #[pyo3(get)]
+    decided_by: Option<String>,
 }
 
 #[pymethods]
@@ -950,6 +953,10 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
                 .map(PyLabelScore::from)
                 .collect(),
             decision_json,
+            decided_by: result
+                .decided_by
+                .and_then(|stage| serde_json::to_value(stage).ok())
+                .and_then(|value| value.as_str().map(str::to_string)),
         }
     }
 }
@@ -999,5 +1006,17 @@ fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRequestState>()?;
     m.add_class::<PyLevelReadiness>()?;
     m.add_class::<PyRuntimeReadiness>()?;
+    m.add(
+        "DEFAULT_MAX_LEVEL",
+        patronus_ark::defaults::PYTHON_MAX_LEVEL,
+    )?;
+    m.add(
+        "DEFAULT_L3_STRATEGY",
+        patronus_ark::defaults::PYTHON_L3_STRATEGY,
+    )?;
+    m.add(
+        "DEFAULT_NTDB_OPERATING_POINT",
+        patronus_ark::defaults::PYTHON_NTDB_OPERATING_POINT,
+    )?;
     Ok(())
 }

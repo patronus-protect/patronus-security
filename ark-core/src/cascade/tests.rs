@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::*;
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, LayerResult,
+    DecisionResult, DecisionTerminality, LayerResult, NativeResult,
 };
 
 /// A fake model that counts its calls and answers with a fixed score.
@@ -585,4 +585,35 @@ fn detect_threshold_is_the_per_module_heuristic_cut() {
     }))
     .unwrap();
     assert!(config.validate().is_err());
+}
+
+#[test]
+fn l1_stage_decision_is_final_only_when_l1_does_not_escalate() {
+    let cascade = Cascade::default();
+    let detected = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.95, true)]);
+    let decision = detected.decision(SecurityCategory::Injection).unwrap();
+    assert_eq!(
+        (
+            decision.module,
+            decision.outcome,
+            decision.decided_by,
+            decision.score
+        ),
+        (
+            SecurityCategory::Injection,
+            StageOutcome::Detected,
+            Stage::Heuristic,
+            0.95
+        )
+    );
+    let undecided = cascade.l1_stage(SecurityCategory::Injection, [&l1(0.5, false)]);
+    assert!(undecided.decision(SecurityCategory::Injection).is_none());
+}
+
+#[test]
+fn each_level_maps_to_the_stage_that_answers_there() {
+    assert_eq!(
+        [SecurityLevel::L1, SecurityLevel::L2, SecurityLevel::L3].map(Stage::from),
+        [Stage::Heuristic, Stage::L2, Stage::L3]
+    );
 }

@@ -36,6 +36,7 @@ pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
     CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
 };
+pub use types::defaults;
 pub use types::{
     ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
     DecisionRecommendation, DecisionResult, DecisionTerminality, EffectiveL3PipelinePolicy,
@@ -47,5 +48,5 @@ pub use types::{
     SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
     SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
+    SecurityRuntimeReadiness, SecurityScanResult, Stage, WolfSelection,
 };

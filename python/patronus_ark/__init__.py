@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from ._patronus_ark import SecurityGateway as RustSecurityGateway
+from ._patronus_ark import DEFAULT_L3_STRATEGY as _DEFAULT_L3_STRATEGY
+from ._patronus_ark import DEFAULT_MAX_LEVEL as _DEFAULT_MAX_LEVEL
+from ._patronus_ark import DEFAULT_NTDB_OPERATING_POINT as _DEFAULT_NTDB_OPERATING_POINT
 from ._patronus_ark import normalize_text as _rust_normalize_text
 from copy import deepcopy
 import json
@@ -51,6 +54,9 @@ def _to_dict(result):
     decision = _decode_json_object(getattr(result, "decision_json", None))
     if decision:
         output["decision"] = decision
+    decided_by = getattr(result, "decided_by", None)
+    if decided_by is not None:
+        output["decided_by"] = decided_by
     return output
 
 
@@ -200,15 +206,15 @@ class SecurityGateway:
     def __init__(
         self,
         categories: list[str],
-        max_level: str = "l2",
+        max_level: str = _DEFAULT_MAX_LEVEL,
         model_dir: str = None,
         download_files: bool = True,
         download_categories: list[str] | None = None,
         execution_gates: dict | None = None,
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
-        ntdb_operating_point: str = "best_f1",
-        l3_strategy: str = "dedicated",
+        ntdb_operating_point: str = _DEFAULT_NTDB_OPERATING_POINT,
+        l3_strategy: str = _DEFAULT_L3_STRATEGY,
         dynamic_pii_config: dict | None = None,
         cache_storage_location: str | None = None,
         cache_encryption_key_hex: str | None = None,

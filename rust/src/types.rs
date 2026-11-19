@@ -224,6 +224,9 @@ pub struct SecurityScanResult {
     pub label_scores: Vec<LabelScore>,
     /// Structured classifier decision contract for policy consumers.
     pub decision: Option<DecisionEnvelope>,
+    /// Stage that gave the category its final answer (`heuristic` for an L1
+    /// result, `l2`, `l3`); `None` while a later layer still answers.
+    pub decided_by: Option<Stage>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -302,14 +305,42 @@ impl std::str::FromStr for NtdbOperatingPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Physical L3 classifier topology.
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
-    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
+}
+
+impl Default for L3Strategy {
+    fn default() -> Self {
+        defaults::RUST_L3_STRATEGY
+    }
+}
+
+/// The defaults of Ark's three entry points, named in one place. They differ
+/// on purpose and each entry point reads its own value from here:
+///
+/// | entry point | max level | L3 strategy | NTDB operating point |
+/// |---|---|---|---|
+/// | Rust `SecurityGateway` / `ScanExecution` | `L3` | `dedicated` | `best_promote` |
+/// | Python `SecurityGateway(...)` | `l2` | `dedicated` | `best_f1` |
+/// | Ark API server (`pipeline.l3_strategy`) | per config | `multi` | per config |
+pub mod defaults {
+    use super::L3Strategy;
+
+    /// L3 topology of the Rust API (`L3Strategy::default()`).
+    pub const RUST_L3_STRATEGY: L3Strategy = L3Strategy::Dedicated;
+    /// Deepest layer of the Python `SecurityGateway`.
+    pub const PYTHON_MAX_LEVEL: &str = "l2";
+    /// L3 topology of the Python `SecurityGateway`.
+    pub const PYTHON_L3_STRATEGY: &str = "dedicated";
+    /// NTDB operating point of the Python `SecurityGateway`.
+    pub const PYTHON_NTDB_OPERATING_POINT: &str = "best_f1";
+    /// L3 topology of the Ark API server when `pipeline.l3_strategy` is unset.
+    pub const ARK_API_L3_STRATEGY: L3Strategy = L3Strategy::Multi;
 }
 
 impl L3Strategy {
@@ -534,7 +565,7 @@ pub use patronus_ark_core::cascade::{
     ConditionalPipelineGate, EffectiveL3PipelinePolicy, GateExpression, GateResult,
     L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
     L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, LayerExecution, MetadataCondition,
-    ResultCondition, ScanGateMatrix, SecurityLevel,
+    ResultCondition, ScanGateMatrix, SecurityLevel, Stage,
 };
 
 pub use patronus_ark_core::{
@@ -557,6 +588,7 @@ impl From<patronus_ark_core::NativeResult> for SecurityScanResult {
             label_scores: value.label_scores,
             decision: value.decision,
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
         }
     }
 }
@@ -579,3 +611,31 @@ impl From<SecurityScanResult> for patronus_ark_core::NativeResult {
 }
 
 pub use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entry_point_defaults_keep_their_documented_values() {
+        assert_eq!(L3Strategy::default(), L3Strategy::Dedicated);
+        assert_eq!(
+            defaults::PYTHON_MAX_LEVEL.parse::<SecurityLevel>(),
+            Ok(SecurityLevel::L2)
+        );
+        assert_eq!(
+            defaults::PYTHON_L3_STRATEGY.parse::<L3Strategy>(),
+            Ok(L3Strategy::Dedicated)
+        );
+        assert_eq!(
+            defaults::PYTHON_NTDB_OPERATING_POINT.parse::<NtdbOperatingPoint>(),
+            Ok(NtdbOperatingPoint::BestF1)
+        );
+        assert_eq!(defaults::ARK_API_L3_STRATEGY, L3Strategy::Multi);
+        assert_eq!(
+            NtdbOperatingPoint::default(),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(ScanExecution::default().max_level(), SecurityLevel::L3);
+    }
+}

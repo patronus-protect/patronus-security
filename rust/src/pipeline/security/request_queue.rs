@@ -9,8 +9,8 @@ use crate::diagnostics::PhaseMetricScope;
 use crate::dynamic_pii::{DynamicPiiSourceChunk, DynamicPiiTextRange};
 use crate::ml::ntdb_executor::L3Candidate;
 use crate::pipeline::{
-    failure_from_scan_result, finish_request_if_ready, has_l3_pending, priority_index, ttl_ms,
-    L3JobSpec, PendingDynamicPii, RequestState,
+    failure_from_scan_result, finish_request_if_ready, has_l3_pending, mark_decided,
+    priority_index, ttl_ms, L3JobSpec, PendingDynamicPii, RequestState,
 };
 #[cfg(any(test, feature = "test-util"))]
 use crate::LayerResult;
@@ -20,6 +20,7 @@ use crate::{
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityRequestState, SecurityScanResult,
 };
+use patronus_ark_core::cascade::Cascade;
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
 
@@ -366,7 +367,10 @@ impl SecurityGateway {
             "after_l1",
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
         );
-        let (l1_results, l1_failures) = split_results(raw_l1);
+        let (mut l1_results, l1_failures) = split_results(raw_l1);
+        // L1's answer is final for the modules it decides; only the others
+        // reach L2 and L3.
+        let undecided = l1_undecided_inputs(&inputs, &mut l1_results);
         metrics.checkpoint(
             "after_split_l1",
             format!(
@@ -395,7 +399,7 @@ impl SecurityGateway {
 
         metrics.checkpoint("before_l2", format!("request_id={request_id}"));
         let raw_l2 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.scan_l2_inputs(&inputs, &execution, &metadata, &conditional_results)
+            self.scan_l2_inputs(&undecided, &execution, &metadata, &conditional_results)
         })) {
             Ok(results) => results,
             Err(_) => {
@@ -441,13 +445,19 @@ impl SecurityGateway {
         let pending_dynamic_pii = self.pending_dynamic_pii_for_request(
             &request_id,
             Arc::clone(&text),
-            &inputs,
+            &undecided,
             &l3_execution,
             &metadata,
             &conditional_results,
             dynamic_pii,
         );
         drop_internal_l2_chunk_outputs(&mut l2_results);
+        for result in l2_results
+            .iter_mut()
+            .filter(|result| !has_l3_pending(result))
+        {
+            mark_decided(result);
+        }
         metrics.checkpoint(
             "before_publish_l2",
             format!("request_id={request_id} results={}", l2_results.len()),
@@ -1226,6 +1236,7 @@ impl SecurityGateway {
                 },
             ],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1291,6 +1302,38 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
                 .to_string(),
         })
         .collect()
+}
+
+/// L1's step of the cascade: a module L1 decides (core [`Cascade::l1_stage`])
+/// is final, so its L1 results carry `decided_by` and later layers skip it.
+/// Returns the inputs of the modules L1 left undecided.
+pub(super) fn l1_undecided_inputs(
+    inputs: &[ExternalL1Input],
+    l1_results: &mut [SecurityScanResult],
+) -> Vec<ExternalL1Input> {
+    let cascade = Cascade::default();
+    let mut undecided = Vec::new();
+    for input in inputs {
+        let module = input.category;
+        let stage = cascade.l1_stage(
+            module,
+            l1_results
+                .iter()
+                .filter(|result| result.category == module.as_str()),
+        );
+        match stage.decision(module) {
+            Some(decision) => {
+                for result in l1_results
+                    .iter_mut()
+                    .filter(|result| result.category == module.as_str())
+                {
+                    result.decided_by = Some(decision.decided_by);
+                }
+            }
+            None => undecided.push(input.clone()),
+        }
+    }
+    undecided
 }
 
 pub(super) fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
@@ -1434,6 +1477,7 @@ mod tests {
             duration_ms: 0.1,
             layers: Vec::new(),
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1507,6 +1551,76 @@ mod tests {
     }
 
     #[test]
+    fn l1_decided_modules_leave_the_cascade_and_undecided_ones_go_on() {
+        let l1 = |category, class_name: &str| {
+            super::super::scan_result(
+                category,
+                "native:test",
+                crate::EvaluationResult {
+                    class_name: class_name.to_string(),
+                    confidence: 0.9,
+                    level: "L1".to_string(),
+                },
+                Vec::new(),
+            )
+        };
+        let mut pii = l1(SecurityCategory::Pii, "EMAIL");
+        pii.evidence_spans.push(crate::EvidenceSpan {
+            label: "EMAIL".to_string(),
+            text: "x".to_string(),
+            score: 0.9,
+            start_byte: 0,
+            end_byte: 1,
+            start_char: 0,
+            end_char: 1,
+        });
+        let mut results = vec![pii, l1(SecurityCategory::Injection, "safe")];
+        let inputs = [
+            ExternalL1Input::new(SecurityCategory::Pii, "x"),
+            ExternalL1Input::new(SecurityCategory::Injection, "x"),
+        ];
+
+        let undecided = l1_undecided_inputs(&inputs, &mut results);
+
+        assert_eq!(
+            undecided
+                .iter()
+                .map(|input| input.category)
+                .collect::<Vec<_>>(),
+            vec![SecurityCategory::Injection]
+        );
+        assert_eq!(
+            results
+                .iter()
+                .map(|result| result.decided_by)
+                .collect::<Vec<_>>(),
+            vec![Some(crate::Stage::Heuristic), None]
+        );
+    }
+
+    #[test]
+    fn published_results_are_marked_with_the_stage_of_their_layer() {
+        for (level, stage) in [
+            ("L1", crate::Stage::Heuristic),
+            ("L2", crate::Stage::L2),
+            ("L3", crate::Stage::L3),
+        ] {
+            let mut result = super::super::scan_result(
+                SecurityCategory::Injection,
+                "m",
+                crate::EvaluationResult {
+                    class_name: "safe".to_string(),
+                    confidence: 0.0,
+                    level: level.to_string(),
+                },
+                Vec::new(),
+            );
+            mark_decided(&mut result);
+            assert_eq!(result.decided_by, Some(stage));
+        }
+    }
+
+    #[test]
     fn producer_errors_preserve_mixed_degraded_and_all_failed_semantics() {
         let safe = super::super::scan_result(
             SecurityCategory::Injection,
@@ -1574,6 +1688,7 @@ mod tests {
                 )]),
             }],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1740,6 +1855,7 @@ mod tests {
                 },
             ],
             internal_l2_chunk_outputs: l2_chunk_outputs,
+            decided_by: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

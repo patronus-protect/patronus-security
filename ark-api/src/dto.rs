@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use patronus_ark::{
     DecisionEnvelope, EvidenceSpan, LabelScore, LayerResult, QueuedSecurityScanResult,
-    SecurityFailure, SecurityRequestCompletion, SecurityScanResult,
+    SecurityFailure, SecurityRequestCompletion, SecurityScanResult, Stage,
 };
 use serde::Serialize;
 
@@ -22,6 +22,10 @@ pub struct ScanResultDto {
     pub duration_ms: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<DecisionEnvelope>,
+    /// Stage that gave the category its final answer; absent while a later
+    /// layer still answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decided_by: Option<Stage>,
     pub evidence_spans: Vec<EvidenceSpanDto>,
     pub label_scores: Vec<LabelScoreDto>,
     pub layers: Vec<LayerResultDto>,
@@ -92,6 +96,7 @@ impl From<SecurityScanResult> for ScanResultDto {
             model: result.model,
             duration_ms: result.duration_ms,
             decision: result.decision,
+            decided_by: result.decided_by,
             evidence_spans: result.evidence_spans.into_iter().map(Into::into).collect(),
             label_scores: result.label_scores.into_iter().map(Into::into).collect(),
             layers: result.layers.into_iter().map(Into::into).collect(),
@@ -171,5 +176,35 @@ impl From<SecurityFailure> for FailureDto {
             retryable: failure.retryable,
             message: failure.message,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result(decided_by: Option<Stage>) -> SecurityScanResult {
+        SecurityScanResult {
+            category: "injection".into(),
+            class_name: "safe".into(),
+            confidence: 0.0,
+            level: "L2".into(),
+            model: "m".into(),
+            duration_ms: 0.0,
+            layers: Vec::new(),
+            internal_l2_chunk_outputs: Vec::new(),
+            decided_by,
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: None,
+        }
+    }
+
+    #[test]
+    fn decided_by_is_serialized_only_when_the_result_is_final() {
+        let json = serde_json::to_value(ScanResultDto::from(result(Some(Stage::L2)))).unwrap();
+        assert_eq!(json["decided_by"], "l2");
+        let json = serde_json::to_value(ScanResultDto::from(result(None))).unwrap();
+        assert!(json.get("decided_by").is_none());
     }
 }
