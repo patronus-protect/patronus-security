@@ -162,8 +162,6 @@ impl Scanner {
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
-        let mut config = config;
-        config.gates.cascade_details = config.cascade.is_some();
         let mut native = NativeEngine::new(&config.categories);
         if let Some(cascade) = &config.cascade {
             native

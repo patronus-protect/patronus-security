@@ -45,10 +45,7 @@ matched action, source or target. An embedded, separately trained logistic score
 rule-presence features, distinct rule count, maximum span length, and class count. The acceptance
 threshold is `0.10`. Accepted findings carry the document score; rejected documents return
 `benign` without finding spans. Raw rule matches remain in `details.matched_rules`.
-`details.score`, `accepted`, `acceptance_threshold`, and `score_version` expose the decision;
-with a configured cascade, `details.scorer_score` is the logistic scorer's own probability (also
-below its threshold) and `details.points_accepted` tells whether a points rule was accepted on its
-own; without one these keys are absent.
+`details.score`, `accepted`, `acceptance_threshold`, and `score_version` expose the decision.
 Confidence is the score for an accepted result and one minus the score for a rejected result;
 it is **not** a calibrated probability of malicious intent. Authorized administration may
 still contain risky operations.

@@ -567,45 +567,41 @@ fn cascade_config_carries_the_l1_model_per_module() {
     assert!(!models[0].1.clear_enabled);
 }
 
-/// A Threat-style result: no decision envelope, the document scorer's own
-/// probability in the layer details, evidence only when accepted.
-fn threat(score: f64, accepted: bool) -> NativeResult {
-    threat_result(score, accepted, false)
-}
-
-/// A Threat result with a points rule accepted on its own (`evidence`:
-/// whether its evidence survived the mode floor).
-fn points_hit(scorer_score: f64, evidence: bool) -> NativeResult {
-    threat_result(scorer_score, evidence, true)
-}
-
-fn threat_result(score: f64, accepted: bool, points: bool) -> NativeResult {
-    let mut result = l1(score, accepted);
+/// A Threat result as the producer reports it: no decision envelope; in the
+/// details the matched rules (`scorer`: one rule the document scorer reads,
+/// probability [`scorer_score`]; `points`: an accepted points rule) and the
+/// registry id; evidence when `evidence`.
+fn threat(scorer: bool, points: bool, evidence: bool) -> NativeResult {
+    let mut result = l1(0.0, false);
     result.decision = None;
     result.category = "exfiltration".into();
+    let mut rules = Vec::new();
+    if scorer {
+        rules.push(crate::detectors::threat::scorer_finding().0);
+    }
+    if points {
+        rules.push(serde_json::json!({"rule_id": "points", "rule_score": 0.8, "accepted": true}));
+    }
     result.layers.push(LayerResult {
         level: "L1".into(),
         layer_type: "native".into(),
-        class_name: if accepted { "exfiltration" } else { "benign" }.into(),
+        class_name: if evidence { "exfiltration" } else { "benign" }.into(),
         confidence: 1.0,
         matched: true,
         duration_ms: 0.0,
         thresholds: HashMap::new(),
         details: HashMap::from([
-            // The combined score (points 0.8 when a points rule hit) is not the cascade's scale.
-            (
-                "score".to_string(),
-                (if points { 0.8 } else { score }).into(),
-            ),
-            ("scorer_score".to_string(), score.into()),
-            ("points_accepted".to_string(), points.into()),
+            ("matched_rules".to_string(), serde_json::json!(rules)),
+            // The combined score (points 0.8) is not the cascade's scale.
+            ("score".to_string(), 0.8.into()),
+            ("registry_id".to_string(), "ark-threat-l1-0.1.7".into()),
         ]),
     });
-    if accepted {
+    if evidence {
         result.evidence_spans.push(crate::EvidenceSpan {
             label: "exfiltration".into(),
             text: "x".into(),
-            score,
+            score: 0.8,
             start_byte: 0,
             end_byte: 1,
             start_char: 0,
@@ -613,6 +609,11 @@ fn threat_result(score: f64, accepted: bool, points: bool) -> NativeResult {
         });
     }
     result
+}
+
+/// The document scorer's probability of the one-rule finding of [`threat`].
+fn scorer_score() -> f64 {
+    crate::detectors::threat::scorer_finding().1
 }
 
 fn module_stage(detect: Option<f64>, clear: Option<f64>, result: &NativeResult) -> L1Stage {
@@ -641,48 +642,61 @@ fn module_stage_at(
 
 #[test]
 fn threat_cuts_read_the_document_scorer_and_points_hits_detect_on_their_own() {
-    // Accepted by the scorer at its own cut (0.1), below the module's cut:
-    // the cut applies to the scorer's probability, not the combined score.
-    let low = threat(0.15, true);
+    let p = scorer_score();
+    assert!(p > 0.0 && p < 1.0);
+    // Accepted by the producer, but below the module's cut: the cut applies
+    // to the scorer's probability, not the combined score (0.8).
+    let low = threat(true, false, true);
     assert_eq!(
         module_stage(None, None, &low).outcome,
         StageOutcome::Detected
     );
-    let stage = module_stage(Some(0.3), None, &low);
-    assert_eq!((stage.outcome, stage.score), (StageOutcome::Escalate, 0.15));
-    // A points rule hit detects whatever the scorer says.
-    let hit = points_hit(0.02, true);
+    let stage = module_stage(Some((p + 0.01).min(1.0)), None, &low);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Escalate, p));
     assert_eq!(
-        module_stage(Some(0.3), Some(0.1), &hit).outcome,
+        module_stage(Some(p), None, &low).outcome,
+        StageOutcome::Detected
+    );
+    // A points rule hit detects whatever the scorer says.
+    let hit = threat(false, true, true);
+    assert_eq!(
+        module_stage(Some(0.9), Some(0.1), &hit).outcome,
         StageOutcome::Detected
     );
     // The mode floor dropped the hit's evidence: no rule hit, and the score
-    // is cleared on the scorer's scale (0.02), not the points score (0.8).
-    let floored = points_hit(0.02, false);
+    // is cleared on the scorer's scale (0), not the points score (0.8).
+    let floored = threat(false, true, false);
     assert_eq!(
-        module_stage(Some(0.3), Some(0.1), &floored).outcome,
+        module_stage(Some(0.9), Some(0.1), &floored).outcome,
         StageOutcome::Clear
     );
 }
 
 #[test]
 fn score_based_detection_needs_the_mode_floor() {
-    // 0.4 passes the cut 0.3 but `balanced` refuses scores below 0.5.
-    let refused = threat(0.4, false);
+    // Score 0 counts against the cut 0, but only `strict` admits it.
+    let none = threat(false, false, false);
     assert_eq!(
-        module_stage_at(ScoreMode::Balanced, Some(0.3), None, &refused).outcome,
-        StageOutcome::Escalate
-    );
-    assert_eq!(
-        module_stage_at(ScoreMode::Recall, Some(0.3), None, &refused).outcome,
+        module_stage_at(ScoreMode::Strict, Some(0.0), None, &none).outcome,
         StageOutcome::Detected
     );
+    assert_eq!(
+        module_stage_at(ScoreMode::Recall, Some(0.0), None, &none).outcome,
+        StageOutcome::Escalate
+    );
+    let p = scorer_score();
+    for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
+        let detected = module_stage_at(mode, Some(p), None, &threat(true, false, false)).outcome
+            == StageOutcome::Detected;
+        assert_eq!(detected, mode.admits(p), "{mode}");
+    }
 }
 
 #[test]
 fn every_escalation_signal_escalates() {
-    for clear in [None, Some(0.2), Some(0.4)] {
-        let stage = module_stage(None, clear, &threat(0.4, false));
+    let p = scorer_score();
+    for clear in [None, Some(p / 2.0), Some(p)] {
+        let stage = module_stage(None, clear, &threat(true, false, false));
         let signal = stage.escalation.expect("escalates");
         assert!(signal.escalates(), "heuristic clear {clear:?}");
         assert_eq!(signal.threshold, clear.unwrap_or(f64::MIN));
@@ -712,40 +726,42 @@ fn every_escalation_signal_escalates() {
 }
 
 #[test]
-fn clear_threshold_reads_the_raw_score_of_results_without_an_envelope() {
-    let below = threat(0.05, false);
-    let stage = module_stage(None, Some(0.1), &below);
-    assert_eq!((stage.outcome, stage.score), (StageOutcome::Clear, 0.05));
-    // Above the clear cut it escalates instead of being cleared as 0.
+fn clear_threshold_reads_the_scorer_score_of_results_without_an_envelope() {
+    let p = scorer_score();
+    let below = threat(true, false, false);
+    let stage = module_stage(None, Some((p + 0.01).min(1.0)), &below);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Clear, p));
+    // At or above the clear cut it escalates instead of being cleared as 0.
     assert_eq!(
-        module_stage(None, Some(0.01), &below).outcome,
+        module_stage(None, Some(p), &below).outcome,
         StageOutcome::Escalate
     );
-    let accepted = threat(0.4, true);
     assert_eq!(
-        module_stage(None, Some(0.1), &accepted).outcome,
+        module_stage(None, Some(0.1), &threat(true, false, true)).outcome,
         StageOutcome::Detected
     );
 }
 
 #[test]
 fn detect_threshold_is_the_per_module_heuristic_cut() {
-    // Unset: the scorer's own acceptance.
+    let p = scorer_score();
+    // Unset: the producer's own acceptance.
     assert_eq!(
-        module_stage(None, None, &threat(0.05, false)).outcome,
+        module_stage(None, None, &threat(true, false, false)).outcome,
         StageOutcome::Escalate
     );
-    // Set: the raw score at or above it detects, below it does not, accepted or not.
+    // Set: the scorer score at or above it detects, below it does not, accepted or not.
     assert_eq!(
-        module_stage(Some(0.04), None, &threat(0.05, false)).outcome,
+        module_stage(Some(p), None, &threat(true, false, false)).outcome,
         StageOutcome::Detected
     );
     assert_eq!(
-        module_stage(Some(0.4), None, &threat(0.4, true)).outcome,
-        StageOutcome::Detected
-    );
-    assert_eq!(
-        module_stage(Some(0.41), Some(0.2), &threat(0.4, true)).outcome,
+        module_stage(
+            Some((p + 0.01).min(1.0)),
+            Some(p / 2.0),
+            &threat(true, false, true)
+        )
+        .outcome,
         StageOutcome::Escalate
     );
     let config: CascadeConfig = serde_json::from_value(serde_json::json!({

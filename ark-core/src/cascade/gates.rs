@@ -595,10 +595,8 @@ impl TryFrom<GateConfig> for ScanGateMatrix {
         policy.estimated_cost_ms.extend(raw.estimated_cost_ms);
         policy.pipelines = raw.pipelines;
         policy.validate()?;
-        let mut native = config.native;
-        native.cascade_details = config.cascade.is_some();
         let mut gates = Self {
-            native,
+            native: config.native,
             l1: config.l1,
             l2: config.l2,
             l3: config.l3,

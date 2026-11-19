@@ -125,8 +125,9 @@ impl StageOutcome {
 pub struct ModuleConfig {
     /// The heuristic's detect cut on its rule scorer's probability
     /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
-    /// and the rule classes it feeds, the Threat document scorer's
-    /// `details.scorer_score` for the Threat classes, the confidence of a
+    /// and the rule classes it feeds, the Threat document scorer's own
+    /// probability (recomputed from `details.matched_rules`) for the Threat
+    /// classes, the confidence of a
     /// result with evidence for PII and DLP. A score at or above it is
     /// Detected when the module's score mode admits it. A Threat points rule
     /// accepted on its own (with evidence left after the mode floor) is
@@ -545,7 +546,8 @@ struct HeuristicScore {
 
 /// The heuristic's view of `result`: with a decision envelope its
 /// acceptance and candidate score; else (Threat rules) the scorer's own
-/// `scorer_score` and `points_accepted` in the native layer details; else
+/// scorer's own probability and accepted points hits, read from the native
+/// layer details ([`crate::detectors::threat::cascade_view`]); else
 /// evidence as acceptance and the confidence of a result with evidence.
 fn heuristic_score(result: &impl LayeredResult) -> HeuristicScore {
     if let Some(decision) = result.decision() {
@@ -559,18 +561,15 @@ fn heuristic_score(result: &impl LayeredResult) -> HeuristicScore {
         };
     }
     let evidence = result.has_evidence();
-    let detail = |key: &str| {
-        result
-            .layers()
-            .iter()
-            .find_map(|layer| layer.details.get(key))
-    };
-    let scorer = detail("scorer_score").and_then(Value::as_f64);
+    let threat = result
+        .layers()
+        .iter()
+        .find_map(|layer| crate::detectors::threat::cascade_view(&layer.details));
     HeuristicScore {
         accepted: evidence,
-        rule_hit: evidence && detail("points_accepted").and_then(Value::as_bool) == Some(true),
-        score: match scorer {
-            Some(score) => score,
+        rule_hit: evidence && threat.is_some_and(|(_, points_accepted)| points_accepted),
+        score: match threat {
+            Some((score, _)) => score,
             None if evidence => result.confidence(),
             None => 0.0,
         },

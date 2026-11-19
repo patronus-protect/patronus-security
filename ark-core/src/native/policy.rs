@@ -155,12 +155,6 @@ pub struct NativeGates {
     pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
-    /// Set by a host that runs a configured cascade: producers then add the
-    /// details the cascade reads (the Threat rules' `scorer_score` and
-    /// `points_accepted`). Off by default, so results stay as they are; not
-    /// serialized.
-    #[serde(skip)]
-    pub cascade_details: bool,
 }
 
 impl NativeGates {
@@ -219,7 +213,6 @@ impl NativeGates {
             points_acceptance: self
                 .threat_points_acceptance
                 .unwrap_or(defaults.points_acceptance),
-            cascade_details: self.cascade_details,
         }
     }
 
@@ -299,8 +292,7 @@ mod tests {
             gates.threat_thresholds(),
             ThreatThresholds {
                 count: 5,
-                points_acceptance: 0.6,
-                cascade_details: false,
+                points_acceptance: 0.6
             }
         );
         for key in ["threat_points_acceptance"] {

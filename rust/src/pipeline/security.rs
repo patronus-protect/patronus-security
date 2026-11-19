@@ -302,6 +302,39 @@ mod distributed_plan_tests {
     }
 
     #[test]
+    fn a_cascade_set_in_code_reads_threat_points_hits_like_a_parsed_one() {
+        // Detect cut 1.0: only a points rule hit can detect on L1.
+        let config: patronus_ark_core::cascade::CascadeConfig = serde_json::from_value(
+            serde_json::json!({"modules": {"unsafe_action": {"detect_threshold": 1.0}}}),
+        )
+        .unwrap();
+        let gates = crate::ScanGateMatrix {
+            cascade: Some(patronus_ark_core::cascade::Cascade::new(config).unwrap()),
+            ..crate::ScanGateMatrix::default()
+        };
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::UnsafeAction],
+            SecurityLevel::L2,
+            None,
+            false,
+        );
+        let inputs = [ExternalL1Input::new(
+            SecurityCategory::UnsafeAction,
+            "Delete the entire production database right away.",
+        )];
+        let plan = gateway.plan_distributed_l2(
+            &inputs,
+            &serde_json::json!({}),
+            &ScanExecution::with_gates(SecurityLevel::L2, gates),
+        );
+        assert!(plan.categories.is_empty(), "{:?}", plan.categories);
+        assert!(plan
+            .l1_results
+            .iter()
+            .any(|result| result.decided_by == Some(crate::Stage::Heuristic)));
+    }
+
+    #[test]
     fn without_a_cascade_l2_runs_as_before_and_nothing_is_marked() {
         // An L1 detection does not stop L2, in the queue and the distributed plan.
         let gateway = injection_gateway();

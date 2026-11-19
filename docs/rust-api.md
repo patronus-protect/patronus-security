@@ -744,8 +744,9 @@ switches clearing off.
 pub struct ModuleConfig {
     /// The heuristic's detect cut on its rule scorer's probability
     /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
-    /// and the rule classes it feeds, the Threat document scorer's
-    /// `details.scorer_score` for the Threat classes, the confidence of a
+    /// and the rule classes it feeds, the Threat document scorer's own
+    /// probability (recomputed from `details.matched_rules`) for the Threat
+    /// classes, the confidence of a
     /// result with evidence for PII and DLP. A score at or above it is
     /// Detected when the module's score mode admits it. A Threat points rule
     /// accepted on its own (with evidence left after the mode floor) is
@@ -2412,12 +2413,6 @@ pub struct NativeGates {
     pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
-    /// Set by a host that runs a configured cascade: producers then add the
-    /// details the cascade reads (the Threat rules' `scorer_score` and
-    /// `points_accepted`). Off by default, so results stay as they are; not
-    /// serialized.
-    #[serde(skip)]
-    pub cascade_details: bool,
 }
 ```
 
