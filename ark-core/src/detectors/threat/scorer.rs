@@ -1,31 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Embedded document-level Threat logistic scorer, independently calibrated.
-use serde::Deserialize;
 use serde_json::Value;
 use std::{collections::HashSet, sync::OnceLock};
-#[derive(Deserialize)]
-pub(super) struct Config {
-    schema_version: u32,
-    pub score_version: String,
-    rule_ids: Vec<String>,
-    feature_order: Vec<String>,
-    coefficients: Vec<f64>,
-    intercept: f64,
-    pub acceptance_threshold: f64,
-    golden_cases: Vec<Golden>,
-}
-#[derive(Deserialize)]
-struct Golden {
-    features: Vec<f64>,
-    expected_score: f64,
-    expected_accepted: bool,
-}
-pub(super) fn config() -> &'static Config {
-    static CONFIG: OnceLock<Config> = OnceLock::new();
+
+use crate::detectors::rule_scorer::RuleScorer;
+
+/// The embedded scorer; its features are one presence flag per rule id, then
+/// the rule count, the longest span and the scorer class count.
+pub(crate) fn config() -> &'static RuleScorer {
+    static CONFIG: OnceLock<RuleScorer> = OnceLock::new();
     CONFIG.get_or_init(|| {
-        let c: Config = serde_json::from_str(include_str!("l1_scorer_0_1_7.json"))
-            .expect("valid Threat scorer");
-        assert_eq!(c.schema_version, 1);
+        let c = RuleScorer::load(include_str!("l1_scorer_0_1_7.json"), "Threat");
         let order: Vec<_> = c
             .rule_ids
             .iter()
@@ -33,35 +18,13 @@ pub(super) fn config() -> &'static Config {
             .chain(["rule_count_log1p", "max_span_log1p", "class_count"].map(str::to_string))
             .collect();
         assert_eq!(c.feature_order, order);
-        assert_eq!(c.coefficients.len(), order.len());
-        assert!(c.intercept.is_finite() && c.coefficients.iter().all(|v| v.is_finite()));
-        assert!((0.0..1.0).contains(&c.acceptance_threshold));
-        assert!(!c.golden_cases.is_empty());
-        for g in &c.golden_cases {
-            let score = probability(&c, &g.features);
-            assert!((score - g.expected_score).abs() <= 1e-12);
-            assert_eq!(score >= c.acceptance_threshold, g.expected_accepted);
-        }
         c
     })
 }
-fn probability(c: &Config, features: &[f64]) -> f64 {
-    assert_eq!(features.len(), c.coefficients.len());
-    let value = c.intercept
-        + features
-            .iter()
-            .zip(&c.coefficients)
-            .map(|(x, w)| x * w)
-            .sum::<f64>();
-    if value >= 0.0 {
-        1.0 / (1.0 + (-value).exp())
-    } else {
-        value.exp() / (1.0 + value.exp())
-    }
-}
-/// Scores the findings of the rules the model was trained on; findings of
-/// points rules are not features of the model.
-pub(super) fn score(findings: &[Value]) -> (f64, bool) {
+/// Scores the findings of the rules the model was trained on against the
+/// acceptance cut `threshold`; findings of points rules are not features of
+/// the model.
+pub(super) fn score(findings: &[Value], threshold: f64) -> (f64, bool) {
     let c = config();
     let findings: Vec<_> = findings
         .iter()
@@ -97,13 +60,15 @@ pub(super) fn score(findings: &[Value]) -> (f64, bool) {
         (length as f64).ln_1p(),
         classes.len() as f64,
     ]);
-    let score = probability(c, &features);
-    (score, score >= c.acceptance_threshold)
+    let score = c.probability(&features);
+    (score, score >= threshold)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const T: f64 = 0.1;
 
     #[test]
     fn model_covers_exactly_the_rules_without_points() {
@@ -120,36 +85,42 @@ mod tests {
     }
 
     #[test]
-    fn scores_match_python_training_goldens() {
+    fn goldens_cover_both_decisions() {
         let c = config();
         assert!(c.golden_cases.iter().any(|g| g.expected_accepted));
         assert!(c.golden_cases.iter().any(|g| !g.expected_accepted));
-        for g in &c.golden_cases {
-            assert!((probability(c, &g.features) - g.expected_score).abs() < 1e-12);
-        }
+    }
+
+    #[test]
+    fn the_acceptance_cut_is_the_callers() {
+        let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
+        let findings = std::slice::from_ref(&finding);
+        let (s, _) = score(findings, 0.0);
+        assert_eq!(score(findings, s), (s, true));
+        assert_eq!(score(findings, s + 1e-9), (s, false));
     }
 
     #[test]
     fn no_findings_cannot_be_accepted() {
-        assert_eq!(score(&[]), (0.0, false));
+        assert_eq!(score(&[], T), (0.0, false));
     }
     #[test]
     fn findings_of_points_rules_do_not_change_the_model_score() {
         let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
         let points = serde_json::json!({"rule_id": "ark.threat.ua_destructive_request", "class_name": "unsafe_action", "start_byte": 0, "end_byte": 300});
         assert_eq!(
-            score(std::slice::from_ref(&finding)),
-            score(&[finding, points.clone()])
+            score(std::slice::from_ref(&finding), T),
+            score(&[finding, points.clone()], T)
         );
-        assert_eq!(score(&[points]), (0.0, false));
+        assert_eq!(score(&[points], T), (0.0, false));
     }
 
     #[test]
     fn repeated_rule_matches_do_not_reduce_score() {
         let finding = serde_json::json!({"rule_id": config().rule_ids[0], "scorer_class": "tool_abuse", "start_byte": 0, "end_byte": 30});
         assert_eq!(
-            score(std::slice::from_ref(&finding)),
-            score(&vec![finding; 256])
+            score(std::slice::from_ref(&finding), T),
+            score(&vec![finding; 256], T)
         );
     }
 }

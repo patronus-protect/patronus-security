@@ -5,6 +5,8 @@ use std::sync::OnceLock;
 
 pub(super) struct GroupedPatterns {
     matcher: AhoCorasick,
+    #[cfg(test)]
+    words: Vec<String>,
     groups: Vec<u64>,
     anchor_gates: Vec<(u64, crate::detectors::anchor_gate::AnchorGate)>,
 }
@@ -13,6 +15,8 @@ impl GroupedPatterns {
     fn new(entries: &[(&str, u64)]) -> Self {
         Self {
             matcher: AhoCorasick::new(entries.iter().map(|(pattern, _)| *pattern)).unwrap(),
+            #[cfg(test)]
+            words: entries.iter().map(|(word, _)| word.to_string()).collect(),
             groups: entries.iter().map(|(_, group)| *group).collect(),
             anchor_gates: (0..64)
                 .map(|bit| 1u64 << bit)
@@ -30,6 +34,17 @@ impl GroupedPatterns {
                 })
                 .collect(),
         }
+    }
+
+    /// One group of plain literals ([`LITERALS`]): a literal set whose
+    /// matches are evidence of their own.
+    fn literals(words: &[&str]) -> Self {
+        Self::new(
+            &words
+                .iter()
+                .map(|word| (*word, LITERALS))
+                .collect::<Vec<_>>(),
+        )
     }
 
     pub(super) fn allows(
@@ -55,6 +70,9 @@ impl GroupedPatterns {
             .collect()
     }
 }
+
+/// The single group of a [`GroupedPatterns::literals`] set.
+pub(super) const LITERALS: u64 = 1;
 
 pub(super) const IO_OVERRIDE_EN: u64 = 1 << 0;
 pub(super) const IO_PRIOR_EN: u64 = 1 << 1;
@@ -396,10 +414,10 @@ pub(super) fn covert_instruction_patterns() -> &'static GroupedPatterns {
     })
 }
 
-pub(super) fn instruction_boundary_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn instruction_boundary_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "<|endoftext|>",
             "<|im_start|>",
             "<|im_end|>",
@@ -413,7 +431,6 @@ pub(super) fn instruction_boundary_ac() -> &'static AhoCorasick {
             "<<sys>>",
             "<</sys>>",
         ])
-        .unwrap()
     })
 }
 
@@ -458,10 +475,10 @@ pub(super) fn output_manipulation_patterns() -> &'static GroupedPatterns {
     })
 }
 
-pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn instruction_leak_question_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "what are your system prompt",
             "what is your system prompt",
             "what are your instructions",
@@ -472,20 +489,18 @@ pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
             "was sind deine anweisungen",
             "was sind ihre regeln",
         ])
-        .unwrap()
     })
 }
 
-pub(super) fn cross_tool_direct_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn cross_tool_direct_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "higher priority than the user",
             "when another tool is requested",
             "höhere priorität als der benutzer",
             "wenn ein anderes tool angefordert wird",
         ])
-        .unwrap()
     })
 }
 
@@ -898,10 +913,10 @@ pub(super) fn guardrail_tamper_passive_request_de_re() -> &'static Regex {
     })
 }
 
-pub(super) fn destructive_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn destructive_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "rm -rf",
             "mkfs.",
             " dd if=",
@@ -920,7 +935,6 @@ pub(super) fn destructive_ac() -> &'static AhoCorasick {
             "history -c",
             "shred ",
         ])
-        .unwrap()
     })
 }
 
@@ -1056,10 +1070,10 @@ pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
     })
 }
 
-pub(super) fn binary_smuggling_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn binary_smuggling_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "metadata",
             "transaction",
             "payload",
@@ -1067,14 +1081,13 @@ pub(super) fn binary_smuggling_ac() -> &'static AhoCorasick {
             "transaktion",
             "nutzlast",
         ])
-        .unwrap()
     })
 }
 
-pub(super) fn sensitive_term_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| {
-        AhoCorasick::new([
+pub(super) fn sensitive_term_literals() -> &'static GroupedPatterns {
+    static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
+    PATTERNS.get_or_init(|| {
+        GroupedPatterns::literals(&[
             "system prompt",
             "developer message",
             "developer instructions",
@@ -1104,7 +1117,6 @@ pub(super) fn sensitive_term_ac() -> &'static AhoCorasick {
             "kennwort",
             "zugangsdaten",
         ])
-        .unwrap()
     })
 }
 
@@ -1243,6 +1255,37 @@ pub(super) fn regex_text_gate(regex: &Regex) -> Option<&'static Regex> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn literal_set_gates_admit_every_literal_they_hold() {
+        for (name, set) in [
+            ("instruction_boundary", instruction_boundary_literals()),
+            (
+                "instruction_leak_question",
+                instruction_leak_question_literals(),
+            ),
+            ("cross_tool_direct", cross_tool_direct_literals()),
+            ("destructive", destructive_literals()),
+            ("binary_smuggling", binary_smuggling_literals()),
+        ] {
+            assert!(!set.words.is_empty(), "{name}");
+            for word in &set.words {
+                // Inside other text, in any case: the gate reads the lowered text.
+                let text = format!("Prefix {} suffix", word.to_uppercase());
+                let prepared = super::super::NativeText::new(&text);
+                assert!(set.allows(LITERALS, prepared.anchors()), "{name}: {word:?}");
+                assert!(
+                    !set.matches(&prepared.lower().text).is_empty(),
+                    "{name}: {word:?}"
+                );
+            }
+        }
+        // Some set is anchored at all, so the gate can skip its search.
+        let empty = super::super::NativeText::new("nothing to see here");
+        assert!([destructive_literals(), cross_tool_direct_literals()]
+            .iter()
+            .any(|set| !set.allows(LITERALS, empty.anchors())));
+    }
 
     #[test]
     fn text_gates_hold_wherever_a_window_matches() {

@@ -4,7 +4,6 @@ use super::{obfuscation::*, patterns::*, util::text_windows};
 use super::{prepared::WINDOW_BYTES, NativeText};
 use crate::detectors::evidence::{L1Component, L1Match, MatchText};
 use crate::detectors::text_views::decode::rot13_decode_text;
-use aho_corasick::AhoCorasick;
 use regex::Regex;
 
 fn regex_matches(view: &MatchText, regex: &Regex, role: &str) -> Vec<L1Match> {
@@ -50,17 +49,32 @@ fn regex_matches_prepared(
     role: &str,
     prepared: &NativeText<'_>,
 ) -> Vec<L1Match> {
-    let gate = regex_anchor_gate(regex);
-    if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+    if !prepared.admits(regex_anchor_gate(regex)) {
         return Vec::new();
     }
     regex_matches(view, regex, role)
 }
 
-fn literals(view: &MatchText, matcher: &AhoCorasick, role: &str) -> Vec<L1Match> {
-    matcher
-        .find_overlapping_iter(&view.text)
-        .map(|m| L1Match::new(vec![view.component(role, m.start()..m.end())]))
+/// Every match of a literal set in `view`; a set none of whose literals the
+/// text's anchors allow is not searched.
+fn literals(
+    view: &MatchText,
+    patterns: &GroupedPatterns,
+    role: &str,
+    prepared: &NativeText<'_>,
+) -> Vec<L1Match> {
+    if !patterns.allows(LITERALS, prepared.anchors()) {
+        return Vec::new();
+    }
+    unanchored_literals(view, patterns, role)
+}
+
+/// [`literals`] on a view the text's anchors do not describe (a mapped view).
+fn unanchored_literals(view: &MatchText, patterns: &GroupedPatterns, role: &str) -> Vec<L1Match> {
+    patterns
+        .matches(&view.text)
+        .into_iter()
+        .map(|(_, start, end)| L1Match::new(vec![view.component(role, start..end)]))
         .collect()
 }
 fn relations(
@@ -259,13 +273,15 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
     match family {
         "cross_tool_instruction" => matches.extend(literals(
             &view,
-            cross_tool_direct_ac(),
+            cross_tool_direct_literals(),
             "cross_tool_authority",
+            prepared,
         )),
         "instruction_leak" => matches.extend(literals(
             &view,
-            instruction_leak_question_ac(),
+            instruction_leak_question_literals(),
             "instruction_disclosure_question",
+            prepared,
         )),
         "instruction_override" => matches.extend(relations(
             &view,
@@ -311,14 +327,18 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
             &[&[CI_DIRECT_EN], &[CI_DIRECT_DE]],
             "covert_action",
         )),
-        "destructive_operation" => {
-            matches.extend(literals(&view, destructive_ac(), "destructive_operation"))
-        }
+        "destructive_operation" => matches.extend(literals(
+            &view,
+            destructive_literals(),
+            "destructive_operation",
+            prepared,
+        )),
         "instruction_boundary" => {
             matches.extend(literals(
                 &view,
-                instruction_boundary_ac(),
+                instruction_boundary_literals(),
                 "instruction_boundary",
+                prepared,
             ));
             for line in view.text.lines() {
                 let trimmed = line.trim_start();
@@ -334,8 +354,7 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
                     system_boundary_instruction_re(),
                     system_boundary_instruction_de_re(),
                 ] {
-                    let gate = regex_anchor_gate(re);
-                    if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+                    if !prepared.admits(regex_anchor_gate(re)) {
                         continue;
                     }
                     for m in re.find_iter(instruction) {
@@ -361,7 +380,12 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
                         "forced_output",
                     )
                 } else {
-                    literals(local, binary_smuggling_ac(), "binary_container")
+                    literals(
+                        local,
+                        binary_smuggling_literals(),
+                        "binary_container",
+                        prepared,
+                    )
                 };
                 // Actions only contribute through an anchor/action combination.
                 // Divider detection below remains independent of these anchors.
@@ -446,7 +470,11 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
                 let local = MatchText::mapped(window, map, true);
                 for evidence in regex_matches(&local, injection_signal_re(), "instruction")
                     .into_iter()
-                    .chain(literals(&local, sensitive_term_ac(), "sensitive_object"))
+                    .chain(unanchored_literals(
+                        &local,
+                        sensitive_term_literals(),
+                        "sensitive_object",
+                    ))
                 {
                     let range = evidence.range();
                     let components = evidence

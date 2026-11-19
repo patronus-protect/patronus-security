@@ -11,6 +11,7 @@ pub mod lexical_anchors;
 pub mod mcp;
 pub mod obfuscation;
 pub mod pii;
+pub mod rule_scorer;
 pub mod score;
 pub mod shell;
 pub mod structure;
@@ -47,6 +48,14 @@ pub struct NativeDetection {
     pub result: EvaluationResult,
     pub evidence_spans: Vec<EvidenceSpan>,
     pub details: HashMap<String, serde_json::Value>,
+}
+
+impl NativeDetection {
+    /// Drops the evidence spans that `mode`'s floor refuses
+    /// ([`ScoreMode::admits`](crate::native::ScoreMode::admits)).
+    pub(crate) fn retain_admitted(&mut self, mode: crate::native::ScoreMode) {
+        self.evidence_spans.retain(|span| mode.admits(span.score));
+    }
 }
 
 /// Shared contract of the native (L1) detectors: a prepared text in, one
@@ -242,7 +251,7 @@ pub trait NativeRegexDetector: Sync {
             || self
                 .anchor_gates()
                 .get(index)
-                .is_some_and(|gate| !gate.is_unconditional() && !gate.allows(prepared.anchors()))
+                .is_some_and(|gate| !prepared.admits(gate))
             || self
                 .prefilters()
                 .and_then(|filters| filters[index].as_ref())

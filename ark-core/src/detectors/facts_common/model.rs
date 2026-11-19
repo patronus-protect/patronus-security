@@ -22,6 +22,7 @@ use rustc_hash::FxHashMap;
 use serde::Deserialize;
 
 use crate::detectors::facts_common::pyjson::py_round;
+use crate::detectors::facts_common::thresholds::L1Thresholds;
 use crate::detectors::shell::pyre::is_py_space;
 use crate::EvidenceSpan;
 
@@ -226,8 +227,7 @@ pub struct TfidfLrModel {
     tokens: Block,
     weights: Vec<f64>,
     intercept: f64,
-    ask_cut: f64,
-    block_cut: f64,
+    thresholds: L1Thresholds,
 }
 
 impl TfidfLrModel {
@@ -286,12 +286,6 @@ impl TfidfLrModel {
                 file.weights.len()
             ));
         }
-        let cut = |name: &str| {
-            file.thresholds
-                .get(name)
-                .copied()
-                .ok_or_else(|| format!("{label} model has no {name} threshold"))
-        };
         Ok(Self {
             name: file.name,
             char_wb,
@@ -299,8 +293,11 @@ impl TfidfLrModel {
             tokens,
             weights: file.weights,
             intercept: file.intercept,
-            ask_cut: cut(form.ask_threshold)?,
-            block_cut: cut(form.block_threshold)?,
+            thresholds: L1Thresholds::from_model(
+                &file.thresholds,
+                form,
+                &format!("{label} model"),
+            )?,
         })
     }
 
@@ -309,9 +306,18 @@ impl TfidfLrModel {
         &self.name
     }
 
-    /// The `ask` and `block` cuts on the decision score.
+    /// The detect and clear cuts on the decision score.
+    pub fn thresholds(&self) -> L1Thresholds {
+        self.thresholds
+    }
+
+    /// Cat's `ask` and `block` cuts: the clear and the detect cut.
     pub fn cuts(&self) -> (f64, f64) {
-        (self.ask_cut, self.block_cut)
+        let ask = self
+            .thresholds
+            .clear_threshold
+            .expect("a loaded model has its clear cut");
+        (ask, self.thresholds.detect_threshold)
     }
 
     /// Nonzero features over the concatenated feature space, in index order:

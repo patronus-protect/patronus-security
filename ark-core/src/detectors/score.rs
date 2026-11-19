@@ -167,6 +167,23 @@ impl RulePoints {
         }
     }
 
+    /// Points of an attack rule from its severity, the anchors its `gate`
+    /// requires and whether a post-match check verifies the match's
+    /// structure (a decoded payload, a parsed host); without one the rule is
+    /// a keyword form without a validator.
+    pub fn for_rule(
+        severity: &str,
+        verified_structure: bool,
+        gate: &crate::detectors::anchor_gate::AnchorGate,
+    ) -> Self {
+        let strength = if verified_structure {
+            ValidatorStrength::Structure
+        } else {
+            ValidatorStrength::None
+        };
+        Self::for_severity(severity, strength, gate.required_anchors())
+    }
+
     /// `matched_rules[]` fields of a finding without proximity context: the
     /// score, the validator strength and the anchor points as `context`.
     pub fn to_json(self) -> serde_json::Value {
@@ -355,5 +372,30 @@ mod tests {
         assert_eq!(normalised_score(0.75, Category::Dlp), 0.75);
         assert_eq!(normalised_score(0.75, Category::Injection), 0.85);
         assert_eq!(normalised_score(0.95, Category::Threat), 1.0);
+    }
+
+    #[test]
+    fn attack_rule_points_follow_severity_check_and_gate() {
+        use crate::detectors::anchor_gate::AnchorGate;
+        let gate = AnchorGate::regex(r"ignore (all )?previous instructions", true);
+        assert!(gate.required_anchors() > 0);
+        let plain = RulePoints::for_rule("critical", false, &gate);
+        assert_eq!(
+            plain,
+            RulePoints {
+                base_score: 55,
+                strength: ValidatorStrength::None,
+                required_anchors: gate.required_anchors(),
+            }
+        );
+        let checked = RulePoints::for_rule("high", true, &AnchorGate::Always);
+        assert_eq!(
+            (
+                checked.base_score,
+                checked.strength,
+                checked.required_anchors
+            ),
+            (45, ValidatorStrength::Structure, 0)
+        );
     }
 }

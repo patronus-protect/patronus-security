@@ -15,16 +15,20 @@
 //! - [`model`]: the per-category text models, in the K26 form (`char_wb`
 //!   TF-IDF + `tf1` tokens -> LR) or the fastText-type form, scored over the
 //!   facts.
+//! - [`l1_model`]: a module's optional L1 model, loaded once from a pinned
+//!   bundle, with its detect/clear outcome.
 //!
 //! Only the text is read: request metadata (role, source) never feeds the
 //! facts. Deterministic, no I/O.
 
 pub mod facts;
+pub mod l1_model;
 pub mod model;
 mod schema;
 mod tf1;
 
 pub use facts::{data_refs, extract, DataRef, Finding, FindingFacts, Sink, TextFacts};
+pub use l1_model::{L1ModelConfig, L1ModelOutcome, L1TextModel, L1_MODEL_LAYER};
 pub use model::{CategoryModel, TEXT_MODEL};
 pub use schema::schema;
 pub use tf1::{tf1, visit_tf1};

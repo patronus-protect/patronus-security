@@ -629,7 +629,7 @@ impl DlpPipeline {
         prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<crate::detectors::StructuredValue> {
         let gate = &self.anchor_gates[index];
-        if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+        if !prepared.admits(gate) {
             return Vec::new();
         }
         let text = prepared.text();
@@ -826,17 +826,15 @@ impl DlpPipeline {
     where
         F: Fn(&str) -> bool,
     {
-        let Some(threshold) = mode.min_score() else {
+        if mode == ScoreMode::Strict {
             return self.detect_prepared_with_options(prepared, allows_rule, explain);
-        };
+        }
         let mut detection = self.detect_prepared_scored(prepared, allows_rule, explain, Some(0.0));
-        detection
-            .evidence_spans
-            .retain(|span| span.score >= threshold);
+        detection.retain_admitted(mode);
         let mut first_group = None;
         if let Some(rules) = detection.details.get_mut("matched_rules") {
             if let Some(entries) = rules.as_array_mut() {
-                entries.retain(|rule| rule["score"].as_f64().is_some_and(|s| s >= threshold));
+                entries.retain(|rule| rule["score"].as_f64().is_some_and(|s| mode.admits(s)));
                 first_group = entries.first().and_then(|rule| {
                     let rule_id = rule["rule_id"].as_str()?;
                     let index = self.rule_ids.iter().position(|id| *id == rule_id)?;

@@ -71,6 +71,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Three optional acceptance cuts (Rust `NativeGates`, Python `ScannerConfig`):
+  `injection_acceptance_threshold` (default `0.96`), `threat_acceptance_threshold` (default `0.1`)
+  and `threat_points_acceptance` (default `0.5`), each between `0.0` and `1.0`. Unset, results
+  are unchanged.
+- An optional L1 text model per category (Rust `L1ModelConfig`, `NativeEngine::load_l1_models`):
+  a pinned model release, loaded once, with a detect and a clear cut that default to the model's
+  own and can be overridden; clearing can be switched off. Off unless configured; no model ships.
+- Python: `NativeCategory` lists every native category.
+
 - **Detection change:** (`injection`, `prompt_extraction`) the injection rules now also read text
   that hides its words: base64 and hex runs (also as the value of a `key=value` pair and in runs
   longer than 256 bytes, of which the first 1024 bytes are decoded), ROT13 text without a `ROT13`

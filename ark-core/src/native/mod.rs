@@ -6,5 +6,7 @@ mod policy;
 mod registry;
 
 pub use engine::{NativeEngine, NativeProducerOutcome, NATIVE_CATEGORIES};
-pub use policy::{default_rule_enabled, NativeGates, ScoreMode};
+pub use policy::{
+    default_rule_enabled, NativeGates, ScoreMode, DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD,
+};
 pub use registry::NativeProducerSpec;

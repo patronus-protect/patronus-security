@@ -8,7 +8,7 @@ use serde_json::json;
 use super::signal::{detection_from_signals, rule_category, InjectionReference, InjectionSignal};
 use super::token_relations::{OrderedRelationDefinition, OrderedTokenRelation};
 use crate::detectors::evidence::L1Match;
-use crate::detectors::score::{score, severity_rank, Context, RulePoints, ValidatorStrength};
+use crate::detectors::score::{score, severity_rank, Context, RulePoints};
 use crate::detectors::NativeDetection;
 use crate::{EvaluationResult, SecurityCategory};
 
@@ -279,9 +279,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, regex, prefilter) in &compiled.regexes {
                 let gate = &compiled.anchor_gates[*rule_index];
                 let rule = &compiled.catalog.rules[*rule_index];
-                if !allows_rule(rule.rule_id())
-                    || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
-                {
+                if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
                 if prefilter
@@ -295,9 +293,7 @@ impl InjectionRuleCatalogPipeline {
             for (rule_index, relation) in &compiled.ordered_relations {
                 let rule = &compiled.catalog.rules[*rule_index];
                 let gate = &compiled.anchor_gates[*rule_index];
-                if !allows_rule(rule.rule_id())
-                    || (!gate.is_unconditional() && !gate.allows(prepared.anchors()))
-                {
+                if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
                 for matched in relation.find_with_tokens(text, &tokens) {
@@ -316,9 +312,7 @@ impl InjectionRuleCatalogPipeline {
                 for (rule_index, regex, _) in &compiled.regexes {
                     let gate = &compiled.anchor_gates[*rule_index];
                     let rule = &compiled.catalog.rules[*rule_index];
-                    if !allows_rule(rule.rule_id())
-                        || (!gate.is_unconditional() && !gate.allows(decoded_view.anchors()))
-                    {
+                    if !allows_rule(rule.rule_id()) || !decoded_view.admits(gate) {
                         continue;
                     }
                     let mut hidden_matches = Vec::new();
@@ -691,17 +685,16 @@ fn validate_catalog(catalog: &RuleCatalog) {
 }
 
 /// Rules whose decoded payload must itself be an injection signal have a
-/// verified structure; the other rules are keyword forms without a validator.
+/// verified structure.
 fn rule_points(
     rule: &RuleDefinition,
     gate: &crate::detectors::anchor_gate::AnchorGate,
 ) -> RulePoints {
-    let strength = if rule.decoded_base64_instruction || rule.decoded_unicode_instruction {
-        ValidatorStrength::Structure
-    } else {
-        ValidatorStrength::None
-    };
-    RulePoints::for_severity(&rule.severity, strength, gate.required_anchors())
+    RulePoints::for_rule(
+        &rule.severity,
+        rule.decoded_base64_instruction || rule.decoded_unicode_instruction,
+        gate,
+    )
 }
 
 fn safe_detection() -> NativeDetection {
@@ -728,6 +721,7 @@ mod tests {
     use std::sync::OnceLock;
 
     use super::*;
+    use crate::detectors::score::ValidatorStrength;
 
     const PROMPT_ARMOR_JSON: &str = include_str!("rules/prompt_armor_95e532e.json");
 
