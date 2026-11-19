@@ -349,6 +349,7 @@ tasks:
   # Owner, 2026-11-18 (decision a): L1 stays the fast pre-filter (IJ02: no in-budget candidate reaches 80);
   # the injection gap is closed by the full stack. The deciding metric is TPR at 0.1% FPR.
   - id: E07
+    status: done
     title: Full-stack scoreboard — scoreboard.py predict/score/report gain a layer choice (l1, l1+l2) that runs the native L1 detectors and then the L2 Wolf Defender model (release 0.1.17, the variant the ARK default config ships) on every row, with the stack's own decision rule (L2 only where the default config escalates, or on every row if that is the default); report TPR at 0.1% and 1% FPR per class and language, hard-benign FPR, and ms per 100 KiB per layer
     type: eval-infra
     deps: [E06, IJ02]
