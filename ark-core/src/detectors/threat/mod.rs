@@ -265,11 +265,14 @@ impl ThreatPipeline {
     ) -> NativeDetection {
         let text = prepared.text();
         let (revision, rules) = catalog();
+        // The regexes of each admitted rule are looked up once here, not per
+        // window or match.
         let mut enabled: Vec<_> = rules
             .iter()
             .filter(|r| {
                 r.category == category && allows_rule(&r.rule.id) && prepared.admits(&r.anchor_gate)
             })
+            .map(|r| (r, r.regexes()))
             .collect();
         // Tool poisoning lives in tool metadata only; the same instruction in
         // plain text is injection.
@@ -286,7 +289,7 @@ impl ThreatPipeline {
             && !enabled.is_empty()
             && !super::text::facts::is_agent_config(text)
         {
-            enabled.retain(|r| {
+            enabled.retain(|(r, _)| {
                 !r.rule.id.starts_with("ark.threat.ac_")
                     || r.rule.id == "ark.threat.ac_tamper_request"
                     || r.rule.id == "ark.threat.ac_config_write"
@@ -306,16 +309,16 @@ impl ThreatPipeline {
                 window_end -= 1;
             }
             let window = &text[window_start..window_end];
-            for compiled in &enabled {
+            for &(compiled, regexes) in &enabled {
                 let mut from = 0;
-                while let Some(captures) = compiled.regexes().regex.captures_at(window, from) {
+                while let Some(captures) = regexes.regex.captures_at(window, from) {
                     let m = captures.get(0).unwrap();
                     from = m.end();
                     // The regex takes the first source after the verb; a
                     // sensitive source behind a business record in the same
                     // transfer ("the customer list and the full
                     // conversation") stands without the record's extra context.
-                    let captures = match (&compiled.regexes().sources, captures.name("record")) {
+                    let captures = match (&regexes.sources, captures.name("record")) {
                         (Some(sources), Some(_)) => sources
                             .captures_at(&window[..m.end()], m.start())
                             .filter(|c| c.get(0).unwrap().start() == m.start())
@@ -506,8 +509,7 @@ impl ThreatPipeline {
                         capped = true;
                         break 'windows;
                     }
-                    let mut evidence =
-                        L1Match::from_captures(&compiled.regexes().regex, &captures, None);
+                    let mut evidence = L1Match::from_captures(&regexes.regex, &captures, None);
                     for component in &mut evidence.components {
                         component.start_byte += window_start;
                         component.end_byte += window_start;
