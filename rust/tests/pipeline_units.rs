@@ -67,6 +67,8 @@ mod l3_results {
                 },
             ],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -214,10 +216,8 @@ mod public_strategy_types {
 mod long_text {
     use std::collections::HashMap;
 
-    use patronus_ark::pipeline::test_util::{
-        aggregate_chunk_outputs, candidate_selection, l3_metadata, ChunkAggregation,
-    };
-    use patronus_ark::{EvaluationResult, LayerResult};
+    use patronus_ark::{EvaluationResult, L3AggregationStrategy, LayerResult};
+    use patronus_ark_core::cascade::aggregate_chunk_outputs;
 
     fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
         EvaluationResult {
@@ -247,36 +247,6 @@ mod long_text {
     }
 
     #[test]
-    fn candidate_selection_dedupes_contiguous_same_class_by_best_confidence() {
-        let chunk_outputs = vec![
-            (
-                result("secret", 0.60, "L2"),
-                vec![layer("L2", "secret", 0.60, true, 1.0)],
-            ),
-            (
-                result("secret", 0.90, "L2"),
-                vec![layer("L2", "secret", 0.90, true, 1.0)],
-            ),
-            (
-                result("credential", 0.80, "L2"),
-                vec![layer("L2", "credential", 0.80, true, 1.0)],
-            ),
-            (
-                result("safe", 1.0, "L1"),
-                vec![layer("L1", "safe", 1.0, true, 1.0)],
-            ),
-        ];
-
-        let selection =
-            candidate_selection(&chunk_outputs, |result, _| result.class_name != "safe");
-
-        assert_eq!(selection.raw_count, 3);
-        assert_eq!(selection.deduped_count, 2);
-        assert_eq!(selection.indexes, vec![1, 2]);
-        assert_eq!(selection.strategy, "contiguous_same_class_best_confidence");
-    }
-
-    #[test]
     fn aggregate_chunk_outputs_selects_highest_risk_and_summarizes_omitted_work() {
         let full_text_layers = vec![layer("L1", "safe", 0.0, false, 0.5)];
         let chunk_outputs = vec![
@@ -299,7 +269,7 @@ mod long_text {
             chunk_outputs,
             3,
             "safe",
-            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
+            L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
         )
         .unwrap();
 
@@ -342,39 +312,12 @@ mod long_text {
             chunk_outputs,
             2,
             "safe",
-            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
+            L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
         )
         .unwrap();
 
         assert_eq!(aggregate.result.class_name, "safe");
         assert_eq!(aggregate.result.confidence, 0.99);
-    }
-
-    #[test]
-    fn l3_metadata_records_runtime_backend_and_batch_shape() {
-        let metadata = l3_metadata(
-            Some("fp16"),
-            Some(std::path::Path::new("/tmp/model.onnx")),
-            "demo-model",
-            Some("CPUExecutionProvider"),
-            "tensor_batch",
-            4,
-        );
-
-        assert_eq!(
-            metadata.get("runtime"),
-            Some(&serde_json::json!("onnxruntime"))
-        );
-        assert_eq!(metadata.get("precision"), Some(&serde_json::json!("fp16")));
-        assert_eq!(
-            metadata.get("model_name"),
-            Some(&serde_json::json!("demo-model"))
-        );
-        assert_eq!(
-            metadata.get("batch_mode"),
-            Some(&serde_json::json!("tensor_batch"))
-        );
-        assert_eq!(metadata.get("batch_size"), Some(&serde_json::json!(4)));
     }
 
     #[test]
@@ -389,7 +332,7 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            ChunkAggregation::AnyPositiveOrHighest {
+            L3AggregationStrategy::AnyPositiveOrHighest {
                 positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
@@ -412,7 +355,7 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            ChunkAggregation::AnyPositiveOrHighest {
+            L3AggregationStrategy::AnyPositiveOrHighest {
                 positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
@@ -435,7 +378,7 @@ mod long_text {
             chunk_outputs,
             10,
             "benign",
-            ChunkAggregation::MajorityVoteOrHighest,
+            L3AggregationStrategy::MajorityVoteOrHighest,
         )
         .unwrap();
 
@@ -454,7 +397,7 @@ mod long_text {
             chunk_outputs,
             10,
             "safe",
-            ChunkAggregation::MajorityVoteOrHighest,
+            L3AggregationStrategy::MajorityVoteOrHighest,
         )
         .unwrap();
 

@@ -1,8 +1,11 @@
 # Architecture
 
 This page explains how Patronus Ark is put together — the major components, how a scan
-flows through them, and why the design looks the way it does. For the moment-to-moment
-escalation rules, see [Layered scanning](layered-scanning.md).
+flows through them, and why the design looks the way it does. The analysis model itself —
+modules × layers, the stages inside a module, escalation and early exit, and which parts live in
+Ark Core — is described once on [Analysis framework](layered-scanning.md).
+
+[![Analysis modules by layers L1, L2 and L3](../img/architecture/analysis-grid.svg)](layered-scanning.md)
 
 ## The big picture
 
@@ -59,29 +62,24 @@ strictly-local *runtime-start* phase — see [Asset & runtime lifecycle](#asset-
 
 ### Pipelines
 
-Each category owns a pipeline that knows which of L1/L2/L3 it supports and how to combine
-their outputs into a single [result](../reference/result-schema.md). Some categories are
+Each category owns a pipeline — one row of the [analysis framework](layered-scanning.md) — that
+knows which of L1/L2/L3 it supports and how to combine their outputs into a single
+[result](../reference/result-schema.md). Some categories are
 L1-only (`pii`), some are L3-only (`dynamic-pii`), most run L1→L2 with optional L3 promotion.
 See [Categories](categories.md) for the per-category layer map.
 
-### The three layers
+### Layers
 
-| Layer | Implementation | Loaded | Latency class |
-| --- | --- | --- | --- |
-| **L1** | Native Rust detectors in `detectors/` and `threat/` | no assets; gate-controlled | input-dependent |
-| **L2** | NTDB packages using the shared mmBERT tokenizer and static embedder | on warmup (if cached) | milliseconds |
-| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings | RAM-resident per config, idle-TTL evicted | tens of milliseconds |
-
-The current official L2 and L3 packages use the same mmBERT tokenization contract and embedding
-space. L2 performs the cheap static-embedding path; when it promotes compatible chunks, their
-token IDs are handed directly to the full L3 transformer rather than computed a second time.
+L1 (native analysis modules, no assets), L2 (NTDB packages, milliseconds) and L3 (full ONNX
+transformers, tens of milliseconds) are defined on [Analysis framework](layered-scanning.md);
+the model formats live in [Models & the NTDB format](models-and-ntdb.md). The current official
+L2 and L3 packages share one mmBERT tokenization contract and embedding space, so promoted chunks
+hand their token IDs straight to L3 instead of tokenizing again.
 
 L1 and L2 run on a **pool of gateway workers** (up to 4 threads, sized to available cores). L3
 runs in a **single separate background worker** so a heavy transformer never blocks a fast
 L1/L2 answer — and because that worker processes one L3 job at a time, its fair scheduler (below)
-decides ordering across categories. Detailed escalation logic lives in
-[Layered scanning](layered-scanning.md); the model formats live in
-[Models & the NTDB format](models-and-ntdb.md).
+decides ordering across categories.
 
 ### The L3 background worker
 
@@ -151,8 +149,8 @@ sequenceDiagram
 
     App->>GW: enqueue(text) → request_id
     GW->>L1: native detectors
-    L1-->>GW: L1 verdict
-    GW->>L2: NTDB classifiers (if assets ready)
+    L1-->>GW: L1 verdict (decided → early exit)
+    GW->>L2: NTDB classifiers on undecided input (if assets ready)
     L2-->>GW: L2 verdict (+ promote?)
     alt L2 promotes to L3
         GW->>Q: publish L2 fallback (result event)
@@ -184,8 +182,9 @@ deployments — see [Offline & air-gapped scanning](../how-to/offline-airgapped.
 
 - **On-device first.** No scan content leaves the machine. The only network activity is the
   optional, one-time asset download from Hugging Face.
-- **Pay for detection only when needed.** Native L1 avoids model inference; the
-  transformer runs only for the uncertain minority that L2 promotes.
+- **Pay for detection only when needed.** Native L1 avoids model inference; each later layer
+  runs only on what the earlier ones left undecided, and the transformer only for the uncertain
+  minority that L2 promotes.
 - **Rust core, thin bindings.** All logic lives once in Rust; Python (and any future binding)
   is a wrapper, so behavior cannot drift between languages.
 - **Graceful degradation.** A missing asset, an L3 timeout, or an inference error degrades to

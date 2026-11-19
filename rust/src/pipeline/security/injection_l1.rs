@@ -13,12 +13,10 @@ fn candidates_from_result(
 }
 #[cfg(test)]
 pub(super) fn aggregate(text: &str, results: Vec<SecurityScanResult>) -> SecurityScanResult {
-    patronus_ark_core::injection_l1::aggregate(
-        crate::SecurityCategory::Injection,
-        text,
-        results.into_iter().map(Into::into).collect(),
-    )
-    .into()
+    let results = results.into_iter().map(|result| (true, result)).collect();
+    category_results(crate::SecurityCategory::Injection, text, results)
+        .pop()
+        .expect("injection always reports its scored decision")
 }
 
 pub(super) fn category_results(
@@ -62,6 +60,8 @@ mod tests {
                 details: HashMap::from([("l1_candidates".to_string(), candidate)]),
             }],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

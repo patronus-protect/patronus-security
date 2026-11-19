@@ -42,7 +42,9 @@ impl NtdbDecision {
         let route_to_l3 = output
             .promote_score
             .zip(output.promote_threshold)
-            .is_some_and(|(score, threshold)| score >= threshold);
+            .is_some_and(|(score, threshold)| {
+                patronus_ark_core::cascade::escalates(f64::from(score), f64::from(threshold))
+            });
 
         let mut l3_candidates = output.l3_candidates;
         for candidate in &mut l3_candidates {

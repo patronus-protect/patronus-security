@@ -30,7 +30,21 @@ class LabelScore(TypedDict):
     matched: bool
 
 
-NativeCategory = Literal["pii", "dlp", "injection"]
+NativeCategory = Literal[
+    "pii",
+    "dlp",
+    "injection",
+    "jailbreak",
+    "prompt_extraction",
+    "tool_poisoning",
+    "agent_config_tampering",
+    "memory_poisoning",
+    "exfiltration",
+    "unsafe_action",
+    "resource_exhaustion",
+    "harmful_content",
+    "toxic_language",
+]
 
 
 class NativeResult(TypedDict):
@@ -57,10 +71,23 @@ class WolfResult(TypedDict):
     precision: str
 
 
+Stage = Literal["heuristic", "l1_model", "policy", "l2", "l3"]
+
+
+class ModuleDecision(TypedDict):
+    """Final answer of one scanned module and the stage that decided it."""
+    module: str
+    outcome: Literal["detected", "clear"]
+    decided_by: Stage
+    score: float
+    layers: NotRequired[list[LayerResult]]
+
+
 class ScanReport(TypedDict):
     input_bytes: int
     native: list[NativeResult]
     wolf: WolfResult | None
+    decision: NotRequired[list[ModuleDecision]]
 
 
 Decision = Literal["allow", "ask", "block"]
@@ -114,7 +141,7 @@ class OnnxRuntimeOptions(TypedDict, total=False):
 
 class WolfConfig(TypedDict):
     bundle_dir: str
-    threshold: float
+    threshold: NotRequired[float]
     model: NotRequired[Literal["base", "small", "edge"]]
     precision: NotRequired[
         Literal["auto", "fp32", "fp16", "mixed", "mixed_x86", "int8_int4", "int8_int4_x86"]
@@ -133,6 +160,32 @@ class ShellConfig(TypedDict):
 ScoreMode = Literal["strict", "balanced", "recall"]
 
 
+class L1ModelConfig(TypedDict):
+    """A module's L1 text model: a pinned release; cuts on its logit scale."""
+    bundle_dir: str
+    manifest_sha256: str
+    detect_threshold: NotRequired[float]
+    clear_threshold: NotRequired[float]
+    clear_enabled: NotRequired[bool]
+
+
+class ModuleConfig(TypedDict, total=False):
+    """One module's cascade settings; heuristic cuts on its 0..1 rule score."""
+    detect_threshold: float | None
+    clear_threshold: float | None
+    l1_model: L1ModelConfig | None
+
+
+class CascadeConfig(TypedDict, total=False):
+    """The opt-in cascade: level switches as in Ark's gates, per-module L1 cuts and L1 models."""
+    max_level: Literal["L1", "L2", "L3"]
+    l1: bool
+    l2: bool
+    l3: bool
+    conditional: list[dict[str, object]]
+    modules: dict[str, ModuleConfig]
+
+
 class ScannerConfig(TypedDict, total=False):
     categories: list[NativeCategory]
     rules: dict[str, bool]
@@ -149,6 +202,7 @@ class ScannerConfig(TypedDict, total=False):
     unsafe_action_mode: ScoreMode
     resource_exhaustion_mode: ScoreMode
     resource_exhaustion_count_threshold: int
+    threat_points_acceptance: float
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode
     explain: bool
@@ -156,6 +210,7 @@ class ScannerConfig(TypedDict, total=False):
     max_findings: int
     wolf: WolfConfig | None
     shell: ShellConfig | None
+    cascade: CascadeConfig | None
 
 
 class WarmupOptions(TypedDict, total=False):

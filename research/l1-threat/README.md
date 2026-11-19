@@ -11,7 +11,9 @@ ARK erkennt Angriffe auf LLMs und Agents auf L1 (CPU, ohne Transformer) in den K
 Werkzeuge 2025–2026 tatsächlich unterscheiden, und ist gegen die offenen heuristischen Baselines messbar
 besser, auf Deutsch deutlich. Die neuen Klassen **ersetzen** die bisherigen sieben Labels in `ark-core` und
 ARK; es bleiben keine Alt-Labels. Das Programm arbeitet nur an L1: L2/L3-Modelle werden weder geändert noch
-neu trainiert, nur ihre Ausgabe-Labels werden über eine feste Tabelle auf die neuen Kategorien gemappt.
+neu trainiert, nur ihre Ausgabe-Labels werden über eine feste Tabelle auf die neuen Kategorien gemappt. Gemessen
+wird mit ark-core allein als Kaskade (L1-Heuristik → L1-Modell → L3 Wolf); L2 gibt es nur in ARK und wird hier
+nicht gemessen.
 
 | Klasse | Kurz | Altes Label |
 |---|---|---|
@@ -421,8 +423,9 @@ nur die ersten 512 Tokens samt beachtetem Padding). Laufzeit auf 5 Kernen: Promp
 allen Threads, 86M und ProtectAI v2 ein Mehrfaches langsamer; die volle Dev-Spalte braucht mehrere Läufe.
 
 **Scoreboard und Gate (E06, [`scripts/l1_threat/scoreboard.py`](../../scripts/l1_threat/scoreboard.py)).**
-Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
-Benign-Pool, je mit Bootstrap-95-%-KI, AUPRC, Hard-Benign-FPR beim ARK-Urteil (Doppelgänger `twin_of` und
+Gemessen wird ark-core allein (Beispiel `threat_cascade`, das Gate mit der Kaskade nur bis L1) auf der
+L1-Score-Kurve. Je Klasse, Sprache (`all`/`de`/`en`) und Herkunft (`native`/`translated`): TPR@1 % und @0,1 % FPR auf dem
+Benign-Pool, je mit Bootstrap-95-%-KI, AUPRC, Hard-Benign-FPR an derselben Schwelle (Doppelgänger `twin_of` und
 die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, WildJailbreak `adversarial_benign`, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
 werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp Verlust an TPR@1 % oder an
 TPR@0,1 % einer Klasse (`all`, `de`, `en`; E08, Owner 2026-11-18: 0,1 % ist die entscheidende Kennzahl) oder einer
@@ -433,24 +436,18 @@ Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz ble
 besten Referenzzeile je Zelle (TPR@1 % / 0,1 %, nur Baselines, die die Klasse bewerten); Baselines ohne
 vollständigen Dev-Cache stehen dort mit Namen und Grund.
 
-**Voller Stack (E07, Owner 2026-11-18: L1 bleibt der schnelle Vorfilter, die Lücke schließt der Stack).**
-`scoreboard.py predict/score/report --layers l1+l2` scannt jede Zeile mit L1 allein und mit dem Stack bis L2
-(Release 0.1.17: Wolf Defender Small, NTDB-L2-Paket `142fadc5`, für `injection`; NTDB-L2-Kopf des
-Threat-Modells `ef87add2` für die übrigen Klassen). Die Standardkonfiguration hat kein bedingtes L2-Gate, also
-läuft L2 auf jeder Zeile; der Score folgt ARKs eigenem Urteil wie auf L1. Dev-Stand mit L1 neben L1+L2, bester
-Heuristik und bestem Prompt Guard 2 je Zelle und ms je 100 KiB je Ebene:
-[`scoreboard/full-stack.md`](scoreboard/full-stack.md). Den Holdout fährt der Owner außerhalb der Sandbox mit
-demselben Befehl (`report --layers l1+l2 --counts-only`) und trägt ihn dort als Zählungstabelle nach.
-Befund auf Dev: L2 hebt `instruction_injection` bei 1 % FPR (60,2 → 68,5, DE 23,0 → 48,0), senkt es aber bei
-0,1 % FPR (60,2 → 36,2, DE 23,0 → 6,0), weil L2 Benign-Zeilen mit hoher Konfidenz meldet (Hard-Benign-FPR
-0 → 22,7 %, 524 von 2313). `harmful_content` und `toxic_language` deckt nur L2 ab (EN 46,8 bzw. 64,7 bei 1 %, fast
-0 bei 0,1 %, DE 0); `unsafe_action` 21,0 → 33,7 (1 %) bzw. 25,1 (0,1 %); die übrigen Klassen bleiben gleich (kein
-L2-Label). Auf der entscheidenden Kennzahl ist der Stack in Standardkonfiguration für Injection damit
-schlechter als L1 allein: L2s sichere Benign-Treffer liegen in der Rangfolge über den meisten Positiven.
-Prompt Guard 2 22M liegt bei Injection EN darüber (84,4 / 80,6), auf Deutsch darunter (12,0 / 5,0 gegen L1 23,0 /
-23,0); Prompt Guard 2 86M und ProtectAI v2 fehlen in der Spalte (kein Dev-Cache für die aktuellen Sätze). Latenz
-im Vorhersagelauf (kurze Zeilen, 4 Prozesse auf 5 Kernen, also vom Fixaufwand je Zeile bestimmt): L2 kostet je
-Zeile etwa das Doppelte von L1 (p95 8,7 gegen 5,1 ms); das 100-KiB-Budget misst weiter `latency.py`.
+**Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
+allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
+seiner Standardschwelle); eine spätere Ebene läuft nur auf dem, was die früheren offen lassen. L2 gibt es nur in
+ARK und wird hier nicht gemessen. Regeln und L1-Modelle werden auf etwa 0,1 % FPR auf Benign-Daten kalibriert
+(Dev-Benign-Pool einschließlich der Hard-Benigns, nie Trainingsnegative); die entscheidende Kennzahl ist TPR bei
+0,1 % FPR. `scoreboard.py calibrate` schreibt die Schwellen je Klasse in eine Kaskaden-Konfiguration,
+`scoreboard.py report --cascade` zeigt je Klasse und Sprache am Arbeitspunkt dieser Konfiguration TPR, FPR,
+Hard-Benign-FPR bei derselben Entscheidung (je Quelle), die Anteile je entscheidender Stufe und die Latenz je
+Stufe: [`scoreboard/cascade.md`](scoreboard/cascade.md) (folgt mit dem ersten Lauf auf dem Eval-Host). Den Holdout
+fährt der Owner mit `--counts-only`. Die frühere Messung, die L1 und L2 auf jeder Zeile laufen ließ und die
+Konfidenzen zusammenzog, ist damit abgelöst; ihr Befund (L2 meldete viele Hard-Benigns sicher, bei 0,1 % FPR lag
+der Stack für Injection unter L1 allein) war der Anlass.
 
 ## Herkunft: Regeln, Train, Gold, Holdout
 

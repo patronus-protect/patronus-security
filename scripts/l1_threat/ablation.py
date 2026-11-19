@@ -8,7 +8,7 @@ Every stage scores the same rows; the comparison shows what each building block 
 |---|---|
 | ``R`` | rules only: the strongest finding ``points`` of the class's category in the facts |
 | ``R+A`` | ``R`` plus the hand-set context points (support ``+SUPPORT_POINTS``, counter context ``-COUNTER_POINTS``), only on a rule hit, not below 0 |
-| ``B0`` | today's scorer of the category: ARK's own score from ``scoreboard.py predict`` predictions (``--b0-predictions``) |
+| ``B0`` | today's scorer of the category: Core's L1 score curve from ``scoreboard.py predict`` predictions (``--b0-predictions``) |
 | ``R+A+L`` | ``R+A`` plus learned integer points per fact token (``LearnedPoints``: ``>= 0``, counter tokens ``<= 0``) |
 | ``B1`` | char n-gram TF-IDF + LR alone (``category_model.py``, vocabulary, no token features) |
 | ``B4`` | hashed char n-gram + word TF-IDF + LR alone (``tf1`` words without fact tokens) |
@@ -19,12 +19,11 @@ Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``tex
 ``classes``, ``benign``, ``language`` and ``dataset``, as in the frozen corpora. A row is a positive
 of the class when the class is in ``classes`` and a negative when ``benign``; other rows are left
 out. ``--rows`` is split by a hash of the row id into train and eval halves unless ``--eval-rows``
-is given. Learned stages train on the train rows; every stage's operating cut holds 1 % FPR on the
-train negatives (``category_model.fpr_cut``).
+is given. Learned stages train on the train rows.
 
 Per stage on the eval rows, per language (``all``, ``de``, ``en``): TPR at matched FPR 1 % and
-0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the operating cut (B0: ARK's
-verdict) on the security-adjacent benign rows (``scoreboard.is_hard_benign``), the model's RAM
+0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the same matched thresholds on the
+security-adjacent benign rows (``scoreboard.is_hard_benign``), the model's RAM
 estimate and the ms per 100 KiB it adds to the facts (``text_model_latency`` example on the latency
 windows, ``--bench-bin``/``--windows``; points stages sum over the facts and add none).
 
@@ -91,7 +90,6 @@ FASTTEXT_SHAPE = (1 << 15, 16)
 TOLERANCE_PP = 1.0
 MAX_RAM_BYTES = 2 * 1024 * 1024
 MAX_EXTRA_MS = 1.0
-OPERATING_FPR = 0.01
 # Per-entry overhead of a vocabulary or points map entry in the Rust model (hash slot, string header).
 ENTRY_BYTES = 32
 # ``Box<str>`` header of a vocabulary term's clone in the Rust model's ``names`` vector.
@@ -179,7 +177,7 @@ class LearnedPoints:
 
 
 class Stage:
-    """One ablation stage: a row scorer, its operating cut and its cost."""
+    """One ablation stage: a row scorer and its cost."""
 
     def __init__(self, name: str, score: Callable[[dict], float], *, model: dict | None = None,
                  ram_bytes: int = 0) -> None:
@@ -187,8 +185,6 @@ class Stage:
         self.score = score
         self.model = model
         self.ram_bytes = ram_bytes
-        self.cut = 0.0
-        self.flagged: Callable[[dict], bool] = lambda row: self.score(row) > self.cut
 
 
 def model_ram_bytes(document: dict) -> int:
@@ -225,14 +221,9 @@ def split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return train, test
 
 
-def operating_cut(scored: list[tuple[float, int]]) -> float:
-    """Cut holding ``OPERATING_FPR`` on the negatives of ``(score, label)`` pairs."""
-    return MODEL.fpr_cut([score for score, label in scored if label == 0], OPERATING_FPR)
-
-
 def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS, iterations: int = 400,
                min_df: int = 2, stages: Iterable[str] = STAGES) -> list[Stage]:
-    """The chosen ``stages`` but ``B0``, trained on ``rows`` and with their operating cut."""
+    """The chosen ``stages`` but ``B0``, trained on ``rows``."""
     wanted = set(stages)
     category = SCOREBOARD.category(cls)
     train = labelled(rows, cls)
@@ -277,20 +268,12 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
         ft = MODEL.FastTextModel(ft_doc)
         fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.fasttext_tokens(row))), model=ft_doc,
                             ram_bytes=model_ram_bytes(ft_doc)))
-    fitted = [stage for stage in fitted if stage.name in wanted]
-    for stage in fitted:
-        stage.cut = operating_cut([(stage.score(row), label) for row, label in train])
-    return fitted
+    return [stage for stage in fitted if stage.name in wanted]
 
 
 def b0_stage(predictions: dict[str, dict], cls: str) -> Stage:
-    """Today's scorer from ARK predictions; its verdict is ARK's own."""
-    def score(row: dict) -> float:
-        return float(predictions[row["id"]]["scores"].get(cls, 0.0))
-
-    stage = Stage("B0", score)
-    stage.flagged = lambda row: cls in (predictions[row["id"]].get("flagged") or [])
-    return stage
+    """Today's scorer: Core's L1 score curve from the scoreboard predictions."""
+    return Stage("B0", lambda row: float(predictions[row["id"]]["scores"].get(cls, 0.0)))
 
 
 def load_predictions(path: Path) -> dict[str, dict]:
@@ -305,7 +288,7 @@ def evaluate(stage: Stage, rows: list[tuple[dict, int]]) -> dict[str, Any]:
         chosen = [(row, label) for row, label in rows if language == "all" or row.get("language") == language]
         pos = [float(stage.score(row)) for row, label in chosen if label]
         neg = [float(stage.score(row)) for row, label in chosen if not label]
-        hard = [stage.flagged(row) for row, label in chosen if not label and SCOREBOARD.is_hard_benign(row)]
+        hard = [float(stage.score(row)) for row, label in chosen if not label and SCOREBOARD.is_hard_benign(row)]
         if pos and neg:
             out[language] = SCOREBOARD.cell_metrics(pos, neg, hard, bootstrap=False)
     return out
@@ -396,7 +379,7 @@ def markdown(reports: list[dict[str, Any]]) -> str:
                   + (f"; over budget: {', '.join(selection['over_budget'])}" if selection["over_budget"] else "")
                   + (f"; untimed: {', '.join(selection['untimed'])}" if selection["untimed"] else ""),
                   "",
-                  "| Stage | TPR@1 % | TPR@0.1 % | DE TPR@1 % | EN TPR@1 % | AUPRC | hard-benign FPR | ms/100 KiB | RAM KiB |",
+                  "| Stage | TPR@1 % | TPR@0.1 % | DE TPR@1 % | EN TPR@1 % | AUPRC | hard-benign FPR@1 % | ms/100 KiB | RAM KiB |",
                   "|---|---|---|---|---|---|---|---|---|"]
         for result in report["stages"]:
             cells = {language: result.get(language) or {} for language in LANGUAGES}
@@ -405,7 +388,7 @@ def markdown(reports: list[dict[str, Any]]) -> str:
                 cell = cells[language].get(fpr)
                 return _pct(None if cell is None else cell["tpr"])
 
-            hard = (cells["all"].get("hard_benign") or {}).get("fpr")
+            hard = ((cells["all"].get("hard_benign") or {}).get("0.01") or {}).get("fpr")
             ms = result.get("ms_per_100kib")
             ram = result.get("ram_bytes")
             lines.append(

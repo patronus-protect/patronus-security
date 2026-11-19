@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" width="1000" height="360" role="img" aria-labelledby="t">
+<title id="t">What lives in Ark Core and what in Ark</title>
+<style>
+:root{--fg:#1a2130;--muted:#5a6477;--line:#d5dbe4;--panel:#ffffff;--soft:#eef1f5;--l1:#0f7b74;--l1b:#dff1ee;--l2:#a3620a;--l2b:#fbeedb;--l3:#6a3fb5;--l3b:#ece4fa;--ok:#2f7d32;--okb:#e4f1e4;--bad:#b3261e;--badb:#fae5e3;--esc:#8a6100;--escb:#fff2cf}
+@media (prefers-color-scheme:dark){:root{--fg:#e3e8ef;--muted:#9aa4b5;--line:#2d3543;--panel:#191f28;--soft:#20272f;--l1:#4cc3b9;--l1b:#11332f;--l2:#e3a54a;--l2b:#38290f;--l3:#b394ee;--l3b:#291e40;--ok:#7cc47f;--okb:#172e18;--bad:#f08a82;--badb:#3b1613;--esc:#e7c35c;--escb:#33290c}}
+text{font-family:-apple-system,"Segoe UI",system-ui,Helvetica,Arial,sans-serif;fill:var(--fg)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.mu{fill:var(--muted)} .c1{fill:var(--l1)} .c2{fill:var(--l2)} .c3{fill:var(--l3)} .cok{fill:var(--ok)} .cbad{fill:var(--bad)} .cesc{fill:var(--esc)}
+.bg{fill:var(--panel)} .p{fill:var(--panel);stroke:var(--line)} .s{fill:var(--soft);stroke:var(--line)}
+.b1{fill:var(--l1b);stroke:var(--l1)} .b2{fill:var(--l2b);stroke:var(--l2)} .b3{fill:var(--l3b);stroke:var(--l3)}
+.bok{fill:var(--okb);stroke:var(--ok)} .bbad{fill:var(--badb);stroke:var(--bad)} .besc{fill:var(--escb);stroke:var(--esc)}
+.ln{stroke:var(--muted);fill:none;stroke-width:1.5} .lok{stroke:var(--ok);fill:none;stroke-width:1.5} .lesc{stroke:var(--esc);fill:none;stroke-width:1.5;stroke-dasharray:5 4}
+.ar{fill:var(--muted)} .aok{fill:var(--ok)} .aesc{fill:var(--esc)}
+</style>
+<rect class="bg" x="0" y="0" width="1000" height="360" rx="10"/>
+<rect x="10" y="10" width="580" height="340" rx="10" class="b1" fill-opacity=".45"/>
+<text x="30" y="40" font-weight="700" class="c1">Ark Core · MIT / Apache-2.0</text>
+<rect x="30" y="60" width="260" height="120" rx="6" class="p"/>
+<text x="45" y="84" font-weight="600" font-size="13">Analysis modules (L1)</text>
+<text x="45" y="106" font-size="13">PII · DLP · Cat · threat classes</text>
+<text x="45" y="126" font-size="13">anchors, one scorer, one points path</text>
+<text x="45" y="146" font-size="13">L1 text model (optional)</text>
+<text x="45" y="166" font-size="13">Cedar evaluator (Cat uses it)</text>
+<rect x="310" y="60" width="260" height="120" rx="6" class="p"/>
+<text x="325" y="84" font-weight="600" font-size="13">Cascade <tspan class="mono" font-weight="400">ark_core::cascade</tspan></text>
+<text x="325" y="106" font-size="13">level and gate schema</text>
+<text x="325" y="126" font-size="13">escalation, early exit</text>
+<text x="325" y="146" font-size="13">arbiter, chunk aggregation</text>
+<text x="325" y="166" font-size="13"><tspan class="mono">decision</tspan>, <tspan class="mono">decided_by</tspan></text>
+<rect x="30" y="200" width="260" height="60" rx="6" class="b3"/>
+<text x="45" y="224" font-weight="600" font-size="13">L3 in Core</text>
+<text x="45" y="246" font-size="13">Wolf Defender base / small / edge</text>
+<rect x="310" y="200" width="260" height="130" rx="6" class="p"/>
+<text x="325" y="224" font-weight="600" font-size="13">Seams (traits)</text>
+<text x="325" y="246" class="mono" font-size="12.5">LayerModel</text>
+<text x="325" y="266" class="mono" font-size="12.5">ThresholdTable</text>
+<text x="325" y="286" class="mono" font-size="12.5">L3Executor</text>
+<text x="325" y="306" class="mono" font-size="12.5">ExternalL1Detector</text>
+<rect x="620" y="10" width="370" height="340" rx="10" class="b2" fill-opacity=".45"/>
+<text x="640" y="40" font-weight="700" class="c2">Ark · GPL-3.0 / commercial</text>
+<rect x="640" y="60" width="330" height="80" rx="6" class="p"/>
+<text x="655" y="84" font-weight="600" font-size="13">L2: NTDB packages</text>
+<text x="655" y="106" font-size="13">promote head escalates to L3</text>
+<text x="655" y="126" font-size="13">own threshold tables (joint_v3)</text>
+<rect x="640" y="155" width="330" height="80" rx="6" class="b3"/>
+<text x="655" y="179" font-weight="600" font-size="13">L3 in Ark only</text>
+<text x="655" y="201" font-size="13">unified multitask, orca, husky,</text>
+<text x="655" y="221" font-size="13">panther, threat classifier, GLiNER</text>
+<rect x="640" y="250" width="330" height="80" rx="6" class="p"/>
+<text x="655" y="274" font-weight="600" font-size="13">Serving</text>
+<text x="655" y="296" font-size="13">queue, L3 workers, cache, SSE,</text>
+<text x="655" y="316" font-size="13">Ark API, coordinator, distributed</text>
+<path d="M636,100 L575,265" class="lesc"/><path d="M636,195 L575,285" class="lesc"/>
+<text x="600" y="345" text-anchor="middle" font-size="11.5" class="cesc">implements</text>
+</svg>

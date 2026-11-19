@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-labelledby="t">
+<title id="t">Scanning without and with a cascade</title>
+<style>
+:root{--fg:#1a2130;--muted:#5a6477;--line:#d5dbe4;--panel:#ffffff;--soft:#eef1f5;--l1:#0f7b74;--l1b:#dff1ee;--l2:#a3620a;--l2b:#fbeedb;--l3:#6a3fb5;--l3b:#ece4fa;--ok:#2f7d32;--okb:#e4f1e4;--bad:#b3261e;--badb:#fae5e3;--esc:#8a6100;--escb:#fff2cf}
+@media (prefers-color-scheme:dark){:root{--fg:#e3e8ef;--muted:#9aa4b5;--line:#2d3543;--panel:#191f28;--soft:#20272f;--l1:#4cc3b9;--l1b:#11332f;--l2:#e3a54a;--l2b:#38290f;--l3:#b394ee;--l3b:#291e40;--ok:#7cc47f;--okb:#172e18;--bad:#f08a82;--badb:#3b1613;--esc:#e7c35c;--escb:#33290c}}
+text{font-family:-apple-system,"Segoe UI",system-ui,Helvetica,Arial,sans-serif;fill:var(--fg)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.mu{fill:var(--muted)} .c1{fill:var(--l1)} .c2{fill:var(--l2)} .c3{fill:var(--l3)} .cok{fill:var(--ok)} .cbad{fill:var(--bad)} .cesc{fill:var(--esc)}
+.bg{fill:var(--panel)} .p{fill:var(--panel);stroke:var(--line)} .s{fill:var(--soft);stroke:var(--line)}
+.b1{fill:var(--l1b);stroke:var(--l1)} .b2{fill:var(--l2b);stroke:var(--l2)} .b3{fill:var(--l3b);stroke:var(--l3)}
+.bok{fill:var(--okb);stroke:var(--ok)} .bbad{fill:var(--badb);stroke:var(--bad)} .besc{fill:var(--escb);stroke:var(--esc)}
+.ln{stroke:var(--muted);fill:none;stroke-width:1.5} .lok{stroke:var(--ok);fill:none;stroke-width:1.5} .lesc{stroke:var(--esc);fill:none;stroke-width:1.5;stroke-dasharray:5 4}
+.ar{fill:var(--muted)} .aok{fill:var(--ok)} .aesc{fill:var(--esc)}
+</style>
+<rect class="bg" x="0" y="0" width="1000" height="400" rx="10"/>
+<defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ar"/></marker><marker id="mo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="aok"/></marker><marker id="me" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="aesc"/></marker></defs>
+<rect x="10" y="10" width="470" height="380" rx="10" class="s"/>
+<text x="30" y="40" font-weight="700">Without <tspan class="mono">cascade</tspan> · default</text>
+<text x="30" y="60" font-size="12.5" class="mu">every enabled producer and model runs</text>
+<rect x="40" y="85" width="120" height="40" rx="6" class="p"/><text x="100" y="110" text-anchor="middle">Input</text>
+<rect x="200" y="85" width="250" height="40" rx="6" class="b1"/><text x="325" y="110" text-anchor="middle">All enabled L1 producers</text>
+<rect x="200" y="150" width="250" height="40" rx="6" class="b2"/><text x="325" y="175" text-anchor="middle">Ark: L2 as configured</text>
+<rect x="200" y="215" width="250" height="40" rx="6" class="b3"/><text x="325" y="240" text-anchor="middle">Wolf on every injection scan</text>
+<path d="M160,105 L195,105" class="ln" marker-end="url(#m)"/><path d="M175,105 L175,170 L195,170" class="ln" marker-end="url(#m)"/><path d="M175,170 L175,235 L195,235" class="ln" marker-end="url(#m)"/>
+<rect x="40" y="290" width="410" height="70" rx="6" class="p"/>
+<text x="60" y="318" font-size="13">Report: <tspan class="mono">native</tspan> and <tspan class="mono">wolf</tspan> side by side;</text>
+<text x="60" y="340" font-size="13">no <tspan class="mono">decision</tspan>, no <tspan class="mono">decided_by</tspan></text>
+<rect x="520" y="10" width="470" height="380" rx="10" class="s"/>
+<text x="540" y="40" font-weight="700">With <tspan class="mono">cascade</tspan> · opt-in</text>
+<text x="540" y="60" font-size="12.5" class="mu">per module, one stage after another, early exit</text>
+<rect x="550" y="85" width="170" height="40" rx="6" class="b1"/><text x="635" y="110" text-anchor="middle">L1 heuristic</text>
+<rect x="550" y="150" width="170" height="40" rx="6" class="b1"/><text x="635" y="175" text-anchor="middle">L1 model</text>
+<rect x="550" y="215" width="170" height="40" rx="6" class="b2"/><text x="635" y="240" text-anchor="middle">L2 (Ark only)</text>
+<rect x="550" y="280" width="170" height="40" rx="6" class="b3"/><text x="635" y="305" text-anchor="middle">L3 (Wolf, …)</text>
+<path d="M635,125 L635,146" class="lesc" marker-end="url(#me)"/><path d="M635,190 L635,211" class="lesc" marker-end="url(#me)"/><path d="M635,255 L635,276" class="lesc" marker-end="url(#me)"/>
+<text x="645" y="141" font-size="11" class="cesc">undecided</text><text x="645" y="206" font-size="11" class="cesc">undecided</text><text x="645" y="271" font-size="11" class="cesc">undecided</text>
+<rect x="800" y="150" width="170" height="105" rx="8" class="bok"/>
+<text x="885" y="185" text-anchor="middle" font-weight="600" class="cok">Decision</text>
+<text x="885" y="207" text-anchor="middle" font-size="12.5">detected / clear</text>
+<text x="885" y="228" text-anchor="middle" font-size="12" class="mono">decided_by</text>
+<path d="M720,105 L780,105 L780,175 L796,175" class="lok" marker-end="url(#mo)"/><path d="M720,170 L796,190" class="lok" marker-end="url(#mo)"/><path d="M720,235 L796,215" class="lok" marker-end="url(#mo)"/><path d="M720,300 L780,300 L780,235 L796,235" class="lok" marker-end="url(#mo)"/>
+<text x="540" y="350" font-size="12.5" class="mu">Stages that are switched off are skipped.</text>
+<text x="540" y="370" font-size="12.5" class="mu">Still undecided at the end: clear, decided by the last stage that ran.</text>
+</svg>

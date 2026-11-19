@@ -25,19 +25,50 @@ use std::{
 pub const CONTENT_TOKENS: usize = 254;
 pub const SEQUENCE_TOKENS: usize = 256;
 
+/// The Wolf Defender L3 of the injection module: bundle, model size,
+/// precision, backend and the attack-probability threshold it detects at
+/// (default 0.93 for base, small and edge).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "WolfConfigFields")]
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
+    /// Attack-probability threshold; a serialized config without one gets
+    /// [`WolfModel::default_threshold`] of its `model` (0.93 for every size).
     pub threshold: f64,
-    #[serde(default)]
     pub model: WolfModel,
-    #[serde(default)]
     pub precision: WolfPrecision,
-    #[serde(default)]
     pub backend: crate::ExecutionBackend,
-    #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
+}
+/// The serialized [`WolfConfig`]: `threshold` is optional.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WolfConfigFields {
+    bundle_dir: PathBuf,
+    #[serde(default)]
+    threshold: Option<f64>,
+    #[serde(default)]
+    model: WolfModel,
+    #[serde(default)]
+    precision: WolfPrecision,
+    #[serde(default)]
+    backend: crate::ExecutionBackend,
+    #[serde(default)]
+    runtime_options: crate::OnnxRuntimeOptions,
+}
+impl From<WolfConfigFields> for WolfConfig {
+    fn from(fields: WolfConfigFields) -> Self {
+        Self {
+            bundle_dir: fields.bundle_dir,
+            threshold: fields
+                .threshold
+                .unwrap_or_else(|| fields.model.default_threshold()),
+            model: fields.model,
+            precision: fields.precision,
+            backend: fields.backend,
+            runtime_options: fields.runtime_options,
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -30,7 +30,7 @@ fn main() -> io::Result<()> {
         Some(other) => return Err(io::Error::other(format!("unknown argument {other}"))),
     };
     let pipeline = ThreatPipeline::new();
-    let count_threshold = NativeGates::default().resource_exhaustion_count_threshold();
+    let thresholds = NativeGates::default().threat_thresholds();
     let mut out = BufWriter::new(io::stdout().lock());
     for (number, line) in io::stdin().lock().lines().enumerate() {
         let line = line?;
@@ -47,13 +47,16 @@ fn main() -> io::Result<()> {
             SecurityCategory::ATTACK_CLASSES
                 .iter()
                 .map(|&category| {
-                    pipeline.detect_prepared(&prepared, category, |_| true, count_threshold)
+                    pipeline.detect_prepared(&prepared, category, |_| true, &thresholds)
                 })
                 .collect()
         } else {
             Vec::new()
         };
-        let findings: Vec<_> = detections.iter().flat_map(facts_findings).collect();
+        let findings: Vec<_> = detections
+            .iter()
+            .flat_map(|detection| facts_findings(&detection.details))
+            .collect();
         let facts = extract(text, &findings, &[]).to_json();
         row["facts"] = facts;
         serde_json::to_writer(&mut out, &row)?;

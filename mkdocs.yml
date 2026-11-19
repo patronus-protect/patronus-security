@@ -104,7 +104,7 @@ nav:
       - Check shell commands (Cat): how-to/check-shell-commands.md
   - Concepts:
       - Architecture: concepts/architecture.md
-      - Layered scanning (L1/L2/L3): concepts/layered-scanning.md
+      - "Analysis framework: modules and layers": concepts/layered-scanning.md
       - Categories: concepts/categories.md
       - Native detectors: concepts/detectors.md
       - Models & the NTDB format: concepts/models-and-ntdb.md

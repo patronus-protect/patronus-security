@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 185" width="1000" height="185" role="img" aria-labelledby="t">
+<title id="t">How an L1 stage decides with two cuts</title>
+<style>
+:root{--fg:#1a2130;--muted:#5a6477;--line:#d5dbe4;--panel:#ffffff;--soft:#eef1f5;--l1:#0f7b74;--l1b:#dff1ee;--l2:#a3620a;--l2b:#fbeedb;--l3:#6a3fb5;--l3b:#ece4fa;--ok:#2f7d32;--okb:#e4f1e4;--bad:#b3261e;--badb:#fae5e3;--esc:#8a6100;--escb:#fff2cf}
+@media (prefers-color-scheme:dark){:root{--fg:#e3e8ef;--muted:#9aa4b5;--line:#2d3543;--panel:#191f28;--soft:#20272f;--l1:#4cc3b9;--l1b:#11332f;--l2:#e3a54a;--l2b:#38290f;--l3:#b394ee;--l3b:#291e40;--ok:#7cc47f;--okb:#172e18;--bad:#f08a82;--badb:#3b1613;--esc:#e7c35c;--escb:#33290c}}
+text{font-family:-apple-system,"Segoe UI",system-ui,Helvetica,Arial,sans-serif;fill:var(--fg)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.mu{fill:var(--muted)} .c1{fill:var(--l1)} .c2{fill:var(--l2)} .c3{fill:var(--l3)} .cok{fill:var(--ok)} .cbad{fill:var(--bad)} .cesc{fill:var(--esc)}
+.bg{fill:var(--panel)} .p{fill:var(--panel);stroke:var(--line)} .s{fill:var(--soft);stroke:var(--line)}
+.b1{fill:var(--l1b);stroke:var(--l1)} .b2{fill:var(--l2b);stroke:var(--l2)} .b3{fill:var(--l3b);stroke:var(--l3)}
+.bok{fill:var(--okb);stroke:var(--ok)} .bbad{fill:var(--badb);stroke:var(--bad)} .besc{fill:var(--escb);stroke:var(--esc)}
+.ln{stroke:var(--muted);fill:none;stroke-width:1.5} .lok{stroke:var(--ok);fill:none;stroke-width:1.5} .lesc{stroke:var(--esc);fill:none;stroke-width:1.5;stroke-dasharray:5 4}
+.ar{fill:var(--muted)} .aok{fill:var(--ok)} .aesc{fill:var(--esc)}
+</style>
+<rect class="bg" x="0" y="0" width="1000" height="185" rx="10"/>
+<rect x="40" y="60" width="300" height="44" class="bok"/><text x="190" y="88" text-anchor="middle" font-weight="600" class="cok">clear · exit</text>
+<rect x="340" y="60" width="360" height="44" class="besc"/><text x="520" y="88" text-anchor="middle" font-weight="600" class="cesc">undecided · next stage</text>
+<rect x="700" y="60" width="260" height="44" class="bbad"/><text x="830" y="88" text-anchor="middle" font-weight="600" class="cbad">detected · exit</text>
+<line x1="340" y1="45" x2="340" y2="120" class="ln" stroke-width="2"/><line x1="700" y1="45" x2="700" y2="120" class="ln" stroke-width="2"/>
+<text x="340" y="36" text-anchor="middle" font-size="12.5" class="mono">clear_threshold</text>
+<text x="700" y="36" text-anchor="middle" font-size="12.5" class="mono">detect_threshold</text>
+<text x="340" y="140" text-anchor="middle" font-size="12" class="mu">L1 model default: 1 % FPR cut (can be switched off)</text>
+<text x="700" y="140" text-anchor="middle" font-size="12" class="mu">L1 default: ≈ 0.1 % FPR cut</text>
+<text x="40" y="170" font-size="12" class="mu">low score</text><text x="960" y="170" text-anchor="end" font-size="12" class="mu">high score</text>
+</svg>

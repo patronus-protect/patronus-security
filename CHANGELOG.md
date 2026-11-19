@@ -71,6 +71,36 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- One analysis framework for every category, opt-in: each category is an analysis module whose
+  layers (L1 rules and an optional L1 text model, then L2, then L3) can run as a cascade, where a
+  later layer runs only on what the earlier ones left undecided. Without a configured cascade
+  nothing changes: Core and Ark scan exactly as before and the new result fields stay absent. See
+  "Analysis framework" in the docs.
+  - Core: an optional `cascade` in the scanner configuration (Rust `ScannerConfig::cascade`,
+    Python `ScannerConfig["cascade"]`) turns it on. Its level keys are those of the Ark gates:
+    `max_level` and `l1`, `l2`, `l3` (`false` switches a level off, so any one layer can run
+    alone, for example only Wolf with `l1: false`), plus `conditional` gates over the L1 results.
+    Per category, `modules.<category>` sets a `detect_threshold` and a `clear_threshold` on the
+    rule score (both between `0.0` and `1.0`) and an optional L1 text model (`l1_model`: a pinned
+    model release, loaded once when the scanner is created, whose detect and clear cuts default
+    to the model's own; clearing can be switched off). A category's rules are switched off with
+    the existing `models` gates. The report then gives each category's final answer (`decision`:
+    `detected` or `clear`), the stage that decided it (`decided_by`) and the time of each later
+    layer. With a cascade, Wolf Defender (the L3 of `injection`) runs only where the cascade
+    escalates.
+  - Ark: the same `cascade` key in the gates (Python `execution_gates`, Ark API `gates`) with
+    per-category `modules` turns on early exit: a category L1 decides, or one no later layer can
+    run for, skips L2 and L3, and results carry `decided_by` (`heuristic`, `l2` or `l3`) once
+    final, in the queue and the distributed plan alike. A category L1 decides also carries
+    `l1_outcome` (`detected` or `clear`), which keeps a detection at a lowered
+    `detect_threshold` even where the rule result itself stays `safe`. Levels and conditional gates stay the
+    existing gate keys.
+  - Wolf Defender's `threshold` is optional; without it the default is `0.93` for base, small and
+    edge.
+  - An optional `threat_points_acceptance` (Rust `NativeGates`, Python `ScannerConfig`): the least
+    score of an accepted threat points rule, between `0.0` and `1.0` (default `0.5`).
+- Python: `NativeCategory` lists every native category.
+
 - **Detection change:** (`injection`, `prompt_extraction`) the injection rules now also read text
   that hides its words: base64 and hex runs (also as the value of a `key=value` pair and in runs
   longer than 256 bytes, of which the first 1024 bytes are decoded), ROT13 text without a `ROT13`
@@ -438,6 +468,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- The threat scoreboard measures `patronus-ark-core` alone instead of the full Ark package: a new
+  example, `threat_cascade`, scans every evaluation row once with the Core scanner and a layer
+  configuration, so a later layer (Wolf for prompt injection) runs only on what the rule layer left
+  open. `scoreboard.py report --cascade` shows, per class and language at that configuration's
+  operating point, the detection rate, the false-positive rate on benign data and on hard benign
+  look-alikes at the same decision, which layer decided how many rows, and the time per layer.
+  `scoreboard.py calibrate` writes per-class detect and clear thresholds (`cascade.modules`) for a
+  0.1 % false-positive rate on the benign evaluation data into such a configuration; it never
+  changes the Core defaults. The hard-benign
+  false-positive rate in the scoreboard report is now taken at the same threshold as each detection
+  rate. The earlier layer option (`--layers l1+l2`), which ran every layer on every row, is removed.
+  **Detection change:** none; this is evaluation tooling only.
 - The threat scoreboard gate (`scripts/l1_threat/scoreboard.py gate` and `compare`) now also checks
   the detection rate at 0.1 % false positives: a change fails when a class (German, English or both)
   loses more than 0.5 percentage points at 0.1 %, just as at 1 %. The gate summary is a Markdown

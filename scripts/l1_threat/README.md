@@ -323,33 +323,50 @@ Tests: `scripts/tests/test_l1_threat_run_baselines.py`.
 
 ## Scoreboard und Gate
 
-`scoreboard.py` misst ARK auf den eingefrorenen Korpora eines Splits und vergleicht einen Head mit seiner Base.
-Ein Split ist ein Wurzelverzeichnis; jedes Unterverzeichnis mit eingefrorenem `manifest.json` zählt
+`scoreboard.py` misst ark-core allein auf den eingefrorenen Korpora eines Splits und vergleicht einen Head mit
+seiner Base. Ein Split ist ein Wurzelverzeichnis; jedes Unterverzeichnis mit eingefrorenem `manifest.json` zählt
 (`DEV/{train_dev,report,generated,translated}`, `HOLDOUT/{holdout,generated}`). Positiv ist eine Zeile für die
 Klassen in `classes` (nur berichtete Klassen zählen nicht), negativ jede `benign`-Zeile. Sätze mit der Rolle
 `report` laufen im eigenen Bereich `report` und gaten nie; alle übrigen (`dev`, `decisive`) bilden den Bereich
 `gated`.
 
-ARK läuft je Klasse in ihrer Kategorie (`instruction_injection` heißt `injection`), standardmäßig nur auf L1
-(`--layers l1`, der gegatete Stack); `--layers l1+l2` siehe „Voller Stack“ unten. Urteil einer Klasse:
-ein Ergebnis, das nicht `benign`/`safe` ist (wie im Golden-Eval). Score: das Höchste aus der Konfidenz eines
-solchen Ergebnisses und den Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des
-Injection-Scorers); 0, wenn ARK nichts meldet. Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`,
-`native`, `translated`; Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map als `translated`
-markierten Satzes, wie in `generators.py`):
+Die Vorhersage macht das Beispiel `threat_cascade` von `patronus-ark-core`: der Core-Scanner scannt jede Zeile
+einmal für die elf Angriffsklassen (`instruction_injection` heißt `injection`) mit einer Kaskaden-Konfiguration
+(`--cascade CONFIG`, JSON mit einem `ScannerConfig` unter `scanner`). Die Ebenen sind eine Kaskade: L1-Heuristik
+→ L1-Modell → L3 (Wolf Defender für `instruction_injection`, mit seiner Standardschwelle, sofern die
+Konfiguration keine setzt); eine spätere Ebene läuft nur auf dem, was die früheren offen lassen, und ohne spätere
+Ebene ist offen = sauber. L2 gibt es nur in ARK; es wird hier nicht gemessen. Ohne `--cascade` gilt `L1_CASCADE`
+(nur L1), der gegatete Stack. Eine Vorhersage trägt je Klasse:
+
+- `scores`: die L1-Score-Kurve, das Höchste aus der Konfidenz eines gemeldeten nativen Ergebnisses und den
+  Scorer-Werten unter der Schwelle (`score` des Threat-Scorers, Kandidaten-`score` des Injection-Scorers); 0,
+  wenn L1 nichts meldet (dieselbe Regel wie zuvor über ARKs L1);
+- `flagged`: die Klassen, die L1 erkennt;
+- `cascade`, je Klasse mit Entscheidung: `l1` (L1-Ausgang `detected`/`clear`/`escalate`), `l1_score` (der
+  Wert, den Detect- und Clear-Schwelle vergleichen, in voller Genauigkeit), `decision` (Endentscheidung) und
+  `decided_by` (`heuristic`, `l1_model`, `l3`). Eine Klasse, für die keine Stufe lief (etwa eine Klasse ohne
+  Regeln und ohne spätere Ebene), fehlt; das Scoreboard wertet sie als nicht erkannt (`clear`, L1-Score 0) und
+  zählt sie bei keiner entscheidenden Stufe;
+- `wolf`: Wolfs Angriffswahrscheinlichkeit, nur wenn Wolf lief;
+- `ms`: `scan` (Wanduhr des Scans), `l1` (die nativen L1-Erzeuger) und, wenn Wolf lief, `l3` (die Dauer der
+  L3-Ebenen aus den Modulentscheidungen).
+
+Je Klasse, Sprache (`all`, `de`, `en`) und Herkunft (`all`, `native`, `translated`; Runner-Übersetzungen und der
+deutsche Teil eines in der Entity-Map als `translated` markierten Satzes, wie in `generators.py`) auf der
+L1-Score-Kurve:
 
 - TPR bei gleicher Dokument-FPR 1 % und 0,1 % auf den Benign-Zeilen (`run_baselines.matched_fpr`), je mit
   Perzentil-Bootstrap-95-%-KI (200 Runden, fester Seed; Positive und Negative getrennt gezogen,
   Schwelle in jeder Runde neu gewählt);
 - AUPRC (Average Precision der Positiven gegen die Benign-Zeilen, Gleichstände als eine Stufe);
-- Hard-Benign-FPR beim ARK-Urteil: harmlose Doppelgänger (`twin_of`) und die Benign-Zeilen von `notinject`,
-  `or_bench_hard`, `xstest`, `wildjailbreak` (adversarial_benign: Jailbreak-Form ohne schädliche Absicht),
-  `l1_goldens` (`HARD_BENIGN_SETS`);
+- Hard-Benign-FPR an derselben Schwelle wie die jeweilige TPR: harmlose Doppelgänger (`twin_of`) und die
+  Benign-Zeilen von `notinject`, `or_bench_hard`, `xstest`, `wildjailbreak` (adversarial_benign: Jailbreak-Form
+  ohne schädliche Absicht), `wildguardmix`, `l1_goldens` (`HARD_BENIGN_SETS`);
 - Leave-one-dataset-out (Sprache und Herkunft `all`): TPR@1 % ohne je einen beteiligten Satz, dazu das Minimum
   und der Satz, dessen Wegfall die TPR senkt.
 
 ```bash
-python3 scripts/l1_threat/scoreboard.py predict --split DEV --out PRED      # mit dem installierten patronus_ark
+python3 scripts/l1_threat/scoreboard.py predict --split DEV --out PRED [--cascade CONFIG] [--predictor BIN]
 python3 scripts/l1_threat/scoreboard.py score --split DEV --predictions PRED [--output report.json]
 python3 scripts/l1_threat/scoreboard.py compare --base base.json --head head.json   # Exit 1 bei Regression
 python3 scripts/l1_threat/scoreboard.py report --split DEV --predictions PRED [--baseline-cache CACHE] \
@@ -357,50 +374,59 @@ python3 scripts/l1_threat/scoreboard.py report --split DEV --predictions PRED [-
 python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DEV [--holdout HOLDOUT] --cache CACHE
 ```
 
-`gate` baut Head und Base (Release-Modul von `python/`, offline, über `ensure_build` des DLP-Scoreboards; gleiche
-Detektor-Quellen teilen einen Build), sagt jeden Satz in einem eigenen Prozess vorher (Cache je Build-Schlüssel,
-Skript-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich `gated` eine Klasse bei TPR@1 % oder bei TPR@0,1 %
-(`all`, `de`, `en`; Herkunft `all`) mehr als 0,5 pp verliert oder der Head eine Hard-Benign-Zeile einer Klasse
-meldet, die die Base nicht meldet; `compare` prüft dieselben Werte. Eine Klasse ohne Positive in der Base ist neu,
-keine Regression. stdout zeigt die Dev-Zahlen als Markdown-Tabelle je Klasse und Sprache (TPR@1 % und TPR@0,1 %,
-Base -> Head mit dem Bootstrap-KI des Heads, AUPRC); der Runner übernimmt bei Erfolg die letzten 60 Zeilen
-(`GATE_SCOREBOARD_LINES` in `ark-l1`), also die ganze Tabelle mit den Urteilen, in die PR-Tabelle. Der
-Holdout verlässt die Sandbox nur als Urteil mit den Namen fehlschlagender Prüfungen, sein Bericht bleibt unter
-`CACHE/threat-scoreboard/reports/`. Die Latenz prüft der Runner getrennt (`latency.py`, `latency_ab`). Exit 0 =
-bestanden, 1 = Regression, 2 = Fehler. `report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle
-Sätze (je Baseline die zuletzt geschriebene Version) auf denselben Zellen aus und nennt je Zeile die beste
-Heuristik- und die beste Referenzzeile (nach TPR@1 %, mit TPR@1 % / 0,1 %), dazu die Versionen. Jede erwartete
-Baseline ohne vollständigen Cache steht mit Namen und Grund unter „Not in the columns“ (kein Cache, etwa weil
-der Klon nicht geholt werden konnte, oder die fehlenden Sätze); die übrigen Spalten erscheinen trotzdem.
-Den Cache legt man außerhalb des Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe
-wiederverwenden.
+`predict` baut ohne `--predictor` das Beispiel dieses Checkouts (`cargo build --release`, mit `--features wolf`,
+wenn die Konfiguration `wolf` setzt) und schreibt je Satz `SET-SHA12.jsonl`; ein Vorhersageverzeichnis gehört zu
+genau einer Konfiguration (`cascade.json` darin, eine andere wird abgelehnt).
+
+`gate` baut das Beispiel für Head und Base (offline, Cache je Quellstand von `ark-core`; gleiche Quellen teilen
+einen Build; eine Base ohne das Beispiel ist ein Fehler), sagt jeden Satz mit `L1_CASCADE` in einem eigenen
+Prozess vorher (Cache je Build-Schlüssel, Konfigurations-Hash und Korpus-SHA) und schlägt fehl, wenn im Bereich
+`gated` eine Klasse bei TPR@1 % oder bei TPR@0,1 % (`all`, `de`, `en`; Herkunft `all`) mehr als 0,5 pp verliert
+oder L1 im Head eine Hard-Benign-Zeile einer Klasse erkennt, die L1 in der Base nicht erkennt; `compare` prüft
+dieselben Werte. Eine Klasse ohne Positive in der Base ist neu, keine Regression. stdout zeigt die Dev-Zahlen als
+Markdown-Tabelle je Klasse und Sprache (TPR@1 % und TPR@0,1 %, Base -> Head mit dem Bootstrap-KI des Heads,
+AUPRC); der Runner übernimmt bei Erfolg die letzten 60 Zeilen (`GATE_SCOREBOARD_LINES` in `ark-l1`), also die
+ganze Tabelle mit den Urteilen, in die PR-Tabelle. Der Holdout verlässt die Sandbox nur als Urteil mit den Namen
+fehlschlagender Prüfungen, sein Bericht bleibt unter `CACHE/threat-scoreboard/reports/`. Die Latenz prüft der
+Runner getrennt (`latency.py`, `latency_ab`). Exit 0 = bestanden, 1 = Regression, 2 = Fehler.
+`report --baseline-cache` wertet jede Baseline mit Vorhersagen für alle Sätze (je Baseline die zuletzt
+geschriebene Version) auf denselben Zellen aus und nennt je Zeile die beste Heuristik- und die beste
+Referenzzeile (nach TPR@1 %, mit TPR@1 % / 0,1 %), dazu die Versionen. Jede erwartete Baseline ohne vollständigen
+Cache steht mit Namen und Grund unter „Not in the columns“ (kein Cache, etwa weil der Klon nicht geholt werden
+konnte, oder die fehlenden Sätze); die übrigen Spalten erscheinen trotzdem. Den Cache legt man außerhalb des
+Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe wiederverwenden.
 Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
 
-### Voller Stack (L1 + L2)
+### Kaskade und Kalibrierung
 
 ```bash
-python3 scripts/l1_threat/scoreboard.py predict --layers l1+l2 --split DEV --out PRED   # Modelle im Asset-Cache, offline
-python3 scripts/l1_threat/scoreboard.py score --layers l1+l2 --split DEV --predictions PRED [--output report.json]
-python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 --split DEV --predictions PRED \
-    [--baseline-cache CACHE] --out research/l1-threat/scoreboard/full-stack.md
-python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 --counts-only --split HOLDOUT --predictions PRED \
-    --out holdout-counts.md                                                               # nur Zählungen
+python3 scripts/l1_threat/scoreboard.py calibrate --split DEV --predictions PRED_L1 [--cascade BASE] \
+    [--target-fpr 0.001] [--clear-fpr 0.01 | --no-clear] [--exclude-ids TRAIN_IDS] --out cascade-config.json
+python3 scripts/l1_threat/scoreboard.py predict --cascade cascade-config.json --split DEV --out PRED_CASCADE
+python3 scripts/l1_threat/scoreboard.py report --cascade cascade-config.json --split DEV --predictions PRED_CASCADE \
+    --out research/l1-threat/scoreboard/cascade.md
+python3 scripts/l1_threat/scoreboard.py report --cascade cascade-config.json --counts-only --split HOLDOUT \
+    --predictions PRED_HOLDOUT --out holdout-counts.md                                          # nur Zählungen
 ```
 
-`predict --layers l1+l2` scannt jede Zeile zweimal: mit einem L1-Gateway (`max_level="l1"`) und mit dem Stack
-bis L2 (`max_level="l2"`, `warmup()` ohne Download; L2 läuft auf jeder Zeile, weil die Standardkonfiguration für
-L2 kein bedingtes Gate hat: Wolf Defender Small für `injection`, der NTDB-L2-Kopf des Threat-Modells für die
-übrigen Klassen). Die Vorhersage (`SET-SHA12-l1l2.jsonl`, neben den L1-Dateien im selben Verzeichnis möglich)
-trägt den Stack-Score, die L1-Sicht (`l1`) und die Millisekunden je Ebene (`ms.l1`: L1-Scan; `ms.l2`: Stack-Scan
-minus L1-Scan derselben Zeile, nie unter 0). Der Score einer Klasse folgt derselben Regel wie auf L1: ein
-L2-Ergebnis zählt mit seiner Konfidenz, wenn der Stack die Klasse meldet. `score --layers` wählt die Ebene;
-`report --layers l1+l2` stellt je Klasse und Sprache (Bereich `gated` und `report`, Herkunft `all`) L1 neben
-L1+L2 (TPR@1 %, TPR@0,1 %, Hard-Benign-FPR), dazu die beste Heuristik und die beste Prompt-Guard-2-Zeile und die
-Latenz je Ebene (ms je 100 KiB = Summe der ms über Summe der UTF-8-Bytes, p95 je Zeile; gemessen im
-Vorhersagelauf, ein Prozess je Satz). `--counts-only` lässt Raten, Latenz und Baselines weg und zeigt je Zelle nur
-TP / FP an jedem Arbeitspunkt und die Hard-Benign-Meldungen — die Form, in der der Owner den Holdout außerhalb der
-Sandbox nachträgt.
-Ergebnis auf Dev: [`research/l1-threat/scoreboard/full-stack.md`](../../research/l1-threat/scoreboard/full-stack.md).
+`calibrate` liest Vorhersagen (am besten mit `L1_CASCADE`) und nimmt den Benign-Pool des Bereichs `gated`
+(Dev-Benign einschließlich der Hard-Benign-Sätze; `--exclude-ids` lässt Zeilen weg, etwa die Trainingsnegative
+eines L1-Modells — sie zählen nie). Je Klasse, beide auf `l1_score` (dem L1-Score der Kaskade): die
+Detect-Schwelle bei `--target-fpr` (0,1 %; Zeilen ab ihr erkennt L1) und die Clear-Schwelle bei `--clear-fpr`
+(1 %; Zeilen darunter sind auf L1 sauber, die übrigen eskalieren; `--no-clear`: aus, jede nicht erkannte Zeile
+eskaliert). Beide landen in `scanner.cascade.modules.<Kategorie>` (`detect_threshold`, `clear_threshold`),
+die erreichten FPRs im Abschnitt `calibration` der Konfiguration. Die Standardwerte von ark-core ändert `calibrate` nicht. Für L3 setzt man `wolf` (Bundle-Pfad,
+Schwelle optional) in der Basis-Konfiguration; die Clear-Schwellen bestimmen dann, welcher Anteil zu Wolf geht.
+
+`report --cascade CONFIG` verlangt Vorhersagen genau dieser Konfiguration und zeigt je Klasse und Sprache
+(Bereiche `gated` und `report`, Herkunft `all`) am Arbeitspunkt der Konfiguration: TPR, FPR auf den
+Benign-Zeilen, Hard-Benign-FPR bei derselben Entscheidung (je Quelle: Doppelgänger und jeder Hard-Benign-Satz),
+den Anteil der Zeilen, die jede Stufe entschieden hat, und den Anteil, den L1 eskaliert hat; dazu die
+L1-Score-Kurve (TPR@1 %/0,1 % mit Hard-Benign-FP an derselben Schwelle, die Sicht des Gates) und die Latenz je
+Stufe (p50/p95 je Zeile für Scan und L1, für L3 nur auf den Zeilen, auf denen es lief, mit Anteil und mittleren
+Kosten je Zeile). Der Kopf nennt den Hash der Konfiguration, die tiefste Ebene, die Clear-Schwellen und Wolfs
+Schwelle (keine Pfade). `--counts-only` zeigt nur Zählungen (TP, FP, Hard-Benign-FP, Stufen, Eskalationen) — die
+Form, in der der Owner den Holdout außerhalb der Sandbox nachträgt.
 
 Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
 
@@ -412,7 +438,7 @@ Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
 |---|---|
 | `R` | nur Regeln: höchste `points` eines Findings der Kategorie in den Facts |
 | `R+A` | `R` plus handgesetzte Kontextpunkte (Stützkontext +25, Gegenkontext −30), nur bei Regeltreffer, nicht unter 0 |
-| `B0` | heutiger Scorer: ARKs Score aus Vorhersagen von `scoreboard.py predict` (`--b0-predictions`), Urteil von ARK |
+| `B0` | heutiger Scorer: Cores L1-Score-Kurve aus Vorhersagen von `scoreboard.py predict` (`--b0-predictions`) |
 | `R+A+L` | `R+A` plus gelernte ganzzahlige Punkte je Fact-Token (balancierte L2-LR, projiziert: Gegenkontext-Tokens ≤ 0, alle anderen ≥ 0) |
 | `B1` | Zeichen-N-Gramm-TF-IDF + LR allein (`category_model.py`, Vokabular, ohne Token-Merkmale) |
 | `B4` | gehashte Zeichen-N-Gramme + Wörter (TF-IDF + LR) allein, ohne Fact-Tokens |
@@ -422,10 +448,10 @@ Zeilen tragen `id`, `text`, `facts` (aus dem Beispiel `text_facts`; mit `--threa
 Punkte-Findings der Threat-Regeln aller Angriffsklassen, ohne Flag ohne Findings, so dass `R`/`R+A` 0 bleiben), `classes`, `benign`, `language`, `dataset`.
 Positiv: Klasse in `classes`; negativ: `benign`; andere Zeilen fallen heraus. `--rows` wird über sha256 der
 Zeilen-ID in Trainings- und Auswertungshälfte geteilt, sofern `--eval-rows` fehlt. Gelernte Stufen trainieren
-auf der Trainingshälfte; der Arbeitspunkt jeder Stufe hält 1 % FPR auf deren Negativen.
+auf der Trainingshälfte.
 
 Je Stufe auf der Auswertungshälfte und Sprache (`all`, `de`, `en`): TPR bei gleicher FPR 1 % und 0,1 %, AUPRC
-(`scoreboard.cell_metrics`), Hard-Benign-FPR am Arbeitspunkt (`scoreboard.is_hard_benign`), RAM-Schätzung des
+(`scoreboard.cell_metrics`), Hard-Benign-FPR an derselben Schwelle wie die TPR (`scoreboard.is_hard_benign`), RAM-Schätzung des
 Modells (f64-Gewicht + f32-idf je Merkmal, je Vokabular-Term Map-Eintrag und Kopie in `names`) und die ms je 100 KiB, die das Modell zu den
 Facts hinzufügt (p95 des Beispiels `text_model_latency` auf den 100-KiB-Fenstern von `latency.py`;
 Punkte-Stufen summieren über die Facts und kosten nichts zusätzlich).

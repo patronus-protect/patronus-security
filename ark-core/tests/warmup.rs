@@ -1,6 +1,6 @@
 #![cfg(feature = "wolf")]
 use patronus_ark_core::{
-    wolf::{WolfConfig, WolfModel, WolfPrecision},
+    wolf::{WolfConfig, WolfPrecision},
     DownloadPolicy, ScanError, Scanner, ScannerConfig, WarmupOptions,
 };
 use std::{
@@ -124,6 +124,7 @@ fn invalid_scan_policy_is_rejected_before_asset_preparation() {
 #[test]
 #[ignore = "downloads the official FP16 and INT8/INT4 models into fresh temporary caches"]
 fn official_download_warms_both_exports_then_reuses_them_offline() {
+    use patronus_ark_core::wolf::WolfModel;
     let models = WolfModel::ALL.into_iter().flat_map(|model| {
         [WolfPrecision::Fp16, WolfPrecision::platform_default()].map(|p| (model, p))
     });

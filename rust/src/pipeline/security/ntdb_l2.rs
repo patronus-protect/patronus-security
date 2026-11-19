@@ -9,7 +9,7 @@ use crate::{
         manifest::{parse_package_manifest, PackageManifest},
         L2ChunkOutput, NtdbDecision, NtdbPackageSpec,
     },
-    pipeline::decision_thresholds::{arbitrate_l2, arbitration_name, threshold_l2_result},
+    pipeline::decision_thresholds::{arbitrate_l2, NtdbThresholds},
     pipeline::l3_pending_layer,
     EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
     SecurityScanResult,
@@ -277,10 +277,10 @@ pub(super) fn ntdb_l2_result_parts(
         && execution.defer_l3()
         && execution.allows_level(SecurityLevel::L3)
         && execution.l3_policy().enabled;
-    let (result, final_arbitration) = threshold_l2_result(
+    let (result, final_arbitration) = patronus_ark_core::cascade::threshold_l2_result(
+        &NtdbThresholds::new(execution.ntdb_decision_threshold_point()),
         source_pipeline,
         raw_result.clone(),
-        execution.ntdb_decision_threshold_point(),
     );
     let mut thresholds = HashMap::new();
     if let Some(threshold) = decision.promote_threshold {
@@ -329,7 +329,7 @@ pub(super) fn ntdb_l2_result_parts(
         ),
         (
             "final_arbitration".to_string(),
-            serde_json::json!(arbitration_name(final_arbitration)),
+            serde_json::json!(final_arbitration.as_str()),
         ),
     ]);
     if let Some(score) = decision.promote_score {

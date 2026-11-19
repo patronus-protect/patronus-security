@@ -553,12 +553,14 @@ class PublicApiTests(unittest.TestCase):
             evidence_spans=[],
             label_scores=[],
             decision_json='{"schema_version":"ark.decision.v1","decision_candidate":{"source":"l2"}}',
+            decided_by="l2",
         )
 
         output = _to_dict(result)
 
         self.assertEqual(output["decision"]["schema_version"], "ark.decision.v1")
         self.assertEqual(output["decision"]["decision_candidate"]["source"], "l2")
+        self.assertEqual(output["decided_by"], "l2")
 
     def test_result_to_dict_omits_decision_for_l2_pending(self):
         result = SimpleNamespace(
@@ -596,7 +598,9 @@ class PublicApiTests(unittest.TestCase):
             decision_json=None,
         )
 
-        self.assertNotIn("decision", _to_dict(result))
+        output = _to_dict(result)
+        self.assertNotIn("decision", output)
+        self.assertNotIn("decided_by", output)
 
     def test_event_to_dict_omits_decision_for_provisional_and_result_preview(self):
         result = SimpleNamespace(

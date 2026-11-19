@@ -11,6 +11,7 @@ use super::facts::TextFacts;
 use super::tf1::{fact_tokens, visit_tf1};
 use crate::detectors::facts_common::fasttext::{is_fasttext, FastTextModel};
 use crate::detectors::facts_common::model::{ModelForm, TfidfLrModel, TopFeature};
+use crate::detectors::facts_common::thresholds::L1Thresholds;
 
 /// The form of a text category `model.json`.
 pub const TEXT_MODEL: ModelForm = ModelForm {
@@ -47,11 +48,11 @@ impl CategoryModel {
         }
     }
 
-    /// The `ask` and `block` cuts on the decision score.
-    pub fn cuts(&self) -> (f64, f64) {
+    /// The detect (0.1 % FPR) and clear (1 % FPR) cuts of the model file.
+    pub fn thresholds(&self) -> L1Thresholds {
         match self {
-            Self::TfidfLr(model) => model.cuts(),
-            Self::FastText(model) => model.cuts(),
+            Self::TfidfLr(model) => model.thresholds(),
+            Self::FastText(model) => model.thresholds(),
         }
     }
 
@@ -114,8 +115,8 @@ mod tests {
         let model = CategoryModel::from_json_slice(SYNTHETIC.as_bytes()).unwrap();
         assert!(matches!(model, CategoryModel::TfidfLr(_)));
         assert_eq!(model.name(), "synthetic-text-tf1");
-        let (ask, block) = model.cuts();
-        assert!(ask <= block);
+        let cuts = model.thresholds();
+        assert!(cuts.clear_threshold.unwrap() <= cuts.detect_threshold);
         assert!(TfidfLrModel::from_json_slice(SYNTHETIC.as_bytes(), SHELL_MODEL).is_err());
         assert!(FastTextModel::from_json_slice(FASTTEXT.as_bytes(), SHELL_MODEL).is_err());
     }

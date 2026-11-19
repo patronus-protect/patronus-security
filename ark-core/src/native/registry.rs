@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use super::NativeGates;
+use super::{NativeGates, ScoreMode};
 use crate::detectors::NativeDetector;
 use crate::{
     detectors::{dlp, injection::*, mcp, pii, threat, NativeDetection},
@@ -42,29 +42,25 @@ impl NativeProducerSpec {
             && self.rule.is_none_or(|id| gates.allows_rule(id))
     }
 
-    /// PII and DLP apply their mode inside the pipeline; the attack classes
-    /// share the score floor of their `<category>_mode` here.
+    /// PII and DLP apply their mode inside the pipeline (per match before
+    /// overlap resolution, per text view before the decoded merge); the
+    /// attack classes share the floor of their `<category>_mode` here.
     pub(super) fn detect(&self, text: &NativeText<'_>, gates: &NativeGates) -> NativeDetection {
         let detection = (self.detect)(text, gates);
         match self.category {
             SecurityCategory::Pii | SecurityCategory::Dlp => detection,
-            category => apply_score_floor(detection, gates.mode(category).min_score()),
+            category => apply_score_floor(detection, gates.mode(category)),
         }
     }
 }
 
-/// Drops evidence scoring below `min_score`; a detection left without evidence
-/// becomes `benign` with the complementary confidence.
-fn apply_score_floor(mut detection: NativeDetection, min_score: Option<f64>) -> NativeDetection {
-    let Some(min_score) = min_score else {
-        return detection;
-    };
+/// Drops evidence `mode` refuses; a detection left without evidence becomes
+/// `benign` with the complementary confidence.
+fn apply_score_floor(mut detection: NativeDetection, mode: ScoreMode) -> NativeDetection {
     if detection.evidence_spans.is_empty() {
         return detection;
     }
-    detection
-        .evidence_spans
-        .retain(|span| span.score >= min_score);
+    detection.retain_admitted(mode);
     if detection.evidence_spans.is_empty() {
         detection.result.class_name = "benign".into();
         detection.result.confidence = 1.0 - detection.result.confidence;
@@ -95,7 +91,7 @@ fn add_threat_rules(specs: &mut Vec<NativeProducerSpec>, category: SecurityCateg
                 prepared,
                 category,
                 |id| gates.allows_rule(id),
-                gates.resource_exhaustion_count_threshold(),
+                &gates.threat_thresholds(),
             )
         }),
     });

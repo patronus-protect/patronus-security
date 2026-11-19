@@ -39,6 +39,9 @@ struct ScoredL1Candidate {
 /// (`scored`) merge into one scored decision, the others pass through unchanged.
 /// Outside `injection` that decision joins only when a rule left a candidate or a
 /// producer failed; a class without a match keeps the verdicts of its own detectors.
+/// The scorer accepts a candidate at its shipped cut or above; a module's
+/// cascade `detect_threshold` re-cuts the decision score
+/// ([`crate::cascade::ModuleConfig`]).
 pub fn category_results(
     category: SecurityCategory,
     text: &str,
@@ -72,7 +75,7 @@ fn reports_candidates_or_errors(result: &NativeResult) -> bool {
 
 /// Merges and scores the candidates of the `ark.injection.*` rule producers of
 /// `category` into one decision.
-pub fn aggregate(
+fn aggregate(
     category: SecurityCategory,
     text: &str,
     producer_results: Vec<NativeResult>,
@@ -128,7 +131,7 @@ pub fn aggregate(
                     class_name,
                     score: score.score,
                     acceptance_threshold: config.acceptance_threshold,
-                    accepted: score.accepted,
+                    accepted: score.score >= config.acceptance_threshold,
                     scoring_features: score.features.into_iter().collect(),
                     score_version: config.score_version.clone(),
                 }

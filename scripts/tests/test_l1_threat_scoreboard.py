@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -44,54 +45,6 @@ def row(set_id, index, classes=(), benign=False, language="en", **extra):
 
 def pred(item, score=0.0, flagged=(), cls="exfiltration"):
     return {"id": item["id"], "scores": {cls: score} if score else {}, "flagged": list(flagged)}
-
-
-# --- ARK results -------------------------------------------------------------------------------
-
-
-def result(category, class_name, confidence=1.0, details=None, layer_type="native"):
-    return {"category": category, "class_name": class_name, "confidence": confidence, "model": "native:x",
-            "layers": [{"layer_type": layer_type, "details": details or {}}], "label_scores": []}
-
-
-def test_ark_scores_take_the_verdict_and_the_scorer_values_below_it():
-    scores, flagged = MODULE.ark_class_scores([
-        result("exfiltration", "exfiltration", 0.91, {"score": 0.91}),
-        result("exfiltration", "safe", 1.0),
-        result("unsafe_action", "benign", 1.0, {"score": 0.04}),
-        result("injection", "safe", 1.0, {"l1_candidates": [{"score": 0.3}, {"score": 0.7}]}),
-        result("agent_config_tampering", "benign", 1.0, {"score": 0.0}),
-        result("dlp", "secret", 1.0),
-    ])
-    assert scores == {"exfiltration": 0.91, "unsafe_action": 0.04, "instruction_injection": 0.7}
-    assert flagged == ["exfiltration"]
-
-
-def test_ark_scores_refuse_a_scanner_error():
-    with pytest.raises(RuntimeError):
-        MODULE.ark_class_scores([result("jailbreak", "benign", layer_type="scanner_error")])
-    with pytest.raises(RuntimeError):
-        MODULE.ark_class_scores([result("jailbreak", "error")])
-
-
-def test_predict_rows_scan_every_row_once():
-    rows = [row("a", 0), row("a", 1)]
-    seen = []
-
-    def scan(text):
-        seen.append(text)
-        return [result("jailbreak", "jailbreak", 0.8)] if text.endswith("1") else []
-
-    out = MODULE.predict_rows(rows, scan)
-    assert seen == [r["text"] for r in rows]
-    assert out == [{"id": "a:0000000", "scores": {}, "flagged": []},
-                   {"id": "a:0000001", "scores": {"jailbreak": 0.8}, "flagged": ["jailbreak"]}]
-
-
-def test_category_keeps_the_injection_name():
-    assert MODULE.category("instruction_injection") == "injection"
-    assert MODULE.CATEGORIES["injection"] == "instruction_injection"
-    assert set(MODULE.CATEGORIES.values()) == set(MODULE.CLASSES)
 
 
 # --- metrics -----------------------------------------------------------------------------------
@@ -156,7 +109,10 @@ def test_score_pairs_cells_by_language_origin_and_hard_benign():
     top = cells["all"]["all"]
     # reported-only classes never count; four positives against four benign rows
     assert (top["positives"], top["negatives"]) == (4, 4)
-    assert top["hard_benign"] == {"rows": 2, "fp": 1, "fpr": 0.5}
+    # Hard-benign FPR at the matched threshold of each TPR (0.95: no negative reaches it), not at L1's
+    # decision, which flags the twin.
+    assert top["0.01"]["threshold"] == 0.95
+    assert top["hard_benign"] == {"rows": 2, "0.01": {"fp": 0, "fpr": 0.0}, "0.001": {"fp": 0, "fpr": 0.0}}
     assert cells["de"]["translated"]["positives"] == 1
     assert cells["de"]["all"]["negatives"] == 1
     assert report["hard_benign_flags"] == {"exfiltration": ["dev_b:0000001"]}
@@ -285,6 +241,16 @@ def test_cell_metrics_bootstrap_both_operating_points():
     assert "tpr_ci95" not in MODULE.cell_metrics(pos, neg, [], bootstrap=False)
 
 
+def test_cell_metrics_hard_benign_fpr_is_at_the_threshold_of_each_tpr():
+    pos = [0.9] * 10
+    neg = [0.1] * 990 + [0.5] * 10
+    # 1 %: cut 0.5, where two of the three hard benigns count; 0.1 %: cut 0.9, where none does.
+    cell = MODULE.cell_metrics(pos, neg, [0.5, 0.5, 0.1], bootstrap=False)
+    assert (cell["0.01"]["threshold"], cell["0.001"]["threshold"]) == (0.5, 0.9)
+    assert cell["hard_benign"] == {"rows": 3, "0.01": {"fp": 2, "fpr": 2 / 3}, "0.001": {"fp": 0, "fpr": 0.0}}
+    assert MODULE.cell_metrics(pos, neg, [], bootstrap=False)["hard_benign"]["0.01"] == {"fp": 0, "fpr": None}
+
+
 def test_summary_table_shows_both_tprs_base_to_head_with_the_head_ci():
     head = gate_report(0.61, 0.29, ci={"0.01": [0.58, 0.64], "0.001": [0.25, 0.33]})
     lines = MODULE.summary_lines(gate_report(0.6, 0.3), head)
@@ -328,7 +294,7 @@ def split(tmp_path):
     return root
 
 
-def fake_predict(sets, out, package=None, jobs=1, flag=()):
+def fake_predict(sets, out, binary=None, config=None, jobs=1, flag=()):
     out.mkdir(parents=True, exist_ok=True)
     for entry in sets:
         rows = list(MODULE.BASELINES.read_rows(entry.path))
@@ -354,7 +320,7 @@ def test_score_refuses_missing_predictions(split, tmp_path):
     path = MODULE.prediction_path(tmp_path / "pred", sets[0])
     path.write_text(path.read_text().splitlines()[0] + "\n")
     with pytest.raises(ValueError):
-        MODULE.score_split(sets, MODULE.ark_predictions(sets, tmp_path / "pred"))
+        MODULE.score_split(sets, MODULE.core_predictions(sets, tmp_path / "pred"))
 
 
 def test_cli_score_and_report(split, tmp_path, capsys):
@@ -383,7 +349,7 @@ def test_german_rows_of_a_translated_source_set_score_as_translated(tmp_path):
     freeze(tmp_path / "train_dev", rows)
     sets = MODULE.split_sets(tmp_path)
     fake_predict(sets, tmp_path / "pred")
-    cells = MODULE.score_split(sets, MODULE.ark_predictions(sets, tmp_path / "pred"), bootstrap=False)["gated"]
+    cells = MODULE.score_split(sets, MODULE.core_predictions(sets, tmp_path / "pred"), bootstrap=False)["gated"]
     cells = cells["toxic_language"]
     assert cells["de"]["translated"]["positives"] == 1 and "native" not in cells["de"]
     assert cells["en"]["native"]["positives"] == 1 and "translated" not in cells["en"]
@@ -412,7 +378,7 @@ def test_report_adds_the_best_heuristic_and_reference_baseline(split, tmp_path):
     assert left_out["pipelock"] == "no cached predictions" and left_out["vigil"] == "no cached predictions"
     assert left_out["protectai_v2"].startswith("`v1` not cached for ")
     assert "atr" not in left_out and "prompt_guard_2_86m" in left_out
-    text = MODULE.render_baseline(MODULE.score_split(sets, MODULE.ark_predictions(sets, tmp_path / "pred")),
+    text = MODULE.render_baseline(MODULE.score_split(sets, MODULE.core_predictions(sets, tmp_path / "pred")),
                                   baselines, "t", left_out)
     assert "best heuristic TPR@1% / 0.1% | best reference TPR@1% / 0.1% |" in text
     assert "| 100.0 / 100.0 (atr) | 100.0 / 100.0 (prompt_guard_2_22m) |" in text
@@ -430,8 +396,8 @@ def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(sp
            schema=CORPORA.GENERATED_SCHEMA, role="decisive")
     builds = {"base": "b" * 40, "head": "h" * 40}
     monkeypatch.setattr(MODULE.DLP_SCOREBOARD, "resolve_commit", lambda tree, rev: builds["head" if rev == "HEAD" else "base"])
-    monkeypatch.setattr(MODULE.DLP_SCOREBOARD, "ensure_build",
-                        lambda tree, commit, cache: MODULE.DLP_SCOREBOARD.Build(commit, commit[:1] * 64, tmp_path / commit[:1], tmp_path))
+    monkeypatch.setattr(MODULE, "ensure_predictor",
+                        lambda tree, commit, cache: MODULE.Predictor(commit, commit[:1] * 64, tmp_path / commit[:1]))
     monkeypatch.setattr(MODULE.DLP_SCOREBOARD, "prune", lambda cache, keep: None)
     monkeypatch.setattr(MODULE, "predict_split", fake_predict)
     assert MODULE.gate(tmp_path, "base", split, holdout, tmp_path / "cache") == 0
@@ -441,8 +407,11 @@ def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(sp
     dev = json.loads(next((tmp_path / "cache" / "threat-scoreboard" / "reports").glob("*/dev.json")).read_text())
     assert {"tpr@1%fpr exfiltration de", "tpr@0.1%fpr exfiltration de"} <= {c["name"] for c in dev["checks"]}
 
-    def flagging(sets, out, package=None, jobs=1):
-        fake_predict(sets, out, flag=("tool_poisoning",) if package == tmp_path / "h" else ())
+    seen = []
+
+    def flagging(sets, out, binary, config, jobs=1):
+        seen.append(config)
+        fake_predict(sets, out, flag=("tool_poisoning",) if binary == tmp_path / "h" else ())
 
     monkeypatch.setattr(MODULE, "predict_split", flagging)
     assert MODULE.gate(tmp_path, "base", split, holdout, tmp_path / "cache2") == 1
@@ -451,120 +420,282 @@ def test_gate_passes_an_unchanged_head_and_keeps_holdout_numbers_in_the_cache(sp
     assert "FAIL hard-benign new fp tool_poisoning" in holdout_part and "gen:" not in holdout_part
     reports = list((tmp_path / "cache2" / "threat-scoreboard" / "reports").glob("*/holdout.json"))
     assert len(reports) == 1
+    # The gate measures the L1 cascade.
+    assert seen and all(config == MODULE.L1_CASCADE for config in seen)
 
 
-# --- full stack (L1 + L2) ----------------------------------------------------------------------
+# --- Core predictor plumbing ---------------------------------------------------------------------
 
 
-def test_predict_rows_with_l2_keep_the_l1_view_and_time_each_layer():
-    ticks = iter([0.0, 0.002, 0.012, 1.0, 1.001, 1.0015])
-    stack = [result("injection", "safe", 1.0, {"score": 0.4}),
-             result("injection", "instruction_override", 0.97, {"score": 0.97}, layer_type="l2_ntdb")]
-    out = MODULE.predict_rows([row("a", 0), row("a", 1)],
-                              lambda text: stack if text.endswith("0") else [],
-                              lambda text: stack[:1] if text.endswith("0") else [],
-                              clock=lambda: next(ticks))
-    assert out[0] == {"id": "a:0000000", "scores": {"instruction_injection": 0.97},
-                      "flagged": ["instruction_injection"],
-                      "l1": {"scores": {"instruction_injection": 0.4}, "flagged": []},
-                      "ms": {"l1": 2.0, "l2": 8.0}}
-    # L2 is the full scan minus the L1 scan of the same row and never negative.
-    assert out[1]["ms"] == {"l1": 1.0, "l2": 0.0}
+def test_category_keeps_the_injection_name():
+    assert MODULE.category("instruction_injection") == "injection"
+    assert MODULE.category("jailbreak") == "jailbreak"
 
 
-def test_layer_view_picks_l1_from_a_full_stack_prediction():
-    full = {"id": "a", "scores": {"jailbreak": 0.9}, "flagged": ["jailbreak"],
-            "l1": {"scores": {}, "flagged": []}, "ms": {"l1": 1.0, "l2": 5.0}}
-    assert MODULE.layer_view(full, "l1") == {"id": "a", "scores": {}, "flagged": []}
-    assert MODULE.layer_view(full, "l1+l2") is full
-    plain = {"id": "b", "scores": {}, "flagged": []}
-    assert MODULE.layer_view(plain, "l1") is plain
+def test_config_defaults_to_l1_only_and_hashes_canonically(tmp_path):
+    assert MODULE.load_config(None) == {"scanner": {"cascade": {"max_level": "l1"}}}
+    path = tmp_path / "c.json"
+    path.write_text('{"scanner": {"wolf": {"bundle_dir": "/m"}, "cascade": {"max_level": "l3"}}}')
+    config = MODULE.load_config(path)
+    assert MODULE.needs_wolf(config) and not MODULE.needs_wolf(MODULE.L1_CASCADE)
+    assert MODULE.config_hash(config) == MODULE.config_hash(json.loads(json.dumps(config, sort_keys=True)))
+    assert MODULE.config_hash(config) != MODULE.config_hash(MODULE.L1_CASCADE)
+    path.write_text('{"scanner": []}')
     with pytest.raises(ValueError):
-        MODULE.layer_view(plain, "l1+l2")
+        MODULE.load_config(path)
 
 
-def test_prediction_paths_keep_the_layer_choices_apart(split, tmp_path):
-    entry = MODULE.split_sets(split)[0]
-    l1, stack = (MODULE.prediction_path(tmp_path, entry, layers) for layers in MODULE.LAYERS)
-    assert l1 == MODULE.prediction_path(tmp_path, entry) and l1 != stack and stack.name.endswith("-l1l2.jsonl")
+FAKE_PREDICTOR = """\
+import hashlib, json, sys
+config = open(sys.argv[1], "rb").read()
+for line in sys.stdin:
+    row = json.loads(line)
+    print(json.dumps({"id": row["id"], "scores": {}, "flagged": [], "config": hashlib.sha256(config).hexdigest()}))
+"""
 
 
-def fake_full_stack(sets, out, l2_catches=("exfiltration",), l2_flags_twin=False):
-    """L1 scores half of every positive class, L2 lifts the classes in ``l2_catches`` to 0.9."""
-    out.mkdir(parents=True, exist_ok=True)
+def test_predict_split_runs_the_predictor_per_set_with_the_bound_config(split, tmp_path):
+    binary = tmp_path / "threat_cascade"
+    binary.write_text(f"#!{sys.executable}\n{FAKE_PREDICTOR}")
+    binary.chmod(0o755)
+    sets = MODULE.split_sets(split)
+    out = tmp_path / "pred"
+    MODULE.predict_split(sets, out, binary, MODULE.L1_CASCADE, jobs=2)
+    bound = (out / MODULE.CONFIG_FILE).read_bytes()
+    for entry in sets:
+        preds = list(MODULE.BASELINES.read_rows(MODULE.prediction_path(out, entry)))
+        assert [p["id"] for p in preds] == [r["id"] for r in MODULE.BASELINES.read_rows(entry.path)]
+        assert {p["config"] for p in preds} == {hashlib.sha256(bound).hexdigest()}
+    # One directory holds the predictions of one config.
+    with pytest.raises(ValueError):
+        MODULE.predict_split(sets, out, binary, {"scanner": {}})
+    failing = tmp_path / "failing"
+    failing.write_text(f"#!{sys.executable}\nimport sys\nsys.exit(3)\n")
+    failing.chmod(0o755)
+    with pytest.raises(RuntimeError, match="exit 3"):
+        MODULE.predict_split(sets, tmp_path / "other", failing, MODULE.L1_CASCADE)
+
+
+# --- cascade decisions --------------------------------------------------------------------------
+
+
+QUIET = {"l1": "escalate", "l1_score": 0.0, "decision": "clear", "decided_by": "heuristic"}
+
+
+def stage(l1, decision, decided_by, l1_score=0.5):
+    return {"l1": l1, "l1_score": l1_score, "decision": decision, "decided_by": decided_by}
+
+
+def cascade_pred(item, ms_l3=None, **stages):
+    """A prediction with the cascade answers of ``stages`` (class -> answer); every other class stays quiet."""
+    cascade = {cls: stages.get(cls, QUIET) for cls in MODULE.CLASSES}
+    ms = {"scan": 1.0 + (ms_l3 or 0.0), "l1": 1.0, **({"l3": ms_l3} if ms_l3 is not None else {})}
+    return {"id": item["id"], "scores": {cls: s["l1_score"] for cls, s in stages.items() if s["l1_score"]},
+            "flagged": sorted(cls for cls, s in stages.items() if s["l1"] == "detected"), "cascade": cascade, "ms": ms}
+
+
+INJ = "instruction_injection"
+CASCADE_ROWS = [
+    # L1 detects: final, decided by the heuristic, no L3.
+    (row("dev_a", 0, [INJ]), {INJ: stage("detected", "detected", "heuristic", 0.99)}, None),
+    # L1 escalates: L3 decides either way.
+    (row("dev_a", 1, [INJ]), {INJ: stage("escalate", "detected", "l3")}, 20.0),
+    (row("dev_a", 2, [INJ], language="de"), {INJ: stage("escalate", "clear", "l3")}, 30.0),
+    # A jailbreak positive L1 escalates but no later layer answers: clear, still the heuristic's.
+    (row("dev_a", 3, ["jailbreak"]), {"jailbreak": stage("escalate", "clear", "heuristic")}, None),
+    (row("dolly", 0, benign=True), {INJ: stage("escalate", "clear", "l3")}, 10.0),
+    (row("dev_b", 0, benign=True, twin_of="dev_a:0000001"), {INJ: stage("escalate", "detected", "l3")}, 40.0),
+    # Below the clear threshold: L1 clears on its own.
+    (row("notinject", 0, benign=True), {INJ: stage("clear", "clear", "heuristic", 0.01)}, None),
+]
+
+
+def cascade_pairs(items=CASCADE_ROWS, role="dev"):
+    return [(item, cascade_pred(item, ms_l3, **stages), role) for item, stages, ms_l3 in items]
+
+
+def test_cascade_counts_the_final_decision_and_the_deciding_stage():
+    cell = MODULE.cascade_metrics(cascade_pairs())["gated"][INJ]["all"]
+    assert (cell["positives"], cell["tp"], cell["negatives"], cell["fp"]) == (3, 2, 3, 1)
+    assert cell["tpr"] == pytest.approx(2 / 3) and cell["fpr"] == pytest.approx(1 / 3)
+    assert cell["decided_by"] == {"heuristic": 2, "l1_model": 0, "l3": 4}
+    assert cell["escalated"] == 4 and cell["escalated_share"] == pytest.approx(4 / 6)
+    # No later layer: the escalated jailbreak positive is clear and counts as the heuristic's.
+    jailbreak = MODULE.cascade_metrics(cascade_pairs())["gated"]["jailbreak"]["all"]
+    assert (jailbreak["positives"], jailbreak["tp"], jailbreak["decided_by"]["heuristic"]) == (1, 0, 4)
+    assert MODULE.cascade_metrics(cascade_pairs())["gated"][INJ]["de"]["tp"] == 0
+
+
+def test_cascade_hard_benign_fpr_is_at_the_same_decision_per_source():
+    cell = MODULE.cascade_metrics(cascade_pairs())["gated"][INJ]["all"]
+    # The twin L3 detects is a false positive of the same decision the TPR counts; notinject L1 cleared.
+    assert cell["hard_benign"] == {"notinject": {"rows": 1, "fp": 0, "fpr": 0.0},
+                                   "twins": {"rows": 1, "fp": 1, "fpr": 1.0}}
+    assert "dolly" not in cell["hard_benign"]
+
+
+def test_cascade_needs_cascade_answers():
+    item = row("dev_a", 9, [INJ])
+    with pytest.raises(ValueError, match="no cascade answer"):
+        MODULE.cascade_metrics([(item, {"id": item["id"], "scores": {}, "flagged": []}, "dev")])
+
+
+def test_a_class_without_a_decision_counts_as_clear_by_no_stage():
+    positive = row("dev_a", 7, [INJ])
+    benign = row("dolly", 8, benign=True)
+    pairs = [(item, {**cascade_pred(item), "cascade": {}}, "dev") for item in (positive, benign)]
+    cell = MODULE.cascade_metrics(pairs)["gated"][INJ]["all"]
+    assert cell["tpr"] == 0.0 and cell["fpr"] == 0.0
+    assert cell["decided_by"] == {stage: 0 for stage in MODULE.STAGES}
+    assert MODULE._stage(pairs[0][1], INJ)["l1_score"] == 0.0
+
+
+def test_stage_latency_counts_l3_only_where_it_ran():
+    latency = MODULE.stage_latency(cascade_pairs())
+    cell = latency["all"]
+    assert cell["rows"] == 7 and cell["l1"] == {"p50": 1.0, "p95": 1.0}
+    assert cell["l3"]["runs"] == 4 and cell["l3"]["share"] == pytest.approx(4 / 7)
+    assert cell["l3"]["p50"] == 25.0 and cell["l3"]["mean_per_row"] == pytest.approx(100 / 7, abs=1e-3)
+    assert latency["de"]["l3"]["runs"] == 1
+    with pytest.raises(ValueError):
+        MODULE.stage_latency([(row("a", 0), {"id": "a:0000000"}, "dev")])
+
+
+# --- calibration --------------------------------------------------------------------------------
+
+
+def calibration_pairs(n=4000):
+    """Benign rows with injection scores spread over (0, 1], a few positives and a report-only benign row."""
+    pairs = []
+    for i in range(n):
+        item = row("dolly" if i % 3 else "notinject", i, benign=True)
+        score = round((i + 1) / n, 6)
+        pairs.append((item, cascade_pred(item, **{INJ: stage("escalate", "clear", "heuristic", score)}), "dev"))
+    for i in range(5):
+        item = row("dev_a", i, [INJ])
+        pairs.append((item, cascade_pred(item, **{INJ: stage("detected", "detected", "heuristic", 1.0)}), "dev"))
+    item = row("rep", 0, benign=True)
+    pairs.append((item, cascade_pred(item, **{INJ: stage("escalate", "clear", "heuristic", 1.0)}), "report"))
+    return pairs
+
+
+def test_calibrate_holds_one_per_mille_on_the_benign_pool():
+    pairs = calibration_pairs()
+    config = MODULE.calibrate(pairs, MODULE.L1_CASCADE)
+    benign = [p["cascade"][INJ]["l1_score"] for r, p, role in pairs if r["benign"] and role != "report"]
+    entry = config["calibration"]["classes"][INJ]
+    cuts = config["scanner"]["cascade"]["modules"]["injection"]
+    detect = cuts["detect_threshold"]
+    flagged = sum(s >= detect for s in benign)
+    assert flagged / len(benign) <= 0.001 and entry["detect_fpr"] == flagged / len(benign)
+    # The lowest such threshold: one more benign score would be over budget.
+    assert sum(s >= max(s for s in benign if s < detect) for s in benign) / len(benign) > 0.001
+    clear = cuts["clear_threshold"]
+    assert clear <= detect
+    assert sum(s >= clear for s in benign) / len(benign) <= 0.01 and entry["escalate_fpr"] <= 0.01
+    # The report-only benign row is not in the pool; the base config's deepest layer stays.
+    assert config["calibration"]["benign_rows"] == 4000 and config["scanner"]["cascade"]["max_level"] == "l1"
+    # A class without benign scores: any positive score detects; the clear cut stays at or below it.
+    jailbreak = config["scanner"]["cascade"]["modules"]["jailbreak"]
+    assert 0 < jailbreak["detect_threshold"] < 1e-300 and jailbreak["clear_threshold"] <= jailbreak["detect_threshold"]
+    assert MODULE.L1_CASCADE == {"scanner": {"cascade": {"max_level": "l1"}}}
+
+
+def test_calibrate_leaves_out_excluded_rows_and_can_switch_clearing_off():
+    pairs = calibration_pairs()
+    top = {r["id"] for r, p, role in pairs if role == "dev" and r["benign"] and p["scores"].get(INJ, 0) > 0.99}
+    excluded = MODULE.calibrate(pairs, MODULE.L1_CASCADE, exclude=frozenset(top))
+    assert excluded["calibration"]["excluded_rows"] == len(top) == 40
+    assert excluded["scanner"]["cascade"]["modules"]["injection"]["detect_threshold"] < 0.99
+    off = MODULE.calibrate(pairs, MODULE.calibrate(pairs, MODULE.L1_CASCADE), clear_fpr=None)
+    assert all("clear_threshold" not in cuts for cuts in off["scanner"]["cascade"]["modules"].values())
+    assert "escalate_fpr" not in off["calibration"]["classes"][INJ]
+    assert off["calibration"]["clear_fpr"] is None
+
+
+def test_fpr_threshold_never_counts_a_zero_and_needs_negatives():
+    assert MODULE.fpr_threshold([0.0] * 10, 0.001) > 0.0
+    assert MODULE.fpr_threshold([0.5, 0.4, 0.3], 0.5) == math.nextafter(0.4, math.inf)
+    with pytest.raises(ValueError):
+        MODULE.fpr_threshold([], 0.001)
+
+
+# --- cascade report CLI -------------------------------------------------------------------------
+
+
+def fake_cascade(sets, out, config=MODULE.L1_CASCADE):
+    """Positives: L1 escalates and L3 detects; benign rows: L1 clears, except the twin L3 detects."""
+    MODULE.bind_config(out, config)
     for entry in sets:
         preds = []
         for r in MODULE.BASELINES.read_rows(entry.path):
-            l1 = {c: 0.5 for c in r["classes"]}
-            stack = {c: 0.9 if c in l2_catches else s for c, s in l1.items()}
-            flagged = [c for c in stack if stack[c] > 0.5]
-            if l2_flags_twin and r["id"] == "gen:0000001":
-                stack, flagged = {"tool_poisoning": 0.7}, ["tool_poisoning"]
-            preds.append({"id": r["id"], "scores": stack, "flagged": flagged,
-                          "l1": {"scores": l1, "flagged": []}, "ms": {"l1": 1.0, "l2": 9.0}})
-        MODULE.prediction_path(out, entry, "l1+l2").write_text("".join(json.dumps(p) + "\n" for p in preds))
+            stages = {cls: stage("escalate", "detected", "l3", 0.4) for cls in r["classes"]}
+            if r["id"] == "gen:0000001":
+                stages = {"tool_poisoning": stage("escalate", "detected", "l3", 0.4)}
+            preds.append(cascade_pred(r, 25.0 if stages else None, **stages))
+        MODULE.prediction_path(out, entry).write_text("".join(json.dumps(p) + "\n" for p in preds))
 
 
-def test_layer_latency_is_ms_per_100_kib_per_layer_and_language():
-    pairs = [({"text": "x" * 1024, "language": "de"}, {"id": "a", "ms": {"l1": 1.0, "l2": 10.0}}, "dev"),
-             ({"text": "x" * 1024, "language": "en"}, {"id": "b", "ms": {"l1": 3.0, "l2": 30.0}}, "dev")]
-    latency = MODULE.layer_latency(pairs)
-    assert latency["all"]["l1"]["ms_per_100kib"] == 200.0 and latency["all"]["l2"]["ms_per_100kib"] == 2000.0
-    assert latency["de"]["l1"] == {"rows": 1, "bytes": 1024, "ms_per_100kib": 100.0, "p95_ms": 1.0}
-    with pytest.raises(ValueError):
-        MODULE.layer_latency([({"text": "x"}, {"id": "c", "scores": {}}, "dev")])
-
-
-def test_score_by_layer_reads_the_full_stack_predictions(split, tmp_path):
+def test_cli_cascade_report_shows_the_operating_point_stages_and_latency(split, tmp_path):
+    config = tmp_path / "cascade.json"
+    config.write_text(json.dumps({"scanner": {"cascade": {"modules": {"injection": {"clear_threshold": 0.2}}},
+                                              "wolf": {"bundle_dir": "/private/models/wolf"}}}))
     sets = MODULE.split_sets(split)
-    fake_full_stack(sets, tmp_path / "pred")
-    predictions = MODULE.ark_predictions(sets, tmp_path / "pred", "l1+l2")
-    assert MODULE.ark_predictions(sets, tmp_path / "pred") == {}
-    l1, stack = (MODULE.score_split(sets, predictions, bootstrap=False, layers=layers) for layers in MODULE.LAYERS)
-    assert stack["gated"]["exfiltration"]["all"]["all"]["0.01"]["tpr"] == 1.0
-    assert l1["gated"]["exfiltration"]["all"]["all"]["0.01"]["tp"] == 2
-    out = tmp_path / "stack.json"
-    assert MODULE.main(["score", "--split", str(split), "--predictions", str(tmp_path / "pred"),
-                        "--layers", "l1+l2", "--output", str(out)]) == 0
-    assert json.loads(out.read_text())["gated"]["exfiltration"]["all"]["all"]["0.01"]["tpr"] == 1.0
-    # Without L1-only predictions the L1 score has nothing to read.
-    assert MODULE.main(["score", "--split", str(split), "--predictions", str(tmp_path / "pred")]) == 2
-
-
-def test_cli_full_stack_report_puts_l1_next_to_l1_l2_with_baselines_and_latency(split, tmp_path):
-    sets = MODULE.split_sets(split)
-    fake_full_stack(sets, tmp_path / "pred", l2_flags_twin=True)
-    cache = tmp_path / "cache"
-    cache_baseline(cache, "atr", "v1", sets, 1)
-    cache_baseline(cache, "prompt_guard_2_86m", "v1", sets, 0.9)
-    cache_baseline(cache, "protectai_v2", "v1", sets, 1)
-    md = tmp_path / "full-stack.md"
-    assert MODULE.main(["report", "--layers", "l1+l2", "--split", str(split), "--predictions", str(tmp_path / "pred"),
-                        "--baseline-cache", str(cache), "--out", str(md)]) == 0
+    fake_cascade(sets, tmp_path / "pred", MODULE.load_config(config))
+    md = tmp_path / "cascade.md"
+    assert MODULE.main(["report", "--cascade", str(config), "--split", str(split), "--predictions",
+                        str(tmp_path / "pred"), "--out", str(md)]) == 0
     text = md.read_text()
-    assert ("| class | lang | pos | neg | TPR@1% L1 | TPR@1% L1+L2 | TPR@0.1% L1 | TPR@0.1% L1+L2 | "
-            "hard-benign FPR L1 | hard-benign FPR L1+L2 | best heuristic TPR@1% / 0.1% | "
-            "best Prompt Guard 2 TPR@1% / 0.1% |") in text
-    assert "| exfiltration | de | 1 | 1 | 100.0 | 100.0 | 100.0 | 100.0 | – | – | 100.0 / 100.0 (atr) | " \
-           "100.0 / 100.0 (prompt_guard_2_86m) |" in text
-    # The twin L2 scores above the positive costs L1+L2 its TPR and shows as a hard-benign flag.
-    assert "| tool_poisoning | all | 1 | 3 | 100.0 | 0.0 | 100.0 | 0.0 | 0.0 (0/1) | 100.0 (1/1) |" in text
-    assert "| tool_poisoning | 0 | 1 |" in text
-    assert "## Latency per layer" in text and "| all | L1 | 8 | 0 |" in text and "| all | L2 | 8 |" in text
+    assert f"Cascade config `{MODULE.config_hash(MODULE.load_config(config))[:12]}`" in text
+    assert "clear thresholds injection 0.2" in text and "L3 Wolf default model at threshold its default" in text
+    assert "/private/models" not in text  # no local paths in a public report
+    assert ("| class | lang | pos | neg | TPR | FPR | hard-benign FPR | decided heuristic % | decided l1_model % | "
+            "decided l3 % | escalated % |") in text
+    # The twin L3 detects is the hard-benign FP of tool_poisoning at the same decision.
+    assert "| tool_poisoning | all | 1 | 3 | 100.0 | 33.33 | 100.0 (1/1) | 50.0 | 0.0 | 50.0 | 100.0 |" in text
+    assert "| tool_poisoning | twins | 1 | 1 | 100.0 |" in text
+    assert "### L1 score curve (gated sets (dev and decisive))" in text and "## Latency per stage" in text
     assert "## Report-only sets" in text
+    # Predictions of another config are refused.
+    assert MODULE.main(["report", "--split", str(split), "--predictions", str(tmp_path / "pred"), "--out", str(md),
+                        "--cascade", str(tmp_path / "missing.json")]) == 2
+    other = tmp_path / "other.json"
+    other.write_text('{"scanner": {}}')
+    assert MODULE.main(["report", "--cascade", str(other), "--split", str(split), "--predictions",
+                        str(tmp_path / "pred"), "--out", str(md)]) == 2
 
 
-def test_cli_full_stack_counts_only_leaves_rates_latency_and_baselines_out(split, tmp_path):
+def test_cli_cascade_counts_only_leaves_rates_and_latency_out(split, tmp_path):
     sets = MODULE.split_sets(split)
-    fake_full_stack(sets, tmp_path / "pred", l2_flags_twin=True)
-    cache = tmp_path / "cache"
-    cache_baseline(cache, "atr", "v1", sets, 1)
+    fake_cascade(sets, tmp_path / "pred")
+    config = tmp_path / "l1.json"
+    config.write_text(json.dumps(MODULE.L1_CASCADE))
     md = tmp_path / "counts.md"
-    assert MODULE.main(["report", "--layers", "l1+l2", "--counts-only", "--split", str(split), "--predictions",
-                        str(tmp_path / "pred"), "--baseline-cache", str(cache), "--out", str(md)]) == 0
+    assert MODULE.main(["report", "--cascade", str(config), "--counts-only", "--split", str(split), "--predictions",
+                        str(tmp_path / "pred"), "--out", str(md)]) == 0
     text = md.read_text()
-    assert "| exfiltration | all | 2 | 3 | 2 / 0 | 2 / 0 | 2 / 0 | 2 / 0 | 0/1 | 0/1 |" in text
-    assert "| tool_poisoning | all | 1 | 3 | 1 / 0 | 0 / 0 | 1 / 0 | 0 / 0 | 0/1 | 1/1 |" in text
-    assert "Latency" not in text and "(atr)" not in text and "100.0" not in text
+    assert "| tool_poisoning | all | 1 / 1 | 1 / 3 | 1 / 1 | 2 | 0 | 2 | 4 |" in text
+    assert "Latency" not in text and "TPR" not in text.split("### L1 score curve")[0]
+    assert "deepest layer L1" in text
+    # Counts only is a form of the cascade report.
     assert MODULE.main(["report", "--counts-only", "--split", str(split), "--predictions", str(tmp_path / "pred"),
                         "--out", str(md)]) == 2
+
+
+def test_cli_calibrate_writes_a_config_the_report_names(split, tmp_path, capsys):
+    sets = MODULE.split_sets(split)
+    fake_cascade(sets, tmp_path / "pred")
+    ids = tmp_path / "train-negatives.txt"
+    ids.write_text("benign:0000000\n")
+    out = tmp_path / "calibrated.json"
+    assert MODULE.main(["calibrate", "--split", str(split), "--predictions", str(tmp_path / "pred"),
+                        "--exclude-ids", str(ids), "--out", str(out)]) == 0
+    config = json.loads(out.read_text())
+    assert config["calibration"]["excluded_rows"] == 1 and config["calibration"]["target_fpr"] == 0.001
+    assert set(config["scanner"]["cascade"]["modules"]) == {MODULE.category(cls) for cls in MODULE.CLASSES}
+    assert MODULE.config_hash(config)[:12] in capsys.readouterr().out
+    lines = MODULE.config_lines(config)
+    assert "Calibrated by `scoreboard.py calibrate` on 2 benign rows at 0.1 % FPR (detect) and 1 % FPR (clear)" in lines[1]
+    with pytest.raises(SystemExit):
+        MODULE.main(["calibrate", "--split", str(split), "--predictions", str(tmp_path / "pred"), "--no-clear",
+                     "--clear-fpr", "0.02", "--out", str(out)])

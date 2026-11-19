@@ -48,6 +48,27 @@ def test_core_accepts_a_mode_gate_per_category(mode):
     Scanner({"injection_mode": mode, "unsafe_action_mode": mode, "toxic_language_mode": mode})
 
 
+def test_cascade_reports_the_deciding_stage_per_module():
+    assert "decision" not in Scanner().scan("hello")
+    scanner = Scanner({"categories": ["pii", "injection"], "cascade": {"max_level": "L1"}})
+    report = scanner.scan("Please summarize the meeting notes.")
+    assert [(d["module"], d["outcome"], d["decided_by"]) for d in report["decision"]] == [
+        ("pii", "clear", "heuristic"), ("injection", "clear", "heuristic"),
+    ]
+    with pytest.raises(ValueError):
+        Scanner({"cascade": {"modules": {"injection": {"clear_threshold": 2}}}})
+    with pytest.raises(ValueError):
+        Scanner({"cascade": {"modules": {"injection": {"detect_threshold": 0.2, "clear_threshold": 0.3}}}})
+    # A per-module detect cut below every score detects with the heuristic.
+    lowered = Scanner({"categories": ["injection"], "cascade": {"modules": {"injection": {"detect_threshold": 0.0}}}})
+    quoted = "The tutorial says to ignore previous instructions in this example."
+    assert lowered.scan(quoted)["decision"][0]["outcome"] == "detected"
+    with pytest.raises(RuntimeError):
+        Scanner({"cascade": {"modules": {"injection": {
+            "l1_model": {"bundle_dir": "/nonexistent", "manifest_sha256": "0" * 64},
+        }}}})
+
+
 def test_shell_command_points_to_shell_verdict():
     with pytest.raises(ValueError, match="shell_verdict"):
         Scanner({"categories": ["shell_command"]})

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
 
+use patronus_ark_core::cascade::{ScanGateMatrix, SecurityLevel};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -12,7 +13,7 @@ pub struct RequestScanConfig {
     #[serde(default)]
     max_level: Option<SecurityLevel>,
     #[serde(default)]
-    gates: Option<RawGates>,
+    gates: Option<ScanGateMatrix>,
     #[serde(default = "empty_metadata")]
     metadata: Value,
     #[serde(default)]
@@ -66,198 +67,14 @@ struct DynamicPiiCondition {
     results: Vec<String>,
 }
 
-/// The worker's `SecurityLevel`: every name its `str::parse` accepts.
-#[derive(Debug, PartialEq, Eq)]
-enum SecurityLevel {
-    L1,
-    L2,
-    L3,
-}
-
-impl<'de> Deserialize<'de> for SecurityLevel {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let name = String::deserialize(deserializer)?;
-        match name.to_lowercase().as_str() {
-            "1" | "l1" => Ok(Self::L1),
-            "2" | "l2" => Ok(Self::L2),
-            "3" | "l3" => Ok(Self::L3),
-            _ => Err(serde::de::Error::custom(format!(
-                "Unknown security level: {name}"
-            ))),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum ScoreMode {
-    Strict,
-    Balanced,
-    Recall,
-}
-
-/// Mirror of the worker's `ScanGateMatrix` gate schema.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct RawGates {
-    explain: bool,
-    l1: Option<bool>,
-    l2: Option<bool>,
-    l3: Option<bool>,
-    models: HashMap<String, bool>,
-    rules: HashMap<String, bool>,
-    pii_mode: Option<ScoreMode>,
-    dlp_mode: Option<ScoreMode>,
-    injection_mode: Option<ScoreMode>,
-    jailbreak_mode: Option<ScoreMode>,
-    prompt_extraction_mode: Option<ScoreMode>,
-    tool_poisoning_mode: Option<ScoreMode>,
-    agent_config_tampering_mode: Option<ScoreMode>,
-    memory_poisoning_mode: Option<ScoreMode>,
-    exfiltration_mode: Option<ScoreMode>,
-    unsafe_action_mode: Option<ScoreMode>,
-    resource_exhaustion_mode: Option<ScoreMode>,
-    resource_exhaustion_count_threshold: Option<std::num::NonZeroU64>,
-    harmful_content_mode: Option<ScoreMode>,
-    toxic_language_mode: Option<ScoreMode>,
-    conditional: Vec<ConditionalGate>,
-    l3_policy: Option<RawL3Policy>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ConditionalGate {
-    level: SecurityLevel,
-    #[serde(default)]
-    pipeline: Option<String>,
-    when: GateExpression,
-    #[serde(default)]
-    l3_policy: Option<L3PipelinePolicy>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum GateExpression {
-    All(Vec<GateExpression>),
-    Any(Vec<GateExpression>),
-    Not(Box<GateExpression>),
-    Metadata(MetadataCondition),
-    Result(ResultCondition),
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct MetadataCondition {
-    path: String,
-    #[serde(default)]
-    equals: Option<Value>,
-    #[serde(default, rename = "in")]
-    in_values: Option<Vec<Value>>,
-    #[serde(default)]
-    exists: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ResultCondition {
-    pipeline: String,
-    #[serde(default)]
-    classes: Vec<String>,
-    #[serde(default)]
-    min_confidence: Option<f64>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct RawL3Policy {
-    enabled: Option<bool>,
-    priority: Option<Vec<String>>,
-    ttl_ms: Option<HashMap<String, u64>>,
-    estimated_cost_ms: Option<HashMap<String, u64>>,
-    fairness_quantum_ms: Option<u64>,
-    max_wait_ms: Option<u64>,
-    degraded_factor: Option<f64>,
-    early_exit: Option<L3EarlyExitMode>,
-    progress: Option<L3ProgressMode>,
-    clustering: Option<L3ClusteringStrategy>,
-    representatives_per_cluster: Option<usize>,
-    verify_representatives_per_cluster: Option<usize>,
-    min_cluster_similarity: Option<f64>,
-    max_cluster_size: Option<usize>,
-    pipelines: Option<HashMap<String, L3PipelinePolicy>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum L3EarlyExitMode {
-    Disabled,
-    ClassStable,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum L3ProgressMode {
-    Disabled,
-    Progress,
-    Provisional,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum L3ClusteringStrategy {
-    Disabled,
-    RankOnly,
-    Representative,
-    VerifyRepresentative,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct L3PipelinePolicy {
-    #[serde(default)]
-    clustering: Option<L3ClusteringStrategy>,
-    #[serde(default)]
-    representatives_per_cluster: Option<usize>,
-    #[serde(default)]
-    verify_representatives_per_cluster: Option<usize>,
-    #[serde(default)]
-    min_cluster_similarity: Option<f64>,
-    #[serde(default)]
-    max_cluster_size: Option<usize>,
-    #[serde(default)]
-    aggregation: Option<L3AggregationStrategy>,
-    #[serde(default)]
-    early_exit: Option<L3PipelineEarlyExit>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-enum L3AggregationStrategy {
-    AnyPositiveOrHighest {
-        positive_class: String,
-        threshold: f64,
-    },
-    HighestRiskAboveThresholdOrConfidence {
-        threshold: f64,
-    },
-    MajorityVoteOrHighest,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum L3PipelineEarlyExit {
-    Disabled,
-    HeadStable,
-    RequestWidePositive,
-}
-
 fn empty_metadata() -> Value {
     serde_json::json!({})
 }
 
 impl RequestScanConfig {
     pub fn validate(&self) -> Result<(), String> {
-        let _ = &self.max_level;
+        // The worker's gate schema validates `max_level` and `gates` while parsing.
+        let _ = (&self.max_level, &self.gates);
         if !self.metadata.is_object() {
             return Err("config.metadata must be a JSON object".into());
         }
@@ -290,9 +107,6 @@ impl RequestScanConfig {
             .is_some_and(|tokens| !(0..=64).contains(&tokens))
         {
             return Err("config.chunk_overlap_tokens must be between 0 and 64".into());
-        }
-        if let Some(gates) = &self.gates {
-            gates.validate()?;
         }
         if let Some(dynamic_pii) = &self.dynamic_pii {
             if self.categories.as_ref().is_some_and(|categories| {
@@ -421,207 +235,6 @@ fn known_category(value: &str) -> bool {
     )
 }
 
-impl RawGates {
-    fn validate(&self) -> Result<(), String> {
-        let _ = (
-            self.explain,
-            self.l1,
-            self.l2,
-            self.l3,
-            &self.models,
-            &self.rules,
-            &self.pii_mode,
-            &self.dlp_mode,
-            &self.injection_mode,
-            &self.jailbreak_mode,
-            &self.prompt_extraction_mode,
-            &self.tool_poisoning_mode,
-            &self.agent_config_tampering_mode,
-            &self.memory_poisoning_mode,
-            &self.exfiltration_mode,
-            &self.unsafe_action_mode,
-            &self.resource_exhaustion_mode,
-            &self.resource_exhaustion_count_threshold,
-            &self.harmful_content_mode,
-            &self.toxic_language_mode,
-        );
-        for gate in &self.conditional {
-            gate.validate()?;
-        }
-        if let Some(policy) = &self.l3_policy {
-            policy.validate()?;
-        }
-        Ok(())
-    }
-}
-
-impl ConditionalGate {
-    fn validate(&self) -> Result<(), String> {
-        if self.level == SecurityLevel::L1 {
-            return Err("conditional gates may only target L2 or L3".into());
-        }
-        if self
-            .pipeline
-            .as_ref()
-            .is_some_and(|value| value.trim().is_empty())
-        {
-            return Err("conditional gate pipeline must not be empty".into());
-        }
-        if self.l3_policy.is_some() && (self.level != SecurityLevel::L3 || self.pipeline.is_none())
-        {
-            return Err("conditional l3_policy overrides require level L3 and a pipeline".into());
-        }
-        self.when.validate()?;
-        if let Some(policy) = &self.l3_policy {
-            policy.validate()?;
-        }
-        Ok(())
-    }
-}
-
-impl GateExpression {
-    fn validate(&self) -> Result<(), String> {
-        match self {
-            Self::All(items) | Self::Any(items) => {
-                if items.is_empty() {
-                    return Err("conditional gate all/any must not be empty".into());
-                }
-                for item in items {
-                    item.validate()?;
-                }
-                Ok(())
-            }
-            Self::Not(item) => item.validate(),
-            Self::Metadata(condition) => condition.validate(),
-            Self::Result(condition) => condition.validate(),
-        }
-    }
-}
-
-impl MetadataCondition {
-    fn validate(&self) -> Result<(), String> {
-        if self.path.trim().is_empty() {
-            return Err("metadata gate path must not be empty".into());
-        }
-        let predicates = usize::from(self.equals.is_some())
-            + usize::from(self.in_values.is_some())
-            + usize::from(self.exists.is_some());
-        if predicates != 1 {
-            return Err("metadata gate must configure exactly one predicate".into());
-        }
-        if self.in_values.as_ref().is_some_and(Vec::is_empty) {
-            return Err("metadata gate in list must not be empty".into());
-        }
-        Ok(())
-    }
-}
-
-impl ResultCondition {
-    fn validate(&self) -> Result<(), String> {
-        let _ = &self.classes;
-        if self.pipeline.trim().is_empty() {
-            return Err("result gate pipeline must not be empty".into());
-        }
-        validate_fraction(self.min_confidence, "result gate min_confidence")
-    }
-}
-
-impl RawL3Policy {
-    fn validate(&self) -> Result<(), String> {
-        let _ = (
-            self.enabled,
-            &self.priority,
-            &self.ttl_ms,
-            self.max_wait_ms,
-            &self.early_exit,
-            &self.progress,
-            &self.clustering,
-        );
-        if [
-            self.fairness_quantum_ms.map(|value| value == 0),
-            self.representatives_per_cluster.map(|value| value == 0),
-            self.verify_representatives_per_cluster
-                .map(|value| value == 0),
-            self.max_cluster_size.map(|value| value == 0),
-        ]
-        .contains(&Some(true))
-            || self
-                .estimated_cost_ms
-                .as_ref()
-                .is_some_and(|costs| costs.values().any(|&cost| cost == 0))
-        {
-            return Err(
-                "gates.l3_policy counts, costs and fairness_quantum_ms must be positive".into(),
-            );
-        }
-        validate_fraction(self.degraded_factor, "gates.l3_policy degraded_factor")?;
-        validate_fraction(
-            self.min_cluster_similarity,
-            "gates.l3_policy min_cluster_similarity",
-        )?;
-        if let Some(pipelines) = &self.pipelines {
-            for (name, policy) in pipelines {
-                if name.trim().is_empty() {
-                    return Err("gates.l3_policy pipelines keys must not be empty".into());
-                }
-                policy.validate()?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl L3PipelinePolicy {
-    fn validate(&self) -> Result<(), String> {
-        let _ = (&self.clustering, &self.early_exit);
-        if [
-            self.representatives_per_cluster,
-            self.verify_representatives_per_cluster,
-            self.max_cluster_size,
-        ]
-        .contains(&Some(0))
-        {
-            return Err("gates pipeline cluster counts must be positive".into());
-        }
-        validate_fraction(
-            self.min_cluster_similarity,
-            "gates pipeline min_cluster_similarity",
-        )?;
-        if let Some(aggregation) = &self.aggregation {
-            aggregation.validate()?;
-        }
-        Ok(())
-    }
-}
-
-impl L3AggregationStrategy {
-    fn validate(&self) -> Result<(), String> {
-        match self {
-            Self::AnyPositiveOrHighest {
-                positive_class,
-                threshold,
-            } => {
-                if positive_class.trim().is_empty() {
-                    return Err("aggregation positive_class must not be empty".into());
-                }
-                validate_fraction(Some(*threshold), "aggregation threshold")
-            }
-            Self::HighestRiskAboveThresholdOrConfidence { threshold } => {
-                validate_fraction(Some(*threshold), "aggregation threshold")
-            }
-            Self::MajorityVoteOrHighest => Ok(()),
-        }
-    }
-}
-
-fn validate_fraction(value: Option<f64>, field: &str) -> Result<(), String> {
-    if value.is_some_and(|value| !value.is_finite() || !(0.0..=1.0).contains(&value)) {
-        Err(format!("{field} must be between 0 and 1"))
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -637,11 +250,13 @@ mod tests {
         let shell: RequestScanConfig =
             serde_json::from_value(serde_json::json!({"categories":["shell_command"]})).unwrap();
         assert!(shell.validate().is_ok());
-        let bad_policy: RequestScanConfig = serde_json::from_value(serde_json::json!({
-            "gates":{"l3_policy":{"degraded_factor":1.1}}
-        }))
-        .unwrap();
-        assert!(bad_policy.validate().is_err());
+        // The gate schema refuses an out-of-range policy while parsing.
+        assert!(
+            serde_json::from_value::<RequestScanConfig>(serde_json::json!({
+                "gates":{"l3_policy":{"degraded_factor":1.1}}
+            }))
+            .is_err()
+        );
     }
 
     /// ark-api checks the same fixture (`routes::scan` tests).

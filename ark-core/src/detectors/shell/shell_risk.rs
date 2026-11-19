@@ -20,8 +20,10 @@ use super::facts::{extract, Facts, ShellContext};
 use super::kf1::visit_kf1;
 use super::model::{ASK_THRESHOLD, SHELL_RISK_CLASS};
 use super::policies::{Decision, Lowered, PolicyHit, ShellPolicies, ShellPolicyConfig};
+use crate::cascade::StageOutcome;
 use crate::detectors::facts_common::model::{TfidfLrModel, TopFeature};
 use crate::detectors::facts_common::pyjson::{self, py_round};
+use crate::detectors::facts_common::thresholds::L1Thresholds;
 use crate::detectors::{NativeDetection, NativeDetector};
 use crate::threat::NativeText;
 use crate::EvaluationResult;
@@ -147,13 +149,13 @@ pub struct ShellRiskPipeline {
     policies: RwLock<Arc<ShellPolicies>>,
 }
 
-fn decide(score: f64, (ask, block): (f64, f64)) -> Decision {
-    if score > block {
-        Decision::Block
-    } else if score > ask {
-        Decision::Ask
-    } else {
-        Decision::Allow
+/// Cat's reading of the model outcome: detected blocks, clear allows, the
+/// band between the cuts asks.
+fn decide(score: f64, thresholds: &L1Thresholds) -> Decision {
+    match thresholds.outcome(score) {
+        StageOutcome::Detected => Decision::Block,
+        StageOutcome::Escalate => Decision::Ask,
+        StageOutcome::Clear => Decision::Allow,
     }
 }
 
@@ -245,20 +247,21 @@ impl ShellRiskPipeline {
         let (policies, allowlisted) =
             self.current_policies()
                 .evaluate(&facts, text, allows_rule)?;
-        let cuts = self.model.cuts();
+        let thresholds = self.model.thresholds();
+        let (ask_cut, block_cut) = self.model.cuts();
         let score = match policies.iter().map(|p| p.decision).max() {
-            Some(Decision::Block) => model_score.max(cuts.1 + 2.0),
-            Some(Decision::Ask) => model_score.max((cuts.0 + cuts.1) / 2.0),
+            Some(Decision::Block) => model_score.max(block_cut + 2.0),
+            Some(Decision::Ask) => model_score.max((ask_cut + block_cut) / 2.0),
             _ => model_score,
         };
         Ok(ShellVerdict {
-            decision: decide(score, cuts),
+            decision: decide(score, &thresholds),
             score,
-            ask_cut: cuts.0,
-            block_cut: cuts.1,
+            ask_cut,
+            block_cut,
             model_id: self.model.name().to_string(),
             model_score,
-            model_decision: decide(model_score, cuts),
+            model_decision: decide(model_score, &thresholds),
             top_features,
             policies,
             allowlisted,

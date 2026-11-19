@@ -80,6 +80,9 @@ pub(crate) struct RequestState {
     pub usable_results: usize,
     pub failures: Vec<SecurityFailure>,
     pub completion: Option<SecurityRequestCompletion>,
+    /// The request runs the opt-in cascade: published final results carry
+    /// `decided_by`.
+    pub marks_decided: bool,
 }
 
 impl RequestState {
@@ -93,6 +96,7 @@ impl RequestState {
             usable_results: 0,
             failures: Vec::new(),
             completion: None,
+            marks_decided: false,
         }
     }
 }
@@ -565,10 +569,12 @@ impl L3Worker {
         let clustering = if spec.execution.l3_strategy() == L3Strategy::Multi {
             unified::selection_clustering_for_spec(spec)
         } else {
-            spec.execution
-                .l3_policy()
-                .pipeline_policy(&spec.category, &spec.model)
-                .clustering
+            super::l3_routing::pipeline_policy(
+                spec.execution.l3_policy(),
+                &spec.category,
+                &spec.model,
+            )
+            .clustering
         };
         let mut chunks = selected_l3_chunks(token_chunks, &spec.l3_candidates, clustering);
         if chunks.is_empty() {
@@ -988,10 +994,12 @@ fn finish_job(
         .state
         .lock()
         .expect("request registry mutex poisoned");
+    let mut marks_decided = false;
     let publish_result = if let Some(state) = registry.requests.get_mut(&request_id) {
         if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;
         }
+        marks_decided = state.marks_decided;
         state.pending_l3_job_categories.remove(&job_id);
         match failure {
             Some(failure) => {
@@ -1020,6 +1028,10 @@ fn finish_job(
         false
     };
     if publish_result {
+        let mut result = result;
+        if marks_decided {
+            super::mark_decided(&mut result);
+        }
         registry
             .ready
             .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
@@ -1217,14 +1229,14 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
         if state.pending_l3_job_ids.remove(&job.job_id) {
             state.pending_l3_job_categories.remove(&job.job_id);
             state.usable_results += 1;
+            let mut result =
+                request_wide_skip_result(job.fallback, &job.execution, job.degraded_factor, reason);
+            if state.marks_decided {
+                super::mark_decided(&mut result);
+            }
             ready.push(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
                 request_id: request_id.to_string(),
-                result: request_wide_skip_result(
-                    job.fallback,
-                    &job.execution,
-                    job.degraded_factor,
-                    reason,
-                ),
+                result,
             }));
         }
     }
@@ -1583,6 +1595,7 @@ mod tests {
                 usable_results: 1,
                 failures: Vec::new(),
                 completion: None,
+                marks_decided: false,
             },
         );
 
@@ -2009,6 +2022,7 @@ mod tests {
                 usable_results: 1,
                 failures: Vec::new(),
                 completion: None,
+                marks_decided: false,
             },
         );
         let mut execution = ScanExecution::new(SecurityLevel::L3);
@@ -2267,6 +2281,8 @@ mod tests {
                     details: HashMap::new(),
                 }],
                 internal_l2_chunk_outputs: Vec::new(),
+                decided_by: None,
+                l1_outcome: None,
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -2308,6 +2324,8 @@ mod tests {
             duration_ms: 0.0,
             layers: Vec::new(),
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

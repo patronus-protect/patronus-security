@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Threat scoreboard: score ARK (and cached baselines) on frozen corpora and gate a head against its base.
+"""Threat scoreboard: score ark-core (and cached baselines) on frozen corpora and gate a head against its base.
 
 Inputs are split roots: every subdirectory with a frozen ``manifest.json`` (``prepare_corpora.py``
 corpora, ``generators.py`` output) counts, e.g. ``DEV/{train_dev,report,generated,translated}`` or
@@ -8,49 +8,63 @@ corpora, ``generators.py`` output) counts, e.g. ``DEV/{train_dev,report,generate
 classes do not count) and a negative of every class when ``benign``. Sets with the role ``report``
 are scored in their own scope and never gate.
 
-ARK runs one category per class (``instruction_injection`` is the category ``injection``) on the
-layers ``--layers`` names: ``l1`` (default, the gated stack) or ``l1+l2``, the native L1 detectors and
-then the L2 models of the categories (Wolf Defender for ``injection``) on every row, as the default
-configuration runs them (no conditional L2 gate); an ``l1+l2`` prediction keeps the L1-only view of
-the same row and the milliseconds of each layer (L1 alone, and the rest of the stack scan as L2).
-The score of a class is the highest attack confidence ARK reports for it (0 when it
-reports nothing), the verdict is ARK's own decision (any result that is not ``benign``/``safe``, as
-in the golden evaluation). Metrics per class, language (``all``, ``de``, ``en``) and origin (``all``,
-``native``, ``translated``; runner translations and the German part of a set marked ``translated`` in
-the entity map, as in ``generators.py``):
+Predictions come from ark-core alone: the ``threat_cascade`` example of ``patronus-ark-core`` scans
+every row once for the eleven attack classes with the Core scanner and a cascade config (``--cascade
+CONFIG``, a JSON file whose ``scanner`` key is a ``ScannerConfig``). The layers are a cascade: the
+L1 heuristic, then the L1 model, then L3 (Wolf Defender for ``instruction_injection``, at its default
+threshold unless the config sets one), each later layer only on what the earlier ones left undecided;
+without a later layer, undecided is clear. L2 is ARK-only and not measured here. Without
+``--cascade`` the config is ``L1_CASCADE`` (L1 only), the gated stack. Per row and class the
+prediction holds the L1 score curve (``scores``: the confidence of a flagged native result and the
+scorer values below the decision; 0 when there is none), the classes L1 detected (``flagged``), the
+cascade's answer (``cascade``: L1 outcome, the L1 score the clear threshold compares, final decision,
+deciding stage), Wolf's probability where Wolf ran and the milliseconds per stage.
+
+L1 score curve (``score``, ``report``, the gate), per class, language (``all``, ``de``, ``en``) and
+origin (``all``, ``native``, ``translated``; runner translations and the German part of a set marked
+``translated`` in the entity map, as in ``generators.py``):
 
 - TPR at matched document FPR 1 % and 0.1 % on the benign rows (lowest threshold whose FPR is within
   the target, ``run_baselines.matched_fpr``), each with a seeded percentile bootstrap 95 % CI
   (positives and negatives resampled, threshold re-chosen in every replicate);
 - AUPRC (average precision of the class positives against the benign rows);
-- hard-benign FPR at ARK's own verdict: benign look-alike twins (``twin_of``) and the benign rows of
-  the security-adjacent sets in ``HARD_BENIGN_SETS``;
+- hard-benign FPR at the same matched threshold as each TPR: benign look-alike twins (``twin_of``) and
+  the benign rows of the security-adjacent sets in ``HARD_BENIGN_SETS``;
 - leave-one-dataset-out (``language: all``, ``origin: all``): TPR@1 % with each contributing set left
   out, and the lowest of them;
 - obfuscation invariance: per obfuscation kind of the generated slices, the attack rows whose clean
   source row is flagged and how many of them stay flagged obfuscated (reported, not gated).
 
-``gate`` builds the head and the base commit (the release module of ``python/``, offline, shared
-with the DLP scoreboard), predicts every split with both and fails on a regression in the gated scope:
-TPR@1 % or TPR@0.1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp below the
-base, or a hard-benign row of a class that the head flags and the base does not. stdout carries the
-dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the holdout leaves as a
-verdict and the names of failing checks only, its report stays in the cache.
+``report --cascade CONFIG`` renders the cascade report instead: per class and language at the
+configured operating point TPR, FPR on the benign rows and hard-benign FPR at the same decision (per
+benign source), the share of rows each stage decided and the share L1 escalated, latency per stage
+(p50/p95; L3 only on the rows it ran, with its share and mean cost per row), and the L1 score curve
+next to it; ``--counts-only`` leaves only row counts (the form of the owner's holdout run).
+
+``calibrate`` reads predictions of the gated benign rows (the dev benign pool incl. the hard
+benigns; rows of ``--exclude-ids``, e.g. a model's train negatives, are left out) and writes a
+cascade config: per class ``cascade.modules.<category>.detect_threshold`` at ``--target-fpr`` (0.1 %)
+and ``clear_threshold`` at ``--clear-fpr`` (1 %), both on the cascade's L1 score (``--no-clear``: off,
+every undetected row escalates). It never changes ark-core defaults.
+
+``gate`` builds the predictor of the head and the base commit (offline, cached per ark-core
+sources), predicts every split with both on the L1 cascade and fails on a regression in the gated
+scope: TPR@1 % or TPR@0.1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp
+below the base, or a hard-benign row of a class that the head's L1 detects and the base's does not.
+stdout carries the dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the
+holdout leaves as a verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
 2 = error.
 
-    python3 scripts/l1_threat/scoreboard.py predict --split DIR --out PRED_DIR [--layers l1+l2]
-    python3 scripts/l1_threat/scoreboard.py score --split DIR --predictions PRED_DIR [--layers l1+l2] [--output REPORT]
+    python3 scripts/l1_threat/scoreboard.py predict --split DIR --out PRED_DIR [--cascade CONFIG] [--predictor BIN]
+    python3 scripts/l1_threat/scoreboard.py score --split DIR --predictions PRED_DIR [--output REPORT]
     python3 scripts/l1_threat/scoreboard.py compare --base REPORT --head REPORT
-    python3 scripts/l1_threat/scoreboard.py report --split DIR --predictions PRED_DIR \
+    python3 scripts/l1_threat/scoreboard.py report --split DIR --predictions PRED_DIR \\
         [--baseline-cache CACHE] --out research/l1-threat/scoreboard/baseline.md
-    python3 scripts/l1_threat/scoreboard.py report --layers l1+l2 [--counts-only] --split DIR \
-        --predictions PRED_DIR [--baseline-cache CACHE] --out research/l1-threat/scoreboard/full-stack.md
-
-``report --layers l1+l2`` renders the full-stack table: L1 next to L1+L2 per class and language (both
-TPRs and the hard-benign FPR), the best heuristic and the best Prompt Guard 2 baseline, and ms per
-100 KiB per layer; ``--counts-only`` leaves only row counts (true and false positives at each matched
-FPR, hard-benign flags) and no rates, latency or baselines.
+    python3 scripts/l1_threat/scoreboard.py report --cascade CONFIG [--counts-only] --split DIR \\
+        --predictions PRED_DIR --out research/l1-threat/scoreboard/cascade.md
+    python3 scripts/l1_threat/scoreboard.py calibrate --split DIR --predictions PRED_DIR [--cascade BASE] \\
+        [--target-fpr 0.001] [--clear-fpr 0.01 | --no-clear] [--exclude-ids FILE] --out CONFIG
     python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DIR [--holdout DIR] --cache DIR
 """
 
@@ -58,12 +72,15 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import copy
+import hashlib
 import importlib.util
 import json
+import math
 import os
+import shutil
 import subprocess
 import sys
-import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
@@ -89,9 +106,8 @@ CLASSES = tuple(CORPORA.taxonomy.CLASSES)
 DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
     "_ark_l1_dlp_scoreboard", ROOT / "scripts" / "l1_dlp" / "scoreboard.py")
 
-REPORT_SCHEMA = "ark-l1-threat-scoreboard-v2"
-PREDICTIONS_SCHEMA = "ark-l1-threat-ark-predictions-v1"
-PREDICTOR_VERSION = "1"
+REPORT_SCHEMA = "ark-l1-threat-scoreboard-v3"
+CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
 FPRS = (0.01, 0.001)
 # Report keys of the gated operating points; both gate with the same tolerance, 1 % first.
 GATE_FPRS = tuple(f"{fpr:g}" for fpr in FPRS)
@@ -105,20 +121,23 @@ BOOTSTRAP_SEED = 20261114
 # prompts without harmful intent, harmless requests that sound risky, hard-negative goldens); together with the generated look-alike twins
 # they make up the hard-benign pool.
 HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens"})
-BENIGN_CLASSES = frozenset({"benign", "safe"})
 JOBS = 4
-# Layer choices: L1 alone (the gated stack) or L1 and then L2 on every row (the default configuration
-# has no conditional L2 gate); the file suffix keeps their predictions apart in one directory.
-LAYERS = {"l1": "", "l1+l2": "-l1l2"}
-KIB_100 = 100 * 1024
+# The Core predictor: an example of patronus-ark-core, built from these sources.
+PREDICTOR = "threat_cascade"
+PREDICTOR_SOURCES = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "ark-core")
+# The gated stack: L1 only, so whatever L1 does not detect is clear.
+L1_CASCADE = {"scanner": {"cascade": {"max_level": "l1"}}}
+# The cascade config a prediction directory was made with.
+CONFIG_FILE = "cascade.json"
+# Stages that decide a module, in cascade order (L2 is ARK-only).
+STAGES = ("heuristic", "l1_model", "l3")
+TARGET_FPR = 0.001
+CLEAR_FPR = 0.01
 
 
 def category(cls: str) -> str:
-    """The ARK category that scans a class; ``instruction_injection`` keeps the name ``injection``."""
+    """The Core category that scans a class; ``instruction_injection`` keeps the name ``injection``."""
     return "injection" if cls == "instruction_injection" else cls
-
-
-CATEGORIES = {category(cls): cls for cls in CLASSES}
 
 
 # ── corpora ──────────────────────────────────────────────────────────────────
@@ -152,147 +171,142 @@ def is_hard_benign(row: dict[str, Any]) -> bool:
     return bool(row["benign"]) and (bool(row.get("twin_of")) or row["dataset"] in HARD_BENIGN_SETS)
 
 
-# ── ARK predictions ──────────────────────────────────────────────────────────
+# ── Core predictions ─────────────────────────────────────────────────────────
 
 
-def _number(value: Any) -> float | None:
-    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+def load_config(path: Path | None) -> dict[str, Any]:
+    """The cascade config of ``path``; ``L1_CASCADE`` without one."""
+    if path is None:
+        return copy.deepcopy(L1_CASCADE)
+    config = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict) or not isinstance(config.get("scanner", {}), dict):
+        raise ValueError(f"{path}: a cascade config is an object with a `scanner` object")
+    return config
 
 
-def ark_class_scores(results: Iterable[dict[str, Any]]) -> tuple[dict[str, float], list[str]]:
-    """``({class: score}, [flagged classes])`` of one text from ARK's L1 results.
+def config_hash(config: dict[str, Any]) -> str:
+    """SHA-256 of the canonical JSON of a cascade config."""
+    return hashlib.sha256(json.dumps(config, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
-    A class is flagged when one of its results is not benign (ARK's own verdict). Its score is the
-    highest of the confidence of such a result and the scorer values below the decision (the
-    layer ``score`` of the threat scorer, the candidate ``score`` of the injection scorer); a class
-    without any is left out (score 0).
+
+def needs_wolf(config: dict[str, Any]) -> bool:
+    """Whether the predictor must be built with Wolf (the config configures the injection L3)."""
+    return config.get("scanner", {}).get("wolf") is not None
+
+
+class Predictor(NamedTuple):
+    """A built ``threat_cascade`` example of one commit."""
+
+    commit: str
+    key: str
+    binary: Path
+
+
+def predictor_key(tree: Path, commit: str, wolf: bool) -> str:
+    """SHA-256 over the blobs of ``PREDICTOR_SOURCES`` and the feature set: unchanged Core sources share one build."""
+    listing = DLP_SCOREBOARD.git(tree, "ls-tree", "-r", "--full-tree", commit, "--", *PREDICTOR_SOURCES)
+    return DLP_SCOREBOARD.sha256_bytes(listing + (b"features=wolf" if wolf else b""))
+
+
+def _cargo_build(manifest: Path, target: Path, wolf: bool, log: Path, offline: bool) -> Path:
+    env = {k: v for k, v in os.environ.items() if k not in ("CARGO_NET_OFFLINE", "ORT_SKIP_DOWNLOAD", "ORT_OFFLINE")}
+    env["CARGO_TARGET_DIR"] = str(target)
+    cmd = [shutil.which("cargo", path=env.get("PATH")) or "cargo", "build", "--release", "-p", "patronus-ark-core",
+           "--example", PREDICTOR, "--manifest-path", str(manifest)]
+    cmd += ["--locked", "--offline"] if offline else []
+    cmd += ["--features", "wolf"] if wolf else []
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("wb") as handle:
+        result = subprocess.run(cmd, cwd=manifest.parent, env=env, stdout=handle, stderr=subprocess.STDOUT,
+                                stdin=subprocess.DEVNULL)
+    if result.returncode != 0:
+        raise RuntimeError(f"cargo build of {PREDICTOR} failed (exit {result.returncode}):\n{DLP_SCOREBOARD._tail(log)}")
+    return target / "release" / "examples" / PREDICTOR
+
+
+def ensure_predictor(tree: Path, commit: str, cache: Path, wolf: bool = False) -> Predictor:
+    """Build (or reuse) the predictor of ``commit`` under ``cache/builds/<key>``.
+
+    cargo runs ``--offline --locked`` with its own target directory in the cache; the crate registry
+    and the ONNX Runtime download cache of the earlier gate steps are only read.
     """
-    scores: dict[str, float] = {}
-    flagged: set[str] = set()
-    for result in results:
-        cls = CATEGORIES.get(result.get("category", ""))
-        if cls is None:
-            continue
-        layers = result.get("layers") or []
-        if result.get("class_name") == "error" or any(layer.get("layer_type") == "scanner_error" for layer in layers):
-            raise RuntimeError(f"ARK scanner {result.get('model')} failed")
-        values = []
-        if result.get("class_name") not in BENIGN_CLASSES:
-            flagged.add(cls)
-            values.append(_number(result.get("confidence")))
-        for layer in layers:
-            details = layer.get("details") or {}
-            values.append(_number(details.get("score")))
-            values += [_number(c.get("score")) for c in details.get("l1_candidates") or []]
-        best = max((v for v in values if v is not None), default=0.0)
-        if best > 0:
-            scores[cls] = round(max(scores.get(cls, 0.0), best), 6)
-    return scores, sorted(flagged)
+    key = predictor_key(tree, commit, wolf)
+    out = cache / "builds" / key
+    if (out / ".ready").is_file():
+        (out / ".ready").touch()  # marks the build as used for prune()
+        return Predictor(commit, key, out / PREDICTOR)
+    src = cache / "src"
+    DLP_SCOREBOARD.extract_tree(tree, commit, src)
+    if not (src / "ark-core" / "examples" / f"{PREDICTOR}.rs").is_file():
+        raise RuntimeError(f"commit {commit[:12]} has no ark-core {PREDICTOR} example; base the head on a newer commit")
+    built = _cargo_build(src / "Cargo.toml", cache / "target", wolf, cache / "builds" / f"{key}.log", offline=True)
+    tmp = cache / "builds" / f"{key}.tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    shutil.copy2(built, tmp / PREDICTOR)
+    (tmp / "build.json").write_text(json.dumps({"commit": commit, "key": key, "wolf": wolf}, indent=2) + "\n",
+                                    encoding="utf-8")
+    shutil.rmtree(out, ignore_errors=True)
+    tmp.rename(out)
+    (out / ".ready").write_text(key + "\n", encoding="utf-8")
+    shutil.rmtree(src, ignore_errors=True)
+    return Predictor(commit, key, out / PREDICTOR)
 
 
-def predict_rows(rows: Iterable[dict[str, Any]], scan, scan_l1=None, clock=time.perf_counter) -> list[dict[str, Any]]:
-    """One prediction per row: ``{"id", "scores", "flagged"}``; ``scan(text)`` returns ARK results.
-
-    With ``scan_l1`` (the L1-only stack), ``scan`` is the full stack: the prediction also keeps the
-    L1 view (``"l1": {"scores", "flagged"}``) and the milliseconds per layer (``"ms": {"l1", "l2"}``;
-    L2 is the full scan minus the L1-only scan of the same row, never below 0).
-    """
-    out = []
-    for row in rows:
-        if scan_l1 is None:
-            scores, flagged = ark_class_scores(scan(row["text"]))
-            out.append({"id": row["id"], "scores": scores, "flagged": flagged})
-            continue
-        start = clock()
-        l1_scores, l1_flagged = ark_class_scores(scan_l1(row["text"]))
-        middle = clock()
-        scores, flagged = ark_class_scores(scan(row["text"]))
-        end = clock()
-        l1_ms = (middle - start) * 1000
-        out.append({"id": row["id"], "scores": scores, "flagged": flagged,
-                    "l1": {"scores": l1_scores, "flagged": l1_flagged},
-                    "ms": {"l1": round(l1_ms, 4), "l2": round(max((end - middle) * 1000 - l1_ms, 0.0), 4)}})
-    return out
+def build_local_predictor(config: dict[str, Any]) -> Path:
+    """The predictor of this checkout (``cargo build --release``, Wolf when the config needs it)."""
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or ROOT / "target")
+    return _cargo_build(ROOT / "Cargo.toml", target, needs_wolf(config), target / f"{PREDICTOR}-build.log",
+                        offline=False)
 
 
-def layer_view(prediction: dict[str, Any], layers: str) -> dict[str, Any]:
-    """The prediction of one layer choice: the L1 view of a full-stack prediction for ``l1``."""
-    if layers == "l1" and "l1" in prediction:
-        return {"id": prediction["id"], **prediction["l1"]}
-    if layers == "l1+l2" and "ms" not in prediction:
-        raise ValueError(f"prediction {prediction['id']} has no L2 layer")
-    return prediction
+def prediction_path(out: Path, entry: SetFile) -> Path:
+    return out / f"{entry.set_id}-{entry.sha256[:12]}.jsonl"
 
 
-def _predict_file(source: Path, output: Path, layers: str = "l1") -> None:
-    """Predict one corpus file with the ``patronus_ark`` on ``sys.path``."""
-    from patronus_ark import SecurityGateway
-
-    categories = sorted(CATEGORIES)
-    gateway = SecurityGateway(categories=categories, max_level="l1", download_files=False)
-    if layers == "l1":
-        predictions = predict_rows(BASELINES.read_rows(source),
-                                   lambda text: gateway.scan_categories(categories, text))
-    else:
-        stack = SecurityGateway(categories=categories, max_level="l2", download_files=False)
-        stack.warmup()
-        predictions = predict_rows(BASELINES.read_rows(source), lambda text: stack.scan_categories(categories, text),
-                                   lambda text: gateway.scan_categories(categories, text))
-    tmp = output.with_suffix(".part")
-    tmp.write_text("".join(json.dumps(p, sort_keys=True) + "\n" for p in predictions), encoding="utf-8")
-    tmp.replace(output)
-
-
-def _predict_worker(package: Path | None, source: Path, output: Path, layers: str = "l1") -> int:
-    if package is not None:
-        sys.path.insert(0, str(package))
-    import patronus_ark
-
-    if package is not None and Path(patronus_ark.__file__).resolve().parent != (package / "patronus_ark").resolve():
-        raise RuntimeError(f"patronus_ark resolved outside the build: {patronus_ark.__file__}")
-    _predict_file(source, output, layers)
-    return 0
-
-
-def prediction_path(out: Path, entry: SetFile, layers: str = "l1") -> Path:
-    return out / f"{entry.set_id}-{entry.sha256[:12]}{LAYERS[layers]}.jsonl"
-
-
-def predict_split(sets: list[SetFile], out: Path, package: Path | None = None, jobs: int = JOBS,
-                  layers: str = "l1") -> None:
-    """Predict every set not yet in ``out``; each set runs in its own process."""
+def bind_config(out: Path, config: dict[str, Any]) -> Path:
+    """Record ``config`` as the cascade config of the prediction directory ``out``; refuse another one."""
     out.mkdir(parents=True, exist_ok=True)
+    path = out / CONFIG_FILE
+    if path.is_file():
+        if config_hash(load_config(path)) != config_hash(config):
+            raise ValueError(f"{out}: predictions of another cascade config; use a new directory")
+    else:
+        path.write_text(json.dumps(config, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def predict_split(sets: list[SetFile], out: Path, binary: Path, config: dict[str, Any], jobs: int = JOBS) -> None:
+    """Predict every set not yet in ``out`` with the Core predictor; each set runs in its own process."""
+    config_path = bind_config(out, config)
 
     def one(entry: SetFile) -> None:
-        cmd = [sys.executable, str(HERE / "scoreboard.py"), "_predict", "--input", str(entry.path),
-               "--output", str(prediction_path(out, entry, layers)), "--layers", layers]
-        if package is not None:
-            cmd += ["--package", str(package)]
-        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-        if package is not None:
-            env.pop("PYTHONPATH", None)
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
+        target = prediction_path(out, entry)
+        part = target.with_suffix(".part")
+        with entry.path.open("rb") as rows, part.open("wb") as predictions:
+            result = subprocess.run([str(binary), str(config_path)], stdin=rows, stdout=predictions,
+                                    stderr=subprocess.DEVNULL)
         if result.returncode != 0:
             # Errors name the set but never echo corpus text.
-            raise RuntimeError(f"ARK prediction of {entry.set_id} failed (exit {result.returncode})")
+            raise RuntimeError(f"Core prediction of {entry.set_id} failed (exit {result.returncode})")
+        part.replace(target)
 
-    todo = [entry for entry in sets if not prediction_path(out, entry, layers).is_file()]
+    todo = [entry for entry in sets if not prediction_path(out, entry).is_file()]
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for future in [pool.submit(one, entry) for entry in todo]:
             future.result()
 
 
-def load_pairs(sets: list[SetFile], predictions: dict[str, Path],
-               layers: str | None = None) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
+def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
     """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``); a set
-    without predictions is an error. ``layers`` picks the ``layer_view`` of every prediction."""
+    without predictions is an error."""
     translated = GENERATORS.translated_sets(CORPORA.entity_map.load())
     pairs = []
     for entry in sets:
         path = predictions.get(entry.set_id)
         if path is None:
             raise ValueError(f"no predictions for set {entry.set_id}")
-        preds = {p["id"]: p if layers is None else layer_view(p, layers) for p in BASELINES.read_rows(path)}
+        preds = {p["id"]: p for p in BASELINES.read_rows(path)}
         for row in BASELINES.read_rows(entry.path):
             if row["id"] not in preds:
                 raise ValueError(f"set {entry.set_id}: no prediction for row {row['id']}")
@@ -300,9 +314,8 @@ def load_pairs(sets: list[SetFile], predictions: dict[str, Path],
     return pairs
 
 
-def ark_predictions(sets: list[SetFile], out: Path, layers: str = "l1") -> dict[str, Path]:
-    return {entry.set_id: prediction_path(out, entry, layers) for entry in sets
-            if prediction_path(out, entry, layers).is_file()}
+def core_predictions(sets: list[SetFile], out: Path) -> dict[str, Path]:
+    return {entry.set_id: prediction_path(out, entry) for entry in sets if prediction_path(out, entry).is_file()}
 
 
 # ── metrics ──────────────────────────────────────────────────────────────────
@@ -366,16 +379,21 @@ def average_precision(pos: list[float], neg: list[float]) -> float | None:
     return round(float(np.sum(np.diff(np.r_[0.0, recall]) * precision)), 6)
 
 
-def cell_metrics(pos: list[float], neg: list[float], hard: list[bool], bootstrap: bool = True) -> dict[str, Any]:
-    """Matched-FPR TPRs, AUPRC, bootstrap CI of each TPR and hard-benign FPR of one cell."""
+def cell_metrics(pos: list[float], neg: list[float], hard: list[float], bootstrap: bool = True) -> dict[str, Any]:
+    """Matched-FPR TPRs, AUPRC, bootstrap CI of each TPR and, at each matched threshold, the hard-benign FPR
+    (``hard``: the scores of the cell's hard-benign rows)."""
     out: dict[str, Any] = {"positives": len(pos), "negatives": len(neg)}
+    hard_benign: dict[str, Any] = {"rows": len(hard)}
     for fpr in FPRS:
         cell = BASELINES.matched_fpr(pos, neg, fpr)
         out[f"{fpr:g}"] = None if cell is None else {k: cell[k] for k in ("threshold", "tpr", "fpr", "tp", "fp")}
+        threshold = None if cell is None else cell["threshold"]
+        fp = 0 if threshold is None else sum(score >= threshold for score in hard)
+        hard_benign[f"{fpr:g}"] = {"fp": fp, "fpr": fp / len(hard) if hard else None}
     out["auprc"] = average_precision(pos, neg)
     if bootstrap:
         out["tpr_ci95"] = {f"{fpr:g}": bootstrap_ci(pos, neg, fpr) for fpr in FPRS}
-    out["hard_benign"] = {"rows": len(hard), "fp": sum(hard), "fpr": sum(hard) / len(hard) if hard else None}
+    out["hard_benign"] = hard_benign
     return out
 
 
@@ -385,7 +403,7 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
     classes = list(classes)
     pos: dict[tuple, list[float]] = defaultdict(list)
     neg: dict[tuple, list[float]] = defaultdict(list)
-    hard: dict[tuple, list[bool]] = defaultdict(list)
+    hard: dict[tuple, list[float]] = defaultdict(list)
     by_set: dict[tuple, dict[str, tuple[list[float], list[float]]]] = defaultdict(dict)
     flags: dict[str, list[str]] = defaultdict(list)
     for row, pred, role in pairs:
@@ -403,7 +421,7 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
                     key = (scope, cls, language, org)
                     (pos if positive else neg)[key].append(score)
                     if hard_row:
-                        hard[key].append(flagged)
+                        hard[key].append(score)
             sets = by_set[(scope, cls)].setdefault(row["dataset"], ([], []))
             sets[0 if positive else 1].append(score)
             if hard_row and flagged and scope == "gated":
@@ -437,8 +455,8 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
 
 def obfuscation_invariance(pairs: list[tuple[dict[str, Any], dict[str, Any], str]]) -> dict[str, dict[str, int]]:
     """Per obfuscation kind of the generated slices: the attack rows whose clean source row (``source_id``,
-    scored in the same split) ARK flags for one of the row's classes (``source_flagged``), and how many
-    of them ARK still flags for such a class in the obfuscated form (``kept``)."""
+    scored in the same split) L1 detects for one of the row's classes (``source_flagged``), and how many
+    of them L1 still detects for such a class in the obfuscated form (``kept``)."""
     flagged = {row["id"]: set(pred.get("flagged") or []) for row, pred, _ in pairs}
     out: dict[str, dict[str, int]] = defaultdict(lambda: {"source_flagged": 0, "kept": 0})
     for row, pred, _ in pairs:
@@ -461,9 +479,8 @@ def invariance_lines(report: dict[str, Any]) -> list[str]:
             *(f"| {kind} | {c['source_flagged']} | {c['kept']} |" for kind, c in cells.items())]
 
 
-def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bool = True,
-                layers: str | None = None) -> dict[str, Any]:
-    pairs = load_pairs(sets, predictions, layers)
+def score_split(sets: list[SetFile], predictions: dict[str, Path], bootstrap: bool = True) -> dict[str, Any]:
+    pairs = load_pairs(sets, predictions)
     roles: dict[str, list[str]] = defaultdict(list)
     for entry in sets:
         roles[entry.role].append(entry.set_id)
@@ -543,7 +560,7 @@ def _best_baseline(baselines: dict[str, dict[str, Any]], kind: str, scope: str, 
 def table_lines(report: dict[str, Any], scope: str, baselines: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """Markdown table of one scope: per class, language and origin; best heuristic and reference if given."""
     header = ["class", "lang", "origin", "pos", "neg", "TPR@1%", "95% CI", "TPR@0.1%", "95% CI", "AUPRC",
-              "hard-benign FPR"]
+              "hard-benign FPR@1% / @0.1%"]
     if baselines is not None:
         header += ["best heuristic TPR@1% / 0.1%", "best reference TPR@1% / 0.1%"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
@@ -560,7 +577,8 @@ def table_lines(report: dict[str, Any], scope: str, baselines: dict[str, dict[st
                           _pct(_tpr_of(cell, "0.01")), _ci(cell, "0.01"), _pct(_tpr_of(cell, "0.001")),
                           _ci(cell, "0.001"),
                           "–" if cell["auprc"] is None else f"{cell['auprc']:.3f}",
-                          f"{_pct(hard['fpr'])} ({hard['fp']}/{hard['rows']})" if hard["rows"] else "–"]
+                          f"{_pct(hard['0.01']['fpr'])} / {_pct(hard['0.001']['fpr'])} "
+                          f"({hard['0.01']['fp']}/{hard['0.001']['fp']} of {hard['rows']})" if hard["rows"] else "–"]
                 if baselines is not None:
                     values += [_best_baseline(baselines, kind, scope, cls, language, origin)
                                for kind in ("heuristic", "reference")]
@@ -586,8 +604,8 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
              "Generated by `scripts/l1_threat/scoreboard.py report`; do not edit by hand.", "",
              f"Sets: {json.dumps(report['sets'], sort_keys=True)}; rows: {report['rows']}.", "",
              "TPR at matched document FPR on the benign rows of the same scope; 95 % CI: percentile bootstrap "
-             f"({BOOTSTRAP} rounds) of the TPR to its left; hard-benign FPR at ARK's own verdict (look-alike twins and "
-             "security-adjacent benign sets). `–`: no negatives or no rows in the cell.", ""]
+             f"({BOOTSTRAP} rounds) of the TPR to its left; hard-benign FPR at the same matched thresholds (look-alike "
+             "twins and security-adjacent benign sets). `–`: no negatives or no rows in the cell.", ""]
     if baselines is None:
         lines += ["Baselines: no cached predictions given; the column is left out.", ""]
     else:
@@ -604,117 +622,320 @@ def render_baseline(report: dict[str, Any], baselines: dict[str, dict[str, Any]]
                   + (f" No positives: {', '.join(missing)}." if missing else ""), "",
                   f"### Leave one dataset out ({name.lower()})", "", *lodo_lines(report, scope), ""]
     flags = report["hard_benign_flags"]
-    lines += ["## Hard-benign rows flagged by ARK", "",
+    lines += ["## Hard-benign rows L1 detects", "",
               *([f"- {cls}: {len(ids)}" for cls, ids in flags.items()] or ["- none"]), ""]
     lines += ["## Obfuscation invariance", "",
-              "Obfuscated attack rows whose clean source row ARK flags for one of the row's classes, and how "
-              "many of them ARK flags for such a class in the obfuscated form too.", "",
+              "Obfuscated attack rows whose clean source row L1 detects for one of the row's classes, and how "
+              "many of them L1 detects for such a class in the obfuscated form too.", "",
               *invariance_lines(report), ""]
     return "\n".join(lines)
 
+# ── cascade ──────────────────────────────────────────────────────────────────
 
-def layer_latency(pairs: list[tuple[dict[str, Any], dict[str, Any], str]]) -> dict[str, dict[str, Any]]:
-    """Per language (``all``, ``de``, ``en``) and layer of full-stack predictions: rows, UTF-8 bytes, ms
-    per 100 KiB (summed ms over summed bytes) and the p95 of the per-row ms."""
+
+# A class the cascade left without a decision (no stage of it ran, e.g. a class without rules and
+# without a later layer): not flagged, clear, decided by no stage.
+NO_DECISION = {"l1": "none", "l1_score": 0.0, "decision": "clear", "decided_by": None}
+
+
+def _stage(prediction: dict[str, Any], cls: str) -> dict[str, Any]:
+    cascade = prediction.get("cascade")
+    if cascade is None:
+        raise ValueError(f"prediction {prediction['id']} has no cascade answers")
+    return cascade.get(cls, NO_DECISION)
+
+
+def _benign_source(row: dict[str, Any]) -> str:
+    """The hard-benign source of a row: ``twins`` for look-alike twins, else its set."""
+    return "twins" if row.get("twin_of") else row["dataset"]
+
+
+def _new_cascade_cell() -> dict[str, Any]:
+    return {"positives": 0, "tp": 0, "negatives": 0, "fp": 0, "decided_by": {stage: 0 for stage in STAGES},
+            "escalated": 0, "hard_benign": {}}
+
+
+def _rates(cell: dict[str, Any]) -> dict[str, Any]:
+    rows = cell["positives"] + cell["negatives"]
+    return {**cell,
+            "tpr": cell["tp"] / cell["positives"] if cell["positives"] else None,
+            "fpr": cell["fp"] / cell["negatives"] if cell["negatives"] else None,
+            "decided_share": {stage: n / rows if rows else None for stage, n in cell["decided_by"].items()},
+            "escalated_share": cell["escalated"] / rows if rows else None,
+            "hard_benign": {source: {**h, "fpr": h["fp"] / h["rows"]} for source, h in sorted(cell["hard_benign"].items())}}
+
+
+def _quantiles(values: list[float]) -> dict[str, float | None]:
+    if not values:
+        return {"p50": None, "p95": None}
+    p50, p95 = np.percentile(values, [50, 95])
+    return {"p50": round(float(p50), 3), "p95": round(float(p95), 3)}
+
+
+def stage_latency(pairs: list[tuple[dict[str, Any], dict[str, Any], str]]) -> dict[str, dict[str, Any]]:
+    """Per language: p50/p95 ms of the scan and of L1 on every row, of L3 on the rows it ran, the share of
+    rows L3 ran on and its mean cost per row (0 where it did not run)."""
     ms: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
-    size: dict[str, int] = defaultdict(int)
     for row, prediction, _ in pairs:
-        if "ms" not in prediction:
-            raise ValueError(f"prediction {prediction['id']} has no layer timing")
+        times = prediction.get("ms")
+        if not times:
+            raise ValueError(f"prediction {prediction['id']} has no stage timing")
         for language in ("all", row.get("language") or "unknown"):
-            size[language] += len(row["text"].encode("utf-8"))
-            for layer, value in prediction["ms"].items():
-                ms[language][layer].append(float(value))
-    return {language: {layer: {"rows": len(values), "bytes": size[language],
-                               "ms_per_100kib": round(sum(values) / size[language] * KIB_100, 3) if size[language] else None,
-                               "p95_ms": round(float(np.percentile(values, 95)), 3)}
-                       for layer, values in sorted(ms[language].items())}
-            for language in LANGUAGES if language in ms}
+            for stage in ("scan", "l1"):
+                ms[language][stage].append(float(times[stage]))
+            if "l3" in times:
+                ms[language]["l3"].append(float(times["l3"]))
+    out = {}
+    for language in LANGUAGES:
+        if language not in ms:
+            continue
+        rows, l3 = len(ms[language]["scan"]), ms[language]["l3"]
+        out[language] = {"rows": rows, "scan": _quantiles(ms[language]["scan"]), "l1": _quantiles(ms[language]["l1"]),
+                         "l3": {**_quantiles(l3), "runs": len(l3), "share": len(l3) / rows,
+                                "mean_per_row": round(sum(l3) / rows, 3)}}
+    return out
 
 
-def full_stack_lines(l1: dict[str, Any], stack: dict[str, Any], scope: str,
-                     baselines: dict[str, dict[str, Any]] | None, counts_only: bool) -> list[str]:
-    """Markdown table of one scope, origin ``all``: L1 next to L1+L2 per class and language."""
+def cascade_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
+                    classes: Iterable[str] = CLASSES) -> dict[str, Any]:
+    """Cells per scope, class and language (origin ``all``) at the configured operating point: the
+    cascade's final decision on the positives and the benign rows, the hard-benign rows it detects per
+    source, the stage that decided each row and the rows L1 escalated."""
+    classes = list(classes)
+    cells: dict[tuple, dict[str, Any]] = defaultdict(_new_cascade_cell)
+    for row, prediction, role in pairs:
+        scope = "report" if role == "report" else "gated"
+        hard_row = is_hard_benign(row)
+        for cls in classes:
+            positive = cls in row["classes"]
+            if not positive and not row["benign"]:
+                continue
+            stage = _stage(prediction, cls)
+            detected = stage["decision"] == "detected"
+            for language in ("all", row.get("language") or "unknown"):
+                cell = cells[scope, cls, language]
+                if positive:
+                    cell["positives"] += 1
+                    cell["tp"] += detected
+                else:
+                    cell["negatives"] += 1
+                    cell["fp"] += detected
+                if stage["decided_by"] is not None:
+                    cell["decided_by"][stage["decided_by"]] += 1
+                cell["escalated"] += stage["l1"] == "escalate"
+                if hard_row:
+                    source = cell["hard_benign"].setdefault(_benign_source(row), {"rows": 0, "fp": 0})
+                    source["rows"] += 1
+                    source["fp"] += detected
+    report: dict[str, Any] = {"gated": {}, "report": {}}
+    for (scope, cls, language), cell in sorted(cells.items()):
+        if cell["positives"]:
+            report[scope].setdefault(cls, {})[language] = _rates(cell)
+    return report
+
+
+def cascade_split(sets: list[SetFile], predictions: dict[str, Path], counts_only: bool = False) -> dict[str, Any]:
+    """The cascade report of a split: decisions, the L1 score curve and (unless counts only) latency."""
+    pairs = load_pairs(sets, predictions)
+    roles: dict[str, list[str]] = defaultdict(list)
+    for entry in sets:
+        roles[entry.role].append(entry.set_id)
+    return {"schema": CASCADE_SCHEMA, "sets": {k: sorted(v) for k, v in sorted(roles.items())}, "rows": len(pairs),
+            "decision": cascade_metrics(pairs), "curve": score_pairs(pairs, bootstrap=False),
+            "latency": None if counts_only else stage_latency(pairs)}
+
+
+def _share(value: float | None) -> str:
+    return "–" if value is None else f"{value * 100:.1f}"
+
+
+def config_lines(config: dict[str, Any]) -> list[str]:
+    """What the operating point is made of, without paths: hash, deepest layer, L1 cuts, Wolf."""
+    scanner = config.get("scanner", {})
+    cascade = scanner.get("cascade") or {}
+
+    def cuts(key: str) -> dict[str, float]:
+        return {module: t[key] for module, t in sorted((cascade.get("modules") or {}).items())
+                if t.get(key) is not None}
+
+    detect, clear = cuts("detect_threshold"), cuts("clear_threshold")
+    wolf = scanner.get("wolf")
+    lines = [f"Cascade config `{config_hash(config)[:12]}`: deepest layer {str(cascade.get('max_level', 'l3')).upper()}; "
+             "detect thresholds " + (", ".join(f"{m} {t:g}" for m, t in detect.items()) or "Core's built-in "
+                                     "acceptance") + "; "
+             "clear thresholds " + (", ".join(f"{m} {t:g}" for m, t in clear.items()) or "off (L1 escalates every "
+                                    "undetected row)") + "; L3 Wolf "
+             + ("off" if wolf is None else f"{wolf.get('model', 'default model')} at threshold "
+                + (f"{wolf['threshold']:g}" if wolf.get("threshold") is not None else "its default")) + "."]
+    calibration = config.get("calibration")
+    if calibration:
+        lines.append(f"Calibrated by `scoreboard.py calibrate` on {calibration['benign_rows']} benign rows at "
+                     f"{calibration['target_fpr'] * 100:g} % FPR (detect) and "
+                     + ("no clear threshold" if calibration["clear_fpr"] is None
+                        else f"{calibration['clear_fpr'] * 100:g} % FPR (clear)") + ".")
+    return lines
+
+
+def cascade_table(report: dict[str, Any], scope: str, counts_only: bool) -> list[str]:
     if counts_only:
-        header = ["class", "lang", "pos", "neg", *(f"TP / FP@{_fpr_label(fpr)} {layer}"
-                                                  for fpr in GATE_FPRS for layer in ("L1", "L1+L2")),
-                  "hard-benign FP L1", "hard-benign FP L1+L2"]
+        header = ["class", "lang", "TP / pos", "FP / neg", "hard-benign FP / rows",
+                  *(f"decided {stage}" for stage in STAGES), "escalated"]
     else:
-        header = ["class", "lang", "pos", "neg", *(f"TPR@{_fpr_label(fpr)} {layer}"
-                                                  for fpr in GATE_FPRS for layer in ("L1", "L1+L2")),
-                  "hard-benign FPR L1", "hard-benign FPR L1+L2"]
-        if baselines is not None:
-            header += ["best heuristic TPR@1% / 0.1%", "best Prompt Guard 2 TPR@1% / 0.1%"]
+        header = ["class", "lang", "pos", "neg", "TPR", "FPR", "hard-benign FPR",
+                  *(f"decided {stage} %" for stage in STAGES), "escalated %"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for cls in CLASSES:
         for language in LANGUAGES:
-            cells = [report[scope].get(cls, {}).get(language, {}).get("all") for report in (l1, stack)]
-            if cells[1] is None:
+            cell = report["decision"][scope].get(cls, {}).get(language)
+            if cell is None:
                 continue
-            values = [cls, language, str(cells[1]["positives"]), str(cells[1]["negatives"])]
-            for fpr in GATE_FPRS:
-                for cell in cells:
-                    point = cell.get(fpr) if cell else None
-                    values.append("–" if point is None else f"{point['tp']} / {point['fp']}" if counts_only
-                                  else _pct(point["tpr"]))
-            for cell in cells:
-                hard = cell["hard_benign"] if cell else {"rows": 0}
-                values.append("–" if not hard["rows"] else f"{hard['fp']}/{hard['rows']}" if counts_only
-                              else f"{_pct(hard['fpr'])} ({hard['fp']}/{hard['rows']})")
-            if baselines is not None and not counts_only:
-                values += [_best_baseline(baselines, kind, scope, cls, language, "all")
-                           for kind in ("heuristic", "prompt_guard_2")]
+            hard_rows = sum(h["rows"] for h in cell["hard_benign"].values())
+            hard_fp = sum(h["fp"] for h in cell["hard_benign"].values())
+            if counts_only:
+                values = [cls, language, f"{cell['tp']} / {cell['positives']}", f"{cell['fp']} / {cell['negatives']}",
+                          f"{hard_fp} / {hard_rows}" if hard_rows else "–",
+                          *(str(cell["decided_by"][stage]) for stage in STAGES), str(cell["escalated"])]
+            else:
+                values = [cls, language, str(cell["positives"]), str(cell["negatives"]), _pct(cell["tpr"]),
+                          f"{cell['fpr'] * 100:.2f}" if cell["fpr"] is not None else "–",
+                          f"{_pct(hard_fp / hard_rows)} ({hard_fp}/{hard_rows})" if hard_rows else "–",
+                          *(_share(cell["decided_share"][stage]) for stage in STAGES), _share(cell["escalated_share"])]
             lines.append("| " + " | ".join(values) + " |")
     return lines
 
 
-def render_full_stack(l1: dict[str, Any], stack: dict[str, Any], latency: dict[str, dict[str, Any]] | None,
-                      baselines: dict[str, dict[str, Any]] | None, title: str,
-                      left_out: dict[str, str] | None = None) -> str:
-    """Full-stack report; without ``latency`` it is the counts-only form (no rates, latency or baselines)."""
-    counts_only = latency is None
+def hard_benign_lines(report: dict[str, Any], scope: str, counts_only: bool) -> list[str]:
+    lines = ["| class | source | rows | FP" + ("" if counts_only else " | FPR") + " |",
+             "|---|---|---|---|" + ("" if counts_only else "---|")]
+    for cls in CLASSES:
+        cell = report["decision"][scope].get(cls, {}).get("all")
+        for source, h in (cell or {}).get("hard_benign", {}).items():
+            lines.append(f"| {cls} | {source} | {h['rows']} | {h['fp']}" + ("" if counts_only else f" | {_pct(h['fpr'])}")
+                         + " |")
+    return lines if len(lines) > 2 else ["- no hard-benign rows"]
+
+
+def curve_lines(report: dict[str, Any], scope: str, counts_only: bool) -> list[str]:
+    """The L1 score curve, origin ``all``: TPR (or TP / FP) and hard-benign FP at each matched threshold."""
+    if counts_only:
+        header = ["class", "lang", *(f"TP / FP@{_fpr_label(fpr)}" for fpr in GATE_FPRS),
+                  *(f"hard-benign FP@{_fpr_label(fpr)}" for fpr in GATE_FPRS)]
+    else:
+        header = ["class", "lang", *(f"TPR@{_fpr_label(fpr)}" for fpr in GATE_FPRS),
+                  *(f"hard-benign FPR@{_fpr_label(fpr)}" for fpr in GATE_FPRS)]
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for cls in CLASSES:
+        for language in LANGUAGES:
+            cell = report["curve"][scope].get(cls, {}).get(language, {}).get("all")
+            if cell is None:
+                continue
+            hard = cell["hard_benign"]
+            values = [cls, language]
+            for fpr in GATE_FPRS:
+                point = cell.get(fpr)
+                values.append("–" if point is None else f"{point['tp']} / {point['fp']}" if counts_only
+                              else _pct(point["tpr"]))
+            for fpr in GATE_FPRS:
+                values.append("–" if not hard["rows"] else f"{hard[fpr]['fp']}/{hard['rows']}" if counts_only
+                              else f"{_pct(hard[fpr]['fpr'])} ({hard[fpr]['fp']}/{hard['rows']})")
+            lines.append("| " + " | ".join(values) + " |")
+    return lines
+
+
+def latency_lines(latency: dict[str, dict[str, Any]]) -> list[str]:
+    lines = ["| lang | rows | scan p50 / p95 | L1 p50 / p95 | L3 p50 / p95 (rows it ran) | L3 ran on | L3 mean per row |",
+             "|---|---|---|---|---|---|---|"]
+
+    def pair(q: dict[str, float | None]) -> str:
+        return "–" if q["p50"] is None else f"{q['p50']:.2f} / {q['p95']:.2f}"
+
+    for language, cell in latency.items():
+        lines.append(f"| {language} | {cell['rows']} | {pair(cell['scan'])} | {pair(cell['l1'])} | {pair(cell['l3'])} | "
+                     f"{_share(cell['l3']['share'])} % | {cell['l3']['mean_per_row']:.2f} |")
+    return lines
+
+
+def render_cascade(report: dict[str, Any], config: dict[str, Any], title: str, counts_only: bool = False) -> str:
+    """The cascade report; ``counts_only`` leaves only row counts (no rates, shares or latency)."""
     lines = [f"# {title}", "",
-             "Generated by `scripts/l1_threat/scoreboard.py report --layers l1+l2"
+             "Generated by `scripts/l1_threat/scoreboard.py report --cascade CONFIG"
              + (" --counts-only" if counts_only else "") + "`; do not edit by hand.", "",
-             f"Sets: {json.dumps(stack['sets'], sort_keys=True)}; rows: {stack['rows']}.", "",
-             "L1: the native detectors alone; L1+L2: the same rows through L1 and then the L2 models of each "
-             "category on every row (Wolf Defender for `injection`), as the default configuration runs them. "
-             + ("True and false positives at the threshold matched to each FPR on the benign rows of the same "
-                "scope; hard-benign FP: look-alike twins and security-adjacent benign rows flagged by ARK's own "
-                "verdict, of all such rows." if counts_only else
-                "TPR at matched document FPR on the benign rows of the same scope; hard-benign FPR at ARK's own "
-                "verdict (look-alike twins and security-adjacent benign sets). `–`: no negatives or no rows in "
-                "the cell."), ""]
-    if not counts_only:
-        if baselines is None:
-            lines += ["Baselines: no cached predictions given; the columns are left out.", ""]
-        else:
-            lines += ["Baselines at the same matched FPR on the same benign rows "
-                      "(`scripts/l1_threat/run_baselines.py`): "
-                      + (", ".join(f"{name} `{b['version']}`" for name, b in baselines.items()) or "none") + ".", ""]
-            if left_out:
-                lines += ["Not in the columns: " + "; ".join(f"{name} ({why})" for name, why in left_out.items())
-                          + ".", ""]
+             f"Sets: {json.dumps(report['sets'], sort_keys=True)}; rows: {report['rows']}.", "",
+             *config_lines(config), "",
+             "ark-core alone, as a cascade: the L1 heuristic, then the L1 model, then L3 (Wolf Defender for "
+             "`instruction_injection`), each later layer only on the rows the earlier ones left undecided; "
+             "undecided with no later layer is clear. L2 is ARK-only and not measured here. "
+             + ("TP and FP count the final decision on the class positives and on the benign rows; hard-benign FP "
+                "counts look-alike twins and security-adjacent benign rows it detects. `decided`: rows each stage "
+                "answered; `escalated`: rows L1 left undecided." if counts_only else
+                "TPR and FPR of the final decision on the class positives and on the benign rows; hard-benign FPR at "
+                "the same decision (look-alike twins and security-adjacent benign sets); `decided`: share of the "
+                "class's rows each stage answered; `escalated`: share L1 left undecided. `–`: no rows in the cell."), ""]
     for scope, name in (("gated", "Gated sets (dev and decisive)"), ("report", "Report-only sets")):
-        if stack[scope]:
-            lines += [f"## {name}", "", *full_stack_lines(l1, stack, scope, baselines, counts_only), ""]
+        if not report["decision"][scope]:
+            continue
+        lines += [f"## {name}", "", *cascade_table(report, scope, counts_only), "",
+                  f"### Hard-benign rows per source ({name.lower()}, language all)", "",
+                  *hard_benign_lines(report, scope, counts_only), "",
+                  f"### L1 score curve ({name.lower()})", "",
+                  "TPR at matched document FPR on the L1 score (the view the gate checks), hard-benign "
+                  "FP at the same threshold; origin all.", "", *curve_lines(report, scope, counts_only), ""]
     if not counts_only:
-        lines += ["## Latency per layer", "",
-                  "Milliseconds per 100 KiB of row text (summed per-row ms over summed UTF-8 bytes) and the p95 "
-                  "of the per-row ms, measured in the prediction run (one process per set); L2 is the full "
-                  "stack scan minus the L1-only scan of the same row.", "",
-                  "| lang | layer | rows | KiB | ms per 100 KiB | p95 ms per row |", "|---|---|---|---|---|---|"]
-        for language, layers in latency.items():
-            for layer, cell in layers.items():
-                rate = "–" if cell["ms_per_100kib"] is None else f"{cell['ms_per_100kib']:.1f}"
-                lines.append(f"| {language} | {layer.upper()} | {cell['rows']} | {cell['bytes'] / 1024:.0f} | "
-                             f"{rate} | {cell['p95_ms']:.2f} |")
-        lines.append("")
-    lines += ["## Hard-benign rows flagged", "", "| class | L1 | L1+L2 |", "|---|---|---|"]
-    flagged = sorted(set(l1["hard_benign_flags"]) | set(stack["hard_benign_flags"]))
-    lines += [f"| {cls} | {len(l1['hard_benign_flags'].get(cls, []))} | {len(stack['hard_benign_flags'].get(cls, []))} |"
-              for cls in flagged] or ["| none | 0 | 0 |"]
-    return "\n".join(lines) + "\n"
+        lines += ["## Latency per stage", "",
+                  "Milliseconds per row in the prediction run (one process per set): the whole scan, the native L1 "
+                  "producers, and L3 (the rest of the scan) on the rows it ran; its mean per row is the conditional "
+                  "cost the cascade adds to every row.", "", *latency_lines(report["latency"]), ""]
+    return "\n".join(lines)
+
+
+# ── calibration ──────────────────────────────────────────────────────────────
+
+
+def fpr_threshold(negatives: list[float], target: float) -> float:
+    """Lowest threshold ``t`` (a row counts when ``score >= t``) with at most ``target`` of the negatives at or above
+    it; a score of 0 never counts."""
+    if not negatives:
+        raise ValueError("no benign rows to calibrate on")
+    k = _max_fp(len(negatives), target)
+    ordered = sorted(negatives, reverse=True)
+    cut = 0.0 if k >= len(ordered) else max(ordered[k], 0.0)
+    return math.nextafter(cut, math.inf)
+
+
+def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dict[str, Any],
+              target_fpr: float = TARGET_FPR, clear_fpr: float | None = CLEAR_FPR,
+              exclude: frozenset[str] = frozenset()) -> dict[str, Any]:
+    """A cascade config from ``base`` with the cuts of every class on the gated benign rows.
+
+    Per class, on the cascade's L1 score and written to ``scanner.cascade.modules.<category>``: the
+    ``detect_threshold`` holds ``target_fpr``; the ``clear_threshold`` lets at most ``clear_fpr`` of the
+    benign rows escalate, or is removed when ``clear_fpr`` is ``None``. Core accepts cuts up to 1.0 and a
+    clear cut at most the detect cut. ``calibration`` records the pool and the FPRs reached.
+    """
+    benign = [(row, prediction) for row, prediction, role in pairs
+              if role != "report" and row["benign"] and row["id"] not in exclude]
+    config = copy.deepcopy(base)
+    config.pop("calibration", None)
+    modules = config.setdefault("scanner", {}).setdefault("cascade", {}).setdefault("modules", {})
+    classes = {}
+    for cls in CLASSES:
+        l1 = [float(_stage(prediction, cls)["l1_score"]) for _, prediction in benign]
+        # At 1.0 the rows scoring 1.0 still detect: L1 counts a score at or above its cut.
+        detect = min(fpr_threshold(l1, target_fpr), 1.0)
+        thresholds = modules.setdefault(category(cls), {})
+        thresholds["detect_threshold"] = detect
+        entry = {"detect_fpr": sum(s >= detect for s in l1) / len(l1)}
+        if clear_fpr is None:
+            thresholds.pop("clear_threshold", None)
+        else:
+            clear = min(fpr_threshold(l1, clear_fpr), detect)
+            thresholds["clear_threshold"] = clear
+            entry["escalate_fpr"] = sum(s >= clear for s in l1) / len(l1)
+        classes[cls] = entry
+    config["calibration"] = {"target_fpr": target_fpr, "clear_fpr": clear_fpr, "benign_rows": len(benign),
+                             "excluded_rows": sum(row["benign"] and row["id"] in exclude for row, _, _ in pairs),
+                             "classes": classes}
+    return config
 
 
 def baseline_reports(sets: list[SetFile], cache: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -785,17 +1006,13 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _predictor_key() -> str:
-    return DLP_SCOREBOARD.sha256_bytes(PREDICTOR_VERSION.encode() + (HERE / "scoreboard.py").read_bytes())[:12]
-
-
 def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache: Path, jobs: int = JOBS) -> int:
     head_tree = head_tree.resolve()
     head_commit = DLP_SCOREBOARD.resolve_commit(head_tree, "HEAD")
     base_commit = DLP_SCOREBOARD.resolve_commit(head_tree, base_sha)
     cache = cache.resolve() / "threat-scoreboard"
-    builds = {"base": DLP_SCOREBOARD.ensure_build(head_tree, base_commit, cache),
-              "head": DLP_SCOREBOARD.ensure_build(head_tree, head_commit, cache)}
+    builds = {"base": ensure_predictor(head_tree, base_commit, cache),
+              "head": ensure_predictor(head_tree, head_commit, cache)}
     splits = [("dev", split_sets(dev))] + ([("holdout", split_sets(holdout))] if holdout is not None else [])
     output = [f"threat scoreboard: head {head_commit[:12]} (build {builds['head'].key[:12]}) vs base "
               f"{base_commit[:12]} (build {builds['base'].key[:12]})"]
@@ -804,9 +1021,9 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
     for split_name, sets in splits:
         reports = {}
         for name, build in builds.items():
-            out = cache / "predictions" / f"{build.key[:16]}-{_predictor_key()}"
-            predict_split(sets, out, build.package, jobs)
-            reports[name] = score_split(sets, ark_predictions(sets, out))
+            out = cache / "predictions" / f"{build.key[:16]}-{config_hash(L1_CASCADE)[:12]}"
+            predict_split(sets, out, build.binary, L1_CASCADE, jobs)
+            reports[name] = score_split(sets, core_predictions(sets, out))
         checks = compare(reports["base"], reports["head"])
         failed_any = failed_any or any(not c["ok"] for c in checks)
         _write_json(report_dir / f"{split_name}.json", {"base": reports["base"], "head": reports["head"],
@@ -826,22 +1043,39 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
+def bound_predictions(sets: list[SetFile], directory: Path, config: dict[str, Any]) -> dict[str, Path]:
+    """The predictions of ``directory``, which must have been made with ``config``."""
+    path = directory / CONFIG_FILE
+    if not path.is_file() or config_hash(load_config(path)) != config_hash(config):
+        raise ValueError(f"{directory}: no predictions of cascade config {config_hash(config)[:12]}")
+    return core_predictions(sets, directory)
+
+
 def report_command(args: argparse.Namespace) -> int:
     sets = split_sets(args.split)
-    baselines, left_out = (baseline_reports(sets, args.baseline_cache)
-                           if args.baseline_cache and not args.counts_only else (None, None))
-    if args.layers == "l1":
-        if args.counts_only:
-            raise ValueError("--counts-only needs --layers l1+l2")
-        report = score_split(sets, ark_predictions(sets, args.predictions))
-        text = render_baseline(report, baselines, args.title or "Threat scoreboard: baseline", left_out)
+    if args.cascade is not None:
+        config = load_config(args.cascade)
+        report = cascade_split(sets, bound_predictions(sets, args.predictions, config), args.counts_only)
+        text = render_cascade(report, config, args.title or "Threat scoreboard: cascade", args.counts_only)
     else:
-        predictions = ark_predictions(sets, args.predictions, "l1+l2")
-        l1, stack = (score_split(sets, predictions, bootstrap=False, layers=layers) for layers in LAYERS)
-        latency = None if args.counts_only else layer_latency(load_pairs(sets, predictions))
-        text = render_full_stack(l1, stack, latency, baselines, args.title or "Threat scoreboard: full stack",
-                                 left_out)
+        if args.counts_only:
+            raise ValueError("--counts-only needs --cascade")
+        baselines, left_out = baseline_reports(sets, args.baseline_cache) if args.baseline_cache else (None, None)
+        report = score_split(sets, core_predictions(sets, args.predictions))
+        text = render_baseline(report, baselines, args.title or "Threat scoreboard: baseline", left_out)
     args.out.write_text(text, encoding="utf-8")
+    return 0
+
+
+def calibrate_command(args: argparse.Namespace) -> int:
+    sets = split_sets(args.split)
+    predictions = core_predictions(sets, args.predictions)
+    exclude = frozenset(line.strip() for line in args.exclude_ids.read_text(encoding="utf-8").splitlines()
+                        if line.strip()) if args.exclude_ids else frozenset()
+    config = calibrate(load_pairs(sets, predictions), load_config(args.cascade), args.target_fpr,
+                       None if args.no_clear else args.clear_fpr, exclude)
+    _write_json(args.out, config)
+    print(f"cascade config {config_hash(config)[:12]} written to {args.out}")
     return 0
 
 
@@ -855,45 +1089,51 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--holdout", type=Path, help="holdout split root; reported as a verdict only")
     g.add_argument("--cache", type=Path, required=True, help="builds, predictions and reports")
     g.add_argument("--jobs", type=int, default=JOBS)
-    pr = commands.add_parser("predict", help="ARK predictions with the installed patronus_ark")
+    pr = commands.add_parser("predict", help="Core predictions of a split with a cascade config")
     pr.add_argument("--split", type=Path, required=True)
-    pr.add_argument("--out", type=Path, required=True)
+    pr.add_argument("--out", type=Path, required=True, help="prediction directory (one per cascade config)")
+    pr.add_argument("--cascade", type=Path, help="cascade config (default: L1 only)")
+    pr.add_argument("--predictor", type=Path, help=f"built {PREDICTOR} example (default: build this checkout)")
     pr.add_argument("--jobs", type=int, default=JOBS)
-    pr.add_argument("--layers", choices=list(LAYERS), default="l1")
-    s = commands.add_parser("score", help="score ARK predictions on one split")
+    s = commands.add_parser("score", help="score the L1 score curve of Core predictions on one split")
     s.add_argument("--split", type=Path, required=True)
     s.add_argument("--predictions", type=Path, required=True, help="directory written by predict")
-    s.add_argument("--layers", choices=list(LAYERS), default="l1")
     s.add_argument("--output", type=Path)
     c = commands.add_parser("compare", help="gate checks of two score reports of the same split")
     c.add_argument("--base", type=Path, required=True)
     c.add_argument("--head", type=Path, required=True)
     c.add_argument("--tolerance-pp", type=float, default=TOLERANCE_PP)
-    r = commands.add_parser("report", help="render the baseline report (Markdown)")
+    r = commands.add_parser("report", help="render the baseline or the cascade report (Markdown)")
     r.add_argument("--split", type=Path, required=True)
     r.add_argument("--predictions", type=Path, required=True, help="directory written by predict")
-    r.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache")
-    r.add_argument("--layers", choices=list(LAYERS), default="l1",
-                   help="l1+l2: the full-stack report (L1 next to L1+L2, latency per layer)")
-    r.add_argument("--counts-only", action="store_true", help="full-stack report with row counts only")
+    r.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (baseline report)")
+    r.add_argument("--cascade", type=Path, help="the cascade report at this config's operating point")
+    r.add_argument("--counts-only", action="store_true", help="cascade report with row counts only")
     r.add_argument("--title")
     r.add_argument("--out", type=Path, required=True)
-    p = commands.add_parser("_predict", help=argparse.SUPPRESS)
-    p.add_argument("--package", type=Path)
-    p.add_argument("--input", type=Path, required=True)
-    p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--layers", choices=list(LAYERS), default="l1")
+    cal = commands.add_parser("calibrate", help="write a cascade config with per-class thresholds")
+    cal.add_argument("--split", type=Path, required=True, help="dev split (its gated benign rows are the pool)")
+    cal.add_argument("--predictions", type=Path, required=True, help="directory written by predict")
+    cal.add_argument("--cascade", type=Path, help="config to start from (default: L1 only)")
+    cal.add_argument("--target-fpr", type=float, default=TARGET_FPR, help="detect threshold FPR (default 0.001)")
+    clear = cal.add_mutually_exclusive_group()
+    clear.add_argument("--clear-fpr", type=float, default=CLEAR_FPR, help="share of benign rows L1 escalates")
+    clear.add_argument("--no-clear", action="store_true", help="no clear threshold: every undetected row escalates")
+    cal.add_argument("--exclude-ids", type=Path, help="row ids (one per line) left out, e.g. train negatives")
+    cal.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
     try:
         if args.command == "gate":
             return gate(args.head, args.base_sha, args.dev, args.holdout, args.cache, args.jobs)
         if args.command == "predict":
-            predict_split(split_sets(args.split), args.out, jobs=args.jobs, layers=args.layers)
+            config = load_config(args.cascade)
+            binary = args.predictor or build_local_predictor(config)
+            predict_split(split_sets(args.split), args.out, binary, config, args.jobs)
             return 0
         if args.command == "score":
             sets = split_sets(args.split)
-            report = score_split(sets, ark_predictions(sets, args.predictions, args.layers), layers=args.layers)
+            report = score_split(sets, core_predictions(sets, args.predictions))
             text = json.dumps(report, indent=1, sort_keys=True) + "\n"
             if args.output:
                 args.output.write_text(text, encoding="utf-8")
@@ -906,9 +1146,9 @@ def main(argv: list[str] | None = None) -> int:
             checks = compare(base, head, args.tolerance_pp)
             print("\n".join(verdict_lines("split", checks, numbers=True)))
             return 1 if any(not c["ok"] for c in checks) else 0
-        if args.command == "report":
-            return report_command(args)
-        return _predict_worker(args.package, args.input, args.output, args.layers)
+        if args.command == "calibrate":
+            return calibrate_command(args)
+        return report_command(args)
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"threat scoreboard: error: {exc}", file=sys.stderr)
         return 2

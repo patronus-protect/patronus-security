@@ -2,7 +2,7 @@
 
 Every knob that changes gateway behavior, in one place. For the full method signatures see the
 generated [Python API](../python-api.md) and [Rust API](../rust-api.md); for concepts see
-[Architecture](../concepts/architecture.md) and [Layered scanning](../concepts/layered-scanning.md).
+[Architecture](../concepts/architecture.md) and [Analysis framework](../concepts/layered-scanning.md).
 
 ## Constructor options
 
@@ -103,11 +103,14 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 
 | Value | Layers used |
 | --- | --- |
-| `l1` | Native L1 only. |
-| `l2` | L1 + L2 (NTDB), when assets are cached. |
-| `l3` | L1 + L2 + L3 (transformer, on promotion), when assets are cached. |
+| `l1` | Native L1 only; what L1 does not detect is clear. |
+| `l2` | L1, then L2 (NTDB) on what L1 left undecided, when assets are cached. |
+| `l3` | L1, L2, then L3 (transformer, on promotion), when assets are cached. |
 
-`max_level` is a ceiling; execution gates can disable levels *below* it per request.
+`max_level` is a ceiling; execution gates can disable levels *below* it per request. Each layer
+runs on what L1 hands on: by default every input, as before; with the opt-in gate key `cascade`
+(below), only the categories L1 left undecided (see
+[Analysis framework](../concepts/layered-scanning.md)).
 
 ## Execution gates
 
@@ -146,6 +149,13 @@ scanner.set_execution_gates({
   See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the shared
   default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
+- `cascade` — opt-in early exit (default off: L2 and L3 run as before). `{"cascade": {}}` turns
+  it on with the scorers' shipped cuts; `{"cascade": {"modules": {"<category>": {"detect_threshold":
+  0.9, "clear_threshold": 0.1}}}}` also sets a category's L1 cuts on its rule score. A category L1
+  decides, or one no later layer can run for, then skips L2 and L3, and results carry
+  `decided_by`. Levels and conditional gates stay the keys above; `l1_model` is not supported in
+  Ark. The same `cascade.modules` keys configure Ark Core's scanner (see
+  [Analysis framework](../concepts/layered-scanning.md#configuration-keys)).
 - `pii_mode` — native PII output mode: `strict` (default; every finding scores `1.0`),
   `balanced` or `recall` (model scores with thresholds 0.50 and 0.30). See
   [PII score and modes](result-schema.md#pii-score-and-modes).
@@ -161,6 +171,12 @@ scanner.set_execution_gates({
 - `resource_exhaustion_count_threshold` — least repetition count (`500000 times`, `2 million
   words`, `zwei Millionen Wörter`) that makes an output request a `resource_exhaustion` finding;
   a positive integer, default `10000`. Raise it when users legitimately ask for long outputs.
+- `threat_points_acceptance` — least score of an accepted threat points rule, between `0.0` and
+  `1.0` (default `0.5`). Unset keeps the default; a lower cut finds more and flags more benign
+  text. The per-category detect cut of the rule scorers is
+  `cascade.modules.<category>.detect_threshold`, and it applies only with a configured cascade
+  (the gate key `cascade` above, or Ark Core's `ScannerConfig.cascade`); otherwise the scorers'
+  shipped cuts hold.
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.

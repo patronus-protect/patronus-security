@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::detectors::dlp::dlp::{DEFAULT_ON_DOCUMENT_GROUPS, DLP_PATTERNS, SECRET_GROUPS};
 use crate::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
+use crate::detectors::threat::ThreatThresholds;
 use crate::SecurityCategory;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, num::NonZeroU64, str::FromStr};
@@ -27,6 +28,14 @@ impl ScoreMode {
             Self::Balanced => Some(0.5),
             Self::Recall => Some(0.3),
         }
+    }
+
+    /// Whether a finding scoring `score` passes the mode's floor; `strict`
+    /// keeps every finding. The one floor rule of every category: PII applies
+    /// it per match before overlap resolution, DLP per text view after it,
+    /// the attack classes per producer detection.
+    pub fn admits(self, score: f64) -> bool {
+        self.min_score().is_none_or(|min| score >= min)
     }
 
     pub const fn as_str(self) -> &'static str {
@@ -92,6 +101,17 @@ pub fn default_rule_enabled(rule_id: &str) -> bool {
 /// Default least repetition count of a huge output request.
 pub const DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD: u64 = 10_000;
 
+/// An optional cut in `0.0..=1.0`.
+fn probability<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<f64>, D::Error> {
+    let value = Option::<f64>::deserialize(deserializer)?;
+    match value {
+        Some(cut) if !(0.0..=1.0).contains(&cut) => Err(serde::de::Error::custom(format!(
+            "threshold {cut} is not in 0.0..=1.0"
+        ))),
+        _ => Ok(value),
+    }
+}
+
 /// Per-call native policy: rule, model, mode and diagnostics gates, shared by
 /// the Core scanner and the full gateway. Missing rule entries use
 /// [`default_rule_enabled`], missing model entries are enabled.
@@ -126,6 +146,13 @@ pub struct NativeGates {
     /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
+    /// Least score of an accepted Threat points rule; unset means
+    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "probability"
+    )]
+    pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -176,6 +203,17 @@ impl NativeGates {
     pub fn resource_exhaustion_count_threshold(&self) -> u64 {
         self.resource_exhaustion_count_threshold
             .map_or(DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD, NonZeroU64::get)
+    }
+
+    /// The Threat cuts in effect.
+    pub fn threat_thresholds(&self) -> ThreatThresholds {
+        let defaults = ThreatThresholds::default();
+        ThreatThresholds {
+            count: self.resource_exhaustion_count_threshold(),
+            points_acceptance: self
+                .threat_points_acceptance
+                .unwrap_or(defaults.points_acceptance),
+        }
     }
 
     /// Whether a model or native producer id is enabled.
@@ -241,6 +279,34 @@ mod tests {
     }
 
     #[test]
+    fn acceptance_cuts_default_to_the_shipped_values_and_reject_non_probabilities() {
+        let gates = NativeGates::default();
+        assert_eq!(gates.threat_thresholds(), ThreatThresholds::default());
+        let serialized = serde_json::to_string(&gates).unwrap();
+        assert!(!serialized.contains("acceptance"), "{serialized}");
+        let gates: NativeGates = serde_json::from_str(
+            r#"{"threat_points_acceptance":0.6,"resource_exhaustion_count_threshold":5}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            gates.threat_thresholds(),
+            ThreatThresholds {
+                count: 5,
+                points_acceptance: 0.6
+            }
+        );
+        for key in ["threat_points_acceptance"] {
+            for bad in ["1.5", "-0.1"] {
+                let json = format!(r#"{{"{key}":{bad}}}"#);
+                assert!(
+                    serde_json::from_str::<NativeGates>(&json).is_err(),
+                    "{json}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn score_mode_is_strict_by_default_and_parses_canonical_names_only() {
         assert_eq!(ScoreMode::default(), ScoreMode::Strict);
         for (mode, min_score) in [
@@ -249,6 +315,9 @@ mod tests {
             (ScoreMode::Recall, Some(0.3)),
         ] {
             assert_eq!(mode.min_score(), min_score);
+            let floor = min_score.unwrap_or(0.0);
+            assert!(mode.admits(floor) && mode.admits(1.0));
+            assert_eq!(mode.admits(floor - 0.01), mode == ScoreMode::Strict);
             assert_eq!(mode.as_str().parse::<ScoreMode>(), Ok(mode));
             assert_eq!(mode.to_string(), mode.as_str());
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.as_str());

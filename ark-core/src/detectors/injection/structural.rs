@@ -41,10 +41,10 @@ impl InjectionStructuralPipeline {
 impl crate::detectors::NativeDetector for InjectionStructuralPipeline {
     fn detect_prepared(&self, prepared: &crate::threat::NativeText<'_>) -> NativeDetection {
         let text = prepared.text();
-        let enabled = self.components.iter().all(|component| {
-            component.anchor_gate.is_unconditional()
-                || component.anchor_gate.allows(prepared.anchors())
-        });
+        let enabled = self
+            .components
+            .iter()
+            .all(|component| prepared.admits(&component.anchor_gate));
         let mut signals = (if enabled { clause_spans(text) } else { Vec::new() })
             .into_iter()
             .filter_map(|(clause_start, clause_end)| {

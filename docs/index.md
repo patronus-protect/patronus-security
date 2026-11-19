@@ -49,7 +49,7 @@ L1 runs only for categories with native detectors and when its execution gate is
 selected chunks to L3. A full transformer then makes the final call using compatible token IDs
 already produced by L2. Most traffic never reaches L3, so model-backed detection avoids paying the
 transformer cost on every request or repeating promotion-time tokenization. See
-[Layered scanning](concepts/layered-scanning.md) for the full escalation model.
+[Analysis framework](concepts/layered-scanning.md) for modules, layers and escalation.
 
 [^cat]: Except `shell_command`, which runs in L1 but loads the 4.4 MiB Cat bundle
     (`cat-shell-risk-commander`).

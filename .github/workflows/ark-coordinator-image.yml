@@ -60,7 +60,7 @@ jobs:
           cargo fmt --check --package ark-coordinator
           cargo clippy --locked -p ark-coordinator --all-targets -- -D warnings
           cargo test --locked -p ark-coordinator
-          if cargo tree --locked -p ark-coordinator | tail -n +2 | grep -Eq 'ark-api|ark-distributed-protocol|patronus-ark|onnxruntime|(^| )ort( |$)'; then
+          if cargo tree --locked -p ark-coordinator | tail -n +2 | grep -Eq 'ark-api|ark-distributed-protocol|patronus-ark( v|-python)|onnxruntime|(^| )ort( |$)'; then
             echo "Default Coordinator build contains ARK/model dependencies" >&2
             exit 1
           fi

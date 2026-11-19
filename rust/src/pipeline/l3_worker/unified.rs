@@ -31,9 +31,9 @@ use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
 use crate::pipeline::decision_thresholds::{arbitrate_joint_v3, JointV3L3Chunk};
 use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3ResolvedKind};
 use crate::pipeline::l3_schedule::SelectedL3Chunk;
-use crate::pipeline::strategy::{
-    aggregate_decision_index, ChunkAggregation, ChunkDecision, HeadDecisionState, PipelineStrategy,
-};
+use crate::pipeline::strategy::chunk_aggregation;
+use crate::L3AggregationStrategy;
+use patronus_ark_core::cascade::{aggregate_decision_index, ChunkDecision, HeadDecisionState};
 
 mod key;
 
@@ -350,7 +350,8 @@ fn run_unified_model_job(
     let mut total_chunks_by_head = HashMap::new();
 
     for head in promoted_heads {
-        let mut policy = job.execution.l3_policy().pipeline_policy(&head, &head);
+        let mut policy =
+            crate::pipeline::l3_routing::pipeline_policy(job.execution.l3_policy(), &head, &head);
         // Without L2 there is no classified fallback for the remaining heads.
         if !job.execution.allows_level(SecurityLevel::L2)
             && policy.early_exit == crate::L3PipelineEarlyExit::RequestWidePositive
@@ -399,18 +400,17 @@ fn run_unified_model_job(
             .into_iter()
             .map(|(_, chunk)| chunk)
             .collect::<Vec<_>>();
-        let mut strategy = PipelineStrategy::for_category_model(&head, &head);
-        if let Some(aggregation) = policy.aggregation.clone() {
-            strategy.aggregation = aggregation.into();
-        } else if let Some(aggregation) = unified_head_aggregation(&head) {
-            strategy.aggregation = aggregation;
-        }
+        let aggregation = policy
+            .aggregation
+            .clone()
+            .or_else(|| unified_head_aggregation(&head))
+            .unwrap_or_else(|| chunk_aggregation(&head, &head));
         let safe_class = unified_safe_class(&head);
         let head_total = head_chunks.len();
         total_effective_chunks = total_effective_chunks.max(head_total);
         total_chunks_by_head.insert(head.clone(), head_total);
         let decision = HeadDecisionState::new(
-            strategy.aggregation.clone(),
+            aggregation.clone(),
             safe_class,
             policy.early_exit,
             head_total,
@@ -437,7 +437,7 @@ fn run_unified_model_job(
             outputs: &mut outputs,
             trace: &mut chunk_trace,
             decision,
-            aggregation: strategy.aggregation,
+            aggregation,
             safe_class,
             physical_inferred_chunks: &mut inferred_chunks,
             cache_hits: &mut cache_hits,
@@ -519,7 +519,7 @@ fn selection_clustering(
 ) -> L3ClusteringStrategy {
     candidate_head_names(candidates, fallback_head)
         .iter()
-        .map(|head| policy.pipeline_policy(head, head).clustering)
+        .map(|head| crate::pipeline::l3_routing::pipeline_policy(policy, head, head).clustering)
         .find(|clustering| {
             matches!(
                 clustering,
@@ -550,7 +550,7 @@ struct UnifiedExecutionAdapter<'a> {
     outputs: &'a mut Vec<UnifiedChunkOutput>,
     trace: &'a mut Option<Vec<serde_json::Value>>,
     decision: HeadDecisionState,
-    aggregation: ChunkAggregation,
+    aggregation: L3AggregationStrategy,
     safe_class: &'static str,
     physical_inferred_chunks: &'a mut usize,
     cache_hits: &'a mut usize,
@@ -926,9 +926,9 @@ fn aggregate_unified_outputs(
             .filter(|output| output.allowed_heads.contains(&head))
             .filter_map(|output| output.output.heads.get(&head))
             .collect::<Vec<_>>();
-        let aggregation = policy
-            .and_then(|policy| policy.pipeline_policy(&head, &head).aggregation)
-            .map(ChunkAggregation::from);
+        let aggregation = policy.and_then(|policy| {
+            crate::pipeline::l3_routing::pipeline_policy(policy, &head, &head).aggregation
+        });
         let selected =
             aggregate_unified_head_with_strategy(&head, &candidates, aggregation.as_ref())
                 .ok_or_else(|| format!("unified L3 head '{head}' produced no output"))?;
@@ -964,17 +964,17 @@ fn unified_chunk_scores(
     scores
 }
 
-fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
+fn unified_head_aggregation(head: &str) -> Option<L3AggregationStrategy> {
     match head {
-        "injection" => Some(ChunkAggregation::AnyPositiveOrHighest {
+        "injection" => Some(L3AggregationStrategy::AnyPositiveOrHighest {
             positive_class: "injection".to_string(),
             threshold: 0.93,
         }),
         "unsafe_action" => {
-            Some(ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 })
+            Some(L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 })
         }
         "sensitive_document" | "tool_class" | "tool_action" | "routing" => {
-            Some(ChunkAggregation::MajorityVoteOrHighest)
+            Some(L3AggregationStrategy::MajorityVoteOrHighest)
         }
         _ => None,
     }
@@ -1021,7 +1021,7 @@ fn aggregate_unified_head(
 fn aggregate_unified_head_with_strategy(
     head: &str,
     candidates: &[&UnifiedHeadOutput],
-    configured: Option<&ChunkAggregation>,
+    configured: Option<&L3AggregationStrategy>,
 ) -> Option<UnifiedHeadOutput> {
     if TOOL_TAG_PROPERTIES
         .iter()
@@ -1084,8 +1084,8 @@ fn aggregate_unified_head_with_strategy(
     let aggregation = if let Some(configured) = configured {
         configured
     } else {
-        default_aggregation = unified_head_aggregation(head)
-            .unwrap_or_else(|| PipelineStrategy::for_category_model(head, head).aggregation);
+        default_aggregation =
+            unified_head_aggregation(head).unwrap_or_else(|| chunk_aggregation(head, head));
         &default_aggregation
     };
     let decisions = candidates
@@ -1169,6 +1169,8 @@ pub fn unified_metadata_details_for_test(
                 &ScanExecution::new(SecurityLevel::L3),
             )],
             internal_l2_chunk_outputs: Vec::new(),
+            decided_by: None,
+            l1_outcome: None,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1323,6 +1325,8 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                     duration_ms: 1.0,
                     layers: Vec::new(),
                     internal_l2_chunk_outputs: Vec::new(),
+                    decided_by: None,
+                    l1_outcome: None,
                     evidence_spans: Vec::new(),
                     label_scores: Vec::new(),
                     decision: None,
@@ -2275,6 +2279,8 @@ mod tests {
                     },
                 ],
                 internal_l2_chunk_outputs: Vec::new(),
+                decided_by: None,
+                l1_outcome: None,
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -2334,10 +2340,12 @@ mod tests {
         assert_eq!(output.heads.keys().collect::<Vec<_>>(), vec![head]);
         let policy = crate::L3SchedulerPolicy::default();
         assert_eq!(
-            policy.pipeline_policy(head, head).early_exit,
+            crate::pipeline::l3_routing::pipeline_policy(&policy, head, head).early_exit,
             crate::L3PipelineEarlyExit::RequestWidePositive
         );
-        assert!(priority_index(&policy, head, head) < policy.priority.len());
+        assert!(
+            priority_index(&policy, head, head) < priority_index(&policy, "unlisted", "unlisted")
+        );
         assert!(unified_head_aggregation(head).is_some());
         assert_eq!(unified_safe_class(head), "benign");
     }

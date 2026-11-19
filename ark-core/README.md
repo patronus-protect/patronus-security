@@ -67,7 +67,11 @@ injection instruction_override     1.00
   (`native:pii`, `native:dlp`, `native:injection_l1`, `native:threat_l1`,
   `native:secret_transfer`, …), `decision`, `label_scores`, `layers` and `evidence_spans` with UTF-8 byte
   and character offsets;
-- `wolf` — the Wolf result, or `None` when Wolf is not configured;
+- `wolf` — the Wolf result, or `None` when Wolf is not configured, `injection` was not scanned,
+  or (only with a configured `cascade`) the cascade did not escalate the input to Wolf;
+- `decision` — only with a configured `cascade`: per scanned module its `outcome`, `decided_by`,
+  `score` and the later `layers` that ran (see
+  [Analysis framework](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/));
 - `input_bytes`.
 
 Core reports; your code decides whether to block, redact or log.

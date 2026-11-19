@@ -108,6 +108,14 @@ impl WolfModel {
             Self::Edge => "edge",
         }
     }
+
+    /// Attack-probability threshold at which this model detects: the value
+    /// Ark's dedicated injection L3 applies to every Wolf size by default.
+    pub fn default_threshold(self) -> f64 {
+        match self {
+            Self::Base | Self::Small | Self::Edge => 0.93,
+        }
+    }
 }
 
 impl WolfModelSpec {

@@ -18,13 +18,12 @@ pub use patronus_ark_core::{
     WolfExecutionOptions,
 };
 pub mod dynamic_pii;
-pub mod external_l1;
 pub mod gliner_onnx_engine;
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub use patronus_ark_core::normalization;
+pub use patronus_ark_core::{cascade, normalization};
 pub mod pipeline;
 pub mod post_prediction;
 pub use patronus_ark_core::threat;
@@ -38,14 +37,15 @@ pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
 };
-pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
+pub use patronus_ark_core::cascade::{ExternalL1Detector, ExternalL1Input};
 pub use patronus_ark_core::native::{NativeGates, ScoreMode};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
     CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
 };
+pub use types::defaults;
 pub use types::{
     ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
     DecisionRecommendation, DecisionResult, DecisionTerminality, EffectiveL3PipelinePolicy,
@@ -57,7 +57,7 @@ pub use types::{
     SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
     SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
+    SecurityRuntimeReadiness, SecurityScanResult, Stage, StageOutcome, WolfSelection,
 };
 ```
 
@@ -677,7 +677,857 @@ pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
 
 Scan text with every category configured on this gateway.
 
-## External L1 API
+## Layer Cascade
+
+```rust
+pub enum Stage {
+    /// The module's anchor heuristic and rule scorer.
+    Heuristic,
+    /// The module's L1 text model.
+    L1Model,
+    /// The module's policies over its L1 results.
+    Policy,
+    L2,
+    L3,
+}
+```
+
+Who decided a module's answer.
+
+```rust
+pub enum StageOutcome {
+    Detected,
+    Clear,
+    /// Undecided: the next configured layer answers.
+    Escalate,
+}
+```
+
+A stage's answer for one module.
+
+```rust
+pub enum CutRule {
+    /// `score >= cut`: the heuristic's rule scorers (and Core's native
+    /// acceptance).
+    AtOrAbove,
+    /// `score > cut`: the L1 models, whose files declare
+    /// `decision_rule: "score > threshold"`.
+    Above,
+}
+```
+
+When a score counts against a cut: the comparison a stage's scorer
+declares.
+
+```rust
+pub fn counts(self, score: f64, cut: f64) -> bool;
+```
+
+Whether `score` counts against `cut`.
+
+```rust
+pub fn from_cuts(
+    detected: bool,
+    score: f64,
+    clear_threshold: Option<f64>,
+    rule: CutRule,
+) -> Self;
+```
+
+The one cut rule of every L1 stage, heuristic and L1 model alike, under
+the stage's [`CutRule`]: a score that counts against the detect cut
+(`detected`) is Detected, a score that does not count against the
+clear cut is Clear, anything else escalates. A `None` clear cut
+switches clearing off.
+
+```rust
+pub struct ModuleConfig {
+    /// The heuristic's detect cut on its rule scorer's probability
+    /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
+    /// and the rule classes it feeds, the Threat document scorer's own
+    /// probability (recomputed from `details.matched_rules`) for the Threat
+    /// classes, the confidence of a
+    /// result with evidence for PII and DLP. A score at or above it is
+    /// Detected when the module's score mode admits it. A Threat points rule
+    /// accepted on its own (with evidence left after the mode floor) is
+    /// Detected regardless. `None` (the default) keeps the scorers' shipped
+    /// acceptance as reported in the native results, so results stay
+    /// identical.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detect_threshold: Option<f64>,
+    /// The heuristic's clear cut on the same score: an undetected score below
+    /// it is Clear without a later stage. `None` (the default) switches it
+    /// off, so every undetected input escalates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clear_threshold: Option<f64>,
+    /// The module's optional L1 model (cuts on its logit scale), run on what
+    /// the heuristic escalates; loaded once by [`crate::Scanner::new`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1_model: Option<L1ModelConfig>,
+}
+```
+
+One analysis module's cascade settings.
+
+```rust
+pub struct CascadeConfig {
+    /// Deepest layer that may run. Default: `L3`.
+    pub max_level: SecurityLevel,
+    /// `false` switches L1 (heuristics and L1 models) off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1: Option<bool>,
+    /// `false` switches L2 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2: Option<bool>,
+    /// `false` switches L3 off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l3: Option<bool>,
+    /// Conditional L2/L3 gates, evaluated over the L1 results of every
+    /// scanned module and the module's own later results. Core has no
+    /// request metadata, so `metadata` conditions are refused.
+    pub conditional: Vec<ConditionalPipelineGate>,
+    /// Per-module settings keyed by category.
+    pub modules: HashMap<SecurityCategory, ModuleConfig>,
+}
+```
+
+The opt-in cascade: which layers run, with early exit between them, and
+per module its L1 cuts and optional L1 model. Its level keys are the
+gate keys of [`ScanGateMatrix`] with the same meaning: `max_level` is the
+ceiling and `l1`, `l2`, `l3` switch a level off (unset: on), so any one
+layer can run alone (for example `l1: false` leaves Wolf, the injection
+L3, to answer every input). Per module, the L1 model runs when
+`l1_model` is configured and the heuristic runs unless its native
+producers are switched off with the existing `models` gates (for
+example `native:injection_l1`, `native:threat_l1`).
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Whether `level` may run: at most `max_level` and not switched off,
+the rule of [`ScanGateMatrix`] and [`LayerExecution`].
+
+```rust
+pub fn validate_for_gates(&self) -> Result<(), String>;
+```
+
+The cascade as Ark's gate key `cascade`: Ark takes the levels and
+conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
+`l3`, `conditional`) and runs no L1 models yet, so only `modules`
+with their L1 cuts may be set.
+
+```rust
+pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)>;
+```
+
+The configured L1 models by module.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse invalid conditional gates, gates over request metadata (Core
+scans have none) and heuristic cuts outside `0..=1` or with the clear
+cut above the detect cut.
+
+```rust
+pub struct ModuleDecision {
+    pub module: SecurityCategory,
+    /// `detected` or `clear`.
+    pub outcome: StageOutcome,
+    pub decided_by: Stage,
+    /// Score of the deciding stage, on that stage's scale: a probability for
+    /// the heuristic, L2 and L3, the decision logit for the L1 model.
+    pub score: f64,
+    /// The layers that ran after the heuristic (L1 model, L2, L3), in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<LayerResult>,
+}
+```
+
+The final answer of one module.
+
+```rust
+pub struct L1Stage {
+    pub outcome: StageOutcome,
+    pub score: f64,
+    /// The L1 stage that answered: [`Stage::Heuristic`] or [`Stage::L1Model`].
+    pub decided_by: Stage,
+    /// Set when the outcome is [`StageOutcome::Escalate`].
+    pub escalation: Option<EscalationSignal>,
+    layers: Vec<LayerResult>,
+    /// Whether an L1 stage ran (not with L1 switched off).
+    ran: bool,
+}
+```
+
+L1's answer for one module, computed once per scan: the heuristic's from
+its native results, refined by the module's L1 model when the heuristic
+escalates.
+
+```rust
+pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision>;
+```
+
+The module's final decision when L1 answered Detected or Clear;
+`None` when it escalates to the next configured layer.
+
+```rust
+pub struct Cascade {
+    config: CascadeConfig,
+}
+```
+
+Runs the configured layers per module with early exit.
+
+```rust
+pub fn new(config: CascadeConfig) -> Result<Self, ScanError>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Whether `level` may run in this cascade.
+
+```rust
+pub fn l1_off(&self, module: SecurityCategory) -> L1Stage;
+```
+
+L1's answer for `module` when its heuristic did not run (L1 switched
+off, or its rules switched off or failed): the input escalates to the
+next stage that runs and is never cleared for lack of evidence; if no
+stage runs, [`Self::decide`] reports no decision for the module.
+
+```rust
+pub fn has_conditional_gates(&self) -> bool;
+```
+
+Whether conditional gates decide which later layer may run; only then
+does [`Self::decide`] read the L1 gate results.
+
+```rust
+pub fn l1_stage<'a, R: LayeredResult + 'a>(
+    &self,
+    module: SecurityCategory,
+    mode: ScoreMode,
+    results: impl IntoIterator<Item = &'a R>,
+) -> L1Stage;
+```
+
+The heuristic's outcome for `module` from its L1 results (see
+[`ModuleConfig::detect_threshold`] for the score per module):
+Detected for a rule hit that detects on its own, a score at or above
+the module's `detect_threshold` that `mode` admits, or, without a
+`detect_threshold`, a result its scorer accepted (or that has evidence
+without a decision envelope); else Clear below the `clear_threshold`;
+else Escalate.
+
+```rust
+pub fn l1_model_stage(
+    &self,
+    mut stage: L1Stage,
+    model: Option<&L1TextModel>,
+    text: &str,
+    findings: &[Finding<'_>],
+) -> L1Stage;
+```
+
+Run `model`, the module's L1 model, on an input the heuristic
+escalated; its Detected or Clear replaces the escalation, its
+Escalate passes on. A decided stage or no model leaves `stage` as is.
+`findings` are the scan's rule findings as the model is trained on
+them (the accepted Threat points findings, see
+[`crate::detectors::threat::facts_findings`]).
+
+```rust
+pub fn decide(
+    &self,
+    module: SecurityCategory,
+    text: &str,
+    l1: L1Stage,
+    l1_results: &[GateResult],
+    l2: &mut [&mut dyn LayerModel],
+    mut l3: Option<&mut dyn L3Executor>,
+    control: &ScanControl,
+) -> Result<Option<ModuleDecision>, ScanError>;
+```
+
+Final decision of `module`: L1's Detected or Clear stands; an
+escalation runs the first allowed L2 model of the module, then the L3
+executor, each only while the previous layer escalates. An escalation
+no configured layer answers ends Clear, decided by the last stage that
+ran. `None` when no stage ran at all (L1 switched off and no later
+layer answered): the module has no decision.
+`l1_results` are the L1 gate results of every scanned module, read
+only when [`Self::has_conditional_gates`].
+
+```rust
+pub fn gate_result(result: &impl LayeredResult) -> Option<GateResult>;
+```
+
+The gate result of one result for conditional gates (its category, class,
+confidence and level); `None` for a result without a known level.
+
+```rust
+pub fn l1_gate_results<'a, R: LayeredResult + 'a>(
+    results: impl IntoIterator<Item = &'a R>,
+) -> Vec<GateResult>;
+```
+
+The gate results of L1 results, shared by every host: one per result
+([`gate_result`]) and one per injection L1 candidate the scorer rejected,
+under the pipeline `native:injection_l1`, so a gate can ask for a rule
+match below the acceptance cut.
+
+## Layer Gates And L3 Policy
+
+```rust
+pub enum SecurityLevel {
+    /// Native rule-based checks only.
+    L1 = 1,
+    /// Native checks plus L2 model-backed classifiers when assets are available.
+    L2 = 2,
+    /// Native, L2, and L3 model-backed classifiers when assets are available.
+    L3 = 3,
+}
+```
+
+Maximum scanner depth to run.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+Return the canonical uppercase level string.
+
+```rust
+pub struct ScanGateMatrix {
+    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
+    pub native: NativeGates,
+    /// Optional L1 override. `None` means enabled.
+    pub l1: Option<bool>,
+    /// Optional L2 override. `None` means enabled.
+    pub l2: Option<bool>,
+    /// Optional L3 override. `None` means enabled.
+    pub l3: Option<bool>,
+    /// Request-context and prior-result conditions applied before L2 or L3.
+    pub conditional: Vec<ConditionalPipelineGate>,
+    /// L3 worker scheduling policy.
+    pub l3_policy: L3SchedulerPolicy,
+    /// The opt-in cascade: when set, a module L1 decides (or no later layer
+    /// can run for) skips L2 and L3 and results carry `decided_by`; its
+    /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
+    /// and L3 as before. Levels and conditional gates stay the keys above;
+    /// see [`super::CascadeConfig::validate_for_gates`].
+    pub cascade: Option<super::Cascade>,
+}
+```
+
+Caller-controlled execution gates for one scanner execution profile.
+
+Unspecified rules use the shared credentials/secrets-only DLP default;
+other execution gates default to enabled. Diagnostic `explain` and the
+scored PII and DLP modes are opt-in. The maximum level is still enforced by
+[`LayerExecution`], so a gate can only further restrict the configured scanner.
+
+Deserializes from the one gate schema of every host (Python
+`execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
+`pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
+`explain`, the level switches `l1`, `l2` and
+`l3`, `conditional`, the L3 worker policy `l3_policy` and the opt-in
+`cascade` (L1 early exit and per-module L1 cuts). Unknown keys and
+out-of-range values are refused.
+
+```rust
+pub struct L3SchedulerPolicy {
+    /// Whether model L3 work should be centrally queued by scan methods.
+    pub enabled: bool,
+    /// Ordered category/model priority list. Earlier entries run first.
+    /// Empty means the host's default order.
+    pub priority: Vec<String>,
+    /// Per category/model timeout before an unstarted L3 job degrades.
+    pub ttl_ms: HashMap<String, u64>,
+    /// Initial execution-cost estimate per category/model. The worker replaces
+    /// this gradually with observed wall time while it is running.
+    pub estimated_cost_ms: HashMap<String, u64>,
+    /// Compute-time credit granted during one fair-scheduling round.
+    pub fairness_quantum_ms: u64,
+    /// Maximum queue wait before the oldest job bypasses priority and cost.
+    pub max_wait_ms: u64,
+    /// Multiplier applied to L2 confidence when L3 degrades.
+    pub degraded_factor: f64,
+    /// Whether L3 may stop once the final class is stable.
+    pub early_exit: L3EarlyExitMode,
+    /// Whether L3 should emit non-authoritative progress/provisional events.
+    pub progress: L3ProgressMode,
+    /// Logical chunk ordering strategy. This does not enable tensor batching.
+    pub clustering: L3ClusteringStrategy,
+    /// Number of high-priority members inferred per similarity cluster for
+    /// representative scheduling. Values below 1 are treated as 1.
+    pub representatives_per_cluster: usize,
+    /// Number of least-similar verification members inferred per cluster for
+    /// verify-representative scheduling. Values below 1 are treated as 1.
+    pub verify_representatives_per_cluster: usize,
+    /// Minimum request-local similarity required to place two chunks in the
+    /// same representative cluster.
+    pub min_cluster_similarity: f64,
+    /// Maximum number of chunks assigned to one representative cluster.
+    pub max_cluster_size: usize,
+    /// Optional execution-policy overrides keyed by pipeline category or model.
+    /// Category keys take precedence over model keys.
+    pub pipelines: HashMap<String, L3PipelinePolicy>,
+}
+```
+
+Priority and timeout policy for centrally scheduled L3 work.
+
+`priority`, `ttl_ms` and `estimated_cost_ms` start empty: a host resolves
+a pipeline missing from them against its own model table.
+
+```rust
+pub struct L3PipelinePolicy {
+    /// Chunk execution strategy. `None` inherits the request-wide default.
+    #[serde(default)]
+    pub clustering: Option<L3ClusteringStrategy>,
+    /// Representatives inferred from the high-priority side of each cluster.
+    #[serde(default)]
+    pub representatives_per_cluster: Option<usize>,
+    /// Least-similar members used to verify a representative cluster.
+    #[serde(default)]
+    pub verify_representatives_per_cluster: Option<usize>,
+    /// Minimum request-local similarity required for cluster membership.
+    #[serde(default)]
+    pub min_cluster_similarity: Option<f64>,
+    /// Maximum number of members allowed in one cluster.
+    #[serde(default)]
+    pub max_cluster_size: Option<usize>,
+    /// Chunk-output aggregation. `None` keeps the pipeline's built-in rule.
+    #[serde(default)]
+    pub aggregation: Option<L3AggregationStrategy>,
+    /// Early-exit scope. `None` inherits the request-wide default semantics.
+    #[serde(default)]
+    pub early_exit: Option<L3PipelineEarlyExit>,
+}
+```
+
+Optional per-pipeline overrides for L3 chunk execution.
+
+```rust
+pub enum L3AggregationStrategy {
+    AnyPositiveOrHighest {
+        positive_class: String,
+        threshold: f64,
+    },
+    HighestRiskAboveThresholdOrConfidence {
+        threshold: f64,
+    },
+    MajorityVoteOrHighest,
+}
+```
+
+Configurable aggregation for one L3 pipeline.
+
+```rust
+pub enum L3PipelineEarlyExit {
+    Disabled,
+    HeadStable,
+    RequestWidePositive,
+}
+```
+
+Scope at which a stable per-pipeline L3 decision stops work.
+
+```rust
+pub struct EffectiveL3PipelinePolicy {
+    pub clustering: L3ClusteringStrategy,
+    pub representatives_per_cluster: usize,
+    pub verify_representatives_per_cluster: usize,
+    pub min_cluster_similarity: f64,
+    pub max_cluster_size: usize,
+    pub aggregation: Option<L3AggregationStrategy>,
+    pub early_exit: L3PipelineEarlyExit,
+}
+```
+
+Fully resolved execution settings for one pipeline and request.
+
+```rust
+pub enum L3EarlyExitMode {
+    Disabled,
+    ClassStable,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum L3ProgressMode {
+    Disabled,
+    Progress,
+    Provisional,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum L3ClusteringStrategy {
+    Disabled,
+    RankOnly,
+    Representative,
+    VerifyRepresentative,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct ConditionalPipelineGate {
+    /// Phase controlled by this gate. L1 is intentionally not supported.
+    pub level: SecurityLevel,
+    /// Optional category/model selector. `None` applies to every pipeline at the level.
+    #[serde(default)]
+    pub pipeline: Option<String>,
+    /// Condition that enables a normal gate or activates an `l3_policy` override.
+    pub when: GateExpression,
+    /// Optional L3 execution-policy override applied when `when` matches.
+    /// Policy gates do not suppress the pipeline when the condition is false.
+    #[serde(default)]
+    pub l3_policy: Option<L3PipelinePolicy>,
+}
+```
+
+One conditional L2/L3 pipeline gate.
+
+```rust
+pub enum GateExpression {
+    All(Vec<GateExpression>),
+    Any(Vec<GateExpression>),
+    Not(Box<GateExpression>),
+    Metadata(MetadataCondition),
+    Result(ResultCondition),
+}
+```
+
+Recursive expression over enqueue metadata and completed L1/L2 results.
+
+```rust
+pub struct MetadataCondition {
+    pub path: String,
+    #[serde(default)]
+    pub equals: Option<Value>,
+    #[serde(default, rename = "in")]
+    pub in_values: Option<Vec<Value>>,
+    #[serde(default)]
+    pub exists: Option<bool>,
+}
+```
+
+Predicate over a dotted path in request metadata.
+
+```rust
+pub struct ResultCondition {
+    pub pipeline: String,
+    #[serde(default)]
+    pub classes: Vec<String>,
+    #[serde(default)]
+    pub min_confidence: Option<f64>,
+}
+```
+
+Predicate over a previously completed L1/L2 pipeline result.
+
+```rust
+pub struct GateResult {
+    pub pipeline: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub level: SecurityLevel,
+}
+```
+
+Minimal result view exposed to conditional gate evaluation.
+
+```rust
+pub fn pipeline_policy(
+    &self,
+    category: &str,
+    model: &str,
+    request_wide_positive: bool,
+) -> EffectiveL3PipelinePolicy;
+```
+
+Resolve request-wide defaults and a category/model override.
+
+`request_wide_positive` marks a pipeline whose stable positive answers
+the whole request (an attack detector); under
+[`L3EarlyExitMode::ClassStable`] it inherits
+[`L3PipelineEarlyExit::RequestWidePositive`], every other pipeline
+[`L3PipelineEarlyExit::HeadStable`].
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse out-of-range values: zero counts, costs and fairness quantum,
+fractions outside `0..=1` and invalid pipeline overrides.
+
+```rust
+pub fn all_enabled() -> Self;
+```
+
+Explicitly enable all native rules, including opt-in DLP content families.
+
+```rust
+pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
+```
+
+Create a matrix with explicit level gates.
+
+```rust
+pub fn set_level(&mut self, level: SecurityLevel, enabled: bool);
+```
+
+Set one level gate.
+
+```rust
+pub fn set_model(&mut self, model: impl Into<String>, enabled: bool);
+```
+
+Set one model/native scanner gate.
+
+```rust
+pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
+```
+
+Builder-style model/native scanner gate setter.
+
+```rust
+pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool);
+```
+
+Set one stable rule-id gate.
+
+```rust
+pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self;
+```
+
+Builder-style stable rule-id gate setter.
+
+```rust
+pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String>;
+```
+
+Replace request-context and prior-result gates.
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Return whether the level is allowed by this matrix before max-level
+enforcement.
+
+```rust
+pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
+```
+
+Replace the L3 worker scheduling policy.
+
+```rust
+pub fn apply_l3_policy_overrides(&mut self, metadata: &Value, results: &[GateResult]);
+```
+
+Merge the `l3_policy` of every matching L3 policy gate into the
+per-pipeline overrides of [`Self::l3_policy`].
+
+```rust
+pub fn pipeline_allowed(
+    conditional: &[ConditionalPipelineGate],
+    level: SecurityLevel,
+    pipeline: &str,
+    metadata: &Value,
+    results: &[GateResult],
+) -> bool;
+```
+
+Whether every normal gate of `conditional` for `level` that targets
+`pipeline` (or every pipeline) matches `metadata` and the completed
+`results`. Policy-override gates never suppress a pipeline.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse zero counts, fractions outside `0..=1` and an empty positive class.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn reads_metadata(&self) -> bool;
+```
+
+Whether the expression reads request metadata anywhere.
+
+```rust
+pub fn matches(&self, metadata: &Value, results: &[GateResult]) -> bool;
+```
+
+Evaluate the expression over request metadata and completed results.
+
+```rust
+pub struct LayerExecution {
+    max_level: SecurityLevel,
+    gates: ScanGateMatrix,
+}
+```
+
+The model-agnostic part of one scan's execution: the maximum level and
+the gate matrix. Hosts add their runtime settings around it.
+
+```rust
+pub fn new(max_level: SecurityLevel) -> Self;
+```
+
+An execution with shared rule defaults up to `max_level`.
+
+```rust
+pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
+```
+
+An execution with explicit gates up to `max_level`.
+
+```rust
+pub fn set_gates(&mut self, gates: ScanGateMatrix);
+```
+
+Replace the gate matrix.
+
+```rust
+pub fn set_max_level(&mut self, max_level: SecurityLevel);
+```
+
+Replace the max-level cap.
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Whether a level is enabled after max-level enforcement.
+
+```rust
+pub fn gates(&self) -> &ScanGateMatrix;
+```
+
+The matrix backing this execution.
+
+```rust
+pub fn gates_mut(&mut self) -> &mut ScanGateMatrix;
+```
+
+Mutable access to the matrix, for request-local overrides.
+
+```rust
+pub fn l3_policy(&self) -> &L3SchedulerPolicy;
+```
+
+The L3 worker policy.
+
+```rust
+pub fn max_level(&self) -> SecurityLevel;
+```
+
+The max-level cap backing this execution.
+
+## Cascade Seams And External L1 API
+
+```rust
+pub struct EscalationSignal {
+    /// Escalation score of the layer (for L1 its rule or model score, for L2
+    /// its promote score).
+    pub score: f64,
+    /// The lower bound of the layer's escalate band, the same meaning for
+    /// every producer: the signal escalates when `score >= threshold`
+    /// ([`Self::escalates`]). For an L1 stage it is its clear cut, or
+    /// `f64::MIN` when clearing is off.
+    pub threshold: f64,
+    /// Byte ranges the next layer should look at; empty means the whole input.
+    pub spans: Vec<Range<usize>>,
+    /// Model or detector that raised the signal.
+    pub source: String,
+}
+```
+
+A layer's request to hand its input to the next configured layer.
+
+```rust
+pub fn above(score: f64, clear_threshold: Option<f64>, source: &str) -> Self;
+```
+
+The signal of an L1 stage that escalated `score`: it did not clear, so
+the score is in the band from the clear cut up (`None`: no lower
+bound).
+
+```rust
+pub fn escalates(&self) -> bool;
+```
+
+Whether the signal asks for the next layer.
+
+```rust
+pub fn escalates(score: f64, threshold: f64) -> bool;
+```
+
+The escalation predicate of L2 and L3 signals: `score >= threshold`. L1
+stages decide by [`super::StageOutcome::from_cuts`] instead.
+
+```rust
+pub struct LayerOutput {
+    /// The layer's evidence; `matched` is its detection, `confidence` its score.
+    pub result: LayerResult,
+    /// Set when the layer leaves the input to the next layer.
+    pub escalation: Option<EscalationSignal>,
+}
+```
+
+What a model layer answers for one input.
+
+```rust
+pub trait LayerModel: Send {
+    /// The layer this model runs at (L2 or L3).
+    fn layer(&self) -> SecurityLevel;
+    /// The analysis module it serves.
+    fn module(&self) -> SecurityCategory;
+    /// Infer on the whole input.
+    fn infer(&mut self, text: &str, control: &ScanControl) -> Result<LayerOutput, ScanError>;
+}
+```
+
+A model that runs at L2 or L3 for one analysis module.
+
+```rust
+pub trait L3Executor {
+    /// Run the L3 stage of `module` on an escalated input; `None` when this
+    /// executor has no L3 for the module.
+    fn execute_l3(
+        &mut self,
+        module: SecurityCategory,
+        text: &str,
+        escalation: &EscalationSignal,
+        control: &ScanControl,
+    ) -> Result<Option<LayerOutput>, ScanError>;
+}
+```
+
+Runs L3 work for escalated inputs: in-process for a local [`LayerModel`],
+or through a host's scheduler.
 
 ```rust
 pub struct ExternalL1Input {
@@ -713,7 +1563,8 @@ pub trait ExternalL1Detector: Send + Sync {
 }
 ```
 
-An application-provided L1 heuristic attached to one security category.
+An application-provided L1 heuristic attached to one security category:
+the L1 extension point of an analysis module.
 
 ## Dynamic PII Types
 
@@ -1054,29 +1905,18 @@ pub struct SecurityScanResult {
     pub label_scores: Vec<LabelScore>,
     /// Structured classifier decision contract for policy consumers.
     pub decision: Option<DecisionEnvelope>,
+    /// Stage that gave the category its final answer (`heuristic` for an L1
+    /// result, `l2`, `l3`); `None` while a later layer still answers.
+    pub decided_by: Option<Stage>,
+    /// With the opt-in cascade, L1's answer (`detected` or `clear`) when L1
+    /// decided the category, as Core's `ModuleDecision::outcome`: a detection
+    /// at a lowered `detect_threshold` shows here even when the native class
+    /// stays `safe`. `None` otherwise.
+    pub l1_outcome: Option<StageOutcome>,
 }
 ```
 
 Public scan result returned by `SecurityGateway` methods.
-
-```rust
-pub enum SecurityLevel {
-    /// Native rule-based checks only.
-    L1 = 1,
-    /// Native checks plus L2 model-backed classifiers when assets are available.
-    L2 = 2,
-    /// Native, L2, and L3 model-backed classifiers when assets are available.
-    L3 = 3,
-}
-```
-
-Maximum scanner depth to run.
-
-```rust
-pub fn as_str(self) -> &'static str;
-```
-
-Return the canonical uppercase level string.
 
 ```rust
 pub enum OnnxBatchMode {
@@ -1121,7 +1961,6 @@ Return the manifest key for this operating point.
 ```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
-    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
@@ -1137,332 +1976,8 @@ pub fn as_str(self) -> &'static str;
 No public documentation is available yet.
 
 ```rust
-pub struct ScanGateMatrix {
-    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
-    pub native: crate::NativeGates,
-    /// Optional L1 override. `None` means enabled.
-    pub l1: Option<bool>,
-    /// Optional L2 override. `None` means enabled.
-    pub l2: Option<bool>,
-    /// Optional L3 override. `None` means enabled.
-    pub l3: Option<bool>,
-    /// Request-context and prior-result conditions applied before L2 or L3.
-    pub conditional: Vec<ConditionalPipelineGate>,
-    /// L3 worker scheduling policy.
-    pub l3_policy: L3SchedulerPolicy,
-}
-```
-
-Caller-controlled execution gates for one scanner execution profile.
-
-Unspecified rules use the shared credentials/secrets-only DLP default;
-other execution gates default to enabled. Diagnostic `explain` and the
-scored PII and DLP modes are opt-in. `max_level` is still enforced by
-`ScanExecution`, so a gate can only further restrict the configured scanner.
-
-Deserializes from the one gate schema of every host (Python
-`execution_gates`, Ark API `gates`): the native keys `rules`, `models`,
-`pii_mode`, `dlp_mode`, the attack-class `<category>_mode` keys and
-`explain`, the level switches `l1`, `l2` and
-`l3`, `conditional` and the L3 worker policy `l3_policy`. Unknown keys and
-out-of-range values are refused.
-
-```rust
-pub struct L3SchedulerPolicy {
-    /// Whether model L3 work should be centrally queued by scan methods.
-    pub enabled: bool,
-    /// Ordered category/model priority list. Earlier entries run first.
-    pub priority: Vec<String>,
-    /// Per category/model timeout before an unstarted L3 job degrades.
-    pub ttl_ms: HashMap<String, u64>,
-    /// Initial execution-cost estimate per category/model. The worker replaces
-    /// this gradually with observed wall time while it is running.
-    pub estimated_cost_ms: HashMap<String, u64>,
-    /// Compute-time credit granted during one fair-scheduling round.
-    pub fairness_quantum_ms: u64,
-    /// Maximum queue wait before the oldest job bypasses priority and cost.
-    pub max_wait_ms: u64,
-    /// Multiplier applied to L2 confidence when L3 degrades.
-    pub degraded_factor: f64,
-    /// Whether L3 may stop once the final class is stable.
-    pub early_exit: L3EarlyExitMode,
-    /// Whether L3 should emit non-authoritative progress/provisional events.
-    pub progress: L3ProgressMode,
-    /// Logical chunk ordering strategy. This does not enable tensor batching.
-    pub clustering: L3ClusteringStrategy,
-    /// Number of high-priority members inferred per similarity cluster for
-    /// representative scheduling. Values below 1 are treated as 1.
-    pub representatives_per_cluster: usize,
-    /// Number of least-similar verification members inferred per cluster for
-    /// verify-representative scheduling. Values below 1 are treated as 1.
-    pub verify_representatives_per_cluster: usize,
-    /// Minimum request-local similarity required to place two chunks in the
-    /// same representative cluster.
-    pub min_cluster_similarity: f64,
-    /// Maximum number of chunks assigned to one representative cluster.
-    pub max_cluster_size: usize,
-    /// Optional execution-policy overrides keyed by pipeline category or model.
-    /// Category keys take precedence over model keys.
-    pub pipelines: HashMap<String, L3PipelinePolicy>,
-}
-```
-
-Priority and timeout policy for centrally scheduled L3 work.
-
-```rust
-pub struct L3PipelinePolicy {
-    /// Chunk execution strategy. `None` inherits the request-wide default.
-    #[serde(default)]
-    pub clustering: Option<L3ClusteringStrategy>,
-    /// Representatives inferred from the high-priority side of each cluster.
-    #[serde(default)]
-    pub representatives_per_cluster: Option<usize>,
-    /// Least-similar members used to verify a representative cluster.
-    #[serde(default)]
-    pub verify_representatives_per_cluster: Option<usize>,
-    /// Minimum request-local similarity required for cluster membership.
-    #[serde(default)]
-    pub min_cluster_similarity: Option<f64>,
-    /// Maximum number of members allowed in one cluster.
-    #[serde(default)]
-    pub max_cluster_size: Option<usize>,
-    /// Chunk-output aggregation. `None` keeps the pipeline's built-in rule.
-    #[serde(default)]
-    pub aggregation: Option<L3AggregationStrategy>,
-    /// Early-exit scope. `None` inherits the request-wide default semantics.
-    #[serde(default)]
-    pub early_exit: Option<L3PipelineEarlyExit>,
-}
-```
-
-Optional per-pipeline overrides for L3 chunk execution.
-
-```rust
-pub enum L3AggregationStrategy {
-    AnyPositiveOrHighest {
-        positive_class: String,
-        threshold: f64,
-    },
-    HighestRiskAboveThresholdOrConfidence {
-        threshold: f64,
-    },
-    MajorityVoteOrHighest,
-}
-```
-
-Configurable aggregation for one L3 pipeline.
-
-```rust
-pub enum L3PipelineEarlyExit {
-    Disabled,
-    HeadStable,
-    RequestWidePositive,
-}
-```
-
-Scope at which a stable per-pipeline L3 decision stops work.
-
-```rust
-pub struct EffectiveL3PipelinePolicy {
-    pub clustering: L3ClusteringStrategy,
-    pub representatives_per_cluster: usize,
-    pub verify_representatives_per_cluster: usize,
-    pub min_cluster_similarity: f64,
-    pub max_cluster_size: usize,
-    pub aggregation: Option<L3AggregationStrategy>,
-    pub early_exit: L3PipelineEarlyExit,
-}
-```
-
-Fully resolved execution settings for one pipeline and request.
-
-```rust
-pub enum L3EarlyExitMode {
-    Disabled,
-    ClassStable,
-}
-```
-
-No public documentation is available yet.
-
-```rust
-pub enum L3ProgressMode {
-    Disabled,
-    Progress,
-    Provisional,
-}
-```
-
-No public documentation is available yet.
-
-```rust
-pub enum L3ClusteringStrategy {
-    Disabled,
-    RankOnly,
-    Representative,
-    VerifyRepresentative,
-}
-```
-
-No public documentation is available yet.
-
-```rust
-pub struct ConditionalPipelineGate {
-    /// Phase controlled by this gate. L1 is intentionally not supported.
-    pub level: SecurityLevel,
-    /// Optional category/model selector. `None` applies to every pipeline at the level.
-    #[serde(default)]
-    pub pipeline: Option<String>,
-    /// Condition that enables a normal gate or activates an `l3_policy` override.
-    pub when: GateExpression,
-    /// Optional L3 execution-policy override applied when `when` matches.
-    /// Policy gates do not suppress the pipeline when the condition is false.
-    #[serde(default)]
-    pub l3_policy: Option<L3PipelinePolicy>,
-}
-```
-
-One conditional L2/L3 pipeline gate.
-
-```rust
-pub enum GateExpression {
-    All(Vec<GateExpression>),
-    Any(Vec<GateExpression>),
-    Not(Box<GateExpression>),
-    Metadata(MetadataCondition),
-    Result(ResultCondition),
-}
-```
-
-Recursive expression over enqueue metadata and completed L1/L2 results.
-
-```rust
-pub struct MetadataCondition {
-    pub path: String,
-    #[serde(default)]
-    pub equals: Option<serde_json::Value>,
-    #[serde(default, rename = "in")]
-    pub in_values: Option<Vec<serde_json::Value>>,
-    #[serde(default)]
-    pub exists: Option<bool>,
-}
-```
-
-Predicate over a dotted path in request metadata.
-
-```rust
-pub struct ResultCondition {
-    pub pipeline: String,
-    #[serde(default)]
-    pub classes: Vec<String>,
-    #[serde(default)]
-    pub min_confidence: Option<f64>,
-}
-```
-
-Predicate over a previously completed L1/L2 pipeline result.
-
-```rust
-pub struct GateResult {
-    pub pipeline: String,
-    pub class_name: String,
-    pub confidence: f64,
-    pub level: SecurityLevel,
-}
-```
-
-Minimal result view exposed to conditional gate evaluation.
-
-```rust
-pub fn pipeline_policy(&self, category: &str, model: &str) -> EffectiveL3PipelinePolicy;
-```
-
-Resolve request-wide defaults and a category/model override.
-
-```rust
-pub fn all_enabled() -> Self;
-```
-
-Explicitly enable all native rules, including opt-in DLP content families.
-
-```rust
-pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
-```
-
-Create a matrix with explicit level gates.
-
-```rust
-pub fn set_level(&mut self, level: SecurityLevel, enabled: bool);
-```
-
-Set one level gate.
-
-```rust
-pub fn set_model(&mut self, model: impl Into<String>, enabled: bool);
-```
-
-Set one model/native scanner gate.
-
-```rust
-pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
-```
-
-Builder-style model/native scanner gate setter.
-
-```rust
-pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool);
-```
-
-Set one stable rule-id gate.
-
-```rust
-pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self;
-```
-
-Builder-style stable rule-id gate setter.
-
-```rust
-pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String>;
-```
-
-Replace request-context and prior-result gates.
-
-```rust
-pub fn allows_level(&self, level: SecurityLevel) -> bool;
-```
-
-Return whether the level is allowed by this matrix before max-level
-enforcement.
-
-```rust
-pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
-```
-
-Replace the L3 worker scheduling policy.
-
-```rust
-pub fn validate(&self) -> Result<(), String>;
-```
-
-Refuse out-of-range values: zero counts, costs and fairness quantum,
-fractions outside `0..=1` and invalid pipeline overrides.
-
-```rust
-pub fn validate(&self) -> Result<(), String>;
-```
-
-Refuse zero counts, fractions outside `0..=1` and an empty positive class.
-
-```rust
-pub fn validate(&self) -> Result<(), String>;
-```
-
-No public documentation is available yet.
-
-```rust
 pub struct ScanExecution {
-    max_level: SecurityLevel,
-    gates: ScanGateMatrix,
+    layers: LayerExecution,
     backend: ExecutionBackend,
     onnx_runtime_options: OnnxRuntimeOptions,
     onnx_batch_mode: OnnxBatchMode,
@@ -1476,7 +1991,9 @@ pub struct ScanExecution {
 }
 ```
 
-Effective execution state consumed by scan methods and model pipelines.
+Effective execution state consumed by scan methods and model pipelines:
+the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
+plus Ark's runtime and NTDB settings.
 
 ```rust
 pub struct WolfSelection {
@@ -1525,12 +2042,6 @@ pub fn wolf_execution_options(&self) -> crate::WolfExecutionOptions;
 ```
 
 No public documentation is available yet.
-
-```rust
-pub fn set_gates(&mut self, gates: ScanGateMatrix);
-```
-
-Replace the gate matrix.
 
 ```rust
 pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
@@ -1587,19 +2098,6 @@ pub fn with_max_level(mut self, max_level: SecurityLevel) -> Self;
 Return a copy with a different max-level cap.
 
 ```rust
-pub fn allows_level(&self, level: SecurityLevel) -> bool;
-```
-
-Return whether a level is enabled for this execution after max-level
-enforcement.
-
-```rust
-pub fn gates(&self) -> &ScanGateMatrix;
-```
-
-Return the matrix backing this execution.
-
-```rust
 pub fn onnx_batch_mode(&self) -> OnnxBatchMode;
 ```
 
@@ -1647,18 +2145,6 @@ pub fn chunk_overlap_tokens(&self) -> usize;
 
 Return the overlap between adjacent classifier chunks.
 
-```rust
-pub fn l3_policy(&self) -> &L3SchedulerPolicy;
-```
-
-Return the L3 worker policy.
-
-```rust
-pub fn max_level(&self) -> SecurityLevel;
-```
-
-Return the max-level cap backing this execution.
-
 ## Synchronous Core API
 
 ```rust
@@ -1677,6 +2163,15 @@ pub struct ScannerConfig {
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
     pub shell: Option<ShellConfig>,
+    /// The opt-in cascade (see [`crate::cascade::CascadeConfig`]): which
+    /// layers run with early exit between them, the per-module L1 cuts and
+    /// optional L1 models (loaded once here). When set, Wolf (the injection
+    /// L3) runs only where the cascade escalates, and
+    /// [`ScanReport::decision`] reports each scanned module's final answer.
+    /// `None` (the default) leaves every scan as before: all native
+    /// producers, and Wolf on every scan that selects `injection`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cascade: Option<CascadeConfig>,
 }
 ```
 
@@ -1713,8 +2208,19 @@ No public documentation is available yet.
 pub struct ScanReport {
     pub input_bytes: usize,
     pub native: Vec<NativeResult>,
+    /// Wolf's result when it ran. Without a cascade Wolf runs on every scan
+    /// that selects `injection`, as before. `None` when Wolf is not
+    /// configured, when `injection` was not selected, or, with a configured
+    /// cascade, when the cascade did not escalate the injection module to L3
+    /// (its L1 decided the input, L3 is above `cascade.max_level` or switched
+    /// off, or a conditional gate kept it off).
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfResult>,
+    /// Final answer and deciding stage per scanned module; set when
+    /// [`ScannerConfig::cascade`] is configured. A module no stage ran for
+    /// (L1 switched off and no later layer answered) has no entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decision: Option<Vec<ModuleDecision>>,
 }
 ```
 
@@ -1723,6 +2229,7 @@ Complete scan output; native decisions and model probabilities remain separate.
 ```rust
 pub struct Scanner {
     config: ScannerConfig,
+    cascade: Cascade,
     native: NativeEngine,
     #[cfg(feature = "wolf")]
     wolf: Option<crate::wolf::WolfRunner>,
@@ -1806,6 +2313,8 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 ```rust
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
+    /// Each module's optional L1 model ([`Self::load_l1_models`]).
+    l1_models: [Option<L1TextModel>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -1817,6 +2326,24 @@ pub fn new(categories: &[SecurityCategory]) -> Self;
 
 Initialize only configured native categories; other categories have no
 native producers. An empty selection creates no pipelines.
+
+```rust
+pub fn load_l1_models<'a>(
+    &mut self,
+    configs: impl IntoIterator<Item = (SecurityCategory, &'a L1ModelConfig)>,
+) -> Result<(), String>;
+```
+
+Load the configured L1 models once (for example
+[`crate::cascade::CascadeConfig::l1_models`]); each replaces the
+module's earlier model. Non-native categories are refused. No model is
+loaded unless configured.
+
+```rust
+pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel>;
+```
+
+The loaded L1 model of `category`'s module, if one is configured.
 
 ```rust
 pub fn producers(&self, category: SecurityCategory) -> &[NativeProducerSpec];
@@ -1854,6 +2381,15 @@ pub enum ScoreMode {
 
 Output mode of a native category (`<category>_mode`). `Strict` is the
 default and the pre-score behaviour.
+
+```rust
+pub fn admits(self, score: f64) -> bool;
+```
+
+Whether a finding scoring `score` passes the mode's floor; `strict`
+keeps every finding. The one floor rule of every category: PII applies
+it per match before overlap resolution, DLP per text view after it,
+the attack classes per producer detection.
 
 ```rust
 pub fn default_rule_enabled(rule_id: &str) -> bool;
@@ -1894,6 +2430,13 @@ pub struct NativeGates {
     /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
+    /// Least score of an accepted Threat points rule; unset means
+    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "probability"
+    )]
+    pub threat_points_acceptance: Option<f64>,
     /// Include bounded diagnostic anchor metadata. Disabled by default.
     pub explain: bool,
 }
@@ -1921,6 +2464,12 @@ pub fn resource_exhaustion_count_threshold(&self) -> u64;
 ```
 
 The `resource_exhaustion_count_threshold` in effect.
+
+```rust
+pub fn threat_thresholds(&self) -> ThreatThresholds;
+```
+
+The Threat cuts in effect.
 
 ```rust
 pub fn allows_model(&self, id: &str) -> bool;
@@ -2500,19 +3049,19 @@ No public documentation is available yet.
 ```rust
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
+    /// Attack-probability threshold; a serialized config without one gets
+    /// [`WolfModel::default_threshold`] of its `model` (0.93 for every size).
     pub threshold: f64,
-    #[serde(default)]
     pub model: WolfModel,
-    #[serde(default)]
     pub precision: WolfPrecision,
-    #[serde(default)]
     pub backend: crate::ExecutionBackend,
-    #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
 }
 ```
 
-No public documentation is available yet.
+The Wolf Defender L3 of the injection module: bundle, model size,
+precision, backend and the attack-probability threshold it detects at
+(default 0.93 for base, small and edge).
 
 ```rust
 pub struct BundleFile {

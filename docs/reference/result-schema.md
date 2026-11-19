@@ -19,6 +19,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
         "level": "L1",
         "model": "native:dlp",
         "duration_ms": 0.4,
+        "decided_by": "heuristic",
         "evidence_spans": [],
         "label_scores": [],
         "layers": [
@@ -46,6 +47,8 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
 | `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
+| `decided_by` | str | Only with the opt-in gate key `cascade`: the stage that gave the category its final answer, `heuristic` (L1), `l2` or `l3`. Absent without a cascade and while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3). Rust exposes `SecurityScanResult.decided_by: Option<Stage>`. |
+| `l1_outcome` | str | Only with the opt-in gate key `cascade`, on the L1 results of a category L1 decided: `detected` or `clear`. A detection at a lowered `cascade.modules.<category>.detect_threshold` shows here even when `class_name` stays `safe`. |
 | `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
@@ -739,7 +742,14 @@ command.
 ```
 
 One request can emit **several** `result` events. L1 results are visible as soon as L1
-finishes; L2 and a later promoted L3 result follow independently.
+finishes; L2 and a later promoted L3 result follow independently, and L3 runs only when L2
+promotes. With the opt-in gate key `cascade`, a category L1 decides is final at L1 (it detects,
+or its score is below a configured `clear_threshold`): its results carry `decided_by:
+"heuristic"` and it gets no L2 or L3 result. So does a category L1 left undecided when no later
+layer can run for it (`max_level` `l1`, its L2 and L3 gated off, or no model
+for it): its L1 result is its clear answer. Only the other categories go on to L2. The queue and
+the distributed plan mark results the same way. Without `cascade`, results carry no
+`decided_by`.
 
 Promoting NTDB L2 layers expose `details.l3_candidates` (each entry: byte `span`,
 `promote_score`, `promote_threshold`, `source_pipeline`, `source_model`, `l2_class`) and

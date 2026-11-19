@@ -144,15 +144,20 @@ Setup and responses: [Deploy the HTTP API](https://patronus-protect.github.io/pa
 
 ## How scanning works
 
+<a href="https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/"><img src="https://raw.githubusercontent.com/patronus-protect/patronus-security/main/docs/img/architecture/analysis-grid.svg" alt="Analysis modules (PII, DLP, Cat, injection, threat classes) by layers L1, L2 and L3" width="100%"></a>
+
 Categories use the layers that fit their detector contract:
 
 | Layer | What it is | Cost | Availability |
 | --- | --- | --- | --- |
 | **L1** | Native rule-based detectors, plus the Cat shell-command verdict (Core and Ark) | input-dependent | rules need no assets; Cat needs its bundle; gate-controlled |
 | **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + lightweight ONNX heads) | milliseconds | Ark, when assets are cached |
-| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | Ark, when assets are cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | Ark, when assets are cached; Wolf Defender also in Core |
 
-Core runs L1 and, when configured, Wolf Defender as a separate prompt-injection model result.
+Each category is an analysis module that runs these layers in order. An opt-in `cascade`
+configuration adds early exit: a later layer then runs only on what the earlier ones left
+undecided, and a category L1 detects skips L2 and L3. Without it, every configured layer runs as
+before. In Core, Wolf Defender is the L3 model of prompt injection.
 
 L2 packages carry a trained promote-router that decides when a case actually needs L3, so most
 traffic never touches a transformer. When a scan is promoted, the queue publishes the L2 fallback
@@ -168,7 +173,7 @@ expose non-finding `l1_anchors` as structured context when the `explain` gate is
 organizations, and locations.
 
 Read more: [Architecture](https://patronus-protect.github.io/patronus-security/concepts/architecture/) ·
-[Layered scanning](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/) ·
+[Analysis framework](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/) ·
 [Categories](https://patronus-protect.github.io/patronus-security/concepts/categories/) ·
 [Models & NTDB](https://patronus-protect.github.io/patronus-security/concepts/models-and-ntdb/)
 
