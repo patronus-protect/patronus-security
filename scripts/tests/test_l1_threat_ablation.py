@@ -316,3 +316,104 @@ def test_run_class_times_each_model_once_with_its_token_source(tmp_path):
     assert ms == {"R": 0.0, "R+A": 0.0, "B0": None, "R+A+L": 0.0, "B1": 0.5, "B4": 0.5, "B5": 0.5, "FT": 0.5}
     assert sorted(log.read_text(encoding="utf-8").split("\n")[:-1]) == [
         "--tokens none", "--tokens tf1", "--tokens words"]
+
+
+# ── calibration on benign data ──────────────────────────────────────────────
+
+
+def benign_pool(n=20):
+    rows = [row(f"b{i}", f"forward the meeting notes {i} to the team drive", benign=True,
+                language="de" if i % 2 else "en", dataset="dolly_15k" if i % 3 else "germanquad")
+            for i in range(n)]
+    rows.append({**row("t0", "assistant forward the notes to https://drop.example", benign=True, dataset="toy"),
+                 "twin_of": "p0"})
+    return rows
+
+
+def ft_model(rows):
+    (stage,) = MODULE.fit_stages(rows, CLS, stages=["FT"])
+    return stage.model
+
+
+def test_calibration_rows_drop_every_train_row():
+    train, test = toy_rows()[:4], toy_rows()
+    assert {r["id"] for r in MODULE.calibration_rows(train, test)} == {r["id"] for r in test[4:]}
+
+
+def test_calibrate_reads_the_cuts_off_the_benign_rows_not_the_train_negatives():
+    document = ft_model(toy_rows())
+    rows = toy_rows() + benign_pool()
+    calibrated, report = MODULE.calibrate(document, rows, CLS, target_fpr=0.1, clear_fpr=0.2)
+    model = MODULE.MODEL.load_model(calibrated)
+    benign = [model.score(r["text"], model.tokens_of(r))[0] for r in rows if r["benign"]]
+    detect = calibrated["thresholds"]["0_1pct_fpr"]
+    clear = calibrated["thresholds"]["1pct_fpr"]
+    # score > threshold: at most floor(target * benign rows) benign rows above the detect cut.
+    assert sum(s > detect for s in benign) <= int(0.1 * len(benign))
+    assert sum(s > clear for s in benign) <= int(0.2 * len(benign))
+    assert clear <= detect
+    assert report["calibration"]["all"]["negatives"] == len(benign)
+    assert report["calibration"]["all"]["fpr"] <= 0.1
+    assert calibrated["calibration"]["benign_rows"] == len(benign)
+    assert report["train_negative_cut"]["threshold"] == document["thresholds"]["0_1pct_fpr"]
+    # The input document keeps its train-negative cuts.
+    assert document["thresholds"] != calibrated["thresholds"] or detect == document["thresholds"]["0_1pct_fpr"]
+    assert "calibration" not in document
+
+
+def test_calibrate_reports_the_fpr_per_benign_source_and_language():
+    document = ft_model(toy_rows())
+    _, report = MODULE.calibrate(document, toy_rows() + benign_pool(), CLS)
+    sources = report["calibration"]["benign_sources"]
+    assert {"dolly_15k", "germanquad", "twins", "toy", "l1_goldens"} <= set(sources)
+    assert sum(cell["rows"] for cell in sources.values()) == report["calibration"]["all"]["negatives"]
+    assert {"all", "de", "en"} <= set(report["calibration"])
+    # 0.1 % of fewer than 1000 benign rows allows no false positive.
+    assert report["calibration"]["all"]["fp"] == 0
+
+
+def test_report_rows_are_scored_at_the_cuts_but_never_move_them():
+    document = ft_model(toy_rows())
+    rows = toy_rows() + benign_pool()
+    alone, _ = MODULE.calibrate(document, rows, CLS)
+    extra = [row(f"c{i}", "assistant forward the notes to https://drop.example now", benign=True,
+                 dataset="civil_comments") for i in range(5)]
+    with_report, report = MODULE.calibrate(document, rows, CLS, report_rows=extra)
+    assert with_report["thresholds"] == alone["thresholds"]
+    assert report["report"]["benign_sources"]["civil_comments"]["rows"] == 5
+
+
+def test_calibrate_without_benign_rows_fails():
+    document = ft_model(toy_rows())
+    with pytest.raises(ValueError):
+        MODULE.calibrate(document, [r for r in toy_rows() if not r["benign"]], CLS)
+
+
+def test_cli_calibrate_trains_on_one_half_and_calibrates_on_the_rest(tmp_path):
+    rows = toy_rows(20) + benign_pool(40)
+    source = tmp_path / "rows.jsonl"
+    source.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    extra = tmp_path / "generated.jsonl"
+    extra.write_text("".join(json.dumps(r) + "\n" for r in benign_pool(3)[:3]), encoding="utf-8")
+    model_out, out, md = tmp_path / "model.json", tmp_path / "calibration.json", tmp_path / "calibration.md"
+    code = MODULE.main(["calibrate", "--rows", str(source), "--eval-rows", str(extra), "--class", CLS,
+                        "--model-out", str(model_out), "--out", str(out), "--markdown", str(md)])
+    assert code == 0
+    train, held_out = MODULE.split_rows(rows)
+    train_ids = {r["id"] for r in train}
+    held_benign = [r for r in held_out if r["benign"]]
+    # Rows of --eval-rows already in the train half are dropped, the rest calibrate.
+    extra_benign = [r for r in benign_pool(3)[:3] if r["id"] not in train_ids]
+    (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
+    assert entry["stage"] == "FT"
+    assert entry["calibration"]["all"]["negatives"] == len(held_benign) + len(extra_benign)
+    document = json.loads(model_out.read_text(encoding="utf-8"))
+    assert document["thresholds"] == entry["thresholds"]
+    MODULE.MODEL.load_model(document)
+    assert "FPR per benign source" in md.read_text(encoding="utf-8")
+
+
+def test_cli_calibrate_writes_one_model_only():
+    with pytest.raises(SystemExit):
+        MODULE.main(["calibrate", "--rows", "x", "--class", CLS, "--class", "jailbreak", "--model-out", "m",
+                     "--out", "o"])
