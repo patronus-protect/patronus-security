@@ -4,12 +4,13 @@ from ._patronus_ark_core import CancelledError, ScanControl, Scanner, ScannerBus
 from .types import (
     EvidenceSpan, NativeCategory, NativeResult, ScanReport, WolfResult, ScannerConfig, WolfConfig,
     WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
-    ShellVerdict,
+    ShellVerdict, CascadeConfig, ModuleThresholds, ModuleDecision,
 )
 
 __all__ = [
     "Scanner", "ScanControl", "CancelledError", "ScannerBusyError", "__version__",
     "EvidenceSpan", "NativeCategory", "NativeResult", "ScanReport", "WolfResult",
     "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions", "OnnxRuntimeOptions",
-    "ShellConfig", "ShellFacts", "ShellVerdict",
+    "ShellConfig", "ShellFacts", "ShellVerdict", "CascadeConfig", "ModuleThresholds",
+    "ModuleDecision",
 ]

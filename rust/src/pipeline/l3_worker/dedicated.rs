@@ -477,7 +477,7 @@ fn run_wolf_document_job(
         Some(crate::L3AggregationStrategy::MajorityVoteOrHighest) => {
             return Err("Wolf requires a probability threshold, not majority voting".into())
         }
-        None => 0.93, // Preserve the legacy gateway default; the new Core requires an explicit threshold.
+        None => job.execution.wolf_selection().model.default_threshold(),
     };
     let allows_fallback = job.execution.allows_level(SecurityLevel::L2);
     let mut model = model.lock().map_err(|error| error.to_string())?;

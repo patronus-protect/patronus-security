@@ -57,10 +57,22 @@ class WolfResult(TypedDict):
     precision: str
 
 
+Stage = Literal["heuristic", "l1_model", "policy", "l2", "l3"]
+
+
+class ModuleDecision(TypedDict):
+    """Final answer of one scanned module and the stage that decided it."""
+    module: str
+    outcome: Literal["detected", "clear"]
+    decided_by: Stage
+    score: float
+
+
 class ScanReport(TypedDict):
     input_bytes: int
     native: list[NativeResult]
     wolf: WolfResult | None
+    decision: NotRequired[list[ModuleDecision]]
 
 
 Decision = Literal["allow", "ask", "block"]
@@ -114,7 +126,7 @@ class OnnxRuntimeOptions(TypedDict, total=False):
 
 class WolfConfig(TypedDict):
     bundle_dir: str
-    threshold: float
+    threshold: NotRequired[float]
     model: NotRequired[Literal["base", "small", "edge"]]
     precision: NotRequired[
         Literal["auto", "fp32", "fp16", "mixed", "mixed_x86", "int8_int4", "int8_int4_x86"]
@@ -131,6 +143,17 @@ class ShellConfig(TypedDict):
 
 
 ScoreMode = Literal["strict", "balanced", "recall"]
+
+
+class ModuleThresholds(TypedDict, total=False):
+    clear_threshold: float | None
+
+
+class CascadeConfig(TypedDict, total=False):
+    """Layers that may run after L1 and per-module L1 clear thresholds."""
+    max_level: Literal["L1", "L2", "L3"]
+    conditional: list[dict[str, object]]
+    modules: dict[str, ModuleThresholds]
 
 
 class ScannerConfig(TypedDict, total=False):
@@ -156,6 +179,7 @@ class ScannerConfig(TypedDict, total=False):
     max_findings: int
     wolf: WolfConfig | None
     shell: ShellConfig | None
+    cascade: CascadeConfig | None
 
 
 class WarmupOptions(TypedDict, total=False):

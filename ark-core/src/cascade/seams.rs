@@ -137,7 +137,7 @@ mod tests {
         let signal = EscalationSignal {
             score: 0.2,
             threshold: 0.3,
-            spans: vec![0..4],
+            spans: vec![0..4, 6..8],
             source: "m".into(),
         };
         assert!(!signal.escalates());
