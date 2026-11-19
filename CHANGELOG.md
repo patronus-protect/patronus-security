@@ -466,6 +466,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to scan per workload. **Detection change:** none; this is evaluation tooling only.
 ### Changed
 
+- Native rules that the gates keep off (opt-in PII forms, opt-in DLP classes, rules a host
+  switches off, rules of categories a scanner does not run) are no longer compiled, and the PII
+  context lexica are built per label and share one counter-term lexicon. A PII-only scanner now
+  holds about 70 MB after warmup instead of about 150 MB, and the first scans no longer pay
+  for compiling the PII lexica or the attack-class rules. Results are unchanged.
+
 - The threat scoreboard measures `patronus-ark-core` alone instead of the full Ark package: a new
   example, `threat_cascade`, scans every evaluation row once with the Core scanner and a layer
   configuration, so a later layer (Wolf for prompt injection) runs only on what the rule layer left
