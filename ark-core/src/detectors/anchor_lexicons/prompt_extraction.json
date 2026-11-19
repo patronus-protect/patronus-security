@@ -1,0 +1,99 @@
+[
+  {
+    "id": "extraction.hidden_target",
+    "description": "Verborgene Vorgaben des Modells: Systemprompt, Anweisungen, Direktiven (Ziel einer Extraktion)",
+    "en": [
+      "prompt",
+      "instruction",
+      "directive",
+      "direction"
+    ],
+    "de": [
+      "anweisung",
+      "instruktion",
+      "direktive",
+      "vorgabe",
+      "systemnachricht"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/prompt_extraction.md"
+    ]
+  },
+  {
+    "id": "extraction.tool_schema",
+    "description": "Tool-Definitionen und Funktionsschemas des Modells",
+    "en": [
+      "schema",
+      "tool",
+      "function",
+      "plugin",
+      "specification",
+      "signature"
+    ],
+    "de": [
+      "schema",
+      "werkzeug",
+      "funktion",
+      "definition",
+      "spezifikation"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/prompt_extraction.md"
+    ]
+  },
+  {
+    "id": "extraction.guardrail",
+    "description": "Sicherheits-, Moderations- und Inhaltsregeln des Modells",
+    "en": [
+      "safety",
+      "moderation",
+      "guardrail",
+      "filter",
+      "content",
+      "polic",
+      "guideline",
+      "restriction",
+      "censorship",
+      "refusal"
+    ],
+    "de": [
+      "sicherheit",
+      "moderation",
+      "inhalt",
+      "filter",
+      "richtlinie",
+      "zensur",
+      "verbot",
+      "beschränkung",
+      "beschraenkung"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/prompt_extraction.md"
+    ]
+  },
+  {
+    "id": "extraction.guarded_secret",
+    "description": "Passwort oder Geheimwort, das die verborgenen Anweisungen schützen",
+    "en": [
+      "password",
+      "passphrase",
+      "passcode",
+      "secret"
+    ],
+    "de": [
+      "passwort",
+      "kennwort",
+      "losungswort",
+      "codewort",
+      "geheim",
+      "zauberwort"
+    ],
+    "shared": [],
+    "sources": [
+      "research/l1-threat/categories/prompt_extraction.md"
+    ]
+  }
+]
