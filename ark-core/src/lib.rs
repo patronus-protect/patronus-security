@@ -32,5 +32,8 @@ pub mod wolf;
 pub mod onnx;
 
 #[cfg(feature = "wolf")]
+pub mod model_assets;
+
+#[cfg(feature = "wolf")]
 #[doc(hidden)]
 pub mod assets;

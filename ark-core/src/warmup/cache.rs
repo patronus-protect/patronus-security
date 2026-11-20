@@ -9,7 +9,9 @@ use std::{
 };
 const LOCK: &str = ".patronus-wolf-prepare.lock";
 const PENDING: &str = ".patronus-wolf-pending";
-const REVISION: &str = ".patronus-revision";
+#[cfg(feature = "download")]
+use crate::model_assets::atomic_marker;
+use crate::model_assets::{stored_revision, REVISION_MARKER as REVISION};
 /// A cache's file count: one graph and the support files.
 const FILES: usize = crate::wolf::SUPPORT_FILES.len() + 1;
 fn asset(e: impl std::fmt::Display) -> ScanError {
@@ -69,11 +71,9 @@ fn available(
 }
 /// A managed cache whose marker names another pin holds another model or revision.
 fn other_pin(dir: &Path, model: WolfModel) -> Result<bool, ScanError> {
-    match std::fs::read_to_string(dir.join(REVISION)) {
-        Ok(revision) => Ok(revision.trim() != model.spec().revision),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(asset(e)),
-    }
+    Ok(stored_revision(dir)
+        .map_err(asset)?
+        .is_some_and(|revision| revision.trim() != model.spec().revision))
 }
 fn local_present(
     dir: &Path,
@@ -216,34 +216,6 @@ fn pending_origin(model: WolfModel) -> String {
     format!("{}\n{}\n", spec.repository, spec.revision)
 }
 #[cfg(feature = "download")]
-fn atomic_marker(dir: &Path, name: &str, value: &str) -> Result<(), ScanError> {
-    use std::{
-        io::Write,
-        sync::atomic::{AtomicU64, Ordering},
-    };
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let path = dir.join(format!(
-        "{name}.tmp-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(asset)?;
-        file.write_all(value.as_bytes()).map_err(asset)?;
-        file.sync_all().map_err(asset)?;
-        drop(file);
-        fs::rename(&path, dir.join(name)).map_err(asset)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(path);
-    }
-    result
-}
-#[cfg(feature = "download")]
 fn has_unknown_files(dir: &Path) -> Result<bool, ScanError> {
     for entry in fs::read_dir(dir).map_err(asset)? {
         let entry = entry.map_err(asset)?;
@@ -276,11 +248,7 @@ fn establish_origin(dir: &Path, model: WolfModel) -> Result<(), ScanError> {
     if other_pin(dir, model)? {
         clear_managed(dir)?;
     }
-    let revision = match fs::read_to_string(dir.join(REVISION)) {
-        Ok(value) => Some(value),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(asset(e)),
-    };
+    let revision = stored_revision(dir).map_err(asset)?;
     match fs::read_to_string(dir.join(PENDING)) {
         Ok(value) if value == pending_origin(model) => return Ok(()),
         Ok(_) => return Err(asset("Wolf pending cache has an unknown origin")),
