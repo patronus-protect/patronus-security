@@ -73,6 +73,11 @@ impl VerifiedBundle {
         }
     }
 
+    /// Whether the manifest lists release file `name`.
+    pub(crate) fn lists(&self, name: &str) -> bool {
+        self.files.contains_key(name)
+    }
+
     /// The bytes of release file `name`, once their sha256 matches the manifest.
     pub(crate) fn read(&self, name: &str) -> Result<Vec<u8>, String> {
         let expected = self

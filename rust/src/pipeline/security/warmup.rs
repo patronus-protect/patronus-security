@@ -291,13 +291,6 @@ impl SecurityGateway {
                 }
                 let shell = self.shell_command_config(&base_dir);
                 let download = allow_download && self.should_download_assets_for(*category);
-                if !download && !patronus_ark_core::warmup::shell_assets_present(&shell) {
-                    return Err(format!(
-                        "missing shell_command assets at {}; downloads disabled",
-                        shell.bundle_dir.display()
-                    )
-                    .into());
-                }
                 let report = progress.map(|progress| {
                     move |completed_files, total_files| {
                         progress(crate::SecurityAssetProgress {
@@ -314,7 +307,17 @@ impl SecurityGateway {
                     report
                         .as_ref()
                         .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
-                )?;
+                )
+                .map_err(|error| {
+                    if download {
+                        error.to_string()
+                    } else {
+                        format!(
+                            "missing shell_command assets at {}; downloads disabled: {error}",
+                            shell.bundle_dir.display()
+                        )
+                    }
+                })?;
                 continue;
             }
             if *category == SecurityCategory::DynamicPii {

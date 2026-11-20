@@ -217,12 +217,13 @@ fn gateway_applies_user_cedar_policies_and_refuses_bad_ones() {
 
 #[test]
 fn warmup_refuses_bundles_that_do_not_match() {
-    // A model that does not match its manifest.
+    // A model that does not match its manifest is not a prepared bundle.
     let model_dir = temp_dir("tampered");
     let manifest = synthetic_bundle(&model_dir, Some(&"0".repeat(64)));
     let error = gateway(&model_dir, &manifest).warmup().unwrap_err();
     assert!(
-        error.message.contains("does not match manifest"),
+        error.message.contains("missing shell_command assets")
+            && error.message.contains("does not match manifest"),
         "{error:?}"
     );
     std::fs::remove_dir_all(model_dir).ok();
@@ -235,7 +236,8 @@ fn warmup_refuses_bundles_that_do_not_match() {
         .warmup()
         .unwrap_err();
     assert!(
-        error.message.contains("missing shell_command assets"),
+        error.message.contains("missing shell_command assets")
+            && error.message.contains("is not the pinned release manifest"),
         "{error:?}"
     );
     std::fs::remove_dir_all(model_dir).ok();

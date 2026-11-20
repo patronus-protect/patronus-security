@@ -103,12 +103,29 @@ pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result
     Ok(())
 }
 
-/// Whether `config.bundle_dir` holds the release `config.manifest_sha256` pins.
+/// Whether `config.bundle_dir` holds the release `config.manifest_sha256` pins, with
+/// every release file the manifest lists in place and matching it.
 pub fn shell_assets_present(config: &crate::detectors::shell::ShellConfig) -> bool {
-    std::fs::read(config.bundle_dir.join("manifest.json")).is_ok_and(|manifest| {
-        crate::detectors::facts_common::bundle::sha256_hex(&manifest)
-            .eq_ignore_ascii_case(&config.manifest_sha256)
-    })
+    shell_bundle_problem(config).is_none()
+}
+
+/// Why `config.bundle_dir` is not the complete pinned release, if it is not.
+fn shell_bundle_problem(config: &crate::detectors::shell::ShellConfig) -> Option<String> {
+    let dir = &config.bundle_dir;
+    if !dir.join("manifest.json").is_file() {
+        return Some(format!("{} holds no Cat bundle", dir.display()));
+    }
+    let bundle = match crate::detectors::facts_common::bundle::VerifiedBundle::open(
+        dir,
+        Some(&config.manifest_sha256),
+    ) {
+        Ok(bundle) => bundle,
+        Err(problem) => return Some(problem),
+    };
+    SHELL_FILES
+        .iter()
+        .filter(|file| **file != "manifest.json" && bundle.lists(file))
+        .find_map(|file| bundle.read(file).err())
 }
 
 /// Fetch the pinned Cat release into `config.bundle_dir` unless it already holds the
@@ -129,16 +146,15 @@ pub fn prepare_shell_assets_with_progress(
 ) -> Result<(), ScanError> {
     options.validate()?;
     let dir = &config.bundle_dir;
-    if shell_assets_present(config) {
+    let Some(problem) = shell_bundle_problem(config) else {
         if let Some(callback) = progress {
             callback(SHELL_FILES.len(), SHELL_FILES.len());
         }
         return Ok(());
-    }
+    };
     if options.download == DownloadPolicy::Never {
         return Err(ScanError::Asset(format!(
-            "{} holds no pinned Cat bundle; prepare it or enable download=missing",
-            dir.display()
+            "{problem}; prepare it or enable download=missing"
         )));
     }
     #[cfg(not(feature = "download"))]
@@ -237,9 +253,28 @@ mod tests {
                 .unwrap();
         assert!(shell_assets_present(&config));
         prepare_shell_assets(&config, &never).unwrap();
+        // A pinned manifest without the files it lists is not a complete bundle.
+        let model = std::fs::read(config.bundle_dir.join("model.json")).unwrap();
+        std::fs::remove_file(config.bundle_dir.join("model.json")).unwrap();
+        assert!(!shell_assets_present(&config));
+        let error = prepare_shell_assets(&config, &never)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("model.json"), "{error}");
+        std::fs::write(config.bundle_dir.join("model.json"), b"{}").unwrap();
+        assert!(!shell_assets_present(&config));
+        std::fs::write(config.bundle_dir.join("model.json"), model).unwrap();
+        assert!(shell_assets_present(&config));
         // A bundle of another release is outdated, not ready.
         config.manifest_sha256 = SHELL_MANIFEST_SHA256.into();
         assert!(!shell_assets_present(&config));
+        let error = prepare_shell_assets(&config, &never)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("is not the pinned release manifest"),
+            "{error}"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
     #[cfg(feature = "wolf")]
