@@ -271,8 +271,15 @@ classes:
       - ark.injection.governance.cross_tool_next_request
       - ark.injection.governance.encrypted_swarm_override
       - ark.injection.governance.refund_control_bypass
+      # T16: directives to the answering model about its own reply inside foreign content (encode/reverse the reply,
+      # add a sentence or link to it, put the following code into it) are the rules
+      # ark.injection.indirect.{response_directive,reply_insertion,code_insertion}_en and
+      # {response_directive,code_insertion}_de; they report under ark.injection.override.replacement_directive (the
+      # scorer 0.1.7 has no weight for a new canonical id), so they need no entry of their own here.
       baseline_coverage: {atr: partial, pipelock: partial, prompt_guard_2: partial}
-      gap: Agent-addressed action requests in benign-looking foreign content (esp. German) are rarely covered.
+      gap: Agent-addressed action requests in benign-looking foreign content (esp. German) are rarely covered;
+        reply directives without a clause start (spliced into a word) or without 'your reply/answer' ('Can you reply in
+        German?', 'Utilize the following code section:') stay unmatched.
     - id: decoded_instruction
       pattern: injection_decoded
       title: Injection pattern visible only in a decoded view, or decode-then-follow request

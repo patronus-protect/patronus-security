@@ -729,6 +729,10 @@ genehmigten Aufruf. Die AC02-Ablation mit den nativen Zeilen steht in §16 von
 Seit T17 (Regel `ac_config_write` für Schreibaufrufe auf die eigene Agent-Konfiguration) findet B0 3 von 3
 `agent_config_tampering`-Zeilen ohne Hard-Benign-FP; die Ablation wählt weiter `B0` (§17 dort).
 
+Seit T16 (Anweisungen an das antwortende Modell in fremdem Inhalt: Antwort umformen, Inhalt oder Code in die
+Antwort einfügen; fünf Regeln, `categories/injection.md` §14) findet B0 bei BIPIA 164 von 188 Injektionen, weiter
+ohne Fund auf den 47 sauberen E-Mails und ohne neuen Benign-Treffer im Dev-Pool; die 50 Exfiltrationen bleiben offen.
+
 **RedCode und Agent-SafetyBench (T18, 2026-11-18).** Zwei weitere `train_dev`-Rezepte (`generation: 16`), beide nur
 EN und nur `unsafe_action` (Familie `unsafe_code`):
 - **RedCode** (Code MIT, Datensatz CC-BY-4.0 laut `dataset/LICENSE`; Commit `664e4793`, 187 Dateien mit SHA-256),
