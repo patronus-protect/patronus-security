@@ -400,14 +400,23 @@ mod tests {
             "INSERT INTO t VALUES (1),\n",
             "INSERT INTO t VALUES ('a\n",
         ] {
-            let text = line.repeat(100 * 1024 / line.len());
-            let started = std::time::Instant::now();
-            let parsed = statements(&text);
-            let elapsed = started.elapsed();
-            assert!(parsed.len() <= 1, "{line}");
+            // Growth, not wall time: a quadratic scan takes ~16x as long on 4x the text,
+            // a linear one ~4x, whatever the machine's load.
+            let fastest = |bytes: usize| {
+                let text = line.repeat(bytes / line.len());
+                (0..3)
+                    .map(|_| {
+                        let started = std::time::Instant::now();
+                        assert!(statements(&text).len() <= 1, "{line}");
+                        started.elapsed()
+                    })
+                    .min()
+                    .unwrap()
+            };
+            let (small, large) = (fastest(25 * 1024), fastest(100 * 1024));
             assert!(
-                elapsed < std::time::Duration::from_millis(100),
-                "{line}: {elapsed:?}"
+                large < small * 10 + std::time::Duration::from_millis(5),
+                "{line}: 25 KiB {small:?}, 100 KiB {large:?}"
             );
         }
     }
