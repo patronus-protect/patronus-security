@@ -25,7 +25,28 @@ pub const SHELL_MANIFEST_SHA256: &str =
 /// Core and ARK keep every model they share once below this root.
 #[cfg(feature = "download")]
 pub fn default_cache_root() -> Option<PathBuf> {
-    dirs::cache_dir().map(|dir| dir.join("patronus_ark"))
+    user_cache_dir(|key| std::env::var_os(key), home::home_dir())
+        .map(|dir| dir.join("patronus_ark"))
+}
+
+/// The platform's user cache directory: `%LOCALAPPDATA%` on Windows,
+/// `~/Library/Caches` on macOS, else an absolute `$XDG_CACHE_HOME` or
+/// `~/.cache`.
+#[cfg(feature = "download")]
+fn user_cache_dir(
+    env: impl Fn(&str) -> Option<std::ffi::OsString>,
+    home: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if cfg!(windows) {
+        env("LOCALAPPDATA").map(PathBuf::from)
+    } else if cfg!(target_os = "macos") {
+        home.map(|home| home.join("Library/Caches"))
+    } else {
+        env("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .filter(|dir| dir.is_absolute())
+            .or_else(|| home.map(|home| home.join(".cache")))
+    }
 }
 
 /// Cat's bundle directory below a model cache root. Core's prepare functions and ARK use
@@ -228,6 +249,33 @@ pub fn prepare_wolf_assets_with_progress(
 
 #[cfg(test)]
 mod tests {
+
+    #[cfg(all(feature = "download", unix, not(target_os = "macos")))]
+    #[test]
+    fn the_cache_root_follows_xdg_and_falls_back_to_home() {
+        let home = Some(PathBuf::from("/home/u"));
+        let xdg =
+            |dir: &'static str| move |key: &str| (key == "XDG_CACHE_HOME").then(|| dir.into());
+        assert_eq!(
+            super::user_cache_dir(xdg("/x/cache"), home.clone()),
+            Some("/x/cache".into())
+        );
+        assert_eq!(
+            super::user_cache_dir(xdg("relative"), home.clone()),
+            Some("/home/u/.cache".into())
+        );
+        assert_eq!(super::user_cache_dir(|_| None, None), None);
+    }
+
+    #[cfg(all(feature = "download", target_os = "macos"))]
+    #[test]
+    fn the_cache_root_is_library_caches_on_macos() {
+        let home = Some(PathBuf::from("/Users/u"));
+        assert_eq!(
+            super::user_cache_dir(|_| None, home),
+            Some("/Users/u/Library/Caches".into())
+        );
+    }
     use super::*;
     #[test]
     fn offline_is_default_and_invalid_budget_is_rejected() {

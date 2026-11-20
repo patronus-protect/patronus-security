@@ -12,7 +12,7 @@ repository = "https://github.com/patronus-protect/patronus-security"
 default = []
 test-util = []
 wolf = ["dep:ort", "dep:half", "dep:blake3", "dep:fs2"]
-download = ["wolf", "dep:ureq", "dep:home", "dep:dirs"]
+download = ["wolf", "dep:ureq", "dep:home"]
 onnx-coreml = ["wolf", "ort/coreml"]
 onnx-cuda = ["wolf", "ort/cuda"]
 onnx-directml = ["wolf", "ort/directml"]
@@ -43,7 +43,6 @@ half = { version = "2.1", optional = true }
 blake3 = { version = "1.5", optional = true }
 ureq = { version = "2.12", optional = true }
 home = { version = "0.5.12", optional = true }
-dirs = { version = "5.0", optional = true }
 fs2 = { version = "0.4", optional = true }
 
 [dev-dependencies]
