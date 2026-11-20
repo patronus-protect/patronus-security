@@ -95,10 +95,12 @@ def main():
     labels = sorted({row["label"] for row in rows if row["label"] != "negative"})
     negatives = [row for row in rows if row["label"] == "negative"]
     gateway = SecurityGateway(
-        categories=["dynamic-pii"],
-        max_level="l3",
-        model_dir=args.model_dir,
-        download_files=False,
+        {
+            "categories": ["dynamic-pii"],
+            "max_level": "l3",
+            "cache_root": args.model_dir,
+            "download": "never",
+        }
     )
     gateway.warmup()
 

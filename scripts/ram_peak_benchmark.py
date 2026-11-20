@@ -316,22 +316,26 @@ def run_child(args: argparse.Namespace) -> int:
     }
     try:
         gateway = SecurityGateway(
-            categories=scenario.categories,
-            max_level=scenario.max_level,
-            model_dir=None if args.model_dir is None else str(args.model_dir),
-            download_files=args.download_files,
-            execution_gates=scenario.execution_gates,
-            l3_strategy=(
-                "multi"
-                if args.child_case == "all_pipelines_unified_dynamic_pii"
-                else "dedicated"
-            ),
-            dynamic_pii_config=dynamic_pii_config,
-            cache_storage_location=None
-            if args.cache_storage_location is None
-            else str(args.cache_storage_location),
-            cache_memory_max_entries=args.cache_memory_max_entries,
-            cache_memory_max_bytes=args.cache_memory_max_bytes,
+            {
+                "categories": scenario.categories,
+                "max_level": scenario.max_level,
+                "cache_root": None if args.model_dir is None else str(args.model_dir),
+                "download": ("missing" if args.download_files else "never"),
+                "l3_strategy": (
+                    "multi"
+                    if args.child_case == "all_pipelines_unified_dynamic_pii"
+                    else "dedicated"
+                ),
+                "dynamic_pii": dynamic_pii_config,
+                "cache": {
+                    "storage_location": None
+                    if args.cache_storage_location is None
+                    else str(args.cache_storage_location),
+                    "memory_max_entries": args.cache_memory_max_entries,
+                    "memory_max_bytes": args.cache_memory_max_bytes,
+                },
+                **scenario.execution_gates,
+            }
         )
         if not args.no_warmup:
             gateway.warmup()

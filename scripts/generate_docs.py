@@ -208,7 +208,7 @@ def wolf_model_lines() -> list[str]:
     lines = [
         "## Wolf Defender Models",
         "",
-        "Dedicated injection L3 runs one Wolf Defender model. Choose it with `pipeline.wolf.model` (Ark API), `wolf_model` (Python) or `WolfConfig.model` (Core); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small pin.",
+        "Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small pin.",
         "",
         "| Model | Repository | Revision |",
         "| --- | --- | --- |",
@@ -886,7 +886,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## Cache Location",
         "",
-        "If `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_ark`:",
+        "If `cache_root` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_ark`:",
         "",
         "| Platform | Typical default cache root |",
         "| --- | --- |",
@@ -898,7 +898,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## Offline And Missing-Asset Behavior",
         "",
-        "- `download_files=False` disables network downloads even when `download_categories` is set.",
+        "- `download: never` disables network downloads even when `download_categories` is set.",
         "- Existing cached assets are still used in offline mode.",
         "- `prepare_assets()` downloads and verifies configured model assets without initializing model runtimes.",
         "- Asset preparation moves the weights of each downloaded ONNX graph (Wolf Defender, L3, GLiNER) into a data file next to it (`model.onnx.data`), once, so ONNX Runtime memory-maps them instead of copying them onto the heap. The weights are copied byte for byte; the rewrite is kept only when the downloaded file can be rebuilt from it exactly. The cache needs about as much disk space as before, since the graph file shrinks by what moves into the data file. Local Wolf bundles that Ark did not download are left as they are.",
@@ -911,7 +911,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.",
         "- Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.",
         "- PII is native L1-only and has no model assets.",
-        "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.",
+        "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `cache_root` asset root.",
         "- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds; set `-1` to keep loaded sessions resident.",
         "- Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.",
         "",
@@ -1070,6 +1070,7 @@ def generate_rust_api_doc() -> str:
         "",
     ]
     sections = [
+        ("Gateway Config", ROOT / "rust/src/config.rs"),
         ("Core Gateway", ROOT / "rust/src/pipeline/security.rs"),
         ("Asset And Runtime Lifecycle", ROOT / "rust/src/pipeline/security/warmup.rs"),
         ("Queued Request API", ROOT / "rust/src/pipeline/security/request_queue.rs"),

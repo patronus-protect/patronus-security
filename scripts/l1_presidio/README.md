@@ -46,8 +46,12 @@ analysiert nur `en` und `de`) und die Modell-Recognizer mit fehlenden Abhängigk
 
 ## ARK im selben Format
 
-`run_ark.py` lässt ARK PII-L1 über die Python-Bindings (`SecurityGateway(categories=["pii"],
-max_level="l1")`, ohne Downloads) über dasselbe Gold-JSONL laufen. Zeilen tragen wie bei Presidio
+`run_ark.py` lässt ARK PII-L1 über die Python-Bindings (`SecurityGateway(
+    {
+        "categories": ["pii"],
+        "max_level": "l1",
+    }
+)`, ohne Downloads) über dasselbe Gold-JSONL laufen. Zeilen tragen wie bei Presidio
 `id`, `language` und `evidence_spans`; jeder Span hat `label` (Benchmark-ID), `ark_label`,
 `start_char`/`end_char` in Code-Points und `score` (Span-Score der Engine). Meldet mehr als eine
 Regel denselben Span, bleibt er einmal mit dem höchsten Score. ARK-Labels ohne Benchmark-ID heißen
@@ -73,7 +77,7 @@ sowie die Paketversion, ohne Zeitstempel. Zwei Läufe auf demselben Build sind b
 
 `--dynamic-pii` ergänzt L1 um die L3-Pipeline `dynamic-pii` (GLiNER, Asset
 `patronus-studio/gliner_small-v2.5-edge`, wird bei Bedarf geladen): ein zweites Gateway
-`SecurityGateway(categories=["dynamic-pii"], max_level="l3", download_files=True)` scannt jede Zeile
+`SecurityGateway({"categories": ["dynamic-pii"], "max_level": "l3", "download": "missing"})` scannt jede Zeile
 nach L1. Labels und Schwellen: `--dynamic-pii-labels` (Standard `person,organization,location`),
 `--dynamic-pii-threshold` (Standard 0,5) und `--dynamic-pii-label-threshold LABEL=X` (wiederholbar).
 GLiNER-Spans tragen `dynamic_pii_label` und die Benchmark-ID aus `dynamic_pii` in `entity_map.yaml`;
@@ -512,7 +516,7 @@ in einem eigenen Prozess, ein Aufruf je Sample, nach Warmup:
 
 | Engine | Messung |
 |---|---|
-| `ark` | Python-Bindings (`SecurityGateway(categories=["pii"], max_level="l1")`) eines Release-Builds des Checkouts, den `run` selbst baut und per `PYTHONPATH` lädt; Debug-Builds (ELF `.debug_*`) brechen mit Exit 2 ab |
+| `ark` | Python-Bindings (`SecurityGateway({"categories": ["pii"], "max_level": "l1"})`) eines Release-Builds des Checkouts, den `run` selbst baut und per `PYTHONPATH` lädt; Debug-Builds (ELF `.debug_*`) brechen mit Exit 2 ab |
 | `ark-native` | Rust-Gateway über `rust/dev/l1_latency_workloads.rs` (`cargo build --release --example l1_latency_workloads`) |
 | `presidio-default`, `presidio-tuned` | `run_presidio.py`-Profile im Presidio-Venv, Pins wie dort geprüft |
 

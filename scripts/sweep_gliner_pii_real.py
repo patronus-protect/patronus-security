@@ -168,10 +168,12 @@ def main():
     labels = args.labels or list(label_map)
 
     gateway = SecurityGateway(
-        categories=["dynamic-pii"],
-        max_level="l3",
-        download_files=False,
-        **({"model_dir": args.model_dir} if args.model_dir else {}),
+        {
+            "categories": ["dynamic-pii"],
+            "max_level": "l3",
+            "download": "never",
+            **({"cache_root": args.model_dir} if args.model_dir else {}),
+        }
     )
     gateway.warmup()
 

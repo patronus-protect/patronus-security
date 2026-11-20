@@ -4,7 +4,7 @@
 
 Input is the same JSONL as for ``run_baselines.py`` (``id`` and ``text``: DLP goldens,
 carrier rows, benign-code or benign-document corpora). Every row is scanned with
-``SecurityGateway(categories=["dlp"], max_level="l1")`` in the default rule profile
+``SecurityGateway({"categories": ["dlp"], "max_level": "l1"})`` in the default rule profile
 (content and document classes stay off unless enabled with ``--enable-rule``).
 
 Each output row carries ``id``, ``tool`` (``ark``) and ``evidence_spans`` with the fields
@@ -90,7 +90,12 @@ def build_gateway(
 
     gates = execution_gates(enabled_rules, load_rule_index() if index is None else index, mode)
     return SecurityGateway(
-        categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False, execution_gates=gates
+        {
+            "categories": [CATEGORY],
+            "max_level": MAX_LEVEL,
+            "download": "never",
+            **(gates or {}),
+        }
     )
 
 

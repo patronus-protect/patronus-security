@@ -177,7 +177,7 @@ def collect_predictions(gateway, rows: list[dict], categories: tuple[str, ...]) 
 def measure_l1(rows: list[dict]) -> dict:
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway(categories=["pii", "dlp"], max_level="l1", download_files=False)
+    gateway = SecurityGateway({"categories": ["pii", "dlp"], "max_level": "l1", "download": "never"})
     # This benchmark measures the full detector inventory, not the default profile.
     source = "".join(
         path.read_text() for path in sorted((ROOT / "ark-core/src/detectors/dlp/rules").glob("*.rs"))
@@ -193,10 +193,12 @@ def measure_gliner(rows: list[dict], model_dir: str | None) -> dict:
     from patronus_ark import SecurityGateway
 
     gateway = SecurityGateway(
-        categories=["dynamic-pii"],
-        max_level="l3",
-        download_files=False,
-        **({"model_dir": model_dir} if model_dir else {}),
+        {
+            "categories": ["dynamic-pii"],
+            "max_level": "l3",
+            "download": "never",
+            **({"cache_root": model_dir} if model_dir else {}),
+        }
     )
     gateway.warmup()
     predictions = collect_predictions(gateway, rows, ("dynamic-pii",))
