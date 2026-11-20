@@ -296,6 +296,11 @@ pub struct L1Stage {
 }
 
 impl L1Stage {
+    /// The layers that ran after the heuristic (the L1 model), in order.
+    pub fn layers(&self) -> &[LayerResult] {
+        &self.layers
+    }
+
     /// The module's final decision when L1 answered Detected or Clear;
     /// `None` when it escalates to the next configured layer.
     pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision> {

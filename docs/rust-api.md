@@ -867,6 +867,12 @@ its native results, refined by the module's L1 model when the heuristic
 escalates.
 
 ```rust
+pub fn layers(&self) -> &[LayerResult];
+```
+
+The layers that ran after the heuristic (the L1 model), in order.
+
+```rust
 pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision>;
 ```
 
