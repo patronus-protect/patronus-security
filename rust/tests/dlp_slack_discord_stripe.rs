@@ -12,14 +12,17 @@
 //! characters (Dashboard) or 64 hex digits (Stripe CLI). Values come from the
 //! golden generator or are built here at test time.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway, SecurityScanResult,
+};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
 };
 use serde_json::Value;
 

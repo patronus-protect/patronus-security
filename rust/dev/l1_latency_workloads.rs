@@ -8,7 +8,8 @@
 //! line per workload: `{id, spans, samples_ns, init_ms}`. After `min_samples` samples, timing
 //! stops once `budget_ms` is spent. Percentiles are computed by the Python scripts, so all Ark
 //! engines share one definition.
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 use std::{collections::HashMap, fs, hint::black_box, time::Instant};
 

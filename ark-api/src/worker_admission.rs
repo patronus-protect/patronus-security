@@ -91,7 +91,10 @@ mod tests {
 
     #[tokio::test]
     async fn inference_capacity_survives_http_cancellation_until_blocking_work_finishes() {
-        use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+        use patronus_ark::SecurityGateway;
+        use patronus_ark_core::{
+            cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
+        };
         let categories = vec![SecurityCategory::Injection];
         let state = AppState::new(
             crate::config::Config {
@@ -190,7 +193,10 @@ mod tests {
         use axum::body::{to_bytes, Body};
         use axum::routing::{get, post};
         use axum::Router;
-        use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+        use patronus_ark::SecurityGateway;
+        use patronus_ark_core::{
+            cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
+        };
         use sha2::{Digest, Sha256};
         use tower::ServiceExt;
 

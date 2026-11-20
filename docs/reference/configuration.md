@@ -123,6 +123,25 @@ config, per key and per request) and Rust (`ScanGateMatrix`, which deserializes 
 gate schema**. Unknown keys and out-of-range values are refused (`ValueError` in Python, HTTP 400 or a
 config error in the Ark API).
 
+### Ark Core keys and Ark keys
+
+Ark runs Ark Core's L1 pass, so Ark Core's config keys are Ark's keys: one document configures
+Ark Core's `Scanner` (`ScannerConfig`) and, without `categories`, Ark's execution gates, and at
+`max_level` `l1` both report the same L1 results. Ark adds only the keys of its later layers.
+
+| Key | Ark Core (`ScannerConfig`) | Ark (execution gates / gateway) |
+|---|---|---|
+| `rules`, `models`, `explain` | yes | yes, same meaning |
+| `pii_mode`, `dlp_mode`, `<attack class>_mode` | yes | yes, same meaning |
+| `resource_exhaustion_count_threshold`, `threat_points_acceptance` | yes | yes, same meaning |
+| `cascade` (`modules`, `detect_threshold`, `clear_threshold`, `max_level`, `conditional`) | yes | yes; `l1_model` is Core only |
+| `categories` | config key | constructor argument (also Ark-only categories) |
+| `max_input_bytes`, `max_findings` | yes | no (Ark queues and chunks long input) |
+| `wolf` | local bundle (`bundle_dir`, `threshold`, `precision`, `backend`) | `wolf_model`, `wolf_precision`, `wolf_options`; same model cache |
+| `shell` | Cat bundle | `shell_command` category and its policy config |
+| `l1`, `l2`, `l3`, `conditional`, `l3_policy` | no | Ark only |
+| `max_level`, `l3_strategy`, `ntdb_operating_point`, `dynamic_pii_config`, cache options | no | Ark only (constructor) |
+
 ```python
 scanner.set_execution_gates({
     "l1": True, "l2": False, "l3": False,

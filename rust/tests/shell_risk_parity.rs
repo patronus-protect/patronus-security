@@ -20,12 +20,11 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use patronus_ark::detectors::shell::{
-    facts::{extract, Facts, ShellContext},
-    kf1,
-    policies::ShellPolicies,
-    shell_risk::{ShellRiskPipeline, ShellVerdict},
-    testing,
+use patronus_ark_core::{
+    detectors::shell::facts::extract, detectors::shell::facts::Facts,
+    detectors::shell::facts::ShellContext, detectors::shell::kf1,
+    detectors::shell::policies::ShellPolicies, detectors::shell::shell_risk::ShellRiskPipeline,
+    detectors::shell::shell_risk::ShellVerdict, detectors::shell::testing,
 };
 use patronus_ark_core::{
     detectors::shell::ShellConfig,
@@ -102,7 +101,7 @@ fn token_counts<'a>(tokens: impl IntoIterator<Item = &'a str>) -> BTreeMap<&'a s
 }
 
 /// `[[id, decision, where...]]` as in the export.
-fn policy_rows(hits: &[patronus_ark::detectors::shell::policies::PolicyHit]) -> Value {
+fn policy_rows(hits: &[patronus_ark_core::detectors::shell::policies::PolicyHit]) -> Value {
     Value::Array(
         hits.iter()
             .map(|hit| {

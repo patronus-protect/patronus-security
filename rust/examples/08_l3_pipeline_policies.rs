@@ -5,10 +5,12 @@
 
 use std::time::Duration;
 
-use patronus_ark::{
-    L3AggregationStrategy, L3ClusteringStrategy, L3PipelineEarlyExit, L3PipelinePolicy,
-    L3SchedulerPolicy, QueuedSecurityEvent, ScanGateMatrix, SecurityCategory, SecurityGateway,
-    SecurityLevel,
+use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
+
+use patronus_ark_core::{
+    cascade::L3AggregationStrategy, cascade::L3ClusteringStrategy, cascade::L3PipelineEarlyExit,
+    cascade::L3PipelinePolicy, cascade::L3SchedulerPolicy, cascade::ScanGateMatrix,
+    cascade::SecurityLevel, SecurityCategory,
 };
 
 fn main() {

@@ -17,11 +17,10 @@
 //!
 //! Validators are not loosened: an impossible date stays negative in every order.
 
-use patronus_ark::detectors::pii::validators;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::validators;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde_json::Value;
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
@@ -32,7 +31,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -82,6 +81,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str) {
 fn assert_silent(label: &str, text: &str) {
     for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let spans: Vec<_> = scan(text, mode)
+            .native
             .evidence_spans
             .into_iter()
             .filter(|span| span.label == label)

@@ -8,9 +8,10 @@
 
 use std::{collections::BTreeSet, path::Path};
 
-use patronus_ark::detectors::obfuscation::{Deobfuscated, Level};
-use patronus_ark::detectors::pii::pii::PII_PATTERNS;
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::pii::PII_PATTERNS;
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{detectors::obfuscation::Deobfuscated, detectors::obfuscation::Level};
 use serde::Deserialize;
 
 /// Non-target primary L1 findings on positives that are detector false positives, not gold
@@ -172,7 +173,7 @@ fn every_l1_finding_on_a_positive_is_gold_or_a_known_detector_fp() {
             .find(|result| result.model == "native:pii")
             .expect("native PII result must be present");
         let secondary = secondary_evidence(&result);
-        for span in result.evidence_spans {
+        for span in result.native.evidence_spans {
             // Target-label spans are scored by 13_l1_golden_eval (incl. known gaps).
             if span.label == row.target_label
                 || secondary.contains(&(span.label.clone(), span.start_byte, span.end_byte))

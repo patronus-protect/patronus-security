@@ -12,9 +12,9 @@ use std::env;
 use std::process::Command;
 use std::time::Instant;
 
-use patronus_ark::{
-    L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{L3Strategy, SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde_json::{json, Value};
 
 const RUNS: usize = 8;

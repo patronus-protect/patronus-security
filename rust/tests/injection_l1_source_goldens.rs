@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 /// The aggregated native L1 result of every attack class: legacy injection
 /// rules report under the class the threat taxonomy assigns them.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::detectors::dlp::dlp::{SecretSubtype, DLP_PATTERNS};
+use patronus_ark_core::{detectors::dlp::dlp::SecretSubtype, detectors::dlp::dlp::DLP_PATTERNS};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 

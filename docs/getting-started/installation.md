@@ -41,10 +41,11 @@ Python package.
 
 ## Rust
 
-Add the crate with Cargo:
+Add the crate with Cargo, together with Ark Core, which defines the shared types
+(categories, levels, gates, results):
 
 ```bash
-cargo add patronus-ark
+cargo add patronus-ark patronus-ark-core
 ```
 
 Or in `Cargo.toml`:
@@ -52,12 +53,14 @@ Or in `Cargo.toml`:
 ```toml
 [dependencies]
 patronus-ark = "0.1"
+patronus-ark-core = "0.1"
 ```
 
 Verify:
 
 ```rust
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 fn main() {
     let mut scanner = SecurityGateway::with_max_level(

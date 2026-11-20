@@ -7,15 +7,22 @@
 
 use std::path::{Path, PathBuf};
 
-use patronus_ark::{
-    detectors::validators::{
-        base58_decode, base58check_decode, base64_decode, base64_digit, bech32_decode,
-        bech32_decode_with_limit, convert_bits, crc32, crc32_base62, crc32_base62_valid,
-        der_integer_ok, der_parse, der_sequence, in_alphabet, jwt_header, jwt_parse,
-        shannon_entropy, Base64Kind, Bech32Variant, CharClasses, BASE32, BASE58, BASE62, BASE64,
-        BASE64URL, BECH32, HEX_LOWER,
-    },
-    golden_recipes::GeneratorSet,
+use patronus_ark::golden_recipes::GeneratorSet;
+
+use patronus_ark_core::{
+    detectors::validators::base58_decode, detectors::validators::base58check_decode,
+    detectors::validators::base64_decode, detectors::validators::base64_digit,
+    detectors::validators::bech32_decode, detectors::validators::bech32_decode_with_limit,
+    detectors::validators::convert_bits, detectors::validators::crc32,
+    detectors::validators::crc32_base62, detectors::validators::crc32_base62_valid,
+    detectors::validators::der_integer_ok, detectors::validators::der_parse,
+    detectors::validators::der_sequence, detectors::validators::in_alphabet,
+    detectors::validators::jwt_header, detectors::validators::jwt_parse,
+    detectors::validators::shannon_entropy, detectors::validators::Base64Kind,
+    detectors::validators::Bech32Variant, detectors::validators::CharClasses,
+    detectors::validators::BASE32, detectors::validators::BASE58, detectors::validators::BASE62,
+    detectors::validators::BASE64, detectors::validators::BASE64URL, detectors::validators::BECH32,
+    detectors::validators::HEX_LOWER,
 };
 
 fn repo_root() -> PathBuf {

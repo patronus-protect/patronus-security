@@ -5,7 +5,9 @@ use std::{
     path::PathBuf,
 };
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -152,8 +154,9 @@ fn predicted_spans(gateway: &SecurityGateway, text: &str) -> BTreeSet<Span> {
     gateway
         .scan_category(SecurityCategory::Pii, text)
         .into_iter()
-        .find(|result| result.model == "native:pii")
+        .find(|result| result.native.model == "native:pii")
         .expect("native PII result must exist")
+        .native
         .evidence_spans
         .into_iter()
         .filter(|span| ark_label_for_output(&span.label))
@@ -339,9 +342,9 @@ mod tests {
             for entity in row["entities"].as_array().expect("entities") {
                 let label = entity["label"].as_str().expect("entity label");
                 let validator: fn(&str) -> bool = match label {
-                    "credit_card" => patronus_ark::detectors::pii::validators::luhn,
+                    "credit_card" => patronus_ark_core::detectors::pii::validators::luhn,
                     "health_insurance_number" => {
-                        patronus_ark::detectors::pii::validators::de_health_insurance_number
+                        patronus_ark_core::detectors::pii::validators::de_health_insurance_number
                     }
                     _ => {
                         assert!(entity.get("checksum_valid").is_none(), "{}", row["id"]);

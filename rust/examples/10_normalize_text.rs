@@ -3,8 +3,11 @@
 //!
 //! Run: `cargo run --example 10_normalize_text`
 
-use patronus_ark::{
-    normalize_text, SecurityCategory, SecurityGateway, SecurityLevel, TextNormalizationConfig,
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, normalization::normalize_text, normalization::TextNormalizationConfig,
+    SecurityCategory,
 };
 
 fn main() {

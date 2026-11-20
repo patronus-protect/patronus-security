@@ -272,7 +272,8 @@ pub struct EvidenceSpan {
 }
 
 #[derive(Debug, Clone, Serialize)]
-/// Public scan result returned by `SecurityGateway` methods.
+/// One category's scan result: the Core [`crate::Scanner`]'s `native`
+/// results, and the shared part of every Ark gateway result, which embeds it.
 pub struct NativeResult {
     /// Category that was scanned, for example `injection` or `dlp`.
     pub category: String,
@@ -294,6 +295,38 @@ pub struct NativeResult {
     pub label_scores: Vec<LabelScore>,
     /// Structured classifier decision contract for policy consumers.
     pub decision: Option<DecisionEnvelope>,
+}
+
+impl NativeResult {
+    /// The L1 result of a producer that failed (panicked or was not loaded):
+    /// class `error` with the message in its `scanner_error` layer.
+    pub fn scanner_error(
+        category: SecurityCategory,
+        model: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            category: category.as_str().into(),
+            class_name: "error".into(),
+            confidence: 0.0,
+            level: "L1".into(),
+            model: model.into(),
+            duration_ms: 0.0,
+            layers: vec![LayerResult {
+                level: "L1".into(),
+                layer_type: "scanner_error".into(),
+                class_name: "error".into(),
+                confidence: 0.0,
+                matched: false,
+                duration_ms: 0.0,
+                thresholds: HashMap::new(),
+                details: HashMap::from([("error".into(), serde_json::json!(message.into()))]),
+            }],
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

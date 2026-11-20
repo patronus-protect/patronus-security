@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
-use patronus_ark::detectors::pii::{pii::PiiPipeline, validators};
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{detectors::pii::pii::PiiPipeline, detectors::pii::validators};
 
 fn pii_result(text: &str) -> SecurityScanResult {
     pii_result_with_explain(text, false)
@@ -14,8 +15,8 @@ fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
         None,
         false,
     );
-    let gates = patronus_ark::ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+    let gates = patronus_ark_core::cascade::ScanGateMatrix {
+        native: patronus_ark_core::native::NativeGates {
             explain,
             ..Default::default()
         },

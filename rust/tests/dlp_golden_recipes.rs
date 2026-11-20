@@ -7,12 +7,13 @@
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    golden_recipes::{
-        materialize, materialize_fragments, transform, Fragment, GeneratorSet, RecipeError,
-        SecretRecipe, SplitMix64,
-    },
-    SecurityCategory, SecurityGateway, SecurityLevel,
+    golden_recipes::materialize, golden_recipes::materialize_fragments, golden_recipes::transform,
+    golden_recipes::Fragment, golden_recipes::GeneratorSet, golden_recipes::RecipeError,
+    golden_recipes::SecretRecipe, golden_recipes::SplitMix64, SecurityGateway,
+};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
 };
 use serde::Deserialize;
 
@@ -574,7 +575,7 @@ fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
         let spans = gateway
             .scan_category(SecurityCategory::Dlp, line)
             .into_iter()
-            .flat_map(|result| result.evidence_spans)
+            .flat_map(|result| result.native.evidence_spans)
             .map(|span| (span.label, span.start_char, span.end_char))
             .collect::<Vec<_>>();
         // Inputs 0 and 1 are generators.json and rules.json, input n is line n - 1.

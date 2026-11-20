@@ -2,13 +2,13 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    assets::{
-        category_assets, dedicated_l3_asset, dynamic_pii_assets_present, ntdb_l2_package_assets,
-        ntdb_l2_package_assets_present, required_assets_present, DEDICATED_L3_ASSETS,
-        DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
-    },
-    SecurityCategory, SecurityLevel,
+    assets::category_assets, assets::dedicated_l3_asset, assets::dynamic_pii_assets_present,
+    assets::ntdb_l2_package_assets, assets::ntdb_l2_package_assets_present,
+    assets::required_assets_present, assets::DEDICATED_L3_ASSETS, assets::DYNAMIC_PII_ASSET,
+    assets::NTDB_L2_PACKAGE_MANIFEST, assets::UNIFIED_L3_ASSET,
 };
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
@@ -422,7 +422,7 @@ mod asset_downloads {
         category_assets, ntdb_l2_package_assets, ntdb_l2_package_manifest_files,
         required_assets_present, ASSET_MANIFEST,
     };
-    use patronus_ark::{SecurityCategory, SecurityLevel};
+    use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let suffix = SystemTime::now()
@@ -582,7 +582,7 @@ mod asset_downloads {
 #[test]
 fn injection_l2_package_uses_cores_wolf_small_pin() {
     // One pin per shared model: the L2 package comes from Core's Wolf Small release.
-    let small = patronus_ark::WolfModel::Small.spec();
+    let small = patronus_ark_core::wolf::WolfModel::Small.spec();
     let package = NTDB_L2_PACKAGE_MANIFEST
         .iter()
         .find(|asset| asset.category == SecurityCategory::Injection)

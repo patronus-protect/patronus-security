@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    detectors::shell::ShellPolicyConfig, normalize_text as rust_normalize_text,
-    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig,
-    ExecutionBackend, L3Strategy, LabelScore, LayerResult, MemoryCacheConfig, NtdbOperatingPoint,
-    OnnxBatchMode, PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
-    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
+    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy,
+    MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig,
+    QueuedSecurityEvent, QueuedSecurityScanResult, SecurityFailure,
+    SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, SecurityRuntimeReadiness, WriteBehindConfig,
+};
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
+    normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
+    EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, SecurityCategory,
+    WolfExecutionOptions,
 };
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
@@ -259,8 +263,9 @@ impl SecurityGateway {
         ntdb_operating_point: Option<&str>,
         chunk_overlap_tokens: i64,
     ) -> PyResult<String> {
-        let chunk_overlap_tokens = patronus_ark::ChunkOverlapTokens::try_from(chunk_overlap_tokens)
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        let chunk_overlap_tokens =
+            patronus_ark_core::ml::tokenizer::ChunkOverlapTokens::try_from(chunk_overlap_tokens)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
         let gates = parse_execution_gates_json(execution_gates_json)?;
         let ntdb_operating_point = ntdb_operating_point
             .map(parse_ntdb_operating_point)
@@ -431,7 +436,7 @@ fn hex_nibble(value: u8) -> PyResult<u8> {
 }
 
 fn parse_wolf_selection(model: &str, precision: &str) -> PyResult<patronus_ark::WolfSelection> {
-    let model = patronus_ark::WolfModel::ALL
+    let model = patronus_ark_core::wolf::WolfModel::ALL
         .into_iter()
         .find(|candidate| candidate.as_str() == model)
         .ok_or_else(|| {
@@ -439,7 +444,7 @@ fn parse_wolf_selection(model: &str, precision: &str) -> PyResult<patronus_ark::
                 "wolf_model must be base, small or edge, not {model:?}"
             ))
         })?;
-    let precision = patronus_ark::WolfPrecision::parse(precision).ok_or_else(|| {
+    let precision = patronus_ark_core::wolf::WolfPrecision::parse(precision).ok_or_else(|| {
         pyo3::exceptions::PyValueError::new_err(format!("unknown wolf_precision {precision:?}"))
     })?;
     Ok(patronus_ark::WolfSelection { model, precision })
@@ -450,7 +455,7 @@ fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecution
         .map(|value| {
             let options: WolfExecutionOptions = serde_json::from_str(value)
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-            patronus_ark::WolfServingProfile::ARK
+            patronus_ark_core::WolfServingProfile::ARK
                 .fill(options)
                 .validate()
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
@@ -939,6 +944,12 @@ impl From<SecurityRuntimeReadiness> for PyRuntimeReadiness {
 
 impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
     fn from(result: patronus_ark::SecurityScanResult) -> Self {
+        let patronus_ark::SecurityScanResult {
+            native: result,
+            decided_by,
+            l1_outcome,
+            ..
+        } = result;
         let decision_json = result
             .decision
             .as_ref()
@@ -959,12 +970,10 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
                 .map(PyLabelScore::from)
                 .collect(),
             decision_json,
-            decided_by: result
-                .decided_by
+            decided_by: decided_by
                 .and_then(|stage| serde_json::to_value(stage).ok())
                 .and_then(|value| value.as_str().map(str::to_string)),
-            l1_outcome: result
-                .l1_outcome
+            l1_outcome: l1_outcome
                 .and_then(|outcome| serde_json::to_value(outcome).ok())
                 .and_then(|value| value.as_str().map(str::to_string)),
         }

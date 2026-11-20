@@ -10,9 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use patronus_ark::{
     assets::DYNAMIC_PII_ASSET, DynamicPiiConditionalLabels, DynamicPiiConfig,
     DynamicPiiExecutionGate, DynamicPiiRequestConfig, DynamicPiiResultCondition,
-    QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel, SecurityLevelReadiness,
-    SecurityRequestCompletion, SecurityRequestState, MAX_REQUEST_LABEL_BYTES,
+    QueuedSecurityEvent, SecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, MAX_REQUEST_LABEL_BYTES,
 };
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 #[test]
 fn default_labels_are_a_small_core_bundle() {

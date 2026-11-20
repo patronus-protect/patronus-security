@@ -858,6 +858,7 @@ mod tests {
 
         let envelope = result
             .decision
+            .clone()
             .expect("NTDB L2 result should carry decision envelope");
         let candidate = envelope
             .decision_candidate

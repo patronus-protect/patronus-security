@@ -2,7 +2,7 @@
 //! Base58Check encoding (double SHA-256) for the key vectors of the wallet
 //! key tests.
 
-use patronus_ark::detectors::validators::BASE58;
+use patronus_ark_core::detectors::validators::BASE58;
 
 pub fn base58check_encode(payload: &[u8]) -> String {
     let digest = ring::digest::digest(

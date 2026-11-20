@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use patronus_ark::detectors::pii::pii::{is_bare_rule, PII_PATTERNS};
+use patronus_ark_core::{detectors::pii::pii::is_bare_rule, detectors::pii::pii::PII_PATTERNS};
 use serde::Deserialize;
 
 const LANGUAGES: [&str; 2] = ["de", "en"];

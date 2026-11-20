@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{EvaluationResult, ExecutionBackend, OnnxRuntimeOptions};
-pub use patronus_ark_core::onnx::{
-    active_execution_providers, available_execution_providers, commit_session,
-    configured_session_builder, warmup_runtime,
+pub(crate) use patronus_ark_core::onnx::{
+    commit_session, configured_session_builder, warmup_runtime,
 };
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::tokenizer::MODEL_TOKENS;
-pub use patronus_ark_core::ml::text_classifier::OnnxTextClassifier;
+pub(crate) use patronus_ark_core::ml::text_classifier::OnnxTextClassifier;
 pub(crate) use patronus_ark_core::ml::text_classifier::RawClassifierOutput;
 
 const DEFAULT_MAX_LEN: usize = MODEL_TOKENS;

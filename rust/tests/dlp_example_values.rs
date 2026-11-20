@@ -6,9 +6,10 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{
-    detectors::validators::crc32_base62, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::validators::crc32_base62, SecurityCategory,
 };
 
 fn scan(text: &str) -> SecurityScanResult {

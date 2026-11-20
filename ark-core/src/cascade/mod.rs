@@ -394,6 +394,41 @@ impl Cascade {
         }
     }
 
+    /// L1's answer for `module`, shared by the Core scanner and Ark's
+    /// gateway: the heuristic ([`Self::l1_stage`]) over the module's results
+    /// in `scan` when one of its producers ran (`heuristic`), else
+    /// [`Self::l1_off`]; then the module's L1 `model` on an escalation
+    /// ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+    /// scan: the model reads their rule findings, as in training.
+    pub fn l1_answer<'a>(
+        &self,
+        module: SecurityCategory,
+        mode: ScoreMode,
+        heuristic: bool,
+        scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
+        model: Option<&L1TextModel>,
+        text: &str,
+    ) -> L1Stage {
+        let stage = if heuristic {
+            self.l1_stage(
+                module,
+                mode,
+                scan.clone()
+                    .filter(|result| result.category == module.as_str()),
+            )
+        } else {
+            self.l1_off(module)
+        };
+        let findings = if model.is_some() && stage.outcome == StageOutcome::Escalate {
+            scan.flat_map(|result| &result.layers)
+                .flat_map(|layer| crate::detectors::threat::facts_findings(&layer.details))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.l1_model_stage(stage, model, text, &findings)
+    }
+
     /// Run `model`, the module's L1 model, on an input the heuristic
     /// escalated; its Detected or Clear replaces the escalation, its
     /// Escalate passes on. A decided stage or no model leaves `stage` as is.

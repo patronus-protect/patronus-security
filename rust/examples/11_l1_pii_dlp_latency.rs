@@ -1,8 +1,10 @@
 use std::{hint::black_box, time::Instant};
 
-use patronus_ark::{
-    detectors::{dlp::dlp::DlpPipeline, pii::pii::PiiPipeline},
-    SecurityCategory, SecurityGateway, SecurityLevel,
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DlpPipeline, detectors::pii::pii::PiiPipeline,
+    SecurityCategory,
 };
 
 fn measure(mut operation: impl FnMut(), samples: usize, batch_size: usize) -> (f64, f64, f64) {
