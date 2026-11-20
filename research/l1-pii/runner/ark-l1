@@ -37,6 +37,8 @@ Subcommands:
   landable        exit 0 when `next` has work on this lane's open PRs (merge, verify, restack,
                   review); run.sh then starts the second programme anyway, with ARK_L1_LAND_ONLY=1
   own BRANCH...   print the given task branches that belong to this host's lane
+  refresh         threat: after merges to main, re-render the scoreboard of main from the dev split
+                  (`scoreboard.py refresh`, sandboxed) and push what changed as one follow-up PR
 
 Verify: auto-merge (and `land`) merges a PR that changes ark-core/ only after a verify run passed
 on its exact head: a fresh agent checks it against the backlog task's accept criteria and the
@@ -2262,6 +2264,98 @@ def drop_worktree(cur: dict) -> None:
     CURRENT.unlink(missing_ok=True)
 
 
+# ── scoreboard of main ───────────────────────────────────────────────────
+
+SCOREBOARD_STATE = STATE / "scoreboard-refresh.json"  # {"rendered_from": main commit of the last refresh}
+SCOREBOARD_BRANCH = f"{BRANCH_PREFIX}scoreboard"       # one follow-up PR, force-pushed by every refresh
+SCOREBOARD_DIR = "research/l1-threat/scoreboard"
+SCOREBOARD_REPORTS = ("baseline.md", "cascade.md")     # the files `scoreboard.py refresh` rewrites
+BASELINE_CACHE = HOME / ".cache" / "ark-l1-threat" / "baselines"  # run_baselines.py cache of the runs
+
+
+def refresh_commit(tree: Path, main_sha: str) -> str | None:
+    """A commit on main with the reports the sandboxed refresh rewrote in ``tree``; None when none changed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        git_raw("read-tree", main_sha, env=env)
+        changed = []
+        for name in SCOREBOARD_REPORTS:
+            path = tree / SCOREBOARD_DIR / name
+            if not path.is_file() or path.is_symlink():
+                continue
+            blob = git_raw("hash-object", "-w", "--stdin", stdin=path.read_text(encoding="utf-8")).strip()
+            if blob != git("rev-parse", "--verify", "--quiet", f"{main_sha}:{SCOREBOARD_DIR}/{name}", check=False):
+                git_raw("update-index", "--add", "--cacheinfo", f"100644,{blob},{SCOREBOARD_DIR}/{name}", env=env)
+                changed.append(name)
+        if not changed:
+            return None
+        tree_id = git_raw("write-tree", env=env).strip()
+    return git_raw("commit-tree", tree_id, "-p", main_sha, "-m",
+                   f"docs({PROGRAM}): scoreboard of main at {main_sha[:12]} ({', '.join(changed)})").strip()
+
+
+def cmd_refresh() -> int:
+    """Re-render the threat scoreboard of main after merges and push it as one follow-up PR.
+
+    Runs at the start of every threat run (lane a only, so two hosts never push the branch). The
+    refresh runs main's own scoreboard.py in the sandbox like a gate step, without the holdout and
+    without network; it skips the render when no detector, scorer or gold path changed since the
+    last refresh. Auto-merge lands the PR like any other green PR of the programme."""
+    if PROGRAM != "threat" or LANE not in ("", "a"):
+        print("REFRESH=none (threat programme, lane a only)")
+        return 0
+    git("fetch", "--quiet", "origin", "main")
+    main_sha = sha("origin/main")
+    since = load(SCOREBOARD_STATE, {}).get("rendered_from")
+    if since == main_sha:
+        print(f"REFRESH=up to date ({main_sha[:12]})")
+        return 0
+    for d in (GATE_TARGET, GATE_HOME / "cargo", GATE_HOME / "cache", CACHE, STATE):
+        d.mkdir(parents=True, exist_ok=True)
+    tree = GATE_TREES / "refresh"
+    shutil.rmtree(tree, ignore_errors=True)
+    git("worktree", "prune")
+    git("worktree", "add", "--quiet", "--detach", str(tree), main_sha)
+    try:
+        cmd = [str(ROOT / P["eval_venv"] / "bin" / "python"), str(tree / P["eval_dir"] / "scoreboard.py"), "refresh",
+               "--tree", str(tree), "--dev", str(DEV_DATA), "--cache", str(CACHE),
+               *(["--since", since] if since else []),
+               *(["--baseline-cache", str(BASELINE_CACHE)] if BASELINE_CACHE.is_dir() else [])]
+        started = time.monotonic()
+        proc = sandbox(cmd, tree, [tree, CACHE], gate_env(), network=False,
+                       readable=(DEV_DATA, *([BASELINE_CACHE] if BASELINE_CACHE.is_dir() else [])),
+                       max_sec=GATE_BUILD_MAX_SEC)
+        if proc.returncode != 0:
+            elapsed = time.monotonic() - started
+            print(f"REFRESH_ERROR=exit {proc.returncode}\n"
+                  + failure_output(proc, elapsed >= GATE_BUILD_MAX_SEC - 5, elapsed, GATE_BUILD_MAX_SEC))
+            return 1
+        summary = proc.stdout.strip().splitlines()[-1:] or [""]
+        commit = refresh_commit(tree, main_sha)
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+        git("worktree", "prune", check=False)
+    if commit is not None:
+        git("push", "--quiet", "origin", f"+{commit}:refs/heads/{SCOREBOARD_BRANCH}")
+        existing = json.loads(run(["gh", "pr", "list", "--repo", GH_REPO, "--head", SCOREBOARD_BRANCH,
+                                   "--state", "open", "--json", "url"]))
+        if existing:
+            url = existing[0]["url"]
+        else:
+            body = "\n".join([
+                f"The {P['name']} scoreboard of main, re-rendered from the dev split by `scoreboard.py refresh` "
+                f"after a detector, scorer or gold change; see `{P['readme']}`.", "",
+                f"`{summary[0]}`", "",
+                "🤖 Generated with [Claude Code](https://claude.com/claude-code)"])
+            url = run(["gh", "pr", "create", "--repo", GH_REPO, "--base", "main", "--head", SCOREBOARD_BRANCH,
+                       "--label", LABEL, "--title", f"{P['title']}: scoreboard of main", "--body", body])
+        print(f"REFRESH_PR={url}")
+    else:
+        print(f"REFRESH=no report changed ({summary[0]})")
+    save(SCOREBOARD_STATE, {"rendered_from": main_sha})
+    return 0
+
+
 def cmd_latency() -> int:
     """Verify runs: the quiet latency A/B before the agent round; the result goes into the task."""
     cur = load(CURRENT, None)
@@ -2428,7 +2522,7 @@ def main(argv: list[str]) -> int:
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
         "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "stale": cmd_stale, "ci": cmd_ci, "idle": cmd_idle,
         "landable": cmd_landable,
-        "latency": cmd_latency, "verdict": cmd_verdict,
+        "latency": cmd_latency, "verdict": cmd_verdict, "refresh": cmd_refresh,
     }
     if cmd in table:
         return table[cmd]()
