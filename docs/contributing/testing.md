@@ -106,7 +106,8 @@ output (it is machine-specific and git-ignored).
 
 Separately, CI's `native-throughput` job installs a fresh release wheel and runs
 `scripts/ark_api_throughput_benchmark.py` against the real L1/L2/unified-L3 profile,
-without GLiNER. Its 0.3 MiB/s and 0.5 requests/s limits are pass/fail gates; a local
+without GLiNER. One warm-up round runs before timing starts, and every round sends new
+texts, so the result is uncached steady-state throughput. Its 0.3 MiB/s and 0.5 requests/s limits are pass/fail gates; a local
 macOS result does not prove that the Linux runner passes them.
 
 ## Adding tests
