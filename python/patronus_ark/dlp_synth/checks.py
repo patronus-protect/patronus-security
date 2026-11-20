@@ -15,7 +15,7 @@ import hmac
 import json
 import re
 import zlib
-from .word_lists import seed_word_list
+from .recipes import seed_word_list
 
 
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

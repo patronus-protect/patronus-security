@@ -100,7 +100,18 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
-from .word_lists import seed_word_list
+
+@lru_cache(maxsize=None)
+def seed_word_list(name: str) -> tuple[str, ...]:
+    """Words of ``bip39_<language>`` or ``monero_english``, in list order, from Ark Core.
+
+    Ark Core is imported on first use: this module stays loadable by path and without any
+    native package (``scripts/tokenizer_parity_texts.py``, ``scripts/l1_dlp/prepare_corpora.py``);
+    only the seed-word recipes and checks need ``patronus_ark_core`` installed.
+    """
+    from patronus_ark_core import seed_word_list as core_seed_word_list
+
+    return tuple(core_seed_word_list(name))
 
 
 GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"

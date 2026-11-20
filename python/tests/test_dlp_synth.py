@@ -1288,6 +1288,18 @@ class NativeFreeLoadTests(unittest.TestCase):
         )
         subprocess.run([sys.executable, "-c", script], check=True)
 
+    def test_recipes_load_by_path_as_a_standalone_module(self):
+        # scripts/tokenizer_parity_texts.py loads recipes.py by path, outside its package.
+        script = (
+            "import importlib.util, sys\n"
+            "sys.modules['patronus_ark_core'] = None\n"
+            f"path = {str(REPO / 'python/patronus_ark/dlp_synth/recipes.py')!r}\n"
+            "spec = importlib.util.spec_from_file_location('golden_recipes', path)\n"
+            "module = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(module)\n"
+        )
+        subprocess.run([sys.executable, "-c", script], check=True)
+
 
 class GeneratorSpecTests(unittest.TestCase):
     def test_every_generator_belongs_to_a_rule(self):
