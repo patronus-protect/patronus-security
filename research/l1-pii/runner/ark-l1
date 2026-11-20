@@ -514,39 +514,9 @@ INFRA_FAILURES = ("failed to install component", "No space left on device",
                   "Unexpected HTTP response: 50", "gzip: invalid magic",
                   # A hosted runner never picked the job up (macos-latest capacity, T18 2026-10-28): no
                   # log at all, only a check-run annotation, and the job ends "cancelled".
-                  "was not acquired by Runner",
-                  # native-throughput on hosted runners: L3 requests time out in the queue (0.2-0.34
-                  # MiB/s vs 0.30 minimum). Push runs fail where the PR run on the same SHA passes
-                  # (0fc0fa6d, 50c62094, a8b514ad on 2026-11-07); a restack head has no PR run to
-                  # compare with. A real slowdown stays red after CI_RESTART_LIMIT restarts.
-                  "expired_before_inference")
+                  "was not acquired by Runner")
 BAD_CONCLUSIONS = ("failure", "cancelled", "timed_out", "startup_failure")
 NO_RESTART = "no-restart"  # rerun_infra_failures: runner failure, but CI could not be restarted
-
-# The native-throughput job (scripts/ark_api_throughput_benchmark.py) fails on hosted runners now and
-# then with nothing but L3 `expired_before_inference` timeouts of unified-v3-threat at normal MiB/s and
-# RPS; it did so on main and on unrelated branches. P08 and P09 were blocked on it after 3 rounds
-# (2026-11-06) although agents cannot change the L3 model. Only that exact report is a flake.
-THROUGHPUT_JOB = "native-throughput"
-GH_LOG_PREFIX = re.compile(r"^[^\t]*\t[^\t]*\t\S+Z ?")
-
-
-def throughput_timeout_flake(log: str) -> bool:
-    """The benchmark JSON in a failed native-throughput log reports only pipeline failures, and every
-    one is an L3 timeout that expired before inference (no throughput, RPS or coverage error)."""
-    lines = [GH_LOG_PREFIX.sub("", line) for line in log.splitlines()]
-    try:
-        start = lines.index("{")
-        end = lines.index("}", start)
-        report = json.loads("\n".join(lines[start:end + 1]))
-    except ValueError:
-        return False
-    errors, failures = report.get("errors") or [], report.get("failures") or []
-    return (bool(failures) and len(errors) == 1
-            and re.fullmatch(r"received \d+ pipeline failures", str(errors[0])) is not None
-            and all(f.get("kind") == "timeout" and f.get("level") == "L3"
-                    and f.get("message") == "expired_before_inference" for f in failures))
-
 
 CI_RESTART_LIMIT = 2  # CI restarts per head; macos capacity + a Windows flake needed two (H06, 2026-11-03)
 
@@ -571,8 +541,6 @@ def run_is_infra_failure(run_id: int, passed_elsewhere: frozenset[str] = frozens
                     "--log-failed"], check=False) + run(
             ["gh", "api", f"repos/{GH_REPO}/check-runs/{job['databaseId']}/annotations", "--jq", ".[].message"],
             check=False)
-        if job.get("name") == THROUGHPUT_JOB and throughput_timeout_flake(text):
-            continue
         if not any(marker in text for marker in INFRA_FAILURES):
             return False
     return bool(bad)

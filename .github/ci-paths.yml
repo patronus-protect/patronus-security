@@ -103,11 +103,6 @@ python:
   - 'requirements-test.txt'
   - '.python-version'
   - '!**/*.md'
-throughput:
-  - 'ark-core/src/**'
-  - 'rust/src/**'
-  - 'python/src/**'
-  - 'scripts/ark_api_throughput_benchmark.py'
 licenses:
   - '**/deny.toml'
   - 'LICENSE*'
