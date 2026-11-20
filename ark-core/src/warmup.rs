@@ -145,7 +145,6 @@ pub fn prepare_shell_assets_with_progress(
     progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
 ) -> Result<(), ScanError> {
     options.validate()?;
-    let dir = &config.bundle_dir;
     let Some(problem) = shell_bundle_problem(config) else {
         if let Some(callback) = progress {
             callback(SHELL_FILES.len(), SHELL_FILES.len());
@@ -168,6 +167,7 @@ pub fn prepare_shell_assets_with_progress(
         use crate::assets::download::{
             download_hf_file_with_options, get_hf_token, DownloadOptions,
         };
+        let dir = &config.bundle_dir;
         let deadline = std::time::Instant::now()
             + std::time::Duration::from_millis(options.download_timeout_ms);
         let token = get_hf_token();
