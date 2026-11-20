@@ -826,12 +826,18 @@
         "your answer",
         "your message",
         "your output",
-        "base",
-        "rot13",
-        "caesar",
-        "morse",
-        "pig latin",
-        "leetspeak"
+        "reply using",
+        "reply in",
+        "reply with",
+        "reply only",
+        "respond using",
+        "respond in",
+        "respond with",
+        "respond only",
+        "answer using",
+        "answer in",
+        "answer with",
+        "answer only"
       ]
     },
     {
@@ -867,9 +873,13 @@
       "source_revision": "0.1.20",
       "description": "Directive to the answering model to put a supplied code snippet into the code or answer it writes",
       "adaptation": "EN clause with 'the following/below/subsequent code (snippet|block|excerpt|section)' and, in the same clause, the model's own output as target (your response, answer, code, codebase, implementation, solution, algorithm, program; the code you develop/write), in either order; targets of the reader's own project files (your settings.py, your pull request, your theme) stay unmatched.",
-      "pattern": "(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n]{0,40}?)\\b(?:the\\s+)?(?:following|below|subsequent|above|attached)\\s+code(?:\\s+(?:snippet|block|excerpt|section|fragment|segment|piece|sample))?\\b[^.!?\\n]{0,60}?\\b(?:your\\s+(?:own\\s+)?(?:response|reply|answer|code(?:base)?|implementation|solution(?:\\s+architecture)?|algorithm|program(?:\\s+logic)?|elucidation|script)|the\\s+code\\s+you\\s+(?:develop|write|produce|generate))\\b|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n]{0,40}?)\\byour\\s+(?:response|reply|answer|code(?:base)?|implementation|solution(?:\\s+architecture)?|algorithm|program(?:\\s+logic)?|elucidation|script)\\b[^.!?\\n]{0,60}?\\b(?:by|with)\\s+(?:the\\s+)?(?:\\w+\\s+){0,3}?(?:the\\s+)?(?:following|below|subsequent|above|attached)\\s+code(?:\\s+(?:snippet|block|excerpt|section|fragment|segment|piece|sample))?\\b",
+      "pattern": "(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n\\\"'“”„=\\[({]{0,40}?)\\b(?:the\\s+)?(?:following|below|subsequent|above|attached)\\s+code(?:\\s+(?:snippet|block|excerpt|section|fragment|segment|piece|sample))?\\b[^.!?\\n]{0,60}?\\b(?:your\\s+(?:own\\s+)?(?:response|reply|answer|code(?:base)?|implementation|solution(?:\\s+architecture)?|algorithm|program(?:\\s+logic)?|elucidation|script)|the\\s+code\\s+you\\s+(?:develop|write|produce|generate))\\b|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n\\\"'“”„=\\[({]{0,40}?)\\byour\\s+(?:response|reply|answer|code(?:base)?|implementation|solution(?:\\s+architecture)?|algorithm|program(?:\\s+logic)?|elucidation|script)\\b[^.!?\\n]{0,60}?\\b(?:by|with)\\s+(?:the\\s+)?(?:\\w+\\s+){0,3}?(?:the\\s+)?(?:following|below|subsequent|above|attached)\\s+code(?:\\s+(?:snippet|block|excerpt|section|fragment|segment|piece|sample))?\\b",
       "required_literals_any": [
-        "code"
+        "following code",
+        "below code",
+        "subsequent code",
+        "above code",
+        "attached code"
       ]
     },
     {
@@ -886,11 +896,31 @@
       "adaptation": "DE clause-initial du-imperative aimed at 'deine Antwort/Ausgabe/Nachricht': a transformation verb with a cipher, Base64, reversal, emoji or typo marker in the same clause; 'übersetze deine Antwort ins Spanische'; 'füge in deine Antwort einen/eine/den ... ein'; 'ergänze deine Antwort um einen ...'; 'erwähne in deiner Antwort, dass ...'; 'ändere deine Antwort so, dass ...'; a quoted line into the reply. Formal requests to a human reader ('geben Sie in Ihrer Antwort Ihre Buchungsnummer an'), 'deine Verfügbarkeit', quoted and negated mentions stay unmatched.",
       "pattern": "(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:verschlüssele|verschluessele|verschlüssle|verschluessle|kodiere|codiere|schreibe|schreib|gib|formuliere|ersetze|verfasse|stelle|kehre|verwende|nutze|wandle|verwandle|drehe)\\b(?:[^.!?\\n]{0,60}?(?:caesar|chiffre|base\\s?-?(?:16|32|64)|emojis?|rückwärts|rueckwaerts|umgekehrter\\s+reihenfolge|anagramm\\w*|tippfehler\\w*|ohne\\s+leerzeichen|morsecode|rot13)[^.!?\\n]{0,40}?\\b(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\b|[^.!?\\n]{0,40}?\\b(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\b[^.!?\\n]{0,50}?(?:caesar|chiffre|base\\s?-?(?:16|32|64)|emojis?|rückwärts|rueckwaerts|umgekehrter\\s+reihenfolge|anagramm\\w*|tippfehler\\w*|ohne\\s+leerzeichen|morsecode|rot13))|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:übersetze|uebersetze)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\s+(?:ins\\s+(?:spanische|französische|franzoesische|portugiesische|italienische|russische|chinesische|japanische)|auf\\s+(?:spanisch|französisch|franzoesisch|portugiesisch|italienisch|russisch|chinesisch|japanisch))\\b|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:füge|fuege|baue|nimm|integriere|bette|setze|schreibe|packe|streue)\\s+in\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\s+(?:(?:noch|bitte|unauffällig|unauffaellig)\\s+)?(?:einen|eine|ein|den|die|das)\\s+|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:ergänze|ergaenze|erweitere|bereichere)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\s+um\\s+(?:einen|eine|ein|den|die|das)\\s+|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:erwähne|erwaehne|empfiehl|bewirb|nenne|weise|deute|behaupte)\\s+(?:in|am\\s+ende)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\s*,?\\s*(?:dass|den|die|das|einen|eine|ein|auf)\\b|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:ändere|aendere|passe|formuliere)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\s+so\\s*(?:(?:um|an|ab)\\s*)?,?\\s*dass\\b|(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:füge|fuege|setze|schreibe|hänge|haenge)\\s+[\\\"'„“‚‘][^\\\"'”“‘’\\n]{3,120}[\\\"'”“‘’]\\s+(?:in|an|unter)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|rückmeldung|rueckmeldung|ausgabe|nachricht)\\b",
       "required_literals_any": [
-        "antwort",
-        "rückmeldung",
-        "rueckmeldung",
-        "ausgabe",
-        "nachricht"
+        "dein antwort",
+        "dein rückmeldung",
+        "dein rueckmeldung",
+        "dein ausgabe",
+        "dein nachricht",
+        "deine antwort",
+        "deine rückmeldung",
+        "deine rueckmeldung",
+        "deine ausgabe",
+        "deine nachricht",
+        "deinen antwort",
+        "deinen rückmeldung",
+        "deinen rueckmeldung",
+        "deinen ausgabe",
+        "deinen nachricht",
+        "deinem antwort",
+        "deinem rückmeldung",
+        "deinem rueckmeldung",
+        "deinem ausgabe",
+        "deinem nachricht",
+        "deiner antwort",
+        "deiner rückmeldung",
+        "deiner rueckmeldung",
+        "deiner ausgabe",
+        "deiner nachricht"
       ]
     },
     {
@@ -905,11 +935,32 @@
       "source_revision": "0.1.20",
       "description": "German: directive to the answering model to put a supplied code snippet into the code or answer it writes",
       "adaptation": "DE clause with 'den/das folgenden/nachstehenden Code(block|ausschnitt|-Schnipsel)' and, in the same clause, 'in deine Antwort/deinen Code/deine Implementierung/Lösung/deinen Algorithmus/dein Programm'; the reader's own project files (deine settings.py, dein Pull Request) stay unmatched.",
-      "pattern": "(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n]{0,40}?)\\b(?:den|das|die)\\s+(?:folgenden?|nachstehenden?|untenstehenden?|obigen?)\\s+(?:code[\\w-]*|snippet|schnipsel)\\b[^.!?\\n]{0,60}?\\b(?:in|unter|an)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|code|implementierung|lösung|loesung|algorithmus|programm|skript|codebasis)\\b",
+      "pattern": "(?:^|[.!?;:>\\n|]\\s*|,\\s*)(?:(?:please|kindly|also|now|then|and)\\s+)?(?:[^.!?\\n\\\"'“”„=\\[({]{0,40}?)\\b(?:den|das|die)\\s+(?:folgenden?|nachstehenden?|untenstehenden?|obigen?)\\s+(?:code[\\w-]*|snippet|schnipsel)\\b[^.!?\\n]{0,60}?\\b(?:in|unter|an)\\s+(?:dein|deine|deinen|deinem|deiner)\\s+(?:antwort|code|implementierung|lösung|loesung|algorithmus|programm|skript|codebasis)\\b",
       "required_literals_any": [
-        "code",
-        "snippet",
-        "schnipsel"
+        "folgende code",
+        "folgende snippet",
+        "folgende schnipsel",
+        "folgenden code",
+        "folgenden snippet",
+        "folgenden schnipsel",
+        "nachstehende code",
+        "nachstehende snippet",
+        "nachstehende schnipsel",
+        "nachstehenden code",
+        "nachstehenden snippet",
+        "nachstehenden schnipsel",
+        "untenstehende code",
+        "untenstehende snippet",
+        "untenstehende schnipsel",
+        "untenstehenden code",
+        "untenstehenden snippet",
+        "untenstehenden schnipsel",
+        "obige code",
+        "obige snippet",
+        "obige schnipsel",
+        "obigen code",
+        "obigen snippet",
+        "obigen schnipsel"
       ]
     }
   ]
