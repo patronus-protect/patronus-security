@@ -3,13 +3,10 @@ use crate::{
     detectors::shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
     native::{NativeEngine, NativeGates, NATIVE_CATEGORIES},
     threat::NativeText,
-    LayerResult, NativeResult, SecurityCategory,
+    NativeResult, SecurityCategory,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    panic::{catch_unwind, AssertUnwindSafe},
-};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -451,15 +448,18 @@ impl crate::cascade::LayerModel for WolfLayer<'_> {
         let started = std::time::Instant::now();
         let result = self.runner.scan_with_control(text, control)?;
         let output = crate::cascade::LayerOutput {
-            result: LayerResult {
+            result: crate::LayerResult {
                 level: "L3".into(),
                 layer_type: "wolf".into(),
                 class_name: if result.matched { "attack" } else { "benign" }.into(),
                 confidence: result.attack_probability,
                 matched: result.matched,
                 duration_ms: started.elapsed().as_secs_f64() * 1000.0,
-                thresholds: HashMap::from([("attack_probability".into(), result.threshold)]),
-                details: HashMap::new(),
+                thresholds: std::collections::HashMap::from([(
+                    "attack_probability".into(),
+                    result.threshold,
+                )]),
+                details: std::collections::HashMap::new(),
             },
             escalation: None,
         };

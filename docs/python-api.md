@@ -128,7 +128,7 @@ file is preserved.
 
 Scan text with every category configured on this gateway.
 
-### `set_execution_gates(execution_gates: dict | None)`
+### `set_execution_gates(execution_gates: ExecutionGates | None)`
 
 Replace the gate matrix used by subsequent scan calls.
 
@@ -184,7 +184,7 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: ExecutionGates | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
 
 Queue one scan request and return its request id.
 
