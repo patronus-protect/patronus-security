@@ -1332,13 +1332,12 @@ pub(super) fn l1_undecided_inputs(
             undecided.push(input.clone());
             continue;
         }
-        // Core's L1 answer; Ark's cascade configures no L1 models.
+        // Core's L1 answer, with the cascade's L1 model of the module.
         let stage = cascade.l1_answer(
             module,
             execution.gates().native.mode(module),
             true,
             l1_results.iter().map(|result| &result.native),
-            None,
             &input.text,
         );
         // Undecided with no later layer to run: L1's answer is final and clear.
