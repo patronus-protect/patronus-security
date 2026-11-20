@@ -78,7 +78,7 @@ def test_pii_fixture_selects_only_pii_targets_and_example_tests():
     assert selected == {p.stem for p in (ROOT / "rust/tests").glob("pii*.rs")} | MODULE.CROSS_DOMAIN_TESTS
     assert any(command[-2:] == ["--example", "12_l1_pii_fixture_eval"] for command in commands)
     assert not any("--lib" in command or "--bins" in command for command in commands)
-    assert flags["throughput"] == flags["core_features"] == "false"
+    assert flags["core_features"] == "false"
 
 
 def test_dlp_fixture_selects_only_dlp_targets():
@@ -122,14 +122,14 @@ def test_coordinator_change_does_not_build_other_crates_or_models():
     (command,) = MODULE.plan("clippy", flags)
     assert command[command.index("-p") + 1] == "ark-coordinator"
     assert command.count("-p") == 1
-    for key in ("core", "core_features", "wrapper", "api", "protocol", "python", "throughput"):
+    for key in ("core", "core_features", "wrapper", "api", "protocol", "python"):
         assert flags[key] == "false"
 
 
 def test_api_change_keeps_api_and_entrypoint_validation_only():
     flags = route("ark-api/src/main.rs")
     assert flags["api"] == flags["python"] == "true"
-    for key in ("core", "core_features", "wrapper", "coordinator", "protocol", "throughput"):
+    for key in ("core", "core_features", "wrapper", "coordinator", "protocol"):
         assert flags[key] == "false"
 
 
@@ -195,7 +195,7 @@ def test_workflow_uses_exclusion_aware_filters_and_conditional_jobs():
     assert filter_step["with"]["filters"] == ".github/ci-paths.yml"
     assert filter_step["with"]["base"] == "${{ github.ref }}"
     assert jobs["changes"]["permissions"]["pull-requests"] == "read"
-    for job in ("rust", "core-features", "python", "native-throughput"):
+    for job in ("rust", "core-features", "python"):
         assert jobs[job]["needs"] == "changes"
         assert "needs.changes.outputs." in jobs[job]["if"]
     # Required checks must report on every PR, so only pushes are path-filtered.

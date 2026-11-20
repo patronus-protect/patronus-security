@@ -95,7 +95,7 @@ def warm_unified_l3(gateway, timeout_seconds: float) -> float:
     started = time.monotonic()
     deadline = started + timeout_seconds
     candidates = [("promotion", PROMOTION_TEXT)]
-    candidates.extend(traffic_workload(1.0, 1, 96.0, 32, 1))
+    candidates.extend(traffic_workload(1.0, 1, 96.0, 32, 1, variant=-1))
     for name, content in candidates:
         content = benchmark_content(name, content)
         request_id = gateway.enqueue(content, categories=THROUGHPUT_CATEGORIES)
@@ -142,6 +142,14 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=60.0,
         help="Minimum timed duration; complete enqueue/consume rounds until reached. Use 0 for one round.",
+    )
+    parser.add_argument(
+        "--warmup-rounds",
+        type=int,
+        default=1,
+        help="Complete rounds run before timing starts and left out of the throughput; their "
+        "failures still fail the run. The first round pays ONNX Runtime's first runs at every "
+        "input shape, which made the timed result depend on how long it took.",
     )
     parser.add_argument(
         "--progress-interval-seconds",
@@ -209,6 +217,15 @@ def workload(
     return requests
 
 
+def round_text(variant: int, seed: str, size: int) -> str:
+    """`size` bytes of `seed`, opened by a round marker: L3 results are cached per request
+    text, so a round that repeats an earlier one byte for byte would measure the cache."""
+    marker = f"benchmark round {variant}\n"
+    text = marker + sized_text(seed, max(size - len(marker), 0))
+    # A multi-byte character cut at the end is dropped; pad back to `size` bytes.
+    return text + " " * (size - len(text.encode()))
+
+
 def traffic_workload(
     long_mib: float,
     long_requests: int,
@@ -225,14 +242,14 @@ def traffic_workload(
         case_index += 1
         requests.append((
             f"spike-{index}-{case_name}",
-            sized_text(seed, int(long_mib * MIB)),
+            round_text(variant, seed, int(long_mib * MIB)),
         ))
     for index in range(medium_requests):
         case_name, seed = cases[case_index]
         case_index += 1
         requests.append((
             f"medium-{index}-{case_name}",
-            sized_text(seed, int(medium_kib * 1024)),
+            round_text(variant, seed, int(medium_kib * 1024)),
         ))
     for cycle in range(short_cycles):
         for index, size_kib in enumerate(SMALL_REQUEST_KIB):
@@ -241,7 +258,7 @@ def traffic_workload(
             name = f"small-{cycle}-{size_kib}k-{case_name}"
             requests.append((
                 name,
-                sized_text(seed, size_kib * 1024),
+                round_text(variant, seed, size_kib * 1024),
             ))
     return requests
 
@@ -309,6 +326,120 @@ def timing_summary(values: list[float]) -> dict:
     }
 
 
+class Tally:
+    """What the rounds of one phase (warm-up or timed) submitted, finished and returned."""
+
+    def __init__(self) -> None:
+        self.submitted: dict[str, float] = {}
+        self.byte_counts: dict[str, int] = {}
+        self.request_names: dict[str, str] = {}
+        self.finished: dict[str, float] = {}
+        self.failures: list[dict] = []
+        self.duplicate_finished: list[str] = []
+        self.unexpected_finished: list[str] = []
+        self.result_models: set[str] = set()
+        self.l3_models: set[str] = set()
+        self.result_pipelines: set[str] = set()
+        self.result_levels: set[str] = set()
+        self.results_by_request: dict[str, list[dict]] = {}
+        self.l3_runs: set[tuple[float, float, int]] = set()
+        self.timed_out = False
+
+
+class Progress:
+    def __init__(self, started: float, interval: float) -> None:
+        self.started = started
+        self.interval = interval
+        self.next = started + interval
+
+    def maybe_print(self, now: float, rounds: int, tally: Tally) -> None:
+        if now < self.next:
+            return
+        completed_bytes = sum(tally.byte_counts[request_id] for request_id in tally.finished)
+        print(
+            progress_line(now - self.started, rounds, len(tally.submitted), len(tally.finished),
+                          completed_bytes),
+            file=sys.stderr,
+            flush=True,
+        )
+        self.next = now + self.interval
+
+
+def round_requests(args: argparse.Namespace, variant: int) -> list[tuple[str, str]]:
+    return traffic_workload(
+        args.long_mib,
+        args.long_requests,
+        args.medium_kib,
+        args.medium_requests,
+        args.short_cycles,
+        variant,
+    )
+
+
+def run_round(
+    gateway,
+    args: argparse.Namespace,
+    requests: list[tuple[str, str]],
+    round_number: int,
+    tally: Tally,
+    progress: Progress | None,
+) -> bool:
+    """Run one round at `args.concurrency` in flight into `tally`; False if it timed out."""
+    pending = iter(requests)
+    active_request_ids = set()
+
+    def enqueue_next() -> None:
+        try:
+            name, content = next(pending)
+        except StopIteration:
+            return
+        case = f"round-{round_number}-{name}"
+        request_id = gateway.enqueue(content, metadata={"benchmark_case": case})
+        tally.submitted[request_id] = time.monotonic()
+        tally.byte_counts[request_id] = len(content.encode())
+        tally.request_names[request_id] = case
+        active_request_ids.add(request_id)
+
+    for _ in range(min(args.concurrency, len(requests))):
+        enqueue_next()
+    round_deadline = time.monotonic() + args.timeout_seconds
+    while active_request_ids and time.monotonic() < round_deadline:
+        event = gateway.consume_next_event(timeout=1.0)
+        now = time.monotonic()
+        if progress:
+            progress.maybe_print(now, round_number, tally)
+        if event is None:
+            continue
+        if event["event_type"] in {"result", "provisional"}:
+            result = event["result"]
+            tally.results_by_request.setdefault(event["request_id"], []).append({
+                "event_type": event["event_type"],
+                "category": result["category"],
+                "level": result["level"],
+                "model": result["model"],
+            })
+            tally.result_models.add(result["model"])
+            if result["level"] == "L3":
+                tally.l3_models.add(result["model"])
+                if event["event_type"] == "result" and (timing := l3_run_timing(result)):
+                    tally.l3_runs.add(timing)
+            tally.result_pipelines.add(result["category"])
+            tally.result_levels.add(result["level"])
+        elif event["event_type"] == "finished":
+            request_id = event["request_id"]
+            if request_id not in tally.submitted:
+                tally.unexpected_finished.append(request_id)
+            elif request_id in tally.finished:
+                tally.duplicate_finished.append(request_id)
+            else:
+                tally.finished[request_id] = now
+                active_request_ids.discard(request_id)
+                enqueue_next()
+            tally.failures.extend(event.get("failures", []))
+    tally.timed_out = bool(active_request_ids)
+    return not tally.timed_out
+
+
 def main() -> int:
     args = parse_args()
     if args.long_requests <= 0 and args.medium_requests <= 0 and args.short_cycles <= 0:
@@ -332,106 +463,39 @@ def main() -> int:
     l3_warmup_seconds = warm_unified_l3(gateway, args.timeout_seconds)
     warmup_seconds = runtime_warmup_seconds + l3_warmup_seconds
 
+    if args.warmup_rounds < 0:
+        raise SystemExit("--warmup-rounds must not be negative")
+    warmup = Tally()
+    warmup_rounds_started = time.monotonic()
+    for variant in range(args.warmup_rounds):
+        if not run_round(gateway, args, round_requests(args, variant), variant, warmup, None):
+            break
+    warmup_rounds_seconds = time.monotonic() - warmup_rounds_started
+
+    tally = Tally()
     started = time.monotonic()
-    submitted = {}
-    byte_counts = {}
-    request_names = {}
-    finished = {}
-    failures = []
-    duplicate_finished = []
-    unexpected_finished = []
-    result_models = set()
-    l3_models = set()
-    result_pipelines = set()
-    result_levels = set()
-    results_by_request = {}
-    l3_runs = set()
     duration_seconds = max(args.duration_seconds, 0.0)
     progress_interval = max(args.progress_interval_seconds, 0.0)
-    next_progress = started + progress_interval if progress_interval else math.inf
+    progress = Progress(started, progress_interval) if progress_interval else None
     rounds = 0
-    timed_out = False
-    while rounds == 0 or time.monotonic() - started < duration_seconds:
-        round_requests = traffic_workload(
-            args.long_mib,
-            args.long_requests,
-            args.medium_kib,
-            args.medium_requests,
-            args.short_cycles,
-            rounds,
-        )
-        pending = iter(round_requests)
-        round_request_ids = set()
-        active_request_ids = set()
-
-        def enqueue_next() -> bool:
-            try:
-                name, content = next(pending)
-            except StopIteration:
-                return False
-            case = f"round-{rounds}-{name}"
-            request_id = gateway.enqueue(content, metadata={"benchmark_case": case})
-            submitted[request_id] = time.monotonic()
-            byte_counts[request_id] = len(content.encode())
-            request_names[request_id] = case
-            round_request_ids.add(request_id)
-            active_request_ids.add(request_id)
-            return True
-
-        for _ in range(min(args.concurrency, len(round_requests))):
-            enqueue_next()
+    timed_out = bool(warmup.timed_out)
+    while not timed_out and (rounds == 0 or time.monotonic() - started < duration_seconds):
+        variant = args.warmup_rounds + rounds
         rounds += 1
-
-        round_deadline = time.monotonic() + args.timeout_seconds
-        while active_request_ids and time.monotonic() < round_deadline:
-            event = gateway.consume_next_event(timeout=1.0)
-            now = time.monotonic()
-            if now >= next_progress:
-                completed_bytes = sum(byte_counts[request_id] for request_id in finished)
-                print(
-                    progress_line(
-                        now - started,
-                        rounds,
-                        len(submitted),
-                        len(finished),
-                        completed_bytes,
-                    ),
-                    file=sys.stderr,
-                    flush=True,
-                )
-                next_progress = now + progress_interval
-            if event is None:
-                continue
-            if event["event_type"] in {"result", "provisional"}:
-                result = event["result"]
-                results_by_request.setdefault(event["request_id"], []).append({
-                    "event_type": event["event_type"],
-                    "category": result["category"],
-                    "level": result["level"],
-                    "model": result["model"],
-                })
-                result_models.add(result["model"])
-                if result["level"] == "L3":
-                    l3_models.add(result["model"])
-                    if event["event_type"] == "result" and (timing := l3_run_timing(result)):
-                        l3_runs.add(timing)
-                result_pipelines.add(result["category"])
-                result_levels.add(result["level"])
-            elif event["event_type"] == "finished":
-                request_id = event["request_id"]
-                if request_id not in submitted:
-                    unexpected_finished.append(request_id)
-                elif request_id in finished:
-                    duplicate_finished.append(request_id)
-                else:
-                    finished[request_id] = now
-                    active_request_ids.discard(request_id)
-                    enqueue_next()
-                failures.extend(event.get("failures", []))
-        if active_request_ids:
-            timed_out = True
-            break
-
+        timed_out = not run_round(gateway, args, round_requests(args, variant), rounds, tally, progress)
+    submitted = tally.submitted
+    byte_counts = tally.byte_counts
+    request_names = tally.request_names
+    finished = tally.finished
+    failures = warmup.failures + tally.failures
+    duplicate_finished = warmup.duplicate_finished + tally.duplicate_finished
+    unexpected_finished = warmup.unexpected_finished + tally.unexpected_finished
+    result_models = tally.result_models
+    l3_models = tally.l3_models
+    result_pipelines = tally.result_pipelines
+    result_levels = tally.result_levels
+    results_by_request = tally.results_by_request
+    l3_runs = tally.l3_runs
     elapsed = time.monotonic() - started
     if progress_interval:
         print(
@@ -443,6 +507,9 @@ def main() -> int:
         )
     completed_bytes = sum(byte_counts[request_id] for request_id in finished)
     latencies = [finished[rid] - submitted[rid] for rid in finished]
+    spike_latencies = [
+        finished[rid] - submitted[rid] for rid in finished if "-spike-" in request_names[rid]
+    ]
     completed_sizes_kib = [byte_counts[rid] / 1024 for rid in finished]
     errors = []
     missing_request_ids = sorted(set(submitted) - set(finished))
@@ -455,6 +522,8 @@ def main() -> int:
         }
         for request_id in missing_request_ids
     ]
+    if warmup.timed_out:
+        errors.append(f"warm-up completed {len(warmup.finished)}/{len(warmup.submitted)} requests")
     if len(finished) != len(submitted):
         errors.append(f"completed {len(finished)}/{len(submitted)} requests")
     if blocking_failures(failures, len(submitted), args.max_l3_queue_timeout_share):
@@ -494,6 +563,9 @@ def main() -> int:
         "latency_seconds": {} if not latencies else {
             "p50": round(statistics.median(latencies), 3), "p95": round(percentile(latencies, 0.95), 3),
             "max": round(max(latencies), 3)},
+        "spike_latency_seconds": timing_summary(spike_latencies),
+        "warmup_rounds": args.warmup_rounds,
+        "warmup_rounds_seconds": round(warmup_rounds_seconds, 3),
         "warmup_seconds": round(warmup_seconds, 3),
         "runtime_warmup_seconds": round(runtime_warmup_seconds, 3),
         "l3_execution_warmup_seconds": round(l3_warmup_seconds, 3), "extension": identity,

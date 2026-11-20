@@ -96,6 +96,45 @@ class ApiThroughputProfileTests(unittest.TestCase):
         self.assertEqual(len({name for name, _ in requests}), 42)
         self.assertTrue(all("attack-" in name or "benign-" in name for name, _ in requests))
 
+    def test_each_round_sends_new_texts_of_the_same_sizes(self):
+        # L3 results are cached per request text: a repeated round would time the cache.
+        first = benchmark.traffic_workload(1.0, 1, 96.0, 32, 1, variant=1)
+        second = benchmark.traffic_workload(1.0, 1, 96.0, 32, 1, variant=2)
+
+        self.assertEqual([name for name, _ in first], [name for name, _ in second])
+        self.assertEqual(
+            [len(content.encode()) for _, content in first],
+            [len(content.encode()) for _, content in second],
+        )
+        self.assertTrue(all(a != b for (_, a), (_, b) in zip(first, second)))
+
+    def test_rounds_record_into_their_own_tally(self):
+        class Gateway:
+            def __init__(self):
+                self.events = []
+                self.enqueued = 0
+
+            def enqueue(self, content, metadata):
+                self.enqueued += 1
+                request_id = f"r{self.enqueued}"
+                self.events.append({"event_type": "finished", "request_id": request_id})
+                return request_id
+
+            def consume_next_event(self, timeout):
+                return self.events.pop(0) if self.events else None
+
+        args = mock.Mock(concurrency=2, timeout_seconds=5.0)
+        requests = [("spike-0-x", "a" * 10), ("medium-0-x", "b" * 4), ("small-0-x", "c")]
+        warmup, timed = benchmark.Tally(), benchmark.Tally()
+        gateway = Gateway()
+
+        self.assertTrue(benchmark.run_round(gateway, args, requests, 1, warmup, None))
+        self.assertTrue(benchmark.run_round(gateway, args, requests, 1, timed, None))
+        self.assertEqual(len(warmup.finished), 3)
+        self.assertEqual(len(timed.finished), 3)
+        self.assertFalse(set(warmup.finished) & set(timed.finished))
+        self.assertEqual(sum(timed.byte_counts.values()), 15)
+
     def test_http_profile_makes_categories_and_operating_point_explicit(self):
         config = http_benchmark.request_config(
             ["injection", "dlp"], "best_promote",

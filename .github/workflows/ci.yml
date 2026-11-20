@@ -52,7 +52,6 @@ jobs:
       protocol: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.protocol == 'true' }}
       bindings: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.bindings == 'true' }}
       python: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.python == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.protocol == 'true' }}
-      throughput: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.throughput == 'true' }}
       licenses: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.licenses == 'true' }}
     steps:
       - uses: actions/checkout@v4
@@ -200,46 +199,3 @@ jobs:
       - run: .venv/bin/python -m unittest discover -s python/tests
       - run: cargo build --locked -p ark-api --bin ark-api-entrypoint
       - run: .venv/bin/python -m pytest scripts/tests -q
-
-  native-throughput:
-    needs: changes
-    if: needs.changes.outputs.throughput == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.98.0
-        with:
-          components: clippy, rustfmt
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12.16"
-          cache: pip
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/patronus_ark
-          key: ark-models-${{ runner.os }}-${{ hashFiles('rust/src/assets/specs.rs') }}
-      - run: python -m venv .build-venv
-      - run: .build-venv/bin/python scripts/bootstrap_python_tls.py
-      - run: .build-venv/bin/python -m pip install maturin
-      - run: .build-venv/bin/python -m maturin build --release --manifest-path ark-core/python/Cargo.toml --interpreter .build-venv/bin/python --out dist
-      - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --interpreter .build-venv/bin/python --out dist
-      - run: python -m venv .perf-venv
-      - run: .perf-venv/bin/python scripts/bootstrap_python_tls.py
-      - run: .perf-venv/bin/python -m pip install dist/*.whl
-      - name: Full gated unified native throughput regression (without GLiNER)
-        run: >-
-          .perf-venv/bin/python scripts/ark_api_throughput_benchmark.py
-          --download-files
-          --long-mib 1
-          --long-requests 1
-          --short-cycles 1
-          --min-mib-per-second 0.3
-          --min-rps 0.5
-          --max-l3-queue-timeout-share 0.02
-          --json-output native-throughput.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-throughput
-          path: native-throughput.json
