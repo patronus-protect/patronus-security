@@ -37,7 +37,9 @@ limits a run to some stages (e.g. ``--stage FT`` for one candidate's numbers).
 Calibration (``calibrate``): a model's cuts read off benign data instead of its train negatives. The
 candidate (``--stage``, default ``FT``) trains on the train half of ``--rows``; the other half and
 ``--eval-rows`` (the gated dev sets, e.g. ``generated``) form the calibration rows, and no row id of the
-train half is among them. ``0_1pct_fpr`` (detect) and ``1pct_fpr`` (clear) are the cuts at
+train half is among them. ``--rows`` repeats: a class with one native train source (jailbreak) also trains
+on the hash half of the generated sets, whose look-alike twins are its hard negatives; the other half
+calibrates. ``0_1pct_fpr`` (detect) and ``1pct_fpr`` (clear) are the cuts at
 ``--target-fpr`` and ``--clear-fpr`` on the scores of the benign calibration rows (the dev benign pool
 incl. the hard benigns, ``score > threshold`` as in the model's ``decision_rule``). The report gives, per
 language, the TPR and FPR at the detect cut, the FPR per benign source (set, ``twins`` for look-alike
@@ -548,7 +550,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--markdown", type=Path)
     cal = sub.add_parser("calibrate", help="calibrate a model stage's cuts on benign data")
-    cal.add_argument("--rows", type=Path, required=True, help="rows with facts (train half / calibration half)")
+    cal.add_argument("--rows", type=Path, action="append", required=True,
+                     help="rows with facts (train half / calibration half); repeat to train on a mix of sources")
     cal.add_argument("--eval-rows", type=Path, action="append", default=[],
                      help="further calibration rows with facts (gated dev sets)")
     cal.add_argument("--report-rows", type=Path, action="append", default=[],
@@ -567,7 +570,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "calibrate":
         if args.model_out is not None and len(args.classes) != 1:
             parser.error("--model-out takes one --class")
-        train, held_out = split_rows(MODEL.read_rows(args.rows))
+        train, held_out = split_rows([row for path in args.rows for row in MODEL.read_rows(path)])
         test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
         reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
         reports = []

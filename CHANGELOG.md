@@ -403,6 +403,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Reading JSONL rows in the threat scripts no longer breaks a row at a Unicode line separator
   inside a string. The text model parity data now also checks each model's answer at its cuts.
   **Detection change:** none; no text model is enabled yet.
+- `scripts/l1_threat/ablation.py calibrate` accepts `--rows` more than once, so a text model can
+  train on several sources at once: every file is split by the same hash of the row id, one half
+  trains and the other half sets the cuts. A jailbreak model trained this way on two sources and
+  their benign look-alikes finds more jailbreaks at the same false positive rate than one trained
+  on a single source; it is an optional model for the `jailbreak` category and is not enabled.
+  **Detection change:** none; no text model is enabled.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
   (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
   policies, in the same form as the shell-command facts: the pattern findings of a text (category,

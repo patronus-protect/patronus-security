@@ -132,6 +132,11 @@ DAN-Goldens bleiben `known_gap`), Policy-Spoof als Behauptung („authorized red
 Kandidaten: B0 (Injection-Scorer 0.1.7, enthält heute die Jailbreak-Regeln), R+A+L, B1, B4, B5. Für DE
 zählen TrustAIRLab-Übersetzungen nur als Dev; entscheidend ist der native DE-Holdout (R05).
 
+Stand JB02 (2026-11-20): gewählt ist der fastText-Kandidat, trainiert auf WildJailbreak plus der Hash-Hälfte
+der generierten Sets (Träger DE + EN, Look-alike-Twins als Hard Negatives); TPR@0,1 % auf den
+Kalibrierzeilen 89,2 (vorher 81,3), ~3,2 ms je 100 KiB, default aus. Zahlen, Quellen und offene Punkte
+(außerhalb der Verteilung kaum Recall) in [`../scoreboard/jailbreak-scorer.md`](../scoreboard/jailbreak-scorer.md).
+
 ## 8. Policies (später)
 
 - `jailbreak.with_harm`: `jailbreak` ∧ `harmful_content` → `block`.

@@ -235,6 +235,31 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_fasttext_bundle_runs_as_the_jailbreak_model_at_its_cuts() {
+        // The jailbreak scorer candidates are fastText-type models; the
+        // module's L1 slot loads them at their calibrated cuts like any
+        // other category model.
+        const FASTTEXT: &[u8] = include_bytes!("testdata/synthetic_fasttext_model.json");
+        let (dir, pin) = write_bundle(
+            "l1_model_fasttext_jailbreak",
+            &[
+                ("config.json", br#"{"model_file":"model.json"}"#),
+                ("model.json", FASTTEXT),
+            ],
+        );
+        let config = L1ModelConfig::new(dir, pin);
+        let model = L1TextModel::load(SecurityCategory::Jailbreak, &config).unwrap();
+        let own = CategoryModel::from_json_slice(FASTTEXT)
+            .unwrap()
+            .thresholds();
+        assert_eq!(model.thresholds(), own);
+        let outcome = model.evaluate(TEXT, &[], &[]);
+        assert_eq!(outcome.outcome, own.outcome(outcome.score));
+        assert_eq!(outcome.category, SecurityCategory::Jailbreak);
+        std::fs::remove_dir_all(&config.bundle_dir).ok();
+    }
+
+    #[test]
     fn configured_cuts_override_and_clear_switches_off() {
         let config = bundle("l1_model_override");
         let base = L1TextModel::load(SecurityCategory::Jailbreak, &config).unwrap();

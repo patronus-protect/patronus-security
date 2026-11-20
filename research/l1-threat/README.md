@@ -325,6 +325,16 @@ ganz (TPR 0–0,8 %). Die Kalibrierung ersetzt nicht die Wahl je Klasse (JB02, P
 kalibriert ihren Gewinner mit `calibrate` auf ihrem Split. Die Auswahlregel der Ablation rechnet weiter mit 1 ms
 je 100 KiB zusätzlich; mit der Owner-Freigabe von ~4 ms wäre `FT` dort wählbar — das ändert der Owner.
 
+**Stand JB02.** Jailbreak-Scorer gewählt (`scoreboard/jailbreak-scorer.md`): `ablation.py calibrate` nimmt
+`--rows` mehrfach, jede Datei teilt sich über denselben Zeilen-ID-Hash in Trainings- und Kalibrierhälfte. Mit
+`--rows train_dev --rows generated` trainiert der fastText-Kandidat neben WildJailbreak (einzige native
+Jailbreak-Quelle) auf den generierten Trägern (DE + EN) und den Look-alike-Twins als Hard Negatives. Am
+0,1-%-Schnitt auf dem Benign-Pool: TPR 81,3 → 89,2 (DE 0 → 24/24, ungesehene generierte Positive 18 → 57/82),
+Twins 0/900, p95 ~3,2 ms je 100 KiB wie S10. `B4` wäre besser (95,7; `jackhhao` matched 48,3 / 20,0), kostet aber
+~13 ms. Gewählt: `FT`-Mix, nicht verdrahtet (nur über `cascade.modules.jailbreak.l1_model`). Offen: außerhalb der
+Verteilung trägt das Modell nicht (`jackhhao_jailbreak` 3,5 / 0,7 bei gematchter FPR gegen ATR 89,9 / 70,0), Hard
+Benigns WildJailbreak-adversarial-benign 7/12 und WildGuardMix 0,82 %; es fehlen weitere Jailbreak-Trainingsquellen.
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).
