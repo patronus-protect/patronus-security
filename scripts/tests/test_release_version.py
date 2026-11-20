@@ -69,3 +69,11 @@ def test_stale_core_python_distribution_version_is_rejected(tmp_path):
     )
     with pytest.raises(ValueError, match="ark-core/python/pyproject.toml"):
         RELEASE_VERSION.release_version(tmp_path)
+
+
+def test_stale_core_pin_of_the_ark_wheel_is_rejected(tmp_path):
+    write_sources(tmp_path, {})
+    pyproject = tmp_path / RELEASE_VERSION.PYPROJECT
+    pyproject.write_text(pyproject.read_text() + 'dependencies = ["patronus-ark-core==1.2.2"]\n')
+    with pytest.raises(ValueError, match="patronus-ark-core pin"):
+        RELEASE_VERSION.release_version(tmp_path)

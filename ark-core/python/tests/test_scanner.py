@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from patronus_ark_core import CancelledError, ScanControl, Scanner
+from patronus_ark_core import CancelledError, ScanControl, Scanner, seed_word_list
 
 
 def test_original_unicode_spans_and_selective_checks():
@@ -160,3 +160,12 @@ def test_real_wolf_is_reused_and_obeys_per_call_selection():
     assert first["wolf"]["attack_probability"] == second["wolf"]["attack_probability"]
     assert first["wolf"]["windows"] > 0
     assert scanner.scan("hello", categories=["pii", "dlp"])["wolf"] is None
+
+
+def test_seed_word_lists_are_the_ones_the_dlp_rules_check():
+    english = seed_word_list("bip39_english")
+    assert len(english) == 2048 and english[0] == "abandon" and english[-1] == "zoo"
+    assert len(seed_word_list("bip39_french")) == 2048
+    assert len(seed_word_list("monero_english")) == 1626
+    with pytest.raises(ValueError, match="unknown seed word list"):
+        seed_word_list("bip39_klingon")

@@ -32,7 +32,7 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``bip39_french`` (the BIP 39
     mnemonic of 16, 20, 24, 28 or 32 bytes of entropy: checksum = the first ``8n/32`` bits
     of SHA-256, 11-bit word indices into the official list in
-    ``ark-core/src/detectors/dlp/bip39``, accented words in NFD as published, joined by single
+    Ark Core (``patronus_ark_core.seed_word_list``), accented words in NFD as published, joined by single
     spaces).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
 
@@ -58,7 +58,7 @@ Placeholders (golden schema v2, E13) may transform the value they insert:
   last ends at the value length.
 
 A ``{"seed_words": kind, "word_len": n}`` segment (C-WALLET) draws words of ``n`` letters
-from a wallet word list (``ark-core/src/detectors/dlp/rules/data``), each word
+from a wallet word list (``patronus_ark_core.seed_word_list``), each word
 ``words[next_u64() % len(words)]`` in list order: ``electrum_standard`` and
 ``electrum_segwit`` draw 12 BIP39 English words again and again until the HMAC-SHA512 of
 the phrase under ``Seed version`` starts with the hex prefix ``01`` or ``100``;
@@ -100,6 +100,8 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
+from patronus_ark_core import seed_word_list
+
 
 GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"
 PLACEHOLDER_RE = re.compile(
@@ -111,12 +113,11 @@ _URL_UNRESERVED = frozenset(
 )
 _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 _MASK = (1 << 64) - 1
-SEED_WORD_LISTS = Path(__file__).resolve().parents[3] / "ark-core" / "src" / "detectors" / "dlp"
 # Seed word kinds: word list, words drawn, words in the value, Electrum version prefix.
 SEED_KINDS = {
-    "electrum_standard": ("bip39/english.txt", 12, 12, "01"),
-    "electrum_segwit": ("bip39/english.txt", 12, 12, "100"),
-    "monero": ("rules/data/monero_english.txt", 24, 25, None),
+    "electrum_standard": ("bip39_english", 12, 12, "01"),
+    "electrum_segwit": ("bip39_english", 12, 12, "100"),
+    "monero": ("monero_english", 24, 25, None),
 }
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -124,7 +125,6 @@ CHECKSUM_LENGTHS = {"crc32_base62": 6, "crc32_hex": 8, "crc32_hex_le": 8, "iso70
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 _BECH32_GENERATOR = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
 BIP39_LANGUAGES = ("english", "italian", "portuguese", "czech", "spanish", "french")
-BIP39_DIR = Path(__file__).resolve().parents[3] / "ark-core/src/detectors/dlp/bip39"
 BIP39_ENTROPY_BYTES = (16, 20, 24, 28, 32)
 ENCODINGS = {
     "hex",
@@ -303,7 +303,7 @@ def _encoded_length(segment: dict) -> int:
 
 @lru_cache(maxsize=None)
 def _seed_word_list(kind: str, word_len: int) -> tuple[str, ...]:
-    words = (SEED_WORD_LISTS / SEED_KINDS[kind][0]).read_text(encoding="ascii").split()
+    words = seed_word_list(SEED_KINDS[kind][0])
     return tuple(word for word in words if len(word) == word_len)
 
 
@@ -446,7 +446,7 @@ def bip39_wordlist(language: str) -> tuple[str, ...]:
     """The official BIP 39 word list of ``language`` (2048 words)."""
     if language not in BIP39_LANGUAGES:
         raise RecipeError(f"unknown BIP 39 language {language!r}")
-    words = tuple((BIP39_DIR / f"{language}.txt").read_text(encoding="utf-8").split())
+    words = tuple(seed_word_list(f"bip39_{language}"))
     if len(words) != 2048:
         raise RecipeError(f"BIP 39 list {language} has {len(words)} words, expected 2048")
     return words

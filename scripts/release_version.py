@@ -47,7 +47,13 @@ def versions(root: Path = ROOT) -> dict[str, str]:
             found[python_manifest.as_posix()] = tomllib.loads(
                 (root / python_manifest).read_text()
             )["project"]["version"]
-    found[PYPROJECT] = tomllib.loads((root / PYPROJECT).read_text())["project"]["version"]
+    project = tomllib.loads((root / PYPROJECT).read_text())["project"]
+    found[PYPROJECT] = project["version"]
+    # The Ark wheel pins the Ark Core wheel it is built with.
+    for dependency in project.get("dependencies", []):
+        name, _, pinned = dependency.partition("==")
+        if name.strip() == "patronus-ark-core":
+            found[f"{PYPROJECT} patronus-ark-core pin"] = pinned.strip()
     return found
 
 
