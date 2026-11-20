@@ -27,3 +27,7 @@ class Scanner:
 def seed_word_list(name: str) -> list[str]:
     """Words of `bip39_<language>` or `monero_english`, in list order."""
     ...
+
+def pii_rule_ids() -> list[str]:
+    """Ids of the registered PII rules, in registry order."""
+    ...

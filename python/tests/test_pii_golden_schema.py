@@ -6,6 +6,7 @@ import unittest
 from collections import Counter
 
 from patronus_ark import benchmark
+from patronus_ark_core import pii_rule_ids
 
 
 TAGS = ("no_context", "structured", "obfuscated", "ocr")
@@ -19,9 +20,6 @@ V2_FIELDS = (
     "id", "suite", "schema_version", "language", "case_type", "target_label", "rule_id",
     "carrier", "tags", "known_gap",
 )
-# The rule fixture lists every registered rule; rust/tests/l1_bilingual_rules.rs ties it
-# to PII_PATTERNS.
-RULE_FIXTURE = benchmark.DATA_DIR.parents[2] / "ark-core" / "tests" / "fixtures" / "l1_bilingual_rules.json"
 
 
 def load_rows():
@@ -31,8 +29,7 @@ def load_rows():
 
 def all_rule_ids():
     """Every pii_* rule in PII_PATTERNS."""
-    cases = json.loads(RULE_FIXTURE.read_text())
-    return {case["rule_id"] for case in cases if case["category"] == "pii"}
+    return set(pii_rule_ids())
 
 
 class PiiGoldenSchemaV2Tests(unittest.TestCase):

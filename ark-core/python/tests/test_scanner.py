@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from patronus_ark_core import CancelledError, ScanControl, Scanner, seed_word_list
+from patronus_ark_core import CancelledError, ScanControl, Scanner, pii_rule_ids, seed_word_list
 
 
 def test_original_unicode_spans_and_selective_checks():
@@ -161,6 +161,13 @@ def test_real_wolf_is_reused_and_obeys_per_call_selection():
     assert first["wolf"]["attack_probability"] == second["wolf"]["attack_probability"]
     assert first["wolf"]["windows"] > 0
     assert scanner.scan("hello", categories=["pii", "dlp"])["wolf"] is None
+
+
+def test_pii_rule_ids_list_the_registered_rules_once():
+    ids = pii_rule_ids()
+    assert "pii_email" in ids
+    assert len(ids) == len(set(ids))
+    assert all(rule_id.startswith("pii_") for rule_id in ids)
 
 
 def test_seed_word_lists_are_the_ones_the_dlp_rules_check():

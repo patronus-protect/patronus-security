@@ -158,6 +158,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Ark Core lists its PII rules in Python:** `patronus_ark_core.pii_rule_ids()` returns the ids
+  of the registered PII rules.
+
 - **L1 models in Ark's cascade:** Ark's execution gates accept
   `cascade.modules.<category>.l1_model` like Ark Core; the model runs on what the heuristic
   escalates and gives the same decision as in Core. A model loads once per process.

@@ -178,11 +178,21 @@ fn seed_word_list(name: &str) -> PyResult<Vec<&'static str>> {
     Ok(words.split_whitespace().collect())
 }
 
+/// The ids of the registered PII rules, in registry order.
+#[pyfunction]
+fn pii_rule_ids() -> Vec<&'static str> {
+    patronus_ark_core::detectors::pii::pii::PII_PATTERNS
+        .iter()
+        .map(|pattern| pattern.name)
+        .collect()
+}
+
 #[pymodule]
 fn _patronus_ark_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Scanner>()?;
     m.add_class::<ScanControl>()?;
     m.add_function(wrap_pyfunction!(seed_word_list, m)?)?;
+    m.add_function(wrap_pyfunction!(pii_rule_ids, m)?)?;
     m.add("CancelledError", m.py().get_type_bound::<CancelledError>())?;
     m.add(
         "ScannerBusyError",
