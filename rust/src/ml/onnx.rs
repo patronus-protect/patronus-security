@@ -482,12 +482,12 @@ mod tests {
         let dir = fake_lazy_onnx_dir("core-eager-classifier");
         std::fs::write(
             dir.join("onnx/model.onnx"),
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_binary.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_BINARY_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         // Existing Ark users receive the Core type through the same public path.
@@ -551,12 +551,12 @@ mod tests {
         let model = dir.join("model_fp16.onnx");
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_SYNTHETIC_FP16_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
@@ -587,7 +587,7 @@ mod tests {
         assert!(!classifier.is_loaded());
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_scalar.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_SCALAR_ONNX,
         )
         .unwrap();
         classifier
@@ -625,12 +625,12 @@ mod tests {
         let _cleanup = Cleanup(dir.clone());
         std::fs::write(
             dir.join("l3/onnx/onnx_fp16/model_fp16.onnx"),
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_SYNTHETIC_FP16_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("l3/tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(dir.join("l3/config.json"), r#"{"num_labels":1}"#).unwrap();
@@ -675,7 +675,7 @@ mod tests {
         let model = dir.join("l3/onnx/onnx_fp16/model_fp16.onnx");
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_scalar.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_SCALAR_ONNX,
         )
         .unwrap();
         let options = crate::WolfExecutionOptions {

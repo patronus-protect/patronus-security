@@ -540,10 +540,8 @@ fn hard_negatives() -> Vec<String> {
         .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
         .filter(|row| row["case_type"] == "hard_negative")
         .map(|row| row["text"].as_str().unwrap().to_owned());
-    let fixture: Vec<serde_json::Value> = serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap();
+    let fixture: Vec<serde_json::Value> =
+        serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap();
     let fixture = fixture
         .into_iter()
         .filter(|rule| rule["category"] == "pii")

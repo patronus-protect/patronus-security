@@ -154,10 +154,9 @@ mod tests {
         ));
         let bundle = crate::assets::UNIFIED_L3_ASSET.spec.cache_dir(&base);
         std::fs::create_dir_all(&bundle).unwrap();
-        std::fs::copy(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../ark-core/tests/fixtures/tokenizer.mmbpe"),
+        std::fs::write(
             bundle.join("tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         let gateway = SecurityGateway::new({

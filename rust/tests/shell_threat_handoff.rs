@@ -302,10 +302,8 @@ fn k26_follow_ups_stay_with_their_rule() {
 
 #[test]
 fn removed_threat_rules_are_gone_from_the_catalog() {
-    let catalog: serde_json::Value = serde_json::from_str(include_str!(
-        "../../ark-core/src/detectors/threat/rules.json"
-    ))
-    .unwrap();
+    let catalog: serde_json::Value =
+        serde_json::from_str(patronus_ark_core::test_fixtures::THREAT_RULES).unwrap();
     let ids: BTreeSet<_> = catalog["rules"]
         .as_array()
         .unwrap()

@@ -30,10 +30,7 @@ fn gateway() -> SecurityGateway {
     .unwrap()
 }
 fn catalog() -> serde_json::Value {
-    serde_json::from_str(include_str!(
-        "../../ark-core/src/detectors/threat/rules.json"
-    ))
-    .unwrap()
+    serde_json::from_str(patronus_ark_core::test_fixtures::THREAT_RULES).unwrap()
 }
 /// The category a rule reports under, from its catalog class.
 fn rule_category(rule_id: &str) -> SecurityCategory {

@@ -327,7 +327,8 @@ fn number_arrays_that_are_no_keypair_are_no_key() {
 // ── Electrum seeds ───────────────────────────────────────────────────────────
 
 fn bip39_words() -> Vec<&'static str> {
-    include_str!("../../ark-core/src/detectors/dlp/bip39/english.txt")
+    patronus_ark_core::detectors::dlp::seed_phrase::word_list("english")
+        .unwrap()
         .lines()
         .collect()
 }
@@ -498,7 +499,7 @@ fn cardano_lookalikes_are_no_key() {
 // ── Monero mnemonic seeds ────────────────────────────────────────────────────
 
 fn monero_words() -> Vec<&'static str> {
-    include_str!("../../ark-core/src/detectors/dlp/rules/data/monero_english.txt")
+    patronus_ark_core::detectors::dlp::seed_phrase::MONERO_ENGLISH
         .lines()
         .collect()
 }

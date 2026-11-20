@@ -157,10 +157,7 @@ struct Case {
 }
 
 fn fixture() -> Vec<Case> {
-    serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap()
+    serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap()
 }
 
 fn materialized(generators: &GeneratorSet, case: &Case, template: &str) -> String {

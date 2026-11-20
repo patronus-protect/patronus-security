@@ -2112,7 +2112,7 @@ mod tests {
         let _cleanup = Cleanup(dir.clone());
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
@@ -2127,7 +2127,7 @@ mod tests {
                 if broken {
                     &b"corrupt"[..]
                 } else {
-                    include_bytes!("../../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx")
+                    patronus_ark_core::test_fixtures::WOLF_SYNTHETIC_FP16_ONNX
                 },
             )
             .unwrap();

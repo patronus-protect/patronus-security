@@ -78,14 +78,8 @@ struct FixtureCase {
 }
 
 fn fixture_texts(generators: &GeneratorSet) -> Vec<(String, String)> {
-    let cases: Vec<FixtureCase> = serde_json::from_str(
-        &std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../ark-core/tests/fixtures/l1_bilingual_rules.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
+    let cases: Vec<FixtureCase> =
+        serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap();
     let mut texts = Vec::new();
     for case in cases.iter().filter(|case| case.rule_id.starts_with("dlp_")) {
         for (language, template) in [("de", &case.de), ("en", &case.en)] {

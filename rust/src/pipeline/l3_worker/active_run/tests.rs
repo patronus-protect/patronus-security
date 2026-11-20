@@ -155,12 +155,12 @@ impl WolfFixture {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(
             dir.join("model_fp16.onnx"),
-            include_bytes!("../../../../../ark-core/tests/fixtures/wolf_cancellable.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_CANCELLABLE_ONNX,
         )
         .unwrap();
         std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
