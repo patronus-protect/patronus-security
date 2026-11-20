@@ -346,6 +346,7 @@ tasks:
       and the summed L1 latency of every model a default-on class ships stays named in the PR; Rust parity
       bit-exact; nothing wired into the scan path before a class task picks it
   - id: E09
+    status: done
     title: Scoreboard of main after every merge — baseline.md (and cascade.md, the core cascade report) re-rendered from main's current dev split with TPR@0.1% and @1% per class and language, so every class has one current number instead of per-PR bases
     type: eval-infra
     deps: [E08]
