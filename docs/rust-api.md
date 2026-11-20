@@ -814,8 +814,8 @@ pub fn validate_for_gates(&self) -> Result<(), String>;
 
 The cascade as Ark's gate key `cascade`: Ark takes the levels and
 conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
-`l3`, `conditional`) and runs no L1 models yet, so only `modules`
-with their L1 cuts may be set.
+`l3`, `conditional`), so only `modules` (L1 cuts and L1 models) may
+be set.
 
 ```rust
 pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)>;
@@ -876,6 +876,9 @@ The module's final decision when L1 answered Detected or Clear;
 ```rust
 pub struct Cascade {
     config: CascadeConfig,
+    /// Each module's loaded L1 model (`modules.<module>.l1_model`), shared
+    /// process-wide through [`crate::shared_models`].
+    l1_models: HashMap<SecurityCategory, std::sync::Arc<L1TextModel>>,
 }
 ```
 
@@ -885,7 +888,14 @@ Runs the configured layers per module with early exit.
 pub fn new(config: CascadeConfig) -> Result<Self, ScanError>;
 ```
 
-No public documentation is available yet.
+Validate `config` and load its L1 models once; a model another
+cascade of the process holds under the same config is shared.
+
+```rust
+pub fn l1_model(&self, module: SecurityCategory) -> Option<&L1TextModel>;
+```
+
+The loaded L1 model of `module`, if one is configured.
 
 ```rust
 pub fn allows_level(&self, level: SecurityLevel) -> bool;
@@ -933,7 +943,6 @@ pub fn l1_answer<'a>(
     mode: ScoreMode,
     heuristic: bool,
     scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-    model: Option<&L1TextModel>,
     text: &str,
 ) -> L1Stage;
 ```
@@ -941,8 +950,8 @@ pub fn l1_answer<'a>(
 L1's answer for `module`, shared by the Core scanner and Ark's
 gateway: the heuristic ([`Self::l1_stage`]) over the module's results
 in `scan` when one of its producers ran (`heuristic`), else
-[`Self::l1_off`]; then the module's L1 `model` on an escalation
-([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+[`Self::l1_off`]; then the module's L1 model ([`Self::l1_model`]) on
+an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
 scan: the model reads their rule findings, as in training.
 
 ```rust
@@ -2317,8 +2326,6 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 ```rust
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
-    /// Each module's optional L1 model ([`Self::load_l1_models`]).
-    l1_models: [Option<std::sync::Arc<L1TextModel>>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -2341,25 +2348,6 @@ keep off cost no memory. Call it when the gates are fixed (a scanner's
 config, a gateway's execution gates) so that no scan under them
 builds anything; a scan under other gates builds what they enable on
 first use. What is built stays, also after a gate change turns it off.
-
-```rust
-pub fn load_l1_models<'a>(
-    &mut self,
-    configs: impl IntoIterator<Item = (SecurityCategory, &'a L1ModelConfig)>,
-) -> Result<(), String>;
-```
-
-Load the configured L1 models once (for example
-[`crate::cascade::CascadeConfig::l1_models`]); each replaces the
-module's earlier model. A model another scanner of the process holds
-under the same config is shared ([`crate::shared_models`]). Non-native categories are refused. No model is
-loaded unless configured.
-
-```rust
-pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel>;
-```
-
-The loaded L1 model of `category`'s module, if one is configured.
 
 ```rust
 pub fn producers(&self, category: SecurityCategory) -> &[NativeProducerSpec];
@@ -3425,16 +3413,10 @@ pub struct NtdbL2PackageAssetSpec {
     pub category: SecurityCategory,
     /// Minimum security level that needs this package.
     pub level: SecurityLevel,
-    /// Public model identifier used by gates and scan results.
-    pub model: &'static str,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision.
-    pub revision: &'static str,
-    /// Directory prefix inside the Hugging Face repository.
-    pub source_prefix: &'static str,
-    /// Relative package directory below the category cache directory.
-    pub destination_path: &'static str,
+    /// The pinned package: its id is the public model identifier used by gates and scan
+    /// results, its source prefix the package directory inside the repository, and its
+    /// environment override a local export that replaces the cached package.
+    pub spec: ModelSpec,
     /// Whether missing or failed downloads should block `warmup`.
     pub required: bool,
 }
@@ -3446,14 +3428,8 @@ A manifest-first NTDB L2 package declared for Hugging Face download.
 pub struct PipelineModelAssetSpec {
     /// Scanner category that owns this pipeline model.
     pub category: SecurityCategory,
-    /// Public model name.
-    pub model: &'static str,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision.
-    pub revision: &'static str,
-    /// Relative bundle directory below the model cache.
-    pub destination_path: &'static str,
+    /// The pinned bundle below the model cache; its id is the public model name.
+    pub spec: ModelSpec,
     /// Files required to load and validate the bundle.
     pub files: &'static [&'static str],
 }
@@ -3493,11 +3469,12 @@ pub fn ntdb_l2_package_assets_present(
     category: SecurityCategory,
     max_level: SecurityLevel,
     model: &str,
-    target_dir: &Path,
+    root: &Path,
 ) -> bool;
 ```
 
-Check whether an official NTDB L2 package cache matches its pinned revision.
+Check whether an official NTDB L2 package cache below the model cache `root` matches
+its pinned revision.
 
 ```rust
 pub fn required_assets_present(
@@ -3510,53 +3487,33 @@ pub fn required_assets_present(
 Check whether all required assets for a category are present in `target_dir`.
 
 ```rust
-pub fn dynamic_pii_assets_present(target_dir: &Path) -> bool;
-```
-
-Check whether the complete revision-pinned `dynamic-pii` model is cached.
-
-```rust
-pub fn download_dynamic_pii_assets(
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Download the revision-pinned `dynamic-pii` GLiNER bundle.
-
-```rust
-pub fn unified_l3_assets_present(target_dir: &Path) -> bool;
-```
-
-Check whether the complete revision-pinned unified L3 model is cached.
-
-```rust
-pub fn download_unified_l3_assets(
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Download the revision-pinned unified L3 bundle.
-
-```rust
 pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
 ```
 
 Return the revision-pinned dedicated L3 bundle for a classifier category.
 
 ```rust
-pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool;
+pub fn selected_files(&self) -> Vec<&'static str>;
 ```
 
-Check whether a category's dedicated L3 bundle is cached.
+The bundle files this process loads: the fp16 graph replaces the quantized one
+when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
 
 ```rust
-pub fn download_dedicated_l3_assets(
-    category: SecurityCategory,
-    target_dir: &Path,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>>;
+pub fn assets_present(&self, root: &Path) -> bool;
 ```
 
-Download a category's revision-pinned dedicated L3 bundle when it has one.
+Whether the model cache `root` holds the complete pinned bundle.
+
+```rust
+pub fn download(
+    &self,
+    root: &Path,
+    progress: Option<&SecurityAssetProgressCallback>,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Fetch the pinned bundle into the model cache `root` and prepare its generated files.
 
 ```rust
 pub fn download_category_assets(
@@ -3575,11 +3532,12 @@ pub fn download_ntdb_l2_package(
     category: SecurityCategory,
     max_level: SecurityLevel,
     model: &str,
-    target_dir: &Path,
+    root: &Path,
+    progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>>;
 ```
 
-Download a missing NTDB L2 package from Hugging Face into `target_dir`.
+Download a missing NTDB L2 package from Hugging Face below the model cache `root`.
 
 The package is downloaded manifest-first: `manifest.json` is fetched from
 the package prefix, then runtime files referenced by that manifest are

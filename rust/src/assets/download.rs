@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
+//! Ark's model table on Core's model mechanism: Core resolves, checks, fetches and
+//! prepares each registered [`ModelSpec`]; this module keeps Ark's file selection,
+//! the NTDB manifest-first package layout and its shared embedder links.
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
-use rayon::prelude::*;
+use patronus_ark_core::model_assets::{fetch_files, prepare_generated_files, ModelFile, Progress};
 
 use crate::{
     SecurityAssetProgress, SecurityAssetProgressCallback, SecurityCategory, SecurityLevel,
@@ -17,7 +19,7 @@ use super::{
     mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
     specs::{
         AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
-        DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
+        DEDICATED_L3_ASSETS, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
     },
 };
 
@@ -28,63 +30,22 @@ struct SharedEmbedderFile {
     package_file: PathBuf,
 }
 
-const ASSET_DOWNLOAD_CONCURRENCY: usize = 6;
-#[cfg(test)]
-use patronus_ark_core::assets::download::download_error_is_retryable;
-use patronus_ark_core::assets::download::{download_hf_file_at_revision, get_hf_token as hf_token};
-
-fn asset_download_pool() -> &'static rayon::ThreadPool {
-    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
-    POOL.get_or_init(|| {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(ASSET_DOWNLOAD_CONCURRENCY)
-            .thread_name(|index| format!("patronus-ark-asset-download-{index}"))
-            .build()
-            .expect("failed to create Patronus Ark asset download pool")
-    })
-}
-
-fn run_downloads_in_parallel<T, F>(
-    items: &[T],
-    progress: Option<&SecurityAssetProgressCallback>,
+/// Report Core's `(completed, total)` file progress as one model's asset progress.
+pub(crate) fn progress_reporter<'a>(
+    progress: Option<&'a SecurityAssetProgressCallback>,
     category: SecurityCategory,
-    model: &str,
-    completed_files: usize,
-    total_files: usize,
-    download: F,
-) -> Result<(), Box<dyn std::error::Error>>
-where
-    T: Sync,
-    F: Fn(&T) -> Result<(), String> + Send + Sync,
-{
-    if let Some(callback) = progress {
-        callback(SecurityAssetProgress {
-            category,
-            model: model.to_string(),
-            completed_files,
-            total_files,
-        });
-    }
-    let completed = Mutex::new(completed_files);
-    let result: Result<(), String> = asset_download_pool().install(|| {
-        items.par_iter().try_for_each(|item| {
-            download(item)?;
-            if let Some(callback) = progress {
-                let mut completed = completed
-                    .lock()
-                    .map_err(|error| format!("asset progress lock poisoned: {error}"))?;
-                *completed += 1;
-                callback(SecurityAssetProgress {
-                    category,
-                    model: model.to_string(),
-                    completed_files: *completed,
-                    total_files,
-                });
-            }
-            Ok(())
-        })
-    });
-    result.map_err(Into::into)
+    model: &'a str,
+) -> Option<impl Fn(usize, usize) + Send + Sync + 'a> {
+    progress.map(move |progress| {
+        move |completed_files, total_files| {
+            progress(SecurityAssetProgress {
+                category,
+                model: model.to_string(),
+                completed_files,
+                total_files,
+            })
+        }
+    })
 }
 
 /// Return manifest entries needed for a category up to `max_level`.
@@ -116,20 +77,21 @@ pub fn ntdb_l2_package_asset(
 ) -> Option<NtdbL2PackageAssetSpec> {
     ntdb_l2_package_assets(category, max_level)
         .into_iter()
-        .find(|asset| asset.model == model)
+        .find(|asset| asset.spec.id == model)
 }
 
-/// Check whether an official NTDB L2 package cache matches its pinned revision.
+/// Check whether an official NTDB L2 package cache below the model cache `root` matches
+/// its pinned revision.
 pub fn ntdb_l2_package_assets_present(
     category: SecurityCategory,
     max_level: SecurityLevel,
     model: &str,
-    target_dir: &Path,
+    root: &Path,
 ) -> bool {
     ntdb_l2_package_asset(category, max_level, model).is_some_and(|asset| {
-        let package_dir = target_dir.join(asset.destination_path);
+        let package_dir = asset.spec.cache_dir(root);
         let manifest_path = package_dir.join("manifest.json");
-        if !manifest_path.is_file() || !bundle_revision_matches(&package_dir, asset.revision) {
+        if !manifest_path.is_file() || !asset.spec.is_current(&package_dir) {
             return false;
         }
         let Ok(manifest_json) = fs::read_to_string(manifest_path) else {
@@ -149,22 +111,19 @@ pub fn ntdb_l2_package_assets_present(
         let elements = manifest.minilm.vocab_size as u64 * manifest.minilm.embedding_dim as u64;
         fs::metadata(matrix)
             .is_ok_and(|metadata| metadata.len() == elements * 2 || metadata.len() == elements * 4)
-            && l3_compatible_tokenizer_matches_unified(&manifest, &package_dir, target_dir)
+            && l3_compatible_tokenizer_matches_unified(&manifest, &package_dir, root)
     })
 }
 
 fn l3_compatible_tokenizer_matches_unified(
     manifest: &PackageManifest,
     package_dir: &Path,
-    category_dir: &Path,
+    root: &Path,
 ) -> bool {
     if !manifest.minilm.is_l3_tokenizer_compatible() {
         return true;
     }
-    let model_root = category_dir.parent().unwrap_or(category_dir);
-    let unified_tokenizer = model_root
-        .join(UNIFIED_L3_ASSET.destination_path)
-        .join("tokenizer.json");
+    let unified_tokenizer = UNIFIED_L3_ASSET.spec.cache_dir(root).join("tokenizer.json");
     if !unified_tokenizer.is_file() {
         return true;
     }
@@ -191,44 +150,6 @@ pub fn required_assets_present(
         .all(|asset| target_dir.join(asset.destination_path).exists())
 }
 
-/// Check whether the complete revision-pinned `dynamic-pii` model is cached.
-pub fn dynamic_pii_assets_present(target_dir: &Path) -> bool {
-    pipeline_model_assets_present(DYNAMIC_PII_ASSET, target_dir)
-}
-
-/// Download the revision-pinned `dynamic-pii` GLiNER bundle.
-pub fn download_dynamic_pii_assets(
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir, None)
-}
-
-pub(crate) fn download_dynamic_pii_assets_with_progress(
-    target_dir: &Path,
-    progress: &SecurityAssetProgressCallback,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir, Some(progress))
-}
-
-/// Check whether the complete revision-pinned unified L3 model is cached.
-pub fn unified_l3_assets_present(target_dir: &Path) -> bool {
-    pipeline_model_assets_present(UNIFIED_L3_ASSET, target_dir)
-}
-
-/// Download the revision-pinned unified L3 bundle.
-pub fn download_unified_l3_assets(
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir, None)
-}
-
-pub(crate) fn download_unified_l3_assets_with_progress(
-    target_dir: &Path,
-    progress: &SecurityAssetProgressCallback,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir, Some(progress))
-}
-
 /// Return the revision-pinned dedicated L3 bundle for a classifier category.
 pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec> {
     DEDICATED_L3_ASSETS
@@ -237,188 +158,70 @@ pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAss
         .find(|asset| asset.category == category)
 }
 
-/// Check whether a category's dedicated L3 bundle is cached.
-pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool {
-    dedicated_l3_asset(category)
-        .is_none_or(|asset| pipeline_model_assets_present(asset, target_dir))
-}
-
-/// Download a category's revision-pinned dedicated L3 bundle when it has one.
-pub fn download_dedicated_l3_assets(
-    category: SecurityCategory,
-    target_dir: &Path,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    dedicated_l3_asset(category)
-        .map(|asset| download_pipeline_model_assets(asset, target_dir, None))
-        .transpose()
-}
-
-fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
-    let bundle_dir = target_dir.join(asset.destination_path);
-    bundle_revision_matches(&bundle_dir, asset.revision)
-        && selected_pipeline_model_files(asset)
+impl PipelineModelAssetSpec {
+    /// The bundle files this process loads: the fp16 graph replaces the quantized one
+    /// when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
+    pub fn selected_files(&self) -> Vec<&'static str> {
+        let fp16 = prefer_fp16_l3();
+        let fp16_path = if self.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
+            Some("onnx/onnx_fp16/model_fp16.onnx")
+        } else if self.files.contains(&"onnx/fp16/model_fp16.onnx") {
+            Some("onnx/fp16/model_fp16.onnx")
+        } else {
+            None
+        };
+        self.files
             .iter()
-            .all(|file| bundle_dir.join(file).is_file())
-}
+            .copied()
+            .filter(|path| {
+                if fp16 && fp16_path.is_some() {
+                    *path != "onnx/int8_int4_embeddings/model.onnx"
+                        && *path != "model_int4_embeddings_int8.onnx"
+                } else {
+                    Some(*path) != fp16_path
+                }
+            })
+            .collect()
+    }
 
-fn download_pipeline_model_assets(
-    asset: PipelineModelAssetSpec,
-    target_dir: &Path,
-    progress: Option<&SecurityAssetProgressCallback>,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let bundle_dir = target_dir.join(asset.destination_path);
-    let token = hf_token();
-    let revision_matches = bundle_revision_matches(&bundle_dir, asset.revision);
-    let selected_files = selected_pipeline_model_files(asset);
-    let missing_files = selected_files
-        .iter()
-        .copied()
-        .filter(|file| !revision_matches || !bundle_dir.join(file).is_file())
-        .collect::<Vec<_>>();
-    run_downloads_in_parallel(
-        &missing_files,
-        progress,
-        asset.category,
-        asset.model,
-        selected_files.len() - missing_files.len(),
-        selected_files.len(),
-        |file| {
-            download_hf_file_at_revision(
-                token.as_deref(),
-                asset.repo,
-                asset.revision,
-                file,
-                &bundle_dir.join(file),
-                true,
-                asset.model,
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-        },
-    )?;
-    fs::write(bundle_dir.join(".patronus-revision"), asset.revision)?;
-    prepare_pipeline_model_files(asset, &bundle_dir);
-    Ok(bundle_dir)
-}
+    /// Whether the model cache `root` holds the complete pinned bundle.
+    pub fn assets_present(&self, root: &Path) -> bool {
+        self.spec
+            .files_present(&self.spec.cache_dir(root), &self.selected_files())
+    }
 
-pub(crate) fn selected_pipeline_model_files(asset: PipelineModelAssetSpec) -> Vec<&'static str> {
-    selected_pipeline_model_files_with_precision(asset, prefer_fp16_l3())
-}
+    /// Fetch the pinned bundle into the model cache `root` and prepare its generated files.
+    pub fn download(
+        &self,
+        root: &Path,
+        progress: Option<&SecurityAssetProgressCallback>,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let files = self.selected_files();
+        let report = progress_reporter(progress, self.category, self.spec.id);
+        let dir = self.spec.fetch(
+            root,
+            &files,
+            report.as_ref().map(|report| report as &Progress<'_>),
+        )?;
+        prepare_generated_files(self.spec.id, &dir, &files);
+        Ok(dir)
+    }
 
-fn selected_pipeline_model_files_with_precision(
-    asset: PipelineModelAssetSpec,
-    fp16: bool,
-) -> Vec<&'static str> {
-    let fp16_path = if asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
-        Some("onnx/onnx_fp16/model_fp16.onnx")
-    } else if asset.files.contains(&"onnx/fp16/model_fp16.onnx") {
-        Some("onnx/fp16/model_fp16.onnx")
-    } else {
-        None
-    };
-    asset
-        .files
-        .iter()
-        .copied()
-        .filter(|path| {
-            if fp16 && fp16_path.is_some() {
-                *path != "onnx/int8_int4_embeddings/model.onnx"
-                    && *path != "model_int4_embeddings_int8.onnx"
-            } else {
-                Some(*path) != fp16_path
-            }
-        })
-        .collect()
+    /// Prepare the generated files of the cached bundle: the compact tokenizer and the
+    /// external weight data of its selected ONNX graphs. An incomplete bundle stays as it is.
+    pub(crate) fn prepare_cached(&self, root: &Path) {
+        if self.assets_present(root) {
+            prepare_generated_files(
+                self.spec.id,
+                &self.spec.cache_dir(root),
+                &self.selected_files(),
+            );
+        }
+    }
 }
 
 pub(crate) fn prefer_fp16_l3() -> bool {
     std::env::var("PATRONUS_L3_PRECISION").is_ok_and(|value| value.eq_ignore_ascii_case("fp16"))
-}
-
-/// Prepare the generated files of a cached pipeline model bundle: the compact tokenizer, and
-/// the external weight data of its selected ONNX graphs.
-pub(crate) fn prepare_cached_pipeline_model(asset: PipelineModelAssetSpec, target_dir: &Path) {
-    let bundle_dir = target_dir.join(asset.destination_path);
-    let assets_present = pipeline_model_assets_present(asset, target_dir);
-    log::debug!(
-        "checked cached pipeline model assets before preparation; model={}; target_dir={}; bundle_dir={}; assets_present={}",
-        asset.model,
-        target_dir.display(),
-        bundle_dir.display(),
-        assets_present
-    );
-    if assets_present {
-        prepare_pipeline_model_files(asset, &bundle_dir);
-    }
-}
-
-fn prepare_pipeline_model_files(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
-    prepare_pipeline_model_compact_tokenizer(asset, bundle_dir);
-    externalize_pipeline_model_weights(asset, bundle_dir);
-}
-
-/// Move the weights of the bundle's selected ONNX graphs to external data once, so ONNX
-/// Runtime memory-maps them. A failure leaves the inline graph, which loads as before.
-fn externalize_pipeline_model_weights(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
-    for file in selected_pipeline_model_files(asset)
-        .into_iter()
-        .filter(|file| file.ends_with(".onnx"))
-    {
-        let graph = bundle_dir.join(file);
-        match patronus_ark_core::onnx::externalize_weights(&graph) {
-            Ok(true) => log::info!("moved the weights of {} to external data", graph.display()),
-            Ok(false) => {}
-            Err(error) => log::warn!(
-                "weights of {} stay inline; external data rewrite failed: {error}",
-                graph.display()
-            ),
-        }
-    }
-}
-
-fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
-    let tokenizer_json = bundle_dir.join("tokenizer.json");
-    log::debug!(
-        "checking pipeline model tokenizer before compact tokenizer preparation; model={}; bundle_dir={}; tokenizer_json={}; tokenizer_json_exists={}",
-        asset.model,
-        bundle_dir.display(),
-        tokenizer_json.display(),
-        tokenizer_json.is_file()
-    );
-    if !tokenizer_json.is_file() {
-        return;
-    }
-    match ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
-        Ok(Some(compact_path)) => {
-            log::debug!(
-                "compact mmBERT tokenizer ready; model={}; compact_path={}",
-                asset.model,
-                compact_path.display()
-            );
-        }
-        Ok(None) => log::debug!(
-            "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",
-            asset.model,
-            tokenizer_json.display()
-        ),
-        Err(err) => {
-            log::debug!(
-                "compact mmBERT tokenizer preparation failed; model={}; bundle_dir={}; error={err}; tokenizer.json remains available",
-                asset.model,
-                bundle_dir.display()
-            );
-            log::warn!(
-                "failed to prepare compact mmBERT tokenizer for {} at {}: {err}; tokenizer.json remains available",
-                asset.model,
-                bundle_dir.display()
-            );
-        }
-    }
-}
-
-fn bundle_revision_matches(bundle_dir: &Path, revision: &str) -> bool {
-    fs::read_to_string(bundle_dir.join(".patronus-revision"))
-        .is_ok_and(|stored| stored.trim() == revision)
 }
 
 /// Download missing manifest assets for a category into `target_dir`.
@@ -429,40 +232,27 @@ pub fn download_category_assets(
     max_level: SecurityLevel,
     target_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let token = hf_token();
     let assets = category_assets(category, max_level)
         .into_iter()
         .filter(|asset| asset.required || download_optional_assets())
         .collect::<Vec<_>>();
-    let missing_assets = assets
+    let missing = assets
         .iter()
-        .copied()
         .filter(|asset| !target_dir.join(asset.destination_path).exists())
+        .map(|asset| ModelFile {
+            repository: asset.repo,
+            revision: asset.revision.unwrap_or("main"),
+            source: asset.source_path.to_owned(),
+            dest: target_dir.join(asset.destination_path),
+            required: asset.required,
+            label: category.as_str(),
+        })
         .collect::<Vec<_>>();
-    run_downloads_in_parallel(
-        &missing_assets,
-        None,
-        category,
-        category.as_str(),
-        assets.len() - missing_assets.len(),
-        assets.len(),
-        |asset| {
-            download_hf_file_at_revision(
-                token.as_deref(),
-                asset.repo,
-                asset.revision.unwrap_or("main"),
-                asset.source_path,
-                &target_dir.join(asset.destination_path),
-                asset.required,
-                &format!("L{} asset", asset.level as u8),
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-        },
-    )
+    fetch_files(&missing, assets.len(), None)?;
+    Ok(())
 }
 
-/// Download a missing NTDB L2 package from Hugging Face into `target_dir`.
+/// Download a missing NTDB L2 package from Hugging Face below the model cache `root`.
 ///
 /// The package is downloaded manifest-first: `manifest.json` is fetched from
 /// the package prefix, then runtime files referenced by that manifest are
@@ -471,80 +261,29 @@ pub fn download_ntdb_l2_package(
     category: SecurityCategory,
     max_level: SecurityLevel,
     model: &str,
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let asset = ntdb_l2_package_asset(category, max_level, model).ok_or_else(|| {
-        format!(
-            "missing NTDB L2 asset spec for {}/{}",
-            category.as_str(),
-            model
-        )
-    })?;
-    download_ntdb_l2_package_asset_inner(asset, target_dir, None)
-}
-
-pub(crate) fn download_ntdb_l2_package_with_progress(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
-    target_dir: &Path,
-    progress: &SecurityAssetProgressCallback,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let asset = ntdb_l2_package_asset(category, max_level, model).ok_or_else(|| {
-        format!(
-            "missing NTDB L2 asset spec for {}/{}",
-            category.as_str(),
-            model
-        )
-    })?;
-    download_ntdb_l2_package_asset_inner(asset, target_dir, Some(progress))
-}
-
-enum NtdbDownloadJob {
-    Shared(SharedEmbedderFile),
-    Package {
-        source_path: String,
-        destination: PathBuf,
-    },
-}
-
-fn download_ntdb_l2_package_asset_inner(
-    asset: NtdbL2PackageAssetSpec,
-    target_dir: &Path,
+    root: &Path,
     progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let token = hf_token();
-    let package_dir = target_dir.join(asset.destination_path);
+    let asset = ntdb_l2_package_asset(category, max_level, model).ok_or_else(|| {
+        format!(
+            "missing NTDB L2 asset spec for {}/{}",
+            category.as_str(),
+            model
+        )
+    })?;
+    let spec = asset.spec;
+    let report = progress_reporter(progress, asset.category, spec.id);
+    let report = report.as_ref().map(|report| report as &Progress<'_>);
+    let package_dir = spec.cache_dir(root);
     let manifest_dest = package_dir.join("manifest.json");
-    let manifest_source = prefixed_source_path(asset.source_prefix, "manifest.json");
-    let revision_matches = bundle_revision_matches(&package_dir, asset.revision);
+    let revision_matches = spec.is_current(&package_dir);
+    let fetch = |relative: &str, dest: PathBuf| ModelFile {
+        required: asset.required,
+        ..spec.file(relative, dest)
+    };
 
     if !revision_matches || !manifest_dest.exists() {
-        if let Some(callback) = progress {
-            callback(SecurityAssetProgress {
-                category: asset.category,
-                model: asset.model.to_string(),
-                completed_files: 0,
-                total_files: 1,
-            });
-        }
-        download_hf_file_at_revision(
-            token.as_deref(),
-            asset.repo,
-            asset.revision,
-            &manifest_source,
-            &manifest_dest,
-            asset.required,
-            "NTDB L2 manifest",
-        )?;
-        if let Some(callback) = progress {
-            callback(SecurityAssetProgress {
-                category: asset.category,
-                model: asset.model.to_string(),
-                completed_files: 1,
-                total_files: 1,
-            });
-        }
+        fetch_files(&[fetch("manifest.json", manifest_dest.clone())], 1, report)?;
     }
 
     let manifest_json = fs::read_to_string(&manifest_dest).map_err(|err| {
@@ -554,7 +293,7 @@ fn download_ntdb_l2_package_asset_inner(
         )
     })?;
     let manifest = crate::ml::ntdb_executor::manifest::parse_package_manifest(&manifest_json)?;
-    let shared_embedder_files = ntdb_l2_shared_embedder_files(&manifest, target_dir, &package_dir)?;
+    let shared_embedder_files = ntdb_l2_shared_embedder_files(&manifest, root, &package_dir)?;
     migrate_legacy_shared_embedder_files(&manifest, &shared_embedder_files)?;
     let shared_relative_paths = shared_embedder_files
         .iter()
@@ -562,12 +301,14 @@ fn download_ntdb_l2_package_asset_inner(
         .collect::<HashSet<_>>();
 
     let manifest_files = ntdb_l2_package_manifest_files_from_manifest(&manifest)?;
-    let mut jobs = Vec::new();
+    let mut fetches = Vec::new();
+    let mut refreshed = Vec::new();
     for file in &shared_embedder_files {
-        if !shared_embedder_refresh_required(revision_matches, &manifest, file, target_dir)? {
-            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
+        if shared_embedder_refresh_required(revision_matches, &manifest, file, root)? {
+            fetches.push(fetch(&file.relative_path, file.shared_file.clone()));
+            refreshed.push(file);
         } else {
-            jobs.push(NtdbDownloadJob::Shared(file.clone()));
+            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
         }
     }
     for relative_path in &manifest_files {
@@ -578,42 +319,14 @@ fn download_ntdb_l2_package_asset_inner(
         if revision_matches && dest_file.exists() {
             continue;
         }
-        jobs.push(NtdbDownloadJob::Package {
-            source_path: prefixed_source_path(asset.source_prefix, relative_path),
-            destination: dest_file,
-        });
+        fetches.push(fetch(relative_path, dest_file));
     }
 
-    let total_files = manifest_files.len() + 1;
-    run_downloads_in_parallel(
-        &jobs,
-        progress,
-        asset.category,
-        asset.model,
-        total_files - jobs.len(),
-        total_files,
-        |job| match job {
-            NtdbDownloadJob::Shared(file) => {
-                download_shared_embedder_file(token.as_deref(), asset, file)
-                    .map_err(|error| error.to_string())
-            }
-            NtdbDownloadJob::Package {
-                source_path,
-                destination,
-            } => download_hf_file_at_revision(
-                token.as_deref(),
-                asset.repo,
-                asset.revision,
-                source_path,
-                destination,
-                asset.required,
-                "NTDB L2 package file",
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string()),
-        },
-    )?;
-    fs::write(package_dir.join(".patronus-revision"), asset.revision)?;
+    fetch_files(&fetches, manifest_files.len() + 1, report)?;
+    for file in refreshed {
+        link_shared_embedder_file(&file.shared_file, &file.package_file)?;
+    }
+    spec.mark_current(&package_dir)?;
 
     if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
         log::warn!(
@@ -650,15 +363,10 @@ fn prepare_downloaded_compact_tokenizer(
 pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
     manifest: &PackageManifest,
     package_dir: &Path,
+    root: &Path,
     prepared_shared_tokenizers: &mut HashSet<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let category_dir = package_dir.parent().and_then(Path::parent).ok_or_else(|| {
-        format!(
-            "invalid cached NTDB package path: {}",
-            package_dir.display()
-        )
-    })?;
-    let shared_embedder_files = ntdb_l2_shared_embedder_files(manifest, category_dir, package_dir)?;
+    let shared_embedder_files = ntdb_l2_shared_embedder_files(manifest, root, package_dir)?;
     migrate_legacy_shared_embedder_files(manifest, &shared_embedder_files)?;
     let Some(tokenizer_file) = shared_embedder_files
         .iter()
@@ -766,10 +474,10 @@ fn ntdb_l2_package_manifest_files_from_manifest(
 
 fn ntdb_l2_shared_embedder_files(
     manifest: &PackageManifest,
-    category_dir: &Path,
+    root: &Path,
     package_dir: &Path,
 ) -> Result<Vec<SharedEmbedderFile>, Box<dyn std::error::Error>> {
-    let shared_root = ntdb_l2_shared_embedder_dir(category_dir, manifest);
+    let shared_root = ntdb_l2_shared_embedder_dir(root, manifest);
     let tokenizer_path = normalize_manifest_file_path(&format!(
         "{}/tokenizer.json",
         manifest.tokenizer_dir.trim_end_matches('/')
@@ -787,10 +495,8 @@ fn ntdb_l2_shared_embedder_files(
         .collect())
 }
 
-fn ntdb_l2_shared_embedder_dir(category_dir: &Path, manifest: &PackageManifest) -> PathBuf {
-    let model_root = category_dir.parent().unwrap_or(category_dir);
-    model_root
-        .join("l2_ntdb")
+fn ntdb_l2_shared_embedder_dir(root: &Path, manifest: &PackageManifest) -> PathBuf {
+    root.join("l2_ntdb")
         .join("_shared")
         .join("encoders")
         .join(shared_embedder_dir_name(manifest))
@@ -942,7 +648,7 @@ fn shared_embedder_refresh_required(
     package_revision_matches: bool,
     manifest: &PackageManifest,
     file: &SharedEmbedderFile,
-    category_dir: &Path,
+    root: &Path,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     if !package_revision_matches || !shared_embedder_file_is_valid(manifest, file)? {
         return Ok(true);
@@ -955,10 +661,7 @@ fn shared_embedder_refresh_required(
     {
         return Ok(false);
     }
-    let model_root = category_dir.parent().unwrap_or(category_dir);
-    let unified_tokenizer = model_root
-        .join(UNIFIED_L3_ASSET.destination_path)
-        .join("tokenizer.json");
+    let unified_tokenizer = UNIFIED_L3_ASSET.spec.cache_dir(root).join("tokenizer.json");
     if !unified_tokenizer.is_file() {
         return Ok(false);
     }
@@ -1044,24 +747,6 @@ fn sanitize_shared_embedder_identity(identity: &str) -> String {
     } else {
         sanitized
     }
-}
-
-fn download_shared_embedder_file(
-    token: Option<&str>,
-    asset: NtdbL2PackageAssetSpec,
-    file: &SharedEmbedderFile,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let source_path = prefixed_source_path(asset.source_prefix, &file.relative_path);
-    download_hf_file_at_revision(
-        token,
-        asset.repo,
-        asset.revision,
-        &source_path,
-        &file.shared_file,
-        asset.required,
-        "NTDB v4 shared L2 embedder file",
-    )?;
-    link_shared_embedder_file(&file.shared_file, &file.package_file)
 }
 
 fn link_shared_embedder_file(
@@ -1162,15 +847,6 @@ fn normalize_manifest_file_path(path: &str) -> Result<String, Box<dyn std::error
     Ok(parts.join("/"))
 }
 
-fn prefixed_source_path(prefix: &str, relative_path: &str) -> String {
-    let prefix = prefix.trim_matches('/');
-    if prefix.is_empty() {
-        relative_path.to_string()
-    } else {
-        format!("{prefix}/{}", relative_path.trim_start_matches('/'))
-    }
-}
-
 fn download_optional_assets() -> bool {
     std::env::var("PATRONUS_DOWNLOAD_OPTIONAL_ASSETS").as_deref() == Ok("1")
 }
@@ -1179,32 +855,10 @@ fn download_optional_assets() -> bool {
 mod tests {
     use std::{
         fs,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc, Mutex,
-        },
-        thread,
-        time::Duration,
         time::{SystemTime, UNIX_EPOCH},
     };
 
     use super::*;
-
-    #[test]
-    fn asset_download_retries_only_transient_http_statuses() {
-        for status in [429, 500, 503, 599] {
-            let response = ureq::Response::new(status, "transient", "").unwrap();
-            assert!(download_error_is_retryable(&ureq::Error::Status(
-                status, response
-            )));
-        }
-        for status in [400, 401, 403, 404] {
-            let response = ureq::Response::new(status, "permanent", "").unwrap();
-            assert!(!download_error_is_retryable(&ureq::Error::Status(
-                status, response
-            )));
-        }
-    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -1232,46 +886,6 @@ mod tests {
     }
 
     #[test]
-    fn asset_downloads_are_parallel_but_bounded_and_report_progress() {
-        let active = Arc::new(AtomicUsize::new(0));
-        let maximum = Arc::new(AtomicUsize::new(0));
-        let reported = Arc::new(Mutex::new(Vec::new()));
-        let callback_reported = reported.clone();
-        let progress: SecurityAssetProgressCallback = Arc::new(move |progress| {
-            callback_reported.lock().unwrap().push(progress);
-        });
-        let items = (0..12).collect::<Vec<_>>();
-        let task_active = active.clone();
-        let task_maximum = maximum.clone();
-
-        run_downloads_in_parallel(
-            &items,
-            Some(&progress),
-            SecurityCategory::Injection,
-            "test-model",
-            0,
-            items.len(),
-            move |_| {
-                let current = task_active.fetch_add(1, Ordering::SeqCst) + 1;
-                task_maximum.fetch_max(current, Ordering::SeqCst);
-                thread::sleep(Duration::from_millis(10));
-                task_active.fetch_sub(1, Ordering::SeqCst);
-                Ok(())
-            },
-        )
-        .unwrap();
-
-        assert!(maximum.load(Ordering::SeqCst) > 1);
-        assert!(maximum.load(Ordering::SeqCst) <= ASSET_DOWNLOAD_CONCURRENCY);
-        let reported = reported.lock().unwrap();
-        assert_eq!(reported.first().unwrap().completed_files, 0);
-        assert_eq!(reported.last().unwrap().completed_files, items.len());
-        assert!(reported
-            .iter()
-            .all(|progress| progress.total_files == items.len()));
-    }
-
-    #[test]
     fn ntdb_l2_shared_embedder_files_use_model_root_and_manifest_identity() {
         let root = temp_dir("shared_paths");
         let category_dir = root.join("injection");
@@ -1279,7 +893,7 @@ mod tests {
         let manifest: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
 
-        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir).unwrap();
         let shared_dir = root
             .join("l2_ntdb/_shared/encoders")
             .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1");
@@ -1315,7 +929,7 @@ mod tests {
         let mut manifest: PackageManifest =
             serde_json::from_str(&manifest_json("jhu-clsp/mmBERT-small")).unwrap();
         manifest.minilm.tokenizer_family = Some("mmBERT".to_string());
-        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir)
+        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir)
             .unwrap()
             .into_iter()
             .find(|file| file.relative_path.ends_with("/tokenizer.json"))
@@ -1327,25 +941,18 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            shared_embedder_refresh_required(false, &manifest, &tokenizer, &category_dir,).unwrap()
-        );
-        assert!(
-            !shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
-        );
+        assert!(shared_embedder_refresh_required(false, &manifest, &tokenizer, &root,).unwrap());
+        assert!(!shared_embedder_refresh_required(true, &manifest, &tokenizer, &root,).unwrap());
 
-        let unified_tokenizer = root
-            .join(UNIFIED_L3_ASSET.destination_path)
+        let unified_tokenizer = UNIFIED_L3_ASSET
+            .spec
+            .cache_dir(&root)
             .join("tokenizer.json");
         fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
         fs::write(&unified_tokenizer, b"current shared tokenizer").unwrap();
-        assert!(
-            shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
-        );
+        assert!(shared_embedder_refresh_required(true, &manifest, &tokenizer, &root,).unwrap());
         fs::copy(&unified_tokenizer, &tokenizer.shared_file).unwrap();
-        assert!(
-            !shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
-        );
+        assert!(!shared_embedder_refresh_required(true, &manifest, &tokenizer, &root,).unwrap());
 
         fs::remove_dir_all(root).unwrap();
     }
@@ -1359,22 +966,21 @@ mod tests {
             serde_json::from_str(&manifest_json("jhu-clsp/mmBERT-small")).unwrap();
         manifest.minilm.tokenizer_family = Some("mmBERT".to_string());
         manifest.tokenizer_dir = ".".to_string();
-        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir)
+        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir)
             .unwrap()
             .into_iter()
             .find(|file| file.relative_path == "tokenizer.json")
             .unwrap();
         fs::create_dir_all(tokenizer.shared_file.parent().unwrap()).unwrap();
         fs::write(&tokenizer.shared_file, b"stale tokenizer").unwrap();
-        let unified_tokenizer = root
-            .join(UNIFIED_L3_ASSET.destination_path)
+        let unified_tokenizer = UNIFIED_L3_ASSET
+            .spec
+            .cache_dir(&root)
             .join("tokenizer.json");
         fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
         fs::write(&unified_tokenizer, b"current tokenizer").unwrap();
 
-        assert!(
-            shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir).unwrap()
-        );
+        assert!(shared_embedder_refresh_required(true, &manifest, &tokenizer, &root).unwrap());
 
         fs::remove_dir_all(root).unwrap();
     }
@@ -1407,14 +1013,13 @@ mod tests {
     #[test]
     fn current_l2_revision_is_not_ready_when_its_shared_tokenizer_is_stale() {
         let root = temp_dir("stale_shared_tokenizer_presence");
-        let category_dir = root.join("injection");
         let asset = ntdb_l2_package_asset(
             SecurityCategory::Injection,
             SecurityLevel::L3,
             "wolf-defender-small",
         )
         .unwrap();
-        let package_dir = category_dir.join(asset.destination_path);
+        let package_dir = asset.spec.cache_dir(&root);
         fs::create_dir_all(package_dir.join("tokenizer")).unwrap();
         fs::create_dir_all(package_dir.join("minilm")).unwrap();
         fs::write(
@@ -1425,15 +1030,16 @@ mod tests {
             ),
         )
         .unwrap();
-        fs::write(package_dir.join(".patronus-revision"), asset.revision).unwrap();
+        fs::write(package_dir.join(".patronus-revision"), asset.spec.revision).unwrap();
         fs::write(package_dir.join("minilm/embedding_matrix.f16"), [0_u8; 2]).unwrap();
         fs::write(
             package_dir.join("tokenizer/tokenizer.json"),
             b"stale tokenizer",
         )
         .unwrap();
-        let unified_tokenizer = root
-            .join(UNIFIED_L3_ASSET.destination_path)
+        let unified_tokenizer = UNIFIED_L3_ASSET
+            .spec
+            .cache_dir(&root)
             .join("tokenizer.json");
         fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
         fs::write(&unified_tokenizer, b"current tokenizer").unwrap();
@@ -1442,7 +1048,7 @@ mod tests {
             SecurityCategory::Injection,
             SecurityLevel::L3,
             "wolf-defender-small",
-            &category_dir,
+            &root,
         ));
         fs::copy(
             &unified_tokenizer,
@@ -1453,7 +1059,7 @@ mod tests {
             SecurityCategory::Injection,
             SecurityLevel::L3,
             "wolf-defender-small",
-            &category_dir,
+            &root,
         ));
 
         fs::remove_dir_all(root).unwrap();
@@ -1462,7 +1068,6 @@ mod tests {
     #[test]
     fn shared_embedder_directory_uses_canonical_model_over_export_path() {
         let root = temp_dir("canonical_shared_path");
-        let category_dir = root.join("injection");
         let exported: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
         let canonical: PackageManifest = serde_json::from_str(&manifest_json(
@@ -1471,8 +1076,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            ntdb_l2_shared_embedder_dir(&category_dir, &exported),
-            ntdb_l2_shared_embedder_dir(&category_dir, &canonical)
+            ntdb_l2_shared_embedder_dir(&root, &exported),
+            ntdb_l2_shared_embedder_dir(&root, &canonical)
         );
 
         fs::remove_dir_all(root).unwrap();
@@ -1486,7 +1091,7 @@ mod tests {
         let package_dir = category_dir.join("l2_ntdb/injection_current");
         let manifest: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
-        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir).unwrap();
         let legacy_root = root
             .join("l2_ntdb/_shared/encoders")
             .join("ntdb_artifacts_granite_embedding_97m__v1_d1");
@@ -1512,7 +1117,6 @@ mod tests {
     #[test]
     fn shared_embedder_directory_does_not_depend_on_chunk_size() {
         let root = temp_dir("chunk_independent_shared_path");
-        let category_dir = root.join("injection");
         let first: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
         let mut second: PackageManifest =
@@ -1521,8 +1125,8 @@ mod tests {
         second.minilm.content_tokens_per_chunk = 384;
 
         assert_eq!(
-            ntdb_l2_shared_embedder_dir(&category_dir, &first),
-            ntdb_l2_shared_embedder_dir(&category_dir, &second)
+            ntdb_l2_shared_embedder_dir(&root, &first),
+            ntdb_l2_shared_embedder_dir(&root, &second)
         );
 
         fs::remove_dir_all(root).unwrap();
@@ -1536,7 +1140,7 @@ mod tests {
         let package_dir = category_dir.join("l2_ntdb/injection_current");
         let manifest: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
-        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir).unwrap();
         let encoders_dir = root.join("l2_ntdb/_shared/encoders");
         let legacy_roots = [
             encoders_dir.join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c2"),
@@ -1571,7 +1175,7 @@ mod tests {
         let package_dir = category_dir.join("l2_ntdb/injection_current");
         let manifest: PackageManifest =
             serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
-        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &root, &package_dir).unwrap();
         let encoders_dir = root.join("l2_ntdb/_shared/encoders");
         let first = encoders_dir
             .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c2/minilm/embedding_matrix.f16");
@@ -1611,40 +1215,18 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn write_supported_mmbpe_tokenizer(path: &Path) {
-        let mut vocab = serde_json::Map::new();
-        vocab.insert("<bos>".to_string(), 0.into());
-        vocab.insert("<eos>".to_string(), 1.into());
-        vocab.insert("<unk>".to_string(), 2.into());
-        vocab.insert("▁".to_string(), 3.into());
-        for byte in 0..=255 {
-            vocab.insert(format!("<{byte:#04X}>"), (byte + 10).into());
-        }
-        let value = serde_json::json!({
-            "added_tokens": [
-                {"id": 0, "content": "<bos>", "lstrip": false},
-                {"id": 1, "content": "<eos>", "lstrip": false}
-            ],
-            "model": {
-                "type": "BPE",
-                "byte_fallback": true,
-                "vocab": vocab,
-                "merges": []
-            }
-        });
-        fs::write(path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
-    }
-
     #[test]
     fn cached_pipeline_model_prepare_moves_graph_weights_to_external_data() {
         use patronus_ark_core::onnx::{external_data_path, has_inline_weights, testing};
         let root = temp_dir("pipeline_external_data");
         let asset = PipelineModelAssetSpec {
             category: SecurityCategory::ToolClass,
-            model: "external-data-test",
-            repo: "example/repo",
-            revision: "rev",
-            destination_path: "pipeline",
+            spec: patronus_ark_core::model_assets::ModelSpec::new(
+                "external-data-test",
+                "example/repo",
+                "rev",
+                "pipeline",
+            ),
             files: &["onnx/int8_int4_embeddings/model.onnx"],
         };
         let graph = root.join("pipeline/onnx/int8_int4_embeddings/model.onnx");
@@ -1652,37 +1234,14 @@ mod tests {
         fs::write(&graph, testing::model_with_weights()).unwrap();
 
         // Without its revision marker the bundle is not a cached model and stays as it is.
-        prepare_cached_pipeline_model(asset, &root);
+        asset.prepare_cached(&root);
         assert!(has_inline_weights(&graph).unwrap());
 
         fs::write(root.join("pipeline/.patronus-revision"), "rev").unwrap();
-        prepare_cached_pipeline_model(asset, &root);
+        asset.prepare_cached(&root);
         assert!(!has_inline_weights(&graph).unwrap());
         assert!(external_data_path(&graph).is_file());
-        assert!(pipeline_model_assets_present(asset, &root));
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn pipeline_model_prepare_generates_mmbpe_tokenizer() {
-        let root = temp_dir("pipeline_mmbpe");
-        let bundle_dir = root.join("pipeline");
-        fs::create_dir_all(&bundle_dir).unwrap();
-        write_supported_mmbpe_tokenizer(&bundle_dir.join("tokenizer.json"));
-        let asset = PipelineModelAssetSpec {
-            category: SecurityCategory::Injection,
-            model: "mmbert-test",
-            repo: "example/repo",
-            revision: "rev",
-            destination_path: "pipeline",
-            files: &["tokenizer.json"],
-        };
-
-        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
-
-        assert!(bundle_dir.join("tokenizer.mmbpe").is_file());
-        assert!(bundle_dir.join("tokenizer.mmbpe.meta.json").is_file());
+        assert!(asset.assets_present(&root));
 
         fs::remove_dir_all(root).unwrap();
     }

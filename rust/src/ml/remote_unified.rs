@@ -40,7 +40,7 @@ impl RemoteUnified {
         {
             return Err("PATRONUS_UNIFIED_TRITON_URL must be an HTTP(S) origin".into());
         }
-        let revision = crate::assets::UNIFIED_L3_ASSET.revision;
+        let revision = crate::assets::UNIFIED_L3_ASSET.spec.revision;
         let timeout_ms = match std::env::var("PATRONUS_UNIFIED_TRITON_TIMEOUT_MS") {
             Ok(value) => value.parse::<u64>()?,
             Err(std::env::VarError::NotPresent) => 1000,

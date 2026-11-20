@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
+  `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
+  environment override) describes a model and Core resolves its directory, checks its revision
+  marker, fetches its files in parallel and prepares its compact tokenizer and external weights.
+  Ark registers GLiNER, Lion, its dedicated L3 models and its NTDB L2 packages this way; cache
+  layout, pins and the `PATRONUS_NTDB_*_DIR` overrides stay as they were, so nothing downloads
+  again. In Ark's Rust API, `PipelineModelAssetSpec` and `NtdbL2PackageAssetSpec` hold a `spec:
+  ModelSpec` instead of their `model`, `repo`, `revision`, `source_prefix` and `destination_path`
+  fields, and `NtdbL2ModelConfig` holds a `package: ModelSpec` instead of `asset_model`, `env_key`
+  and `package_name`. `dynamic_pii_assets_present`, `download_dynamic_pii_assets`,
+  `unified_l3_assets_present`, `download_unified_l3_assets`, `dedicated_l3_assets_present` and
+  `download_dedicated_l3_assets` are replaced by `assets_present`, `download` and `selected_files`
+  on `PipelineModelAssetSpec`; `ntdb_l2_package_assets_present` and `download_ntdb_l2_package`
+  take the model cache root instead of a category directory, and the latter an optional progress
+  callback.
 - **Ark uses Ark Core's types and L1 pass:** the `patronus-ark` crate no longer re-exports Ark
   Core types. Import categories, levels, gates, cascade, detectors, normalization, post-prediction
   hooks and result parts (`SecurityCategory`, `SecurityLevel`, `ScanGateMatrix`, `LayerResult`,

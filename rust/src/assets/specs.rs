@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{SecurityCategory, SecurityLevel};
+use patronus_ark_core::model_assets::ModelSpec;
 
 #[derive(Debug, Clone, Copy)]
 /// A model asset declared in the static download manifest.
@@ -27,16 +28,10 @@ pub struct NtdbL2PackageAssetSpec {
     pub category: SecurityCategory,
     /// Minimum security level that needs this package.
     pub level: SecurityLevel,
-    /// Public model identifier used by gates and scan results.
-    pub model: &'static str,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision.
-    pub revision: &'static str,
-    /// Directory prefix inside the Hugging Face repository.
-    pub source_prefix: &'static str,
-    /// Relative package directory below the category cache directory.
-    pub destination_path: &'static str,
+    /// The pinned package: its id is the public model identifier used by gates and scan
+    /// results, its source prefix the package directory inside the repository, and its
+    /// environment override a local export that replaces the cached package.
+    pub spec: ModelSpec,
     /// Whether missing or failed downloads should block `warmup`.
     pub required: bool,
 }
@@ -46,24 +41,20 @@ pub struct NtdbL2PackageAssetSpec {
 pub struct PipelineModelAssetSpec {
     /// Scanner category that owns this pipeline model.
     pub category: SecurityCategory,
-    /// Public model name.
-    pub model: &'static str,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision.
-    pub revision: &'static str,
-    /// Relative bundle directory below the model cache.
-    pub destination_path: &'static str,
+    /// The pinned bundle below the model cache; its id is the public model name.
+    pub spec: ModelSpec,
     /// Files required to load and validate the bundle.
     pub files: &'static [&'static str],
 }
 
 pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::DynamicPii,
-    model: "gliner_small-v2.5-edge",
-    repo: "patronus-studio/gliner_small-v2.5-edge",
-    revision: "6cfcbd93d7fc6f5e1658f80afa38f73891b91693",
-    destination_path: "dynamic_pii/gliner_small_v2_5",
+    spec: ModelSpec::new(
+        "gliner_small-v2.5-edge",
+        "patronus-studio/gliner_small-v2.5-edge",
+        "6cfcbd93d7fc6f5e1658f80afa38f73891b91693",
+        "dynamic_pii/gliner_small_v2_5",
+    ),
     files: &[
         "gliner_config.json",
         "gliner_onnx_config.json",
@@ -79,10 +70,12 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
 
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
-    model: "unified-multitask-model-augmented-v3",
-    repo: "patronus-studio/lion-warden-ai-security-classifier",
-    revision: "77888f617584758f904faefd6f38d4cf926f6d5d",
-    destination_path: "unified_multitask_v3",
+    spec: ModelSpec::new(
+        "unified-multitask-model-augmented-v3",
+        "patronus-studio/lion-warden-ai-security-classifier",
+        "77888f617584758f904faefd6f38d4cf926f6d5d",
+        "unified_multitask_v3",
+    ),
     files: &[
         "onnx/int8_int4_embeddings/model.onnx",
         "onnx/onnx_fp16/model_fp16.onnx",
@@ -103,10 +96,12 @@ const WOLF_SMALL: &patronus_ark_core::wolf::WolfModelSpec =
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::SensitiveDocument,
-        model: "orca-sonar-document-classifier",
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: "c038771b10b00b8da67d31e2b0280f85e13b808c",
-        destination_path: "sensitive_document/prompts",
+        spec: ModelSpec::new(
+            "orca-sonar-document-classifier",
+            "patronus-studio/orca-sonar-document-classifier",
+            "c038771b10b00b8da67d31e2b0280f85e13b808c",
+            "sensitive_document/prompts",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "onnx/onnx_fp16/model_fp16.onnx",
@@ -117,10 +112,12 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolClass,
-        model: "unified-v3-tool-class",
-        repo: "patronus-studio/husky-sight-tool-type-classifier-edge",
-        revision: "68e58725282dcdda106d8388fca47e0802335bc4",
-        destination_path: "tool_class/l3",
+        spec: ModelSpec::new(
+            "unified-v3-tool-class",
+            "patronus-studio/husky-sight-tool-type-classifier-edge",
+            "68e58725282dcdda106d8388fca47e0802335bc4",
+            "tool_class/l3",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "config.json",
@@ -130,10 +127,12 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolAction,
-        model: "unified-v3-tool-action",
-        repo: "patronus-studio/husky-paw-tool-action-classifier-edge",
-        revision: "326adc8edfcaa5c65986cab2896c2e69bc3d36cc",
-        destination_path: "tool_action/l3",
+        spec: ModelSpec::new(
+            "unified-v3-tool-action",
+            "patronus-studio/husky-paw-tool-action-classifier-edge",
+            "326adc8edfcaa5c65986cab2896c2e69bc3d36cc",
+            "tool_action/l3",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "config.json",
@@ -143,10 +142,12 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolTags,
-        model: "unified-v3-tool-tags",
-        repo: "patronus-studio/husky-nose-tool-security-properties-classifier-edge",
-        revision: "4619a3c2c14c36f2e4c8ee5c9d65b1ea7b962cbd",
-        destination_path: "tool_tags/l3",
+        spec: ModelSpec::new(
+            "unified-v3-tool-tags",
+            "patronus-studio/husky-nose-tool-security-properties-classifier-edge",
+            "4619a3c2c14c36f2e4c8ee5c9d65b1ea7b962cbd",
+            "tool_tags/l3",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "config.json",
@@ -156,10 +157,12 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::Routing,
-        model: "unified-v3-routing",
-        repo: "patronus-studio/panther-read-intent-classifier-edge",
-        revision: "ef7f1e20afda64f06be0e656184ab67c14061e6a",
-        destination_path: "routing/l3",
+        spec: ModelSpec::new(
+            "unified-v3-routing",
+            "patronus-studio/panther-read-intent-classifier-edge",
+            "ef7f1e20afda64f06be0e656184ab67c14061e6a",
+            "routing/l3",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "config.json",
@@ -169,10 +172,12 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
     PipelineModelAssetSpec {
         category: SecurityCategory::UnsafeAction,
-        model: "unified-v3-threat",
-        repo: "patronus-studio/wolf-defender-threat-classifier",
-        revision: "6520c1f43c716d1210321aecc7681446dd5ce317",
-        destination_path: "threat/l3",
+        spec: ModelSpec::new(
+            "unified-v3-threat",
+            "patronus-studio/wolf-defender-threat-classifier",
+            "6520c1f43c716d1210321aecc7681446dd5ce317",
+            "threat/l3",
+        ),
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
             "onnx/onnx_fp16/model_fp16.onnx",
@@ -222,95 +227,141 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     },
 ];
 
+pub const NTDB_INJECTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::Injection,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        WOLF_PIPELINE_MODEL,
+        WOLF_SMALL.repository,
+        WOLF_SMALL.revision,
+        "injection/l2_ntdb/injection_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_INJECTION_DIR"),
+    required: true,
+};
+
+pub const NTDB_SENSITIVE_DOCUMENT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::SensitiveDocument,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "orca-sonar-document-classifier",
+        "patronus-studio/orca-sonar-document-classifier",
+        "efa2b1724946fb2de5a22ce58ef99d7b246c2798",
+        "sensitive_document/l2_ntdb/sensitive_document_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR"),
+    required: true,
+};
+
+pub const NTDB_TOOL_CLASS: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::ToolClass,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "unified-v3-tool-class",
+        "patronus-studio/husky-sight-tool-type-classifier",
+        "de43b66056fc6b41e5f5c170712770ae805a4850",
+        "tool_class/l2_ntdb/tool_class_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_TOOL_CLASS_DIR"),
+    required: true,
+};
+
+pub const NTDB_TOOL_ACTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::ToolAction,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "unified-v3-tool-action",
+        "patronus-studio/husky-paw-tool-action-classifier",
+        "b2f4a556e7c9b02606589c5c587e096503f274c5",
+        "tool_action/l2_ntdb/tool_action_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_TOOL_ACTION_DIR"),
+    required: true,
+};
+
+pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::ToolTags,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "tool_tags_sink_external",
+        "patronus-studio/husky-nose-tool-security-properties-classifier",
+        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
+        "tool_tags/l2_ntdb/tool_tags_sink_external_current",
+    )
+    .with_source_prefix("l2/sink_external")
+    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR"),
+    required: true,
+};
+
+pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::ToolTags,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "tool_tags_source_sensitive",
+        "patronus-studio/husky-nose-tool-security-properties-classifier",
+        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
+        "tool_tags/l2_ntdb/tool_tags_source_sensitive_current",
+    )
+    .with_source_prefix("l2/source_sensitive")
+    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR"),
+    required: true,
+};
+
+pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::ToolTags,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "tool_tags_source_untrusted",
+        "patronus-studio/husky-nose-tool-security-properties-classifier",
+        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
+        "tool_tags/l2_ntdb/tool_tags_source_untrusted_current",
+    )
+    .with_source_prefix("l2/source_untrusted")
+    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR"),
+    required: true,
+};
+
+pub const NTDB_ROUTING: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::Routing,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "unified-v3-routing",
+        "patronus-studio/panther-read-intent-classifier",
+        "74ec1d568bdddc34d408d4e96ce52b5dd7789cbe",
+        "routing/l2_ntdb/routing_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_ROUTING_DIR"),
+    required: true,
+};
+
+pub const NTDB_THREAT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+    category: SecurityCategory::UnsafeAction,
+    level: SecurityLevel::L2,
+    spec: ModelSpec::new(
+        "unified-v3-threat",
+        "patronus-studio/wolf-defender-threat-classifier",
+        "6520c1f43c716d1210321aecc7681446dd5ce317",
+        "threat/l2_ntdb/threat_current",
+    )
+    .with_source_prefix("l2")
+    .with_env_override("PATRONUS_NTDB_THREAT_DIR"),
+    required: true,
+};
+
+/// Every NTDB L2 package; packages live below `<category dir>/l2_ntdb` of the model cache.
 pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L2,
-        model: WOLF_PIPELINE_MODEL,
-        repo: WOLF_SMALL.repository,
-        revision: WOLF_SMALL.revision,
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/injection_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L2,
-        model: "orca-sonar-document-classifier",
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: "efa2b1724946fb2de5a22ce58ef99d7b246c2798",
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/sensitive_document_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolClass,
-        level: SecurityLevel::L2,
-        model: "unified-v3-tool-class",
-        repo: "patronus-studio/husky-sight-tool-type-classifier",
-        revision: "de43b66056fc6b41e5f5c170712770ae805a4850",
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/tool_class_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolAction,
-        level: SecurityLevel::L2,
-        model: "unified-v3-tool-action",
-        repo: "patronus-studio/husky-paw-tool-action-classifier",
-        revision: "b2f4a556e7c9b02606589c5c587e096503f274c5",
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/tool_action_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolTags,
-        level: SecurityLevel::L2,
-        model: "tool_tags_sink_external",
-        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        source_prefix: "l2/sink_external",
-        destination_path: "l2_ntdb/tool_tags_sink_external_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolTags,
-        level: SecurityLevel::L2,
-        model: "tool_tags_source_sensitive",
-        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        source_prefix: "l2/source_sensitive",
-        destination_path: "l2_ntdb/tool_tags_source_sensitive_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolTags,
-        level: SecurityLevel::L2,
-        model: "tool_tags_source_untrusted",
-        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        source_prefix: "l2/source_untrusted",
-        destination_path: "l2_ntdb/tool_tags_source_untrusted_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::Routing,
-        level: SecurityLevel::L2,
-        model: "unified-v3-routing",
-        repo: "patronus-studio/panther-read-intent-classifier",
-        revision: "74ec1d568bdddc34d408d4e96ce52b5dd7789cbe",
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/routing_current",
-        required: true,
-    },
-    NtdbL2PackageAssetSpec {
-        category: SecurityCategory::UnsafeAction,
-        level: SecurityLevel::L2,
-        model: "unified-v3-threat",
-        repo: "patronus-studio/wolf-defender-threat-classifier",
-        revision: "6520c1f43c716d1210321aecc7681446dd5ce317",
-        source_prefix: "l2",
-        destination_path: "l2_ntdb/threat_current",
-        required: true,
-    },
+    NTDB_INJECTION,
+    NTDB_SENSITIVE_DOCUMENT,
+    NTDB_TOOL_CLASS,
+    NTDB_TOOL_ACTION,
+    NTDB_TOOL_TAGS_SINK_EXTERNAL,
+    NTDB_TOOL_TAGS_SOURCE_SENSITIVE,
+    NTDB_TOOL_TAGS_SOURCE_UNTRUSTED,
+    NTDB_ROUTING,
+    NTDB_THREAT,
 ];

@@ -91,7 +91,7 @@ impl DynamicPiiRuntime {
             let labels = call.config.inference_labels();
             let inference_threshold = call.config.inference_threshold();
             let chunk_entities = if let Some(entities) = chunk_cache.get(
-                crate::assets::DYNAMIC_PII_ASSET.revision,
+                crate::assets::DYNAMIC_PII_ASSET.spec.revision,
                 chunk_text,
                 &labels,
                 inference_threshold,
@@ -102,7 +102,7 @@ impl DynamicPiiRuntime {
                 let entities =
                     engine.extract_entity_candidates(chunk_text, &labels, inference_threshold)?;
                 chunk_cache.put(
-                    crate::assets::DYNAMIC_PII_ASSET.revision,
+                    crate::assets::DYNAMIC_PII_ASSET.spec.revision,
                     chunk_text,
                     &labels,
                     inference_threshold,

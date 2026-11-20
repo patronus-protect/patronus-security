@@ -44,12 +44,16 @@ fn distributed_unified_l3_fingerprint(base_dir: &std::path::Path) -> Result<Stri
     use std::io::Read;
 
     let asset = crate::assets::UNIFIED_L3_ASSET;
-    let bundle_dir = base_dir.join(asset.destination_path);
-    let mut files = crate::assets::selected_pipeline_model_files(asset)
+    let bundle_dir = asset.spec.cache_dir(base_dir);
+    let mut files = asset
+        .selected_files()
         .into_iter()
         .map(str::to_string)
         .collect::<Vec<_>>();
-    for generated in ["tokenizer.mmbpe", ".patronus-revision"] {
+    for generated in [
+        "tokenizer.mmbpe",
+        patronus_ark_core::model_assets::REVISION_MARKER,
+    ] {
         if bundle_dir.join(generated).is_file() {
             files.push(generated.to_string());
         }
@@ -91,9 +95,8 @@ mod distributed_fingerprint_tests {
             std::process::id(),
             std::thread::current().id()
         ));
-        let bundle = root.join(crate::assets::UNIFIED_L3_ASSET.destination_path);
-        let selected =
-            crate::assets::selected_pipeline_model_files(crate::assets::UNIFIED_L3_ASSET);
+        let bundle = crate::assets::UNIFIED_L3_ASSET.spec.cache_dir(&root);
+        let selected = crate::assets::UNIFIED_L3_ASSET.selected_files();
         for relative in &selected {
             let path = bundle.join(relative);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -680,7 +683,7 @@ pub(super) fn dynamic_pii_pending_result(execution: &ScanExecution) -> SecurityS
     };
     scan_result(
         SecurityCategory::DynamicPii,
-        DYNAMIC_PII_ASSET.model,
+        DYNAMIC_PII_ASSET.spec.id,
         result.clone(),
         vec![crate::pipeline::l3_pending_layer(&result, execution)],
     )
@@ -1026,9 +1029,9 @@ impl SecurityGateway {
             && execution
                 .gates()
                 .native
-                .allows_model(DYNAMIC_PII_ASSET.model)
+                .allows_model(DYNAMIC_PII_ASSET.spec.id)
         {
-            l3_models.push(DYNAMIC_PII_ASSET.model);
+            l3_models.push(DYNAMIC_PII_ASSET.spec.id);
         }
         let l3_failures = l3_models
             .iter()

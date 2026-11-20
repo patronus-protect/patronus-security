@@ -813,13 +813,13 @@ impl SecurityGateway {
                 job_id,
                 request_id: request_id.to_string(),
                 category: DYNAMIC_PII_ASSET.category.as_str().to_string(),
-                model: DYNAMIC_PII_ASSET.model.to_string(),
+                model: DYNAMIC_PII_ASSET.spec.id.to_string(),
                 text: Arc::clone(&text),
                 fallback: dynamic_pii_pending_result(execution),
                 priority: priority_index(
                     policy,
                     DYNAMIC_PII_ASSET.category.as_str(),
-                    DYNAMIC_PII_ASSET.model,
+                    DYNAMIC_PII_ASSET.spec.id,
                 ),
                 ttl_ms: config.queue_timeout_ms,
                 inference_timeout_ms: config.inference_timeout_ms(text.as_ref()),
@@ -1373,7 +1373,7 @@ pub(super) fn dynamic_pii_runs(
         && execution
             .gates()
             .native
-            .allows_model(DYNAMIC_PII_ASSET.model)
+            .allows_model(DYNAMIC_PII_ASSET.spec.id)
         && execution.l3_policy().enabled
         && patronus_ark_core::cascade::pipeline_allowed(
             &execution.gates().conditional,

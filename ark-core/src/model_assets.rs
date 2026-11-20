@@ -15,7 +15,7 @@ use std::{
 pub const REVISION_MARKER: &str = ".patronus-revision";
 
 /// One revision-pinned model below a model cache root.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModelSpec {
     /// Public model name, used in logs and progress reports.
     pub id: &'static str,

@@ -142,8 +142,7 @@ def _core_shell_assets() -> list[Asset]:
 def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> list[Asset]:
     block = full_source.split(f"pub const {const_name}", 1)[1].split("};", 1)[0]
     category = _field(block, "category").replace("SecurityCategory::", "")
-    repo = _field(block, "repo").strip('"')
-    destination = _field(block, "destination_path").strip('"')
+    _, repo, _, destination = _model_spec(block)
     if "files: &[" in block:
         files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
     else:
@@ -177,17 +176,26 @@ class NtdbPackage:
 
 def parse_ntdb_packages() -> list[NtdbPackage]:
     source = (ROOT / "rust/src/assets/specs.rs").read_text()
-    source = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[1]
+    blocks = dict(
+        re.findall(
+            r"pub const (\w+): NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec \{(.*?)\n\};",
+            source,
+            flags=re.S,
+        )
+    )
+    manifest = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[1].split("];", 1)[0]
     packages: list[NtdbPackage] = []
-    for block in re.findall(r"\bNtdbL2PackageAssetSpec\s*\{(.*?)\}", source, flags=re.S):
+    for name in re.findall(r"\b(NTDB_\w+),", manifest):
+        block = blocks[name]
+        model, repo, revision, destination = _model_spec(block)
         packages.append(
             NtdbPackage(
                 category=_field(block, "category").replace("SecurityCategory::", ""),
-                model=_field(block, "model").strip('"'),
-                repo=_field(block, "repo").strip('"'),
-                revision=_field(block, "revision").strip('"'),
-                source_prefix=_field(block, "source_prefix").strip('"'),
-                destination_path=_field(block, "destination_path").strip('"'),
+                model=model,
+                repo=repo,
+                revision=revision,
+                source_prefix=re.search(r'with_source_prefix\("([^"]*)"\)', block).group(1),
+                destination_path=destination,
             )
         )
     return packages
@@ -220,11 +228,23 @@ def wolf_model_lines() -> list[str]:
     return lines
 
 
+def _model_spec(block: str) -> list[str]:
+    """The `id, repository, revision, cache_subdir` of a block's `ModelSpec::new(...)`."""
+    arguments = block.split("ModelSpec::new(", 1)[1].split(")", 1)[0]
+    values = [_resolve(value.strip()).strip('"') for value in arguments.split(",") if value.strip()]
+    if len(values) != 4:
+        raise ValueError(f"Unexpected ModelSpec::new arguments: {arguments}")
+    return values
+
+
 def _field(block: str, name: str) -> str:
     match = re.search(rf"{name}:\s*([^,\n]+)", block)
     if not match:
         raise ValueError(f"Missing {name} in AssetSpec block")
-    value = match.group(1).strip()
+    return _resolve(match.group(1).strip())
+
+
+def _resolve(value: str) -> str:
     # A string constant of `specs.rs` itself, such as the injection model name.
     specs = (ROOT / "rust/src/assets/specs.rs").read_text()
     local = re.search(rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*"([^"\n]+)";', specs, re.M)

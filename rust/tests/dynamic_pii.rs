@@ -294,7 +294,7 @@ impl GlinerModelDir {
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!("{name}_{}_{}", std::process::id(), suffix));
-        let bundle_dir = path.join(DYNAMIC_PII_ASSET.destination_path);
+        let bundle_dir = DYNAMIC_PII_ASSET.spec.cache_dir(&path);
         std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
         symlink(bundle_source, &bundle_dir).unwrap();
         Self { path }
