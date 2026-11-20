@@ -88,7 +88,8 @@ def parity_rows(rows: list[dict]) -> list[dict]:
 
 
 def read_rows(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    # Split on "\n" only: str.splitlines also breaks at U+2028, U+0085 or \x0c inside a JSON string.
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n") if line]
 
 
 def render(rows: list[dict]) -> str:

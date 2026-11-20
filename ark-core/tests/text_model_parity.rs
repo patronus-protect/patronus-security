@@ -2,10 +2,11 @@
 //! Exact parity of the text category models with the Python reference
 //! (`scripts/l1_threat/category_model.py`): per row of
 //! `testdata/model_parity.jsonl` the Rust score of each synthetic model (one
-//! with vocabularies, one hashed, one fastText-type) is bit-identical and the top features are
-//! the same.
+//! with vocabularies, one hashed, one fastText-type) is bit-identical, the top features are
+//! the same and the answer at the model's cuts (`score > threshold`) is the same.
 use std::path::Path;
 
+use patronus_ark_core::cascade::StageOutcome;
 use patronus_ark_core::detectors::text::{CategoryModel, TextFacts};
 use serde_json::Value;
 
@@ -57,6 +58,16 @@ fn rust_scores_match_the_python_reference() {
                 })
                 .collect();
             assert_eq!(top, want, "{name} {id}: top features");
+            let outcome = match model.thresholds().outcome(score) {
+                StageOutcome::Detected => "detected",
+                StageOutcome::Clear => "clear",
+                StageOutcome::Escalate => "escalate",
+            };
+            assert_eq!(
+                outcome,
+                expected["outcome"].as_str().expect("outcome"),
+                "{name} {id}: outcome at the model's cuts"
+            );
         }
     }
 }

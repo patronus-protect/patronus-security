@@ -102,3 +102,11 @@ def test_parity_goldens_are_fresh(tmp_path):
     fixed = json.loads(stale.read_text(encoding="utf-8"))
     assert fixed["canonical"] == MODULE.dumps(facts())
     assert fixed["tf1"] == sorted(MODULE.tf1("Hi", facts()))
+
+
+def test_read_rows_keeps_unicode_line_separators_inside_a_row(tmp_path):
+    # JSON writers (serde_json, ensure_ascii=False) leave U+2028, U+0085 and \x0c raw inside strings.
+    path = tmp_path / "rows.jsonl"
+    rows = [{"id": "a", "text": "one two\u0085three\x0cfour"}, {"id": "b", "text": "x"}]
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    assert MODULE.read_rows(path) == rows

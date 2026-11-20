@@ -288,6 +288,43 @@ Train-Negativen auf `report`/`generated` nicht trägt (Verteilungswechsel); die 
 wählen mit ihrem eigenen Split. Offen: quantisierte Embeddings (int8) und ein schnellerer Merkmalspfad
 (z. B. nur 3–4-Gramme) für das 1-ms-Budget.
 
+**Stand S10.** Kalibrierung auf Benign-Daten (Owner 2026-11-19: die FPR wird auf Benign-Daten gemessen, nie auf
+Trainingsnegativen; ~4 ms je 100 KiB je Modell akzeptiert, int8 optional): `ablation.py calibrate --class K
+[--stage FT]` trainiert den Kandidaten auf der Hash-Hälfte von `train_dev`; die andere Hälfte plus die gegateten
+Dev-Sets (`--eval-rows`, hier `generated`) bilden die Kalibrierzeilen, keine Trainings-ID darunter. `0_1pct_fpr`
+(Detect) und `1pct_fpr` (Clear) sind die 0,1-%-/1-%-FPR-Schnitte auf den Benign-Scores dieser Zeilen
+(`score > threshold` wie im `decision_rule`); `model.json` trägt den Pool unter `calibration`. Bericht: TPR/FPR je
+Sprache am Detect-Schnitt, FPR je Benign-Quelle (Set, `twins`), was der Train-Negativ-Schnitt von S09 auf demselben
+Pool meldete, die `report`-Sets (`--report-rows`) am selben Schnitt in eigenem Scope. Paritäts-Goldens tragen je
+Modell zusätzlich die Antwort an seinen Schnitten (`outcome`), Rust prüft sie mit. Dev-Lauf (2026-11-19, 25 433
+Trainingszeilen, 17 002 Benign-Kalibrierzeilen inkl. 1 800 Twins), TPR / FPR am kalibrierten Detect-Schnitt, p95 je
+Modell auf dem E03-Latenzkorpus (`32fc2d58…`, Median aus drei Läufen); Tabellen je Quelle in
+[`scoreboard/fasttext-calibration.md`](scoreboard/fasttext-calibration.md):
+
+| Klasse | TPR alle | DE | EN | FPR Pool | FPR Train-Negativ-Schnitt | ms/100 KiB p95 |
+|---|---|---|---|---|---|---|
+| instruction_injection | 36,4 | 0,0 | 38,3 | 0,02 % | 0,50 % | 4,36 |
+| prompt_extraction | 87,5 | – | 87,5 | 0,09 % | 1,85 % | 3,91 |
+| jailbreak | 81,3 | 0,0 | 84,2 | 0,10 % | 0,85 % | 4,04 |
+| harmful_content | 42,2 | 47,6 | 38,6 | 0,10 % | 0,52 % | 3,58 |
+| unsafe_action | 39,4 | 0,8 | 49,7 | 0,10 % | 0,32 % | 4,02 |
+| exfiltration | 26,7 | 0,0 | 37,5 | 0,10 % | 0,08 % | 3,55 |
+| toxic_language | 68,0 (50 Positive) | 67,9 | 68,2 | 0,10 % | 0,36 % | 3,54 |
+| agent_config_tampering | 0,0 | 0,0 | 0,0 | 0,10 % | 0,74 % | 3,51 |
+
+Alle acht Modelle haben dieselbe Form (2^15 × 16, 256 KiB resident), die Streuung der p95 (3,5–4,4 ms; Einzelläufe
+3,2–5,3 ms) ist Messrauschen der VPS um die ~3,8 ms von S09. Summe der L1-Modelle einer Default-Klasse: heute 0 ms,
+kein Modell ist im Scan-Pfad verdrahtet und keine Klasse schaltet eines per Default ein; nähmen alle acht Klassen
+ihr Modell, kämen ~8 × 3,8 ≈ 30 ms je 100 KiB dazu (Facts einmal geteilt). Befunde: am kalibrierten Schnitt bleibt
+der Pool je Klasse ≤ 0,1 %, aber einzelne Quellen liegen darüber — `twins` bei prompt_extraction 0,72 %
+(13/1 800), agent_config_tampering 0,44 %, unsafe_action 0,33 %; `wildjailbreak`-Benigns (adversarial-benign,
+12 Zeilen) bei jailbreak 8/12. Außerhalb der Verteilung (Scope `report`) meldet jailbreak 2,8 % von
+`civil_comments` und 4,6 % der `jackhhao_jailbreak`-Benigns bei 14 % TPR auf dessen Positiven; die übrigen Klassen
+bleiben dort bei 0,05–0,24 %. Deutsch fehlt bei injection, jailbreak, exfiltration und unsafe_action praktisch
+ganz (TPR 0–0,8 %). Die Kalibrierung ersetzt nicht die Wahl je Klasse (JB02, PX02 …): die Klassen-Aufgabe
+kalibriert ihren Gewinner mit `calibrate` auf ihrem Split. Die Auswahlregel der Ablation rechnet weiter mit 1 ms
+je 100 KiB zusätzlich; mit der Owner-Freigabe von ~4 ms wäre `FT` dort wählbar — das ändert der Owner.
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).

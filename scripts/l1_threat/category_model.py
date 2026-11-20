@@ -31,7 +31,7 @@ inference matches bit for bit.
   (``--buckets`` x ``--dim``); a text's vector is the average of its feature embeddings, followed
   by a linear softmax over the classes (negative, positive). Fitted by deterministic mini-batch Adam
   with balanced class weights; the decision score is the positive minus the negative logit.
-- ``parity``: recomputes the expected scores of the parity goldens from the checked-in synthetic
+- ``parity``: recomputes the expected scores and cut outcomes (``outcome``) of the parity goldens from the checked-in synthetic
   models (one with vocabularies, one hashed, one fastText-type); ``--retrain`` first retrains them on the rows of the text-facts parity file
   (label: the row has a finding); ``--check`` only verifies that the scores are fresh.
 """
@@ -581,6 +581,15 @@ def train_fasttext(
     return document
 
 
+def outcome(thresholds: dict, score: float) -> str:
+    """The answer of a decision score at a model's cuts, as Rust's ``L1Thresholds::outcome`` under the
+    ``decision_rule`` ``score > threshold``: ``detected`` above the ``0_1pct_fpr`` cut, ``clear`` at or
+    below the ``1pct_fpr`` cut, ``escalate`` in between."""
+    if score > thresholds[BLOCK_THRESHOLD]:
+        return "detected"
+    return "clear" if score <= thresholds[ASK_THRESHOLD] else "escalate"
+
+
 def dump_model(document: dict) -> str:
     return json.dumps(document, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -614,7 +623,7 @@ def parity_scores() -> str:
         scores = {}
         for name, model in models.items():
             score, top = model.score(row["text"], model.tokens_of(row))
-            scores[name] = {"score": score, "top": top}
+            scores[name] = {"score": score, "top": top, "outcome": outcome(model.document["thresholds"], score)}
         expected.append({"id": row["id"], "text": row["text"], "facts": row["facts"], "models": scores})
     return render(expected)
 

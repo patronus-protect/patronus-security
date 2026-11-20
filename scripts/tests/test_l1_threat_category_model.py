@@ -195,3 +195,12 @@ def test_fasttext_cli_trains_and_scores(tmp_path):
     document = json.loads(out.read_text(encoding="utf-8"))
     assert document["name"] == "text-exfiltration-fasttext" and document["buckets"] == 128
     assert MODULE.main(["score", "--model", str(out), "--rows", str(rows)]) == 0
+
+
+def test_outcome_detects_above_the_block_cut_and_clears_at_or_below_the_ask_cut():
+    cuts = {MODULE.ASK_THRESHOLD: 0.5, MODULE.BLOCK_THRESHOLD: 2.0}
+    assert MODULE.outcome(cuts, 2.5) == "detected"
+    assert MODULE.outcome(cuts, 2.0) == "escalate"
+    assert MODULE.outcome(cuts, 1.0) == "escalate"
+    assert MODULE.outcome(cuts, 0.5) == "clear"
+    assert MODULE.outcome({MODULE.ASK_THRESHOLD: 1.0, MODULE.BLOCK_THRESHOLD: 1.0}, 1.0) == "clear"

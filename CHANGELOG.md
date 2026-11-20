@@ -391,6 +391,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   scores bit for bit; the attack-class ablation (`scripts/l1_threat/ablation.py`) measures it as
   stage `FT` next to the other candidates, and `--stage` limits a run to some stages.
   **Detection change:** none; no text model is enabled yet.
+- `scripts/l1_threat/ablation.py calibrate` sets the two cuts of a text model (`0_1pct_fpr`, the
+  detect cut, and `1pct_fpr`, the clear cut) from the model's scores on benign evaluation texts,
+  including security-adjacent look-alikes, instead of from the negatives it was trained on: the
+  model trains on one half of the training rows, and the other half plus the generated evaluation
+  sets set the cuts, with no training row among them. The report lists the detection rate and false
+  positive rate per language, the false positive rate per benign source and what the training cut
+  would have flagged. The calibrated `model.json` records the benign pool under `calibration`.
+  Each stage is calibrated and reported on the same tokens it was trained with (`B4` on the
+  words alone, without fact tokens).
+  Reading JSONL rows in the threat scripts no longer breaks a row at a Unicode line separator
+  inside a string. The text model parity data now also checks each model's answer at its cuts.
+  **Detection change:** none; no text model is enabled yet.
 - Add versioned, deterministic text facts `patronus.text_facts/1`
   (`patronus_ark_core::detectors::text`), the common input for the attack-category models and
   policies, in the same form as the shell-command facts: the pattern findings of a text (category,

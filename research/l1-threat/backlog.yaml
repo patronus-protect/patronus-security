@@ -335,6 +335,7 @@ tasks:
   # but the threshold from train negatives does not carry (hard-benign FPR 27-70% at the operating point) and
   # p95 is 3.8 ms per 100 KiB (owner 2026-11-19: accepted). S10 fixes the calibration before the class scorers pick it.
   - id: S10
+    status: done
     title: fastText-type candidates ready to ship — threshold calibrated per class so that the FPR is measured on benign data (the dev benign pool incl. the hard-benign sets, never train negatives) at the 0.1% FPR operating point; latency up to about 4 ms per 100 KiB per model is accepted (owner 2026-11-19, S09 measured 3.8 ms), int8 quantisation optional; parity goldens updated
     type: scorer
     deps: [S09]
