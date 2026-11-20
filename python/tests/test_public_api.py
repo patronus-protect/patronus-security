@@ -613,7 +613,7 @@ class PublicApiTests(unittest.TestCase):
                     SecurityGateway({"download": "never", **config})
 
     def test_result_dicts_keep_the_documented_shape(self):
-        scanner = SecurityGateway(categories=["pii", "dlp"], max_level="l1", download_files=False)
+        scanner = SecurityGateway({"categories": ["pii", "dlp"], "max_level": "l1", "download": "never"})
         scanner.warmup()
 
         results = scanner.scan_all(f"Contact: jane.doe@example.com, key {OPENAI_KEY}")
@@ -701,7 +701,7 @@ class PublicApiTests(unittest.TestCase):
 
         # The Rust gate schema refuses unknown keys, so every typed key is one it accepts.
         execution_gates: ScanGates = {"conditional": [conditional], "l3_policy": l3_policy}
-        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        scanner = SecurityGateway({"categories": ["pii"], "max_level": "l1", "download": "never"})
         scanner.set_execution_gates(execution_gates)
         with self.assertRaises(ValueError):
             scanner.set_execution_gates({"l3_policy": {**l3_policy, "unknown": 1}})
