@@ -4,6 +4,7 @@
 //! a line, comma-separated, numbered or one word per line. Phrases are built
 //! here from entropy at test time; invalid vectors are no phrases.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::sync::OnceLock;
 
@@ -35,12 +36,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

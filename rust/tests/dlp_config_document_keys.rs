@@ -8,6 +8,7 @@
 //! nothing, and interpolations, file names, placeholders, expressions and key
 //! IDs stay silent in config documents too. Values are synthetic.
 
+use patronus_ark::GatewayConfig;
 use std::sync::OnceLock;
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -18,12 +19,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

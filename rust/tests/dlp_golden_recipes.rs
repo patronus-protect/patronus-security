@@ -4,6 +4,7 @@
 //! time) and check that
 //! the checked-in file itself carries no detectable secret.
 
+use patronus_ark::GatewayConfig;
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
@@ -557,12 +558,11 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
 
 #[test]
 fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let synth = repo_root().join("python/patronus_ark/dlp_synth");
     let spec = std::fs::read_to_string(synth.join("generators.json")).unwrap();
     let rules = std::fs::read_to_string(synth.join("rules.json")).unwrap();

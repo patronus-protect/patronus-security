@@ -7,6 +7,7 @@
 //! generator or get their checksum here at test time; no checksum-valid token
 //! is checked in.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -75,12 +76,11 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
         [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
-            let scanner = SecurityGateway::with_max_level(
+            let scanner = SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            );
+            ))
+            .unwrap();
             scanner.set_execution_gates(ScanGateMatrix {
                 native: patronus_ark_core::native::NativeGates {
                     dlp_mode: mode,
@@ -242,12 +242,11 @@ fn an_underscore_in_the_body_is_no_github_token() {
 
 #[test]
 fn generic_rules_skip_a_token_with_a_wrong_checksum() {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix::default().with_rule("dlp_github_token", false));
     let scan = |text: &str| {
         scanner
@@ -328,12 +327,11 @@ fn fine_grained_tokens_have_82_characters_after_the_prefix() {
 
 #[test]
 fn generic_rules_skip_github_tokens_of_another_length() {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let scan = |text: &str| {
         scanner
             .scan_category(SecurityCategory::Dlp, text)

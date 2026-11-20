@@ -92,29 +92,24 @@ mod tests {
     #[tokio::test]
     async fn inference_capacity_survives_http_cancellation_until_blocking_work_finishes() {
         use patronus_ark::SecurityGateway;
-        use patronus_ark_core::{
-            cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
-        };
+        use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
         let categories = vec![SecurityCategory::Injection];
         let state = AppState::new(
             crate::config::Config {
                 bind: "127.0.0.1:0".parse().unwrap(),
                 max_upload_bytes: 1024,
                 keys: Vec::new(),
-                categories: categories.clone(),
-                max_level: SecurityLevel::L1,
-                model_dir: None,
-                download_files: false,
                 cache_dir: None,
-                default_gates: ScanGateMatrix::default(),
-                shell_command: None,
-                dynamic_pii: None,
-                onnx_runtime: Default::default(),
-                l3_strategy: patronus_ark::L3Strategy::Multi,
-                wolf_options: Default::default(),
-                wolf: Default::default(),
+                gateway: patronus_ark::GatewayConfig {
+                    l3_strategy: patronus_ark::L3Strategy::Multi,
+                    ..patronus_ark::GatewayConfig::new(categories.clone(), SecurityLevel::L1)
+                },
             },
-            SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false),
+            SecurityGateway::new(patronus_ark::GatewayConfig::new(
+                categories,
+                SecurityLevel::L1,
+            ))
+            .unwrap(),
         );
         let (permit, job) = state.try_begin_distributed_inference().unwrap();
         assert_eq!(state.active_jobs(), 1);
@@ -194,9 +189,7 @@ mod tests {
         use axum::routing::{get, post};
         use axum::Router;
         use patronus_ark::SecurityGateway;
-        use patronus_ark_core::{
-            cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
-        };
+        use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
         use sha2::{Digest, Sha256};
         use tower::ServiceExt;
 
@@ -211,22 +204,19 @@ mod tests {
                 default_categories: None,
                 gates: None,
             }],
-            categories: categories.clone(),
-            max_level: SecurityLevel::L1,
-            model_dir: None,
-            download_files: false,
             cache_dir: None,
-            default_gates: ScanGateMatrix::default(),
-            shell_command: None,
-            dynamic_pii: None,
-            onnx_runtime: Default::default(),
-            l3_strategy: patronus_ark::L3Strategy::Multi,
-            wolf_options: Default::default(),
-            wolf: Default::default(),
+            gateway: patronus_ark::GatewayConfig {
+                l3_strategy: patronus_ark::L3Strategy::Multi,
+                ..patronus_ark::GatewayConfig::new(categories.clone(), SecurityLevel::L1)
+            },
         };
         let state = AppState::new(
             config,
-            SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false),
+            SecurityGateway::new(patronus_ark::GatewayConfig::new(
+                categories,
+                SecurityLevel::L1,
+            ))
+            .unwrap(),
         );
         let instance = state.admission.lock().unwrap().instance_id.clone();
         let app = Router::new()

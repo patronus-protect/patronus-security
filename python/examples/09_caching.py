@@ -151,23 +151,25 @@ def similarity_example(scanner: SecurityGateway) -> None:
 
 def new_scanner(cache_path: str | None, strategy: str) -> SecurityGateway:
     scanner = SecurityGateway(
-        categories=["injection", "sensitive_document", "dynamic-pii"],
-        max_level="l3",
-        download_files=True,
-        cache_storage_location=cache_path,
-        l3_strategy=strategy,
-        execution_gates=(
-            {"l3_policy": {"priority": ["sensitive_document", "injection"]}}
-            if strategy == "multi"
-            else None
-        ),
-        dynamic_pii_config={
-            "labels": ["person"],
-            "threshold": 0.5,
-            "timeout_ms": 60_000,
-            "queue_timeout_ms": 60_000,
-            "max_timeout_ms": 120_000,
-        },
+        {
+            "categories": ["injection", "sensitive_document", "dynamic-pii"],
+            "max_level": "l3",
+            "download": "missing",
+            "l3_strategy": strategy,
+            "dynamic_pii": {
+                "labels": ["person"],
+                "threshold": 0.5,
+                "timeout_ms": 60_000,
+                "queue_timeout_ms": 60_000,
+                "max_timeout_ms": 120_000,
+            },
+            "cache": {"storage_location": cache_path},
+            **(
+                {"l3_policy": {"priority": ["sensitive_document", "injection"]}}
+                if strategy == "multi"
+                else {}
+            ),
+        }
     )
     scanner.warmup()
     return scanner

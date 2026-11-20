@@ -1530,6 +1530,7 @@ fn merge_csvish_field(left: &str, right: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayConfig;
 
     #[test]
     fn rejected_l1_candidate_is_available_to_conditional_l2_gates_only_internally() {
@@ -1879,12 +1880,11 @@ mod tests {
 
     #[test]
     fn multi_l3_jobs_share_l2_chunk_output_union() {
-        let scanner = SecurityGateway::with_max_level(
+        let scanner = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Injection, SecurityCategory::ToolClass],
             SecurityLevel::L3,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_l3_strategy(crate::L3Strategy::Multi);
         let mut results = vec![

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use patronus_ark::GatewayConfig;
 use std::time::Duration;
 
 use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway};
@@ -9,16 +10,15 @@ use patronus_ark_core::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![
             SecurityCategory::Injection,
             SecurityCategory::Routing,
             SecurityCategory::DynamicPii,
         ],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.set_dynamic_pii_config(DynamicPiiConfig {
         labels: vec!["person".to_string(), "organization".to_string()],
         queue_timeout_ms: 3_000,

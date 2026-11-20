@@ -32,7 +32,8 @@ pub struct LazyOnnxTextClassifier {
     ttl: Duration,
     loaded: Option<OnnxTextClassifier>,
     wolf_runner: Option<patronus_ark_core::wolf::WolfRunner>,
-    wolf_selection: crate::WolfSelection,
+    /// The Wolf model and export this slot loads (`model`, `precision`).
+    wolf: patronus_ark_core::wolf::WolfConfig,
     loaded_backend: Option<ExecutionBackend>,
     loaded_options: Option<OnnxRuntimeOptions>,
     last_used: Option<Instant>,
@@ -131,7 +132,7 @@ impl LazyOnnxTextClassifier {
             ttl: l3_ttl(),
             loaded: None,
             wolf_runner: None,
-            wolf_selection: crate::WolfSelection::default(),
+            wolf: Default::default(),
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
@@ -270,21 +271,22 @@ impl LazyOnnxTextClassifier {
             self.loaded = None;
             self.loaded_backend = None;
             self.loaded_options = None;
-            self.wolf_runner = Some(patronus_ark_core::wolf::WolfRunner::new_with_options(
+            self.wolf_runner = Some(patronus_ark_core::wolf::WolfRunner::new(
                 &patronus_ark_core::wolf::WolfConfig {
-                    bundle_dir: self
-                        .dir
-                        .join(&self.tokenizer_path)
-                        .parent()
-                        .ok_or("invalid Wolf tokenizer path")?
-                        .to_path_buf(),
+                    bundle_dir: Some(
+                        self.dir
+                            .join(&self.tokenizer_path)
+                            .parent()
+                            .ok_or("invalid Wolf tokenizer path")?
+                            .to_path_buf(),
+                    ),
                     threshold: Some(threshold),
-                    model: self.wolf_selection.model,
-                    precision: self.wolf_selection.precision,
+                    model: self.wolf.model,
+                    precision: self.wolf.precision,
                     backend,
                     runtime_options: options,
+                    execution,
                 },
-                execution,
             )?);
             self.loaded_backend = Some(backend);
             self.loaded_options = Some(options);
@@ -328,16 +330,17 @@ impl LazyOnnxTextClassifier {
             ttl: self.ttl,
             loaded: None,
             wolf_runner: None,
-            wolf_selection: self.wolf_selection,
+            wolf: self.wolf.clone(),
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
         }
     }
 
-    /// Load this slot's Wolf session from `selection` instead of the default export.
-    pub(crate) fn with_wolf_selection(mut self, selection: crate::WolfSelection) -> Self {
-        self.wolf_selection = selection;
+    /// Load this slot's Wolf session with the model and export of `wolf`
+    /// instead of the default ones.
+    pub(crate) fn with_wolf(mut self, wolf: patronus_ark_core::wolf::WolfConfig) -> Self {
+        self.wolf = wolf;
         self
     }
 

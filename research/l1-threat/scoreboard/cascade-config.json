@@ -63,8 +63,8 @@
   "target_fpr": 0.001
  },
  "scanner": {
+  "max_level": "l1",
   "cascade": {
-   "max_level": "l1",
    "modules": {}
   }
  }

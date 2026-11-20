@@ -7,6 +7,7 @@
 //!
 //! Run: `cargo run --example 02_enqueue_consume`
 
+use patronus_ark::GatewayConfig;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -15,12 +16,11 @@ use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection, SecurityCategory::Dlp],
         SecurityLevel::L2,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
 
     // Submit several texts; each returns a request id immediately.
     let mut pending: HashSet<String> = HashSet::new();

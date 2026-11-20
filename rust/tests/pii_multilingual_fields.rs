@@ -10,6 +10,7 @@
 //! for the scored modes. Validators are unchanged: the vectors below pass or fail the
 //! validator or checksum they name, whatever the language of the field name.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeMap;
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -25,12 +26,11 @@ use serde_json::Value;
 const LANGUAGES: [&str; 4] = ["fr", "es", "it", "nl"];
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,

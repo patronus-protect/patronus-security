@@ -1016,13 +1016,16 @@ mod download_policy {
 
     #[test]
     fn download_categories_limit_asset_downloads() {
-        let gateway = SecurityGateway::with_download_categories(
-            vec![SecurityCategory::Injection, SecurityCategory::Pii],
-            SecurityLevel::L2,
-            None,
-            true,
-            Some(vec![SecurityCategory::Injection]),
-        );
+        let gateway = SecurityGateway::new({
+            let mut config = patronus_ark::GatewayConfig::new(
+                vec![SecurityCategory::Injection, SecurityCategory::Pii],
+                SecurityLevel::L2,
+            );
+            config.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
+            config.download_categories = Some(vec![SecurityCategory::Injection]);
+            config
+        })
+        .unwrap();
 
         assert!(gateway.should_download_assets_for(SecurityCategory::Injection));
         assert!(!gateway.should_download_assets_for(SecurityCategory::Pii));
@@ -1030,25 +1033,30 @@ mod download_policy {
 
     #[test]
     fn download_files_false_disables_even_selected_categories() {
-        let gateway = SecurityGateway::with_download_categories(
-            vec![SecurityCategory::Injection],
-            SecurityLevel::L2,
-            None,
-            false,
-            Some(vec![SecurityCategory::Injection]),
-        );
+        let gateway = SecurityGateway::new({
+            let mut config = patronus_ark::GatewayConfig::new(
+                vec![SecurityCategory::Injection],
+                SecurityLevel::L2,
+            );
+            config.download_categories = Some(vec![SecurityCategory::Injection]);
+            config
+        })
+        .unwrap();
 
         assert!(!gateway.should_download_assets_for(SecurityCategory::Injection));
     }
 
     #[test]
     fn missing_download_categories_preserves_global_download_behavior() {
-        let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::Injection],
-            SecurityLevel::L2,
-            None,
-            true,
-        );
+        let gateway = SecurityGateway::new({
+            let mut config = patronus_ark::GatewayConfig::new(
+                vec![SecurityCategory::Injection],
+                SecurityLevel::L2,
+            );
+            config.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
+            config
+        })
+        .unwrap();
 
         assert!(gateway.should_download_assets_for(SecurityCategory::Injection));
     }

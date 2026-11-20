@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -465,12 +466,11 @@ fn evaluate_threat(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut gateway = SecurityGateway::with_max_level(
+    let mut gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.warmup()?;
     let root = Path::new("../python/patronus_ark/benchmark_data");
     let generators = GeneratorSet::load("../python/patronus_ark/dlp_synth/generators.json")?;
@@ -509,12 +509,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
     if matches!(suite.as_str(), "threat" | "all") {
-        let mut threat_gateway = SecurityGateway::with_max_level(
+        let mut threat_gateway = SecurityGateway::new(GatewayConfig::new(
             SecurityCategory::ATTACK_CLASSES.to_vec(),
             SecurityLevel::L1,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         threat_gateway.warmup()?;
         evaluate_threat(&threat_gateway, &root.join("threat_l1.jsonl"))?;
     }

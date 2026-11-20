@@ -139,7 +139,15 @@ class OnnxRuntimeOptions(TypedDict, total=False):
     spinning: bool | None
 
 
-class WolfConfig(TypedDict):
+class WolfExecutionOptions(TypedDict, total=False):
+    window_tokens: int
+    overlap_tokens: int
+    batch_size: int
+
+
+class WolfConfig(TypedDict, total=False):
+    """Wolf, the injection L3; an unset `bundle_dir` is the model's directory
+    below `cache_root`."""
     bundle_dir: str
     threshold: NotRequired[float]
     model: NotRequired[Literal["base", "small", "edge"]]
@@ -148,9 +156,12 @@ class WolfConfig(TypedDict):
     ]
     backend: NotRequired[Literal["auto", "cpu", "gpu", "coreml", "core_ml", "cuda", "direct_ml", "tensorrt", "tensor_rt"]]
     runtime_options: NotRequired[OnnxRuntimeOptions]
+    execution: NotRequired[WolfExecutionOptions]
 
 
-class ShellConfig(TypedDict):
+class ShellConfig(TypedDict, total=False):
+    """Cat, the shell verdict; an unset `bundle_dir` is Cat's directory below
+    `cache_root`."""
     bundle_dir: str
     manifest_sha256: NotRequired[str]
     policy_dirs: NotRequired[list[str]]
@@ -177,18 +188,13 @@ class ModuleConfig(TypedDict, total=False):
 
 
 class CascadeConfig(TypedDict, total=False):
-    """The opt-in cascade: level switches as in Ark's gates, per-module L1 cuts and L1 models."""
-    max_level: Literal["L1", "L2", "L3"]
-    l1: bool
-    l2: bool
-    l3: bool
-    conditional: list[dict[str, object]]
+    """The opt-in cascade: per-module L1 cuts and L1 models. The levels that
+    run are the gate keys `max_level`, `l1`, `l2`, `l3` and `conditional`."""
     modules: dict[str, ModuleConfig]
 
 
 class NativeGates(TypedDict, total=False):
-    """Rule, model, mode and `explain` gates: top-level keys of the Core
-    `ScannerConfig` and of Ark's `execution_gates`."""
+    """Rule, model, mode and `explain` gates, the native part of `ScanGates`."""
     rules: dict[str, bool]
     models: dict[str, bool]
     pii_mode: ScoreMode
@@ -209,13 +215,28 @@ class NativeGates(TypedDict, total=False):
     explain: bool
 
 
-class ScannerConfig(NativeGates, total=False):
+class ScanGates(NativeGates, total=False):
+    """The gates: top-level keys of the Core `ScannerConfig`, of Ark's config
+    and Ark's `execution_gates`. Core scans carry no request metadata and run
+    no L3 worker, so they read only result `conditional` gates and ignore
+    `l3_policy`."""
+    l1: bool
+    l2: bool
+    l3: bool
+    conditional: list[dict[str, object]]
+    l3_policy: dict[str, object]
+    cascade: CascadeConfig | None
+
+
+class ScannerConfig(ScanGates, total=False):
+    """The Core scanner's config; Ark's config is this config plus Ark's keys."""
     categories: list[NativeCategory]
+    max_level: Literal["L1", "L2", "L3", "l1", "l2", "l3"]
     max_input_bytes: int
     max_findings: int
+    cache_root: str
     wolf: WolfConfig | None
     shell: ShellConfig | None
-    cascade: CascadeConfig | None
 
 
 class WarmupOptions(TypedDict, total=False):
@@ -223,7 +244,3 @@ class WarmupOptions(TypedDict, total=False):
     download_timeout_ms: int
 
 
-class WolfExecutionOptions(TypedDict, total=False):
-    window_tokens: int
-    overlap_tokens: int
-    batch_size: int

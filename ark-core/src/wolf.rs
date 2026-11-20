@@ -12,7 +12,7 @@ mod tests;
 mod windows;
 use crate::{wolf_options::WolfWindows, WolfExecutionOptions};
 pub use assets::graph_candidates;
-use assets::{asset_manifest, verified_file};
+use assets::verified_file;
 pub(crate) use assets::{asset_manifest_at, model_paths, precision_order};
 pub use models::{
     WolfModel, WolfModelSpec, WolfPrecision, PRECISION_ENV, SUPPORT_FILES, WOLF_MODELS,
@@ -25,14 +25,18 @@ use std::{
     sync::Arc,
 };
 
-/// The Wolf Defender L3 of the injection module: bundle, model size,
-/// precision, backend and the attack-probability threshold it detects at.
-/// Everything unset follows the bundle's published settings (`POOLING.json`):
-/// Wolf Defender detects strictly above 0.5 over 2048-token windows with 64 overlap.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The Wolf Defender L3 of the injection module: model size, precision,
+/// bundle, document windows, backend and the attack-probability threshold it
+/// detects at. Everything unset follows the bundle's published settings
+/// (`POOLING.json`): Wolf Defender detects strictly above 0.5 over
+/// 2048-token windows with 64 overlap.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WolfConfig {
-    pub bundle_dir: PathBuf,
+    /// The model's bundle directory; unset takes the model's directory below
+    /// the model cache root ([`crate::warmup::wolf_bundle_dir`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_dir: Option<PathBuf>,
     /// Attack-probability threshold; unset takes the bundle's published one.
     #[serde(default)]
     pub threshold: Option<f64>,
@@ -44,6 +48,9 @@ pub struct WolfConfig {
     pub backend: crate::ExecutionBackend,
     #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
+    /// Document windows and batching; unset sizes follow the bundle.
+    #[serde(default)]
+    pub execution: WolfExecutionOptions,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -143,32 +150,25 @@ pub struct WolfRunner {
     fixed_width: Option<usize>,
 }
 impl WolfRunner {
-    /// Construct a runner with the bundle's published windows.
-    pub fn new(config: &WolfConfig) -> Result<Self, ScanError> {
-        Self::new_with_options(config, WolfExecutionOptions::default())
-    }
-
     /// Construct and warm a runner; execution sizes are validated against the local export.
     /// Unset sizes and threshold follow the bundle's `POOLING.json`.
-    pub fn new_with_options(
-        config: &WolfConfig,
-        options: WolfExecutionOptions,
-    ) -> Result<Self, ScanError> {
-        options.validate()?;
+    pub fn new(config: &WolfConfig) -> Result<Self, ScanError> {
+        let options = config.execution;
         config.validate()?;
-        let published = Published::read(&config.bundle_dir)?;
+        let bundle_dir = config.dir(None)?;
+        let published = Published::read(&bundle_dir)?;
         let windows = options.resolve(published.window_tokens, published.overlap_tokens)?;
-        let manifest = asset_manifest(config)?;
+        let manifest = asset_manifest_at(&bundle_dir, config.model, config.precision)?;
         let optional_integrity = !manifest.model.blake3.is_empty();
         let model = if optional_integrity {
-            verified_file(&config.bundle_dir, &manifest.model)?
+            verified_file(&bundle_dir, &manifest.model)?
         } else {
-            config.bundle_dir.join(&manifest.model.path)
+            bundle_dir.join(&manifest.model.path)
         };
         let tokenizer_path = if optional_integrity {
-            verified_file(&config.bundle_dir, &manifest.tokenizer)?
+            verified_file(&bundle_dir, &manifest.tokenizer)?
         } else {
-            config.bundle_dir.join(&manifest.tokenizer.path)
+            bundle_dir.join(&manifest.tokenizer.path)
         };
         let tokenizer = crate::ml::tokenizer_store::global_tokenizer_store()
             .load_mmbert(&tokenizer_path)
@@ -186,7 +186,7 @@ impl WolfRunner {
         let session = crate::shared_models::shared(&key, || {
             let (builder, execution_provider) = crate::onnx::configured_session_builder(
                 config.backend,
-                Some(&config.bundle_dir),
+                Some(&bundle_dir),
                 config.runtime_options,
             )
             .map_err(inference)?;
@@ -203,7 +203,7 @@ impl WolfRunner {
                 .session
                 .lock()
                 .map_err(|_| inference("Wolf session poisoned"))?,
-            &config.bundle_dir,
+            &bundle_dir,
             windows,
             &manifest,
         )?;
@@ -488,18 +488,27 @@ fn validate_threshold(threshold: f64) -> Result<(), ScanError> {
 }
 
 impl WolfConfig {
-    pub(crate) fn validate(&self) -> Result<(), ScanError> {
-        self.threshold.map_or(Ok(()), validate_threshold)
+    /// Refuse a threshold outside `[0,1]`, invalid window sizes and an
+    /// unknown `auto` precision override.
+    pub fn validate(&self) -> Result<(), ScanError> {
+        self.threshold.map_or(Ok(()), validate_threshold)?;
+        self.execution.validate()?;
+        self.precision.resolve().map(drop)
     }
 
     pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self {
         Self {
-            bundle_dir: bundle_dir.into(),
+            bundle_dir: Some(bundle_dir.into()),
             threshold: Some(threshold),
-            model: WolfModel::default(),
-            precision: WolfPrecision::default(),
-            backend: crate::ExecutionBackend::default(),
-            runtime_options: crate::OnnxRuntimeOptions::default(),
+            ..Self::default()
         }
+    }
+
+    /// The bundle directory: `bundle_dir`, else the model's directory below
+    /// the model cache root `root` (unset: the default cache root).
+    pub fn dir(&self, root: Option<&Path>) -> Result<PathBuf, ScanError> {
+        crate::warmup::bundle_dir_or_default(self.bundle_dir.as_deref(), root, |root| {
+            crate::warmup::wolf_bundle_dir(root, self.model)
+        })
     }
 }

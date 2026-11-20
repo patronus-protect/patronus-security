@@ -1,4 +1,6 @@
+use patronus_ark::GatewayConfig;
 use patronus_ark::{L3Strategy, SecurityGateway};
+use patronus_ark_core::warmup::DownloadPolicy;
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde_json::json;
 use std::fs;
@@ -33,22 +35,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_json = workspace_root().join("benchmarks/standalone_all_categories_results.json");
     let out_md = workspace_root().join("benchmarks/standalone_all_categories_results.md");
 
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![
-            SecurityCategory::Injection,
-            SecurityCategory::Dlp,
-            SecurityCategory::Pii,
-            SecurityCategory::SensitiveDocument,
-            SecurityCategory::ToolClass,
-            SecurityCategory::ToolAction,
-            SecurityCategory::ToolTags,
-            SecurityCategory::Routing,
-            SecurityCategory::UnsafeAction,
-        ],
-        SecurityLevel::L3,
-        Some(asset_dir.clone()),
-        allow_downloads(),
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![
+                SecurityCategory::Injection,
+                SecurityCategory::Dlp,
+                SecurityCategory::Pii,
+                SecurityCategory::SensitiveDocument,
+                SecurityCategory::ToolClass,
+                SecurityCategory::ToolAction,
+                SecurityCategory::ToolTags,
+                SecurityCategory::Routing,
+                SecurityCategory::UnsafeAction,
+            ],
+            SecurityLevel::L3,
+        );
+        config.core.cache_root = Some(asset_dir.clone());
+        config.download = if allow_downloads() {
+            DownloadPolicy::Missing
+        } else {
+            DownloadPolicy::Never
+        };
+        config
+    })
+    .unwrap();
     scanner.set_l3_strategy(L3Strategy::Multi);
 
     let warmup_start = Instant::now();

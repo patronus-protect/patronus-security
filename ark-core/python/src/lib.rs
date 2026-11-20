@@ -68,18 +68,16 @@ struct Scanner {
 #[pymethods]
 impl Scanner {
     #[new]
-    #[pyo3(signature = (config=None, *, warmup=None, wolf_options=None))]
+    #[pyo3(signature = (config=None, *, warmup=None))]
     fn new(
         py: Python<'_>,
         config: Option<&Bound<'_, PyDict>>,
         warmup: Option<&Bound<'_, PyDict>>,
-        wolf_options: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let policy = self::config(py, config.map(|v| v.as_any()))?;
         let warmup = self::config(py, warmup.map(|v| v.as_any()))?;
-        let execution = self::config(py, wolf_options.map(|v| v.as_any()))?;
         let scanner = py
-            .allow_threads(move || CoreScanner::warmup_with_wolf_options(policy, warmup, execution))
+            .allow_threads(move || CoreScanner::warmup(policy, warmup))
             .map_err(scan_error)?;
         Ok(Self {
             inner: Mutex::new(scanner),

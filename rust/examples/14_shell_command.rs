@@ -13,6 +13,8 @@
 //!
 //! Run: `cargo run --example 14_shell_command`
 
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::path::Path;
 
 use patronus_ark::SecurityGateway;
@@ -25,13 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use SecurityCategory::{Dlp, Injection, Pii, ShellCommand};
 
     // Raise the level to L3 for model-backed injection (Wolf); see 03_l2_l3_promotion.
-    let mut gateway = SecurityGateway::with_download_categories(
-        vec![Pii, Dlp, Injection, ShellCommand],
-        SecurityLevel::L1,
-        None, // platform cache directory
-        true,
-        Some(vec![ShellCommand]),
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config =
+            GatewayConfig::new(vec![Pii, Dlp, Injection, ShellCommand], SecurityLevel::L1);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![ShellCommand]);
+        config
+    })
+    .unwrap();
 
     // User policies: every `*.cedar` file of the directory. Set before or after
     // warmup; a refused configuration changes nothing.

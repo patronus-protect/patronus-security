@@ -8,6 +8,7 @@
 //! line per workload: `{id, spans, samples_ns, init_ms}`. After `min_samples` samples, timing
 //! stops once `budget_ms` is spent. Percentiles are computed by the Python scripts, so all Ark
 //! engines share one definition.
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
@@ -43,7 +44,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (gateway, init_ms) = gateways.entry(job.categories.clone()).or_insert_with(|| {
             let started = Instant::now();
             let gateway =
-                SecurityGateway::with_max_level(job.categories, SecurityLevel::L1, None, false);
+                SecurityGateway::new(GatewayConfig::new(job.categories, SecurityLevel::L1))
+                    .unwrap();
             (gateway, started.elapsed().as_secs_f64() * 1000.0)
         });
         let scan = |text: &str| gateway.scan_all(black_box(text));

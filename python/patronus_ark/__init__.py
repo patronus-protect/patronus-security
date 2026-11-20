@@ -1,28 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from ._patronus_ark import SecurityGateway as RustSecurityGateway
-from ._patronus_ark import DEFAULT_L3_STRATEGY as _DEFAULT_L3_STRATEGY
-from ._patronus_ark import DEFAULT_MAX_LEVEL as _DEFAULT_MAX_LEVEL
-from ._patronus_ark import DEFAULT_NTDB_OPERATING_POINT as _DEFAULT_NTDB_OPERATING_POINT
 from ._patronus_ark import normalize_text as _rust_normalize_text
 from copy import deepcopy
 import json
 import math
 
-from patronus_ark_core import CascadeConfig, NativeGates
-
-
-class ExecutionGates(NativeGates, total=False):
-    """`execution_gates`: Ark Core's gate keys (`rules`, `models`, the
-    `*_mode` keys, `explain`, ...) plus the layer switches, conditional gates,
-    the L3 worker policy and the opt-in cascade. Unknown keys raise
-    `ValueError`."""
-
-    l1: bool
-    l2: bool
-    l3: bool
-    conditional: list[dict[str, object]]
-    l3_policy: dict[str, object]
-    cascade: CascadeConfig | None
+from patronus_ark_core import ScanGates, ScannerConfig
 
 
 def _decode_json_object(value):
@@ -165,150 +148,105 @@ def normalize_text(text: str, configs: dict | None = None) -> str:
     return _rust_normalize_text(text, _normalization_configs_json(configs))
 
 
+class GatewayConfig(ScannerConfig, total=False):
+    """`SecurityGateway(config)`: Ark Core's `Scanner` config (`categories`,
+    `max_level`, the gate keys, `cascade`, `cache_root`, `wolf`, `shell`)
+    with the same meaning, plus Ark's keys. Unknown keys raise `ValueError`."""
+
+    download: str
+    download_categories: list[str]
+    l3_strategy: str
+    ntdb_operating_point: str
+    ntdb_decision_threshold_point: str
+    execution_backend: str
+    onnx_batch_mode: str
+    onnx_runtime: dict[str, object]
+    dynamic_pii: dict[str, object]
+    cache: dict[str, object]
+
+
+# Ark keys the isolated benchmark worker keeps from the gateway's config.
+_BENCHMARK_WORKER_KEYS = (
+    "cache_root",
+    "onnx_batch_mode",
+    "execution_backend",
+    "ntdb_decision_threshold_point",
+    "l3_strategy",
+    "wolf",
+)
+
+
 class SecurityGateway:
     """Python gateway for Patronus Ark scanners.
 
     Args:
-        categories: Scanner categories to use for `scan_all`.
-        max_level: Maximum scanner level: `l1`, `l2`, or `l3`.
-        model_dir: Optional asset cache root. Defaults to the platform cache
-            directory plus `patronus_ark`.
-        download_files: Whether `warmup()` may download missing model assets.
-        download_categories: Optional category allowlist for asset downloads.
-            When omitted, every configured category may download if
-            `download_files` is true.
-        execution_gates: Optional scan execution matrix in the gate schema
-            shared with the Ark API: `{"l1": True, "l2": False, "l3": False,
-            "models": {"native:mcp_runtime_risk": False},
-            "rules": {"pii_email": False, "cat.core.remote_to_exec": False}}`
-            disables levels, model/native scanner areas, or individual L1 rules
-            (Cat shell policies included) for subsequent scan calls; `pii_mode`,
-            `dlp_mode`, one `<category>_mode` per attack class (such as
-            `unsafe_action_mode`), `explain`, `conditional`, the L3 worker policy
-            `l3_policy` and the opt-in `cascade` (`{"cascade": {"modules": {...}}}`:
-            L1 early exit with per-category `detect_threshold`/`clear_threshold`;
-            results then carry `decided_by`) complete it. Unknown keys raise
-            `ValueError`.
-            New classifier pipelines can be gated independently through
-            `models`, for example `{"models": {"tool_action": False}}`.
-        onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
-            `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
-            when using batch APIs.
-        execution_backend: `auto`, `cpu`, `gpu`, `coreml`, `cuda`,
-            `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
-            CPU/auto and tensor batches on accelerator backends unless
-            `onnx_batch_mode` is explicitly set.
-        ntdb_operating_point: Calibrated NTDB final-decision threshold set. One of
-            `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
-            `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
-            L3 promote thresholds.
-        wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
-            (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
-            retain 256/0/1 (the model card's 2048/64 is opt-in). Validated before
-            gateway construction; applied before warmup.
-        wolf_model: Dedicated-Wolf model: `base`, `small` (default) or `edge`.
-        wolf_precision: Dedicated-Wolf ONNX export: `auto` (default; uses
-            `PATRONUS_L3_PRECISION`, else `int8_int4_x86` on x86_64 and
-            `int8_int4` elsewhere), `fp32`, `fp16`, `mixed`, `mixed_x86`,
-            `int8_int4` or `int8_int4_x86`.
-        l3_strategy: `dedicated` for one L3 model per classifier pipeline or
-            `multi` for the shared unified multi-head ONNX model.
-        dynamic_pii_config: Pipeline-specific labels, result gates,
-            thresholds, chunking, text limit, and timeout for the L3-only
-            `dynamic-pii` category.
-        cache_storage_location: Optional path to the persistent cache database.
-            If omitted, caching remains memory-only.
-        cache_encryption_key_hex: Optional 64-character hex-encoded persistent
-            cache encryption key. Ignored when `cache_storage_location` is omitted.
-        cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
-        cache_memory_max_entries: Maximum entries retained by a hot cache tier.
-        cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
+        config: The gateway config, a dict (see `GatewayConfig`): the keys of
+            Ark Core's `Scanner` config with the same meaning, plus Ark's own.
+
+            Core keys: `categories` (any Ark category), `max_level` (`l1`,
+            `l2` or `l3`; default `l2` here), the gate keys at the top level
+            (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`, `dlp_mode`, one
+            `<category>_mode` per attack class, `explain`, `conditional`, the
+            L3 worker policy `l3_policy` and the opt-in `cascade`
+            (`{"modules": {...}}`: L1 early exit with per-category
+            `detect_threshold`/`clear_threshold`; results then carry
+            `decided_by`)), `cache_root` (the model cache root; default the
+            platform cache directory plus `patronus_ark`), `wolf` (the
+            dedicated injection L3: `model` `base`, `small` (default) or
+            `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
+            `mixed_x86`, `int8_int4` or `int8_int4_x86`; `execution` with
+            `window_tokens`, `overlap_tokens`, `batch_size`, unset values
+            retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
+            the `shell_command` verdict).
+
+            Ark keys: `download` (`missing`, the default here, lets `warmup()`
+            download missing model assets; `never`), `download_categories`,
+            `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
+            `ntdb_decision_threshold_point` (`best_f1` (default),
+            `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
+            `best_latency_in_f1`), `execution_backend` (`auto`, `cpu`, `gpu`,
+            `coreml`, `cuda`, `directml`, `tensorrt`), `onnx_batch_mode`
+            (`lazy_batches` or `tensor_batch`; unset follows the backend),
+            `onnx_runtime`, `dynamic_pii` (labels, result gates, thresholds,
+            chunking, text limit and timeout of the L3-only `dynamic-pii`
+            category) and `cache` (`storage_location`, `encryption_key_hex`,
+            `entry_ttl_seconds`, `memory_max_entries`, `memory_max_bytes`;
+            without a storage location the cache stays in memory).
     """
 
-    def __init__(
-        self,
-        categories: list[str],
-        max_level: str = _DEFAULT_MAX_LEVEL,
-        model_dir: str = None,
-        download_files: bool = True,
-        download_categories: list[str] | None = None,
-        execution_gates: ExecutionGates | None = None,
-        onnx_batch_mode: str = "backend_default",
-        execution_backend: str = "auto",
-        ntdb_operating_point: str = _DEFAULT_NTDB_OPERATING_POINT,
-        l3_strategy: str = _DEFAULT_L3_STRATEGY,
-        dynamic_pii_config: dict | None = None,
-        cache_storage_location: str | None = None,
-        cache_encryption_key_hex: str | None = None,
-        cache_entry_ttl_seconds: int = 30 * 24 * 60 * 60,
-        cache_memory_max_entries: int = 100_000,
-        cache_memory_max_bytes: int = 128 * 1024 * 1024,
-        *,
-        wolf_options: dict[str, int] | None = None,
-        wolf_model: str = "small",
-        wolf_precision: str = "auto",
-    ):
-        self._categories = list(categories)
-        self._max_level = max_level
-        self._l3_strategy = l3_strategy
-        self._execution_gates = deepcopy(execution_gates)
-        self._dynamic_pii_config = deepcopy(dynamic_pii_config or {})
-        self._benchmark_gateway_config = {
-            "categories": list(categories),
-            "max_level": max_level,
-            "model_dir": model_dir,
-            "download_files": download_files,
-            "download_categories": deepcopy(download_categories),
-            "execution_gates": deepcopy(execution_gates),
-            "onnx_batch_mode": onnx_batch_mode,
-            "execution_backend": execution_backend,
-            "ntdb_operating_point": ntdb_operating_point,
-            "l3_strategy": l3_strategy,
-            "wolf_options": deepcopy(wolf_options),
-            "wolf_model": wolf_model,
-            "wolf_precision": wolf_precision,
-            "dynamic_pii_config": deepcopy(dynamic_pii_config),
-            "cache_storage_location": cache_storage_location,
-            "cache_encryption_key_hex": cache_encryption_key_hex,
-            "cache_entry_ttl_seconds": cache_entry_ttl_seconds,
-            "cache_memory_max_entries": cache_memory_max_entries,
-            "cache_memory_max_bytes": cache_memory_max_bytes,
+    def __init__(self, config: GatewayConfig):
+        if not isinstance(config, dict):
+            raise ValueError("config must be a dict")
+        self._config = deepcopy(config)
+        self._execution_gates = None
+        self.rust_gateway = RustSecurityGateway(json.dumps(config))
+
+    @classmethod
+    def _from_benchmark_config(cls, benchmark_config: dict):
+        """A gateway from `_benchmark_config()`: the config and any later gates."""
+        gateway = cls(benchmark_config["config"])
+        if benchmark_config["execution_gates"] is not None:
+            gateway.set_execution_gates(benchmark_config["execution_gates"])
+        return gateway
+
+    def _benchmark_config(self) -> dict:
+        """This gateway's config and later gates, for isolated benchmark gateways."""
+        return {
+            "config": deepcopy(self._config),
+            "execution_gates": deepcopy(self._execution_gates),
         }
-        self._benchmark_worker_config = {
-            "model_dir": model_dir,
-            "onnx_batch_mode": onnx_batch_mode,
-            "execution_backend": execution_backend,
-            "ntdb_operating_point": ntdb_operating_point,
-            "l3_strategy": l3_strategy,
-            "wolf_options": deepcopy(wolf_options),
-            "wolf_model": wolf_model,
-            "wolf_precision": wolf_precision,
+
+    def _benchmark_worker_config(self) -> dict:
+        """The Ark keys an isolated benchmark worker keeps."""
+        return {
+            key: deepcopy(self._config[key])
+            for key in _BENCHMARK_WORKER_KEYS
+            if key in self._config
         }
-        self.rust_gateway = RustSecurityGateway(
-            categories,
-            max_level,
-            model_dir=model_dir,
-            download_files=download_files,
-            download_categories=download_categories,
-            execution_gates_json=_execution_gates_json(execution_gates),
-            onnx_batch_mode=onnx_batch_mode,
-            execution_backend=execution_backend,
-            ntdb_operating_point=ntdb_operating_point,
-            l3_strategy=l3_strategy,
-            dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
-            cache_storage_location=cache_storage_location,
-            cache_encryption_key_hex=cache_encryption_key_hex,
-            cache_entry_ttl_seconds=cache_entry_ttl_seconds,
-            cache_memory_max_entries=cache_memory_max_entries,
-            cache_memory_max_bytes=cache_memory_max_bytes,
-            wolf_options_json=json.dumps(wolf_options) if wolf_options is not None else None,
-            wolf_model=wolf_model,
-            wolf_precision=wolf_precision,
-        )
 
     @property
     def wolf_options(self) -> dict[str, int]:
-        """Effective dedicated-Wolf startup profile; returned as an independent copy."""
+        """Effective dedicated-Wolf windows; returned as an independent copy."""
         return dict(self.rust_gateway.wolf_options)
 
     @property
@@ -324,17 +262,17 @@ class SecurityGateway:
     @property
     def categories(self) -> list[str]:
         """Categories configured for `scan_all`."""
-        return list(self._categories)
+        return list(self.rust_gateway.categories)
 
     @property
     def max_level(self) -> str:
         """Maximum scanner level configured for this gateway."""
-        return self._max_level
+        return self.rust_gateway.max_level
 
     @property
     def l3_strategy(self) -> str:
         """Active global L3 model strategy."""
-        return self._l3_strategy
+        return self.rust_gateway.l3_strategy
 
     def warmup(self):
         """Initialize model-backed scanners and download allowed missing assets.
@@ -377,11 +315,11 @@ class SecurityGateway:
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""
-        self._require_loaded_dynamic_pii(self._categories)
+        self._require_loaded_dynamic_pii(self.categories)
         results = self.rust_gateway.scan_all(text)
         return [_to_dict(r) for r in results]
 
-    def set_execution_gates(self, execution_gates: ExecutionGates | None):
+    def set_execution_gates(self, execution_gates: ScanGates | None):
         """Replace the gate matrix used by subsequent scan calls.
 
         Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
@@ -392,7 +330,6 @@ class SecurityGateway:
         """
         self.rust_gateway.set_execution_gates(_execution_gates_json(execution_gates))
         self._execution_gates = deepcopy(execution_gates)
-        self._benchmark_gateway_config["execution_gates"] = deepcopy(execution_gates)
 
     def set_onnx_batch_mode(self, mode: str):
         """Replace the ONNX batch mode for subsequent batch calls.
@@ -402,8 +339,7 @@ class SecurityGateway:
         pipelines can batch their fallback texts.
         """
         self.rust_gateway.set_onnx_batch_mode(mode)
-        self._benchmark_worker_config["onnx_batch_mode"] = mode
-        self._benchmark_gateway_config["onnx_batch_mode"] = mode
+        self._config["onnx_batch_mode"] = mode
 
     def set_execution_backend(self, backend: str):
         """Replace execution backend and apply its default L3 mode.
@@ -413,27 +349,24 @@ class SecurityGateway:
         `set_onnx_batch_mode` afterwards to override.
         """
         self.rust_gateway.set_execution_backend(backend)
-        self._benchmark_worker_config["execution_backend"] = backend
-        self._benchmark_gateway_config["execution_backend"] = backend
+        self._config["execution_backend"] = backend
+        # The backend's default batch mode replaces an earlier one.
+        self._config.pop("onnx_batch_mode", None)
 
     def set_ntdb_operating_point(self, point: str):
         """Select the calibrated NTDB final-decision threshold set for subsequent scans."""
         self.rust_gateway.set_ntdb_operating_point(point)
-        self._benchmark_worker_config["ntdb_operating_point"] = point
-        self._benchmark_gateway_config["ntdb_operating_point"] = point
+        self._config["ntdb_decision_threshold_point"] = point
 
     def set_l3_strategy(self, strategy: str):
         """Select `dedicated` per-pipeline L3 models or the shared `multi` model."""
         self.rust_gateway.set_l3_strategy(strategy)
-        self._l3_strategy = self.rust_gateway.l3_strategy
-        self._benchmark_worker_config["l3_strategy"] = strategy
-        self._benchmark_gateway_config["l3_strategy"] = strategy
+        self._config["l3_strategy"] = strategy
 
     def set_dynamic_pii_config(self, config: dict):
         """Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`."""
         self.rust_gateway.set_dynamic_pii_config(_dynamic_pii_config_json(config))
-        self._dynamic_pii_config = deepcopy(config)
-        self._benchmark_gateway_config["dynamic_pii_config"] = deepcopy(config)
+        self._config["dynamic_pii"] = deepcopy(config)
 
     def set_shell_command_policy_config(
         self,
@@ -444,7 +377,7 @@ class SecurityGateway:
 
         `policy_dirs` are directories of user `*.cedar` policies, read in file-name
         order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
-        Ark Core's `shell` config and the Ark API's `pipeline.shell_command`. A loaded
+        Ark Core's `shell` config and the Ark API's `pipeline.shell`. A loaded
         bundle applies the configuration at once, otherwise `warmup()` does. A refused
         configuration raises `ValueError` and changes nothing.
         """
@@ -455,9 +388,9 @@ class SecurityGateway:
 
     def _new_benchmark_gateway(self, l3_strategy: str):
         """Create an isolated gateway for one benchmark strategy."""
-        config = deepcopy(self._benchmark_gateway_config)
-        config["l3_strategy"] = l3_strategy
-        return type(self)(**config)
+        config = self._benchmark_config()
+        config["config"]["l3_strategy"] = l3_strategy
+        return type(self)._from_benchmark_config(config)
 
     def _require_loaded_dynamic_pii(self, categories: list[str]):
         """Raise instead of silently returning no `dynamic-pii` result when its model is not loaded."""
@@ -486,7 +419,7 @@ class SecurityGateway:
         self,
         text: str,
         categories: list[str] | None = None,
-        execution_gates: ExecutionGates | None = None,
+        execution_gates: ScanGates | None = None,
         metadata: dict | None = None,
         ntdb_operating_point: str | None = None,
         chunk_overlap_tokens: int = 0,

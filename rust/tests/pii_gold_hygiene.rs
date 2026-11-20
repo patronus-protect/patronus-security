@@ -6,6 +6,7 @@
 //! validator does not accept yet; a checksum must still hold. Validators are never relaxed
 //! for gold.
 
+use patronus_ark::GatewayConfig;
 use std::{collections::BTreeSet, path::Path};
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -152,12 +153,11 @@ fn secondary_evidence(result: &SecurityScanResult) -> BTreeSet<(String, usize, u
 
 #[test]
 fn every_l1_finding_on_a_positive_is_gold_or_a_known_detector_fp() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let rows = positives();
     let mut unexplained = Vec::new();
     let mut seen_fp = BTreeSet::new();

@@ -142,6 +142,7 @@ impl SecurityGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayConfig;
     use crate::{L3Strategy, ScanGateMatrix, SecurityCategory};
 
     fn gateway() -> SecurityGateway {
@@ -159,12 +160,15 @@ mod tests {
             bundle.join("tokenizer.mmbpe"),
         )
         .unwrap();
-        let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::Injection, SecurityCategory::ToolTags],
-            SecurityLevel::L3,
-            Some(base),
-            false,
-        );
+        let gateway = SecurityGateway::new({
+            let mut config = GatewayConfig::new(
+                vec![SecurityCategory::Injection, SecurityCategory::ToolTags],
+                SecurityLevel::L3,
+            );
+            config.core.cache_root = Some(base);
+            config
+        })
+        .unwrap();
         gateway.set_l3_strategy(L3Strategy::Multi);
         gateway.set_execution_gates(ScanGateMatrix::levels(false, false, true));
         gateway

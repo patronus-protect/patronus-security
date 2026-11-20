@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! JSONL scanner bridge for reproducible offline L1 calibration.
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use std::io::{self, BufRead};
 fn main() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     for line in io::stdin().lock().lines() {
         let input: serde_json::Value =

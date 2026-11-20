@@ -7,6 +7,7 @@
 //! scores every span 1.0; `balanced` and `recall` are opt-in, report the
 //! model score and drop candidates below their threshold.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::native::ScoreMode;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
@@ -19,12 +20,11 @@ use patronus_ark_core::{
 };
 
 fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     if let Some(gates) = gates {
         scanner.set_execution_gates(gates);
     }

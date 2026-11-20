@@ -16,34 +16,36 @@ auth:
       key_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       # The gateway must be able to forward every configured category.
       categories: ["pii", "dlp", "injection", "jailbreak", "prompt_extraction", "tool_poisoning", "exfiltration", "dynamic-pii"]
-      # Optional per-key gate override. Falls back to `pipeline.gates` when
-      # omitted. Same shape as `pipeline.gates` below.
+      # Optional per-key gate override. Falls back to the gate keys of `pipeline` when
+      # omitted. Same keys as the gate keys of `pipeline` below.
       # gates:
       #   l3: false
 
 pipeline:
   categories: ["pii", "dlp", "injection", "jailbreak", "prompt_extraction", "tool_poisoning", "exfiltration", "dynamic-pii"]
   max_level: "L3"
-  model_dir: "/data/models"
+  # The model cache root (Ark Core's `cache_root`).
+  cache_root: "/data/models"
   # Assets are baked into the image at build time (see Dockerfile); leave
-  # this false in production so a misconfigured deployment fails fast
+  # this `never` in production so a misconfigured deployment fails fast
   # instead of silently downloading models at request time.
-  download_files: false
+  download: never
 
   # Existing deployment default: one shared multi-head L3 classifier.
   # Opt in to dedicated models only with the matching assets installed.
   l3_strategy: multi
-  # Dedicated Wolf only. Model: base, small (default) or edge. Precision: auto
-  # (PATRONUS_L3_PRECISION, else int8_int4_x86 on x86_64 and int8_int4 elsewhere),
-  # fp32, fp16, mixed, mixed_x86, int8_int4 or int8_int4_x86.
+  # Dedicated Wolf only, with Ark Core's `wolf` keys. Model: base, small
+  # (default) or edge. Precision: auto (PATRONUS_L3_PRECISION, else
+  # int8_int4_x86 on x86_64 and int8_int4 elsewhere), fp32, fp16, mixed,
+  # mixed_x86, int8_int4 or int8_int4_x86. Omitted execution values retain
+  # 256/0/1; the model card's 2048/64 is about 2.5x slower on long texts.
   # wolf:
   #   model: small
   #   precision: auto
-  # Omitted values retain 256/0/1; the model card's 2048/64 is about 2.5x slower on long texts.
-  # wolf_options:
-  #   window_tokens: 256 # Includes BOS/EOS.
-  #   overlap_tokens: 0
-  #   batch_size: 1
+  #   execution:
+  #     window_tokens: 256 # Includes BOS/EOS.
+  #     overlap_tokens: 0
+  #     batch_size: 1
 
   # Optional ONNX Runtime CPU tuning. Defaults are 1/1/false, which avoid
   # oversubscription when several API containers share one VPS.
@@ -52,17 +54,18 @@ pipeline:
     inter_threads: 1
     spinning: false
 
-  # User Cedar policies and allowlist of the `shell_command` verdict (Cat),
-  # with Ark Core's `shell` keys; read at startup. Needs `shell_command` in
+  # User Cedar policies and allowlist of the `shell_command` verdict (Cat):
+  # Ark Core's `shell` keys; read at startup. Needs `shell_command` in
   # `categories`.
-  # shell_command:
+  # shell:
   #   policy_dirs: ["/etc/patronus/shell-policies"]
   #   allowlist: {C2-WEBHOOK-SITE: ask}
 
-  # Default execution gates for every scan (overridable per API key above).
-  # The one gate schema of `patronus_ark::ScanGateMatrix`, shared with the
-  # Python `execution_gates` and request `config.gates`; the L3 worker policy
-  # is `l3_policy`. `l1`/`l2`/`l3` are top-level
+  # Default execution gates for every scan (overridable per API key above):
+  # the gate keys sit at the top level of `pipeline`, as in Ark Core's
+  # config. The one gate schema of `patronus_ark_core::cascade::ScanGateMatrix`,
+  # shared with the Python `execution_gates` and request `config.gates`; the
+  # L3 worker policy is `l3_policy`. `l1`/`l2`/`l3` are top-level
   # on/off switches (omit for "enabled"), `models` disables individual
   # native scanners or models by their result `model` name (e.g.
   # `native:mcp_runtime_risk`), `rules` enables/disables one stable L1 rule
@@ -72,35 +75,34 @@ pipeline:
   # enable or disable an L2/L3 pipeline based on request metadata or an
   # already-completed L1/L2 result, optionally overriding that pipeline's L3
   # execution policy when the condition matches.
-  gates:
-    explain: false # Opt in to bounded PII/DLP context metadata.
-    l1: true
-    l2: true
-    l3: true
-    # Shared Rust/Python/API defaults enable credentials/secrets-only DLP.
-    # Broader families are opt-in, e.g. rules: {dlp_sql_statement: true}.
-    conditional:
-      # Only run the (expensive) L3 injection classifier once L1 already
-      # flagged something suspicious for this request.
-      - level: "L3"
-        pipeline: "injection"
-        when:
-          any:
-            - result:
-                pipeline: "injection"
-                classes: ["instruction_override", "instruction_leak"]
-                min_confidence: 0.5
-            - metadata:
-                path: "source"
-                equals: "slack_file_upload"
-      # Skip DLP's L2 pass entirely for a caller-tagged low-risk channel.
-      - level: "L2"
-        pipeline: "dlp"
-        when:
-          not:
-            metadata:
-              path: "channel_risk"
-              equals: "low"
+  explain: false # Opt in to bounded PII/DLP context metadata.
+  l1: true
+  l2: true
+  l3: true
+  # Shared Rust/Python/API defaults enable credentials/secrets-only DLP.
+  # Broader families are opt-in, e.g. rules: {dlp_sql_statement: true}.
+  conditional:
+    # Only run the (expensive) L3 injection classifier once L1 already
+    # flagged something suspicious for this request.
+    - level: "L3"
+      pipeline: "injection"
+      when:
+        any:
+          - result:
+              pipeline: "injection"
+              classes: ["instruction_override", "instruction_leak"]
+              min_confidence: 0.5
+          - metadata:
+              path: "source"
+              equals: "slack_file_upload"
+    # Skip DLP's L2 pass entirely for a caller-tagged low-risk channel.
+    - level: "L2"
+      pipeline: "dlp"
+      when:
+        not:
+          metadata:
+            path: "channel_risk"
+            equals: "low"
 
 cache:
   dir: "/data/cache"

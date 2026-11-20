@@ -120,12 +120,10 @@ impl SecurityGateway {
         metrics.checkpoint("worker_registration", "");
         let execution = self.scan_execution();
         self.shell_command_pipeline = if self.shell_command_configured(&execution) {
-            let shell = self.shell_command_config(&base_dir);
-            let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(
-                &shell.bundle_dir,
-                &shell.manifest_sha256,
-            )
-            .map_err(std::io::Error::other)?;
+            let shell = self.shell_command_config(&base_dir)?;
+            let dir = shell.dir(None).map_err(std::io::Error::other)?;
+            let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(&dir, &shell.manifest_sha256)
+                .map_err(std::io::Error::other)?;
             pipeline
                 .configure(&self.shell_command_policy_config())
                 .map_err(std::io::Error::other)?;
@@ -133,7 +131,7 @@ impl SecurityGateway {
             log::info!(
                 "shell_command model {} loaded from {}; cuts ask={ask} block={block}",
                 patronus_ark_core::warmup::SHELL_MODEL,
-                shell.bundle_dir.display(),
+                dir.display(),
             );
             metrics.checkpoint("shell_command_l1", "");
             Some(pipeline)
@@ -284,7 +282,7 @@ impl SecurityGateway {
                 if !self.shell_command_configured(&execution) {
                     continue;
                 }
-                let shell = self.shell_command_config(&base_dir);
+                let shell = self.shell_command_config(&base_dir)?;
                 let download = allow_download && self.should_download_assets_for(*category);
                 let report = assets::progress_reporter(
                     progress,
@@ -304,7 +302,7 @@ impl SecurityGateway {
                     } else {
                         format!(
                             "missing shell_command assets at {}; downloads disabled: {error}",
-                            shell.bundle_dir.display()
+                            shell.dir(None).unwrap_or_default().display()
                         )
                     }
                 })?;
@@ -455,8 +453,8 @@ impl SecurityGateway {
                 let download = allow_download && self.should_download_assets_for(*category);
                 if *category == SecurityCategory::Injection {
                     // Core pins, prepares and caches Wolf; ARK only picks the model.
-                    let wolf = execution.wolf_selection();
-                    let dir = patronus_ark_core::warmup::wolf_bundle_dir(&base_dir, wolf.model);
+                    let wolf = execution.wolf();
+                    let dir = wolf.dir(Some(&base_dir))?;
                     if !download
                         && !patronus_ark_core::warmup::wolf_assets_present(
                             &dir,
@@ -558,11 +556,9 @@ impl SecurityGateway {
     }
 
     pub(super) fn model_base_dir(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        match &self.model_dir {
-            Some(path) => Ok(path.clone()),
-            None => Ok(patronus_ark_core::warmup::default_cache_root()
-                .ok_or("Could not resolve cache directory")?),
-        }
+        Ok(patronus_ark_core::warmup::model_cache_root(
+            self.cache_root.as_deref(),
+        )?)
     }
 
     fn register_ntdb_l3_worker_model(
@@ -580,7 +576,7 @@ impl SecurityGateway {
         let model = match config.category {
             SecurityCategory::Injection => ntdb_injection_l3_worker_model(
                 &self.model_base_dir()?,
-                self.scan_execution().wolf_selection(),
+                self.scan_execution().wolf(),
             )?,
             SecurityCategory::SensitiveDocument => {
                 let asset = revision_pinned_l3_asset(config.category)?;
@@ -619,7 +615,7 @@ impl SecurityGateway {
         model.warmup_session(
             execution.backend(),
             execution.onnx_runtime_options(),
-            execution.wolf_execution_options(),
+            execution.wolf().execution,
         )?;
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
@@ -693,12 +689,12 @@ fn warmup_failure(message: String) -> SecurityFailure {
 
 fn ntdb_injection_l3_worker_model(
     base_dir: &Path,
-    wolf: crate::WolfSelection,
+    wolf: &patronus_ark_core::wolf::WolfConfig,
 ) -> Result<Option<LazyOnnxTextClassifier>, Box<dyn std::error::Error>> {
     let labels = vec!["benign".to_string(), "attack".to_string()];
     let graphs = patronus_ark_core::wolf::graph_candidates(wolf.model, wolf.precision)?;
     Ok(LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
-        patronus_ark_core::warmup::wolf_bundle_dir(base_dir, wolf.model),
+        wolf.dir(Some(base_dir))?,
         labels,
         assets::WOLF_PIPELINE_MODEL,
         &graphs,
@@ -706,7 +702,7 @@ fn ntdb_injection_l3_worker_model(
         256,
         wolf.model.spec().revision,
     )?
-    .map(|model| model.with_wolf_selection(wolf)))
+    .map(|model| model.with_wolf(wolf.clone())))
 }
 
 /// Core's warmup options for one ARK preparation step.

@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy,
-    MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig,
+    DynamicPiiConfig, GatewayConfig, L3Strategy, NtdbOperatingPoint, OnnxBatchMode,
     QueuedSecurityEvent, QueuedSecurityScanResult, SecurityFailure,
     SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, WriteBehindConfig,
+    SecurityRequestState, SecurityRuntimeReadiness,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
     EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, SecurityCategory,
-    WolfExecutionOptions,
 };
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
@@ -36,100 +34,35 @@ struct SecurityGateway {
 
 #[pymethods]
 impl SecurityGateway {
+    /// `config_json`: the gateway config (`patronus_ark::GatewayConfig`),
+    /// Ark Core's `Scanner` config plus Ark's keys. Unset `max_level` and
+    /// `download` take the Python defaults.
     #[new]
-    #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
-    #[pyo3(signature = (categories, max_level=patronus_ark::defaults::PYTHON_MAX_LEVEL, model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point=patronus_ark::defaults::PYTHON_NTDB_OPERATING_POINT, l3_strategy=patronus_ark::defaults::PYTHON_L3_STRATEGY, dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None, wolf_model="small", wolf_precision="auto"))]
-    fn new(
-        categories: Vec<String>,
-        max_level: &str,
-        model_dir: Option<String>,
-        download_files: bool,
-        download_categories: Option<Vec<String>>,
-        execution_gates_json: Option<&str>,
-        onnx_batch_mode: &str,
-        execution_backend: &str,
-        ntdb_operating_point: &str,
-        l3_strategy: &str,
-        dynamic_pii_config_json: Option<&str>,
-        cache_storage_location: Option<String>,
-        cache_encryption_key_hex: Option<&str>,
-        cache_entry_ttl_seconds: u64,
-        cache_memory_max_entries: usize,
-        cache_memory_max_bytes: usize,
-        wolf_options_json: Option<&str>,
-        wolf_model: &str,
-        wolf_precision: &str,
-    ) -> PyResult<Self> {
-        let wolf_options = parse_wolf_options_json(wolf_options_json)?;
-        let wolf_selection = parse_wolf_selection(wolf_model, wolf_precision)?;
-        if cache_entry_ttl_seconds == 0 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "cache_entry_ttl_seconds must be positive",
-            ));
+    fn new(config_json: &str) -> PyResult<Self> {
+        let value_error = |error: String| pyo3::exceptions::PyValueError::new_err(error);
+        let mut config: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(config_json).map_err(|error| value_error(error.to_string()))?;
+        for (key, default) in [
+            ("max_level", patronus_ark::defaults::PYTHON_MAX_LEVEL),
+            ("download", patronus_ark::defaults::PYTHON_DOWNLOAD),
+        ] {
+            config.entry(key).or_insert_with(|| default.into());
         }
-        let rust_categories = parse_categories(categories)?;
-        let rust_max_level = match max_level.parse::<SecurityLevel>() {
-            Ok(level) => level,
-            Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
-        };
-        // `dynamic-pii` runs only on L3; below it every scan would silently return nothing.
-        if rust_categories.contains(&SecurityCategory::DynamicPii)
-            && rust_max_level != SecurityLevel::L3
+        let config: GatewayConfig = serde_json::from_value(config.into())
+            .map_err(|error| value_error(error.to_string()))?;
+        // `dynamic_pii` runs only on L3; below it every scan would silently return nothing.
+        if config
+            .core
+            .categories
+            .contains(&SecurityCategory::DynamicPii)
+            && config.core.max_level != SecurityLevel::L3
         {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "dynamic-pii runs only on L3; set max_level=\"l3\" (got {max_level:?})"
+            return Err(value_error(format!(
+                "dynamic-pii runs only on L3; set max_level=\"l3\" (got {:?})",
+                config.core.max_level.as_str()
             )));
         }
-        let rust_model_dir = model_dir.map(PathBuf::from);
-        let rust_download_categories = match download_categories {
-            Some(categories) => Some(parse_categories(categories)?),
-            None => None,
-        };
-        let encryption = parse_cache_encryption_key_hex(cache_encryption_key_hex)?;
-        let cache_config = ExactCacheConfig {
-            memory: MemoryCacheConfig {
-                max_entries: cache_memory_max_entries,
-                max_bytes: cache_memory_max_bytes,
-            },
-            persistent: cache_storage_location.map(|storage_location| PersistentCacheConfig {
-                storage_location: PathBuf::from(storage_location),
-                write_mode: CacheWriteMode::Async,
-                write_behind: WriteBehindConfig::default(),
-                encryption: encryption.clone(),
-            }),
-            entry_ttl: Duration::from_secs(cache_entry_ttl_seconds),
-        };
-        let inner = RustSecurityGateway::try_with_download_categories_and_cache(
-            rust_categories,
-            rust_max_level,
-            rust_model_dir,
-            download_files,
-            rust_download_categories,
-            cache_config,
-        )
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        if let Some(gates) = parse_execution_gates_json(execution_gates_json)? {
-            inner.set_execution_gates(gates);
-        }
-        inner.set_execution_backend(parse_execution_backend(execution_backend)?);
-        inner.set_ntdb_decision_threshold_point(parse_ntdb_operating_point(ntdb_operating_point)?);
-        inner.set_l3_strategy(parse_l3_strategy(l3_strategy)?);
-        if let Some(options) = wolf_options {
-            inner
-                .set_wolf_execution_options(options)
-                .map_err(pyo3::exceptions::PyValueError::new_err)?;
-        }
-        inner
-            .set_wolf_selection(wolf_selection)
-            .map_err(pyo3::exceptions::PyValueError::new_err)?;
-        if onnx_batch_mode != "backend_default" {
-            inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
-        }
-        if let Some(config) = parse_dynamic_pii_config_json(dynamic_pii_config_json)? {
-            inner
-                .set_dynamic_pii_config(config)
-                .map_err(pyo3::exceptions::PyValueError::new_err)?;
-        }
+        let inner = RustSecurityGateway::new(config).map_err(value_error)?;
         Ok(SecurityGateway { inner })
     }
 
@@ -336,7 +269,7 @@ impl SecurityGateway {
 
     #[getter]
     fn wolf_options(&self) -> std::collections::HashMap<&'static str, usize> {
-        let options = self.inner.distributed_execution().wolf_execution_options();
+        let options = self.inner.distributed_execution().wolf().execution;
         [
             // ScanExecution always holds both window sizes.
             ("window_tokens", options.window_tokens.unwrap_or_default()),
@@ -349,20 +282,26 @@ impl SecurityGateway {
 
     #[getter]
     fn wolf_model(&self) -> &'static str {
-        self.inner
-            .distributed_execution()
-            .wolf_selection()
-            .model
-            .as_str()
+        self.inner.distributed_execution().wolf().model.as_str()
     }
 
     #[getter]
     fn wolf_precision(&self) -> &'static str {
+        self.inner.distributed_execution().wolf().precision.as_str()
+    }
+
+    #[getter]
+    fn categories(&self) -> Vec<&'static str> {
         self.inner
-            .distributed_execution()
-            .wolf_selection()
-            .precision
-            .as_str()
+            .categories()
+            .iter()
+            .map(|category| category.as_str())
+            .collect()
+    }
+
+    #[getter]
+    fn max_level(&self) -> &'static str {
+        self.inner.max_level().as_str()
     }
 
     #[getter]
@@ -404,64 +343,6 @@ fn parse_l3_strategy(value: &str) -> PyResult<L3Strategy> {
     value
         .parse::<L3Strategy>()
         .map_err(pyo3::exceptions::PyValueError::new_err)
-}
-
-fn parse_cache_encryption_key_hex(value: Option<&str>) -> PyResult<Option<CacheEncryptionConfig>> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    if value.len() != 64 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "cache_encryption_key_hex must contain exactly 64 hex characters",
-        ));
-    }
-    let mut key = [0u8; 32];
-    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
-        let high = hex_nibble(chunk[0])?;
-        let low = hex_nibble(chunk[1])?;
-        key[index] = (high << 4) | low;
-    }
-    Ok(Some(CacheEncryptionConfig::from_key(key)))
-}
-
-fn hex_nibble(value: u8) -> PyResult<u8> {
-    match value {
-        b'0'..=b'9' => Ok(value - b'0'),
-        b'a'..=b'f' => Ok(value - b'a' + 10),
-        b'A'..=b'F' => Ok(value - b'A' + 10),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
-            "cache_encryption_key_hex must contain only hex characters",
-        )),
-    }
-}
-
-fn parse_wolf_selection(model: &str, precision: &str) -> PyResult<patronus_ark::WolfSelection> {
-    let model = patronus_ark_core::wolf::WolfModel::ALL
-        .into_iter()
-        .find(|candidate| candidate.as_str() == model)
-        .ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "wolf_model must be base, small or edge, not {model:?}"
-            ))
-        })?;
-    let precision = patronus_ark_core::wolf::WolfPrecision::parse(precision).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!("unknown wolf_precision {precision:?}"))
-    })?;
-    Ok(patronus_ark::WolfSelection { model, precision })
-}
-
-fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecutionOptions>> {
-    value
-        .map(|value| {
-            let options: WolfExecutionOptions = serde_json::from_str(value)
-                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-            patronus_ark_core::WolfServingProfile::ARK
-                .fill(options)
-                .validate()
-                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-            Ok(options)
-        })
-        .transpose()
 }
 
 fn parse_dynamic_pii_config_json(value: Option<&str>) -> PyResult<Option<DynamicPiiConfig>> {
@@ -1025,17 +906,5 @@ fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRequestState>()?;
     m.add_class::<PyLevelReadiness>()?;
     m.add_class::<PyRuntimeReadiness>()?;
-    m.add(
-        "DEFAULT_MAX_LEVEL",
-        patronus_ark::defaults::PYTHON_MAX_LEVEL,
-    )?;
-    m.add(
-        "DEFAULT_L3_STRATEGY",
-        patronus_ark::defaults::PYTHON_L3_STRATEGY,
-    )?;
-    m.add(
-        "DEFAULT_NTDB_OPERATING_POINT",
-        patronus_ark::defaults::PYTHON_NTDB_OPERATING_POINT,
-    )?;
     Ok(())
 }

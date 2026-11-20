@@ -9,6 +9,7 @@
 //! counter-context term. It scores the `balanced` threshold `0.50`, below the
 //! labelled rules of its id in `balanced` and `recall`.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::pii::validators;
 use patronus_ark_core::{
@@ -202,12 +203,11 @@ const NEGATIVE: [&str; 6] = [
 ];
 
 fn scanner(gates: ScanGateMatrix) -> SecurityGateway {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(gates);
     scanner
 }

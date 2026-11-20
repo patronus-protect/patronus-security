@@ -31,7 +31,7 @@ use std::io::{self, BufRead, BufWriter, Write};
 use std::time::Instant;
 
 use patronus_ark_core::{
-    cascade::{Cascade, CascadeConfig},
+    cascade::Cascade,
     native::{NativeGates, NATIVE_CATEGORIES},
     Scanner, ScannerConfig, SecurityCategory,
 };
@@ -136,7 +136,7 @@ fn load_config(path: &str) -> Result<ScannerConfig, String> {
     let mut config: ScannerConfig =
         serde_json::from_value(scanner).map_err(|e| format!("{path}: scanner: {e}"))?;
     config.categories = modules();
-    config.cascade.get_or_insert_with(CascadeConfig::default);
+    config.gates.cascade.get_or_insert_with(Cascade::default);
     Ok(config)
 }
 
@@ -146,9 +146,8 @@ fn main() -> Result<(), String> {
         return Err("usage: threat_cascade CONFIG.json < rows.jsonl > predictions.jsonl".into());
     };
     let config = load_config(path)?;
-    let cascade =
-        Cascade::new(config.cascade.clone().unwrap_or_default()).map_err(|e| e.to_string())?;
-    let gates = config.gates.clone();
+    let cascade = config.gates.cascade.clone().unwrap_or_default();
+    let gates = config.gates.native.clone();
     let mut scanner = Scanner::new(config).map_err(|e| e.to_string())?;
     let modules = modules();
     let mut out = BufWriter::new(io::stdout().lock());
@@ -167,7 +166,6 @@ fn main() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use patronus_ark_core::cascade::SecurityLevel;
 
     #[test]
     fn modules_are_the_eleven_attack_classes() {
@@ -178,21 +176,14 @@ mod tests {
     }
 
     fn l1_only() -> (Scanner, Cascade, NativeGates) {
-        let cascade = CascadeConfig {
-            max_level: SecurityLevel::L1,
-            ..CascadeConfig::default()
-        };
-        let config = ScannerConfig {
+        let mut config = ScannerConfig {
             categories: modules(),
-            cascade: Some(cascade.clone()),
+            max_level: patronus_ark_core::cascade::SecurityLevel::L1,
             ..ScannerConfig::default()
         };
-        let gates = config.gates.clone();
-        (
-            Scanner::new(config).unwrap(),
-            Cascade::new(cascade).unwrap(),
-            gates,
-        )
+        config.gates.cascade = Some(Cascade::default());
+        let gates = config.gates.native.clone();
+        (Scanner::new(config).unwrap(), Cascade::default(), gates)
     }
 
     #[test]

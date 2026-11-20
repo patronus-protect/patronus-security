@@ -201,17 +201,16 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     scope.update(execution.l3_strategy().as_str().as_bytes());
     scope.update(&execution.chunk_overlap_tokens().to_le_bytes());
     // ScanExecution always holds both window sizes.
-    let wolf = execution.wolf_execution_options();
+    let wolf = execution.wolf();
     for value in [
-        wolf.window_tokens.unwrap_or_default(),
-        wolf.overlap_tokens.unwrap_or_default(),
-        wolf.batch_size,
+        wolf.execution.window_tokens.unwrap_or_default(),
+        wolf.execution.overlap_tokens.unwrap_or_default(),
+        wolf.execution.batch_size,
     ] {
         scope.update(&value.to_le_bytes());
     }
-    let selection = execution.wolf_selection();
-    scope.update(selection.model.as_str().as_bytes());
-    scope.update(selection.precision.as_str().as_bytes());
+    scope.update(wolf.model.as_str().as_bytes());
+    scope.update(wolf.precision.as_str().as_bytes());
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),
@@ -405,7 +404,12 @@ mod tests {
             },
         ] {
             let mut changed = baseline.clone();
-            changed.set_wolf_execution_options(options).unwrap();
+            changed
+                .set_wolf(patronus_ark_core::wolf::WolfConfig {
+                    execution: options,
+                    ..Default::default()
+                })
+                .unwrap();
             assert_ne!(
                 cache_key("injection", "same text", &baseline),
                 cache_key("injection", "same text", &changed)
@@ -417,17 +421,17 @@ mod tests {
     fn cache_key_separates_wolf_models_and_precisions() {
         let baseline = ScanExecution::default();
         for selection in [
-            crate::WolfSelection {
-                model: crate::WolfModel::Edge,
+            patronus_ark_core::wolf::WolfConfig {
+                model: patronus_ark_core::wolf::WolfModel::Edge,
                 ..Default::default()
             },
-            crate::WolfSelection {
-                precision: crate::WolfPrecision::Fp16,
+            patronus_ark_core::wolf::WolfConfig {
+                precision: patronus_ark_core::wolf::WolfPrecision::Fp16,
                 ..Default::default()
             },
         ] {
             let mut changed = baseline.clone();
-            changed.set_wolf_selection(selection).unwrap();
+            changed.set_wolf(selection).unwrap();
             assert_ne!(
                 cache_key("injection", "same text", &baseline),
                 cache_key("injection", "same text", &changed)

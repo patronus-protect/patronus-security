@@ -8,6 +8,7 @@
 //! creditor identifier (`DE98ZZZ09999999999`) is no IBAN: its length is not the
 //! registry length of its country, even where its digits pass MOD-97.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::pii::validators;
 use patronus_ark_core::native::ScoreMode;
@@ -120,12 +121,7 @@ const CREDITOR_IDS: [&str; 4] = [
 
 thread_local! {
     /// One scanner per test thread: the tests scan thousands of texts.
-    static SCANNER: SecurityGateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-        None,
-        false,
-    );
+    static SCANNER: SecurityGateway = SecurityGateway::new(GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1)).unwrap();
 }
 
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {

@@ -7,6 +7,8 @@
 //!
 //! Run: `cargo run --release --example 06_multi_l3_speedup`
 
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::collections::BTreeSet;
 use std::env;
 use std::process::Command;
@@ -85,13 +87,13 @@ fn run_strategy(strategy: L3Strategy) -> Result<Value, String> {
         SecurityCategory::Injection,
         SecurityCategory::SensitiveDocument,
     ];
-    let mut scanner = SecurityGateway::with_download_categories(
-        categories.clone(),
-        SecurityLevel::L3,
-        None,
-        true,
-        Some(categories),
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(categories);
+        config
+    })
+    .unwrap();
     scanner.set_l3_strategy(strategy);
     scanner
         .prepare_assets()

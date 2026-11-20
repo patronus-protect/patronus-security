@@ -2,6 +2,7 @@
 //! The order of `DLP_PATTERNS` is observable behaviour: rules run in registry
 //! order, the first matching rule sets the result class and `matched_rules`
 //! lists matches in that order. Splitting the rule modules must keep it.
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::{
     cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
@@ -209,12 +210,11 @@ fn registry_keeps_rule_order_and_unique_ids() {
 
 #[test]
 fn first_matching_rule_in_registry_order_sets_the_class() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     // The URL password comes first in the text, but the hash rule comes first in
     // the registry, so the result class is the hash group.
     let text = "DATABASE_DSN=postgres://app:Hx7rQ2pw@db.internal/app\n\

@@ -9,6 +9,7 @@
 //! that a checksum-valid value is no finding when it is glued into a run.
 //! Values come from the golden generator and are assembled at test time.
 
+use patronus_ark::GatewayConfig;
 use std::{collections::BTreeMap, path::Path, sync::OnceLock};
 
 use patronus_ark::{
@@ -143,12 +144,11 @@ fn spans(text: &str) -> Vec<EvidenceSpan> {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

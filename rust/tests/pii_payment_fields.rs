@@ -11,6 +11,7 @@
 //! - Account numbers after `Konto-Nr.:`, `Als Kontonummer ist …` and `Bank account on file
 //!   is …`; `Permanent Account Number` is the Indian PAN, no bank account.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::native::ScoreMode;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
@@ -18,12 +19,11 @@ use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, Securit
 const MODES: [ScoreMode; 2] = [ScoreMode::Strict, ScoreMode::Balanced];
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,

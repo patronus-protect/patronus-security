@@ -5,6 +5,7 @@
 //! are subtypes of existing groups, not groups of their own. Token values are
 //! synthetic and assembled at test time.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeSet;
 
 use patronus_ark::{golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult};
@@ -236,12 +237,11 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
 ];
 
 fn scan_with(gates: Option<ScanGateMatrix>, text: &str) -> SecurityScanResult {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     if let Some(gates) = gates {
         gateway.set_execution_gates(gates);
     }

@@ -4,6 +4,7 @@
 //! covers its command positives; what K26 does not cover yet stays where it is
 //! and is pinned below as a K26 follow-up.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeSet;
 
 use patronus_ark::SecurityGateway;
@@ -192,12 +193,11 @@ fn policies(pipeline: &ShellRiskPipeline, command: &str) -> Vec<String> {
 /// Rule ids that fire on `command`: threat rules through their attack classes,
 /// MCP policy rules as the argument of a `bash` tool call.
 fn fired(command: &str) -> BTreeSet<String> {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut ids: BTreeSet<String> = SecurityCategory::ATTACK_CLASSES
         .into_iter()
         .flat_map(|category| gateway.scan_category(category, command))

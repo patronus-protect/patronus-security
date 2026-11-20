@@ -12,6 +12,7 @@
 //! characters (Dashboard) or 64 hex digits (Stripe CLI). Values come from the
 //! golden generator or are built here at test time.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -114,12 +115,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

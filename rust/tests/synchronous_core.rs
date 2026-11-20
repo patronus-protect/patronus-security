@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use patronus_ark::{
     golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
     golden_recipes::SecretRecipe, SecurityGateway,
@@ -47,12 +48,11 @@ fn assert_native_parity(direct: &[NativeResult], queued: &[patronus_ark::Securit
 #[test]
 fn core_preserves_gateway_native_decisions_and_source_evidence() {
     let mut core = Scanner::new(ScannerConfig::default()).unwrap();
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::DEFAULT_ACTIVE.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let generators = generators();
     let mut counts = Vec::new();
     let mut recipes = 0;
@@ -117,10 +117,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         (ScoreMode::Recall, ScoreMode::Recall),
     ] {
         policies.push(ScannerConfig {
-            gates: NativeGates {
-                pii_mode,
-                dlp_mode,
-                explain: true,
+            gates: ScanGateMatrix {
+                native: NativeGates {
+                    pii_mode,
+                    dlp_mode,
+                    explain: true,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             ..Default::default()
@@ -133,40 +136,37 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         "native:dlp",
     ] {
         let mut policy = ScannerConfig::default();
-        policy.gates.models.insert(model.into(), false);
+        policy.gates.native.models.insert(model.into(), false);
         policies.push(policy);
     }
     let mut rules = ScannerConfig::default();
-    rules.gates.rules.insert("pii_email".into(), false);
+    rules.gates.native.rules.insert("pii_email".into(), false);
     rules
         .gates
+        .native
         .rules
         .insert("ark.injection.override.discard_prior".into(), false);
     policies.push(rules);
 
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::DEFAULT_ACTIVE.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     for policy in policies {
         let mut core = Scanner::new(policy.clone()).unwrap();
-        gateway.set_execution_gates(ScanGateMatrix {
-            native: policy.gates.clone(),
-            ..ScanGateMatrix::default()
-        });
+        gateway.set_execution_gates(policy.gates.clone());
         for text in &texts {
             let direct = core.scan(text).unwrap();
             let queued = gateway.scan_all(text);
             assert_native_parity(&direct.native, &queued);
-            if policy.gates.models.get("native:injection_l1") == Some(&false) {
+            if policy.gates.native.models.get("native:injection_l1") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
                     .all(|result| result.category != "injection"));
             }
-            if policy.gates.rules.get("pii_email") == Some(&false) {
+            if policy.gates.native.rules.get("pii_email") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
@@ -193,12 +193,11 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
         ..Default::default()
     })
     .unwrap();
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let combined = core.scan(&text).unwrap();
     assert_native_parity(&combined.native, &gateway.scan_all(&text));
     let pii_alone = core
@@ -288,7 +287,7 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
     let mut core_config = gates.clone();
     core_config["categories"] = serde_json::to_value(&categories).unwrap();
     let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
-    let gateway = SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false);
+    let gateway = SecurityGateway::new(GatewayConfig::new(categories, SecurityLevel::L1)).unwrap();
     gateway.set_execution_gates(serde_json::from_value(gates).unwrap());
     let untimed = |result: &NativeResult| {
         let mut result = result.clone();
@@ -355,7 +354,8 @@ fn ark_runs_the_cascade_l1_model_like_core() {
         let mut core_config = gates.clone();
         core_config["categories"] = serde_json::to_value(&categories).unwrap();
         let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
-        let gateway = SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false);
+        let gateway =
+            SecurityGateway::new(GatewayConfig::new(categories, SecurityLevel::L1)).unwrap();
         gateway.set_execution_gates(serde_json::from_value(gates).unwrap());
         let direct = core.scan(text).unwrap();
         assert_eq!(direct.native.is_empty(), rules_off);

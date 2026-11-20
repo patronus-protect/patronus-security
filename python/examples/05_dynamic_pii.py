@@ -13,19 +13,21 @@ from patronus_ark import SecurityGateway
 
 def main() -> None:
     scanner = SecurityGateway(
-        categories=["injection", "dynamic-pii"],
-        max_level="l3",
-        download_files=True,
-        dynamic_pii_config={
-            "labels": ["person", "organization", "location"],
-            "threshold": 0.5,
-            # Run GLiNER only when injection flags the text.
-            "execution_gate": {
-                "type": "if_result_in",
-                "pipeline": "injection",
-                "results": ["attack", "instruction_override"],
+        {
+            "categories": ["injection", "dynamic-pii"],
+            "max_level": "l3",
+            "download": "missing",
+            "dynamic_pii": {
+                "labels": ["person", "organization", "location"],
+                "threshold": 0.5,
+                
+                "execution_gate": {
+                    "type": "if_result_in",
+                    "pipeline": "injection",
+                    "results": ["attack", "instruction_override"],
+                },
             },
-        },
+        }
     )
     scanner.warmup()
 

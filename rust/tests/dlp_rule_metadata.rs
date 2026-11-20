@@ -4,6 +4,7 @@
 //! live/test severity; matches report them in `matched_rules`. Token values
 //! are synthetic and assembled at test time.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -48,12 +49,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()
@@ -380,12 +380,11 @@ fn matched_rules_report_metadata() {
     assert_eq!(rule["severity"], "live");
 
     // Content classes are off by default; enable them for this check.
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     let text = "Fehlerprotokoll:\nTraceback (most recent call last):\n  File \"app.py\", line 3\n";
     let result = gateway

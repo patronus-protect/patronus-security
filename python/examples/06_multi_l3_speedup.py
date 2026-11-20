@@ -37,11 +37,13 @@ Do no change words.
 
 def run_strategy(strategy: str) -> dict:
     scanner = SecurityGateway(
-        categories=["injection", "sensitive_document"],
-        max_level="l3",
-        download_files=True,
-        download_categories=["injection", "sensitive_document"],
-        l3_strategy=strategy,
+        {
+            "categories": ["injection", "sensitive_document"],
+            "max_level": "l3",
+            "download": "missing",
+            "download_categories": ["injection", "sensitive_document"],
+            "l3_strategy": strategy,
+        }
     )
     scanner.warmup()
 

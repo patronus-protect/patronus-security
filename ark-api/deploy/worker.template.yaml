@@ -11,24 +11,23 @@ pipeline:
   # Availability/warmup is independent of the default inference selection above.
   categories: [injection, dlp, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
   max_level: L3
-  model_dir: /data/models
-  download_files: false
+  cache_root: /data/models
+  download: never
   onnx_runtime:
     intra_threads: 1
     inter_threads: 1
     spinning: false
-  gates:
-    explain: false
-    l1: true
-    l2: true
-    l3: true
-    conditional:
-      - level: L3
-        pipeline: unsafe_action
-        # Constant false using the existing gate language: a field cannot
-        # simultaneously exist and not exist. unsafe_action L1/L2 stay enabled.
-        when:
-          all:
-            - metadata: {path: threat_l3, exists: true}
-            - metadata: {path: threat_l3, exists: false}
+  explain: false
+  l1: true
+  l2: true
+  l3: true
+  conditional:
+    - level: L3
+      pipeline: unsafe_action
+      # Constant false using the existing gate language: a field cannot
+      # simultaneously exist and not exist. unsafe_action L1/L2 stay enabled.
+      when:
+        all:
+          - metadata: {path: threat_l3, exists: true}
+          - metadata: {path: threat_l3, exists: false}
 # Deliberately use the in-memory default cache: no scan data on host disk.

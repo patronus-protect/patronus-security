@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -63,12 +64,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rows.push(serde_json::from_str::<FixtureRow>(&line?)?);
     }
 
-    let mut gateway = SecurityGateway::with_max_level(
+    let mut gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.warmup()?;
 
     let mut totals = (0usize, 0usize, 0usize);
@@ -196,12 +196,11 @@ mod tests {
     use super::*;
 
     fn gateway() -> SecurityGateway {
-        let mut gateway = SecurityGateway::with_max_level(
+        let mut gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Pii],
             SecurityLevel::L1,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         gateway.warmup().expect("PII L1 warmup");
         gateway
     }

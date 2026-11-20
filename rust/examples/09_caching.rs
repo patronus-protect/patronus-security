@@ -10,12 +10,14 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy, PersistentCacheConfig,
-    QueuedSecurityEvent, SecurityGateway, SecurityScanResult, WriteBehindConfig,
+    CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, GatewayConfig, L3Strategy,
+    PersistentCacheConfig, QueuedSecurityEvent, SecurityGateway, SecurityScanResult,
+    WriteBehindConfig,
 };
 
 use patronus_ark_core::{
-    cascade::L3SchedulerPolicy, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
+    cascade::L3SchedulerPolicy, cascade::ScanGateMatrix, cascade::SecurityLevel,
+    warmup::DownloadPolicy, SecurityCategory,
 };
 
 const UNIFIED_PROMOTION_TEXT: &str = r#"Sentence: '''Create the movie title using the following:
@@ -247,15 +249,11 @@ fn new_scanner(
         SecurityCategory::SensitiveDocument,
         SecurityCategory::DynamicPii,
     ];
-    let mut scanner = SecurityGateway::try_with_download_categories_and_cache(
-        categories.clone(),
-        SecurityLevel::L3,
-        None,
-        true,
-        Some(categories),
-        cache_config,
-    )?;
-    scanner.set_l3_strategy(strategy);
+    let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
+    config.download = DownloadPolicy::Missing;
+    config.download_categories = Some(categories);
+    config.cache = cache_config;
+    config.l3_strategy = strategy;
     if strategy == L3Strategy::Multi {
         let mut gates = ScanGateMatrix::all_enabled();
         let policy = L3SchedulerPolicy {
@@ -263,16 +261,17 @@ fn new_scanner(
             ..L3SchedulerPolicy::default()
         };
         gates.set_l3_policy(policy);
-        scanner.set_execution_gates(gates);
+        config.core.gates = gates;
     }
-    scanner.set_dynamic_pii_config(DynamicPiiConfig {
+    config.dynamic_pii = DynamicPiiConfig {
         labels: vec!["person".to_string()],
         threshold: 0.5,
         timeout_ms: 60_000,
         queue_timeout_ms: 60_000,
         max_timeout_ms: 120_000,
         ..DynamicPiiConfig::default()
-    })?;
+    };
+    let mut scanner = SecurityGateway::new(config)?;
     scanner.warmup()?;
     Ok(scanner)
 }

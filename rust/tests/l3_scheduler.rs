@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::time::Duration;
 
 use patronus_ark::{QueuedSecurityEvent, SecurityGateway, SecurityRequestCompletion};
@@ -5,12 +6,11 @@ use patronus_ark::{QueuedSecurityEvent, SecurityGateway, SecurityRequestCompleti
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn scanner() -> SecurityGateway {
-    SecurityGateway::with_max_level(
+    SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection],
         SecurityLevel::L3,
-        None,
-        false,
-    )
+    ))
+    .unwrap()
 }
 
 fn final_model_order(scanner: &SecurityGateway, job_count: usize) -> Vec<String> {

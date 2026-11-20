@@ -3,6 +3,7 @@
 //!
 //! Run: `cargo run --example 10_normalize_text`
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 
 use patronus_ark_core::{
@@ -17,12 +18,11 @@ fn main() {
     println!("raw:        {raw:?}");
     println!("normalized: {normalized:?}\n");
 
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     for result in scanner.scan_all(&normalized) {
         println!(
             "[{:<3}] {:<20} class={:<24} confidence={:.3} model={}",

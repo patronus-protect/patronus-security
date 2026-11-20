@@ -128,7 +128,7 @@ fn validate_request_compatibility(
             .category
             .parse::<SecurityCategory>()
             .map_err(|error| format!("unknown category '{}': {error}", pipeline.category))?;
-        if !state.config.categories.contains(&category) {
+        if !state.config.gateway.core.categories.contains(&category) {
             return Err(format!(
                 "category '{}' is not configured on this worker",
                 pipeline.category

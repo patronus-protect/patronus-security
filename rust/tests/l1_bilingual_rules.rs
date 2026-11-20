@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use patronus_ark::GatewayConfig;
 use patronus_ark::{
     golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
     SecurityGateway,
@@ -66,12 +67,11 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         "every registered rule needs DE/EN fixtures"
     );
     assert_eq!(actual.len(), cases.len(), "duplicate fixtures");
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let generators = GeneratorSet::load(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../python/patronus_ark/dlp_synth/generators.json"),
@@ -136,12 +136,11 @@ fn hard_negatives_are_silent_in_de_and_en() {
         "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
     ))
     .unwrap();
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp, SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut reported = Vec::new();
     let mut rules = BTreeMap::<&str, usize>::new();
     for case in cases.iter().filter(|case| !case.hard_negatives.is_empty()) {

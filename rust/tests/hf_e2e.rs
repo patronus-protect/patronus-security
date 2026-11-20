@@ -1,3 +1,5 @@
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -30,12 +32,13 @@ fn hf_ntdb_l2_download_warmup_smoke() {
 
     let dir = model_dir();
     let categories = classifier_categories();
-    let mut scanner = SecurityGateway::with_max_level(
-        categories.clone(),
-        SecurityLevel::L2,
-        Some(dir.clone()),
-        true,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L2);
+        config.core.cache_root = Some(dir.clone());
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
 
     scanner.warmup().unwrap();
     for manifest in [
@@ -100,12 +103,13 @@ fn hf_four_chunk_injection_fixture_is_not_benign() {
          and secret configuration.",
         "safe ".repeat(3 * 254),
     );
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L2,
-        Some(model_dir()),
-        true,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L2);
+        config.core.cache_root = Some(model_dir());
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
     scanner.warmup().unwrap();
 
     let results = scanner.scan_category(SecurityCategory::Injection, &text);
@@ -137,16 +141,20 @@ fn hf_short_german_greeting_is_not_an_injection() {
         return;
     }
 
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![
-            SecurityCategory::Injection,
-            SecurityCategory::Dlp,
-            SecurityCategory::UnsafeAction,
-        ],
-        SecurityLevel::L3,
-        Some(model_dir()),
-        true,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![
+                SecurityCategory::Injection,
+                SecurityCategory::Dlp,
+                SecurityCategory::UnsafeAction,
+            ],
+            SecurityLevel::L3,
+        );
+        config.core.cache_root = Some(model_dir());
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
     scanner.set_l3_strategy(L3Strategy::Multi);
     scanner.set_execution_backend(patronus_ark_core::ExecutionBackend::Cpu);
     scanner.warmup().unwrap();
@@ -175,12 +183,14 @@ fn hf_shell_command_download_warmup_smoke() {
     }
 
     let dir = model_dir();
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::ShellCommand],
-        SecurityLevel::L1,
-        Some(dir.clone()),
-        true,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config =
+            GatewayConfig::new(vec![SecurityCategory::ShellCommand], SecurityLevel::L1);
+        config.core.cache_root = Some(dir.clone());
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
     scanner.warmup().unwrap();
     let bundle = patronus_ark_core::warmup::shell_bundle_dir(&dir);
     for file in [
@@ -237,8 +247,13 @@ fn hf_product_asset_sync_progress_smoke() {
         SecurityCategory::DynamicPii,
         SecurityCategory::ShellCommand,
     ];
-    let scanner =
-        SecurityGateway::with_max_level(categories, SecurityLevel::L3, Some(dir.clone()), true);
+    let scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(categories, SecurityLevel::L3);
+        config.core.cache_root = Some(dir.clone());
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
     scanner.set_l3_strategy(L3Strategy::Multi);
     let progress: SecurityAssetProgressCallback = Arc::new(|progress| {
         eprintln!(
@@ -277,12 +292,12 @@ fn local_ntdb_model_dir_symlink_warmup_smoke() {
     let model_dir = unique_model_dir();
     symlink_all_local_ntdb_packages(&model_dir);
 
-    let mut scanner = SecurityGateway::with_max_level(
-        classifier_categories(),
-        SecurityLevel::L2,
-        Some(model_dir.clone()),
-        false,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(classifier_categories(), SecurityLevel::L2);
+        config.core.cache_root = Some(model_dir.clone());
+        config
+    })
+    .unwrap();
 
     scanner.warmup().unwrap();
     let results = scanner.scan_categories(
@@ -324,12 +339,12 @@ fn local_ntdb_l2_second_scan_hits_decision_cache() {
         "injection/l2_ntdb/injection_current",
     );
 
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L2,
-        Some(model_dir.clone()),
-        false,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L2);
+        config.core.cache_root = Some(model_dir.clone());
+        config
+    })
+    .unwrap();
     scanner.warmup().unwrap();
 
     let text = "Summarize this harmless release note for the customer success team.";
@@ -376,13 +391,14 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
         SecurityCategory::Injection,
         SecurityCategory::SensitiveDocument,
     ];
-    let mut scanner = SecurityGateway::with_download_categories(
-        categories.clone(),
-        SecurityLevel::L3,
-        Some(model_dir.clone()),
-        true,
-        Some(categories.clone()),
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
+        config.core.cache_root = Some(model_dir.clone());
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(categories.clone());
+        config
+    })
+    .unwrap();
     let mut policy = L3SchedulerPolicy::default();
     policy.ttl_ms.insert("injection".to_string(), 120_000);
     policy
@@ -410,13 +426,13 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
         patronus_ark::SecurityLevelReadiness::Ready
     ));
 
-    let mut cached_scanner = SecurityGateway::with_download_categories(
-        categories.clone(),
-        SecurityLevel::L3,
-        Some(model_dir.clone()),
-        false,
-        Some(categories),
-    );
+    let mut cached_scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
+        config.core.cache_root = Some(model_dir.clone());
+        config.download_categories = Some(categories);
+        config
+    })
+    .unwrap();
     cached_scanner.warmup().unwrap();
     assert!(matches!(
         cached_scanner.runtime_readiness().l3,

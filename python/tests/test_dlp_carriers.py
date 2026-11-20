@@ -487,7 +487,7 @@ class SelfScanTests(unittest.TestCase):
     def test_template_source_has_no_secret_finding(self):
         from patronus_ark import SecurityGateway
 
-        gateway = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        gateway = SecurityGateway({"categories": ["dlp"], "max_level": "l1", "download": "never"})
         value_rules = set(rules.load_rule_map())
         source = Path(carriers.__file__).with_name("carrier_templates.py").read_text(encoding="utf-8")
         findings = [

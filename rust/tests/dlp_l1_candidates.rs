@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::{
     collections::BTreeSet,
     time::{Duration, Instant},
@@ -15,12 +16,11 @@ fn scan(text: &str) -> SecurityScanResult {
 }
 
 fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
-    let mut scanner = SecurityGateway::with_max_level(
+    let mut scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.warmup().unwrap();
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::all_enabled();
     gates.native.explain = explain;
@@ -826,12 +826,11 @@ fn provider_prefix_does_not_suppress_a_real_password() {
         .evidence_spans
         .iter()
         .any(|span| span.label == "CREDENTIAL" && span.text == token));
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::default();
     gates.set_rule("dlp_github_token", false);
     scanner.set_execution_gates(gates);

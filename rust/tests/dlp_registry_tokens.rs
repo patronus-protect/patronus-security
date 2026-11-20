@@ -14,6 +14,7 @@
 //! Doppler prefix. Tokens come from the golden generator or get their
 //! checksum or structure here at test time; no valid token is checked in.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -156,12 +157,11 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
         [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
-            let scanner = SecurityGateway::with_max_level(
+            let scanner = SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            );
+            ))
+            .unwrap();
             scanner.set_execution_gates(ScanGateMatrix {
                 native: patronus_ark_core::native::NativeGates {
                     dlp_mode: mode,

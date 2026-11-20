@@ -1532,7 +1532,7 @@ class StructureTests(unittest.TestCase):
 class RuleProbeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.gateway = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        cls.gateway = SecurityGateway({"categories": ["dlp"], "max_level": "l1", "download": "never"})
         cls.all_rules = set(rules.load_rule_map()) | set(rules.content_rules())
 
     def test_each_rule_reports_exactly_its_generated_values(self):

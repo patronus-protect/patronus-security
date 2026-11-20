@@ -82,7 +82,7 @@ fn bundle_dir() -> Option<PathBuf> {
             prepare_shell_assets(&config, &options).unwrap_or_else(|error| {
                 panic!("CI needs the pinned shell-risk bundle for parity: {error}")
             });
-            Some(config.bundle_dir)
+            config.bundle_dir
         })
         .clone()
 }

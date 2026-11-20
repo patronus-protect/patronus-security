@@ -496,7 +496,7 @@ fn run_wolf_document_job(
             threshold,
             job.execution.backend(),
             job.execution.onnx_runtime_options(),
-            job.execution.wolf_execution_options(),
+            job.execution.wolf().execution,
         )
         .map_err(|error| error.to_string())?;
     let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
@@ -595,7 +595,7 @@ fn run_wolf_document_job(
         threshold,
         job.execution.backend(),
         job.execution.onnx_runtime_options(),
-        job.execution.wolf_execution_options(),
+        job.execution.wolf().execution,
         active.control(),
         callback,
     );

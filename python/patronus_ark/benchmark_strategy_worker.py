@@ -10,7 +10,7 @@ from .benchmark import _run_local_benchmark_for_strategy
 
 def main():
     payload = json.load(sys.stdin)
-    gateway = SecurityGateway(**payload["gateway"])
+    gateway = SecurityGateway._from_benchmark_config(payload["gateway"])
     gateway.warmup()
     result = _run_local_benchmark_for_strategy(
         gateway,

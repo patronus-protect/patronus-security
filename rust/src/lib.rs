@@ -6,6 +6,7 @@
 pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
+mod config;
 pub mod dynamic_pii;
 pub mod gliner_onnx_engine;
 #[cfg(feature = "test-util")]
@@ -24,17 +25,17 @@ use patronus_ark_core::{
         L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
         L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
     },
-    detectors, diagnostics, threat,
-    wolf::{WolfModel, WolfPrecision},
-    DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, EvaluationResult, EvidenceSpan, ExecutionBackend,
-    LabelScore, LayerResult, OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
+    detectors, diagnostics, threat, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
+    DecisionRecommendation, DecisionResult, DecisionTerminality, EvaluationResult, EvidenceSpan,
+    ExecutionBackend, LabelScore, LayerResult, OnnxRuntimeOptions, SecurityCategory,
+    WolfExecutionOptions,
 };
 
 pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
     PersistentCacheConfig, WriteBehindConfig,
 };
+pub use config::GatewayConfig;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiRequestConfig, DynamicPiiResultCondition, MAX_REQUEST_LABEL_BYTES,
@@ -46,5 +47,5 @@ pub use types::{
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
     SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
+    SecurityRuntimeReadiness, SecurityScanResult,
 };

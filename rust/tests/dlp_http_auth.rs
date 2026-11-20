@@ -12,6 +12,7 @@
 //! env, JSON, YAML, TOML, XML, properties and code, in logs and alone in
 //! chats, tickets and mails. Values are synthetic.
 
+use patronus_ark::GatewayConfig;
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -25,12 +26,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

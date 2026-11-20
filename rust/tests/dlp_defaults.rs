@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
@@ -51,12 +52,11 @@ fn default_and_partial_matrices_share_the_credential_and_marking_inventory() {
 
 #[test]
 fn gateway_default_excludes_sql_and_explicit_rule_enables_it() {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let text = "password = CorrectHorseBatteryStaple\nSELECT * FROM customer;";
     let results = scanner.scan_all(text);
     assert!(results

@@ -9,9 +9,11 @@ from patronus_ark import SecurityGateway
 
 def main() -> None:
     scanner = SecurityGateway(
-        categories=["injection", "threat", "tool_class"],
-        max_level="l3",
-        download_files=True,
+        {
+            "categories": ["injection", "threat", "tool_class"],
+            "max_level": "l3",
+            "download": "missing",
+        }
     )
     scanner.warmup()
 

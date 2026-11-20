@@ -5,14 +5,14 @@ from ._patronus_ark_core import (
 )
 from .types import (
     EvidenceSpan, NativeCategory, NativeResult, ScanReport, WolfResult, ScannerConfig, WolfConfig,
-    NativeGates, WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
+    NativeGates, ScanGates, WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
     ShellVerdict, CascadeConfig, ModuleConfig, L1ModelConfig, ModuleDecision,
 )
 
 __all__ = [
     "Scanner", "ScanControl", "CancelledError", "ScannerBusyError", "__version__", "seed_word_list",
     "EvidenceSpan", "NativeCategory", "NativeResult", "ScanReport", "WolfResult",
-    "NativeGates", "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions", "OnnxRuntimeOptions",
+    "NativeGates", "ScanGates", "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions", "OnnxRuntimeOptions",
     "ShellConfig", "ShellFacts", "ShellVerdict", "CascadeConfig", "ModuleConfig", "L1ModelConfig",
     "ModuleDecision",
 ]

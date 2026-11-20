@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::injection::signal::rule_category;
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
@@ -81,12 +82,11 @@ fn category_results(category: SecurityCategory, text: &str) -> Vec<SecurityScanR
     static GATEWAY: std::sync::OnceLock<SecurityGateway> = std::sync::OnceLock::new();
     GATEWAY
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 SecurityCategory::ATTACK_CLASSES.to_vec(),
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(category, text)
 }

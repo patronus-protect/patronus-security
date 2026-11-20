@@ -1,7 +1,5 @@
 //! Resolve local Wolf exports and validate their integrity metadata.
-use super::{
-    asset, BundleFile, LogitOutput, Published, WolfConfig, WolfManifest, WolfModel, WolfPrecision,
-};
+use super::{asset, BundleFile, LogitOutput, Published, WolfManifest, WolfModel, WolfPrecision};
 use crate::ScanError;
 use std::{
     fs,
@@ -54,10 +52,6 @@ fn validate_manifest(manifest: &WolfManifest, model: WolfModel) -> Result<(), Sc
         return Err(asset("invalid optional Wolf integrity manifest"));
     }
     Ok(())
-}
-
-pub(crate) fn asset_manifest(config: &WolfConfig) -> Result<WolfManifest, ScanError> {
-    asset_manifest_at(&config.bundle_dir, config.model, config.precision)
 }
 
 pub(crate) fn asset_manifest_at(

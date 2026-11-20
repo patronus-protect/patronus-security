@@ -229,17 +229,14 @@ mod tests {
         let mut config = WolfConfig::new(&directory, 0.8);
         config.precision = precision;
         config.backend = crate::ExecutionBackend::Cpu;
+        config.execution = WolfExecutionOptions {
+            window_tokens: Some(32),
+            overlap_tokens: Some(0),
+            batch_size: 4,
+        };
         let batch = vec![vec![400; 30], vec![1500; 9], vec![400; 23], vec![500; 1]];
         let (actual, model, bos, eos, pad) = {
-            let mut runner = WolfRunner::new_with_options(
-                &config,
-                WolfExecutionOptions {
-                    window_tokens: Some(32),
-                    overlap_tokens: Some(0),
-                    batch_size: 4,
-                },
-            )
-            .unwrap();
+            let mut runner = WolfRunner::new(&config).unwrap();
             (
                 runner.infer_batch(&batch, &ScanControl::default()).unwrap(),
                 runner.model_path.clone(),

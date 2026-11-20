@@ -111,8 +111,11 @@ pub struct ShellRiskScore {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShellConfig {
-    /// The downloaded `cat-shell-risk-commander` release directory.
-    pub bundle_dir: PathBuf,
+    /// The downloaded `cat-shell-risk-commander` release directory; unset
+    /// takes Cat's directory below the model cache root
+    /// ([`crate::warmup::shell_bundle_dir`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_dir: Option<PathBuf>,
     /// sha256 of the bundle's `manifest.json`. Default: the pinned K26
     /// release, [`SHELL_MANIFEST_SHA256`](crate::warmup::SHELL_MANIFEST_SHA256).
     #[serde(default = "pinned_manifest")]
@@ -133,7 +136,28 @@ impl ShellConfig {
     /// The pinned release in `bundle_dir`, without user policies.
     pub fn new(bundle_dir: impl Into<PathBuf>) -> Self {
         Self {
-            bundle_dir: bundle_dir.into(),
+            bundle_dir: Some(bundle_dir.into()),
+            ..Self::default()
+        }
+    }
+
+    /// The bundle directory: `bundle_dir`, else Cat's directory below the
+    /// model cache root `root` (unset: the default cache root).
+    pub fn dir(&self, root: Option<&Path>) -> Result<PathBuf, String> {
+        crate::warmup::bundle_dir_or_default(
+            self.bundle_dir.as_deref(),
+            root,
+            crate::warmup::shell_bundle_dir,
+        )
+        .map_err(|error| error.to_string())
+    }
+}
+
+impl Default for ShellConfig {
+    /// The pinned release below the model cache root, without user policies.
+    fn default() -> Self {
+        Self {
+            bundle_dir: None,
             manifest_sha256: pinned_manifest(),
             policy_dirs: Vec::new(),
             allowlist: BTreeMap::new(),
@@ -186,7 +210,7 @@ impl ShellRiskPipeline {
 
     /// Load the bundle of `config` and apply its user policies and allowlist.
     pub fn from_config(config: &ShellConfig) -> Result<Self, String> {
-        let pipeline = Self::from_pinned_bundle_dir(&config.bundle_dir, &config.manifest_sha256)?;
+        let pipeline = Self::from_pinned_bundle_dir(&config.dir(None)?, &config.manifest_sha256)?;
         pipeline.configure(&ShellPolicyConfig::load(
             &config.policy_dirs,
             &config.allowlist,

@@ -9,6 +9,7 @@
 //! (a URL password read as e-mail local part, Slack token digits read as a
 //! card number) are dropped from the PII result. Values are synthetic.
 
+use patronus_ark::GatewayConfig;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -63,7 +64,11 @@ fn fill(template: &str, gen: &str, seed: u64) -> (String, std::ops::Range<usize>
 fn dlp_gateway() -> &'static SecurityGateway {
     static GATEWAY: OnceLock<SecurityGateway> = OnceLock::new();
     GATEWAY.get_or_init(|| {
-        SecurityGateway::with_max_level(vec![SecurityCategory::Dlp], SecurityLevel::L1, None, false)
+        SecurityGateway::new(GatewayConfig::new(
+            vec![SecurityCategory::Dlp],
+            SecurityLevel::L1,
+        ))
+        .unwrap()
     })
 }
 
@@ -629,12 +634,11 @@ fn a_standalone_wif_key_and_a_secret_next_to_it_both_stay() {
 
 #[test]
 fn content_classes_keep_their_spans_over_secrets() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut gates = ScanGateMatrix::default();
     for pattern in DLP_PATTERNS {
         if pattern.entity_group == "dlp.content.source_code" {
@@ -674,12 +678,11 @@ fn scored_modes_resolve_overlaps_like_strict() {
         15,
     );
     for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Dlp],
             SecurityLevel::L1,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         gateway.set_execution_gates(ScanGateMatrix {
             native: patronus_ark_core::native::NativeGates {
                 dlp_mode: mode,
@@ -768,12 +771,11 @@ fn golden_and_fixture_texts_never_report_overlapping_secret_spans() {
 fn both_gateway() -> &'static SecurityGateway {
     static GATEWAY: OnceLock<SecurityGateway> = OnceLock::new();
     GATEWAY.get_or_init(|| {
-        SecurityGateway::with_max_level(
+        SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Dlp, SecurityCategory::Pii],
             SecurityLevel::L1,
-            None,
-            false,
-        )
+        ))
+        .unwrap()
     })
 }
 
@@ -802,12 +804,11 @@ fn url_password_is_not_also_reported_as_an_email_address() {
         ),
     ] {
         let (text, value) = fill(template, "url_userinfo_password", seed);
-        let pii_alone = SecurityGateway::with_max_level(
+        let pii_alone = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Pii],
             SecurityLevel::L1,
-            None,
-            false,
-        )
+        ))
+        .unwrap()
         .scan_category(SecurityCategory::Pii, &text);
         let results =
             both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);
@@ -885,12 +886,11 @@ fn pii_decision_is_kept_when_its_span_defers_to_dlp() {
         "url_userinfo_password",
         74,
     );
-    let pii_alone = SecurityGateway::with_max_level(
+    let pii_alone = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    )
+    ))
+    .unwrap()
     .scan_category(SecurityCategory::Pii, &text);
     let results =
         both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);

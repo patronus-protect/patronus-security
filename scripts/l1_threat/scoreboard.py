@@ -135,7 +135,7 @@ JOBS = 4
 PREDICTOR = "threat_cascade"
 PREDICTOR_SOURCES = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "ark-core")
 # The gated stack: L1 only, so whatever L1 does not detect is clear.
-L1_CASCADE = {"scanner": {"cascade": {"max_level": "l1"}}}
+L1_CASCADE = {"scanner": {"max_level": "l1", "cascade": {}}}
 # The cascade config a prediction directory was made with.
 CONFIG_FILE = "cascade.json"
 # Stages that decide a module, in cascade order (L2 is ARK-only).
@@ -780,7 +780,7 @@ def config_lines(config: dict[str, Any]) -> list[str]:
 
     detect, clear = cuts("detect_threshold"), cuts("clear_threshold")
     wolf = scanner.get("wolf")
-    lines = [f"Cascade config `{config_hash(config)[:12]}`: deepest layer {str(cascade.get('max_level', 'l3')).upper()}; "
+    lines = [f"Cascade config `{config_hash(config)[:12]}`: deepest layer {str(scanner.get('max_level', 'l3')).upper()}; "
              "detect thresholds " + (", ".join(f"{m} {t:g}" for m, t in detect.items()) or "Core's built-in "
                                      "acceptance") + "; "
              "clear thresholds " + (", ".join(f"{m} {t:g}" for m, t in clear.items()) or "off (L1 escalates every "
