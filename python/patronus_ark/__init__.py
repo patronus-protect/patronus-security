@@ -8,60 +8,6 @@ import math
 from patronus_ark_core import ScanGates, ScannerConfig
 
 
-def _decode_json_object(value):
-    try:
-        decoded = json.loads(value or "{}")
-    except (TypeError, json.JSONDecodeError):
-        return {}
-    return decoded if isinstance(decoded, dict) else {}
-
-
-def _to_dict(result):
-    output = {
-        "category": result.category,
-        "class_name": result.class_name,
-        "confidence": result.confidence,
-        "level": result.level,
-        "model": result.model,
-        "duration_ms": result.duration_ms,
-        "layers": [
-            {
-                "level": layer.level,
-                "layer_type": layer.layer_type,
-                "class_name": layer.class_name,
-                "confidence": layer.confidence,
-                "matched": layer.matched,
-                "duration_ms": layer.duration_ms,
-                "thresholds": layer.thresholds,
-                "details": layer.details,
-            }
-            for layer in result.layers
-        ],
-        "evidence_spans": result.evidence_spans,
-        "label_scores": [
-            {
-                "label": score.label,
-                "confidence": score.confidence,
-                "matched": score.matched,
-            }
-            for score in result.label_scores
-        ],
-    }
-    request_id = getattr(result, "request_id", None)
-    if request_id is not None:
-        output["request_id"] = request_id
-    decision = _decode_json_object(getattr(result, "decision_json", None))
-    if decision:
-        output["decision"] = decision
-    decided_by = getattr(result, "decided_by", None)
-    if decided_by is not None:
-        output["decided_by"] = decided_by
-    l1_outcome = getattr(result, "l1_outcome", None)
-    if l1_outcome is not None:
-        output["l1_outcome"] = l1_outcome
-    return output
-
-
 def _failure_to_dict(failure):
     return {
         "stage": failure.stage,
@@ -79,9 +25,9 @@ def _event_to_dict(event):
         "request_id": event.request_id,
     }
     if event.event_type in ("result", "provisional"):
-        output["result"] = _to_dict(event.result)
+        output["result"] = event.result
     elif event.event_type == "progress":
-        output["progress"] = _decode_json_object(getattr(event, "progress_json", None))
+        output["progress"] = event.progress
     else:
         output["completion"] = event.completion
         output["failures"] = [_failure_to_dict(failure) for failure in event.failures]
@@ -316,8 +262,7 @@ class SecurityGateway:
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""
         self._require_loaded_dynamic_pii(self.categories)
-        results = self.rust_gateway.scan_all(text)
-        return [_to_dict(r) for r in results]
+        return self.rust_gateway.scan_all(text)
 
     def set_execution_gates(self, execution_gates: ScanGates | None):
         """Replace the gate matrix used by subsequent scan calls.
@@ -406,14 +351,12 @@ class SecurityGateway:
     def scan_category(self, category: str, text: str) -> list[dict]:
         """Scan text with a single category."""
         self._require_loaded_dynamic_pii([category])
-        results = self.rust_gateway.scan_category(category, text)
-        return [_to_dict(r) for r in results]
+        return self.rust_gateway.scan_category(category, text)
 
     def scan_categories(self, categories: list[str], text: str) -> list[dict]:
         """Scan text with a caller-provided category subset."""
         self._require_loaded_dynamic_pii(categories)
-        results = self.rust_gateway.scan_categories(categories, text)
-        return [_to_dict(r) for r in results]
+        return self.rust_gateway.scan_categories(categories, text)
 
     def enqueue(
         self,

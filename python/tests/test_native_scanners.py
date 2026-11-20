@@ -51,8 +51,8 @@ class NativeScannerTests(unittest.TestCase):
             self.assertIs(type(rule["components"][0]["span_precision"]), str)
 
     def test_layer_details_outlive_their_released_result(self):
-        # The binding frees released details on a background thread (H06-3);
-        # a layer still held must keep the details it shares with its result.
+        # The binding frees the Rust results of large details on a background
+        # thread (H06-3); the Python dicts it built from them stay intact.
         scanner = SecurityGateway({"categories": ["pii"], "max_level": "l1", "download": "never"})
         text = " ".join(f"Kontakt {n}: user{n}@example.de." for n in range(200))
         expected = next(
@@ -60,9 +60,9 @@ class NativeScannerTests(unittest.TestCase):
         )["layers"][0]["details"]
         for _ in range(3):
             results = scanner.rust_gateway.scan_category("pii", text)
-            layer = next(r for r in results if r.model == "native:pii").layers[0]
+            layer = next(r for r in results if r["model"] == "native:pii")["layers"][0]
             del results
-            self.assertEqual(layer.details, expected)
+            self.assertEqual(layer["details"], expected)
             del layer
         rules = expected["matched_rules"]
         self.assertEqual(len(rules), 200)

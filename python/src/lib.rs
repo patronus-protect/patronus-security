@@ -2,23 +2,23 @@
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
     DynamicPiiConfig, GatewayConfig, L3Strategy, OnnxBatchMode, QueuedSecurityEvent,
-    QueuedSecurityScanResult, SecurityFailure, SecurityGateway as RustSecurityGateway,
-    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness,
+    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
-    EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, NtdbOperatingPoint, SecurityCategory,
+    ExecutionBackend, NtdbOperatingPoint, SecurityCategory,
 };
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
-use rustc_hash::FxHashMap;
-use std::collections::HashMap;
+use pyo3::types::PyDict;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender};
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use std::time::Duration;
+
+mod py_serde;
+use py_serde::PyStrings;
 
 #[pyfunction]
 #[pyo3(signature = (text, configs_json=None))]
@@ -92,9 +92,9 @@ impl SecurityGateway {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<Vec<PyEvaluationResult>> {
+    fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<Vec<PyObject>> {
         let results = py.allow_threads(|| self.inner.scan_all(text));
-        Ok(results.into_iter().map(PyEvaluationResult::from).collect())
+        results_to_py(py, results)
     }
 
     #[pyo3(signature = (execution_gates_json=None))]
@@ -148,18 +148,13 @@ impl SecurityGateway {
         .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
-    fn scan_category(
-        &self,
-        py: Python<'_>,
-        category: &str,
-        text: &str,
-    ) -> PyResult<Vec<PyEvaluationResult>> {
+    fn scan_category(&self, py: Python<'_>, category: &str, text: &str) -> PyResult<Vec<PyObject>> {
         let cat = match category.parse::<SecurityCategory>() {
             Ok(c) => c,
             Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
         };
         let results = py.allow_threads(|| self.inner.scan_category(cat, text));
-        Ok(results.into_iter().map(PyEvaluationResult::from).collect())
+        results_to_py(py, results)
     }
 
     fn scan_categories(
@@ -167,13 +162,13 @@ impl SecurityGateway {
         py: Python<'_>,
         categories: Vec<String>,
         text: &str,
-    ) -> PyResult<Vec<PyEvaluationResult>> {
+    ) -> PyResult<Vec<PyObject>> {
         let rust_categories = parse_categories(categories)?;
         let profile = std::env::var_os("PATRONUS_PHASE_METRICS").is_some_and(|v| v == "1");
         let started = std::time::Instant::now();
         let results = py.allow_threads(|| self.inner.scan_categories(&rust_categories, text));
         let scanned = std::time::Instant::now();
-        let results = results.into_iter().map(PyEvaluationResult::from).collect();
+        let results = results_to_py(py, results)?;
         if profile {
             eprintln!(
                 "L1_BINDING_PROFILE scan_ms={} result_conversion_ms={}",
@@ -244,9 +239,9 @@ impl SecurityGateway {
         timeout: Option<f64>,
     ) -> PyResult<Option<PySecurityEvent>> {
         let timeout = timeout.map(Duration::from_secs_f64);
-        Ok(py
-            .allow_threads(|| self.inner.consume_next_event(timeout))
-            .map(PySecurityEvent::from))
+        py.allow_threads(|| self.inner.consume_next_event(timeout))
+            .map(|event| security_event(py, event))
+            .transpose()
     }
 
     fn has_request(&self, request_id: &str) -> bool {
@@ -400,65 +395,51 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
         .transpose()
 }
 
-#[pyclass]
-#[derive(Clone)]
-struct PyLayerResult {
-    #[pyo3(get)]
-    level: String,
-    #[pyo3(get)]
-    layer_type: String,
-    #[pyo3(get)]
-    class_name: String,
-    #[pyo3(get)]
-    confidence: f64,
-    #[pyo3(get)]
-    matched: bool,
-    #[pyo3(get)]
-    duration_ms: f64,
-    thresholds: HashMap<String, f64>,
-    // Shared, so the `layers` getter clones a pointer and not the `matched_rules`.
-    details: Arc<HashMap<String, serde_json::Value>>,
+/// The public result dicts, from the results' own `Serialize`: Core's result
+/// fields, flat, plus `decided_by` and `l1_outcome` when set
+/// (`docs/reference/result-schema.md`).
+fn results_to_py(py: Python<'_>, results: Vec<SecurityScanResult>) -> PyResult<Vec<PyObject>> {
+    let mut strings = PyStrings::new(py);
+    let dicts = results
+        .iter()
+        .map(|result| result_dict(&mut strings, result).map(Bound::unbind))
+        .collect::<PyResult<Vec<_>>>()?;
+    let matched_rules = results.iter().map(matched_rules).sum();
+    release(results, matched_rules);
+    Ok(dicts)
 }
 
-#[pymethods]
-impl PyLayerResult {
-    #[getter]
-    fn thresholds(&self, py: Python<'_>) -> PyResult<PyObject> {
-        Ok(self
-            .thresholds
-            .clone()
-            .into_py_dict_bound(py)
-            .into_any()
-            .unbind())
+/// One result dict; Python omits `decision` while it is unset.
+fn result_dict<'py, T: serde::Serialize>(
+    strings: &mut PyStrings<'py>,
+    result: &T,
+) -> PyResult<Bound<'py, PyAny>> {
+    let dict = py_serde::to_py(strings, result)?.downcast_into::<PyDict>()?;
+    if dict
+        .get_item("decision")?
+        .is_some_and(|decision| decision.is_none())
+    {
+        dict.del_item("decision")?;
     }
-
-    /// The layer details as Python objects, built directly from the JSON values:
-    /// a JSON text round trip (`serde_json` out, `json.loads` in) cost more than
-    /// the scan on large texts (H06-2).
-    #[getter]
-    fn details(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let mut strings = PyStrings::new(py);
-        let details = PyDict::new_bound(py);
-        for (key, value) in self.details.iter() {
-            details.set_item(strings.key(key), strings.json_to_py(value)?)?;
-        }
-        Ok(details.into_any().unbind())
-    }
+    Ok(dict.into_any())
 }
 
-impl Drop for PyLayerResult {
-    /// Large details go to [`release_off_thread`]; freeing a few entries
-    /// here costs less than waking the thread.
-    fn drop(&mut self) {
-        const RELEASE_OFF_THREAD_MIN_RULES: usize = 64;
-        let large = self
-            .details
-            .get("matched_rules")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|rules| rules.len() >= RELEASE_OFF_THREAD_MIN_RULES);
-        if large && Arc::strong_count(&self.details) == 1 {
-            release_off_thread(std::mem::take(&mut self.details));
-        }
+fn matched_rules(result: &SecurityScanResult) -> usize {
+    result
+        .layers
+        .iter()
+        .filter_map(|layer| layer.details.get("matched_rules"))
+        .filter_map(serde_json::Value::as_array)
+        .map(Vec::len)
+        .sum()
+}
+
+/// Results with many `matched_rules` go to [`release_off_thread`]; freeing a
+/// few entries here costs less than waking the thread.
+fn release<T: Send + 'static>(results: T, matched_rules: usize) {
+    const RELEASE_OFF_THREAD_MIN_RULES: usize = 64;
+    if matched_rules >= RELEASE_OFF_THREAD_MIN_RULES {
+        release_off_thread(results);
     }
 }
 
@@ -484,157 +465,6 @@ fn release_off_thread<T: Send + 'static>(value: T) {
     }
 }
 
-/// Builds the Python objects of JSON values and shares one string object per
-/// distinct text: the keys and most string values (`rule_id`,
-/// `span_precision`, …) repeat in every `matched_rules` entry, and creating
-/// and freeing a string per occurrence cost about a third of the details of
-/// a 100 KiB scan (H06-3). A shared value string is equal and immutable, so
-/// the dicts are the ones `json.loads` makes. The texts are short (rule
-/// ids, component names, labels), so the cache hashes with Fx: SipHash cost
-/// about a fifth of the details of a 100 KiB scan (H06-5).
-struct PyStrings<'py, 'a> {
-    py: Python<'py>,
-    strings: FxHashMap<&'a str, Bound<'py, PyString>>,
-}
-
-impl<'py, 'a> PyStrings<'py, 'a> {
-    fn new(py: Python<'py>) -> Self {
-        Self {
-            py,
-            strings: FxHashMap::default(),
-        }
-    }
-
-    /// A dict key, interned like the keys `json.loads` memoizes.
-    fn key(&mut self, text: &'a str) -> Bound<'py, PyString> {
-        let py = self.py;
-        self.strings
-            .entry(text)
-            .or_insert_with(|| PyString::intern_bound(py, text))
-            .clone()
-    }
-
-    /// A string value; not interned, as it may hold scanned text.
-    fn value(&mut self, text: &'a str) -> Bound<'py, PyString> {
-        let py = self.py;
-        self.strings
-            .entry(text)
-            .or_insert_with(|| PyString::new_bound(py, text))
-            .clone()
-    }
-
-    /// A JSON value as the Python object that `json.loads` makes of its JSON text.
-    fn json_to_py(&mut self, value: &'a serde_json::Value) -> PyResult<Bound<'py, PyAny>> {
-        use serde_json::Value;
-        let py = self.py;
-        Ok(match value {
-            Value::Null => py.None().into_bound(py),
-            Value::Bool(flag) => PyBool::new_bound(py, *flag).to_owned().into_any(),
-            Value::Number(number) => match (number.as_i64(), number.as_u64()) {
-                (Some(int), _) => int.into_py(py).into_bound(py),
-                (None, Some(int)) => int.into_py(py).into_bound(py),
-                _ => number.as_f64().into_py(py).into_bound(py),
-            },
-            Value::String(text) => self.value(text).into_any(),
-            Value::Array(items) => {
-                let list = PyList::empty_bound(py);
-                for item in items {
-                    list.append(self.json_to_py(item)?)?;
-                }
-                list.into_any()
-            }
-            Value::Object(map) => {
-                let dict = PyDict::new_bound(py);
-                for (key, item) in map {
-                    dict.set_item(self.key(key), self.json_to_py(item)?)?;
-                }
-                dict.into_any()
-            }
-        })
-    }
-}
-
-#[pyclass]
-#[derive(Clone)]
-struct PyEvaluationResult {
-    #[pyo3(get)]
-    request_id: Option<String>,
-    #[pyo3(get)]
-    category: String,
-    #[pyo3(get)]
-    class_name: String,
-    #[pyo3(get)]
-    confidence: f64,
-    #[pyo3(get)]
-    level: String,
-    #[pyo3(get)]
-    model: String,
-    #[pyo3(get)]
-    duration_ms: f64,
-    #[pyo3(get)]
-    layers: Vec<PyLayerResult>,
-    // Shared, so cloning a result (an event) does not copy its spans.
-    evidence_spans: Arc<Vec<EvidenceSpan>>,
-    #[pyo3(get)]
-    label_scores: Vec<PyLabelScore>,
-    #[pyo3(get)]
-    decision_json: Option<String>,
-    /// Stage that gave the category its final answer, e.g. `heuristic`.
-    #[pyo3(get)]
-    decided_by: Option<String>,
-    /// L1's answer when L1 decided the category under the cascade:
-    /// `detected` or `clear`.
-    #[pyo3(get)]
-    l1_outcome: Option<String>,
-}
-
-#[pymethods]
-impl PyEvaluationResult {
-    /// The evidence spans as the dicts of the public result, built here: a
-    /// span object per span read field by field in Python cost about 2 ms per
-    /// 1 000 spans (H06-2).
-    #[getter]
-    fn evidence_spans<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyDict>>> {
-        let keys = [
-            "label",
-            "text",
-            "score",
-            "start_byte",
-            "end_byte",
-            "start_char",
-            "end_char",
-        ]
-        .map(|key| PyString::intern_bound(py, key));
-        let mut labels = PyStrings::new(py);
-        self.evidence_spans
-            .iter()
-            .map(|span| {
-                let dict = PyDict::new_bound(py);
-                // Bound values: a dropped `PyObject` checks the GIL first.
-                dict.set_item(&keys[0], labels.value(&span.label))?;
-                dict.set_item(&keys[1], PyString::new_bound(py, &span.text))?;
-                dict.set_item(&keys[2], span.score.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[3], span.start_byte.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[4], span.end_byte.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[5], span.start_char.into_py(py).into_bound(py))?;
-                dict.set_item(&keys[6], span.end_char.into_py(py).into_bound(py))?;
-                Ok(dict)
-            })
-            .collect()
-    }
-}
-
-#[pyclass]
-#[derive(Clone)]
-struct PyLabelScore {
-    #[pyo3(get)]
-    label: String,
-    #[pyo3(get)]
-    confidence: f64,
-    #[pyo3(get)]
-    matched: bool,
-}
-
 #[pyclass]
 #[derive(Clone)]
 struct PySecurityFailure {
@@ -653,20 +483,34 @@ struct PySecurityFailure {
 }
 
 #[pyclass]
-#[derive(Clone)]
 struct PySecurityEvent {
     #[pyo3(get)]
     event_type: String,
     #[pyo3(get)]
     request_id: String,
-    #[pyo3(get)]
-    result: Option<PyEvaluationResult>,
+    /// The result dict of a `result` or `provisional` event.
+    result: Option<PyObject>,
+    /// The progress dict of a `progress` event.
+    progress: Option<PyObject>,
     #[pyo3(get)]
     completion: Option<String>,
     #[pyo3(get)]
     failures: Vec<PySecurityFailure>,
-    #[pyo3(get)]
-    progress_json: Option<String>,
+}
+
+#[pymethods]
+impl PySecurityEvent {
+    #[getter]
+    fn result(&self, py: Python<'_>) -> Option<PyObject> {
+        self.result.as_ref().map(|result| result.clone_ref(py))
+    }
+
+    #[getter]
+    fn progress(&self, py: Python<'_>) -> Option<PyObject> {
+        self.progress
+            .as_ref()
+            .map(|progress| progress.clone_ref(py))
+    }
 }
 
 #[pyclass]
@@ -727,51 +571,47 @@ fn completion_parts(completion: SecurityRequestCompletion) -> (String, Vec<PySec
     }
 }
 
-impl From<QueuedSecurityEvent> for PySecurityEvent {
-    fn from(event: QueuedSecurityEvent) -> Self {
-        match event {
-            QueuedSecurityEvent::Result(queued) => Self {
-                event_type: "result".to_string(),
-                request_id: queued.request_id.clone(),
-                result: Some(PyEvaluationResult::from(queued)),
-                completion: None,
-                failures: Vec::new(),
-                progress_json: None,
-            },
-            QueuedSecurityEvent::Provisional(queued) => Self {
-                event_type: "provisional".to_string(),
-                request_id: queued.request_id.clone(),
-                result: Some(PyEvaluationResult::from(queued)),
-                completion: None,
-                failures: Vec::new(),
-                progress_json: None,
-            },
-            QueuedSecurityEvent::Progress(progress) => Self {
+fn security_event(py: Python<'_>, event: QueuedSecurityEvent) -> PyResult<PySecurityEvent> {
+    let (event_type, queued) = match event {
+        QueuedSecurityEvent::Result(queued) => ("result", queued),
+        QueuedSecurityEvent::Provisional(queued) => ("provisional", queued),
+        QueuedSecurityEvent::Progress(progress) => {
+            return Ok(PySecurityEvent {
                 event_type: "progress".to_string(),
                 request_id: progress.request_id.clone(),
                 result: None,
+                progress: Some(py_serde::to_py(&mut PyStrings::new(py), &progress)?.unbind()),
                 completion: None,
                 failures: Vec::new(),
-                progress_json: Some(
-                    serde_json::to_string(&progress).unwrap_or_else(|_| "{}".to_string()),
-                ),
-            },
-            QueuedSecurityEvent::Finished {
-                request_id,
-                completion,
-            } => {
-                let (completion, failures) = completion_parts(completion);
-                Self {
-                    event_type: "finished".to_string(),
-                    request_id,
-                    result: None,
-                    completion: Some(completion),
-                    failures,
-                    progress_json: None,
-                }
-            }
+            })
         }
-    }
+        QueuedSecurityEvent::Finished {
+            request_id,
+            completion,
+        } => {
+            let (completion, failures) = completion_parts(completion);
+            return Ok(PySecurityEvent {
+                event_type: "finished".to_string(),
+                request_id,
+                result: None,
+                progress: None,
+                completion: Some(completion),
+                failures,
+            });
+        }
+    };
+    let result = result_dict(&mut PyStrings::new(py), &queued)?;
+    let matched_rules = matched_rules(&queued.result);
+    let request_id = queued.request_id.clone();
+    release(queued, matched_rules);
+    Ok(PySecurityEvent {
+        event_type: event_type.to_string(),
+        request_id,
+        result: Some(result.unbind()),
+        progress: None,
+        completion: None,
+        failures: Vec::new(),
+    })
 }
 
 impl From<SecurityRequestState> for PyRequestState {
@@ -823,84 +663,10 @@ impl From<SecurityRuntimeReadiness> for PyRuntimeReadiness {
     }
 }
 
-impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
-    fn from(result: patronus_ark::SecurityScanResult) -> Self {
-        let patronus_ark::SecurityScanResult {
-            native: result,
-            decided_by,
-            l1_outcome,
-            ..
-        } = result;
-        let decision_json = result
-            .decision
-            .as_ref()
-            .and_then(|decision| serde_json::to_string(decision).ok());
-        PyEvaluationResult {
-            request_id: None,
-            category: result.category,
-            class_name: result.class_name,
-            confidence: result.confidence,
-            level: result.level,
-            model: result.model,
-            duration_ms: result.duration_ms,
-            layers: result.layers.into_iter().map(PyLayerResult::from).collect(),
-            evidence_spans: Arc::new(result.evidence_spans),
-            label_scores: result
-                .label_scores
-                .into_iter()
-                .map(PyLabelScore::from)
-                .collect(),
-            decision_json,
-            decided_by: decided_by
-                .and_then(|stage| serde_json::to_value(stage).ok())
-                .and_then(|value| value.as_str().map(str::to_string)),
-            l1_outcome: l1_outcome
-                .and_then(|outcome| serde_json::to_value(outcome).ok())
-                .and_then(|value| value.as_str().map(str::to_string)),
-        }
-    }
-}
-
-impl From<LabelScore> for PyLabelScore {
-    fn from(score: LabelScore) -> Self {
-        Self {
-            label: score.label,
-            confidence: score.confidence,
-            matched: score.matched,
-        }
-    }
-}
-
-impl From<QueuedSecurityScanResult> for PyEvaluationResult {
-    fn from(queued: QueuedSecurityScanResult) -> Self {
-        let mut result = PyEvaluationResult::from(queued.result);
-        result.request_id = Some(queued.request_id);
-        result
-    }
-}
-
-impl From<LayerResult> for PyLayerResult {
-    fn from(layer: LayerResult) -> Self {
-        PyLayerResult {
-            level: layer.level,
-            layer_type: layer.layer_type,
-            class_name: layer.class_name,
-            confidence: layer.confidence,
-            matched: layer.matched,
-            duration_ms: layer.duration_ms,
-            thresholds: layer.thresholds,
-            details: Arc::new(layer.details),
-        }
-    }
-}
-
 #[pymodule]
 fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(normalize_text, m)?)?;
     m.add_class::<SecurityGateway>()?;
-    m.add_class::<PyLayerResult>()?;
-    m.add_class::<PyEvaluationResult>()?;
-    m.add_class::<PyLabelScore>()?;
     m.add_class::<PySecurityFailure>()?;
     m.add_class::<PySecurityEvent>()?;
     m.add_class::<PyRequestState>()?;

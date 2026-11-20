@@ -76,6 +76,47 @@ mod l3_results {
         }
     }
 
+    /// The public result shape (`docs/reference/result-schema.md`): Core's
+    /// fields flat, `decided_by`/`l1_outcome` only when set, no internal fields.
+    #[test]
+    fn scan_results_serialize_flat_with_optional_cascade_fields() {
+        let mut result = fallback_result();
+        let json = serde_json::to_value(&result).unwrap();
+        let mut keys = json
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                "category",
+                "class_name",
+                "confidence",
+                "decision",
+                "duration_ms",
+                "evidence_spans",
+                "label_scores",
+                "layers",
+                "level",
+                "model",
+            ]
+        );
+        result.decided_by = Some(patronus_ark_core::cascade::Stage::L2);
+        let queued = patronus_ark::QueuedSecurityScanResult {
+            request_id: "rq".to_string(),
+            result,
+        };
+        let json = serde_json::to_value(&queued).unwrap();
+        assert_eq!(json["request_id"], "rq");
+        assert_eq!(json["decided_by"], "l2");
+        assert_eq!(json["category"], "injection");
+        assert!(json.get("l1_outcome").is_none());
+        assert!(json.get("result").is_none());
+    }
+
     #[test]
     fn l3_pending_layer_records_fallback_and_execution_metadata() {
         let result = EvaluationResult {

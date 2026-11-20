@@ -2199,6 +2199,7 @@ dependencies = [
  "patronus-ark-core",
  "pyo3",
  "rustc-hash",
+ "serde",
  "serde_json",
 ]
 

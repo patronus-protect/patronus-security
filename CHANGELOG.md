@@ -53,6 +53,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `patronus_ark_core`; `DynamicPiiRequestConfig::resolve(base)` becomes
   `DynamicPiiConfig::with_request(request)`. The coordinator now reports the worker's error text
   for a refused config (still status 422).
+- **Ark results serialize themselves:** `SecurityScanResult` and `QueuedSecurityScanResult`
+  implement `Serialize` (Core's result fields flat, `request_id`, and `decided_by` and
+  `l1_outcome` when set). The Python `SecurityGateway` builds its result and progress dicts from
+  that serialization; the dicts keep their keys and values. The internal result classes of the
+  native module (`PyEvaluationResult`, `PyLayerResult`, `PyLabelScore`) are gone, and events carry
+  `result` and `progress` dicts instead of `progress_json`.
 - **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
   `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
   environment override) describes a model and Core resolves its directory, checks its revision

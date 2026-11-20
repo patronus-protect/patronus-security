@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -11,7 +12,6 @@ from patronus_ark import (
     GatewayConfig,
     SecurityGateway,
     _event_to_dict,
-    _to_dict,
     normalize_text,
 )
 
@@ -601,119 +601,47 @@ class PublicApiTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     SecurityGateway({"download": "never", **config})
 
-    def test_result_to_dict_decodes_decision_json(self):
-        result = SimpleNamespace(
-            request_id=None,
-            category="unsafe_action",
-            class_name="benign",
-            confidence=0.0,
-            level="L2",
-            model="unified-v3-threat",
-            duration_ms=1.0,
-            layers=[
-                SimpleNamespace(
-                    level="L2",
-                    layer_type="ntdb_l2",
-                    class_name="benign",
-                    confidence=0.0,
-                    matched=True,
-                    duration_ms=1.0,
-                    thresholds={},
-                    details={},
+    def test_result_dicts_keep_the_documented_shape(self):
+        scanner = SecurityGateway(categories=["pii", "dlp"], max_level="l1", download_files=False)
+        scanner.warmup()
+
+        results = scanner.scan_all(f"Contact: jane.doe@example.com, key {OPENAI_KEY}")
+
+        self.assertTrue(results)
+        required = {
+            "category", "class_name", "confidence", "level", "model", "duration_ms",
+            "layers", "evidence_spans", "label_scores",
+        }
+        optional = {"request_id", "decision", "decided_by", "l1_outcome"}
+        for result in results:
+            self.assertLessEqual(required, set(result))
+            self.assertLessEqual(set(result) - required, optional)
+            # Python omits `decision` while it is unset instead of returning None.
+            self.assertIsNot(result.get("decision", {}), None)
+            for layer in result["layers"]:
+                self.assertEqual(
+                    set(layer),
+                    {"level", "layer_type", "class_name", "confidence", "matched",
+                     "duration_ms", "thresholds", "details"},
                 )
-            ],
-            evidence_spans=[],
-            label_scores=[],
-            decision_json='{"schema_version":"ark.decision.v1","decision_candidate":{"source":"l2"}}',
-            decided_by="l2",
-        )
-
-        output = _to_dict(result)
-
-        self.assertEqual(output["decision"]["schema_version"], "ark.decision.v1")
-        self.assertEqual(output["decision"]["decision_candidate"]["source"], "l2")
-        self.assertEqual(output["decided_by"], "l2")
-
-    def test_result_to_dict_omits_decision_for_l2_pending(self):
-        result = SimpleNamespace(
-            request_id=None,
-            category="unsafe_action",
-            class_name="benign",
-            confidence=0.0,
-            level="L2",
-            model="unified-v3-threat",
-            duration_ms=1.0,
-            layers=[
-                SimpleNamespace(
-                    level="L2",
-                    layer_type="ntdb_l2",
-                    class_name="benign",
-                    confidence=0.0,
-                    matched=True,
-                    duration_ms=1.0,
-                    thresholds={},
-                    details={},
-                ),
-                SimpleNamespace(
-                    level="L3",
-                    layer_type="l3_pending",
-                    class_name="benign",
-                    confidence=0.0,
-                    matched=False,
-                    duration_ms=0.0,
-                    thresholds={},
-                    details={"queued": True},
-                ),
-            ],
-            evidence_spans=[],
-            label_scores=[],
-            decision_json=None,
-        )
-
-        output = _to_dict(result)
-        self.assertNotIn("decision", output)
-        self.assertNotIn("decided_by", output)
-
-    def test_event_to_dict_omits_decision_for_provisional_and_result_preview(self):
-        result = SimpleNamespace(
-            request_id="rq",
-            category="injection",
-            class_name="attack",
-            confidence=0.91,
-            level="L3",
-            model="test-l3",
-            duration_ms=1.0,
-            layers=[
-                SimpleNamespace(
-                    level="L3",
-                    layer_type="onnx",
-                    class_name="attack",
-                    confidence=0.91,
-                    matched=True,
-                    duration_ms=1.0,
-                    thresholds={},
-                    details={"provisional": True},
+            for span in result["evidence_spans"]:
+                self.assertEqual(
+                    set(span),
+                    {"label", "text", "score", "start_byte", "end_byte", "start_char", "end_char"},
                 )
-            ],
-            evidence_spans=[],
-            label_scores=[],
-            decision_json=None,
-        )
+            for score in result["label_scores"]:
+                self.assertEqual(set(score), {"label", "confidence", "matched"})
+            # The dicts are the ones `json.loads` makes of the Rust result's JSON.
+            self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertTrue(any(result["evidence_spans"] for result in results))
 
+    def test_event_to_dict_passes_the_result_dict_through(self):
+        result = {"request_id": "rq", "category": "injection", "class_name": "attack"}
         for event_type in ("provisional", "result"):
             with self.subTest(event_type=event_type):
-                event = SimpleNamespace(
-                    event_type=event_type,
-                    request_id="rq",
-                    result=result,
-                    completion=None,
-                    failures=[],
-                    progress_json=None,
-                )
+                event = SimpleNamespace(event_type=event_type, request_id="rq", result=result)
 
-                output = _event_to_dict(event)
-
-                self.assertNotIn("decision", output["result"])
+                self.assertIs(_event_to_dict(event)["result"], result)
 
     def test_unsafe_action_scan_returns_dict_results(self):
         scanner = SecurityGateway({"categories": ["unsafe_action"], "max_level": "l1", "download": "never"})
