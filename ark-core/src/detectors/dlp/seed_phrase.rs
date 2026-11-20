@@ -29,6 +29,17 @@ const LISTS: [(&str, &str); 6] = [
     ("french", include_str!("bip39/french.txt")),
 ];
 
+/// Monero's English seed word list (1626 words), one word per line.
+pub const MONERO_ENGLISH: &str = include_str!("rules/data/monero_english.txt");
+
+/// The BIP39 word list of `language` (e.g. `english`), one word per line.
+pub fn word_list(language: &str) -> Option<&'static str> {
+    LISTS
+        .iter()
+        .find(|(name, _)| *name == language)
+        .map(|(_, words)| *words)
+}
+
 /// Words per phrase, longest first.
 const LENGTHS: [usize; 5] = [24, 21, 18, 15, 12];
 
@@ -470,6 +481,13 @@ pub(crate) fn has_seed_context(text: &str, value: Range<usize>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn word_lists_are_served_by_name() {
+        assert_eq!(word_list("english").unwrap().lines().count(), 2048);
+        assert!(word_list("klingon").is_none());
+        assert_eq!(MONERO_ENGLISH.lines().count(), 1626);
+    }
 
     fn entropy(seed: u8, len: usize) -> Vec<u8> {
         (0..len)

@@ -5,7 +5,7 @@ use patronus_ark::{
     assets::{
         category_assets, dedicated_l3_asset, dynamic_pii_assets_present, ntdb_l2_package_assets,
         ntdb_l2_package_assets_present, required_assets_present, DEDICATED_L3_ASSETS,
-        DYNAMIC_PII_ASSET, UNIFIED_L3_ASSET,
+        DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
     },
     SecurityCategory, SecurityLevel,
 };
@@ -74,7 +74,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
     );
     assert_eq!(
         UNIFIED_L3_ASSET.revision,
-        "30ea449339d1075a31fcffa9199ebee4f2cfaf9a"
+        "77888f617584758f904faefd6f38d4cf926f6d5d"
     );
     assert!(UNIFIED_L3_ASSET
         .files
@@ -82,13 +82,9 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
     assert!(UNIFIED_L3_ASSET
         .files
         .contains(&"onnx/onnx_fp16/model_fp16.onnx"));
-    assert_eq!(DEDICATED_L3_ASSETS.len(), 7);
-    // Injection is a Wolf slot: Core pins each selectable model, not this table.
-    let injection = dedicated_l3_asset(SecurityCategory::Injection).unwrap();
-    assert!(injection.files.is_empty());
-    for model in patronus_ark::WolfModel::ALL {
-        assert_eq!(model.spec().revision.len(), 40);
-    }
+    assert_eq!(DEDICATED_L3_ASSETS.len(), 6);
+    // Injection L3 is Wolf: Core pins, prepares and caches it, so ARK holds no entry.
+    assert!(dedicated_l3_asset(SecurityCategory::Injection).is_none());
     for (category, revision) in [
         (
             SecurityCategory::SensitiveDocument,
@@ -96,23 +92,23 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
         ),
         (
             SecurityCategory::ToolClass,
-            "0f425da68608af007dceb56b35ef51992477877e",
+            "68e58725282dcdda106d8388fca47e0802335bc4",
         ),
         (
             SecurityCategory::ToolAction,
-            "8c224609ed22841be6a53ac94e3dc20ee2c73757",
+            "326adc8edfcaa5c65986cab2896c2e69bc3d36cc",
         ),
         (
             SecurityCategory::ToolTags,
-            "374f97cb202ce3097ae0c7844f7ac0febb8f4fec",
+            "4619a3c2c14c36f2e4c8ee5c9d65b1ea7b962cbd",
         ),
         (
             SecurityCategory::Routing,
-            "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
+            "ef7f1e20afda64f06be0e656184ab67c14061e6a",
         ),
         (
             SecurityCategory::UnsafeAction,
-            "f186c09846c325256a262babcd8558d4e5f93dc9",
+            "6520c1f43c716d1210321aecc7681446dd5ce317",
         ),
     ] {
         let asset = dedicated_l3_asset(category).expect("dedicated L3 asset");
@@ -136,31 +132,31 @@ fn classifier_assets_use_the_public_hub_repositories() {
             SecurityCategory::ToolClass,
             "patronus-studio/husky-sight-tool-type-classifier-edge",
             "patronus-studio/husky-sight-tool-type-classifier",
-            "0f425da68608af007dceb56b35ef51992477877e",
+            "68e58725282dcdda106d8388fca47e0802335bc4",
         ),
         (
             SecurityCategory::ToolAction,
             "patronus-studio/husky-paw-tool-action-classifier-edge",
             "patronus-studio/husky-paw-tool-action-classifier",
-            "8c224609ed22841be6a53ac94e3dc20ee2c73757",
+            "326adc8edfcaa5c65986cab2896c2e69bc3d36cc",
         ),
         (
             SecurityCategory::ToolTags,
             "patronus-studio/husky-nose-tool-security-properties-classifier-edge",
             "patronus-studio/husky-nose-tool-security-properties-classifier",
-            "374f97cb202ce3097ae0c7844f7ac0febb8f4fec",
+            "4619a3c2c14c36f2e4c8ee5c9d65b1ea7b962cbd",
         ),
         (
             SecurityCategory::Routing,
             "patronus-studio/panther-read-intent-classifier-edge",
             "patronus-studio/panther-read-intent-classifier",
-            "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
+            "ef7f1e20afda64f06be0e656184ab67c14061e6a",
         ),
         (
             SecurityCategory::UnsafeAction,
             "patronus-studio/wolf-defender-threat-classifier",
             "patronus-studio/wolf-defender-threat-classifier",
-            "f186c09846c325256a262babcd8558d4e5f93dc9",
+            "6520c1f43c716d1210321aecc7681446dd5ce317",
         ),
     ] {
         let l3 = dedicated_l3_asset(category).expect("dedicated L3 asset");
@@ -187,7 +183,6 @@ fn classifier_assets_use_the_public_hub_repositories() {
 fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
     let migrated = [
         UNIFIED_L3_ASSET,
-        dedicated_l3_asset(SecurityCategory::Injection).unwrap(),
         dedicated_l3_asset(SecurityCategory::SensitiveDocument).unwrap(),
         dedicated_l3_asset(SecurityCategory::UnsafeAction).unwrap(),
     ];
@@ -197,7 +192,6 @@ fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
         migrated.map(|asset| asset.repo),
         [
             "patronus-studio/lion-warden-ai-security-classifier",
-            "patronus-studio/wolf-defender-prompt-injection-small",
             "patronus-studio/orca-sonar-document-classifier",
             "patronus-studio/wolf-defender-threat-classifier",
         ]
@@ -210,13 +204,13 @@ fn l3_model_categories_have_required_l3_assets() {
     assert!(assets
         .iter()
         .any(|asset| asset.level == SecurityLevel::L3 && asset.required));
-    // Injection L3 is Wolf: Core prepares the configured model in the dedicated slot.
+    // Injection L3 is Wolf: Core prepares the configured model.
     assert!(
         category_assets(SecurityCategory::Injection, SecurityLevel::L3)
             .iter()
             .all(|asset| asset.level != SecurityLevel::L3)
     );
-    assert!(dedicated_l3_asset(SecurityCategory::Injection).is_some());
+    assert!(dedicated_l3_asset(SecurityCategory::Injection).is_none());
 
     for category in [
         SecurityCategory::ToolClass,
@@ -313,7 +307,7 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
     );
     assert!(tool_tags.iter().all(|asset| {
         asset.repo == "patronus-studio/husky-nose-tool-security-properties-classifier"
-            && asset.revision == "66bb4bdd76f57aacba7a4e39e0368e35701b2244"
+            && asset.revision == "f5736c09bcb6f75f1af3604706a1ee5c7e39d745"
     }));
     assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
     assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
@@ -583,4 +577,18 @@ mod asset_downloads {
         let err = ntdb_l2_package_manifest_files(&manifest).unwrap_err();
         assert!(err.to_string().contains("invalid NTDB manifest file path"));
     }
+}
+
+#[test]
+fn injection_l2_package_uses_cores_wolf_small_pin() {
+    // One pin per shared model: the L2 package comes from Core's Wolf Small release.
+    let small = patronus_ark::WolfModel::Small.spec();
+    let package = NTDB_L2_PACKAGE_MANIFEST
+        .iter()
+        .find(|asset| asset.category == SecurityCategory::Injection)
+        .unwrap();
+    assert_eq!(
+        (package.repo, package.revision),
+        (small.repository, small.revision)
+    );
 }

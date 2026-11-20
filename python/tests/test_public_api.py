@@ -12,8 +12,6 @@ from patronus_ark import (
     normalize_text,
 )
 
-# Pinned `cat-shell-risk-commander` release (`SHELL_REVISION` in ark-core).
-SHELL_REVISION = "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f"
 NO_KUBECTL_DELETE = (
     '@id("user.no_kubectl_delete")\n@decision("block")\n'
     'forbid (principal, action == Action::"segment", resource)\n'
@@ -783,7 +781,6 @@ class PublicApiTests(unittest.TestCase):
             shutil.copytree(os.environ["PATRONUS_SHELL_RISK_BUNDLE"], bundle)
             if not (bundle / "LICENSE").is_file():
                 self.skipTest("the gateway needs the complete release, LICENSE included")
-            (bundle / ".patronus-revision").write_text(SHELL_REVISION)
             policies = Path(tmp) / "policies"
             policies.mkdir()
             (policies / "kubectl.cedar").write_text(NO_KUBECTL_DELETE)

@@ -106,12 +106,12 @@ def test_shared_wolf_metadata_is_resolved_in_asset_docs():
     assert not [asset for asset in assets if asset.category == "Injection" and asset.level == "L3"]
     package = next(p for p in GENERATE_DOCS.parse_ntdb_packages() if p.category == "Injection")
     assert package.repo == "patronus-studio/wolf-defender-prompt-injection-small"
-    assert package.revision == "142fadc5474163d4c483cb761d5a6b02e3aa1741"
+    assert package.revision == "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
     models = "\n".join(GENERATE_DOCS.wolf_model_lines())
     for repo in ("wolf-defender-prompt-injection", "wolf-defender-prompt-injection-small", "wolf-defender-prompt-injection-edge"):
         assert f"`patronus-studio/{repo}`" in models
     page = GENERATE_DOCS.generate_assets_doc(assets, GENERATE_DOCS.load_snapshot())
-    assert "patronus_ark_core::warmup::" not in page and "WOLF_L2_" not in page
+    assert "patronus_ark_core::warmup::" not in page and "WOLF_SMALL" not in page
 
 
 def test_pii_default_names_the_opt_in_bare_form():

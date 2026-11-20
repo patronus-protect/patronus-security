@@ -11,6 +11,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Asset manifest change:** Ark and Ark Core now share their models through Core. Core holds the
+  one pin, download and cache layout for Wolf Defender and Cat, and a default model cache root
+  (`warmup::default_cache_root()`, the same `<user cache>/patronus_ark` Ark used). Ark keeps Wolf
+  in Core's layout `<model_dir>/wolf/<model id>` (was `<model_dir>/injection/l3`), so the selected
+  Wolf model downloads once more; delete the old `injection/l3` directory afterwards. Cat stays in
+  `shell_command/cat_shell_risk_commander` and is now prepared by Core, which replaces a bundle
+  whose manifest is not the pinned one. Removed from the Rust API: `assets::SHELL_COMMAND_ASSET`,
+  `shell_command_assets_present`, `download_shell_command_assets` and `types::ark_wolf_options`;
+  use `warmup::{shell_bundle_dir, shell_assets_present, prepare_shell_assets}` and
+  `WolfServingProfile::ARK`. `dedicated_l3_assets_present` and `download_dedicated_l3_assets` no
+  longer take a Wolf selection; Injection has no `DEDICATED_L3_ASSETS` entry.
+- **Model pins updated:** the injection L2 package now uses Core's Wolf Defender Small pin, and
+  Cat, GLiNER, Lion, the husky and panther models, the threat model and the sensitive-document L2
+  package move to their current releases. These releases change no file Ark loads except Cat's
+  manifest (two documentation files added), so detections stay the same; cached bundles download
+  once more.
+
 - **Detection change (Ark Core):** Wolf Defender now runs in Ark Core with the model's published
   settings (Edge/Small: threshold 0.5, 2048-token windows with 64 overlap), read from the bundle's
   `POOLING.json`, which managed downloads now fetch; a bundle without it uses these values. A
@@ -80,6 +97,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and a producer left without evidence reports `benign`. Unknown values are rejected.
 
 ### Added
+
+- Ark Core: `WolfServingProfile`, a named Wolf serving choice (window sizes and decision rule);
+  `WolfServingProfile::ARK` is the full gateway's 256/0 windows detecting at `>= 0.93`.
+  `detectors::dlp::seed_phrase::word_list` and `MONERO_ENGLISH` expose the seed word lists.
 
 - One analysis framework for every category, opt-in: each category is an analysis module whose
   layers (L1 rules and an optional L1 text model, then L2, then L3) can run as a cascade, where a

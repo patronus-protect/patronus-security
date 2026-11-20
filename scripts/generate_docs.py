@@ -112,9 +112,31 @@ def parse_assets() -> list[Asset]:
                 required=_field(block, "required") == "true",
             )
         )
-    for const_name, level in (("DYNAMIC_PII_ASSET", "L3"), ("SHELL_COMMAND_ASSET", "L1")):
-        assets.extend(_pipeline_bundle_assets(full_source, const_name, level))
+    assets.extend(_pipeline_bundle_assets(full_source, "DYNAMIC_PII_ASSET", "L3"))
+    assets.extend(_core_shell_assets())
     return assets
+
+
+def _core_shell_assets() -> list[Asset]:
+    """Cat's release files, pinned and laid out by `ark-core/src/warmup.rs`."""
+    constants = (ROOT / "ark-core/src/warmup.rs").read_text()
+    repo = re.search(r'pub const SHELL_REPOSITORY: &str = "([^"]+)";', constants).group(1)
+    files_block = constants.split("pub const SHELL_FILES: &[&str] = &[", 1)[1].split("];", 1)[0]
+    destination = re.search(
+        r'pub fn shell_bundle_dir\(root: &Path\) -> PathBuf \{\s*root\.join\("([^"]+)"\)', constants
+    ).group(1)
+    return [
+        Asset(
+            category="ShellCommand",
+            level="L1",
+            repo=repo,
+            source_path=filename,
+            destination_path=f"{destination}/{filename}",
+            required=True,
+            bundle=True,
+        )
+        for filename in re.findall(r'"([^"]+)"', files_block)
+    ]
 
 
 def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> list[Asset]:
@@ -178,7 +200,7 @@ def wolf_model_lines() -> list[str]:
     lines = [
         "## Wolf Defender Models",
         "",
-        "Dedicated injection L3 runs one Wolf Defender model. Choose it with `pipeline.wolf.model` (Ark API), `wolf_model` (Python) or `WolfConfig.model` (Core); the injection L2 package above stays on its own pin.",
+        "Dedicated injection L3 runs one Wolf Defender model. Choose it with `pipeline.wolf.model` (Ark API), `wolf_model` (Python) or `WolfConfig.model` (Core); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small pin.",
         "",
         "| Model | Repository | Revision |",
         "| --- | --- | --- |",
@@ -203,11 +225,16 @@ def _field(block: str, name: str) -> str:
     if not match:
         raise ValueError(f"Missing {name} in AssetSpec block")
     value = match.group(1).strip()
-    # A string constant of `specs.rs` itself, such as the Wolf L2 pin.
+    # A string constant of `specs.rs` itself, such as the injection model name.
     specs = (ROOT / "rust/src/assets/specs.rs").read_text()
     local = re.search(rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*"([^"\n]+)";', specs, re.M)
     if local:
         return json.dumps(local.group(1))
+    # Core's Wolf Small pin, which the injection L2 package shares.
+    if value.startswith("WOLF_SMALL."):
+        source = (ROOT / "ark-core/src/wolf/models.rs").read_text()
+        small = source.split("model: WolfModel::Small,", 1)[1].split("\n    }", 1)[0]
+        return _field(small, value.removeprefix("WOLF_SMALL."))
     # Runtime and documentation use the same official model metadata.
     if "patronus_ark_core::warmup::" in value:
         constants = (ROOT / "ark-core/src/warmup.rs").read_text()
@@ -870,7 +897,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## L3 Strategy",
         "",
-        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`; GLiNER remains separate in both strategies.",
+        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `77888f617584758f904faefd6f38d4cf926f6d5d`; GLiNER remains separate in both strategies.",
         "",
         "The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See [Models & the NTDB format](concepts/models-and-ntdb.md) for the current tensor and runtime contracts.",
         "",

@@ -450,7 +450,8 @@ fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecution
         .map(|value| {
             let options: WolfExecutionOptions = serde_json::from_str(value)
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-            patronus_ark::types::ark_wolf_options(options)
+            patronus_ark::WolfServingProfile::ARK
+                .fill(options)
                 .validate()
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
             Ok(options)

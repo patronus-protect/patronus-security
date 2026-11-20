@@ -179,7 +179,7 @@ fn hf_shell_command_download_warmup_smoke() {
         true,
     );
     scanner.warmup().unwrap();
-    let bundle = dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
+    let bundle = patronus_ark_core::warmup::shell_bundle_dir(&dir);
     for file in [
         "manifest.json",
         "config.json",
@@ -390,10 +390,10 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     scanner.set_execution_gates(gates);
 
     scanner.warmup().unwrap();
-    assert!(model_dir.join("injection/l3/tokenizer.json").exists());
-    assert!(model_dir
-        .join("injection/l3/onnx/int8_int4_embeddings/model.onnx")
-        .exists());
+    let wolf =
+        patronus_ark_core::warmup::wolf_bundle_dir(&model_dir, patronus_ark::WolfModel::Small);
+    assert!(wolf.join("tokenizer.json").exists());
+    assert!(wolf.join("onnx/int8_int4_embeddings/model.onnx").exists());
     assert!(model_dir
         .join("sensitive_documents/prompts/tokenizer.json")
         .exists());

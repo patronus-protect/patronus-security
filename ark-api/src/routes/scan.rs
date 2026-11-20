@@ -805,14 +805,9 @@ mod tests {
             std::process::id(),
             Instant::now().elapsed().as_nanos()
         ));
-        let bundle = model_dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
+        let bundle = patronus_ark::warmup::shell_bundle_dir(&model_dir);
         let manifest =
             patronus_ark::detectors::shell::testing::write_synthetic_bundle(&bundle, None).unwrap();
-        std::fs::write(
-            bundle.join(".patronus-revision"),
-            patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
-        )
-        .unwrap();
 
         let (mut config, mut key) = config_and_key();
         config.categories = vec![SecurityCategory::ShellCommand];

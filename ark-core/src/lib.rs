@@ -21,7 +21,7 @@ pub mod aggregation;
 pub mod attack_classes;
 pub mod cascade;
 mod wolf_options;
-pub use wolf_options::WolfExecutionOptions;
+pub use wolf_options::{WolfExecutionOptions, WolfServingProfile};
 #[cfg(feature = "wolf")]
 pub mod ml;
 #[cfg(feature = "wolf")]

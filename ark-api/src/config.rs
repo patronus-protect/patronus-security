@@ -266,7 +266,8 @@ impl RawConfig {
             .l3_strategy
             .parse::<L3Strategy>()
             .map_err(|error| ConfigError::Invalid(format!("pipeline.l3_strategy: {error}")))?;
-        patronus_ark::types::ark_wolf_options(self.pipeline.wolf_options)
+        patronus_ark::WolfServingProfile::ARK
+            .fill(self.pipeline.wolf_options)
             .validate()
             .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
         self.pipeline
