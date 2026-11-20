@@ -125,6 +125,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **L1 models in Ark's cascade:** Ark's execution gates accept
+  `cascade.modules.<category>.l1_model` like Ark Core; the model runs on what the heuristic
+  escalates and gives the same decision as in Core. A model loads once per process.
 - Ark Core: `WolfServingProfile`, a named Wolf serving choice (window sizes and decision rule);
   `WolfServingProfile::ARK` is the full gateway's 256/0 windows detecting at `>= 0.93`.
   `detectors::dlp::seed_phrase::word_list` and `MONERO_ENGLISH` expose the seed word lists.
