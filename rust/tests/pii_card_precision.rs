@@ -11,12 +11,13 @@
 
 use std::path::Path;
 
-use patronus_ark::detectors::pii::validators::{
-    self, card_brand, payment_card, CardBrand, CARD_IIN_RANGES,
-};
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::pii::validators, detectors::pii::validators::card_brand,
+    detectors::pii::validators::payment_card, detectors::pii::validators::CardBrand,
+    detectors::pii::validators::CARD_IIN_RANGES,
 };
 use serde::Deserialize;
 
@@ -30,7 +31,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -45,6 +46,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
 
 fn cards(text: &str, mode: ScoreMode) -> Vec<String> {
     scan(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .filter(|span| span.label == "CREDITCARD")
@@ -356,6 +358,7 @@ fn every_luhn_valid_card_of_the_goldens_passes_the_table() {
 
 fn labels(text: &str, mode: ScoreMode) -> Vec<String> {
     scan(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .map(|span| span.label)

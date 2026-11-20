@@ -3,9 +3,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use patronus_ark::{
-    detectors::{dlp::dlp::DlpPipeline, validators::crc32_base62},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DlpPipeline, detectors::validators::crc32_base62,
+    SecurityCategory,
 };
 
 fn scan(text: &str) -> SecurityScanResult {
@@ -20,7 +22,7 @@ fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
         false,
     );
     scanner.warmup().unwrap();
-    let mut gates = patronus_ark::ScanGateMatrix::all_enabled();
+    let mut gates = patronus_ark_core::cascade::ScanGateMatrix::all_enabled();
     gates.native.explain = explain;
     scanner.set_execution_gates(gates);
     scanner
@@ -830,7 +832,7 @@ fn provider_prefix_does_not_suppress_a_real_password() {
         None,
         false,
     );
-    let mut gates = patronus_ark::ScanGateMatrix::default();
+    let mut gates = patronus_ark_core::cascade::ScanGateMatrix::default();
     gates.set_rule("dlp_github_token", false);
     scanner.set_execution_gates(gates);
     let results = scanner.scan_category(SecurityCategory::Dlp, &format!("password = {token}"));

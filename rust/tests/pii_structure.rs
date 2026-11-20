@@ -10,10 +10,9 @@
 //! scores as field, a counter-context key (order, invoice … number) as counter, and
 //! a context-bound rule takes its required context from the key.
 
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -25,7 +24,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -49,6 +48,7 @@ fn matched_rules(text: &str, mode: ScoreMode) -> Vec<Value> {
 /// `(label, text)` of every evidence span.
 fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     pii_result(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .map(|span| (span.label, span.text))

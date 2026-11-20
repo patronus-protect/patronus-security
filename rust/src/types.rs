@@ -198,32 +198,17 @@ pub struct QueuedSecurityScanResult {
 }
 
 #[derive(Debug, Clone)]
-/// Public scan result returned by `SecurityGateway` methods.
+/// Public scan result returned by `SecurityGateway` methods: Core's
+/// [`patronus_ark_core::NativeResult`] (category, class, confidence, level,
+/// model, layers, evidence, label scores, decision envelope) plus what only
+/// the layered gateway reports. It dereferences to the Core result.
 pub struct SecurityScanResult {
-    /// Category that was scanned, for example `injection` or `dlp`.
-    pub category: String,
-    /// Stable class label for the final decision.
-    pub class_name: String,
-    /// Final confidence score in the inclusive range `0.0..=1.0` when available.
-    pub confidence: f64,
-    /// Highest layer that contributed the final decision.
-    pub level: String,
-    /// Model or native scanner name that produced the final decision.
-    pub model: String,
-    /// Sum of recorded layer durations, in milliseconds.
-    pub duration_ms: f64,
-    /// Ordered layer evidence that explains the final decision.
-    pub layers: Vec<LayerResult>,
+    /// The result fields Ark Core defines; Ark serializes them flat.
+    pub native: patronus_ark_core::NativeResult,
     /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
     /// before results are published outside the gateway.
     #[doc(hidden)]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
-    /// Exact entity evidence returned by span-producing pipelines.
-    pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
-    /// Per-label scores for multi-label classifier outputs.
-    pub label_scores: Vec<LabelScore>,
-    /// Structured classifier decision contract for policy consumers.
-    pub decision: Option<DecisionEnvelope>,
     /// Stage that gave the category its final answer (`heuristic` for an L1
     /// result, `l2`, `l3`); `None` while a later layer still answers.
     pub decided_by: Option<Stage>,
@@ -232,6 +217,20 @@ pub struct SecurityScanResult {
     /// at a lowered `detect_threshold` shows here even when the native class
     /// stays `safe`. `None` otherwise.
     pub l1_outcome: Option<StageOutcome>,
+}
+
+impl std::ops::Deref for SecurityScanResult {
+    type Target = patronus_ark_core::NativeResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.native
+    }
+}
+
+impl std::ops::DerefMut for SecurityScanResult {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.native
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -568,32 +567,16 @@ impl Default for ScanExecution {
     }
 }
 
-pub use patronus_ark_core::cascade::{
-    ConditionalPipelineGate, EffectiveL3PipelinePolicy, GateExpression, GateResult,
-    L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
-    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, LayerExecution, MetadataCondition,
-    ResultCondition, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
+pub(crate) use patronus_ark_core::cascade::{
+    LayerExecution, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
 };
 
-pub use patronus_ark_core::{
-    DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, EvaluationResult, LabelScore, LayerResult,
-    SecurityCategory,
-};
+pub(crate) use patronus_ark_core::SecurityCategory;
 
 impl From<patronus_ark_core::NativeResult> for SecurityScanResult {
-    fn from(value: patronus_ark_core::NativeResult) -> Self {
+    fn from(native: patronus_ark_core::NativeResult) -> Self {
         Self {
-            category: value.category,
-            class_name: value.class_name,
-            confidence: value.confidence,
-            level: value.level,
-            model: value.model,
-            duration_ms: value.duration_ms,
-            layers: value.layers,
-            evidence_spans: value.evidence_spans,
-            label_scores: value.label_scores,
-            decision: value.decision,
+            native,
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
@@ -601,24 +584,7 @@ impl From<patronus_ark_core::NativeResult> for SecurityScanResult {
     }
 }
 
-impl From<SecurityScanResult> for patronus_ark_core::NativeResult {
-    fn from(value: SecurityScanResult) -> Self {
-        Self {
-            category: value.category,
-            class_name: value.class_name,
-            confidence: value.confidence,
-            level: value.level,
-            model: value.model,
-            duration_ms: value.duration_ms,
-            layers: value.layers,
-            evidence_spans: value.evidence_spans,
-            label_scores: value.label_scores,
-            decision: value.decision,
-        }
-    }
-}
-
-pub use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
+pub(crate) use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
 
 #[cfg(test)]
 mod tests {

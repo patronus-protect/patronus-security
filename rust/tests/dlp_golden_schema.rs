@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use patronus_ark::detectors::dlp::dlp::DLP_PATTERNS;
+use patronus_ark_core::detectors::dlp::dlp::DLP_PATTERNS;
 use serde::Deserialize;
 
 const LANGUAGES: [&str; 2] = ["de", "en"];

@@ -1,10 +1,9 @@
 use patronus_ark::{
-    gliner_onnx_engine::GlinerEngine,
-    ml::{
-        ntdb_executor::NtdbExecutor,
-        onnx::{warmup_runtime, OnnxTextClassifier},
-    },
-    ExecutionBackend, NtdbOperatingPoint, OnnxRuntimeOptions,
+    gliner_onnx_engine::GlinerEngine, ml::ntdb_executor::NtdbExecutor, NtdbOperatingPoint,
+};
+use patronus_ark_core::{
+    ml::text_classifier::OnnxTextClassifier, onnx::warmup_runtime, ExecutionBackend,
+    OnnxRuntimeOptions,
 };
 use std::{io, path::Path, process::Command, time::Instant};
 

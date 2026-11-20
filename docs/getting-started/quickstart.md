@@ -28,7 +28,8 @@ work on its own background workers.
 === "Rust"
 
     ```rust
-    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
     let mut scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Injection, SecurityCategory::Dlp, SecurityCategory::Pii],
@@ -175,7 +176,8 @@ those models are held **resident in RAM**, governed by an idle-TTL policy
 === "Rust"
 
     ```rust
-    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
     let mut scanner = SecurityGateway::with_download_categories(
         vec![SecurityCategory::Injection],

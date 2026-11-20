@@ -6,21 +6,25 @@
 //! stress it, each rule finds exactly the matches of `Regex::captures_iter`.
 //! Token values are synthetic and assembled at test time.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
 use patronus_ark::{
-    detectors::dlp::{
-        dlp::{DlpPattern, RuleMeta, DLP_PATTERNS},
-        prefilter::{
-            has_short_probes, keyword_lead, keywords_are_required, required_value_run, rule_gate,
-            RuleGate, RulePrefilter, ValueClass, ValueRun, FOLDS_TO_ASCII,
-        },
-    },
-    golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe, SplitMix64},
+    golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
+    golden_recipes::SecretRecipe, golden_recipes::SplitMix64,
+};
+
+use patronus_ark_core::{
+    detectors::dlp::dlp::DlpPattern, detectors::dlp::dlp::RuleMeta,
+    detectors::dlp::dlp::DLP_PATTERNS, detectors::dlp::prefilter::has_short_probes,
+    detectors::dlp::prefilter::keyword_lead, detectors::dlp::prefilter::keywords_are_required,
+    detectors::dlp::prefilter::required_value_run, detectors::dlp::prefilter::rule_gate,
+    detectors::dlp::prefilter::RuleGate, detectors::dlp::prefilter::RulePrefilter,
+    detectors::dlp::prefilter::ValueClass, detectors::dlp::prefilter::ValueRun,
+    detectors::dlp::prefilter::FOLDS_TO_ASCII,
 };
 use regex::Regex;
 use serde::Deserialize;

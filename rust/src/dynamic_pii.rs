@@ -519,7 +519,7 @@ fn validate_threshold(name: &str, threshold: f32) -> Result<(), String> {
     }
 }
 
-pub use patronus_ark_core::EvidenceSpan;
+pub(crate) use patronus_ark_core::EvidenceSpan;
 
 #[cfg(test)]
 mod tests {

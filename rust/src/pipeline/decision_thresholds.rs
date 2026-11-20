@@ -472,28 +472,30 @@ mod tests {
 
     fn result(class_name: &str, confidence: f64, level: &str) -> SecurityScanResult {
         SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: class_name.to_string(),
-            confidence,
-            level: level.to_string(),
-            model: "test".to_string(),
-            duration_ms: 0.0,
-            layers: vec![LayerResult {
-                level: level.to_string(),
-                layer_type: "test".to_string(),
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
                 class_name: class_name.to_string(),
                 confidence,
-                matched: true,
+                level: level.to_string(),
+                model: "test".to_string(),
                 duration_ms: 0.0,
-                thresholds: HashMap::new(),
-                details: HashMap::new(),
-            }],
+                layers: vec![LayerResult {
+                    level: level.to_string(),
+                    layer_type: "test".to_string(),
+                    class_name: class_name.to_string(),
+                    confidence,
+                    matched: true,
+                    duration_ms: 0.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::new(),
+                }],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 
@@ -547,6 +549,7 @@ mod tests {
             assert_eq!(selected.class_name, expected);
             assert_eq!(selected.level, "L3");
             assert!(selected
+                .native
                 .decision
                 .unwrap()
                 .candidates
@@ -612,6 +615,7 @@ mod tests {
         assert!(!details.contains_key("arbitration_union_raw_confidence"));
 
         let decision = selected
+            .native
             .decision
             .expect("decision envelope should be present");
         assert_eq!(decision.candidates.len(), 3);
@@ -665,6 +669,7 @@ mod tests {
         );
 
         let decision = selected
+            .native
             .decision
             .expect("classifier result should carry decision envelope");
         let candidate = decision
@@ -701,6 +706,7 @@ mod tests {
         );
 
         let decision = selected
+            .native
             .decision
             .expect("classifier result should carry decision envelope");
         let candidate = decision
@@ -722,34 +728,38 @@ mod tests {
         let selected = arbitrate_l3_l2(
             "routing",
             Some(SecurityScanResult {
-                category: "routing".to_string(),
-                class_name: "tool_operation_request".to_string(),
-                confidence: 0.40,
-                level: "L3".to_string(),
-                model: "test".to_string(),
-                duration_ms: 0.0,
-                layers: Vec::new(),
+                native: patronus_ark_core::NativeResult {
+                    category: "routing".to_string(),
+                    class_name: "tool_operation_request".to_string(),
+                    confidence: 0.40,
+                    level: "L3".to_string(),
+                    model: "test".to_string(),
+                    duration_ms: 0.0,
+                    layers: Vec::new(),
+                    evidence_spans: Vec::new(),
+                    label_scores: Vec::new(),
+                    decision: None,
+                },
                 internal_l2_chunk_outputs: Vec::new(),
                 decided_by: None,
                 l1_outcome: None,
-                evidence_spans: Vec::new(),
-                label_scores: Vec::new(),
-                decision: None,
             }),
             SecurityScanResult {
-                category: "routing".to_string(),
-                class_name: "code_development_request".to_string(),
-                confidence: 0.40,
-                level: "L2".to_string(),
-                model: "test".to_string(),
-                duration_ms: 0.0,
-                layers: Vec::new(),
+                native: patronus_ark_core::NativeResult {
+                    category: "routing".to_string(),
+                    class_name: "code_development_request".to_string(),
+                    confidence: 0.40,
+                    level: "L2".to_string(),
+                    model: "test".to_string(),
+                    duration_ms: 0.0,
+                    layers: Vec::new(),
+                    evidence_spans: Vec::new(),
+                    label_scores: Vec::new(),
+                    decision: None,
+                },
                 internal_l2_chunk_outputs: Vec::new(),
                 decided_by: None,
                 l1_outcome: None,
-                evidence_spans: Vec::new(),
-                label_scores: Vec::new(),
-                decision: None,
             },
             NtdbOperatingPoint::BestF1,
         );
@@ -978,7 +988,7 @@ mod tests {
             NtdbOperatingPoint::BestF1,
         )
         .unwrap();
-        let envelope = selected.decision.unwrap();
+        let envelope = selected.decision.clone().unwrap();
         assert_eq!(selected.class_name, "benign");
         assert_eq!(envelope.recommendation.final_arbitration, "default");
         assert_eq!(envelope.decision_candidate.unwrap().source, "union");
@@ -995,7 +1005,7 @@ mod tests {
             ),
             NtdbOperatingPoint::BestF1,
         );
-        let envelope = selected.decision.unwrap();
+        let envelope = selected.decision.clone().unwrap();
         assert_eq!(envelope.recommendation.final_arbitration, "union");
         assert_eq!(
             envelope.decision_candidate.as_ref().unwrap().source,

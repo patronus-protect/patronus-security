@@ -1,6 +1,6 @@
 //! Keep repository research metadata aligned with the shared native table.
 //! This repository-only check stays outside the independently packaged Core.
-use patronus_ark::detectors::dlp::documented_reference_metadata;
+use patronus_ark_core::detectors::dlp::documented_reference_metadata;
 
 #[test]
 fn table_mirrors_research_documented_values_yaml() {

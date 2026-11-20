@@ -9,17 +9,22 @@
 //! `balanced` and `recall`, `matched_rules[].context` explains every score:
 //! bonus, penalty and the deciding lexicon term with its side and distance.
 
-use patronus_ark::detectors::context::{Evidence, Side, AFTER_WINDOW, BEFORE_WINDOW};
-use patronus_ark::detectors::lexical_anchors::LexicalAnchorScanner;
-use patronus_ark::detectors::pii::{
-    context::{self, COUNTER_LEXICON, SUPPORT_LEXICON},
-    pii::{PiiPattern, PII_PATTERNS},
-    validators,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::lexical_anchors::LexicalAnchorScanner;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::context::Evidence, detectors::context::Side, detectors::context::AFTER_WINDOW,
+    detectors::context::BEFORE_WINDOW,
 };
-use patronus_ark::detectors::score::{self, Context, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS};
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark_core::{
+    detectors::pii::context, detectors::pii::context::COUNTER_LEXICON,
+    detectors::pii::context::SUPPORT_LEXICON, detectors::pii::pii::PiiPattern,
+    detectors::pii::pii::PII_PATTERNS, detectors::pii::validators,
+};
+use patronus_ark_core::{
+    detectors::score, detectors::score::Context, detectors::score::COUNTER_CONTEXT_POINTS,
+    detectors::score::FIELD_CONTEXT_POINTS,
 };
 use serde::Deserialize;
 
@@ -33,7 +38,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -48,6 +53,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
 
 fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String, f64)> {
     pii_result(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .map(|span| (span.label, span.text, span.score))

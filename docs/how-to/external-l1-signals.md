@@ -12,9 +12,7 @@ calibrated native score.
 ## Implement the trait
 
 ```rust
-use patronus_ark::{
-    EvaluationResult, ExternalL1Detector, ExternalL1Input, SecurityCategory, SecurityLevel,
-};
+use patronus_ark_core::{EvaluationResult, cascade::ExternalL1Detector, cascade::ExternalL1Input, SecurityCategory, cascade::SecurityLevel};
 
 struct InternalTokenRule;
 

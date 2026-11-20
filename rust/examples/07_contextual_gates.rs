@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::time::Duration;
 
-use patronus_ark::{
-    ConditionalPipelineGate, DynamicPiiConfig, GateExpression, MetadataCondition,
-    QueuedSecurityEvent, ResultCondition, ScanGateMatrix, SecurityCategory, SecurityGateway,
-    SecurityLevel,
+use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway};
+
+use patronus_ark_core::{
+    cascade::ConditionalPipelineGate, cascade::GateExpression, cascade::MetadataCondition,
+    cascade::ResultCondition, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

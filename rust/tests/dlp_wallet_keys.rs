@@ -12,16 +12,18 @@
 #[path = "support/base58check.rs"]
 mod base58check;
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use base58check::base58check_encode;
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    detectors::validators::crc32,
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult,
+};
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, detectors::validators::crc32,
+    SecurityCategory,
 };
 
 fn generators() -> &'static GeneratorSet {
@@ -169,7 +171,7 @@ fn checksum_valid_strings_without_an_extended_private_key_are_no_key() {
 
 #[test]
 fn a_wrong_checksum_character_or_a_public_key_is_no_key() {
-    let alphabet: Vec<char> = patronus_ark::detectors::validators::BASE58
+    let alphabet: Vec<char> = patronus_ark_core::detectors::validators::BASE58
         .chars()
         .collect();
     for seed in 0..8 {

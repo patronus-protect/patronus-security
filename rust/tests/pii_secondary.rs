@@ -14,11 +14,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use patronus_ark::detectors::pii::{overlap::SECONDARY_IN_IBAN, validators};
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{detectors::pii::overlap::SECONDARY_IN_IBAN, detectors::pii::validators};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -30,7 +29,7 @@ fn scanner(mode: ScoreMode) -> SecurityGateway {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },

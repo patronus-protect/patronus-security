@@ -1,4 +1,5 @@
-use patronus_ark::{L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{L3Strategy, SecurityGateway};
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -13,18 +13,18 @@
 //! (`gloas-`). Tokens come from the golden generator or get their checksum
 //! here at test time; no checksum-valid token is checked in.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
-use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{
-        dlp::dlp::DLP_PATTERNS,
-        validators::{crc32_base62, BASE62},
-    },
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult,
+};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::validators::crc32_base62, detectors::validators::BASE62, SecurityCategory,
 };
 
 /// Generators of `dlp_gitlab_token`, one per documented prefix.
@@ -126,7 +126,7 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                native: patronus_ark::NativeGates {
+                native: patronus_ark_core::native::NativeGates {
                     dlp_mode: mode,
                     ..Default::default()
                 },

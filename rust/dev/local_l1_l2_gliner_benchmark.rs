@@ -1,7 +1,7 @@
 use patronus_ark::{
-    gliner_onnx_engine::GlinerEngine, ExecutionBackend, NtdbOperatingPoint, SecurityCategory,
-    SecurityGateway, SecurityLevel, SecurityScanResult,
+    gliner_onnx_engine::GlinerEngine, NtdbOperatingPoint, SecurityGateway, SecurityScanResult,
 };
+use patronus_ark_core::{cascade::SecurityLevel, ExecutionBackend, SecurityCategory};
 use serde::Deserialize;
 use serde_json::json;
 use std::{fs, path::Path, process::Command, time::Instant};

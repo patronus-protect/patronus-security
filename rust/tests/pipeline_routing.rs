@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use patronus_ark::detectors::validators::crc32_base62;
-use patronus_ark::{
-    EvaluationResult, ExternalL1Detector, ExternalL1Input, L3SchedulerPolicy, QueuedSecurityEvent,
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityRequestCompletion,
+use patronus_ark::{QueuedSecurityEvent, SecurityGateway, SecurityRequestCompletion};
+use patronus_ark_core::detectors::validators::crc32_base62;
+use patronus_ark_core::{
+    cascade::ExternalL1Detector, cascade::ExternalL1Input, cascade::L3SchedulerPolicy,
+    cascade::ScanGateMatrix, cascade::SecurityLevel, EvaluationResult, SecurityCategory,
 };
 use rayon::prelude::*;
 
@@ -195,7 +196,7 @@ fn constructors_wire_native_category_pipelines_without_warmup() {
     let models = scanner
         .scan_all("Contact jane.doe@example.com about the deployment")
         .into_iter()
-        .map(|result| result.model)
+        .map(|result| result.native.model)
         .collect::<std::collections::HashSet<_>>();
     for model in [
         "native:injection_l1",
@@ -618,7 +619,7 @@ fn rule_gates_filter_individual_dlp_and_injection_rules() {
     let body = concat!("K7QZM2XWP9RDT4HB", "N8YC3JLA6VFE0G");
     let dlp_results = dlp.scan_all(&format!(
         "password = CorrectHorseBatteryStaple\nghp_{body}{}",
-        patronus_ark::detectors::validators::crc32_base62(body)
+        patronus_ark_core::detectors::validators::crc32_base62(body)
     ));
     let native_dlp = dlp_results
         .iter()
@@ -1027,7 +1028,7 @@ fn native_dlp_multiple_evidence_spans_keep_unicode_offsets() {
         .expect("native DLP result must be present");
 
     assert_eq!(result.evidence_spans.len(), 2);
-    for span in result.evidence_spans {
+    for span in result.native.evidence_spans {
         assert_eq!(text.get(span.start_byte..span.end_byte), Some(&*span.text));
         assert_eq!(text[..span.start_byte].chars().count(), span.start_char);
         assert_eq!(text[..span.end_byte].chars().count(), span.end_char);
@@ -1038,9 +1039,10 @@ mod l3_worker_streaming {
     use std::time::{Duration, Instant};
 
     use patronus_ark::{
-        QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel,
-        SecurityRequestCompletion, SecurityRequestState,
+        QueuedSecurityEvent, SecurityGateway, SecurityRequestCompletion, SecurityRequestState,
     };
+
+    use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
     use crate::consume_for;
 
@@ -1104,8 +1106,8 @@ mod l3_worker_streaming {
             false,
         );
 
-        let gates = patronus_ark::ScanGateMatrix {
-            native: patronus_ark::NativeGates {
+        let gates = patronus_ark_core::cascade::ScanGateMatrix {
+            native: patronus_ark_core::native::NativeGates {
                 explain: true,
                 ..Default::default()
             },
@@ -1216,11 +1218,11 @@ mod l3_worker_streaming {
             None,
             false,
         );
-        let policy = patronus_ark::L3SchedulerPolicy {
-            progress: patronus_ark::L3ProgressMode::Provisional,
-            ..patronus_ark::L3SchedulerPolicy::default()
+        let policy = patronus_ark_core::cascade::L3SchedulerPolicy {
+            progress: patronus_ark_core::cascade::L3ProgressMode::Provisional,
+            ..patronus_ark_core::cascade::L3SchedulerPolicy::default()
         };
-        let mut gates = patronus_ark::ScanGateMatrix::all_enabled();
+        let mut gates = patronus_ark_core::cascade::ScanGateMatrix::all_enabled();
         gates.set_l3_policy(policy);
         scanner.set_execution_gates(gates);
 
@@ -1368,7 +1370,7 @@ mod l3_worker_streaming {
                     .expect("queued event should arrive");
                 if let QueuedSecurityEvent::Result(queued) = event {
                     result_tx
-                        .send((queued.request_id, queued.result.level))
+                        .send((queued.request_id, queued.result.native.level))
                         .unwrap();
                     published_results += 1;
                 }

@@ -1,6 +1,7 @@
-use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS, ScanGateMatrix, SecurityCategory, SecurityGateway,
-    SecurityLevel,
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    SecurityCategory,
 };
 
 #[test]

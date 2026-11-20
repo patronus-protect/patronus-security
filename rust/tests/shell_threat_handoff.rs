@@ -6,12 +6,12 @@
 
 use std::collections::BTreeSet;
 
-use patronus_ark::{
-    detectors::{
-        mcp::mcp_policy::McpToolPolicyScanner,
-        shell::{testing::write_synthetic_bundle, ShellRiskPipeline},
-    },
-    SecurityCategory, SecurityGateway, SecurityLevel,
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::mcp::mcp_policy::McpToolPolicyScanner,
+    detectors::shell::testing::write_synthetic_bundle, detectors::shell::ShellRiskPipeline,
+    SecurityCategory,
 };
 
 /// Removed rule (or alternative), its command positives and the K26 policy
@@ -204,6 +204,7 @@ fn fired(command: &str) -> BTreeSet<String> {
         .filter(|result| result.model == "native:threat_l1")
         .flat_map(|result| {
             result
+                .native
                 .layers
                 .into_iter()
                 .flat_map(|layer| layer.details["matched_rules"].as_array().cloned())

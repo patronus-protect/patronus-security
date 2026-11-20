@@ -288,15 +288,17 @@ mod tests {
         let gateway = gateway();
         let mut gates = gateway.scan_execution().gates().clone();
         gates
-            .set_conditional(vec![crate::ConditionalPipelineGate {
+            .set_conditional(vec![patronus_ark_core::cascade::ConditionalPipelineGate {
                 level: SecurityLevel::L3,
                 pipeline: Some("injection".to_string()),
-                when: crate::GateExpression::Metadata(crate::MetadataCondition {
-                    path: "run_l3".to_string(),
-                    equals: Some(serde_json::json!(true)),
-                    in_values: None,
-                    exists: None,
-                }),
+                when: patronus_ark_core::cascade::GateExpression::Metadata(
+                    patronus_ark_core::cascade::MetadataCondition {
+                        path: "run_l3".to_string(),
+                        equals: Some(serde_json::json!(true)),
+                        in_values: None,
+                        exists: None,
+                    },
+                ),
                 l3_policy: None,
             }])
             .unwrap();
@@ -324,15 +326,17 @@ mod tests {
         let gateway = gateway();
         let mut gates = gateway.scan_execution().gates().clone();
         gates
-            .set_conditional(vec![crate::ConditionalPipelineGate {
+            .set_conditional(vec![patronus_ark_core::cascade::ConditionalPipelineGate {
                 level: SecurityLevel::L3,
                 pipeline: Some("tool_tags_sink_external".to_string()),
-                when: crate::GateExpression::Metadata(crate::MetadataCondition {
-                    path: "run_sink".to_string(),
-                    equals: Some(serde_json::json!(true)),
-                    in_values: None,
-                    exists: None,
-                }),
+                when: patronus_ark_core::cascade::GateExpression::Metadata(
+                    patronus_ark_core::cascade::MetadataCondition {
+                        path: "run_sink".to_string(),
+                        equals: Some(serde_json::json!(true)),
+                        in_values: None,
+                        exists: None,
+                    },
+                ),
                 l3_policy: None,
             }])
             .unwrap();

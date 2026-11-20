@@ -10,10 +10,9 @@ use std::{
     sync::OnceLock,
 };
 
-use patronus_ark::{
-    golden_recipes::GeneratorSet, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
-};
+use patronus_ark::{golden_recipes::GeneratorSet, SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();

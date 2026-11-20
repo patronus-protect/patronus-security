@@ -4,7 +4,7 @@
 //! modules (K01); this test keeps the registry order fixed across such moves.
 //! A new rule is appended here at the position it takes in the registry.
 
-use patronus_ark::detectors::pii::pii::PII_PATTERNS;
+use patronus_ark_core::detectors::pii::pii::PII_PATTERNS;
 
 const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_email", "EMAIL"),

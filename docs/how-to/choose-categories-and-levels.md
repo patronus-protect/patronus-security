@@ -44,7 +44,8 @@ clear), and the last layer you allow gives the final answer: with `l1`, what L1 
 === "Rust"
 
     ```rust
-    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
     let mut scanner = SecurityGateway::with_download_categories(
         vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
@@ -129,7 +130,7 @@ specific detector below the ceiling, without rebuilding the gateway:
 === "Rust"
 
     ```rust
-    use patronus_ark::ScanGateMatrix;
+    use patronus_ark_core::cascade::ScanGateMatrix;
 
     scanner.set_execution_gates(ScanGateMatrix::levels(true, true, false));
     // ... later ...

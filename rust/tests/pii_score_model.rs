@@ -7,15 +7,15 @@
 //! scores every span 1.0; `balanced` and `recall` are opt-in, report the
 //! model score and drop candidates below their threshold.
 
-use patronus_ark::detectors::pii::{
-    context,
-    pii::{is_bare_rule, PII_PATTERNS},
-    validators,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::pii::context, detectors::pii::pii::is_bare_rule, detectors::pii::pii::PII_PATTERNS,
+    detectors::pii::validators,
 };
-use patronus_ark::detectors::score::{self, Context, ValidatorStrength};
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark_core::{
+    detectors::score, detectors::score::Context, detectors::score::ValidatorStrength,
 };
 
 fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
@@ -45,7 +45,7 @@ fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
 
 fn with_mode(mode: ScoreMode) -> Option<ScanGateMatrix> {
     Some(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -163,7 +163,7 @@ fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
 fn expected_score_of(
     text: &str,
     rule: &serde_json::Value,
-    pattern: &patronus_ark::detectors::pii::pii::PiiPattern,
+    pattern: &patronus_ark_core::detectors::pii::pii::PiiPattern,
 ) -> (f64, Context) {
     let context = if pattern.captured_value {
         Context::Field

@@ -10,19 +10,19 @@
 
 use std::{path::Path, sync::OnceLock};
 
-use patronus_ark::detectors::dlp::{
-    context::{self, ContextSource},
-    dlp::DLP_PATTERNS,
-};
-use patronus_ark::detectors::score::{
-    self, Context, ValidatorStrength, COUNTER_CONTEXT_POINTS, FIELD_CONTEXT_POINTS,
-};
 use patronus_ark::golden_recipes::{
     materialize, materialize_fragments, GeneratorSet, SecretRecipe,
 };
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::dlp::context, detectors::dlp::context::ContextSource,
+    detectors::dlp::dlp::DLP_PATTERNS,
+};
+use patronus_ark_core::{
+    detectors::score, detectors::score::Context, detectors::score::ValidatorStrength,
+    detectors::score::COUNTER_CONTEXT_POINTS, detectors::score::FIELD_CONTEXT_POINTS,
 };
 use serde::Deserialize;
 
@@ -61,9 +61,9 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
 
 fn with_mode(mode: ScoreMode) -> ScanGateMatrix {
     ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             dlp_mode: mode,
-            ..patronus_ark::NativeGates::all_enabled()
+            ..patronus_ark_core::native::NativeGates::all_enabled()
         },
         ..ScanGateMatrix::all_enabled()
     }
@@ -217,7 +217,7 @@ fn corpus() -> Vec<String> {
     texts
 }
 
-fn pattern(rule_id: &str) -> &'static patronus_ark::detectors::dlp::dlp::DlpPattern {
+fn pattern(rule_id: &str) -> &'static patronus_ark_core::detectors::dlp::dlp::DlpPattern {
     DLP_PATTERNS
         .iter()
         .find(|pattern| pattern.name == rule_id)
@@ -243,7 +243,7 @@ fn strict_output_is_the_unscored_rule_acceptance() {
     let strict = mode_scanner(ScoreMode::Strict);
     let unset = scanner(None);
     let explicit = scanner(Some(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             dlp_mode: ScoreMode::Strict,
             ..Default::default()
         },

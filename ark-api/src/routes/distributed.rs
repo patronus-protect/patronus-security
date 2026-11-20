@@ -13,9 +13,10 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use patronus_ark::cascade::escalates;
 use patronus_ark::ml::ntdb_executor::{ByteSpan, NtdbModelChunkInferences, PreparedNtdbChunk};
-use patronus_ark::{L3Strategy, NtdbOperatingPoint, ScanExecution, SecurityCategory};
+use patronus_ark::{L3Strategy, NtdbOperatingPoint, ScanExecution};
+use patronus_ark_core::cascade::escalates;
+use patronus_ark_core::SecurityCategory;
 use serde_json::json;
 
 use crate::auth::AuthenticatedKey;
@@ -557,7 +558,8 @@ mod tests {
     };
 
     use super::*;
-    use patronus_ark::{pipeline::DistributedL2Pipeline, LabelScore};
+    use patronus_ark::pipeline::DistributedL2Pipeline;
+    use patronus_ark_core::LabelScore;
 
     fn request() -> WorkerBatchRequestV1 {
         let pipelines = vec![ChunkPipelineRequestV1 {

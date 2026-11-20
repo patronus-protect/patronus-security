@@ -10,6 +10,8 @@ import binascii
 import json
 import math
 import re
+import subprocess
+import sys
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -1267,6 +1269,36 @@ def mutate(value, index):
     character = value[index]
     pool = DIGITS if character.isdigit() else ALNUM
     return value[:index] + pool[(pool.index(character) + 1) % len(pool)] + value[index + 1 :]
+
+
+class NativeFreeLoadTests(unittest.TestCase):
+    def test_dlp_synth_loads_without_native_packages(self):
+        # scripts/l1_dlp/prepare_corpora.py loads dlp_synth by path, without the
+        # patronus_ark package; Ark Core is needed only once a seed word list is read.
+        script = (
+            "import importlib, importlib.util, sys\n"
+            "sys.modules['patronus_ark_core'] = None\n"
+            "sys.modules['patronus_ark'] = None\n"
+            f"directory = {str(REPO / 'python/patronus_ark/dlp_synth')!r}\n"
+            "spec = importlib.util.spec_from_file_location('synth', directory + '/__init__.py',"
+            " submodule_search_locations=[directory])\n"
+            "module = importlib.util.module_from_spec(spec); sys.modules['synth'] = module\n"
+            "spec.loader.exec_module(module)\n"
+            "importlib.import_module('synth.carriers')\n"
+        )
+        subprocess.run([sys.executable, "-c", script], check=True)
+
+    def test_recipes_load_by_path_as_a_standalone_module(self):
+        # scripts/tokenizer_parity_texts.py loads recipes.py by path, outside its package.
+        script = (
+            "import importlib.util, sys\n"
+            "sys.modules['patronus_ark_core'] = None\n"
+            f"path = {str(REPO / 'python/patronus_ark/dlp_synth/recipes.py')!r}\n"
+            "spec = importlib.util.spec_from_file_location('golden_recipes', path)\n"
+            "module = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(module)\n"
+        )
+        subprocess.run([sys.executable, "-c", script], check=True)
 
 
 class GeneratorSpecTests(unittest.TestCase):

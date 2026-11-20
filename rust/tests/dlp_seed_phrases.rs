@@ -4,15 +4,14 @@
 //! a line, comma-separated, numbered or one word per line. Phrases are built
 //! here from entropy at test time; invalid vectors are no phrases.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::sync::OnceLock;
 
-use patronus_ark::{
-    detectors::dlp::{
-        dlp::{SecretSubtype, DLP_PATTERNS},
-        seed_phrase::mnemonic,
-    },
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::SecretSubtype, detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::dlp::seed_phrase::mnemonic, SecurityCategory,
 };
 
 const RULE: &str = "dlp_bip39_seed_phrase";

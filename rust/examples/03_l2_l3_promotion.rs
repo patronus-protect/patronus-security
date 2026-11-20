@@ -12,7 +12,9 @@
 
 use std::time::Duration;
 
-use patronus_ark::{QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
     let mut scanner = SecurityGateway::with_download_categories(

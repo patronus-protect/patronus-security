@@ -3,10 +3,11 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use patronus_ark::{
-    detectors::shell::ShellPolicyConfig, DynamicPiiConfig, L3Strategy, OnnxRuntimeOptions,
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, WolfExecutionOptions,
-    WolfSelection,
+use patronus_ark::{DynamicPiiConfig, L3Strategy, SecurityGateway, WolfSelection};
+
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
+    OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
 };
 use serde::Deserialize;
 
@@ -266,7 +267,7 @@ impl RawConfig {
             .l3_strategy
             .parse::<L3Strategy>()
             .map_err(|error| ConfigError::Invalid(format!("pipeline.l3_strategy: {error}")))?;
-        patronus_ark::WolfServingProfile::ARK
+        patronus_ark_core::WolfServingProfile::ARK
             .fill(self.pipeline.wolf_options)
             .validate()
             .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
@@ -364,12 +365,13 @@ impl RawConfig {
 mod tests {
     use std::path::Path;
 
-    use patronus_ark::{
-        detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
-        WolfSelection,
+    use patronus_ark::{SecurityGateway, WolfSelection};
+
+    use patronus_ark_core::{
+        cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
     };
 
-    use patronus_ark::ScanGateMatrix;
+    use patronus_ark_core::cascade::ScanGateMatrix;
 
     use super::{Config, RawConfig, RawOnnxRuntime};
 
@@ -419,7 +421,7 @@ mod tests {
         assert_eq!(config.l3_strategy, patronus_ark::L3Strategy::Multi);
         assert_eq!(
             config.wolf_options,
-            patronus_ark::WolfExecutionOptions::default()
+            patronus_ark_core::WolfExecutionOptions::default()
         );
         assert_eq!(config.wolf, WolfSelection::default());
     }
@@ -442,8 +444,8 @@ mod tests {
         assert_eq!(
             execution.wolf_selection(),
             WolfSelection {
-                model: patronus_ark::WolfModel::Edge,
-                precision: patronus_ark::WolfPrecision::MixedX86,
+                model: patronus_ark_core::wolf::WolfModel::Edge,
+                precision: patronus_ark_core::wolf::WolfPrecision::MixedX86,
             }
         );
     }
@@ -561,7 +563,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
 
     #[test]
     fn category_modes_are_strict_by_default_and_explicitly_configurable() {
-        use patronus_ark::ScoreMode;
+        use patronus_ark_core::native::ScoreMode;
         for category in [
             "pii",
             "dlp",

@@ -160,7 +160,8 @@ Rust-only, so write-through and custom queue sizing are not reachable from Pytho
 ### Rust: memory only
 
 ```rust
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 let scanner = SecurityGateway::with_max_level(
     vec![SecurityCategory::Injection],
@@ -174,10 +175,8 @@ let scanner = SecurityGateway::with_max_level(
 
 ```rust
 use std::path::PathBuf;
-use patronus_ark::{
-    CacheEncryptionConfig, CacheWriteMode, ExactCacheConfig, PersistentCacheConfig,
-    SecurityCategory, SecurityGateway, SecurityLevel, WriteBehindConfig,
-};
+use patronus_ark::{CacheEncryptionConfig, CacheWriteMode, ExactCacheConfig, PersistentCacheConfig, SecurityGateway, WriteBehindConfig};
+use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 let cache_key = [0u8; 32]; // Load 32 bytes from your OS keychain or secret manager.
 let config = ExactCacheConfig {

@@ -166,10 +166,25 @@ impl Scanner {
     }
 }
 
+/// The words of a seed word list the DLP rules check, in list order:
+/// `bip39_<language>` (`english`, `italian`, `portuguese`, `czech`, `spanish`,
+/// `french`) or `monero_english`.
+#[pyfunction]
+fn seed_word_list(name: &str) -> PyResult<Vec<&'static str>> {
+    use patronus_ark_core::detectors::dlp::seed_phrase::{word_list, MONERO_ENGLISH};
+    let words = match name {
+        "monero_english" => Some(MONERO_ENGLISH),
+        _ => name.strip_prefix("bip39_").and_then(word_list),
+    }
+    .ok_or_else(|| PyValueError::new_err(format!("unknown seed word list: {name}")))?;
+    Ok(words.split_whitespace().collect())
+}
+
 #[pymodule]
 fn _patronus_ark_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Scanner>()?;
     m.add_class::<ScanControl>()?;
+    m.add_function(wrap_pyfunction!(seed_word_list, m)?)?;
     m.add("CancelledError", m.py().get_type_bound::<CancelledError>())?;
     m.add(
         "ScannerBusyError",

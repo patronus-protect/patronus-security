@@ -9,8 +9,8 @@ use axum::{Extension, Json};
 use futures::StreamExt;
 use patronus_ark::{
     DynamicPiiConfig, DynamicPiiRequestConfig, NtdbOperatingPoint, QueuedSecurityEvent,
-    ScanGateMatrix, SecurityCategory, SecurityLevel,
 };
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
@@ -51,7 +51,7 @@ struct ResolvedScanConfig {
     gates: ScanGateMatrix,
     metadata: Value,
     ntdb_operating_point: Option<NtdbOperatingPoint>,
-    chunk_overlap_tokens: patronus_ark::ChunkOverlapTokens,
+    chunk_overlap_tokens: patronus_ark_core::ml::tokenizer::ChunkOverlapTokens,
     dynamic_pii: Option<DynamicPiiConfig>,
 }
 
@@ -113,9 +113,10 @@ fn resolve_request_config(
         .as_deref()
         .map(str::parse::<NtdbOperatingPoint>)
         .transpose()?;
-    let chunk_overlap_tokens =
-        patronus_ark::ChunkOverlapTokens::try_from(request.chunk_overlap_tokens.unwrap_or(0))
-            .map_err(|error| format!("config.{error}"))?;
+    let chunk_overlap_tokens = patronus_ark_core::ml::tokenizer::ChunkOverlapTokens::try_from(
+        request.chunk_overlap_tokens.unwrap_or(0),
+    )
+    .map_err(|error| format!("config.{error}"))?;
     let dynamic_pii = request
         .dynamic_pii
         .map(|dynamic_pii| {
@@ -441,7 +442,9 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::{Duration, Instant};
 
-    use patronus_ark::{SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+
+    use patronus_ark_core::cascade::SecurityLevel;
     use sha2::{Digest, Sha256};
     use tower::ServiceExt;
 
@@ -475,7 +478,7 @@ mod tests {
                 default_gates: ScanGateMatrix::default(),
                 shell_command: None,
                 dynamic_pii: None,
-                onnx_runtime: patronus_ark::OnnxRuntimeOptions::default(),
+                onnx_runtime: patronus_ark_core::OnnxRuntimeOptions::default(),
                 l3_strategy: patronus_ark::L3Strategy::Multi,
                 wolf_options: Default::default(),
                 wolf: Default::default(),
@@ -805,9 +808,10 @@ mod tests {
             std::process::id(),
             Instant::now().elapsed().as_nanos()
         ));
-        let bundle = patronus_ark::warmup::shell_bundle_dir(&model_dir);
+        let bundle = patronus_ark_core::warmup::shell_bundle_dir(&model_dir);
         let manifest =
-            patronus_ark::detectors::shell::testing::write_synthetic_bundle(&bundle, None).unwrap();
+            patronus_ark_core::detectors::shell::testing::write_synthetic_bundle(&bundle, None)
+                .unwrap();
 
         let (mut config, mut key) = config_and_key();
         config.categories = vec![SecurityCategory::ShellCommand];

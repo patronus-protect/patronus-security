@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from patronus_ark_core import NativeGates
+
 from patronus_ark import (
+    ExecutionGates,
     SecurityGateway,
     _event_to_dict,
     _to_dict,
@@ -179,6 +182,16 @@ class PublicApiTests(unittest.TestCase):
         self.assertNotIn("l1_anchors", native()["layers"][0]["details"])
         with self.assertRaises(ValueError):
             scanner.set_execution_gates({"explain": "yes"})
+
+    def test_execution_gates_are_core_gates_plus_the_layer_keys(self):
+        self.assertEqual(
+            set(ExecutionGates.__annotations__) - set(NativeGates.__annotations__),
+            {"l1", "l2", "l3", "conditional", "l3_policy", "cascade"},
+        )
+        scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        scanner.set_execution_gates({"dlp_mode": "strict", "l2": False})
+        with self.assertRaisesRegex(ValueError, "unknown field"):
+            scanner.set_execution_gates({"dlp_modes": "strict"})
 
     def test_pii_mode_is_strict_by_default_and_opt_in(self):
         scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)

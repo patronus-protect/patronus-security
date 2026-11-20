@@ -7,7 +7,9 @@
 //!
 //! Run: `cargo run --example 04_execution_gates`
 
-use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
     let scanner = SecurityGateway::with_max_level(

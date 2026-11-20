@@ -7,10 +7,8 @@ mod l3_results {
     use patronus_ark::pipeline::{
         degraded_error_result, degraded_timeout_result, has_l3_pending, l3_pending_layer,
     };
-    use patronus_ark::{
-        EvaluationResult, LayerResult, NtdbOperatingPoint, ScanExecution, SecurityLevel,
-        SecurityScanResult,
-    };
+    use patronus_ark::{NtdbOperatingPoint, ScanExecution, SecurityScanResult};
+    use patronus_ark_core::{cascade::SecurityLevel, EvaluationResult, LayerResult};
 
     #[test]
     fn ntdb_decision_threshold_point_is_separate_from_promote_point() {
@@ -38,40 +36,42 @@ mod l3_results {
 
     fn fallback_result() -> SecurityScanResult {
         SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: "benign".to_string(),
-            confidence: 0.80,
-            level: "L2".to_string(),
-            model: "wolf-defender-small".to_string(),
-            duration_ms: 4.0,
-            layers: vec![
-                LayerResult {
-                    level: "L2".to_string(),
-                    layer_type: "veto_consensus".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.80,
-                    matched: true,
-                    duration_ms: 4.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                },
-                LayerResult {
-                    level: "L3".to_string(),
-                    layer_type: "l3_pending".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.0,
-                    matched: false,
-                    duration_ms: 0.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                },
-            ],
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
+                class_name: "benign".to_string(),
+                confidence: 0.80,
+                level: "L2".to_string(),
+                model: "wolf-defender-small".to_string(),
+                duration_ms: 4.0,
+                layers: vec![
+                    LayerResult {
+                        level: "L2".to_string(),
+                        layer_type: "veto_consensus".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.80,
+                        matched: true,
+                        duration_ms: 4.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    },
+                    LayerResult {
+                        level: "L3".to_string(),
+                        layer_type: "l3_pending".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.0,
+                        matched: false,
+                        duration_ms: 0.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    },
+                ],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 
@@ -170,14 +170,10 @@ mod l3_results {
         let pending = fallback_result();
         assert!(has_l3_pending(&pending));
 
-        let without_pending = SecurityScanResult {
-            layers: pending
-                .layers
-                .into_iter()
-                .filter(|layer| layer.layer_type != "l3_pending")
-                .collect(),
-            ..pending
-        };
+        let mut without_pending = pending;
+        without_pending
+            .layers
+            .retain(|layer| layer.layer_type != "l3_pending");
         assert!(!has_l3_pending(&without_pending));
     }
 }
@@ -216,8 +212,8 @@ mod public_strategy_types {
 mod long_text {
     use std::collections::HashMap;
 
-    use patronus_ark::{EvaluationResult, L3AggregationStrategy, LayerResult};
     use patronus_ark_core::cascade::aggregate_chunk_outputs;
+    use patronus_ark_core::{cascade::L3AggregationStrategy, EvaluationResult, LayerResult};
 
     fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
         EvaluationResult {
@@ -409,7 +405,8 @@ mod decision_cache {
     use std::collections::HashMap;
 
     use patronus_ark::pipeline::test_util::{DecisionCache, DecisionCacheConfig};
-    use patronus_ark::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
+    use patronus_ark::ScanExecution;
+    use patronus_ark_core::{cascade::SecurityLevel, EvaluationResult, LayerResult};
 
     fn result(class_name: &str) -> EvaluationResult {
         EvaluationResult {
@@ -550,8 +547,10 @@ mod ntdb_l2_results {
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision,
     };
-    use patronus_ark::{
-        L3SchedulerPolicy, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
+    use patronus_ark::ScanExecution;
+    use patronus_ark_core::{
+        cascade::L3SchedulerPolicy, cascade::ScanGateMatrix, cascade::SecurityLevel,
+        SecurityCategory,
     };
 
     fn routed_injection_decision() -> NtdbDecision {
@@ -774,6 +773,7 @@ mod ntdb_l2_results {
         assert_eq!(result.class_name, "attack");
         assert!((result.confidence - 0.9).abs() < 1e-6);
         let decision = result
+            .native
             .decision
             .expect("L2-only result should carry a decision envelope");
         assert_eq!(decision.final_result.class_name, "attack");
@@ -1011,7 +1011,8 @@ mod ntdb_l2_results {
 }
 
 mod download_policy {
-    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
     #[test]
     fn download_categories_limit_asset_downloads() {

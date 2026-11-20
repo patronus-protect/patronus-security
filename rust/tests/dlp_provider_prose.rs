@@ -11,9 +11,11 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway, SecurityScanResult,
 };
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde_json::Value;
 
 fn generators() -> &'static GeneratorSet {
@@ -71,6 +73,7 @@ fn rule_ids(text: &str) -> Vec<String> {
 /// `rule_id` reports exactly `value` in `text`, and no other span.
 fn assert_reported(text: &str, rule_id: &str, value: &str) {
     let spans: Vec<String> = scan(text)
+        .native
         .evidence_spans
         .into_iter()
         .map(|span| span.text)

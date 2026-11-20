@@ -10,7 +10,9 @@ use patronus_ark::pipeline::test_util::{
     unified_coalescing_snapshot, unified_metadata_details_for_test,
     unified_outputs_have_same_classes_for_heads_for_test,
 };
-use patronus_ark::{ExecutionBackend, L3ClusteringStrategy, LayerResult, OnnxRuntimeOptions};
+use patronus_ark_core::{
+    cascade::L3ClusteringStrategy, ExecutionBackend, LayerResult, OnnxRuntimeOptions,
+};
 use std::collections::HashMap;
 
 #[test]
@@ -332,7 +334,7 @@ fn candidate_selection_keeps_every_unique_promoted_chunk() {
 fn real_pinned_bundle_loads_and_returns_all_heads() {
     let dir = std::env::var("PATRONUS_TEST_UNIFIED_DIR")
         .expect("PATRONUS_TEST_UNIFIED_DIR must point at the unified model bundle");
-    patronus_ark::ml::onnx::warmup_runtime();
+    patronus_ark_core::onnx::warmup_runtime();
     let mut model = LazyUnifiedOnnxClassifier::from_dir(dir).unwrap();
     let outputs = model
         .infer_batch(

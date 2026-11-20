@@ -11,14 +11,12 @@
 //! Swiss passport and identity card (one letter, seven digits), the Italian carta
 //! d'identità and the Spanish pasaporte (three letters, six digits).
 
-use patronus_ark::detectors::pii::{
-    pii::{PiiPattern, PII_PATTERNS},
-    validators,
-};
-use patronus_ark::detectors::score::ValidatorStrength;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::score::ValidatorStrength;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::pii::pii::PiiPattern, detectors::pii::pii::PII_PATTERNS, detectors::pii::validators,
 };
 use serde_json::Value;
 
@@ -38,7 +36,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -54,6 +52,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
 /// Texts of every span with `label`.
 fn spans(text: &str, mode: ScoreMode, label: &str) -> Vec<String> {
     pii_result(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .filter(|span| span.label == label)

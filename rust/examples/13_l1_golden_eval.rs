@@ -5,14 +5,14 @@ use std::{
     path::Path,
 };
 
-use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{
-        dlp::dlp::DLP_PATTERNS,
-        pii::pii::{is_bare_rule, PII_PATTERNS},
-    },
-    golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
+    golden_recipes::SecretRecipe, SecurityGateway, SecurityScanResult,
+};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::pii::pii::is_bare_rule, detectors::pii::pii::PII_PATTERNS, SecurityCategory,
 };
 use serde::Deserialize;
 
@@ -70,7 +70,7 @@ struct FixtureEntity {
 /// in the PII and DLP modes the row names (default `strict`).
 fn gates_for(target_label: &str, pii_mode: ScoreMode, dlp_mode: ScoreMode) -> ScanGateMatrix {
     let mut gates = ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode,
             dlp_mode,
             ..Default::default()
@@ -230,6 +230,7 @@ fn evaluate(
         // card-shaped part of a valid IBAN, an account finding on an IBAN value) as well.
         let secondary = secondary_evidence(&result);
         let predicted_all = result
+            .native
             .evidence_spans
             .into_iter()
             .filter(|span| {

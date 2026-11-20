@@ -6,9 +6,10 @@ use crate::{
         NativeDetection,
     },
     threat::NativeText,
-    ScanControl, ScanError, SecurityCategory,
+    LayerResult, NativeResult, ScanControl, ScanError, SecurityCategory,
 };
 use std::{
+    collections::HashMap,
     panic::{catch_unwind, AssertUnwindSafe},
     time::Instant,
 };
@@ -41,7 +42,7 @@ pub const NATIVE_CATEGORIES: [SecurityCategory; 13] = [
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
     /// Each module's optional L1 model ([`Self::load_l1_models`]).
-    l1_models: [Option<L1TextModel>; NATIVE_CATEGORIES.len()],
+    l1_models: [Option<std::sync::Arc<L1TextModel>>; NATIVE_CATEGORIES.len()],
 }
 
 impl NativeEngine {
@@ -78,7 +79,8 @@ impl NativeEngine {
 
     /// Load the configured L1 models once (for example
     /// [`crate::cascade::CascadeConfig::l1_models`]); each replaces the
-    /// module's earlier model. Non-native categories are refused. No model is
+    /// module's earlier model. A model another scanner of the process holds
+    /// under the same config is shared ([`crate::shared_models`]). Non-native categories are refused. No model is
     /// loaded unless configured.
     pub fn load_l1_models<'a>(
         &mut self,
@@ -87,14 +89,18 @@ impl NativeEngine {
         for (category, config) in configs {
             let slot = index(category)
                 .ok_or_else(|| format!("l1 model for non-native category {}", category.as_str()))?;
-            self.l1_models[slot] = Some(L1TextModel::load(category, config)?);
+            // Scanners of one process that configure the same model share it.
+            let key = format!("{}|{config:?}", category.as_str());
+            self.l1_models[slot] = Some(crate::shared_models::shared(&key, || {
+                L1TextModel::load(category, config)
+            })?);
         }
         Ok(())
     }
 
     /// The loaded L1 model of `category`'s module, if one is configured.
     pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel> {
-        index(category).and_then(|i| self.l1_models[i].as_ref())
+        index(category).and_then(|i| self.l1_models[i].as_deref())
     }
 
     /// Producers in the established category order, or empty for an unselected
@@ -129,6 +135,81 @@ impl NativeEngine {
             detection,
             duration_ms,
         })
+    }
+
+    /// The L1 pass of one module, shared by the Core [`crate::Scanner`] and
+    /// Ark's gateway: every producer of `category` that `gates` enable, its
+    /// evidence filtered by post-prediction, and the `ark.injection.*`
+    /// producers merged into one scored decision
+    /// ([`crate::injection_l1::category_results`]). A failing producer
+    /// reports an `error` result ([`NativeResult::scanner_error`]);
+    /// cancellation and an exceeded deadline are returned as errors.
+    pub fn scan_module(
+        &self,
+        category: SecurityCategory,
+        prepared: &NativeText<'_>,
+        gates: &NativeGates,
+        control: &ScanControl,
+    ) -> Result<Vec<NativeResult>, ScanError> {
+        let text = prepared.text();
+        let mut outputs = Vec::new();
+        for producer in self.producers(category) {
+            if !producer.enabled(gates) {
+                continue;
+            }
+            let result = match self.run_producer(producer, prepared, gates, control) {
+                Ok(outcome) => measure(category, producer.id(), text, outcome),
+                Err(ScanError::Detector(message)) => {
+                    NativeResult::scanner_error(category, producer.id(), message)
+                }
+                Err(error) => return Err(error),
+            };
+            outputs.push((producer.scored(), result));
+        }
+        Ok(crate::injection_l1::category_results(
+            category, text, outputs,
+        ))
+    }
+}
+
+/// One producer's result: its evidence filtered by post-prediction, the
+/// confidence the best remaining span score (the producer's own without spans).
+fn measure(
+    category: SecurityCategory,
+    model: &str,
+    text: &str,
+    outcome: NativeProducerOutcome,
+) -> NativeResult {
+    let NativeProducerOutcome {
+        detection,
+        duration_ms,
+    } = outcome;
+    let spans = crate::post_prediction::filter_evidence(category, text, detection.evidence_spans);
+    let confidence = spans
+        .iter()
+        .map(|s| s.score)
+        .reduce(f64::max)
+        .unwrap_or(detection.result.confidence);
+    NativeResult {
+        category: category.as_str().into(),
+        class_name: detection.result.class_name.clone(),
+        confidence,
+        level: "L1".into(),
+        model: model.into(),
+        duration_ms,
+        layers: vec![LayerResult {
+            level: "L1".into(),
+            layer_type: "native".into(),
+            class_name: detection.result.class_name,
+            confidence,
+            matched: true,
+            duration_ms,
+            thresholds: HashMap::new(),
+            details: detection.details,
+        }],
+        evidence_spans: spans,
+        label_scores: Vec::new(),
+        decision: None,
     }
 }
 

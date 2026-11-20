@@ -280,7 +280,8 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
 === "Rust"
 
     ```rust
-    use patronus_ark::{detectors::shell::ShellPolicyConfig, SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{detectors::shell::ShellPolicyConfig, SecurityCategory, cascade::SecurityLevel};
 
     let mut gateway = SecurityGateway::with_download_categories(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand],

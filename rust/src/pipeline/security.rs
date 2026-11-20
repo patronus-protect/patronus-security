@@ -25,10 +25,7 @@ use crate::{
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
-use patronus_ark_core::{
-    native::{NativeEngine, NativeProducerOutcome},
-    ScanControl, ScanError,
-};
+use patronus_ark_core::{native::NativeEngine, ScanControl};
 
 mod direct_l3;
 mod injection_l1;
@@ -214,7 +211,7 @@ mod distributed_plan_tests {
 
     /// Results and failure levels of one queued Injection request.
     fn queued_levels(gateway: &SecurityGateway, text: &str) -> Vec<String> {
-        queued_events(gateway, text, |result| result.level)
+        queued_events(gateway, text, |result| result.native.level)
     }
 
     /// `pick` of every result, and the failure levels, of one queued
@@ -657,19 +654,21 @@ fn scan_result(
 ) -> SecurityScanResult {
     let duration_ms = layers.iter().map(|layer| layer.duration_ms).sum();
     SecurityScanResult {
-        category: category.as_str().to_string(),
-        class_name: result.class_name,
-        confidence: result.confidence,
-        level: result.level,
-        model: model.into(),
-        duration_ms,
-        layers,
+        native: patronus_ark_core::NativeResult {
+            category: category.as_str().to_string(),
+            class_name: result.class_name,
+            confidence: result.confidence,
+            level: result.level,
+            model: model.into(),
+            duration_ms,
+            layers,
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: None,
+        },
         internal_l2_chunk_outputs: Vec::new(),
         decided_by: None,
         l1_outcome: None,
-        evidence_spans: Vec::new(),
-        label_scores: Vec::new(),
-        decision: None,
     }
 }
 
@@ -744,70 +743,12 @@ fn native_detection_scan_result(
     result
 }
 
-fn native_engine_scan_result(
-    category: SecurityCategory,
-    model: &str,
-    text: &str,
-    outcome: Result<NativeProducerOutcome, ScanError>,
-    execution: &ScanExecution,
-) -> SecurityScanResult {
-    let outcome = match outcome {
-        Ok(outcome) => outcome,
-        Err(ScanError::Detector(message)) => {
-            return scanner_error_scan_result(category, model, message);
-        }
-        Err(error) => return scanner_error_scan_result(category, model, error.to_string()),
-    };
-    let mut result = native_detection_scan_result(
-        category,
-        model.into(),
-        text,
-        outcome.detection,
-        outcome.duration_ms,
-    );
-    // Keep Ark's existing result policy: only scored native PII/DLP update
-    // confidence after evidence filtering. Other producer scores stay untouched.
-    let scored = match model {
-        "native:pii" => execution.gates().native.pii_mode.min_score().is_some(),
-        "native:dlp" => execution.gates().native.dlp_mode.min_score().is_some(),
-        _ => false,
-    };
-    if scored {
-        if let Some(best) = result
-            .evidence_spans
-            .iter()
-            .map(|span| span.score)
-            .reduce(f64::max)
-        {
-            result.confidence = best;
-            result.layers[0].confidence = best;
-        }
-    }
-    result
-}
-
 fn scanner_error_scan_result(
     category: SecurityCategory,
     model: impl Into<String>,
     message: String,
 ) -> SecurityScanResult {
-    let model = model.into();
-    let result = EvaluationResult {
-        class_name: "error".to_string(),
-        confidence: 0.0,
-        level: SecurityLevel::L1.as_str().to_string(),
-    };
-    let layer = LayerResult {
-        level: result.level.clone(),
-        layer_type: "scanner_error".to_string(),
-        class_name: result.class_name.clone(),
-        confidence: 0.0,
-        matched: false,
-        duration_ms: 0.0,
-        thresholds: HashMap::new(),
-        details: HashMap::from([("error".to_string(), serde_json::json!(message))]),
-    };
-    scan_result(category, model, result, vec![layer])
+    patronus_ark_core::NativeResult::scanner_error(category, model, message).into()
 }
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -823,29 +764,6 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 #[cfg(test)]
 mod native_adapter_tests {
     use super::*;
-
-    #[test]
-    fn engine_detector_errors_preserve_the_legacy_producer_error_result() {
-        let legacy = timed_native_detection_scan_result(
-            SecurityCategory::Injection,
-            "native:injection_rule_catalog",
-            "hello",
-            || panic!("detector fixture failure"),
-        );
-        let migrated = native_engine_scan_result(
-            SecurityCategory::Injection,
-            "native:injection_rule_catalog",
-            "hello",
-            Err(ScanError::Detector("detector fixture failure".into())),
-            &ScanExecution::new(SecurityLevel::L1),
-        );
-        let legacy: patronus_ark_core::NativeResult = legacy.into();
-        let migrated: patronus_ark_core::NativeResult = migrated.into();
-        assert_eq!(
-            serde_json::to_value(legacy).unwrap(),
-            serde_json::to_value(migrated).unwrap(),
-        );
-    }
 
     #[test]
     fn ark_only_categories_do_not_initialize_shared_native_producers() {
@@ -1627,33 +1545,21 @@ impl SecurityGateway {
         let category = input.category;
         let text = input.text.as_ref();
         let mut results = Vec::new();
-        let producers = self.native_engine.producers(category);
-        if !producers.is_empty() && self.level_enabled(execution, SecurityLevel::L1) {
-            let control = ScanControl::default();
-            let gates = &execution.gates().native;
-            let native_results = producers
-                .iter()
-                .filter(|producer| producer.enabled(gates))
-                .map(|producer| {
-                    let result =
-                        run_measured_l1_detector(category, producer.id(), text.len(), || {
-                            native_engine_scan_result(
-                                category,
-                                producer.id(),
-                                text,
-                                self.native_engine
-                                    .run_producer(producer, prepared, gates, &control),
-                                execution,
-                            )
-                        });
-                    (producer.scored(), result)
-                })
-                .collect::<Vec<_>>();
-            results.extend(injection_l1::category_results(
+        if self.level_enabled(execution, SecurityLevel::L1) {
+            // Core's L1 pass; the gateway's scans are never cancelled.
+            match self.native_engine.scan_module(
                 category,
-                text,
-                native_results,
-            ));
+                prepared,
+                &execution.gates().native,
+                &ScanControl::default(),
+            ) {
+                Ok(native) => results.extend(native.into_iter().map(SecurityScanResult::from)),
+                Err(error) => results.push(scanner_error_scan_result(
+                    category,
+                    "native",
+                    error.to_string(),
+                )),
+            }
         }
         match category {
             SecurityCategory::ShellCommand => {

@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 patronus-ark = { path = "../rust" }
+patronus-ark-core = { path = "../ark-core" }
 ark-distributed-protocol = { path = "../ark-distributed-protocol" }
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }

@@ -9,11 +9,10 @@
 //! and `balanced` keep them negative (gold convention T01). Validators are not relaxed: a checksum that
 //! fails behind the obfuscation stays rejected.
 
-use patronus_ark::detectors::score::Category;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::score::Category;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -27,7 +26,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -51,6 +50,7 @@ fn matched_rules(result: &SecurityScanResult) -> Vec<Value> {
 /// `(label, text)` of every evidence span.
 fn spans(text: &str, mode: ScoreMode) -> Vec<(String, String)> {
     pii_result(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .map(|span| (span.label, span.text))
@@ -381,6 +381,7 @@ fn spelled_out_forms_are_reported_in_recall_only_below_the_plain_score() {
             "{text:?}: {score} vs {plain_score}"
         );
         let span = pii_result(text, ScoreMode::Recall)
+            .native
             .evidence_spans
             .into_iter()
             .find(|span| span.label == label)

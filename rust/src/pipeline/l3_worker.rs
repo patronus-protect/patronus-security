@@ -1256,9 +1256,9 @@ pub(super) fn request_wide_skip_result(
         execution.ntdb_decision_threshold_point(),
     );
     result.confidence = (result.confidence * degraded_factor).clamp(0.0, 1.0);
-    for layer in &mut result.layers {
-        if layer.level == result.level && layer.layer_type != "l3_pending" {
-            layer.confidence = result.confidence;
+    for layer in &mut result.native.layers {
+        if layer.level == result.native.level && layer.layer_type != "l3_pending" {
+            layer.confidence = result.native.confidence;
             layer
                 .details
                 .insert("degraded".to_string(), serde_json::json!(true));
@@ -2264,28 +2264,30 @@ mod tests {
             model: category.to_string(),
             input: L3WorkerInput::Text(Arc::<str>::from("test")),
             fallback: SecurityScanResult {
-                category: category.to_string(),
-                class_name: "benign".to_string(),
-                confidence: 0.5,
-                level: "L2".to_string(),
-                model: category.to_string(),
-                duration_ms: 0.0,
-                layers: vec![LayerResult {
-                    level: "L2".to_string(),
-                    layer_type: "test".to_string(),
+                native: patronus_ark_core::NativeResult {
+                    category: category.to_string(),
                     class_name: "benign".to_string(),
                     confidence: 0.5,
-                    matched: false,
+                    level: "L2".to_string(),
+                    model: category.to_string(),
                     duration_ms: 0.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                }],
+                    layers: vec![LayerResult {
+                        level: "L2".to_string(),
+                        layer_type: "test".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.5,
+                        matched: false,
+                        duration_ms: 0.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    }],
+                    evidence_spans: Vec::new(),
+                    label_scores: Vec::new(),
+                    decision: None,
+                },
                 internal_l2_chunk_outputs: Vec::new(),
                 decided_by: None,
                 l1_outcome: None,
-                evidence_spans: Vec::new(),
-                label_scores: Vec::new(),
-                decision: None,
             },
             priority,
             ttl_ms: 10_000,
@@ -2316,19 +2318,21 @@ mod tests {
         level: &str,
     ) -> SecurityScanResult {
         SecurityScanResult {
-            category: category.to_string(),
-            class_name: class_name.to_string(),
-            confidence,
-            level: level.to_string(),
-            model: category.to_string(),
-            duration_ms: 0.0,
-            layers: Vec::new(),
+            native: patronus_ark_core::NativeResult {
+                category: category.to_string(),
+                class_name: class_name.to_string(),
+                confidence,
+                level: level.to_string(),
+                model: category.to_string(),
+                duration_ms: 0.0,
+                layers: Vec::new(),
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 }
