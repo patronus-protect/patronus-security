@@ -595,10 +595,41 @@ def test_calibrate_holds_one_per_mille_on_the_benign_pool():
     assert sum(s >= clear for s in benign) / len(benign) <= 0.01 and entry["escalate_fpr"] <= 0.01
     # The report-only benign row is not in the pool; the base config's deepest layer stays.
     assert config["calibration"]["benign_rows"] == 4000 and config["scanner"]["cascade"]["max_level"] == "l1"
-    # A class without benign scores: any positive score detects; the clear cut stays at or below it.
-    jailbreak = config["scanner"]["cascade"]["modules"]["jailbreak"]
-    assert 0 < jailbreak["detect_threshold"] < 1e-300 and jailbreak["clear_threshold"] <= jailbreak["detect_threshold"]
+    assert entry["benign_scored"] == 4000 and "detect" not in entry and "clear" not in entry
+    # A class without benign scores gets no degenerate cut ("any score above 0"): it keeps the shipped
+    # acceptance and escalates every undetected row, reported as not reachable.
+    assert "jailbreak" not in config["scanner"]["cascade"]["modules"]
+    assert config["calibration"]["classes"]["jailbreak"] == {
+        "benign_scored": 0, "detect": MODULE.UNREACHABLE, "clear": MODULE.UNREACHABLE}
     assert MODULE.L1_CASCADE == {"scanner": {"cascade": {"max_level": "l1"}}}
+
+
+def test_calibrate_keeps_the_shipped_cuts_when_the_benign_scores_cannot_fill_the_budget():
+    # 2000 benign rows: the 0.1 % budget is 2 rows, the 1 % budget 20 rows. Three non-zero scores place the
+    # detect cut but not the clear cut; two cannot place either, and a stale cut of the base is removed.
+    def pairs(scored):
+        out = []
+        for i in range(2000):
+            item = row("dolly", i, benign=True)
+            score = 0.5 + i / 100 if i < scored else 0.0
+            out.append((item, cascade_pred(item, **{INJ: stage("escalate", "clear", "heuristic", score)}), "dev"))
+        return out
+
+    three = MODULE.calibrate(pairs(3), MODULE.L1_CASCADE)
+    cuts = three["scanner"]["cascade"]["modules"]["injection"]
+    assert cuts == {"detect_threshold": math.nextafter(0.5, math.inf)}
+    assert three["calibration"]["classes"][INJ] == {"benign_scored": 3, "detect_fpr": 2 / 2000,
+                                                    "clear": MODULE.UNREACHABLE}
+    stale = {"scanner": {"cascade": {"max_level": "l1", "modules": {"injection": {
+        "detect_threshold": 0.7, "clear_threshold": 0.1}}}}}
+    two = MODULE.calibrate(pairs(2), stale)
+    assert "injection" not in two["scanner"]["cascade"]["modules"]
+    assert two["calibration"]["classes"][INJ] == {"benign_scored": 2, "detect": MODULE.UNREACHABLE,
+                                                  "clear": MODULE.UNREACHABLE}
+    lines = MODULE.config_lines(two)
+    assert lines[2].startswith(f"Detect {MODULE.UNREACHABLE}") and "instruction_injection" in lines[2]
+    assert "Core's built-in acceptance" in lines[0]
+    assert lines[3].startswith(f"Clear {MODULE.UNREACHABLE}")
 
 
 def test_calibrate_leaves_out_excluded_rows_and_can_switch_clearing_off():
@@ -614,7 +645,9 @@ def test_calibrate_leaves_out_excluded_rows_and_can_switch_clearing_off():
 
 
 def test_fpr_threshold_never_counts_a_zero_and_needs_negatives():
-    assert MODULE.fpr_threshold([0.0] * 10, 0.001) > 0.0
+    # Too few non-zero scores to fill the budget: no cut rather than "any score above 0".
+    assert MODULE.fpr_threshold([0.0] * 10, 0.001) is None
+    assert MODULE.fpr_threshold([0.5, 0.0, 0.0, 0.0], 0.5) is None
     assert MODULE.fpr_threshold([0.5, 0.4, 0.3], 0.5) == math.nextafter(0.4, math.inf)
     with pytest.raises(ValueError):
         MODULE.fpr_threshold([], 0.001)
@@ -692,7 +725,9 @@ def test_cli_calibrate_writes_a_config_the_report_names(split, tmp_path, capsys)
                         "--exclude-ids", str(ids), "--out", str(out)]) == 0
     config = json.loads(out.read_text())
     assert config["calibration"]["excluded_rows"] == 1 and config["calibration"]["target_fpr"] == 0.001
-    assert set(config["scanner"]["cascade"]["modules"]) == {MODULE.category(cls) for cls in MODULE.CLASSES}
+    # Every class is calibrated; only tool_poisoning has a benign score to place a cut on.
+    assert set(config["calibration"]["classes"]) == set(MODULE.CLASSES)
+    assert set(config["scanner"]["cascade"]["modules"]) == {"tool_poisoning"}
     assert MODULE.config_hash(config)[:12] in capsys.readouterr().out
     lines = MODULE.config_lines(config)
     assert "Calibrated by `scoreboard.py calibrate` on 2 benign rows at 0.1 % FPR (detect) and 1 % FPR (clear)" in lines[1]

