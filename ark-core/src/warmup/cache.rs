@@ -454,6 +454,11 @@ mod tests {
             .unwrap();
             fs::write(self.0.join("config.json"), r#"{"num_labels":1}"#).unwrap();
             fs::write(self.0.join("tokenizer_config.json"), "{}").unwrap();
+            fs::write(
+                self.0.join("POOLING.json"),
+                r#"{"encoder_positions": 256, "overlap": 0}"#,
+            )
+            .unwrap();
         }
     }
     impl Drop for Directory {
