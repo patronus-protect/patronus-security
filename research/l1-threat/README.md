@@ -1,6 +1,6 @@
 # L1-Threat: breite Regeln, gelernte Punkte
 
-Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). OSS-Regelinventar: [`oss_rules.yaml`](oss_rules.yaml) (Prüfung `scripts/l1_threat/oss_inventory.py check`). Baseline- und Datensatz-Mapping: [`entity_map.yaml`](entity_map.yaml) (Prüfung `scripts/l1_threat/entity_map.py check`). Recherche:
+Stand: 2026-11-11 (Runner-Programm `threat` läuft auf VPS 1 und VPS 2; offen: R03 Baselines-Venv, R05 Blind-Holdout). Aufgabenliste: [`backlog.yaml`](backlog.yaml). Familien je Klasse: [`taxonomy.yaml`](taxonomy.yaml) (Prüfung `scripts/l1_threat/taxonomy.py check`). OSS-Regelinventar: [`oss_rules.yaml`](oss_rules.yaml) (Prüfung `scripts/l1_threat/oss_inventory.py check`). Baseline- und Datensatz-Mapping: [`entity_map.yaml`](entity_map.yaml) (Prüfung `scripts/l1_threat/entity_map.py check`). **Aktueller Stand je Klasse und Sprache (main, Dev):** [`scoreboard/baseline.md`](scoreboard/baseline.md) (TPR@0,1 % und @1 % FPR, Hard-Benign-FPR, beste Heuristik- und Referenz-Baseline), Kaskade: [`scoreboard/cascade.md`](scoreboard/cascade.md); beide rendert der Runner nach jedem Merge neu (E09). Recherche:
 [`research-2026-11.md`](research-2026-11.md). Ausführung über denselben VPS-Runner wie
 [`../l1-pii/`](../l1-pii/README.md) und [`../dlp/`](../dlp/README.md), Branch-Präfix `threat/`, Label
 `ark-threat`.
@@ -469,9 +469,20 @@ TPR@0,1 % einer Klasse (`all`, `de`, `en`; E08, Owner 2026-11-18: 0,1 % ist die 
 Hard-Benign-Zeile, die nur der Head meldet. Die Dev-Zusammenfassung des Gates (und damit die PR-Tabelle des
 Runners) zeigt je Klasse und Sprache beide TPRs, Base -> Head mit KI. Der Holdout erscheint im
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
-`latency_ab`. Dev-Stand: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
+`latency_ab`. Aktueller Stand von main: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
 besten Referenzzeile je Zelle (TPR@1 % / 0,1 %, nur Baselines, die die Klasse bewerten); Baselines ohne
 vollständigen Dev-Cache stehen dort mit Namen und Grund.
+
+**Scoreboard von main nach jedem Merge (E09).** Damit jede Klasse eine aktuelle Zahl hat statt einer Base je PR,
+rendert `scoreboard.py refresh` in einem Checkout von main `scoreboard/baseline.md` (L1-Kaskade, mit den
+Baseline-Spalten) und, sobald die kalibrierte Konfiguration `scoreboard/cascade-config.json` auf main liegt, auch
+`scoreboard/cascade.md` aus dem aktuellen Dev-Split neu; eine Zeile nennt den Commit. Der Runner (`ark-l1 refresh`,
+zu Beginn jedes Threat-Laufs, nur Lane a) ruft es auf, sobald sich main bewegt hat, aber nur nach einer Änderung an
+Detektoren oder Scorern (`ark-core`, Cargo-Dateien), an `scripts/l1_threat/`, an der Gold-Bereinigung
+(`scoreboard/gold-dev.json`, `gold-leakage.json`), an `entity_map.yaml` oder an der Kaskaden-Konfiguration. Was
+sich geändert hat, geht als ein Folge-PR (`threat/scoreboard`, bei jedem Refresh neu gepusht) über den normalen
+Auto-Merge nach main; ein Bericht mit unveränderten Zahlen bleibt stehen. Der Refresh läuft wie ein Gate-Schritt
+in der Sandbox, ohne Netz und ohne Holdout, und teilt Builds und Vorhersagen mit dem Gate.
 
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
