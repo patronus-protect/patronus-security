@@ -108,8 +108,9 @@ block 5.1519 ['core.remote_to_exec', 'CMD-PIPE-CURL'] curl -s https://example.or
   with 64 overlap). `matched` means the attack probability is above the threshold (`threshold` is
   optional and replaces the published one). The `wolf` config takes
   `model` (`base`, `small`, `edge`) and `precision` (`auto`, `fp32`, `fp16`, `mixed`,
-  `mixed_x86`, `int8_int4`, `int8_int4_x86`). `wolf_options=
-  {"window_tokens": 256, "overlap_tokens": 0, "batch_size": 1}` replaces the published windowing;
+  `mixed_x86`, `int8_int4`, `int8_int4_x86`), optional `bundle_dir` (default: the model's directory
+  below `cache_root`) and `execution`: `{"window_tokens": 256, "overlap_tokens": 0, "batch_size": 1}`
+  replaces the published windowing;
   unset keys keep the published values. Recalibrate the threshold when you change it.
 - `shell_verdict(command, *, cwd=None, home=None, repo_root=None, dialect=None,
   prior_facts=None, with_facts=False)` returns the `patronus.verdict/1` dict. For a session,

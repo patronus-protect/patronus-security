@@ -152,10 +152,11 @@ The rules behind the diagram:
 
 ### Configuration keys
 
-Ark Core takes the cascade as the optional `cascade` key of the scanner configuration (Rust
-`ScannerConfig::cascade`, Python `ScannerConfig["cascade"]`). Its level keys are the gate keys
-of full Ark with the same meaning (`max_level` the ceiling; `l1`, `l2`, `l3` switch a level off,
-unset means on), so any single layer can run alone. Per module, the rules run unless their native
+Ark Core takes the cascade as the optional `cascade` gate key of the scanner configuration
+(Rust `ScannerConfig::gates.cascade`, Python `ScannerConfig["cascade"]`). Which layers run is
+decided by the level keys of the configuration, with the same meaning in full Ark and with or
+without a cascade (`max_level` the ceiling; `l1`, `l2`, `l3` switch a level off, unset means
+on), so any single layer can run alone. Per module, the rules run unless their native
 producers are switched off with the existing `models` gate (for example
 `{"models": {"native:injection_l1": false}}`), and the L1 model runs when `l1_model` is set:
 
@@ -163,8 +164,8 @@ producers are switched off with the existing `models` gate (for example
 {
   "categories": ["pii", "dlp", "injection", "exfiltration"],
   "wolf": {"bundle_dir": "/srv/models/wolf-defender"},
+  "max_level": "l3",
   "cascade": {
-    "max_level": "l3",
     "modules": {
       "injection": {
         "clear_threshold": 0.05,
@@ -178,9 +179,9 @@ producers are switched off with the existing `models` gate (for example
 
 | Key | Meaning | Default |
 | --- | --- | --- |
-| `cascade.max_level` | Deepest layer that may run: `l1`, `l2` or `l3`. | `l3` |
-| `cascade.l1`, `cascade.l2`, `cascade.l3` | `false` switches that level off (`l1: false`: no rules and no L1 models run; for example only Wolf answers `injection`). | on |
-| `cascade.conditional` | [Conditional gates](../reference/configuration.md#conditional-gates) for L2 and L3, over the L1 results of every scanned module. Only `result` conditions: Core scans carry no request metadata, so `metadata` conditions are refused. | none |
+| `max_level` | Deepest layer that may run: `l1`, `l2` or `l3`. | `l3` |
+| `l1`, `l2`, `l3` | `false` switches that level off (`l1: false`: no rules and no L1 models run; for example only Wolf answers `injection`). | on |
+| `conditional` | [Conditional gates](../reference/configuration.md#conditional-gates) for L2 and L3, over the L1 results of every scanned module. Only `result` conditions: Core scans carry no request metadata, so `metadata` conditions are refused. | none |
 | `cascade.modules.<category>.detect_threshold` | The heuristic's detect cut on its rule scorer's probability (`0.0`–`1.0`): for `injection` (and the classes its rules feed) the injection scorer's candidate score; for the threat classes the document scorer's own probability (recomputed from `details.matched_rules`), not the points score; for PII and DLP the result's confidence. A score at or above it is detected when the category's mode (`<category>_mode`) admits it. A threat points rule accepted on its own, with evidence left after the mode floor, is detected regardless. | the scorer's calibrated point |
 | `cascade.modules.<category>.clear_threshold` | The heuristic's clear cut on the same score; an undetected score below it is clear. Not above `detect_threshold`. | off |
 | `cascade.modules.<category>.l1_model.bundle_dir` | The L1 model release directory (`manifest.json`, `config.json`, the model file), loaded once when the scanner is created. | no model |

@@ -9,64 +9,42 @@ Import from `patronus_ark` after installing the wheel or running `maturin develo
 Python gateway for Patronus Ark scanners.
 
 Args:
-    categories: Scanner categories to use for `scan_all`.
-    max_level: Maximum scanner level: `l1`, `l2`, or `l3`.
-    model_dir: Optional asset cache root. Defaults to the platform cache
-        directory plus `patronus_ark`.
-    download_files: Whether `warmup()` may download missing model assets.
-    download_categories: Optional category allowlist for asset downloads.
-        When omitted, every configured category may download if
-        `download_files` is true.
-    execution_gates: Optional scan execution matrix in the gate schema
-        shared with the Ark API: `{"l1": True, "l2": False, "l3": False,
-        "models": {"native:mcp_runtime_risk": False},
-        "rules": {"pii_email": False, "cat.core.remote_to_exec": False}}`
-        disables levels, model/native scanner areas, or individual L1 rules
-        (Cat shell policies included) for subsequent scan calls; `pii_mode`,
-        `dlp_mode`, one `<category>_mode` per attack class (such as
-        `unsafe_action_mode`), `explain`, `conditional`, the L3 worker policy
-        `l3_policy` and the opt-in `cascade` (`{"cascade": {"modules": {...}}}`:
-        L1 early exit with per-category `detect_threshold`/`clear_threshold`;
-        results then carry `decided_by`) complete it. Unknown keys raise
-        `ValueError`.
-        New classifier pipelines can be gated independently through
-        `models`, for example `{"models": {"tool_action": False}}`.
-    onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
-        `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
-        when using batch APIs.
-    execution_backend: `auto`, `cpu`, `gpu`, `coreml`, `cuda`,
-        `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
-        CPU/auto and tensor batches on accelerator backends unless
-        `onnx_batch_mode` is explicitly set.
-    ntdb_operating_point: Calibrated NTDB final-decision threshold set. One of
-        `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
-        `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
-        L3 promote thresholds.
-    wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
-        (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
-        retain 256/0/1 (the model card's 2048/64 is opt-in). Validated before
-        gateway construction; applied before warmup.
-    wolf_model: Dedicated-Wolf model: `base`, `small` (default) or `edge`.
-    wolf_precision: Dedicated-Wolf ONNX export: `auto` (default; uses
-        `PATRONUS_L3_PRECISION`, else `int8_int4_x86` on x86_64 and
-        `int8_int4` elsewhere), `fp32`, `fp16`, `mixed`, `mixed_x86`,
-        `int8_int4` or `int8_int4_x86`.
-    l3_strategy: `dedicated` for one L3 model per classifier pipeline or
-        `multi` for the shared unified multi-head ONNX model.
-    dynamic_pii_config: Pipeline-specific labels, result gates,
-        thresholds, chunking, text limit, and timeout for the L3-only
-        `dynamic-pii` category.
-    cache_storage_location: Optional path to the persistent cache database.
-        If omitted, caching remains memory-only.
-    cache_encryption_key_hex: Optional 64-character hex-encoded persistent
-        cache encryption key. Ignored when `cache_storage_location` is omitted.
-    cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
-    cache_memory_max_entries: Maximum entries retained by a hot cache tier.
-    cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
+    config: The gateway config, a dict (see `GatewayConfig`): the keys of
+        Ark Core's `Scanner` config with the same meaning, plus Ark's own.
+
+        Core keys: `categories` (any Ark category), `max_level` (`l1`,
+        `l2` or `l3`; default `l2` here), the gate keys at the top level
+        (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`, `dlp_mode`, one
+        `<category>_mode` per attack class, `explain`, `conditional`, the
+        L3 worker policy `l3_policy` and the opt-in `cascade`
+        (`{"modules": {...}}`: L1 early exit with per-category
+        `detect_threshold`/`clear_threshold`; results then carry
+        `decided_by`)), `cache_root` (the model cache root; default the
+        platform cache directory plus `patronus_ark`), `wolf` (the
+        dedicated injection L3: `model` `base`, `small` (default) or
+        `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
+        `mixed_x86`, `int8_int4` or `int8_int4_x86`; `execution` with
+        `window_tokens`, `overlap_tokens`, `batch_size`, unset values
+        retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
+        the `shell_command` verdict).
+
+        Ark keys: `download` (`missing`, the default here, lets `warmup()`
+        download missing model assets; `never`), `download_categories`,
+        `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
+        `ntdb_decision_threshold_point` (`best_f1` (default),
+        `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
+        `best_latency_in_f1`), `execution_backend` (`auto`, `cpu`, `gpu`,
+        `coreml`, `cuda`, `directml`, `tensorrt`), `onnx_batch_mode`
+        (`lazy_batches` or `tensor_batch`; unset follows the backend),
+        `onnx_runtime`, `dynamic_pii` (labels, result gates, thresholds,
+        chunking, text limit and timeout of the L3-only `dynamic-pii`
+        category) and `cache` (`storage_location`, `encryption_key_hex`,
+        `entry_ttl_seconds`, `memory_max_entries`, `memory_max_bytes`;
+        without a storage location the cache stays in memory).
 
 ### `wolf_options() -> dict[str, int]`
 
-Effective dedicated-Wolf startup profile; returned as an independent copy.
+Effective dedicated-Wolf windows; returned as an independent copy.
 
 ### `wolf_model() -> str`
 
@@ -128,7 +106,7 @@ file is preserved.
 
 Scan text with every category configured on this gateway.
 
-### `set_execution_gates(execution_gates: ExecutionGates | None)`
+### `set_execution_gates(execution_gates: ScanGates | None)`
 
 Replace the gate matrix used by subsequent scan calls.
 
@@ -172,7 +150,7 @@ Replace the user policies and allowlist of the `shell_command` verdict.
 
 `policy_dirs` are directories of user `*.cedar` policies, read in file-name
 order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
-Ark Core's `shell` config and the Ark API's `pipeline.shell_command`. A loaded
+Ark Core's `shell` config and the Ark API's `pipeline.shell`. A loaded
 bundle applies the configuration at once, otherwise `warmup()` does. A refused
 configuration raises `ValueError` and changes nothing.
 
@@ -184,7 +162,7 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None, execution_gates: ExecutionGates | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: ScanGates | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
 
 Queue one scan request and return its request id.
 

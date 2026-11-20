@@ -29,7 +29,7 @@ docker compose up -d
 ```
 
 The image bakes model assets in at build time (`ark-api --warmup-only`), so the running container
-never needs network access or `pipeline.download_files: true`. On Linux `x86_64`, use the pinned
+never needs network access or `pipeline.download: missing`. On Linux `x86_64`, use the pinned
 FP16 graphs for production parity:
 
 ```bash
@@ -66,8 +66,8 @@ auth:
 pipeline:
   categories: ["injection", "dlp", "pii"]
   max_level: "L2"
-  model_dir: "/data/models"
-  download_files: false
+  cache_root: "/data/models"
+  download: never
 
 cache:
   dir: "/data/cache"
@@ -75,7 +75,8 @@ cache:
 
 ### Gates
 
-`pipeline.gates` (and an optional per-key override at `auth.keys[].gates`) mirrors
+The gate keys at the top level of `pipeline` (Ark Core's gate keys; an optional per-key override
+sits at `auth.keys[].gates`) mirror
 `ScanGateMatrix` from the [Rust API](../rust-api.md): `l1`/`l2`/`l3` toggle whole levels,
 `models` disables individual native scanners or models by their result `model` name (e.g.
 `native:mcp_runtime_risk`), and `conditional` is the deep gate logic — the same
@@ -84,22 +85,21 @@ straight from YAML:
 
 ```yaml
 pipeline:
-  gates:
-    models:
-      native:mcp_runtime_risk: false
-    conditional:
-      # Only run the L3 injection classifier once L1 already flagged something.
-      - level: "L3"
-        pipeline: "injection"
-        when:
-          any:
-            - result:
-                pipeline: "injection"
-                classes: ["instruction_override", "instruction_leak"]
-                min_confidence: 0.5
-            - metadata:
-                path: "source"
-                equals: "slack_file_upload"
+  models:
+    native:mcp_runtime_risk: false
+  conditional:
+    # Only run the L3 injection classifier once L1 already flagged something.
+    - level: "L3"
+      pipeline: "injection"
+      when:
+        any:
+          - result:
+              pipeline: "injection"
+              classes: ["instruction_override", "instruction_leak"]
+              min_confidence: 0.5
+          - metadata:
+              path: "source"
+              equals: "slack_file_upload"
 ```
 
 `when` supports `all` / `any` / `not` trees of `metadata` (request-context) and `result`

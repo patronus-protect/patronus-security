@@ -4,40 +4,56 @@ Every knob that changes gateway behavior, in one place. For the full method sign
 generated [Python API](../python-api.md) and [Rust API](../rust-api.md); for concepts see
 [Architecture](../concepts/architecture.md) and [Analysis framework](../concepts/layered-scanning.md).
 
-## Constructor options
+## Gateway config
 
-Set at gateway construction:
+A gateway is built from one config: `SecurityGateway(config)` in Python (a dict),
+`SecurityGateway::new(GatewayConfig)` in Rust and the `pipeline` section of the Ark API server.
+**Ark Core's keys are Ark's keys**: every key of Ark Core's `Scanner` config (`ScannerConfig`)
+means the same in Ark, and Ark adds the keys of its later layers. Unknown keys are refused
+(`ValueError` in Python, an error in Rust and at server start).
 
-| Option | Type | Meaning | Rust |
-| --- | --- | --- | --- |
-| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | constructor |
-| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation (default `"l2"`). | constructor |
-| `download_files` | bool | Whether missing assets may be downloaded on warmup. | constructor |
-| `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
-| `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
-| `cache_storage_location` | path or `None` | Explicit persistent cache database; `None` keeps the cache memory-only. | cache constructor |
-| `cache_encryption_key_hex` | 64 hex chars or `None` | Encrypt persistent cache values and keyed similarity bucket indexes. | `PersistentCacheConfig.encryption` |
-| `cache_entry_ttl_seconds` | positive integer | Shared hot/persistent TTL; defaults to 30 days (`2_592_000`). | `ExactCacheConfig.entry_ttl` |
-| `cache_memory_max_entries` | non-negative integer | Per-hot-tier entry bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_entries` |
-| `cache_memory_max_bytes` | non-negative integer | Per-hot-tier byte bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_bytes` |
-| `wolf_options` | dict or `None` | Dedicated-Wolf startup profile: total window tokens, content overlap and batch size; default `256/0/1`. | `set_wolf_execution_options` |
-| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. | setter |
-| `execution_gates` | dict / matrix | Initial [execution gates](#execution-gates). | setter |
-| `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | setter |
-| `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | setter |
-| `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); default `"backend_default"` follows whatever the backend implies. | setter |
-| `ntdb_operating_point` | str | Initial [final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | setter |
+| Key | Type | Meaning | Core | Ark |
+| --- | --- | --- | --- | --- |
+| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | text-scan categories | every category |
+| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"`; Python `"l2"`; required in the server config. | yes | yes |
+| gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
+| `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
+| `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`. Core also reads `threshold`, `backend`, `runtime_options`. | yes | yes |
+| `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, `allowlist`, optional `bundle_dir`. | yes | yes |
+| `max_input_bytes`, `max_findings` | integer | Limits of Ark Core's `Scanner`. | yes | no (Ark queues and chunks long input) |
+| `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`; Python `"missing"`. | warmup option | yes |
+| `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
+| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"`; server `"multi"`. | no | yes |
+| `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
+| `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
+| `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | no | yes |
+| `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); unset follows the backend. | no | yes |
+| `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` (default `1/1/false`). | no | yes |
+| `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
+| `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. The server takes the storage directory from its own `cache.dir`. | no | yes |
 
-In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust the
-*constructor*-marked options are positional: `with_max_level(categories, max_level, model_dir,
-download_files)` takes four arguments (it always downloads for every configured category), and
-`with_download_categories(...)` adds the fifth, `download_categories`. Every other option is
-applied after construction with its setter (`set_l3_strategy`, `set_execution_gates`,
-`set_dynamic_pii_config`, `set_execution_backend`, `set_onnx_runtime_options`,
-`set_wolf_execution_options`,
-`set_onnx_batch_mode`). Rust persistent caching uses
-`try_with_download_categories_and_cache(...)` with `ExactCacheConfig`; the path is fixed for
-the gateway lifecycle and cannot be overridden per request.
+```python
+from patronus_ark import SecurityGateway
+
+gateway = SecurityGateway({
+    "categories": ["pii", "dlp", "injection"],
+    "max_level": "l1",
+    "download": "never",
+    "rules": {"pii_email": False},
+})
+```
+
+```rust
+use patronus_ark::{GatewayConfig, SecurityGateway};
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+
+let mut config = GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1);
+config.core.gates.set_rule("pii_email", false);
+let gateway = SecurityGateway::new(config)?;
+```
+
+The same document configures Ark Core's `Scanner` when it holds only Core keys. The cache path
+is fixed for the gateway lifecycle and cannot be overridden per request.
 
 Python persistent writes are asynchronous. Call `flush_cache()` when shutdown or a durability
 boundary must wait for all queued writes. See
@@ -46,16 +62,21 @@ cache-hit behavior, Dynamic PII events, metadata, and measured latencies.
 
 ## Dedicated Wolf profile
 
-Full-Ark Python accepts optional startup `wolf_options`, using the same
+Ark takes Wolf's windows from the Core key `wolf.execution`, with the same
 `WolfExecutionOptions` validation as Core:
 
 ```python
 from patronus_ark import SecurityGateway
 
 gateway = SecurityGateway(
-    ["injection"], max_level="l3", model_dir="/srv/models",
-    download_files=False, l3_strategy="dedicated",
-    wolf_options={"window_tokens": 256, "overlap_tokens": 0, "batch_size": 1},
+    {
+        "categories": ["injection"],
+        "max_level": "l3",
+        "cache_root": "/srv/models",
+        "download": "never",
+        "l3_strategy": "dedicated",
+        "wolf": {"execution": {"window_tokens": 256, "overlap_tokens": 0, "batch_size": 1}},
+    }
 )
 gateway.warmup()
 assert gateway.wolf_options["window_tokens"] == 256
@@ -73,15 +94,16 @@ to the server configuration:
 ```yaml
 pipeline:
   l3_strategy: dedicated
-  wolf_options:
-    window_tokens: 256
-    overlap_tokens: 0
-    batch_size: 1
+  wolf:
+    execution:
+      window_tokens: 256
+      overlap_tokens: 0
+      batch_size: 1
 ```
 
-These are server defaults, not request overrides. Wolf options do not configure
+These are server defaults, not request overrides. Wolf's windows do not configure
 the shared `multi` model. Existing HTTP configs without these fields keep `multi`
-and the `256/0/1` Wolf profile. Existing Full-Ark Python calls retain `dedicated`.
+and the `256/0/1` Wolf profile. Python gateways default to `dedicated`.
 The generic request `chunk_overlap_tokens` setting remains separate from Wolf's
 content-token overlap.
 
@@ -125,22 +147,14 @@ config error in the Ark API).
 
 ### Ark Core keys and Ark keys
 
-Ark runs Ark Core's L1 pass, so Ark Core's config keys are Ark's keys: one document configures
-Ark Core's `Scanner` (`ScannerConfig`) and, without `categories`, Ark's execution gates, and at
-`max_level` `l1` both report the same L1 results. Ark adds only the keys of its later layers.
-
-| Key | Ark Core (`ScannerConfig`) | Ark (execution gates / gateway) |
-|---|---|---|
-| `rules`, `models`, `explain` | yes | yes, same meaning |
-| `pii_mode`, `dlp_mode`, `<attack class>_mode` | yes | yes, same meaning |
-| `resource_exhaustion_count_threshold`, `threat_points_acceptance` | yes | yes, same meaning |
-| `cascade` (`modules`, `detect_threshold`, `clear_threshold`, `max_level`, `conditional`) | yes | yes; `l1_model` is Core only |
-| `categories` | config key | constructor argument (also Ark-only categories) |
-| `max_input_bytes`, `max_findings` | yes | no (Ark queues and chunks long input) |
-| `wolf` | local bundle (`bundle_dir`, `threshold`, `precision`, `backend`) | `wolf_model`, `wolf_precision`, `wolf_options`; same model cache |
-| `shell` | Cat bundle | `shell_command` category and its policy config |
-| `l1`, `l2`, `l3`, `conditional`, `l3_policy` | no | Ark only |
-| `max_level`, `l3_strategy`, `ntdb_operating_point`, `dynamic_pii_config`, cache options | no | Ark only (constructor) |
+The gate keys are part of the [gateway config](#gateway-config) and of Ark Core's
+`ScannerConfig`, with one meaning: the level keys `max_level`, `l1`, `l2`, `l3` and
+`conditional` decide which layers run, with or without a cascade; the `cascade` key holds
+only `modules` (per-module L1 cuts and L1 models). At `max_level` `l1` Core and Ark report the
+same L1 results. Core scans carry no request metadata, so Core refuses `metadata` conditions,
+and run no L3 worker, so Core ignores `l3_policy`. Per-request gates (Python `execution_gates`,
+`enqueue`, the Ark API's per-key and per-request `gates`) take the same keys without the
+gateway's other keys.
 
 ```python
 scanner.set_execution_gates({

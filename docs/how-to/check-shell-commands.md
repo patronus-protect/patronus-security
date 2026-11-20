@@ -283,13 +283,13 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
     use patronus_ark::SecurityGateway;
     use patronus_ark_core::{detectors::shell::ShellPolicyConfig, SecurityCategory, cascade::SecurityLevel};
 
-    let mut gateway = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand],
-        SecurityLevel::L1,
-        None,
-        true,
-        Some(vec![SecurityCategory::ShellCommand]),
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand], SecurityLevel::L1);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::ShellCommand]);
+        config
+
+    }).unwrap();
     let policies = ShellPolicyConfig::load(&["/etc/patronus/shell-policies"], &Default::default())?;
     gateway.set_shell_command_policy_config(policies)?; // before or after warmup
     gateway.warmup()?;
@@ -303,7 +303,7 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
     ```python
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway(categories=["shell_command"], max_level="l1")
+    gateway = SecurityGateway({"categories": ["shell_command"], "max_level": "l1"})
     gateway.set_shell_command_policy_config(
         policy_dirs=["/etc/patronus/shell-policies"],
         allowlist={"C2-WEBHOOK-SITE": "ask"},
@@ -317,7 +317,7 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
     pipeline:
       categories: [shell_command]
       max_level: L1
-      shell_command:
+      shell:
         policy_dirs: [/etc/patronus/shell-policies]
         allowlist: {C2-WEBHOOK-SITE: ask}
     ```

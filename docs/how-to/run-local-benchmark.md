@@ -15,9 +15,11 @@ config, or environment variables.
 from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_document", "unsafe_action", "routing"],
-    max_level="l3",
-    l3_strategy="multi",
+    {
+        "categories": ["injection", "sensitive_document", "unsafe_action", "routing"],
+        "max_level": "l3",
+        "l3_strategy": "multi",
+    }
 )
 scanner.warmup()
 scanner.run_local_benchmark()

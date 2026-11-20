@@ -31,7 +31,7 @@ Verify the install:
 ```python
 from patronus_ark import SecurityGateway
 
-scanner = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
+scanner = SecurityGateway({"categories": ["injection"], "max_level": "l1", "download": "never"})
 scanner.warmup()
 print(scanner.runtime_readiness())
 ```
@@ -63,12 +63,7 @@ use patronus_ark::SecurityGateway;
 use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 fn main() {
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L1,
-        None,   // model dir; None uses the platform cache directory
-        false,  // download_files
-    );
+    let mut scanner = SecurityGateway::new(GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L1)).unwrap();
     scanner.warmup().expect("warmup");
     println!("{:?}", scanner.runtime_readiness());
 }

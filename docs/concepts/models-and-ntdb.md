@@ -100,7 +100,7 @@ them on your own hardware.
 
 The category → level → repository mapping is defined in
 [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
-Assets are cached under the platform cache directory (or a custom `model_dir`) and downloaded on
+Assets are cached under the platform cache directory (or a custom `cache_root`) and downloaded on
 first use. Every bundle is pinned to an immutable commit revision: the Cat (`shell_command`) and
 Wolf Defender revisions live in
 [`ark-core/src/warmup.rs`](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/src/warmup.rs)

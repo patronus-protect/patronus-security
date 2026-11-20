@@ -18,9 +18,11 @@ work on its own background workers.
     from patronus_ark import SecurityGateway
 
     scanner = SecurityGateway(
-        categories=["injection", "dlp", "pii"],
-        max_level="l2",          # L1 native + L2 models, no L3 transformer
-        download_files=True,     # fetch missing L2 assets on the first warmup
+        {
+            "categories": ["injection", "dlp", "pii"],
+            "max_level": "l2",
+            "download": "missing",
+        }
     )
     scanner.warmup()             # downloads injection's L2 package if not cached
     ```
@@ -31,12 +33,12 @@ work on its own background workers.
     use patronus_ark::SecurityGateway;
     use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection, SecurityCategory::Dlp, SecurityCategory::Pii],
-        SecurityLevel::L2,
-        None,   // model dir; None uses the platform cache directory
-        true,   // download_files: fetch missing L2 assets on first warmup
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection, SecurityCategory::Dlp, SecurityCategory::Pii], SecurityLevel::L2);
+        config.download = DownloadPolicy::Missing;
+        config
+
+    }).unwrap();
     scanner.warmup().expect("warmup");
     ```
 
@@ -44,7 +46,7 @@ work on its own background workers.
 on the first run. Native L1 always runs; `pii` and `dlp` are L1-only and never download (`shell_command` is L1 but needs a small model file).
 
 !!! warning "Offline start needs pre-cached assets"
-    With `download_files=false` and a model-backed level (`l2`/`l3`), `warmup()` **raises** if a
+    With `"download": "never"` and a model-backed level (`l2`/`l3`), `warmup()` **raises** if a
     required package isn't cached yet — it does not silently fall back to L1. For air-gapped
     startup, pre-fetch assets first (see [Offline & air-gapped](../how-to/offline-airgapped.md)),
     or cap the gateway at `max_level="l1"`.
@@ -165,10 +167,12 @@ those models are held **resident in RAM**, governed by an idle-TTL policy
 
     ```python
     scanner = SecurityGateway(
-        categories=["injection"],
-        max_level="l3",
-        download_files=True,
-        download_categories=["injection"],
+        {
+            "categories": ["injection"],
+            "max_level": "l3",
+            "download": "missing",
+            "download_categories": ["injection"],
+        }
     )
     scanner.warmup()   # may download injection L2/L3 assets on first run
     ```
@@ -179,13 +183,13 @@ those models are held **resident in RAM**, governed by an idle-TTL policy
     use patronus_ark::SecurityGateway;
     use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
-    let mut scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L3,
-        None,
-        true,                                    // download_files
-        Some(vec![SecurityCategory::Injection]), // download only injection
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::Injection]);
+        config
+
+    }).unwrap();
     scanner.warmup().expect("warmup");
     ```
 
@@ -195,7 +199,7 @@ The Python package can measure a gateway on the validation samples it ships with
 datasets or configuration:
 
 ```python
-scanner = SecurityGateway(categories=["injection", "unsafe_action"], max_level="l3")
+scanner = SecurityGateway({"categories": ["injection", "unsafe_action"], "max_level": "l3"})
 scanner.warmup()
 scanner.run_local_benchmark()   # writes ./benchmark/…
 ```
