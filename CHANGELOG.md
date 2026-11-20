@@ -41,6 +41,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Wolf's windows are the `wolf.execution` key: `Scanner::new_with_wolf_options`,
   `Scanner::warmup_with_wolf_options`, `WolfRunner::new_with_options` and the Python
   `wolf_options` argument are gone.
+- **Ark's standalone rules `Pipeline` is removed:** `patronus_ark::Pipeline` (an n-gram rule
+  matcher over a directory's `l1_rules.json`) and `patronus_ark::ml::l1_heuristics` had no caller;
+  `SecurityGateway` and Ark Core's L1 pass cover the categories.
 - **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
   `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
   environment override) describes a model and Core resolves its directory, checks its revision

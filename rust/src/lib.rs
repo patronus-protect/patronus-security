@@ -40,7 +40,7 @@ pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiRequestConfig, DynamicPiiResultCondition, MAX_REQUEST_LABEL_BYTES,
 };
-pub use pipeline::{Pipeline, SecurityGateway};
+pub use pipeline::SecurityGateway;
 pub use types::defaults;
 pub use types::{
     L3Strategy, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,

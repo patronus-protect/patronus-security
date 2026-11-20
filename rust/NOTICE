@@ -27,8 +27,7 @@ Licensed under the Apache License, Version 2.0. You may obtain a copy of the
 License at http://www.apache.org/licenses/LICENSE-2.0
 
 -------------------------------------------------------------------------------
-2. Detection heuristics  (rust/src/ml/l1_heuristics.rs,
-                          rust/src/ml/ntdb_executor/heuristics.rs)
+2. Detection heuristics  (rust/src/ml/ntdb_executor/heuristics.rs)
 -------------------------------------------------------------------------------
 Portions of the native detection heuristics are derived from the Apache-2.0
 licensed core of the pipelock project.
