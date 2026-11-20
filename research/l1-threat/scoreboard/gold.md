@@ -23,17 +23,17 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | instruction_injection | 109 | 3313 | 0 | 11711 | 2727 | 9 | 686 | 11711 | 0 | 0 |
-| jailbreak | 42 | 2154 | 63 | 62 | 2000 | 0 | 196 | 0 | 0 | 125 |
-| prompt_extraction | 0 | 15101 | 0 | 1831 | 15000 | 0 | 101 | 331 | 0 | 1500 |
-| tool_poisoning | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
-| agent_config_tampering | 45 | 42 | 63 | 62 | 0 | 3 | 84 | 0 | 0 | 125 |
-| memory_poisoning | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
+| jailbreak | 42 | 2154 | 63 | 1086 | 2000 | 0 | 196 | 647 | 0 | 502 |
+| prompt_extraction | 0 | 15101 | 0 | 725 | 15000 | 0 | 101 | 331 | 0 | 394 |
+| tool_poisoning | 42 | 41 | 63 | 894 | 0 | 0 | 83 | 474 | 0 | 483 |
+| agent_config_tampering | 45 | 42 | 63 | 347 | 0 | 3 | 84 | 285 | 0 | 125 |
+| memory_poisoning | 42 | 41 | 63 | 665 | 0 | 0 | 83 | 232 | 0 | 496 |
 | exfiltration | 151 | 461 | 225 | 11936 | 113 | 1 | 498 | 11711 | 0 | 450 |
-| unsafe_action | 178 | 517 | 63 | 62 | 382 | 35 | 278 | 0 | 0 | 125 |
+| unsafe_action | 178 | 517 | 63 | 144 | 382 | 35 | 278 | 82 | 0 | 125 |
 | resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
 | harmful_content | 316 | 483 | 0 | 172 | 483 | 316 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
-| benign | 12101 | 19902 | 17191 | 12122 | 30156 | 47 | 1800 | 33727 | 0 | 2700 |
+| benign | 12101 | 19902 | 17191 | 15030 | 30156 | 47 | 1800 | 37235 | 0 | 2100 |
 
 ## Spot-check dev
 
@@ -69,15 +69,22 @@ Benign pool (dev, scored sets): 0 of 334 reviewed benign rows wrong or unclear.
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/carrier_insertion | decisive | 1800 | 50 | 0 | 1 | 2.0% | 0 / 25 |
+| generated/carrier_insertion | decisive | 1800 | 50 | 1 | 1 | 4.0% | 0 / 10 |
 | generated/class_templates | decisive | 1500 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | decisive | 900 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| generated/obfuscation_slices | decisive | 1200 | 50 | 0 | 0 | 0.0% | 0 / 25 |
+| generated/obfuscation_slices | decisive | 600 | 52 | 0 | 1 | 1.9% | 0 / 0 |
+| holdout/agentharm | decisive | 147 | 50 | 6 | 8 | 28.0% | 0 / 0 |
+| holdout/autoredclaw | decisive | 146 | 50 | 24 | 17 | 82.0% | 0 / 0 |
 | holdout/cyberseceval_pi | decisive | 232 | 50 | 27 | 2 | 58.0% | 0 / 0 |
 | holdout/hatecheck_de | decisive | 2844 | 50 | 0 | 0 | 0.0% | 0 / 25 |
 | holdout/hatecheck_en | decisive | 3153 | 50 | 0 | 0 | 0.0% | 0 / 25 |
+| holdout/jbb_artifacts | decisive | 647 | 50 | 2 | 0 | 4.0% | 0 / 0 |
 | holdout/jbb_behaviors | decisive | 60 | 50 | 1 | 5 | 12.0% | 0 / 0 |
 | holdout/llmail_inject | decisive | 11711 | 150 | 0 | 7 | 4.7% | 0 / 0 |
+| holdout/malskillbench | decisive | 3641 | 51 | 0 | 1 | 2.0% | 0 / 17 |
+| holdout/mcptox | decisive | 474 | 50 | 0 | 2 | 4.0% | 0 / 0 |
+| holdout/memform | decisive | 232 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| holdout/memform_clean | decisive | 234 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | holdout/multijail | decisive | 307 | 50 | 13 | 13 | 52.0% | 0 / 0 |
 | holdout/notinject | decisive | 339 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | holdout/oasst2 | decisive | 14985 | 50 | 0 | 0 | 0.0% | 0 / 50 |
@@ -87,11 +94,11 @@ Benign pool (dev, scored sets): 0 of 334 reviewed benign rows wrong or unclear.
 | holdout/wikipedia | decisive | 15000 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | holdout/xstest | decisive | 446 | 51 | 0 | 2 | 3.9% | 0 / 17 |
 
-Benign pool (holdout, scored sets): 6 of 350 reviewed benign rows wrong or unclear.
+Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or unclear.
 
 ## Leakage dev → holdout
 
-0 of 56769 holdout rows duplicate one of 70929 dev rows (exact or MinHash).
+0 of 61690 holdout rows duplicate one of 70454 dev rows (exact or MinHash).
 
 ## Flagged dev rows
 
