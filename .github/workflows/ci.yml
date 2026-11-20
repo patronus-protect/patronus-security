@@ -222,6 +222,7 @@ jobs:
       - run: python -m venv .build-venv
       - run: .build-venv/bin/python scripts/bootstrap_python_tls.py
       - run: .build-venv/bin/python -m pip install maturin
+      - run: .build-venv/bin/python -m maturin build --release --manifest-path ark-core/python/Cargo.toml --interpreter .build-venv/bin/python --out dist
       - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --interpreter .build-venv/bin/python --out dist
       - run: python -m venv .perf-venv
       - run: .perf-venv/bin/python scripts/bootstrap_python_tls.py

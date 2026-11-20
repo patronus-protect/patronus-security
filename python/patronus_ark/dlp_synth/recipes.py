@@ -100,7 +100,7 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
-from patronus_ark_core import seed_word_list
+from .word_lists import seed_word_list
 
 
 GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"

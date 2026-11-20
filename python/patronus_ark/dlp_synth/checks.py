@@ -15,7 +15,7 @@ import hmac
 import json
 import re
 import zlib
-from patronus_ark_core import seed_word_list
+from .word_lists import seed_word_list
 
 
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
