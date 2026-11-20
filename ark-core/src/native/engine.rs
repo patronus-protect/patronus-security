@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use super::{registry, NativeGates, NativeProducerSpec};
 use crate::{
-    detectors::{
-        text::{L1ModelConfig, L1TextModel},
-        NativeDetection,
-    },
-    threat::NativeText,
-    LayerResult, NativeResult, ScanControl, ScanError, SecurityCategory,
+    detectors::NativeDetection, threat::NativeText, LayerResult, NativeResult, ScanControl,
+    ScanError, SecurityCategory,
 };
 use std::{
     collections::HashMap,
@@ -41,8 +37,6 @@ pub const NATIVE_CATEGORIES: [SecurityCategory; 13] = [
 /// Owns each selected category's detector state once, without worker threads.
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
-    /// Each module's optional L1 model ([`Self::load_l1_models`]).
-    l1_models: [Option<std::sync::Arc<L1TextModel>>; NATIVE_CATEGORIES.len()],
 }
 
 impl NativeEngine {
@@ -57,10 +51,7 @@ impl NativeEngine {
                 }
             }
         }
-        Self {
-            groups,
-            l1_models: std::array::from_fn(|_| None),
-        }
+        Self { groups }
     }
 
     /// Builds what a scan under `gates` runs, for every enabled producer:
@@ -75,32 +66,6 @@ impl NativeEngine {
                 producer.prepare(gates);
             }
         }
-    }
-
-    /// Load the configured L1 models once (for example
-    /// [`crate::cascade::CascadeConfig::l1_models`]); each replaces the
-    /// module's earlier model. A model another scanner of the process holds
-    /// under the same config is shared ([`crate::shared_models`]). Non-native categories are refused. No model is
-    /// loaded unless configured.
-    pub fn load_l1_models<'a>(
-        &mut self,
-        configs: impl IntoIterator<Item = (SecurityCategory, &'a L1ModelConfig)>,
-    ) -> Result<(), String> {
-        for (category, config) in configs {
-            let slot = index(category)
-                .ok_or_else(|| format!("l1 model for non-native category {}", category.as_str()))?;
-            // Scanners of one process that configure the same model share it.
-            let key = format!("{}|{config:?}", category.as_str());
-            self.l1_models[slot] = Some(crate::shared_models::shared(&key, || {
-                L1TextModel::load(category, config)
-            })?);
-        }
-        Ok(())
-    }
-
-    /// The loaded L1 model of `category`'s module, if one is configured.
-    pub fn l1_model(&self, category: SecurityCategory) -> Option<&L1TextModel> {
-        index(category).and_then(|i| self.l1_models[i].as_deref())
     }
 
     /// Producers in the established category order, or empty for an unselected

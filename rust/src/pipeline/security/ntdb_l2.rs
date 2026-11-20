@@ -16,15 +16,16 @@ use crate::{
 };
 
 use super::scan_result;
+use crate::assets::specs;
+use patronus_ark_core::model_assets::ModelSpec;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct NtdbL2ModelConfig {
     pub category: SecurityCategory,
     pub model_id: &'static str,
     pub public_model: &'static str,
-    pub asset_model: &'static str,
-    pub env_key: &'static str,
-    pub package_name: &'static str,
+    /// The pinned NTDB package; Core resolves its directory and environment override.
+    pub package: ModelSpec,
     pub has_l3: bool,
 }
 
@@ -53,9 +54,7 @@ pub(super) fn classifier_model_configs_for_category(
                     category,
                     model_id: "injection",
                     public_model: "wolf-defender-small",
-                    asset_model: "wolf-defender-small",
-                    env_key: "PATRONUS_NTDB_INJECTION_DIR",
-                    package_name: "injection_current",
+                    package: specs::NTDB_INJECTION.spec,
                     has_l3: true,
                 }]
             } else {
@@ -73,9 +72,7 @@ pub(super) fn classifier_model_configs_for_category(
                     category,
                     model_id: "sensitive_document",
                     public_model: "orca-sonar-document-classifier",
-                    asset_model: "orca-sonar-document-classifier",
-                    env_key: "PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR",
-                    package_name: "sensitive_document_current",
+                    package: specs::NTDB_SENSITIVE_DOCUMENT.spec,
                     has_l3: true,
                 }]
             } else {
@@ -86,49 +83,33 @@ pub(super) fn classifier_model_configs_for_category(
             execution,
             category,
             "unified-v3-tool-class",
-            "PATRONUS_NTDB_TOOL_CLASS_DIR",
-            "tool_class_current",
+            specs::NTDB_TOOL_CLASS.spec,
         ),
         SecurityCategory::ToolAction => model_config(
             execution,
             category,
             "unified-v3-tool-action",
-            "PATRONUS_NTDB_TOOL_ACTION_DIR",
-            "tool_action_current",
+            specs::NTDB_TOOL_ACTION.spec,
         ),
         SecurityCategory::ToolTags => [
-            (
-                "tool_tags_sink_external",
-                "PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR",
-                "tool_tags_sink_external_current",
-            ),
-            (
-                "tool_tags_source_sensitive",
-                "PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR",
-                "tool_tags_source_sensitive_current",
-            ),
-            (
-                "tool_tags_source_untrusted",
-                "PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR",
-                "tool_tags_source_untrusted_current",
-            ),
+            specs::NTDB_TOOL_TAGS_SINK_EXTERNAL.spec,
+            specs::NTDB_TOOL_TAGS_SOURCE_SENSITIVE.spec,
+            specs::NTDB_TOOL_TAGS_SOURCE_UNTRUSTED.spec,
         ]
         .into_iter()
-        .filter(|(model_id, _, _)| {
+        .filter(|package| {
             execution.gates().native.allows_model("tool_tags")
                 && execution
                     .gates()
                     .native
                     .allows_model("unified-v3-tool-tags")
-                && execution.gates().native.allows_model(model_id)
+                && execution.gates().native.allows_model(package.id)
         })
-        .map(|(model_id, env_key, package_name)| NtdbL2ModelConfig {
+        .map(|package| NtdbL2ModelConfig {
             category,
-            model_id,
+            model_id: package.id,
             public_model: "unified-v3-tool-tags",
-            asset_model: model_id,
-            env_key,
-            package_name,
+            package,
             has_l3: true,
         })
         .collect(),
@@ -136,8 +117,7 @@ pub(super) fn classifier_model_configs_for_category(
             execution,
             category,
             "unified-v3-routing",
-            "PATRONUS_NTDB_ROUTING_DIR",
-            "routing_current",
+            specs::NTDB_ROUTING.spec,
         ),
         // The unified threat head; its labels map onto the attack classes in
         // `patronus_ark_core::attack_classes`.
@@ -147,9 +127,7 @@ pub(super) fn classifier_model_configs_for_category(
                     category,
                     model_id: "threat",
                     public_model: "unified-v3-threat",
-                    asset_model: "unified-v3-threat",
-                    env_key: "PATRONUS_NTDB_THREAT_DIR",
-                    package_name: "threat_current",
+                    package: specs::NTDB_THREAT.spec,
                     has_l3: true,
                 }]
             } else {
@@ -176,8 +154,7 @@ fn model_config(
     execution: &ScanExecution,
     category: SecurityCategory,
     public_model: &'static str,
-    env_key: &'static str,
-    package_name: &'static str,
+    package: ModelSpec,
 ) -> Vec<NtdbL2ModelConfig> {
     if !execution.gates().native.allows_model(category.as_str())
         || !execution.gates().native.allows_model(public_model)
@@ -188,9 +165,7 @@ fn model_config(
         category,
         model_id: category.as_str(),
         public_model,
-        asset_model: public_model,
-        env_key,
-        package_name,
+        package,
         has_l3: true,
     }]
 }
@@ -215,17 +190,6 @@ pub fn ntdb_l2_model_config_for_id(model_id: &str) -> Option<NtdbL2ModelConfig> 
 #[cfg(feature = "test-util")]
 pub fn ntdb_l2_enabled_for_category(execution: &ScanExecution, category: SecurityCategory) -> bool {
     !ntdb_l2_model_configs_for_category(execution, category).is_empty()
-}
-
-pub(super) fn ntdb_l2_package_dir(
-    config: NtdbL2ModelConfig,
-    category_dir: &std::path::Path,
-) -> PathBuf {
-    if let Some(path) = std::env::var_os(config.env_key).map(PathBuf::from) {
-        return path;
-    }
-
-    category_dir.join("l2_ntdb").join(config.package_name)
 }
 
 pub(super) fn ntdb_l2_cache_namespace(model_id: &str, aggregator_id: &str) -> String {
@@ -571,9 +535,7 @@ mod tests {
             category: SecurityCategory::ToolTags,
             model_id: "tool_tags",
             public_model: "unified-v3-tool-tags",
-            asset_model: "unified-v3-tool-tags",
-            env_key: "TEST",
-            package_name: "test",
+            package: specs::NTDB_TOOL_TAGS_SINK_EXTERNAL.spec,
             has_l3: true,
         };
 
@@ -665,9 +627,7 @@ mod tests {
                 category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
-                asset_model: "unified-v3-threat",
-                env_key: "TEST",
-                package_name: "test",
+                package: specs::NTDB_THREAT.spec,
                 has_l3: true,
             },
             &decision,
@@ -710,9 +670,7 @@ mod tests {
             category: SecurityCategory::UnsafeAction,
             model_id: "threat",
             public_model: "unified-v3-threat",
-            asset_model: "unified-v3-threat",
-            env_key: "TEST",
-            package_name: "test",
+            package: specs::NTDB_THREAT.spec,
             has_l3: false,
         };
         let execution = ScanExecution::new(SecurityLevel::L2);
@@ -787,9 +745,7 @@ mod tests {
                 category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
-                asset_model: "unified-v3-threat",
-                env_key: "TEST",
-                package_name: "test",
+                package: specs::NTDB_THREAT.spec,
                 has_l3: true,
             },
             &decision,
@@ -846,9 +802,7 @@ mod tests {
                 category: SecurityCategory::UnsafeAction,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
-                asset_model: "unified-v3-threat",
-                env_key: "TEST",
-                package_name: "test",
+                package: specs::NTDB_THREAT.spec,
                 has_l3: true,
             },
             &decision,

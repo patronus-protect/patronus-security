@@ -813,13 +813,13 @@ impl SecurityGateway {
                 job_id,
                 request_id: request_id.to_string(),
                 category: DYNAMIC_PII_ASSET.category.as_str().to_string(),
-                model: DYNAMIC_PII_ASSET.model.to_string(),
+                model: DYNAMIC_PII_ASSET.spec.id.to_string(),
                 text: Arc::clone(&text),
                 fallback: dynamic_pii_pending_result(execution),
                 priority: priority_index(
                     policy,
                     DYNAMIC_PII_ASSET.category.as_str(),
-                    DYNAMIC_PII_ASSET.model,
+                    DYNAMIC_PII_ASSET.spec.id,
                 ),
                 ttl_ms: config.queue_timeout_ms,
                 inference_timeout_ms: config.inference_timeout_ms(text.as_ref()),
@@ -1312,7 +1312,7 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
 /// decided by L1: it passes on.
 pub(super) fn l1_undecided_inputs(
     inputs: &[ExternalL1Input],
-    l1_results: &mut [SecurityScanResult],
+    l1_results: &mut Vec<SecurityScanResult>,
     l1_failed: bool,
     execution: &ScanExecution,
     metadata: &serde_json::Value,
@@ -1324,23 +1324,26 @@ pub(super) fn l1_undecided_inputs(
     let mut undecided = Vec::new();
     for input in inputs {
         let module = input.category;
-        if l1_failed
-            || !l1_results
-                .iter()
-                .any(|result| result.category == module.as_str())
-        {
+        let heuristic = l1_results
+            .iter()
+            .any(|result| result.category == module.as_str());
+        // A module without heuristic results is decided only by its L1 model,
+        // as in Core (rules switched off, model on).
+        if l1_failed || !(heuristic || cascade.l1_model(module).is_some()) {
             undecided.push(input.clone());
             continue;
         }
-        // Core's L1 answer; Ark's cascade configures no L1 models.
+        // Core's L1 answer, with the cascade's L1 model of the module.
         let stage = cascade.l1_answer(
             module,
             execution.gates().native.mode(module),
-            true,
+            heuristic,
             l1_results.iter().map(|result| &result.native),
-            None,
             &input.text,
         );
+        if !heuristic && !stage.layers().is_empty() {
+            l1_results.push(l1_model_result(module, &stage));
+        }
         // Undecided with no later layer to run: L1's answer is final and clear.
         let outcome = match stage.outcome {
             StageOutcome::Escalate
@@ -1363,6 +1366,34 @@ pub(super) fn l1_undecided_inputs(
     undecided
 }
 
+/// The published result of a module only its L1 model answered (no
+/// heuristic result): the model's layer as the module's L1 result.
+fn l1_model_result(
+    module: SecurityCategory,
+    stage: &patronus_ark_core::cascade::L1Stage,
+) -> SecurityScanResult {
+    let layers = stage.layers().to_vec();
+    let last = layers.last().expect("the L1 model ran");
+    patronus_ark_core::NativeResult {
+        category: module.as_str().to_string(),
+        class_name: last.class_name.clone(),
+        confidence: last.confidence,
+        level: SecurityLevel::L1.as_str().to_string(),
+        model: last
+            .details
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(patronus_ark_core::detectors::text::L1_MODEL_LAYER)
+            .to_string(),
+        duration_ms: layers.iter().map(|layer| layer.duration_ms).sum(),
+        layers,
+        evidence_spans: Vec::new(),
+        label_scores: Vec::new(),
+        decision: None,
+    }
+    .into()
+}
+
 /// Whether dynamic PII's GLiNER L3 runs under `execution`: L3 allowed and
 /// enabled, its model gate on and its L3 conditional gate passing.
 pub(super) fn dynamic_pii_runs(
@@ -1374,7 +1405,7 @@ pub(super) fn dynamic_pii_runs(
         && execution
             .gates()
             .native
-            .allows_model(DYNAMIC_PII_ASSET.model)
+            .allows_model(DYNAMIC_PII_ASSET.spec.id)
         && execution.l3_policy().enabled
         && patronus_ark_core::cascade::pipeline_allowed(
             &execution.gates().conditional,

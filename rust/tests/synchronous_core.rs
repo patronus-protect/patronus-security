@@ -330,3 +330,68 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
         }
     }
 }
+
+/// An L1 model configured in the cascade runs in Ark as in Core: the same
+/// config and text give the same module decision, decided by the L1 model,
+/// also with the module's rules switched off (the model alone answers).
+#[test]
+fn ark_runs_the_cascade_l1_model_like_core() {
+    use patronus_ark_core::{
+        cascade::{Stage, StageOutcome},
+        detectors::text::l1_model::test_model,
+    };
+    let mut model = test_model::bundle("ark_cascade_l1_model");
+    // Detect everything the heuristic escalates.
+    model.detect_threshold = Some(-1e6);
+    model.clear_enabled = false;
+    let text = "Please summarize the meeting notes.";
+    for rules_off in [false, true] {
+        let mut gates =
+            serde_json::json!({"cascade": {"modules": {"injection": {"l1_model": model}}}});
+        if rules_off {
+            gates["models"] = serde_json::json!({"native:injection_l1": false});
+        }
+        let categories = vec![SecurityCategory::Injection];
+        let mut core_config = gates.clone();
+        core_config["categories"] = serde_json::to_value(&categories).unwrap();
+        let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
+        let gateway = SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false);
+        gateway.set_execution_gates(serde_json::from_value(gates).unwrap());
+        let direct = core.scan(text).unwrap();
+        assert_eq!(direct.native.is_empty(), rules_off);
+        let decision = &direct.decision.unwrap()[0];
+        assert_eq!(
+            (decision.outcome, decision.decided_by),
+            (StageOutcome::Detected, Stage::L1Model),
+            "rules_off={rules_off}"
+        );
+        let ark = gateway.scan_all(text);
+        let injection = ark
+            .iter()
+            .filter(|result| result.category == "injection")
+            .collect::<Vec<_>>();
+        assert!(!injection.is_empty(), "rules_off={rules_off}");
+        for result in injection {
+            assert_eq!(
+                result.l1_outcome,
+                Some(decision.outcome),
+                "rules_off={rules_off}"
+            );
+            assert_eq!(
+                result.decided_by,
+                Some(Stage::L1Model),
+                "rules_off={rules_off}"
+            );
+        }
+        if rules_off {
+            assert_eq!(ark.len(), 1, "only the model's result");
+            let layer_types = |layers: &[patronus_ark_core::LayerResult]| {
+                layers
+                    .iter()
+                    .map(|layer| (layer.layer_type.clone(), layer.class_name.clone()))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(layer_types(&ark[0].layers), layer_types(&decision.layers));
+        }
+    }
+}

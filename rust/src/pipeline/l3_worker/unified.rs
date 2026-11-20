@@ -685,7 +685,8 @@ fn infer_unified_exact(
     chunk.validate_token_input()?;
     const CACHE_SCHEMA_VERSION: u32 = 2;
 
-    let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, UNIFIED_L3_ASSET.revision);
+    let namespace =
+        CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, UNIFIED_L3_ASSET.spec.revision);
     let key = CacheKey::for_chunk(
         namespace,
         &crate::ml::tokenizer::token_key(&chunk.token_ids),
@@ -694,7 +695,7 @@ fn infer_unified_exact(
         &chunk.embedding_space,
         &chunk.embedding,
         requested_head,
-        UNIFIED_L3_ASSET.revision,
+        UNIFIED_L3_ASSET.spec.revision,
     ) {
         if matched.propagation_similarity > 0.985 {
             if let Some(decision) = matched
@@ -768,7 +769,7 @@ fn infer_unified_exact(
     similarity_cache.remember(
         &chunk.embedding_space,
         &chunk.embedding,
-        UNIFIED_L3_ASSET.revision,
+        UNIFIED_L3_ASSET.spec.revision,
         similarity_heads,
     );
     Ok((output, lookup.source != CacheSource::Computed, false))
@@ -783,7 +784,7 @@ fn historical_unified_non_safe(
         &chunk.embedding_space,
         &chunk.embedding,
         head,
-        UNIFIED_L3_ASSET.revision,
+        UNIFIED_L3_ASSET.spec.revision,
     ) else {
         return false;
     };
@@ -1572,7 +1573,7 @@ fn materialize_unified_result(
         ("head".to_string(), serde_json::json!(head)),
         (
             "revision".to_string(),
-            serde_json::json!(UNIFIED_L3_ASSET.revision),
+            serde_json::json!(UNIFIED_L3_ASSET.spec.revision),
         ),
         ("l3_worker".to_string(), serde_json::json!("rust_l3_worker")),
         (

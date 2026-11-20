@@ -366,7 +366,7 @@ fn literal_ascii_byte_token(byte: u8) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::{fs, path::Path, sync::Arc, thread, time::SystemTime};
 
     use super::*;
@@ -385,7 +385,7 @@ mod tests {
         dir
     }
 
-    fn write_supported_tokenizer(path: &Path, extra: &str) {
+    pub(crate) fn write_supported_tokenizer(path: &Path, extra: &str) {
         let mut vocab = serde_json::Map::new();
         vocab.insert("<bos>".to_string(), 0.into());
         vocab.insert("<eos>".to_string(), 1.into());

@@ -97,28 +97,30 @@ impl VerifiedBundle {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-
-    /// Write `files` and a manifest of them into a fresh directory; returns
-    /// the directory and the manifest's sha256.
-    pub(crate) fn write_bundle(name: &str, files: &[(&str, &[u8])]) -> (PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let mut listed = serde_json::Map::new();
-        for (file, bytes) in files {
-            fs::write(dir.join(file), bytes).unwrap();
-            listed.insert(file.to_string(), sha256_hex(bytes).into());
-        }
-        let manifest = serde_json::json!({ "files": listed }).to_string();
-        fs::write(dir.join("manifest.json"), &manifest).unwrap();
-        (dir, sha256_hex(manifest.as_bytes()))
+#[cfg(any(test, feature = "test-util"))]
+/// Write `files` and a manifest of them into a fresh directory; returns
+/// the directory and the manifest's sha256.
+pub(crate) fn write_test_bundle(name: &str, files: &[(&str, &[u8])]) -> (PathBuf, String) {
+    let dir = std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let mut listed = serde_json::Map::new();
+    for (file, bytes) in files {
+        fs::write(dir.join(file), bytes).unwrap();
+        listed.insert(file.to_string(), sha256_hex(bytes).into());
     }
+    let manifest = serde_json::json!({ "files": listed }).to_string();
+    fs::write(dir.join("manifest.json"), &manifest).unwrap();
+    (dir, sha256_hex(manifest.as_bytes()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn reads_only_files_the_pinned_manifest_vouches_for() {
-        let (dir, pin) = write_bundle("verified_bundle", &[("a.json", b"{}"), ("b.txt", b"b")]);
+        let (dir, pin) =
+            write_test_bundle("verified_bundle", &[("a.json", b"{}"), ("b.txt", b"b")]);
         let bundle = VerifiedBundle::open(&dir, Some(&pin)).unwrap();
         assert_eq!(bundle.read("a.json").unwrap(), b"{}");
         assert!(bundle

@@ -111,7 +111,7 @@ fn finalized_unified_key(
         request_id
             .map(|value| format!("{value}:"))
             .unwrap_or_default(),
-        UNIFIED_L3_ASSET.revision,
+        UNIFIED_L3_ASSET.spec.revision,
         backend.as_str(),
         hash.to_hex()
     )

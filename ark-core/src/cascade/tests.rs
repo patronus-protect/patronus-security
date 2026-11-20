@@ -438,7 +438,7 @@ fn one_cut_rule_for_every_l1_stage() {
 /// The synthetic L1 model at cuts around its own score on the test text:
 /// `Detected`, `Clear` or `Escalate` (clearing on), or `None` for clearing off.
 fn l1_model(name: &str, outcome: Option<StageOutcome>) -> L1TextModel {
-    use crate::detectors::text::l1_model::tests::{bundle, TEXT};
+    use crate::detectors::text::l1_model::test_model::{bundle, TEXT};
     let config = bundle(name);
     let score = L1TextModel::load(SecurityCategory::Injection, &config)
         .unwrap()
@@ -470,7 +470,7 @@ fn run_with_model(
     heuristic: &NativeResult,
     l3: Option<&mut Fake>,
 ) -> ModuleDecision {
-    use crate::detectors::text::l1_model::tests::TEXT;
+    use crate::detectors::text::l1_model::test_model::TEXT;
     let cascade = cascade(None);
     let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [heuristic]);
     let stage = cascade.l1_model_stage(stage, Some(model), TEXT, &[]);
@@ -719,7 +719,7 @@ fn every_escalation_signal_escalates() {
         let stage = cascade(None).l1_model_stage(
             stage,
             Some(&model),
-            crate::detectors::text::l1_model::tests::TEXT,
+            crate::detectors::text::l1_model::test_model::TEXT,
             &[],
         );
         let signal = stage.escalation.expect("escalates");
@@ -895,4 +895,33 @@ fn l1_gate_results_include_rejected_injection_candidates() {
         (gates[1].pipeline.as_str(), gates[1].class_name.as_str()),
         (crate::injection_l1::MODEL, "injection")
     );
+}
+
+#[test]
+fn a_cascade_loads_its_l1_models_once_and_refuses_non_native_modules() {
+    use crate::detectors::text::l1_model::test_model::bundle;
+    assert!(Cascade::default()
+        .l1_model(SecurityCategory::Injection)
+        .is_none());
+    let config = |module| {
+        let mut config = CascadeConfig::default();
+        config.modules.insert(
+            module,
+            ModuleConfig {
+                l1_model: Some(bundle("cascade_owns_l1_model")),
+                ..Default::default()
+            },
+        );
+        config
+    };
+    let first = Cascade::new(config(SecurityCategory::Injection)).unwrap();
+    let second = Cascade::new(config(SecurityCategory::Injection)).unwrap();
+    assert!(std::ptr::eq(
+        first.l1_model(SecurityCategory::Injection).unwrap(),
+        second.l1_model(SecurityCategory::Injection).unwrap(),
+    ));
+    assert!(matches!(
+        Cascade::new(config(SecurityCategory::ShellCommand)),
+        Err(ScanError::Config(message)) if message.contains("non-native")
+    ));
 }

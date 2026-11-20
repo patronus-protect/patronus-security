@@ -20,8 +20,7 @@ use crate::{
 };
 
 use super::ntdb_l2::{
-    ntdb_l2_model_configs_for_category, ntdb_l2_package_dir, validate_ntdb_l2_package,
-    NtdbL2ModelConfig,
+    ntdb_l2_model_configs_for_category, validate_ntdb_l2_package, NtdbL2ModelConfig,
 };
 use super::SecurityGateway;
 use crate::detectors::shell::shell_risk::ShellRiskPipeline;
@@ -153,7 +152,7 @@ impl SecurityGateway {
                     .any(|config| config.has_l3)
             })
         {
-            let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
+            let bundle_dir = assets::UNIFIED_L3_ASSET.spec.cache_dir(&base_dir);
             let mut classifier = LazyUnifiedOnnxClassifier::from_dir(&bundle_dir)?;
             classifier.warmup_session(execution.backend(), execution.onnx_runtime_options())?;
             self.l3_worker.register_unified(classifier);
@@ -171,13 +170,13 @@ impl SecurityGateway {
                 .scan_execution()
                 .gates()
                 .native
-                .allows_model(assets::DYNAMIC_PII_ASSET.model)
+                .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)
         {
-            let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
+            let bundle_dir = assets::DYNAMIC_PII_ASSET.spec.cache_dir(&base_dir);
             let mut runtime = DynamicPiiRuntime::from_path(&bundle_dir)?;
             runtime.warmup(&self.dynamic_pii_config())?;
             self.l3_worker
-                .register_dynamic_pii(assets::DYNAMIC_PII_ASSET.model, runtime);
+                .register_dynamic_pii(assets::DYNAMIC_PII_ASSET.spec.id, runtime);
             metrics.checkpoint("dynamic_pii_l3", "");
             log::info!(
                 "dynamic-pii L3 worker model registered from {}",
@@ -232,7 +231,7 @@ impl SecurityGateway {
                 .iter()
                 .any(|config| config.has_l3)
         });
-        let unified_assets_present = assets::unified_l3_assets_present(&base_dir);
+        let unified_assets_present = assets::UNIFIED_L3_ASSET.assets_present(&base_dir);
         log::debug!(
             "checked unified L3 asset preparation state; base_dir={}; allow_download={}; strategy_multi={}; l3_allowed={}; unified_model_allowed={}; category_has_l3={}; unified_assets_present={}",
             base_dir.display(),
@@ -249,7 +248,7 @@ impl SecurityGateway {
             && unified_model_allowed
             && unified_category_has_l3
         {
-            let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
+            let bundle_dir = assets::UNIFIED_L3_ASSET.spec.cache_dir(&base_dir);
             if !unified_assets_present {
                 let may_download = allow_download
                     && self
@@ -264,11 +263,7 @@ impl SecurityGateway {
                     may_download
                 );
                 if may_download {
-                    if let Some(progress) = progress {
-                        assets::download_unified_l3_assets_with_progress(&base_dir, progress)?;
-                    } else {
-                        assets::download_unified_l3_assets(&base_dir)?;
-                    }
+                    assets::UNIFIED_L3_ASSET.download(&base_dir, progress)?;
                 } else {
                     return Err(format!(
                         "missing unified L3 assets at {}; downloads disabled",
@@ -280,7 +275,7 @@ impl SecurityGateway {
             // Runtime startup and readiness checks only consume prepared files.
             // Converting the source tokenizer and weights belongs to delivery.
             if allow_download {
-                assets::prepare_cached_pipeline_model(assets::UNIFIED_L3_ASSET, &base_dir);
+                assets::UNIFIED_L3_ASSET.prepare_cached(&base_dir);
             }
         }
 
@@ -291,16 +286,11 @@ impl SecurityGateway {
                 }
                 let shell = self.shell_command_config(&base_dir);
                 let download = allow_download && self.should_download_assets_for(*category);
-                let report = progress.map(|progress| {
-                    move |completed_files, total_files| {
-                        progress(crate::SecurityAssetProgress {
-                            category: SecurityCategory::ShellCommand,
-                            model: patronus_ark_core::warmup::SHELL_MODEL.to_string(),
-                            completed_files,
-                            total_files,
-                        })
-                    }
-                });
+                let report = assets::progress_reporter(
+                    progress,
+                    SecurityCategory::ShellCommand,
+                    patronus_ark_core::warmup::SHELL_MODEL,
+                );
                 patronus_ark_core::warmup::prepare_shell_assets_with_progress(
                     &shell,
                     &core_warmup_options(download),
@@ -326,18 +316,14 @@ impl SecurityGateway {
                     || !execution
                         .gates()
                         .native
-                        .allows_model(assets::DYNAMIC_PII_ASSET.model)
+                        .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)
                 {
                     continue;
                 }
-                let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
-                if !assets::dynamic_pii_assets_present(&base_dir) {
+                let bundle_dir = assets::DYNAMIC_PII_ASSET.spec.cache_dir(&base_dir);
+                if !assets::DYNAMIC_PII_ASSET.assets_present(&base_dir) {
                     if allow_download && self.should_download_assets_for(*category) {
-                        if let Some(progress) = progress {
-                            assets::download_dynamic_pii_assets_with_progress(&base_dir, progress)?;
-                        } else {
-                            assets::download_dynamic_pii_assets(&base_dir)?;
-                        }
+                        assets::DYNAMIC_PII_ASSET.download(&base_dir, progress)?;
                     } else {
                         return Err(format!(
                             "missing dynamic-pii assets at {}; downloads disabled",
@@ -349,10 +335,7 @@ impl SecurityGateway {
                 let missing_files = assets::DYNAMIC_PII_ASSET
                     .files
                     .iter()
-                    .filter(|file| {
-                        assets::selected_pipeline_model_files(assets::DYNAMIC_PII_ASSET)
-                            .contains(file)
-                    })
+                    .filter(|file| assets::DYNAMIC_PII_ASSET.selected_files().contains(file))
                     .filter(|file| !bundle_dir.join(file).is_file())
                     .copied()
                     .collect::<Vec<_>>();
@@ -365,7 +348,7 @@ impl SecurityGateway {
                     .into());
                 }
                 if allow_download {
-                    assets::prepare_cached_pipeline_model(assets::DYNAMIC_PII_ASSET, &base_dir);
+                    assets::DYNAMIC_PII_ASSET.prepare_cached(&base_dir);
                 }
                 continue;
             }
@@ -405,14 +388,14 @@ impl SecurityGateway {
             }
 
             for config in configs {
-                let env_override = std::env::var_os(config.env_key).is_some();
-                let package_dir = ntdb_l2_package_dir(config, &category_dir);
+                let env_override = config.package.override_dir().is_some();
+                let package_dir = config.package.dir(&base_dir);
                 let official_package_current = env_override
                     || assets::ntdb_l2_package_assets_present(
                         *category,
                         self.max_level,
-                        config.asset_model,
-                        &category_dir,
+                        config.package.id,
+                        &base_dir,
                     );
                 if !official_package_current {
                     if allow_download && self.should_download_assets_for(*category) {
@@ -421,22 +404,13 @@ impl SecurityGateway {
                             category.as_str(),
                             config.public_model
                         );
-                        if let Some(progress) = progress {
-                            assets::download_ntdb_l2_package_with_progress(
-                                *category,
-                                self.max_level,
-                                config.asset_model,
-                                &category_dir,
-                                progress,
-                            )?;
-                        } else {
-                            assets::download_ntdb_l2_package(
-                                *category,
-                                self.max_level,
-                                config.asset_model,
-                                &category_dir,
-                            )?;
-                        }
+                        assets::download_ntdb_l2_package(
+                            *category,
+                            self.max_level,
+                            config.package.id,
+                            &base_dir,
+                            progress,
+                        )?;
                     } else {
                         return Err(format!(
                             "missing {} L2 package at {}, or cached revision is outdated; downloads disabled",
@@ -452,6 +426,7 @@ impl SecurityGateway {
                     if let Err(error) = assets::prepare_cached_ntdb_l2_compact_tokenizer(
                         &manifest,
                         &package_dir,
+                        &base_dir,
                         &mut prepared_compact_tokenizers,
                     ) {
                         log::warn!(
@@ -503,7 +478,7 @@ impl SecurityGateway {
                         None,
                     )?;
                 } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
-                    if !assets::dedicated_l3_assets_present(*category, &base_dir) {
+                    if !asset.assets_present(&base_dir) {
                         if !download {
                             return Err(format!(
                                 "missing {} dedicated L3 assets below {}; downloads disabled",
@@ -512,10 +487,10 @@ impl SecurityGateway {
                             )
                             .into());
                         }
-                        assets::download_dedicated_l3_assets(*category, &base_dir)?;
+                        asset.download(&base_dir, None)?;
                     }
                     if allow_download {
-                        assets::prepare_cached_pipeline_model(asset, &base_dir);
+                        asset.prepare_cached(&base_dir);
                     }
                 }
             }
@@ -565,7 +540,7 @@ impl SecurityGateway {
                     && execution
                         .gates()
                         .native
-                        .allows_model(assets::DYNAMIC_PII_ASSET.model)));
+                        .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)));
         SecurityAssetReadiness {
             l1: configured_level_readiness(self.shell_command_configured(&execution)),
             l2: configured_level_readiness(l2_configured),
@@ -616,7 +591,7 @@ impl SecurityGateway {
                     sensitive_l3_onnx_paths(),
                     "prompts/tokenizer.json",
                     256,
-                    asset.revision,
+                    asset.spec.revision,
                 )?
             }
             SecurityCategory::ToolClass
@@ -632,7 +607,7 @@ impl SecurityGateway {
                     dedicated_l3_onnx_paths(),
                     "l3/tokenizer.json",
                     256,
-                    asset.revision,
+                    asset.spec.revision,
                 )?
             }
             _ => return Ok(()),

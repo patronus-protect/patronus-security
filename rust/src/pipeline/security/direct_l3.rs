@@ -84,10 +84,10 @@ impl SecurityGateway {
                 let tokenizer = tokenizer.get_or_insert_with(|| {
                     self.model_base_dir().and_then(|base| {
                         let dir = if execution.l3_strategy() == crate::L3Strategy::Multi {
-                            base.join(crate::assets::UNIFIED_L3_ASSET.destination_path)
+                            crate::assets::UNIFIED_L3_ASSET.spec.cache_dir(&base)
                         } else {
                             crate::assets::dedicated_l3_asset(input.category)
-                                .map(|asset| base.join(asset.destination_path))
+                                .map(|asset| asset.spec.cache_dir(&base))
                                 .unwrap_or_else(|| base.join(input.category.as_str()))
                         };
                         RuntimeTokenizer::load(dir).map_err(Into::into)
@@ -151,7 +151,7 @@ mod tests {
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        let bundle = base.join(crate::assets::UNIFIED_L3_ASSET.destination_path);
+        let bundle = crate::assets::UNIFIED_L3_ASSET.spec.cache_dir(&base);
         std::fs::create_dir_all(&bundle).unwrap();
         std::fs::copy(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

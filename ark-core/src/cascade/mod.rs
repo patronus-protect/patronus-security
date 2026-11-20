@@ -201,8 +201,8 @@ impl CascadeConfig {
 
     /// The cascade as Ark's gate key `cascade`: Ark takes the levels and
     /// conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
-    /// `l3`, `conditional`) and runs no L1 models yet, so only `modules`
-    /// with their L1 cuts may be set.
+    /// `l3`, `conditional`), so only `modules` (L1 cuts and L1 models) may
+    /// be set.
     pub fn validate_for_gates(&self) -> Result<(), String> {
         let levels = Self {
             modules: HashMap::new(),
@@ -214,9 +214,6 @@ impl CascadeConfig {
                 the cascade key takes only modules"
                     .into(),
             );
-        }
-        if self.l1_models().next().is_some() {
-            return Err("cascade.modules: Ark runs no L1 models (l1_model)".into());
         }
         self.validate()
     }
@@ -299,6 +296,11 @@ pub struct L1Stage {
 }
 
 impl L1Stage {
+    /// The layers that ran after the heuristic (the L1 model), in order.
+    pub fn layers(&self) -> &[LayerResult] {
+        &self.layers
+    }
+
     /// The module's final decision when L1 answered Detected or Clear;
     /// `None` when it escalates to the next configured layer.
     pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision> {
@@ -313,15 +315,46 @@ impl L1Stage {
 }
 
 /// Runs the configured layers per module with early exit.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Cascade {
     config: CascadeConfig,
+    /// Each module's loaded L1 model (`modules.<module>.l1_model`), shared
+    /// process-wide through [`crate::shared_models`].
+    l1_models: HashMap<SecurityCategory, std::sync::Arc<L1TextModel>>,
+}
+
+impl std::fmt::Debug for Cascade {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cascade")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Cascade {
+    /// Validate `config` and load its L1 models once; a model another
+    /// cascade of the process holds under the same config is shared.
     pub fn new(config: CascadeConfig) -> Result<Self, ScanError> {
         config.validate().map_err(ScanError::Config)?;
-        Ok(Self { config })
+        let mut l1_models = HashMap::new();
+        for (module, model) in config.l1_models() {
+            if !crate::native::NATIVE_CATEGORIES.contains(&module) {
+                return Err(ScanError::Config(format!(
+                    "l1 model for non-native category {}",
+                    module.as_str()
+                )));
+            }
+            let key = format!("{}|{model:?}", module.as_str());
+            let loaded = crate::shared_models::shared(&key, || L1TextModel::load(module, model))
+                .map_err(ScanError::Asset)?;
+            l1_models.insert(module, loaded);
+        }
+        Ok(Self { config, l1_models })
+    }
+
+    /// The loaded L1 model of `module`, if one is configured.
+    pub fn l1_model(&self, module: SecurityCategory) -> Option<&L1TextModel> {
+        self.l1_models.get(&module).map(|model| model.as_ref())
     }
 
     /// Whether `level` may run in this cascade.
@@ -397,8 +430,8 @@ impl Cascade {
     /// L1's answer for `module`, shared by the Core scanner and Ark's
     /// gateway: the heuristic ([`Self::l1_stage`]) over the module's results
     /// in `scan` when one of its producers ran (`heuristic`), else
-    /// [`Self::l1_off`]; then the module's L1 `model` on an escalation
-    /// ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+    /// [`Self::l1_off`]; then the module's L1 model ([`Self::l1_model`]) on
+    /// an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
     /// scan: the model reads their rule findings, as in training.
     pub fn l1_answer<'a>(
         &self,
@@ -406,9 +439,9 @@ impl Cascade {
         mode: ScoreMode,
         heuristic: bool,
         scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-        model: Option<&L1TextModel>,
         text: &str,
     ) -> L1Stage {
+        let model = self.l1_model(module);
         let stage = if heuristic {
             self.l1_stage(
                 module,

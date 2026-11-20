@@ -154,13 +154,8 @@ impl Scanner {
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
-        let mut native = NativeEngine::new(&config.categories);
+        let native = NativeEngine::new(&config.categories);
         native.prepare(&config.gates);
-        if let Some(cascade) = &config.cascade {
-            native
-                .load_l1_models(cascade.l1_models())
-                .map_err(ScanError::Asset)?;
-        }
         Ok(Self {
             native,
             cascade: Cascade::new(config.cascade.clone().unwrap_or_default())?,
@@ -313,7 +308,6 @@ impl Scanner {
                     self.config.gates.mode(module),
                     heuristic,
                     native.iter(),
-                    self.native.l1_model(module),
                     text,
                 )
             } else {
@@ -915,8 +909,8 @@ mod cascade_tests {
 
     #[test]
     fn the_l1_model_alone_decides_with_the_rules_switched_off() {
-        let bundle = crate::detectors::text::l1_model::tests::bundle("scanner_l1_model_only");
-        let text = crate::detectors::text::l1_model::tests::TEXT;
+        let bundle = crate::detectors::text::l1_model::test_model::bundle("scanner_l1_model_only");
+        let text = crate::detectors::text::l1_model::test_model::TEXT;
         let scan = |detect: f64, clear: Option<f64>, clear_enabled: bool| {
             let mut config = ScannerConfig {
                 cascade: Some(Default::default()),
@@ -964,7 +958,7 @@ mod cascade_tests {
 
     #[test]
     fn the_l1_model_reads_the_scans_rule_findings_as_in_training() {
-        let bundle = crate::detectors::text::l1_model::tests::bundle("scanner_l1_findings");
+        let bundle = crate::detectors::text::l1_model::test_model::bundle("scanner_l1_findings");
         let text = "Delete the entire production database right away.";
         let model_config = crate::detectors::text::L1ModelConfig {
             detect_threshold: Some(1e6),
@@ -1004,7 +998,7 @@ mod cascade_tests {
 
     #[test]
     fn configured_l1_model_decides_what_the_heuristic_escalates() {
-        let bundle = crate::detectors::text::l1_model::tests::bundle("scanner_l1_model");
+        let bundle = crate::detectors::text::l1_model::test_model::bundle("scanner_l1_model");
         let scan = |detect: f64, clear: Option<f64>, clear_enabled: bool| {
             let mut config: ScannerConfig =
                 serde_json::from_value(serde_json::json!({"cascade": {}})).unwrap();

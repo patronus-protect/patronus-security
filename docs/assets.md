@@ -49,15 +49,15 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 
 | Category | Model | Repository | Revision | Source prefix | Cache path |
 | --- | --- | --- | --- | --- | --- |
-| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` | `l2` | `l2_ntdb/injection_current` |
-| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `efa2b1724946fb2de5a22ce58ef99d7b246c2798` | `l2` | `l2_ntdb/sensitive_document_current` |
-| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `de43b66056fc6b41e5f5c170712770ae805a4850` | `l2` | `l2_ntdb/tool_class_current` |
-| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `b2f4a556e7c9b02606589c5c587e096503f274c5` | `l2` | `l2_ntdb/tool_action_current` |
-| ToolTags | `tool_tags_sink_external` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/sink_external` | `l2_ntdb/tool_tags_sink_external_current` |
-| ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_sensitive` | `l2_ntdb/tool_tags_source_sensitive_current` |
-| ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_untrusted` | `l2_ntdb/tool_tags_source_untrusted_current` |
-| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `74ec1d568bdddc34d408d4e96ce52b5dd7789cbe` | `l2` | `l2_ntdb/routing_current` |
-| UnsafeAction | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `6520c1f43c716d1210321aecc7681446dd5ce317` | `l2` | `l2_ntdb/threat_current` |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` | `l2` | `injection/l2_ntdb/injection_current` |
+| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `efa2b1724946fb2de5a22ce58ef99d7b246c2798` | `l2` | `sensitive_document/l2_ntdb/sensitive_document_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `de43b66056fc6b41e5f5c170712770ae805a4850` | `l2` | `tool_class/l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `b2f4a556e7c9b02606589c5c587e096503f274c5` | `l2` | `tool_action/l2_ntdb/tool_action_current` |
+| ToolTags | `tool_tags_sink_external` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/sink_external` | `tool_tags/l2_ntdb/tool_tags_sink_external_current` |
+| ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_sensitive` | `tool_tags/l2_ntdb/tool_tags_source_sensitive_current` |
+| ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_untrusted` | `tool_tags/l2_ntdb/tool_tags_source_untrusted_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `74ec1d568bdddc34d408d4e96ce52b5dd7789cbe` | `l2` | `routing/l2_ntdb/routing_current` |
+| UnsafeAction | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `6520c1f43c716d1210321aecc7681446dd5ce317` | `l2` | `threat/l2_ntdb/threat_current` |
 
 ## Wolf Defender Models
 
