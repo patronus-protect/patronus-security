@@ -8,6 +8,9 @@ from .types import (
     EvidenceSpan, NativeCategory, NativeResult, ScanReport, WolfResult, ScannerConfig, WolfConfig,
     NativeGates, ScanGates, WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
     ShellVerdict, CascadeConfig, ModuleConfig, L1ModelConfig, ModuleDecision,
+    ConditionalPipelineGate, GateExpression, MetadataCondition, ResultCondition,
+    L3SchedulerPolicy, L3PipelinePolicy, L3AggregationStrategy, L3ClusteringStrategy,
+    L3EarlyExitMode, L3PipelineEarlyExit, L3ProgressMode,
 )
 
 __all__ = [
@@ -16,5 +19,7 @@ __all__ = [
     "NativeGates", "ScanGates", "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions",
     "OnnxRuntimeOptions",
     "ShellConfig", "ShellFacts", "ShellVerdict", "CascadeConfig", "ModuleConfig", "L1ModelConfig",
-    "ModuleDecision",
+    "ModuleDecision", "ConditionalPipelineGate", "GateExpression", "MetadataCondition",
+    "ResultCondition", "L3SchedulerPolicy", "L3PipelinePolicy", "L3AggregationStrategy",
+    "L3ClusteringStrategy", "L3EarlyExitMode", "L3PipelineEarlyExit", "L3ProgressMode",
 ]

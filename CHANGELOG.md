@@ -59,6 +59,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   that serialization; the dicts keep their keys and values. The internal result classes of the
   native module (`PyEvaluationResult`, `PyLayerResult`, `PyLabelScore`) are gone, and events carry
   `result` and `progress` dicts instead of `progress_json`.
+- **Typed gate options in Python:** Ark Core's Python package adds TypedDicts for the gate
+  schema's conditional gates and L3 worker policy (`ConditionalPipelineGate`, `GateExpression`,
+  `MetadataCondition`, `ResultCondition`, `L3PipelinePolicy`, `L3AggregationStrategy`,
+  `L3SchedulerPolicy`), used by Ark's `ExecutionGates` and Core's `CascadeConfig`.
 - **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
   `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
   environment override) describes a model and Core resolves its directory, checks its revision

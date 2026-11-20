@@ -6,7 +6,18 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from patronus_ark_core import NativeGates, ScanGates, ScannerConfig
+from patronus_ark_core import (
+    ConditionalPipelineGate,
+    GateExpression,
+    L3AggregationStrategy,
+    L3PipelinePolicy,
+    L3SchedulerPolicy,
+    MetadataCondition,
+    NativeGates,
+    ResultCondition,
+    ScanGates,
+    ScannerConfig,
+)
 
 from patronus_ark import (
     GatewayConfig,
@@ -634,6 +645,66 @@ class PublicApiTests(unittest.TestCase):
             # The dicts are the ones `json.loads` makes of the Rust result's JSON.
             self.assertEqual(json.loads(json.dumps(result)), result)
         self.assertTrue(any(result["evidence_spans"] for result in results))
+
+    def test_typed_conditional_gates_and_l3_policy_cover_every_rust_key(self):
+        pipeline_policy: L3PipelinePolicy = {
+            "clustering": "representative",
+            "representatives_per_cluster": 2,
+            "verify_representatives_per_cluster": 1,
+            "min_cluster_similarity": 0.9,
+            "max_cluster_size": 4,
+            "aggregation": {"type": "any_positive_or_highest", "positive_class": "attack", "threshold": 0.9},
+            "early_exit": "head_stable",
+        }
+        # A metadata condition sets exactly one of `equals`, `in` and `exists`.
+        metadata: list[MetadataCondition] = [
+            {"path": "tenant", "equals": "a"},
+            {"path": "tier", "in": ["a", "b"]},
+            {"path": "trace", "exists": True},
+        ]
+        result: ResultCondition = {"pipeline": "dlp", "classes": ["secret"], "min_confidence": 0.5}
+        when: GateExpression = {"all": [
+            {"any": [{"metadata": condition} for condition in metadata]},
+            {"not": {"result": result}},
+        ]}
+        conditional: ConditionalPipelineGate = {
+            "level": "L3", "pipeline": "injection", "when": when, "l3_policy": pipeline_policy,
+        }
+        l3_policy: L3SchedulerPolicy = {
+            "enabled": True,
+            "priority": ["injection"],
+            "ttl_ms": {"injection": 10000},
+            "estimated_cost_ms": {"injection": 60},
+            "fairness_quantum_ms": 20,
+            "max_wait_ms": 250,
+            "degraded_factor": 0.7,
+            "early_exit": "class_stable",
+            "progress": "disabled",
+            "clustering": "rank_only",
+            "representatives_per_cluster": 2,
+            "verify_representatives_per_cluster": 1,
+            "min_cluster_similarity": 0.9,
+            "max_cluster_size": 8,
+            "pipelines": {"injection": pipeline_policy},
+        }
+        for typed, value in [
+            (L3PipelinePolicy, pipeline_policy),
+            (MetadataCondition, {key: None for condition in metadata for key in condition}),
+            (ResultCondition, result),
+            (ConditionalPipelineGate, conditional),
+            (L3SchedulerPolicy, l3_policy),
+            (L3AggregationStrategy, pipeline_policy["aggregation"]),
+        ]:
+            with self.subTest(typed=typed.__name__):
+                self.assertEqual(set(typed.__annotations__), set(value))
+        self.assertEqual(set(GateExpression.__annotations__), {"all", "any", "not", "metadata", "result"})
+
+        # The Rust gate schema refuses unknown keys, so every typed key is one it accepts.
+        execution_gates: ScanGates = {"conditional": [conditional], "l3_policy": l3_policy}
+        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        scanner.set_execution_gates(execution_gates)
+        with self.assertRaises(ValueError):
+            scanner.set_execution_gates({"l3_policy": {**l3_policy, "unknown": 1}})
 
     def test_event_to_dict_passes_the_result_dict_through(self):
         result = {"request_id": "rq", "category": "injection", "class_name": "attack"}

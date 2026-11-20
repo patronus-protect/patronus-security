@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 """Python shapes of Core configuration and serialized reports."""
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired, Required, TypedDict
 
 
 class EvidenceSpan(TypedDict):
@@ -187,6 +187,93 @@ class ModuleConfig(TypedDict, total=False):
     l1_model: L1ModelConfig | None
 
 
+# Conditional gates and the L3 worker policy of the gate schema (Rust
+# `cascade::gates`); key names follow the Rust types.
+
+MetadataCondition = TypedDict("MetadataCondition", {
+    "path": Required[str],
+    "equals": object,
+    "in": list[object],
+    "exists": bool,
+}, total=False)
+"""Predicate over a dotted path in request metadata."""
+
+
+class ResultCondition(TypedDict, total=False):
+    """Predicate over a previously completed L1/L2 pipeline result."""
+    pipeline: Required[str]
+    classes: list[str]
+    min_confidence: float
+
+
+GateExpression = TypedDict("GateExpression", {
+    "all": list["GateExpression"],
+    "any": list["GateExpression"],
+    "not": "GateExpression",
+    "metadata": MetadataCondition,
+    "result": ResultCondition,
+}, total=False)
+"""Exactly one key: a recursive expression over request metadata and
+completed L1/L2 results."""
+
+L3ClusteringStrategy = Literal["disabled", "rank_only", "representative", "verify_representative"]
+L3EarlyExitMode = Literal["disabled", "class_stable"]
+L3PipelineEarlyExit = Literal["disabled", "head_stable", "request_wide_positive"]
+L3ProgressMode = Literal["disabled", "progress", "provisional"]
+
+
+class L3AggregationStrategy(TypedDict, total=False):
+    """`positive_class` and `threshold` for `any_positive_or_highest`,
+    `threshold` for `highest_risk_above_threshold_or_confidence`."""
+    type: Required[Literal[
+        "any_positive_or_highest",
+        "highest_risk_above_threshold_or_confidence",
+        "majority_vote_or_highest",
+    ]]
+    positive_class: str
+    threshold: float
+
+
+class L3PipelinePolicy(TypedDict, total=False):
+    """Per-pipeline overrides for L3 chunk execution."""
+    clustering: L3ClusteringStrategy
+    representatives_per_cluster: int
+    verify_representatives_per_cluster: int
+    min_cluster_similarity: float
+    max_cluster_size: int
+    aggregation: L3AggregationStrategy
+    early_exit: L3PipelineEarlyExit
+
+
+class ConditionalPipelineGate(TypedDict, total=False):
+    """One conditional L2/L3 gate: enables the level for `pipeline` (every
+    pipeline when absent) when `when` matches, or with `l3_policy` applies
+    that policy instead."""
+    level: Required[Literal["L2", "L3"]]
+    pipeline: str
+    when: Required[GateExpression]
+    l3_policy: L3PipelinePolicy
+
+
+class L3SchedulerPolicy(TypedDict, total=False):
+    """L3 worker policy; each key overrides its default."""
+    enabled: bool
+    priority: list[str]
+    ttl_ms: dict[str, int]
+    estimated_cost_ms: dict[str, int]
+    fairness_quantum_ms: int
+    max_wait_ms: int
+    degraded_factor: float
+    early_exit: L3EarlyExitMode
+    progress: L3ProgressMode
+    clustering: L3ClusteringStrategy
+    representatives_per_cluster: int
+    verify_representatives_per_cluster: int
+    min_cluster_similarity: float
+    max_cluster_size: int
+    pipelines: dict[str, L3PipelinePolicy]
+
+
 class CascadeConfig(TypedDict, total=False):
     """The opt-in cascade: per-module L1 cuts and L1 models. The levels that
     run are the gate keys `max_level`, `l1`, `l2`, `l3` and `conditional`."""
@@ -223,8 +310,8 @@ class ScanGates(NativeGates, total=False):
     l1: bool
     l2: bool
     l3: bool
-    conditional: list[dict[str, object]]
-    l3_policy: dict[str, object]
+    conditional: list[ConditionalPipelineGate]
+    l3_policy: L3SchedulerPolicy
     cascade: CascadeConfig | None
 
 
