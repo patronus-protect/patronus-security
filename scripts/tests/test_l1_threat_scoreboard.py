@@ -699,3 +699,96 @@ def test_cli_calibrate_writes_a_config_the_report_names(split, tmp_path, capsys)
     with pytest.raises(SystemExit):
         MODULE.main(["calibrate", "--split", str(split), "--predictions", str(tmp_path / "pred"), "--no-clear",
                      "--clear-fpr", "0.02", "--out", str(out)])
+
+
+# --- refresh of main -----------------------------------------------------------------------------
+
+
+def commit_files(tree, files, message):
+    import subprocess
+    for name, text in files.items():
+        (tree / name).parent.mkdir(parents=True, exist_ok=True)
+        (tree / name).write_text(text)
+    env = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", "-C", str(tree), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tree), *env, "commit", "-q", "-m", message], check=True)
+    return subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
+@pytest.fixture
+def main_tree(tmp_path, monkeypatch):
+    import subprocess
+    tree = tmp_path / "main"
+    tree.mkdir()
+    subprocess.run(["git", "init", "-q", str(tree)], check=True)
+    first = commit_files(tree, {"ark-core/src/lib.rs": "// v1\n", "README.md": "x\n"}, "first")
+    built = []
+
+    def predictor(tree_, commit, cache, wolf=False):
+        built.append((commit, wolf))
+        return MODULE.Predictor(commit, "k" * 64, tmp_path / "bin")
+
+    monkeypatch.setattr(MODULE, "ensure_predictor", predictor)
+    monkeypatch.setattr(MODULE, "predict_split", fake_predict)
+    monkeypatch.setattr(MODULE.DLP_SCOREBOARD, "prune", lambda cache, keep: None)
+    return tree, first, built
+
+
+def test_refresh_renders_baseline_of_head_with_the_commit_and_both_tprs(split, tmp_path, main_tree, capsys):
+    tree, first, built = main_tree
+    cache = tmp_path / "bcache"
+    sets = MODULE.split_sets(split)
+    cache_baseline(cache, "atr", "v1", sets, 1)
+    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "cache"),
+                        "--baseline-cache", str(cache)]) == 0
+    text = (tree / MODULE.SCOREBOARD_DIR / "baseline.md").read_text()
+    assert f"{MODULE.RENDERED_FROM} `{first[:12]}` on the dev split." in text
+    assert "| TPR@1% | 95% CI | TPR@0.1% |" in text and "hard-benign FPR" in text
+    assert "| 100.0 / 100.0 (atr) |" in text
+    # Without a calibrated cascade config only baseline.md is rendered, with the L1 build.
+    assert not (tree / MODULE.SCOREBOARD_DIR / "cascade.md").exists() and built == [(first, False)]
+    assert "rewrote research/l1-threat/scoreboard/baseline.md" in capsys.readouterr().out
+
+
+def test_refresh_skips_commits_without_detector_scorer_or_gold_change(split, tmp_path, main_tree, capsys):
+    tree, first, built = main_tree
+    commit_files(tree, {"README.md": "docs only\n"}, "docs")
+    args = ["refresh", "--tree", str(tree), "--since", first, "--dev", str(split), "--cache", str(tmp_path / "c")]
+    assert MODULE.main(args) == 0
+    assert "nothing to render" in capsys.readouterr().out and built == []
+    assert not (tree / MODULE.SCOREBOARD_DIR / "baseline.md").exists()
+    for path in ("ark-core/src/lib.rs", "scripts/l1_threat/scoreboard.py", "research/l1-threat/scoreboard/gold-dev.json"):
+        commit_files(tree, {path: f"// {path}\n"}, path)
+        assert path in MODULE.changed_paths(tree, first, "HEAD")
+    assert MODULE.main(args) == 0 and len(built) == 1
+
+
+def test_refresh_keeps_a_report_whose_numbers_did_not_change(split, tmp_path, main_tree, capsys):
+    tree, first, _ = main_tree
+    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
+    assert MODULE.main(args) == 0
+    path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
+    commit_files(tree, {"ark-core/src/lib.rs": "// v2\n"}, "same numbers")
+    assert MODULE.main(args) == 0
+    assert f"`{first[:12]}`" in path.read_text() and "numbers unchanged" in capsys.readouterr().out
+    assert MODULE.write_rendered(path, path.read_text().replace("100.0", " 99.0")) is True
+
+
+def test_refresh_renders_cascade_md_from_the_calibrated_config_of_main(split, tmp_path, main_tree, monkeypatch):
+    tree, _, built = main_tree
+    config = {"scanner": {"cascade": {"modules": {"injection": {"clear_threshold": 0.2}}},
+                          "wolf": {"bundle_dir": "/private/models/wolf"}}}
+    head = commit_files(tree, {str(MODULE.CASCADE_CONFIG): json.dumps(config)}, "calibrated")
+    seen = []
+
+    def predict(sets, out, binary, config, jobs=1):
+        seen.append(config)
+        (fake_predict if config == MODULE.L1_CASCADE else fake_cascade)(sets, out, config)
+
+    monkeypatch.setattr(MODULE, "predict_split", predict)
+    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]) == 0
+    text = (tree / MODULE.SCOREBOARD_DIR / "cascade.md").read_text()
+    assert f"Cascade config `{MODULE.config_hash(config)[:12]}`" in text and f"`{head[:12]}`" in text
+    assert "/private/models" not in text
+    assert seen == [MODULE.L1_CASCADE, config] and built == [(head, False), (head, True)]

@@ -93,6 +93,10 @@ ensure_free_space() {  # $1: what comes next, $2: agent | gate
 ensure_free_space "the run" agent
 
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
+# Threat: re-render the scoreboard of main after merges (a follow-up PR); a failure never stops the run.
+if [ "$PROGRAM" = threat ]; then
+  "${L1[@]}" refresh || echo "== scoreboard refresh failed; the next run retries"
+fi
 "${L1[@]}" next
 rc=$?
 # CI waits and publishing need no agent memory: the other programme may run meanwhile.

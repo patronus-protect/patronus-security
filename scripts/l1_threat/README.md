@@ -372,6 +372,8 @@ python3 scripts/l1_threat/scoreboard.py compare --base base.json --head head.jso
 python3 scripts/l1_threat/scoreboard.py report --split DEV --predictions PRED [--baseline-cache CACHE] \
     --out research/l1-threat/scoreboard/baseline.md
 python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DEV [--holdout HOLDOUT] --cache CACHE
+python3 scripts/l1_threat/scoreboard.py refresh [--tree MAIN] [--since SHA] --dev DEV --cache CACHE \
+    [--baseline-cache CACHE]                                       # Scoreboard von main neu rendern
 ```
 
 `predict` baut ohne `--predictor` das Beispiel dieses Checkouts (`cargo build --release`, mit `--features wolf`,
@@ -395,7 +397,18 @@ Referenzzeile (nach TPR@1 %, mit TPR@1 % / 0,1 %), dazu die Versionen. Jede erwa
 Cache steht mit Namen und Grund unter „Not in the columns“ (kein Cache, etwa weil der Klon nicht geholt werden
 konnte, oder die fehlenden Sätze); die übrigen Spalten erscheinen trotzdem. Den Cache legt man außerhalb des
 Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe wiederverwenden.
-Ergebnis auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+Aktueller Stand von main auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+
+`refresh` hält das Scoreboard von main aktuell: im Checkout `--tree` (Standard: dieses Repo) baut es den
+Predictor von HEAD (Cache wie `gate`, Builds und Vorhersagen werden geteilt), rendert
+`research/l1-threat/scoreboard/baseline.md` aus `--dev` (L1-Kaskade, mit `--baseline-cache` die Baseline-Spalten)
+und, wenn der Checkout `research/l1-threat/scoreboard/cascade-config.json` enthält (Ausgabe von `calibrate`),
+`cascade.md` an deren Arbeitspunkt; der Kopf nennt den Commit. Mit `--since SHA` (Commit des letzten Renderns)
+läuft nichts, solange sich zwischen SHA und HEAD keine Datei unter `REFRESH_PATHS` geändert hat: `ark-core`,
+Cargo-Dateien, `scripts/l1_threat/`, `research/l1-threat/entity_map.yaml`, `gold-dev.json`, `gold-leakage.json`,
+`cascade-config.json`. Ein Bericht, dessen Zahlen gleich bleiben (nur die Commit-Zeile wäre neu), bleibt
+unverändert. Der Runner ruft es zu Beginn jedes Threat-Laufs auf (`ark-l1 refresh`, nur Lane a, sandboxed ohne
+Netz und Holdout) und pusht geänderte Berichte als einen Folge-PR `threat/scoreboard`, den der Auto-Merge landet.
 
 ### Kaskade und Kalibrierung
 
