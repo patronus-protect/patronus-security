@@ -121,10 +121,10 @@ impl SecurityGateway {
         metrics.checkpoint("worker_registration", "");
         let execution = self.scan_execution();
         self.shell_command_pipeline = if self.shell_command_configured(&execution) {
-            let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
+            let shell = self.shell_command_config(&base_dir);
             let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(
-                &bundle_dir,
-                &self.shell_command_manifest_sha256,
+                &shell.bundle_dir,
+                &shell.manifest_sha256,
             )
             .map_err(std::io::Error::other)?;
             pipeline
@@ -133,8 +133,8 @@ impl SecurityGateway {
             let (ask, block) = pipeline.model().cuts();
             log::info!(
                 "shell_command model {} loaded from {}; cuts ask={ask} block={block}",
-                assets::SHELL_COMMAND_ASSET.model,
-                bundle_dir.display(),
+                patronus_ark_core::warmup::SHELL_MODEL,
+                shell.bundle_dir.display(),
             );
             metrics.checkpoint("shell_command_l1", "");
             Some(pipeline)
@@ -289,24 +289,32 @@ impl SecurityGateway {
                 if !self.shell_command_configured(&execution) {
                     continue;
                 }
-                if !assets::shell_command_assets_present(&base_dir) {
-                    let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
-                    if allow_download && self.should_download_assets_for(*category) {
-                        if let Some(progress) = progress {
-                            assets::download_shell_command_assets_with_progress(
-                                &base_dir, progress,
-                            )?;
-                        } else {
-                            assets::download_shell_command_assets(&base_dir)?;
-                        }
-                    } else {
-                        return Err(format!(
-                            "missing shell_command assets at {}; downloads disabled",
-                            bundle_dir.display()
-                        )
-                        .into());
-                    }
+                let shell = self.shell_command_config(&base_dir);
+                let download = allow_download && self.should_download_assets_for(*category);
+                if !download && !patronus_ark_core::warmup::shell_assets_present(&shell) {
+                    return Err(format!(
+                        "missing shell_command assets at {}; downloads disabled",
+                        shell.bundle_dir.display()
+                    )
+                    .into());
                 }
+                let report = progress.map(|progress| {
+                    move |completed_files, total_files| {
+                        progress(crate::SecurityAssetProgress {
+                            category: SecurityCategory::ShellCommand,
+                            model: patronus_ark_core::warmup::SHELL_MODEL.to_string(),
+                            completed_files,
+                            total_files,
+                        })
+                    }
+                });
+                patronus_ark_core::warmup::prepare_shell_assets_with_progress(
+                    &shell,
+                    &core_warmup_options(download),
+                    report
+                        .as_ref()
+                        .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
+                )?;
                 continue;
             }
             if *category == SecurityCategory::DynamicPii {
@@ -465,43 +473,47 @@ impl SecurityGateway {
             };
             if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
-                && assets::dedicated_l3_asset(*category).is_some()
-                && !assets::dedicated_l3_assets_present(
-                    *category,
-                    &base_dir,
-                    execution.wolf_selection(),
-                )
             {
-                if allow_download && self.should_download_assets_for(*category) {
-                    assets::download_dedicated_l3_assets(
-                        *category,
-                        &base_dir,
-                        execution.wolf_selection(),
-                    )?;
-                } else {
-                    return Err(format!(
-                        "missing {} dedicated L3 assets below {}; downloads disabled",
-                        category.as_str(),
-                        base_dir.display()
-                    )
-                    .into());
-                }
-            }
-            if allow_download
-                && execution.l3_strategy() == L3Strategy::Dedicated
-                && execution.allows_level(SecurityLevel::L3)
-            {
-                match assets::dedicated_l3_asset(*category) {
-                    // Core prepares Wolf's compact tokenizer and external weights with its cache.
-                    Some(asset) if asset.model == assets::WOLF_PIPELINE_MODEL => {
-                        assets::download_dedicated_l3_assets(
-                            *category,
-                            &base_dir,
-                            execution.wolf_selection(),
-                        )?;
+                let download = allow_download && self.should_download_assets_for(*category);
+                if *category == SecurityCategory::Injection {
+                    // Core pins, prepares and caches Wolf; ARK only picks the model.
+                    let wolf = execution.wolf_selection();
+                    let dir = patronus_ark_core::warmup::wolf_bundle_dir(&base_dir, wolf.model);
+                    if !download
+                        && !patronus_ark_core::warmup::wolf_assets_present(
+                            &dir,
+                            wolf.model,
+                            wolf.precision,
+                        )?
+                    {
+                        return Err(format!(
+                            "missing injection dedicated L3 assets below {}; downloads disabled",
+                            dir.display()
+                        )
+                        .into());
                     }
-                    Some(asset) => assets::prepare_cached_pipeline_model(asset, &base_dir),
-                    None => {}
+                    patronus_ark_core::warmup::prepare_wolf_cache(
+                        &dir,
+                        wolf.model,
+                        wolf.precision,
+                        &core_warmup_options(download),
+                        None,
+                    )?;
+                } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
+                    if !assets::dedicated_l3_assets_present(*category, &base_dir) {
+                        if !download {
+                            return Err(format!(
+                                "missing {} dedicated L3 assets below {}; downloads disabled",
+                                category.as_str(),
+                                base_dir.display()
+                            )
+                            .into());
+                        }
+                        assets::download_dedicated_l3_assets(*category, &base_dir)?;
+                    }
+                    if allow_download {
+                        assets::prepare_cached_pipeline_model(asset, &base_dir);
+                    }
                 }
             }
             if !assets::required_assets_present(*category, asset_level, &category_dir) {
@@ -570,9 +582,8 @@ impl SecurityGateway {
     pub(super) fn model_base_dir(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
         match &self.model_dir {
             Some(path) => Ok(path.clone()),
-            None => Ok(dirs::cache_dir()
-                .ok_or("Could not resolve cache directory")?
-                .join("patronus_ark")),
+            None => Ok(patronus_ark_core::warmup::default_cache_root()
+                .ok_or("Could not resolve cache directory")?),
         }
     }
 
@@ -590,7 +601,7 @@ impl SecurityGateway {
         }
         let model = match config.category {
             SecurityCategory::Injection => ntdb_injection_l3_worker_model(
-                category_dir,
+                &self.model_base_dir()?,
                 self.scan_execution().wolf_selection(),
             )?,
             SecurityCategory::SensitiveDocument => {
@@ -703,25 +714,33 @@ fn warmup_failure(message: String) -> SecurityFailure {
 }
 
 fn ntdb_injection_l3_worker_model(
-    category_dir: &Path,
+    base_dir: &Path,
     wolf: crate::WolfSelection,
 ) -> Result<Option<LazyOnnxTextClassifier>, Box<dyn std::error::Error>> {
     let labels = vec!["benign".to_string(), "attack".to_string()];
-    let graphs = patronus_ark_core::wolf::graph_candidates(wolf.model, wolf.precision)?
-        .into_iter()
-        .map(|graph| format!("l3/{graph}"))
-        .collect::<Vec<_>>();
-    let graphs = graphs.iter().map(String::as_str).collect::<Vec<_>>();
+    let graphs = patronus_ark_core::wolf::graph_candidates(wolf.model, wolf.precision)?;
     Ok(LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
-        category_dir,
+        patronus_ark_core::warmup::wolf_bundle_dir(base_dir, wolf.model),
         labels,
         assets::WOLF_PIPELINE_MODEL,
         &graphs,
-        "l3/tokenizer.json",
+        "tokenizer.json",
         256,
         wolf.model.spec().revision,
     )?
     .map(|model| model.with_wolf_selection(wolf)))
+}
+
+/// Core's warmup options for one ARK preparation step.
+fn core_warmup_options(download: bool) -> patronus_ark_core::warmup::WarmupOptions {
+    patronus_ark_core::warmup::WarmupOptions {
+        download: if download {
+            patronus_ark_core::warmup::DownloadPolicy::Missing
+        } else {
+            patronus_ark_core::warmup::DownloadPolicy::Never
+        },
+        ..Default::default()
+    }
 }
 
 fn dedicated_l3_onnx_paths() -> &'static [&'static str] {

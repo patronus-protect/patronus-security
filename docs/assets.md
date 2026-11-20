@@ -37,7 +37,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 
 ## L3 Strategy
 
-`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`; GLiNER remains separate in both strategies.
+`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `77888f617584758f904faefd6f38d4cf926f6d5d`; GLiNER remains separate in both strategies.
 
 The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See [Models & the NTDB format](concepts/models-and-ntdb.md) for the current tensor and runtime contracts.
 
@@ -49,19 +49,19 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 
 | Category | Model | Repository | Revision | Source prefix | Cache path |
 | --- | --- | --- | --- | --- | --- |
-| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `142fadc5474163d4c483cb761d5a6b02e3aa1741` | `l2` | `l2_ntdb/injection_current` |
-| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `dd51a00ec62b99eb0efc77300679676508f8e583` | `l2` | `l2_ntdb/sensitive_document_current` |
-| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `286be0dae164ac189bb79cfcb4f60cedd81aaa58` | `l2` | `l2_ntdb/tool_class_current` |
-| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `54a95e983d0df6d13ceb2ce675bde7200238170b` | `l2` | `l2_ntdb/tool_action_current` |
-| ToolTags | `tool_tags_sink_external` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/sink_external` | `l2_ntdb/tool_tags_sink_external_current` |
-| ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_sensitive` | `l2_ntdb/tool_tags_source_sensitive_current` |
-| ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_untrusted` | `l2_ntdb/tool_tags_source_untrusted_current` |
-| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `3e997999c05a3a8be8ea6b3e23dd97126ca10d70` | `l2` | `l2_ntdb/routing_current` |
-| UnsafeAction | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `ef87add2834a1a257754fbf9d7ba69df48aea733` | `l2` | `l2_ntdb/threat_current` |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` | `l2` | `l2_ntdb/injection_current` |
+| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `efa2b1724946fb2de5a22ce58ef99d7b246c2798` | `l2` | `l2_ntdb/sensitive_document_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `de43b66056fc6b41e5f5c170712770ae805a4850` | `l2` | `l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `b2f4a556e7c9b02606589c5c587e096503f274c5` | `l2` | `l2_ntdb/tool_action_current` |
+| ToolTags | `tool_tags_sink_external` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/sink_external` | `l2_ntdb/tool_tags_sink_external_current` |
+| ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_sensitive` | `l2_ntdb/tool_tags_source_sensitive_current` |
+| ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `f5736c09bcb6f75f1af3604706a1ee5c7e39d745` | `l2/source_untrusted` | `l2_ntdb/tool_tags_source_untrusted_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `74ec1d568bdddc34d408d4e96ce52b5dd7789cbe` | `l2` | `l2_ntdb/routing_current` |
+| UnsafeAction | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `6520c1f43c716d1210321aecc7681446dd5ce317` | `l2` | `l2_ntdb/threat_current` |
 
 ## Wolf Defender Models
 
-Dedicated injection L3 runs one Wolf Defender model. Choose it with `pipeline.wolf.model` (Ark API), `wolf_model` (Python) or `WolfConfig.model` (Core); the injection L2 package above stays on its own pin.
+Dedicated injection L3 runs one Wolf Defender model. Choose it with `pipeline.wolf.model` (Ark API), `wolf_model` (Python) or `WolfConfig.model` (Core); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small pin.
 
 | Model | Repository | Revision |
 | --- | --- | --- |

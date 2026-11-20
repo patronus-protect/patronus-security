@@ -2163,7 +2163,6 @@ version = "0.1.17"
 dependencies = [
  "aho-corasick",
  "blake3",
- "dirs",
  "flate2",
  "half",
  "log",
@@ -2195,6 +2194,7 @@ dependencies = [
  "aho-corasick",
  "blake3",
  "cedar-policy",
+ "dirs",
  "fs2",
  "half",
  "hashbrown 0.17.1",

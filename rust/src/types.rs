@@ -387,16 +387,6 @@ pub struct ScanExecution {
     wolf_selection: WolfSelection,
 }
 
-/// ARK serves Wolf in 256-token windows without overlap, its own choice rather
-/// than the model's published 2048/64; unset sizes take these.
-pub fn ark_wolf_options(options: crate::WolfExecutionOptions) -> crate::WolfExecutionOptions {
-    crate::WolfExecutionOptions {
-        window_tokens: Some(options.window_tokens.unwrap_or(256)),
-        overlap_tokens: Some(options.overlap_tokens.unwrap_or(0)),
-        ..options
-    }
-}
-
 /// The Wolf Defender model and ONNX export the dedicated injection L3 loads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -437,7 +427,8 @@ impl ScanExecution {
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
             chunk_overlap_tokens: 0,
-            wolf_execution_options: ark_wolf_options(crate::WolfExecutionOptions::default()),
+            wolf_execution_options: patronus_ark_core::WolfServingProfile::ARK
+                .fill(crate::WolfExecutionOptions::default()),
             wolf_selection: WolfSelection::default(),
         }
     }
@@ -458,7 +449,7 @@ impl ScanExecution {
         &mut self,
         options: crate::WolfExecutionOptions,
     ) -> Result<(), String> {
-        let options = ark_wolf_options(options);
+        let options = patronus_ark_core::WolfServingProfile::ARK.fill(options);
         options.validate().map_err(|e| e.to_string())?;
         self.wolf_execution_options = options;
         Ok(())

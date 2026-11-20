@@ -81,8 +81,70 @@ impl WolfWindows {
     }
 }
 
+/// A named Wolf serving choice: the window sizes it fills in where the options leave
+/// them unset, and its decision rule. Core's defaults stay the model's published
+/// settings; a caller that serves Wolf differently selects a profile here.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WolfServingProfile {
+    pub window_tokens: usize,
+    pub overlap_tokens: usize,
+    /// Attack probability at which the profile detects.
+    pub threshold: f64,
+    /// Detect at the threshold (`>=`) instead of strictly above it (`>`).
+    pub inclusive: bool,
+}
+
+impl WolfServingProfile {
+    /// Ark's dedicated injection L3: 256-token windows without overlap, detecting at
+    /// an attack probability of at least 0.93.
+    pub const ARK: Self = Self {
+        window_tokens: 256,
+        overlap_tokens: 0,
+        threshold: 0.93,
+        inclusive: true,
+    };
+
+    /// `options` with this profile's sizes where they are unset.
+    pub fn fill(self, options: WolfExecutionOptions) -> WolfExecutionOptions {
+        WolfExecutionOptions {
+            window_tokens: Some(options.window_tokens.unwrap_or(self.window_tokens)),
+            overlap_tokens: Some(options.overlap_tokens.unwrap_or(self.overlap_tokens)),
+            ..options
+        }
+    }
+
+    /// Whether `probability` detects at `threshold` under this profile's rule.
+    pub fn detects(self, probability: f64, threshold: f64) -> bool {
+        if self.inclusive {
+            probability >= threshold
+        } else {
+            probability > threshold
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ark_profile_fills_only_unset_sizes_and_detects_at_its_threshold() {
+        let ark = super::WolfServingProfile::ARK;
+        let filled = ark.fill(super::WolfExecutionOptions::default());
+        assert_eq!(
+            (filled.window_tokens, filled.overlap_tokens),
+            (Some(256), Some(0))
+        );
+        let explicit = super::WolfExecutionOptions {
+            window_tokens: Some(512),
+            ..Default::default()
+        };
+        assert_eq!(ark.fill(explicit).window_tokens, Some(512));
+        assert!(ark.detects(0.93, ark.threshold));
+        assert!(!super::WolfServingProfile {
+            inclusive: false,
+            ..ark
+        }
+        .detects(0.93, 0.93));
+    }
     use super::*;
     #[test]
     fn defaults_and_partial_configuration() {

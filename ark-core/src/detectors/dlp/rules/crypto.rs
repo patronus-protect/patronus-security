@@ -166,8 +166,11 @@ const SEED_TERMS: &[&str] = &[
 
 /// The Monero English word list (1626 sorted words with unique 3-letter
 /// prefixes), `src/mnemonics/english.h`.
-static MONERO_ENGLISH: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| include_str!("data/monero_english.txt").lines().collect());
+static MONERO_ENGLISH: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    crate::detectors::dlp::seed_phrase::MONERO_ENGLISH
+        .lines()
+        .collect()
+});
 
 /// C-WALLET: a Monero mnemonic seed, the text form of the private spend key:
 /// 24 words of the English word list and a checksum word, the word at the

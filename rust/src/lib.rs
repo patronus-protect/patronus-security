@@ -6,7 +6,7 @@ pub mod detectors;
 pub use patronus_ark_core::{
     diagnostics,
     wolf::{WolfModel, WolfPrecision},
-    WolfExecutionOptions,
+    WolfExecutionOptions, WolfServingProfile,
 };
 pub mod dynamic_pii;
 pub mod gliner_onnx_engine;
@@ -14,7 +14,7 @@ pub mod gliner_onnx_engine;
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub use patronus_ark_core::{cascade, normalization};
+pub use patronus_ark_core::{cascade, normalization, warmup};
 pub mod pipeline;
 pub mod post_prediction;
 pub use patronus_ark_core::threat;

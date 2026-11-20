@@ -20,13 +20,16 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use patronus_ark::assets::download_shell_command_assets;
 use patronus_ark::detectors::shell::{
     facts::{extract, Facts, ShellContext},
     kf1,
     policies::ShellPolicies,
     shell_risk::{ShellRiskPipeline, ShellVerdict},
     testing,
+};
+use patronus_ark_core::{
+    detectors::shell::ShellConfig,
+    warmup::{prepare_shell_assets, shell_bundle_dir, DownloadPolicy, WarmupOptions},
 };
 use serde_json::Value;
 
@@ -56,7 +59,7 @@ fn bundle_policies() -> ShellPolicies {
 }
 
 /// The released bundle: `PATRONUS_SHELL_RISK_BUNDLE`, or in CI (`CI` set) the
-/// pinned `SHELL_COMMAND_ASSET` fetched once through ARK's asset download into
+/// pinned Cat release fetched once through Core's asset preparation into
 /// `PATRONUS_SHELL_RISK_CACHE` (default `target/shell_risk_bundle`). CI fails
 /// instead of skipping the model fields when the bundle cannot be had.
 fn bundle_dir() -> Option<PathBuf> {
@@ -72,10 +75,15 @@ fn bundle_dir() -> Option<PathBuf> {
                 .unwrap_or_else(|| {
                     Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/shell_risk_bundle")
                 });
-            let dir = download_shell_command_assets(&cache).unwrap_or_else(|error| {
+            let config = ShellConfig::new(shell_bundle_dir(&cache));
+            let options = WarmupOptions {
+                download: DownloadPolicy::Missing,
+                ..Default::default()
+            };
+            prepare_shell_assets(&config, &options).unwrap_or_else(|error| {
                 panic!("CI needs the pinned shell-risk bundle for parity: {error}")
             });
-            Some(dir)
+            Some(config.bundle_dir)
         })
         .clone()
 }

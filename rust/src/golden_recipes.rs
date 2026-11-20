@@ -168,16 +168,14 @@ enum Segment {
     SeedWords(SeedWords),
 }
 
-const BIP39_ENGLISH: &str = include_str!("../../ark-core/src/detectors/dlp/bip39/english.txt");
-const MONERO_ENGLISH: &str =
-    include_str!("../../ark-core/src/detectors/dlp/rules/data/monero_english.txt");
-
 /// A seed word kind: word list, words drawn, words in the value and the
 /// Electrum version prefix (none for Monero, which appends a checksum word).
 fn seed_kind(kind: &str) -> Option<(&'static str, usize, usize, Option<&'static str>)> {
+    use patronus_ark_core::detectors::dlp::seed_phrase::{word_list, MONERO_ENGLISH};
+    let english = word_list("english")?;
     match kind {
-        "electrum_standard" => Some((BIP39_ENGLISH, 12, 12, Some("01"))),
-        "electrum_segwit" => Some((BIP39_ENGLISH, 12, 12, Some("100"))),
+        "electrum_standard" => Some((english, 12, 12, Some("01"))),
+        "electrum_segwit" => Some((english, 12, 12, Some("100"))),
         "monero" => Some((MONERO_ENGLISH, 24, 25, None)),
         _ => None,
     }

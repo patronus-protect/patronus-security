@@ -239,8 +239,9 @@ impl LazyOnnxTextClassifier {
             Some(callback) => runner.scan_with_progress_and_control(text, control, callback)?,
             None => runner.scan_with_control(text, control)?,
         };
-        // ARK detects at its threshold (`>=`); Core follows the model's strict `>`.
-        result.matched = result.attack_probability >= result.threshold;
+        // ARK's serving profile decides; Core's default follows the model's strict `>`.
+        result.matched = patronus_ark_core::WolfServingProfile::ARK
+            .detects(result.attack_probability, result.threshold);
         Ok(result)
     }
 
@@ -254,7 +255,7 @@ impl LazyOnnxTextClassifier {
         if let Some(runner) = self.wolf_runner.as_mut() {
             runner.set_threshold(threshold)?;
         }
-        let execution = crate::types::ark_wolf_options(execution);
+        let execution = patronus_ark_core::WolfServingProfile::ARK.fill(execution);
         let options = options.normalized();
         if self.wolf_runner.is_none()
             || self.loaded_backend != Some(backend)

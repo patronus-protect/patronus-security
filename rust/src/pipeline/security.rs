@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
 use crate::{
-    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
+    assets::DYNAMIC_PII_ASSET,
     detectors::{
         shell::{ShellPolicyConfig, ShellRiskPipeline},
         NativeDetection,
@@ -1036,10 +1036,13 @@ impl SecurityGateway {
                 failures: vec![SecurityFailure {
                     stage: SecurityFailureStage::Inference,
                     level: Some(SecurityLevel::L1),
-                    detector_id: Some(SHELL_COMMAND_ASSET.model.to_string()),
+                    detector_id: Some(patronus_ark_core::warmup::SHELL_MODEL.to_string()),
                     kind: SecurityFailureKind::NotReady,
                     retryable: true,
-                    message: format!("{} model is not loaded", SHELL_COMMAND_ASSET.model),
+                    message: format!(
+                        "{} model is not loaded",
+                        patronus_ark_core::warmup::SHELL_MODEL
+                    ),
                 }],
             }
         } else {
@@ -1572,13 +1575,26 @@ impl SecurityGateway {
     }
 
     /// Whether the shell command model is configured and allowed by the gates.
+    /// Cat's bundle in Core's layout below `base_dir`, pinned to this gateway's manifest.
+    fn shell_command_config(
+        &self,
+        base_dir: &std::path::Path,
+    ) -> crate::detectors::shell::ShellConfig {
+        crate::detectors::shell::ShellConfig {
+            bundle_dir: patronus_ark_core::warmup::shell_bundle_dir(base_dir),
+            manifest_sha256: self.shell_command_manifest_sha256.clone(),
+            policy_dirs: Vec::new(),
+            allowlist: Default::default(),
+        }
+    }
+
     fn shell_command_configured(&self, execution: &ScanExecution) -> bool {
         self.categories.contains(&SecurityCategory::ShellCommand)
             && execution.allows_level(SecurityLevel::L1)
             && execution
                 .gates()
                 .native
-                .allows_model(SHELL_COMMAND_ASSET.model)
+                .allows_model(patronus_ark_core::warmup::SHELL_MODEL)
     }
 
     fn level_enabled(&self, execution: &ScanExecution, level: SecurityLevel) -> bool {
@@ -1642,9 +1658,9 @@ impl SecurityGateway {
         match category {
             SecurityCategory::ShellCommand => {
                 if self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, SHELL_COMMAND_ASSET.model)
+                    && self.model_enabled(execution, patronus_ark_core::warmup::SHELL_MODEL)
                 {
-                    let model = SHELL_COMMAND_ASSET.model;
+                    let model = patronus_ark_core::warmup::SHELL_MODEL;
                     results.push(run_measured_l1_detector(
                         category,
                         model,

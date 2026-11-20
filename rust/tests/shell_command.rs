@@ -4,8 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use patronus_ark_core::warmup::{shell_bundle_dir, SHELL_MODEL};
+
 use patronus_ark::{
-    assets::SHELL_COMMAND_ASSET,
     detectors::{
         shell::{testing::write_synthetic_bundle, Decision, ShellPolicyConfig, ShellRiskPipeline},
         NativeDetector,
@@ -32,18 +33,10 @@ fn temp_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// Write the synthetic K26 bundle as a revision-pinned bundle in a model
-/// cache. `model_sha` overrides the manifest digest of `model.json`. Returns
+/// Write the synthetic K26 bundle into Core's layout of a model cache. `model_sha` overrides the manifest digest of `model.json`. Returns
 /// the manifest's sha256.
 fn synthetic_bundle(model_dir: &Path, model_sha: Option<&str>) -> String {
-    let bundle = model_dir.join(SHELL_COMMAND_ASSET.destination_path);
-    let manifest = write_synthetic_bundle(&bundle, model_sha).unwrap();
-    std::fs::write(
-        bundle.join(".patronus-revision"),
-        SHELL_COMMAND_ASSET.revision,
-    )
-    .unwrap();
-    manifest
+    write_synthetic_bundle(&shell_bundle_dir(model_dir), model_sha).unwrap()
 }
 
 fn gateway(model_dir: &Path, manifest_sha256: &str) -> SecurityGateway {
@@ -66,10 +59,7 @@ fn published_bundle_decides_when_cached() {
         .map(PathBuf::from)
         .ok()
         .or_else(|| {
-            dirs::cache_dir().map(|dir| {
-                dir.join("patronus_ark")
-                    .join(SHELL_COMMAND_ASSET.destination_path)
-            })
+            patronus_ark_core::warmup::default_cache_root().map(|root| shell_bundle_dir(&root))
         })
         .filter(|dir| dir.join("config.json").is_file());
     let Some(bundle) = bundle else {
@@ -118,9 +108,7 @@ fn gateway_scans_commands_from_a_local_bundle() {
         SecurityLevelReadiness::Ready
     );
 
-    let pipeline =
-        ShellRiskPipeline::from_bundle_dir(&model_dir.join(SHELL_COMMAND_ASSET.destination_path))
-            .unwrap();
+    let pipeline = ShellRiskPipeline::from_bundle_dir(&shell_bundle_dir(&model_dir)).unwrap();
     for text in [
         "git status",
         "rm -rf ~/.ssh",
@@ -131,7 +119,7 @@ fn gateway_scans_commands_from_a_local_bundle() {
         assert_eq!(results.len(), 1, "{text:?}");
         let result = &results[0];
         assert_eq!(result.category, "shell_command");
-        assert_eq!(result.model, SHELL_COMMAND_ASSET.model);
+        assert_eq!(result.model, SHELL_MODEL);
         let detection = pipeline.detect(text);
         assert_eq!(result.class_name, detection.result.class_name, "{text:?}");
         assert_eq!(
@@ -239,14 +227,15 @@ fn warmup_refuses_bundles_that_do_not_match() {
     );
     std::fs::remove_dir_all(model_dir).ok();
 
-    // A consistent bundle that is not the pinned release.
+    // A consistent bundle of another release is outdated: not ready, so warmup
+    // would replace it with the pinned release and refuses with downloads off.
     let model_dir = temp_dir("unpinned");
     synthetic_bundle(&model_dir, None);
     let error = gateway(&model_dir, SHELL_MANIFEST_SHA256)
         .warmup()
         .unwrap_err();
     assert!(
-        error.message.contains("is not the pinned release manifest"),
+        error.message.contains("missing shell_command assets"),
         "{error:?}"
     );
     std::fs::remove_dir_all(model_dir).ok();
@@ -255,7 +244,9 @@ fn warmup_refuses_bundles_that_do_not_match() {
 #[test]
 fn asset_readiness_reports_the_shell_command_bundle() {
     let model_dir = temp_dir("readiness");
-    let gateway = gateway(&model_dir, "");
+    let manifest = synthetic_bundle(&model_dir, None);
+    std::fs::remove_dir_all(shell_bundle_dir(&model_dir)).unwrap();
+    let gateway = gateway(&model_dir, &manifest);
     let missing = gateway.asset_readiness();
     let SecurityLevelReadiness::NotReady { failures } = &missing.l1 else {
         panic!("missing bundle must make L1 assets not ready: {missing:?}");

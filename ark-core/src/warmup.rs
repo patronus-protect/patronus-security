@@ -1,10 +1,12 @@
 //! Explicit asset preparation and one-time runtime warmup. Scanning stays offline.
 use crate::{ScanError, Scanner, ScannerConfig};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// Cat, the K26 shell-risk release: a JSON model plus gated Cedar policy levels.
+pub const SHELL_MODEL: &str = "cat-shell-risk-commander";
 pub const SHELL_REPOSITORY: &str = "patronus-studio/cat-shell-risk-commander";
-pub const SHELL_REVISION: &str = "54617685bc2bc3b7f06ba0c7e7f86c2899940d1f";
+pub const SHELL_REVISION: &str = "a971100c6757230dbebbfdadd9a539312c9a9dcb";
 /// `manifest.json` is fetched last: a bundle directory with a manifest is complete.
 pub const SHELL_FILES: &[&str] = &[
     "config.json",
@@ -17,7 +19,26 @@ pub const SHELL_FILES: &[&str] = &[
 /// sha256 of every release file, so pinning it makes any changed file a
 /// refused bundle.
 pub const SHELL_MANIFEST_SHA256: &str =
-    "b4dd4f1ed7ef83957c69ec321b134fdb65e2c8cfcb82f38c826d4aa4ca977153";
+    "b60905b95780ff7ab2cd55c63b1eaf296ddea2f53e53d50a8f97bfdf46d8f39a";
+
+/// The model cache root when the caller names none: `<user cache>/patronus_ark`.
+/// Core and ARK keep every model they share once below this root.
+#[cfg(feature = "download")]
+pub fn default_cache_root() -> Option<PathBuf> {
+    dirs::cache_dir().map(|dir| dir.join("patronus_ark"))
+}
+
+/// Cat's bundle directory below a model cache root. Core's prepare functions and ARK use
+/// this one layout, so a root holds each shared model once.
+pub fn shell_bundle_dir(root: &Path) -> PathBuf {
+    root.join("shell_command/cat_shell_risk_commander")
+}
+
+/// The bundle directory of a Wolf model below a model cache root, one per model.
+#[cfg(feature = "wolf")]
+pub fn wolf_bundle_dir(root: &Path, model: crate::wolf::WolfModel) -> PathBuf {
+    root.join("wolf").join(model.spec().id)
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,20 +103,41 @@ pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result
     Ok(())
 }
 
-/// Fetch the pinned Cat release into `config.bundle_dir` unless it already
-/// holds a bundle. Files are verified when the scanner loads them.
+/// Whether `config.bundle_dir` holds the release `config.manifest_sha256` pins.
+pub fn shell_assets_present(config: &crate::detectors::shell::ShellConfig) -> bool {
+    std::fs::read(config.bundle_dir.join("manifest.json")).is_ok_and(|manifest| {
+        crate::detectors::facts_common::bundle::sha256_hex(&manifest)
+            .eq_ignore_ascii_case(&config.manifest_sha256)
+    })
+}
+
+/// Fetch the pinned Cat release into `config.bundle_dir` unless it already holds the
+/// pinned bundle; an outdated bundle is replaced. Files are verified when the scanner
+/// loads them.
 pub fn prepare_shell_assets(
     config: &crate::detectors::shell::ShellConfig,
     options: &WarmupOptions,
 ) -> Result<(), ScanError> {
+    prepare_shell_assets_with_progress(config, options, None)
+}
+
+/// [`prepare_shell_assets`] reporting `(completed, total)` files.
+pub fn prepare_shell_assets_with_progress(
+    config: &crate::detectors::shell::ShellConfig,
+    options: &WarmupOptions,
+    progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
+) -> Result<(), ScanError> {
     options.validate()?;
     let dir = &config.bundle_dir;
-    if dir.join("manifest.json").is_file() {
+    if shell_assets_present(config) {
+        if let Some(callback) = progress {
+            callback(SHELL_FILES.len(), SHELL_FILES.len());
+        }
         return Ok(());
     }
     if options.download == DownloadPolicy::Never {
         return Err(ScanError::Asset(format!(
-            "{} holds no Cat bundle; prepare it or enable download=missing",
+            "{} holds no pinned Cat bundle; prepare it or enable download=missing",
             dir.display()
         )));
     }
@@ -113,7 +155,10 @@ pub fn prepare_shell_assets(
         let deadline = std::time::Instant::now()
             + std::time::Duration::from_millis(options.download_timeout_ms);
         let token = get_hf_token();
-        for file in SHELL_FILES {
+        for (done, file) in SHELL_FILES.iter().enumerate() {
+            if let Some(callback) = progress {
+                callback(done, SHELL_FILES.len());
+            }
             let timeout = deadline
                 .checked_duration_since(std::time::Instant::now())
                 .filter(|left| !left.is_zero())
@@ -129,6 +174,9 @@ pub fn prepare_shell_assets(
                 &DownloadOptions { timeout },
             )
             .map_err(|error| ScanError::Asset(error.to_string()))?;
+        }
+        if let Some(callback) = progress {
+            callback(SHELL_FILES.len(), SHELL_FILES.len());
         }
         Ok(())
     }
@@ -176,6 +224,37 @@ mod tests {
             }
         )
         .is_err());
+    }
+    #[test]
+    fn shell_bundle_is_ready_only_at_the_pinned_manifest() {
+        let root = std::env::temp_dir().join(format!("core-shell-pin-{}", std::process::id()));
+        let mut config = crate::detectors::shell::ShellConfig::new(shell_bundle_dir(&root));
+        assert!(!shell_assets_present(&config));
+        let never = WarmupOptions::default();
+        assert!(prepare_shell_assets(&config, &never).is_err());
+        config.manifest_sha256 =
+            crate::detectors::shell::testing::write_synthetic_bundle(&config.bundle_dir, None)
+                .unwrap();
+        assert!(shell_assets_present(&config));
+        prepare_shell_assets(&config, &never).unwrap();
+        // A bundle of another release is outdated, not ready.
+        config.manifest_sha256 = SHELL_MANIFEST_SHA256.into();
+        assert!(!shell_assets_present(&config));
+        let _ = std::fs::remove_dir_all(root);
+    }
+    #[cfg(feature = "wolf")]
+    #[test]
+    fn each_wolf_model_has_its_own_bundle_dir() {
+        let root = Path::new("/models");
+        let dirs: std::collections::HashSet<_> = crate::wolf::WolfModel::ALL
+            .into_iter()
+            .map(|model| wolf_bundle_dir(root, model))
+            .collect();
+        assert_eq!(dirs.len(), 3);
+        assert_eq!(
+            wolf_bundle_dir(root, crate::wolf::WolfModel::Small),
+            root.join("wolf/wolf-defender-small")
+        );
     }
     #[test]
     fn native_warmup_needs_no_assets_or_downloads() {

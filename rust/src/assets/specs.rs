@@ -62,7 +62,7 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::DynamicPii,
     model: "gliner_small-v2.5-edge",
     repo: "patronus-studio/gliner_small-v2.5-edge",
-    revision: "0057606351626290b6b73d82aeb2ee566b69451f",
+    revision: "6cfcbd93d7fc6f5e1658f80afa38f73891b91693",
     destination_path: "dynamic_pii/gliner_small_v2_5",
     files: &[
         "gliner_config.json",
@@ -77,26 +77,11 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
-/// `cat-shell-risk-commander`: a TF-IDF logistic regression exported as JSON
-/// plus the gated levels of its Cedar policies. It runs natively in the L1
-/// phase, so the bundle carries no ONNX graph or tokenizer.
-pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
-    category: SecurityCategory::ShellCommand,
-    model: "cat-shell-risk-commander",
-    // K26 (format_version 2): char_wb + kf1 (shell tokens, legacy markers and
-    // patronus.facts/1 tokens), verdict = max(model, Cedar policies). The
-    // core pins its manifest (`SHELL_MANIFEST_SHA256`).
-    repo: patronus_ark_core::warmup::SHELL_REPOSITORY,
-    revision: patronus_ark_core::warmup::SHELL_REVISION,
-    destination_path: "shell_command/cat_shell_risk_commander",
-    files: patronus_ark_core::warmup::SHELL_FILES,
-};
-
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
     model: "unified-multitask-model-augmented-v3",
     repo: "patronus-studio/lion-warden-ai-security-classifier",
-    revision: "30ea449339d1075a31fcffa9199ebee4f2cfaf9a",
+    revision: "77888f617584758f904faefd6f38d4cf926f6d5d",
     destination_path: "unified_multitask_v3",
     files: &[
         "onnx/int8_int4_embeddings/model.onnx",
@@ -108,23 +93,14 @@ pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
-/// Injection's pipeline slot; it also names the L2 package of the Small repository.
+/// Injection's public model: its L2 package lives in Core's pinned Wolf Small
+/// repository, and its dedicated L3 is the Wolf model Core prepares.
 pub const WOLF_PIPELINE_MODEL: &str = "wolf-defender-small";
-/// The injection L2 package stays on the Small export it was trained with.
-const WOLF_L2_REPOSITORY: &str = "patronus-studio/wolf-defender-prompt-injection-small";
-const WOLF_L2_REVISION: &str = "142fadc5474163d4c483cb761d5a6b02e3aa1741";
+const WOLF_SMALL: &patronus_ark_core::wolf::WolfModelSpec =
+    &patronus_ark_core::wolf::WOLF_MODELS[patronus_ark_core::wolf::WolfModel::Small as usize];
 
-/// The injection entry is a slot: Core prepares the Wolf files of the configured
-/// [`crate::WolfSelection`], so its repository, revision and files are not used.
+/// Injection has no entry: Core prepares and pins the configured Wolf model.
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
-    PipelineModelAssetSpec {
-        category: SecurityCategory::Injection,
-        model: WOLF_PIPELINE_MODEL,
-        repo: WOLF_L2_REPOSITORY,
-        revision: WOLF_L2_REVISION,
-        destination_path: "injection/l3",
-        files: &[],
-    },
     PipelineModelAssetSpec {
         category: SecurityCategory::SensitiveDocument,
         model: "orca-sonar-document-classifier",
@@ -143,7 +119,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::ToolClass,
         model: "unified-v3-tool-class",
         repo: "patronus-studio/husky-sight-tool-type-classifier-edge",
-        revision: "0f425da68608af007dceb56b35ef51992477877e",
+        revision: "68e58725282dcdda106d8388fca47e0802335bc4",
         destination_path: "tool_class/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -156,7 +132,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::ToolAction,
         model: "unified-v3-tool-action",
         repo: "patronus-studio/husky-paw-tool-action-classifier-edge",
-        revision: "8c224609ed22841be6a53ac94e3dc20ee2c73757",
+        revision: "326adc8edfcaa5c65986cab2896c2e69bc3d36cc",
         destination_path: "tool_action/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -169,7 +145,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::ToolTags,
         model: "unified-v3-tool-tags",
         repo: "patronus-studio/husky-nose-tool-security-properties-classifier-edge",
-        revision: "374f97cb202ce3097ae0c7844f7ac0febb8f4fec",
+        revision: "4619a3c2c14c36f2e4c8ee5c9d65b1ea7b962cbd",
         destination_path: "tool_tags/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -182,7 +158,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::Routing,
         model: "unified-v3-routing",
         repo: "patronus-studio/panther-read-intent-classifier-edge",
-        revision: "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
+        revision: "ef7f1e20afda64f06be0e656184ab67c14061e6a",
         destination_path: "routing/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -195,7 +171,7 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::UnsafeAction,
         model: "unified-v3-threat",
         repo: "patronus-studio/wolf-defender-threat-classifier",
-        revision: "f186c09846c325256a262babcd8558d4e5f93dc9",
+        revision: "6520c1f43c716d1210321aecc7681446dd5ce317",
         destination_path: "threat/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -251,8 +227,8 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::Injection,
         level: SecurityLevel::L2,
         model: WOLF_PIPELINE_MODEL,
-        repo: WOLF_L2_REPOSITORY,
-        revision: WOLF_L2_REVISION,
+        repo: WOLF_SMALL.repository,
+        revision: WOLF_SMALL.revision,
         source_prefix: "l2",
         destination_path: "l2_ntdb/injection_current",
         required: true,
@@ -262,7 +238,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "orca-sonar-document-classifier",
         repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: "dd51a00ec62b99eb0efc77300679676508f8e583",
+        revision: "efa2b1724946fb2de5a22ce58ef99d7b246c2798",
         source_prefix: "l2",
         destination_path: "l2_ntdb/sensitive_document_current",
         required: true,
@@ -272,7 +248,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "unified-v3-tool-class",
         repo: "patronus-studio/husky-sight-tool-type-classifier",
-        revision: "286be0dae164ac189bb79cfcb4f60cedd81aaa58",
+        revision: "de43b66056fc6b41e5f5c170712770ae805a4850",
         source_prefix: "l2",
         destination_path: "l2_ntdb/tool_class_current",
         required: true,
@@ -282,7 +258,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "unified-v3-tool-action",
         repo: "patronus-studio/husky-paw-tool-action-classifier",
-        revision: "54a95e983d0df6d13ceb2ce675bde7200238170b",
+        revision: "b2f4a556e7c9b02606589c5c587e096503f274c5",
         source_prefix: "l2",
         destination_path: "l2_ntdb/tool_action_current",
         required: true,
@@ -292,7 +268,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "tool_tags_sink_external",
         repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "66bb4bdd76f57aacba7a4e39e0368e35701b2244",
+        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
         source_prefix: "l2/sink_external",
         destination_path: "l2_ntdb/tool_tags_sink_external_current",
         required: true,
@@ -302,7 +278,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "tool_tags_source_sensitive",
         repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "66bb4bdd76f57aacba7a4e39e0368e35701b2244",
+        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
         source_prefix: "l2/source_sensitive",
         destination_path: "l2_ntdb/tool_tags_source_sensitive_current",
         required: true,
@@ -312,7 +288,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "tool_tags_source_untrusted",
         repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "66bb4bdd76f57aacba7a4e39e0368e35701b2244",
+        revision: "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
         source_prefix: "l2/source_untrusted",
         destination_path: "l2_ntdb/tool_tags_source_untrusted_current",
         required: true,
@@ -322,7 +298,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "unified-v3-routing",
         repo: "patronus-studio/panther-read-intent-classifier",
-        revision: "3e997999c05a3a8be8ea6b3e23dd97126ca10d70",
+        revision: "74ec1d568bdddc34d408d4e96ce52b5dd7789cbe",
         source_prefix: "l2",
         destination_path: "l2_ntdb/routing_current",
         required: true,
@@ -332,7 +308,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         level: SecurityLevel::L2,
         model: "unified-v3-threat",
         repo: "patronus-studio/wolf-defender-threat-classifier",
-        revision: "ef87add2834a1a257754fbf9d7ba69df48aea733",
+        revision: "6520c1f43c716d1210321aecc7681446dd5ce317",
         source_prefix: "l2",
         destination_path: "l2_ntdb/threat_current",
         required: true,

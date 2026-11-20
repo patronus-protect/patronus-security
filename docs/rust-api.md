@@ -15,7 +15,7 @@ pub mod detectors;
 pub use patronus_ark_core::{
     diagnostics,
     wolf::{WolfModel, WolfPrecision},
-    WolfExecutionOptions,
+    WolfExecutionOptions, WolfServingProfile,
 };
 pub mod dynamic_pii;
 pub mod gliner_onnx_engine;
@@ -23,7 +23,7 @@ pub mod gliner_onnx_engine;
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub use patronus_ark_core::{cascade, normalization};
+pub use patronus_ark_core::{cascade, normalization, warmup};
 pub mod pipeline;
 pub mod post_prediction;
 pub use patronus_ark_core::threat;
@@ -1997,13 +1997,6 @@ the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
 plus Ark's runtime and NTDB settings.
 
 ```rust
-pub fn ark_wolf_options(options: crate::WolfExecutionOptions) -> crate::WolfExecutionOptions;
-```
-
-ARK serves Wolf in 256-token windows without overlap, its own choice rather
-than the model's published 2048/64; unset sizes take these.
-
-```rust
 pub struct WolfSelection {
     pub model: crate::WolfModel,
     pub precision: crate::WolfPrecision,
@@ -2568,6 +2561,33 @@ pub fn validate(self) -> Result<(), ScanError>;
 
 Check the sizes that are set; unset sizes are checked once the bundle is read.
 
+```rust
+pub struct WolfServingProfile {
+    pub window_tokens: usize,
+    pub overlap_tokens: usize,
+    /// Attack probability at which the profile detects.
+    pub threshold: f64,
+    /// Detect at the threshold (`>=`) instead of strictly above it (`>`).
+    pub inclusive: bool,
+}
+```
+
+A named Wolf serving choice: the window sizes it fills in where the options leave
+them unset, and its decision rule. Core's defaults stay the model's published
+settings; a caller that serves Wolf differently selects a profile here.
+
+```rust
+pub fn fill(self, options: WolfExecutionOptions) -> WolfExecutionOptions;
+```
+
+`options` with this profile's sizes where they are unset.
+
+```rust
+pub fn detects(self, probability: f64, threshold: f64) -> bool;
+```
+
+Whether `probability` detects at `threshold` under this profile's rule.
+
 ## Core ONNX Classification
 
 ```rust
@@ -2668,6 +2688,26 @@ No public documentation is available yet.
 ## Core Asset Preparation And Warmup
 
 ```rust
+pub fn default_cache_root() -> Option<PathBuf>;
+```
+
+The model cache root when the caller names none: `<user cache>/patronus_ark`.
+Core and ARK keep every model they share once below this root.
+
+```rust
+pub fn shell_bundle_dir(root: &Path) -> PathBuf;
+```
+
+Cat's bundle directory below a model cache root. Core's prepare functions and ARK use
+this one layout, so a root holds each shared model once.
+
+```rust
+pub fn wolf_bundle_dir(root: &Path, model: crate::wolf::WolfModel) -> PathBuf;
+```
+
+The bundle directory of a Wolf model below a model cache root, one per model.
+
+```rust
 pub enum DownloadPolicy {
     #[default]
     Never,
@@ -2710,14 +2750,31 @@ pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result
 Prepare model files without creating a tokenizer, ONNX session or scanner.
 
 ```rust
+pub fn shell_assets_present(config: &crate::detectors::shell::ShellConfig) -> bool;
+```
+
+Whether `config.bundle_dir` holds the release `config.manifest_sha256` pins.
+
+```rust
 pub fn prepare_shell_assets(
     config: &crate::detectors::shell::ShellConfig,
     options: &WarmupOptions,
 ) -> Result<(), ScanError>;
 ```
 
-Fetch the pinned Cat release into `config.bundle_dir` unless it already
-holds a bundle. Files are verified when the scanner loads them.
+Fetch the pinned Cat release into `config.bundle_dir` unless it already holds the
+pinned bundle; an outdated bundle is replaced. Files are verified when the scanner
+loads them.
+
+```rust
+pub fn prepare_shell_assets_with_progress(
+    config: &crate::detectors::shell::ShellConfig,
+    options: &WarmupOptions,
+    progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
+) -> Result<(), ScanError>;
+```
+
+[`prepare_shell_assets`] reporting `(completed, total)` files.
 
 ```rust
 pub fn prepare_wolf_assets(
@@ -3432,20 +3489,6 @@ pub fn download_dynamic_pii_assets(
 Download the revision-pinned `dynamic-pii` GLiNER bundle.
 
 ```rust
-pub fn shell_command_assets_present(target_dir: &Path) -> bool;
-```
-
-Check whether the complete revision-pinned `shell_command` model is cached.
-
-```rust
-pub fn download_shell_command_assets(
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Download the revision-pinned `shell_command` risk model bundle.
-
-```rust
 pub fn unified_l3_assets_present(target_dir: &Path) -> bool;
 ```
 
@@ -3466,20 +3509,15 @@ pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAss
 Return the revision-pinned dedicated L3 bundle for a classifier category.
 
 ```rust
-pub fn dedicated_l3_assets_present(
-    category: SecurityCategory,
-    target_dir: &Path,
-    wolf: crate::WolfSelection,
-) -> bool;
+pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool;
 ```
 
-Check whether a category's dedicated L3 bundle is cached; Wolf checks `wolf`'s pin.
+Check whether a category's dedicated L3 bundle is cached.
 
 ```rust
 pub fn download_dedicated_l3_assets(
     category: SecurityCategory,
     target_dir: &Path,
-    wolf: crate::WolfSelection,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>>;
 ```
 

@@ -22,7 +22,6 @@ regex-syntax = "0.8"
 regex-automata = { version = "0.4", default-features = false, features = ["std", "meta", "syntax", "perf", "unicode"] }
 aho-corasick = "1.1"
 rayon = "1.10"
-dirs = "5.0"
 url = "2"
 ureq = { version = "2.10", features = ["json"] }
 ort = { version = "2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }

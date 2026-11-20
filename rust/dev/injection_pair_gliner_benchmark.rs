@@ -353,7 +353,10 @@ fn prepare_wolf_assets(
         "patronus_pair_gliner_benchmark_{}",
         std::process::id()
     ));
-    let target = root.join("injection/l3");
+    let target = patronus_ark_core::warmup::wolf_bundle_dir(
+        &root,
+        patronus_ark_core::wolf::WolfModel::Small,
+    );
     fs::create_dir_all(target.join("onnx/onnx_mixed"))?;
     link(
         &source.join("tokenizer.json"),
