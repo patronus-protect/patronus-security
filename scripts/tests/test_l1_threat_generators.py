@@ -22,7 +22,7 @@ EMAP = MODULE.entity_map.load(MODULE.entity_map.MAP_PATH)
 COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20}
 SMALL = {"dev": COUNTS, "holdout": COUNTS}
 # Class template families without a benign look-alike (owner decision 2026-11-20).
-TWINLESS_FAMILIES = {"memory_note_in_doc"}
+TWINLESS_FAMILIES = {"memory_note_in_doc", "refusal_suppression"}
 
 
 def corpus_rows(prefix: str):
@@ -447,8 +447,8 @@ def test_tool_poisoning_class_templates_are_tool_metadata():
                         json.loads(filled)
 
 
-def test_memory_note_in_doc_has_no_benign_twin_and_other_families_keep_theirs(roots):
-    # Owner decision 2026-11-20: a document with a note to the assistant is no benign input.
+def test_twinless_families_have_no_benign_twin_and_other_families_keep_theirs(roots):
+    # 2026-11-20: a document with a note to the assistant and a refusal-suppression look-alike are no benign input.
     dev, holdout = roots
     assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
     families = {family for table in MODULE.CLASS_TEMPLATES.values() for split in ("dev", "holdout")

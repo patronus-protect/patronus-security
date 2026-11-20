@@ -217,8 +217,9 @@ Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
   (`jailbreak`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
   `resource_exhaustion`), DE und EN nativ. Jede Template-Familie hat die Form öffentlicher Beispiele, die
   `modelled_on` nennt (Paper, Advisories, MCPTox-Muster), und einen harmlosen Doppelgänger im selben
-  Rahmen (keinen für `memory_note_in_doc`: ein Dokument mit einer Notiz an den Assistenten ist keine
-  harmlose Eingabe; im Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
+  Rahmen (keinen für `memory_note_in_doc` — ein Dokument mit einer Notiz an den Assistenten — und
+  `refusal_suppression`, dessen Doppelgänger den Jailbreak-Rahmen behält: keine harmlose Eingabe; im
+  Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
 
 Dev und Holdout haben getrennte Seeds und disjunkte Template-Familien (`check_families`). Dev: öffentlicher
 Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`generators_dev_seed`,
