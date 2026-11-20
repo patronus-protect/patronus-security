@@ -291,7 +291,9 @@ Regeln in `source_derived_coverage_0_1_6.json` (Familie `agent_directive`, Kandi
   mention/suggest a/the/that …`; `modify/enhance your answer to mention / by suggesting / with a …`.
 - `indirect.code_insertion_en`: `the following/below/subsequent code (snippet|block|excerpt|section)` und im
   selben Satz `your response/code/codebase/implementation/solution/algorithm` oder `the code you develop`, in
-  beiden Reihenfolgen.
+  beiden Reihenfolgen; vor `the following code` steht ein Wort (kein Subjekt am Klauselanfang: „The following
+  code snippet in your code contains a bug.“), eine Verneinung im Treffer (`not`, `never`, `don't`, `avoid`,
+  DE `nicht`, `nie`, `niemals`) verwirft ihn (`excluded_match_words`, Review #429).
 - `indirect.response_directive_de`, `indirect.code_insertion_de`: du-Imperativ (`Verschlüssele deine Antwort mit
   Base64`, `Füge in deine Antwort einen Satz ein`, `Erwähne in deiner Antwort, dass`, `Ändere deine Antwort so,
   dass`, `Füge den folgenden Codeblock in deine Antwort ein`).

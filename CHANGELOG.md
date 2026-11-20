@@ -500,6 +500,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   snippet from a pull request, setup guides ("add the following code snippet to your settings.py"),
   defensive prompts, quoted, negated and test-code mentions stay unreported. The decision threshold
   is unchanged.
+  - **Detection change:** prompt injection, all modes. The code-insertion directive needs a verb
+    before "the following code" and no negation in the clause: "The following code snippet in your
+    code contains a bug.", "Do not include the following code snippet in your response." and "Füge
+    den folgenden Codeblock nicht in deine Antwort ein." stay unreported.
 - Lower memory use and faster first scans. Only what a scanner or gateway actually runs takes
   memory, and model weights are memory-mapped. **Detection change:** none; every rule and model
   returns the same results.
