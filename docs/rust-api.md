@@ -8,26 +8,37 @@ Import public items from the `patronus_ark` crate.
 
 ```rust
 // SPDX-License-Identifier: GPL-3.0-only
+//! Patronus Ark: the layered (L1/L2/L3), queued security gateway. It runs
+//! Ark Core's modules (`patronus_ark_core`) and extends them; types Ark
+//! Core defines (categories, levels, gates, results, detectors) are imported
+//! from `patronus_ark_core`, this crate exports only what Ark adds.
 pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
-pub mod detectors;
-pub use patronus_ark_core::{
-    diagnostics,
-    wolf::{WolfModel, WolfPrecision},
-    WolfExecutionOptions, WolfServingProfile,
-};
 pub mod dynamic_pii;
 pub mod gliner_onnx_engine;
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub use patronus_ark_core::{cascade, normalization, warmup};
 pub mod pipeline;
-pub mod post_prediction;
-pub use patronus_ark_core::threat;
+mod post_prediction;
 pub mod types;
+
+// Ark Core's modules and types, used inside this crate as `crate::...`.
+use ml::tokenizer::ChunkOverlapTokens;
+use patronus_ark_core::{
+    cascade::{
+        EffectiveL3PipelinePolicy, ExternalL1Detector, ExternalL1Input, GateResult,
+        L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
+        L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
+    },
+    detectors, diagnostics, threat,
+    wolf::{WolfModel, WolfPrecision},
+    DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
+    DecisionResult, DecisionTerminality, EvaluationResult, EvidenceSpan, ExecutionBackend,
+    LabelScore, LayerResult, OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
+};
 
 pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
@@ -35,29 +46,16 @@ pub use cache::{
 };
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
-    DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
+    DynamicPiiRequestConfig, DynamicPiiResultCondition, MAX_REQUEST_LABEL_BYTES,
 };
-pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
-pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
-pub use patronus_ark_core::cascade::{ExternalL1Detector, ExternalL1Input};
-pub use patronus_ark_core::native::{NativeGates, ScoreMode};
 pub use pipeline::{Pipeline, SecurityGateway};
-pub use post_prediction::{
-    CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
-};
 pub use types::defaults;
 pub use types::{
-    ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
-    DecisionRecommendation, DecisionResult, DecisionTerminality, EffectiveL3PipelinePolicy,
-    EvaluationResult, ExecutionBackend, GateExpression, GateResult, L3AggregationStrategy,
-    L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit, L3PipelinePolicy, L3ProgressMode,
-    L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult, MetadataCondition, NtdbOperatingPoint,
-    OnnxBatchMode, OnnxRuntimeOptions, QueuedSecurityEvent, QueuedSecurityProgress,
-    QueuedSecurityScanResult, RequestId, ResultCondition, ScanExecution, ScanGateMatrix,
-    SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
-    SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, Stage, StageOutcome, WolfSelection,
+    L3Strategy, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
+    QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
+    SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
+    SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
 };
 ```
 
@@ -927,6 +925,25 @@ the module's `detect_threshold` that `mode` admits, or, without a
 `detect_threshold`, a result its scorer accepted (or that has evidence
 without a decision envelope); else Clear below the `clear_threshold`;
 else Escalate.
+
+```rust
+pub fn l1_answer<'a>(
+    &self,
+    module: SecurityCategory,
+    mode: ScoreMode,
+    heuristic: bool,
+    scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
+    model: Option<&L1TextModel>,
+    text: &str,
+) -> L1Stage;
+```
+
+L1's answer for `module`, shared by the Core scanner and Ark's
+gateway: the heuristic ([`Self::l1_stage`]) over the module's results
+in `scan` when one of its producers ran (`heuristic`), else
+[`Self::l1_off`]; then the module's L1 `model` on an escalation
+([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+scan: the model reads their rule findings, as in training.
 
 ```rust
 pub fn l1_model_stage(
@@ -1883,30 +1900,12 @@ A completed queued scan result together with the request that produced it.
 
 ```rust
 pub struct SecurityScanResult {
-    /// Category that was scanned, for example `injection` or `dlp`.
-    pub category: String,
-    /// Stable class label for the final decision.
-    pub class_name: String,
-    /// Final confidence score in the inclusive range `0.0..=1.0` when available.
-    pub confidence: f64,
-    /// Highest layer that contributed the final decision.
-    pub level: String,
-    /// Model or native scanner name that produced the final decision.
-    pub model: String,
-    /// Sum of recorded layer durations, in milliseconds.
-    pub duration_ms: f64,
-    /// Ordered layer evidence that explains the final decision.
-    pub layers: Vec<LayerResult>,
+    /// The result fields Ark Core defines; Ark serializes them flat.
+    pub native: patronus_ark_core::NativeResult,
     /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
     /// before results are published outside the gateway.
     #[doc(hidden)]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
-    /// Exact entity evidence returned by span-producing pipelines.
-    pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
-    /// Per-label scores for multi-label classifier outputs.
-    pub label_scores: Vec<LabelScore>,
-    /// Structured classifier decision contract for policy consumers.
-    pub decision: Option<DecisionEnvelope>,
     /// Stage that gave the category its final answer (`heuristic` for an L1
     /// result, `l2`, `l3`); `None` while a later layer still answers.
     pub decided_by: Option<Stage>,
@@ -1918,7 +1917,10 @@ pub struct SecurityScanResult {
 }
 ```
 
-Public scan result returned by `SecurityGateway` methods.
+Public scan result returned by `SecurityGateway` methods: Core's
+[`patronus_ark_core::NativeResult`] (category, class, confidence, level,
+model, layers, evidence, label scores, decision envelope) plus what only
+the layered gateway reports. It dereferences to the Core result.
 
 ```rust
 pub enum OnnxBatchMode {
@@ -2316,7 +2318,7 @@ Raw producer output; result/decision mapping remains the host's responsibility.
 pub struct NativeEngine {
     groups: [Vec<NativeProducerSpec>; NATIVE_CATEGORIES.len()],
     /// Each module's optional L1 model ([`Self::load_l1_models`]).
-    l1_models: [Option<L1TextModel>; NATIVE_CATEGORIES.len()],
+    l1_models: [Option<std::sync::Arc<L1TextModel>>; NATIVE_CATEGORIES.len()],
 }
 ```
 
@@ -2349,7 +2351,8 @@ pub fn load_l1_models<'a>(
 
 Load the configured L1 models once (for example
 [`crate::cascade::CascadeConfig::l1_models`]); each replaces the
-module's earlier model. Non-native categories are refused. No model is
+module's earlier model. A model another scanner of the process holds
+under the same config is shared ([`crate::shared_models`]). Non-native categories are refused. No model is
 loaded unless configured.
 
 ```rust
@@ -2377,6 +2380,24 @@ pub fn run_producer(
 
 Execute an active producer. Call `producer.enabled(gates)` before this method.
 Cancellation is checked before and after detection; panics become detector errors.
+
+```rust
+pub fn scan_module(
+    &self,
+    category: SecurityCategory,
+    prepared: &NativeText<'_>,
+    gates: &NativeGates,
+    control: &ScanControl,
+) -> Result<Vec<NativeResult>, ScanError>;
+```
+
+The L1 pass of one module, shared by the Core [`crate::Scanner`] and
+Ark's gateway: every producer of `category` that `gates` enable, its
+evidence filtered by post-prediction, and the `ark.injection.*`
+producers merged into one scored decision
+([`crate::injection_l1::category_results`]). A failing producer
+reports an `error` result ([`NativeResult::scanner_error`]);
+cancellation and an exceeded deadline are returned as errors.
 
 ## Native Policy
 
@@ -3078,7 +3099,19 @@ pub struct NativeResult {
 }
 ```
 
-Public scan result returned by `SecurityGateway` methods.
+One category's scan result: the Core [`crate::Scanner`]'s `native`
+results, and the shared part of every Ark gateway result, which embeds it.
+
+```rust
+pub fn scanner_error(
+    category: SecurityCategory,
+    model: impl Into<String>,
+    message: impl Into<String>,
+) -> Self;
+```
+
+The L1 result of a producer that failed (panicked or was not loaded):
+class `error` with the message in its `scanner_error` layer.
 
 ```rust
 pub enum ExecutionBackend {
@@ -3249,7 +3282,7 @@ Non-authoritative progress over the windows processed so far.
 
 ```rust
 pub struct WolfRunner {
-    session: Session,
+    session: Arc<WolfSession>,
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,

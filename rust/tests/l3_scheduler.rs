@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use patronus_ark::{
-    QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityRequestCompletion,
-};
+use patronus_ark::{QueuedSecurityEvent, SecurityGateway, SecurityRequestCompletion};
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn scanner() -> SecurityGateway {
     SecurityGateway::with_max_level(
@@ -24,7 +23,7 @@ fn final_model_order(scanner: &SecurityGateway, job_count: usize) -> Vec<String>
         {
             QueuedSecurityEvent::Result(queued) if queued.result.level == "L2" => fallbacks += 1,
             QueuedSecurityEvent::Result(queued) if queued.result.level == "L3" => {
-                finals.push(queued.result.model)
+                finals.push(queued.result.native.model)
             }
             QueuedSecurityEvent::Result(_)
             | QueuedSecurityEvent::Progress(_)

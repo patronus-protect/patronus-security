@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
 use patronus_ark_core::detectors::injection::signal::rule_category;
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

@@ -2,8 +2,8 @@ use ort::{
     ep::CPU,
     session::{builder::GraphOptimizationLevel, Session},
 };
-use patronus_ark::ml::onnx::{warmup_runtime, OnnxTextClassifier};
-use patronus_ark::{ExecutionBackend, OnnxRuntimeOptions};
+use patronus_ark_core::{ml::text_classifier::OnnxTextClassifier, onnx::warmup_runtime};
+use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
 use std::{path::Path, process::Command, thread, time::Duration, time::Instant};
 use tokenizers::Tokenizer;
 

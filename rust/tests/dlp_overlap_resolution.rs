@@ -12,12 +12,15 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::dlp::dlp::{overlap_tier, OverlapTier, DLP_PATTERNS},
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    EvidenceSpan, ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway, SecurityScanResult,
+};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::overlap_tier,
+    detectors::dlp::dlp::OverlapTier, detectors::dlp::dlp::DLP_PATTERNS, EvidenceSpan,
+    SecurityCategory,
 };
 
 const SECRET_GROUPS: &[&str] = &[
@@ -678,7 +681,7 @@ fn scored_modes_resolve_overlaps_like_strict() {
             false,
         );
         gateway.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark::NativeGates {
+            native: patronus_ark_core::native::NativeGates {
                 dlp_mode: mode,
                 ..Default::default()
             },

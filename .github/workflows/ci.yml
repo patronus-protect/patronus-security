@@ -190,6 +190,9 @@ jobs:
       - run: python -m venv .venv
       - run: .venv/bin/python scripts/bootstrap_python_tls.py
       - run: .venv/bin/python -m pip install -r requirements-test.txt
+      - run: .venv/bin/python -m maturin develop --manifest-path ark-core/python/Cargo.toml
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/.venv
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
         env:
           VIRTUAL_ENV: ${{ github.workspace }}/.venv

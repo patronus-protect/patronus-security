@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityLevelReadiness,
-};
+use patronus_ark::{SecurityGateway, SecurityLevelReadiness};
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
@@ -65,7 +64,7 @@ fn threat_result(
 fn verdict(gateway: &SecurityGateway, text: &str) -> String {
     RULE_CLASSES
         .into_iter()
-        .map(|category| threat_result(gateway, category, text).class_name)
+        .map(|category| threat_result(gateway, category, text).native.class_name)
         .find(|class| class != "benign")
         .unwrap_or_else(|| "benign".into())
 }

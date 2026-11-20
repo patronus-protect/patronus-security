@@ -10,9 +10,10 @@
 use std::time::Duration;
 
 use patronus_ark::{
-    DynamicPiiConfig, DynamicPiiExecutionGate, QueuedSecurityEvent, SecurityCategory,
-    SecurityGateway, SecurityLevel,
+    DynamicPiiConfig, DynamicPiiExecutionGate, QueuedSecurityEvent, SecurityGateway,
 };
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
     let mut scanner = SecurityGateway::with_download_categories(

@@ -23,3 +23,7 @@ class Scanner:
         repo_root: str | None = None, dialect: str | None = None,
         prior_facts: list[ShellFacts] | None = None, with_facts: bool = False,
     ) -> ShellVerdict: ...
+
+def seed_word_list(name: str) -> list[str]:
+    """Words of `bip39_<language>` or `monero_english`, in list order."""
+    ...

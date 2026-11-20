@@ -11,6 +11,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Ark uses Ark Core's types and L1 pass:** the `patronus-ark` crate no longer re-exports Ark
+  Core types. Import categories, levels, gates, cascade, detectors, normalization, post-prediction
+  hooks and result parts (`SecurityCategory`, `SecurityLevel`, `ScanGateMatrix`, `LayerResult`,
+  `EvidenceSpan`, `ExternalL1Detector`, `NativeGates`, ...) from `patronus_ark_core`; the
+  `patronus_ark::detectors`, `cascade`, `threat`, `normalization`, `warmup`, `diagnostics` and
+  `post_prediction` paths are gone. `SecurityScanResult` now holds Core's result in its `native`
+  field (it dereferences to it) and adds `decided_by` and `l1_outcome`; the JSON and Python result
+  shapes are unchanged. Ark's L1 runs Core's L1 pass, so a native result's confidence is now the
+  best remaining evidence score for every producer, as in Core (before, only scored PII/DLP). The
+  `patronus-ark` Python package now depends on `patronus-ark-core`, whose
+  `seed_word_list(name)` returns the BIP39 and Monero seed word lists. Scanners and gateways of one
+  process that load the same Wolf graph or L1 model now share one loaded instance.
 - **Asset manifest change:** Ark and Ark Core now share their models through Core. Core holds the
   one pin, download and cache layout for Wolf Defender and Cat, and a default model cache root
   (`warmup::default_cache_root()`, the same `<user cache>/patronus_ark` Ark used). Ark keeps Wolf

@@ -15,8 +15,10 @@
 
 use std::path::Path;
 
-use patronus_ark::{
-    detectors::shell::ShellPolicyConfig, SecurityCategory, SecurityGateway, SecurityLevel,
+use patronus_ark::SecurityGateway;
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::shell::ShellPolicyConfig, SecurityCategory,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

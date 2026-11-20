@@ -1,31 +1,28 @@
-use patronus_ark::detectors::{
-    dlp::{
-        destructive_operation::DestructiveOperationPipeline, dlp::DlpPipeline,
-        secret_transfer::SecretTransferPipeline, sensitive_material::SensitiveMaterialPipeline,
-    },
-    injection::{
-        agentic_control_abuse::AgenticControlAbusePipeline,
-        binary_smuggling::BinarySmugglingPipeline,
-        cross_tool_instruction::CrossToolInstructionPipeline,
-        encoded_instruction::EncodedInstructionPipeline, guardrail_tamper::GuardrailTamperPipeline,
-        hidden_html_instruction::HiddenHtmlInstructionPipeline,
-        instruction_boundary::InstructionBoundaryPipeline,
-        instruction_leak::InstructionLeakPipeline,
-        instruction_override::InstructionOverridePipeline,
-        multi_turn_escalation::MultiTurnEscalationPipeline,
-        output_manipulation::OutputManipulationPipeline,
-        tool_output_instruction::ToolOutputInstructionPipeline,
-        unicode_confusable::UnicodeConfusablePipeline,
-        zero_width_obfuscation::ZeroWidthObfuscationPipeline,
-    },
-    mcp::{
-        mcp_policy::{McpPolicyPipeline, McpSeverity, McpToolPolicyScanner},
-        mcp_runtime_risk::McpRuntimeRiskPipeline,
-    },
-    pii::pii::PiiPipeline,
-    NativeDetector,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::dlp::destructive_operation::DestructiveOperationPipeline,
+    detectors::dlp::dlp::DlpPipeline, detectors::dlp::secret_transfer::SecretTransferPipeline,
+    detectors::dlp::sensitive_material::SensitiveMaterialPipeline,
+    detectors::injection::agentic_control_abuse::AgenticControlAbusePipeline,
+    detectors::injection::binary_smuggling::BinarySmugglingPipeline,
+    detectors::injection::cross_tool_instruction::CrossToolInstructionPipeline,
+    detectors::injection::encoded_instruction::EncodedInstructionPipeline,
+    detectors::injection::guardrail_tamper::GuardrailTamperPipeline,
+    detectors::injection::hidden_html_instruction::HiddenHtmlInstructionPipeline,
+    detectors::injection::instruction_boundary::InstructionBoundaryPipeline,
+    detectors::injection::instruction_leak::InstructionLeakPipeline,
+    detectors::injection::instruction_override::InstructionOverridePipeline,
+    detectors::injection::multi_turn_escalation::MultiTurnEscalationPipeline,
+    detectors::injection::output_manipulation::OutputManipulationPipeline,
+    detectors::injection::tool_output_instruction::ToolOutputInstructionPipeline,
+    detectors::injection::unicode_confusable::UnicodeConfusablePipeline,
+    detectors::injection::zero_width_obfuscation::ZeroWidthObfuscationPipeline,
+    detectors::mcp::mcp_policy::McpPolicyPipeline, detectors::mcp::mcp_policy::McpSeverity,
+    detectors::mcp::mcp_policy::McpToolPolicyScanner,
+    detectors::mcp::mcp_runtime_risk::McpRuntimeRiskPipeline, detectors::pii::pii::PiiPipeline,
+    detectors::NativeDetector,
 };
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 
 type DetectorCase<'a> = (&'a str, Box<dyn Fn(&str) -> String>, &'a str);
 
@@ -731,7 +728,8 @@ fn native_l1_relationship_heuristics_reject_code_logs_and_documentation() {
         false,
     );
     actions.set_execution_gates(
-        patronus_ark::ScanGateMatrix::default().with_rule("dlp_mcp_runtime_risk", true),
+        patronus_ark_core::cascade::ScanGateMatrix::default()
+            .with_rule("dlp_mcp_runtime_risk", true),
     );
     for (category, model, text) in [
         (
@@ -1144,7 +1142,7 @@ fn mcp_scanners_detect_policy_and_runtime_risk() {
 }
 
 mod pii_validators {
-    use patronus_ark::detectors::pii::validators::{luhn, mod97};
+    use patronus_ark_core::{detectors::pii::validators::luhn, detectors::pii::validators::mod97};
 
     #[test]
     fn luhn_valid_visa() {

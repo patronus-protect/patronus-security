@@ -15,7 +15,9 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();

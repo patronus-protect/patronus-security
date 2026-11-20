@@ -1,5 +1,6 @@
-use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
 use patronus_ark_core::detectors::injection::signal::rule_category;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 #[test]
 fn semantic_anchor_combinations_de_en() {

@@ -8,9 +8,9 @@ pub fn degraded_fallback_confidence(confidence: f64) -> f64 {
 }
 
 pub(crate) fn mark_decision_degraded(result: &mut SecurityScanResult, reason: &str) {
-    if let Some(decision) = &mut result.decision {
-        decision.final_result.class_name = result.class_name.clone();
-        decision.final_result.confidence = result.confidence;
+    if let Some(decision) = &mut result.native.decision {
+        decision.final_result.class_name = result.native.class_name.clone();
+        decision.final_result.confidence = result.native.confidence;
         decision.terminality.completion = "degraded".to_string();
         decision.terminality.degraded = true;
         decision.terminality.degradation_reason = Some(reason.to_string());
@@ -76,9 +76,9 @@ pub fn degraded_timeout_result(
     degraded_factor: f64,
 ) -> SecurityScanResult {
     result.confidence = (result.confidence * degraded_factor).clamp(0.0, 1.0);
-    for layer in &mut result.layers {
-        if layer.level == result.level && layer.layer_type != "l3_pending" {
-            layer.confidence = result.confidence;
+    for layer in &mut result.native.layers {
+        if layer.level == result.native.level && layer.layer_type != "l3_pending" {
+            layer.confidence = result.native.confidence;
             layer.matched = true;
             layer
                 .details
@@ -124,9 +124,9 @@ pub fn degraded_error_result(
     error: String,
 ) -> SecurityScanResult {
     result.confidence = (result.confidence * degraded_factor).clamp(0.0, 1.0);
-    for layer in &mut result.layers {
-        if layer.level == result.level && layer.layer_type != "l3_pending" {
-            layer.confidence = result.confidence;
+    for layer in &mut result.native.layers {
+        if layer.level == result.native.level && layer.layer_type != "l3_pending" {
+            layer.confidence = result.native.confidence;
             layer.matched = true;
             layer
                 .details
@@ -190,65 +190,67 @@ mod tests {
     #[test]
     fn degraded_timeout_marks_decision_terminality_degraded() {
         let result = SecurityScanResult {
-            category: "threat".to_string(),
-            class_name: "benign".to_string(),
-            confidence: 0.8,
-            level: "L2".to_string(),
-            model: "unified-v3-threat".to_string(),
-            duration_ms: 1.0,
-            layers: vec![LayerResult {
-                level: "L2".to_string(),
-                layer_type: "ntdb_l2".to_string(),
+            native: patronus_ark_core::NativeResult {
+                category: "threat".to_string(),
                 class_name: "benign".to_string(),
                 confidence: 0.8,
-                matched: true,
+                level: "L2".to_string(),
+                model: "unified-v3-threat".to_string(),
                 duration_ms: 1.0,
-                thresholds: HashMap::new(),
-                details: HashMap::new(),
-            }],
+                layers: vec![LayerResult {
+                    level: "L2".to_string(),
+                    layer_type: "ntdb_l2".to_string(),
+                    class_name: "benign".to_string(),
+                    confidence: 0.8,
+                    matched: true,
+                    duration_ms: 1.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::new(),
+                }],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: Some(DecisionEnvelope {
+                    schema_version: "ark.decision.v1".to_string(),
+                    final_result: DecisionResult {
+                        class_name: "benign".to_string(),
+                        confidence: 0.8,
+                        source: "l2".to_string(),
+                    },
+                    decision_candidate: Some(DecisionCandidate {
+                        source: "l2".to_string(),
+                        class_name: "instruction_override".to_string(),
+                        confidence: 0.9,
+                        acceptance_threshold: 0.86471,
+                        accepted: true,
+                        evidence: None,
+                        chunk_evidence: None,
+                    }),
+                    recommendation: DecisionRecommendation {
+                        accepted: true,
+                        final_arbitration: "l2".to_string(),
+                        operating_point: "best_f1".to_string(),
+                        acceptance_threshold: Some(0.86471),
+                    },
+                    candidates: Vec::new(),
+                    terminality: DecisionTerminality {
+                        completion: "complete".to_string(),
+                        degraded: false,
+                        degradation_reason: None,
+                    },
+                    provenance: DecisionProvenance {
+                        ark_version: "test".to_string(),
+                        schema_version: "ark.decision.v1".to_string(),
+                        model: "unified-v3-threat".to_string(),
+                    },
+                }),
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: Some(DecisionEnvelope {
-                schema_version: "ark.decision.v1".to_string(),
-                final_result: DecisionResult {
-                    class_name: "benign".to_string(),
-                    confidence: 0.8,
-                    source: "l2".to_string(),
-                },
-                decision_candidate: Some(DecisionCandidate {
-                    source: "l2".to_string(),
-                    class_name: "instruction_override".to_string(),
-                    confidence: 0.9,
-                    acceptance_threshold: 0.86471,
-                    accepted: true,
-                    evidence: None,
-                    chunk_evidence: None,
-                }),
-                recommendation: DecisionRecommendation {
-                    accepted: true,
-                    final_arbitration: "l2".to_string(),
-                    operating_point: "best_f1".to_string(),
-                    acceptance_threshold: Some(0.86471),
-                },
-                candidates: Vec::new(),
-                terminality: DecisionTerminality {
-                    completion: "complete".to_string(),
-                    degraded: false,
-                    degradation_reason: None,
-                },
-                provenance: DecisionProvenance {
-                    ark_version: "test".to_string(),
-                    schema_version: "ark.decision.v1".to_string(),
-                    model: "unified-v3-threat".to_string(),
-                },
-            }),
         };
 
         let degraded = degraded_timeout_result(result, 100.0, 50, 0.75);
-        let terminality = &degraded.decision.unwrap().terminality;
+        let terminality = &degraded.native.decision.unwrap().terminality;
 
         assert_eq!(terminality.completion, "degraded");
         assert!(terminality.degraded);

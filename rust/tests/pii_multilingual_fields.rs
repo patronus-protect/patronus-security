@@ -12,14 +12,12 @@
 
 use std::collections::BTreeMap;
 
-use patronus_ark::detectors::pii::{
-    context::{self, SUPPORT_LEXICON},
-    validators,
-};
-use patronus_ark::detectors::score::Context;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::score::Context;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    detectors::pii::context, detectors::pii::context::SUPPORT_LEXICON, detectors::pii::validators,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -34,7 +32,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },

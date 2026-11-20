@@ -36,7 +36,7 @@ which runs this runtime in Docker.
 
 ```bash
 pip install patronus-ark      # Python 3.11+, imports as patronus_ark
-cargo add patronus-ark        # Rust
+cargo add patronus-ark patronus-ark-core   # Rust; shared types come from Ark Core
 ```
 
 L1 needs no downloads. L2/L3 models (and the small `shell_command` model) are fetched on the
@@ -98,7 +98,8 @@ Each result is one detector's verdict: `category`, `class_name`, `confidence`, `
 The same in Rust (`examples/01_basic_scan.rs`):
 
 ```rust
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 let scanner = SecurityGateway::with_max_level(
     vec![SecurityCategory::Injection, SecurityCategory::Dlp, SecurityCategory::Pii],
@@ -169,7 +170,7 @@ The same gates can be passed per request (`enqueue(..., execution_gates=...)`) o
 construction (`SecurityGateway(..., execution_gates=...)`). In Rust:
 
 ```rust
-use patronus_ark::ScanGateMatrix;
+use patronus_ark_core::cascade::ScanGateMatrix;
 
 gateway.set_execution_gates(
     ScanGateMatrix::default()

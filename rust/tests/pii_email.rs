@@ -11,11 +11,10 @@
 //! is ASCII or punycode and delegated by IANA or reserved as a placeholder (T01);
 //! the userinfo of a URL is no address.
 
-use patronus_ark::detectors::pii::validators;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::validators;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     let scanner = SecurityGateway::with_max_level(
@@ -25,7 +24,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },
@@ -41,6 +40,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
 /// `(text, start_char, end_char)` of every EMAIL span.
 fn email_spans(text: &str, mode: ScoreMode) -> Vec<(String, usize, usize)> {
     scan(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .filter(|span| span.label == "EMAIL")

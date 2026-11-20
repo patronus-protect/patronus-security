@@ -2,8 +2,9 @@
 //! The order of `DLP_PATTERNS` is observable behaviour: rules run in registry
 //! order, the first matching rule sets the result class and `matched_rules`
 //! lists matches in that order. Splitting the rule modules must keep it.
-use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
+use patronus_ark::SecurityGateway;
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
 };
 use std::collections::HashSet;
 

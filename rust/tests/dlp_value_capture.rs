@@ -11,9 +11,10 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
 };
 
 fn scan(text: &str) -> SecurityScanResult {

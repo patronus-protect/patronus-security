@@ -12,9 +12,13 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway,
+};
+
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    SecurityCategory,
 };
 use serde::Deserialize;
 
@@ -291,7 +295,7 @@ fn each_rule_reports_exactly_its_generated_values() {
                         .scan_category(SecurityCategory::Dlp, &text)
                         .into_iter()
                         .filter(|result| result.model == "native:dlp")
-                        .flat_map(|result| result.evidence_spans)
+                        .flat_map(|result| result.native.evidence_spans)
                         .map(|span| (span.start_char, span.end_char))
                         .collect::<BTreeSet<_>>();
                     assert_eq!(
@@ -333,7 +337,7 @@ fn rules_do_not_report_their_lookalike_values() {
                         .scan_category(SecurityCategory::Dlp, &text)
                         .into_iter()
                         .filter(|result| result.model == "native:dlp")
-                        .flat_map(|result| result.evidence_spans)
+                        .flat_map(|result| result.native.evidence_spans)
                         .collect::<Vec<_>>();
                     assert!(
                         predicted.is_empty(),

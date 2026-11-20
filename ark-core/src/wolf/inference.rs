@@ -130,7 +130,13 @@ impl WolfRunner {
             .fixed_width
             .unwrap_or_else(|| batch.iter().map(|t| t.len() + 2).max().unwrap());
         let chunks: Vec<_> = batch.iter().map(Vec::as_slice).collect();
-        let names = super::session_input_names(&self.session);
+        // Runners of one graph share its session; one batch runs at a time.
+        let mut session = self
+            .session
+            .session
+            .lock()
+            .map_err(|_| inference("Wolf session poisoned"))?;
+        let names = super::session_input_names(&session);
         let (mut ids, mut mask, mut types) = crate::ml::tokenizer::assemble_batch_inputs(
             &chunks,
             width,
@@ -162,7 +168,7 @@ impl WolfRunner {
             let _ = abort_options.terminate();
         })?;
         control.check()?;
-        let output = self.session.run_with_options(inputs, &options);
+        let output = session.run_with_options(inputs, &options);
         control.check()?;
         let outputs = output.map_err(inference)?;
         let value = outputs

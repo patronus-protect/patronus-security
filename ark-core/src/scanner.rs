@@ -1,19 +1,12 @@
 use crate::{
-    cascade::{Cascade, CascadeConfig, L3Executor, ModuleDecision, SecurityLevel, StageOutcome},
-    detectors::{
-        shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
-        text::Finding,
-        threat::facts_findings,
-    },
-    native::{NativeEngine, NativeGates, NativeProducerOutcome, NATIVE_CATEGORIES},
+    cascade::{Cascade, CascadeConfig, L3Executor, ModuleDecision, SecurityLevel},
+    detectors::shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
+    native::{NativeEngine, NativeGates, NATIVE_CATEGORIES},
     threat::NativeText,
-    LayerResult, NativeResult, SecurityCategory,
+    NativeResult, SecurityCategory,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    panic::{catch_unwind, AssertUnwindSafe},
-};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -308,31 +301,21 @@ impl Scanner {
                 .map(|layer| layer as &mut dyn L3Executor);
             #[cfg(not(feature = "wolf"))]
             let l3: Option<&mut dyn L3Executor> = None;
-            // The heuristic ran when one of the module's producers is enabled.
-            let heuristic = l1
-                && self
+            let stage = if l1 {
+                // The heuristic ran when one of the module's producers is enabled.
+                let heuristic = self
                     .native
                     .producers(module)
                     .iter()
                     .any(|producer| producer.enabled(&self.config.gates));
-            let stage = if l1 {
-                // Once per module and scan, after the native producers.
-                let stage = if heuristic {
-                    self.cascade.l1_stage(
-                        module,
-                        self.config.gates.mode(module),
-                        native.iter().filter(|r| r.category == module.as_str()),
-                    )
-                } else {
-                    self.cascade.l1_off(module)
-                };
-                let model = self.native.l1_model(module);
-                let findings = if model.is_some() && stage.outcome == StageOutcome::Escalate {
-                    scan_findings(native)
-                } else {
-                    Vec::new()
-                };
-                self.cascade.l1_model_stage(stage, model, text, &findings)
+                self.cascade.l1_answer(
+                    module,
+                    self.config.gates.mode(module),
+                    heuristic,
+                    native.iter(),
+                    self.native.l1_model(module),
+                    text,
+                )
             } else {
                 self.cascade.l1_off(module)
             };
@@ -389,32 +372,14 @@ impl Scanner {
         let mut results = Vec::new();
         for &category in &self.config.categories {
             control.check()?;
-            if !categories.contains(&category) {
-                continue;
+            if categories.contains(&category) {
+                results.extend(self.native.scan_module(
+                    category,
+                    &prepared,
+                    &self.config.gates,
+                    control,
+                )?);
             }
-            let mut outputs = Vec::new();
-            for producer in self.native.producers(category) {
-                control.check()?;
-                if !producer.enabled(&self.config.gates) {
-                    continue;
-                }
-                let outcome = self
-                    .native
-                    .run_producer(producer, &prepared, &self.config.gates, control)
-                    .map_err(|error| match error {
-                        ScanError::Detector(_) => {
-                            ScanError::Detector("native scanner panicked".into())
-                        }
-                        other => other,
-                    })?;
-                outputs.push((
-                    producer.scored(),
-                    measure(category, producer.id(), text, outcome),
-                ));
-            }
-            results.extend(crate::injection_l1::category_results(
-                category, text, outputs,
-            ));
         }
         control.check()?;
         let secrets = crate::post_prediction::dlp_secret_ranges(
@@ -457,16 +422,6 @@ type CascadeWolf = Option<crate::wolf::WolfResult>;
 #[cfg(not(feature = "wolf"))]
 type CascadeWolf = ();
 
-/// The rule findings of a scan as the L1 models are trained on them
-/// (`text_facts --threat-findings`): the accepted Threat points findings of
-/// every scanned attack class; no PII/DLP data, which training has none of.
-fn scan_findings(native: &[NativeResult]) -> Vec<Finding<'static>> {
-    native
-        .iter()
-        .flat_map(|result| &result.layers)
-        .flat_map(|layer| facts_findings(&layer.details))
-        .collect()
-}
 /// Wolf as the injection L3 [`crate::cascade::LayerModel`]; it keeps the
 /// full [`crate::wolf::WolfResult`] for [`ScanReport::wolf`].
 #[cfg(feature = "wolf")]
@@ -493,59 +448,23 @@ impl crate::cascade::LayerModel for WolfLayer<'_> {
         let started = std::time::Instant::now();
         let result = self.runner.scan_with_control(text, control)?;
         let output = crate::cascade::LayerOutput {
-            result: LayerResult {
+            result: crate::LayerResult {
                 level: "L3".into(),
                 layer_type: "wolf".into(),
                 class_name: if result.matched { "attack" } else { "benign" }.into(),
                 confidence: result.attack_probability,
                 matched: result.matched,
                 duration_ms: started.elapsed().as_secs_f64() * 1000.0,
-                thresholds: HashMap::from([("attack_probability".into(), result.threshold)]),
-                details: HashMap::new(),
+                thresholds: std::collections::HashMap::from([(
+                    "attack_probability".into(),
+                    result.threshold,
+                )]),
+                details: std::collections::HashMap::new(),
             },
             escalation: None,
         };
         self.result = Some(result);
         Ok(output)
-    }
-}
-
-fn measure(
-    category: SecurityCategory,
-    model: &str,
-    text: &str,
-    outcome: NativeProducerOutcome,
-) -> NativeResult {
-    let NativeProducerOutcome {
-        detection,
-        duration_ms,
-    } = outcome;
-    let spans = crate::post_prediction::filter_evidence(category, text, detection.evidence_spans);
-    let confidence = spans
-        .iter()
-        .map(|s| s.score)
-        .reduce(f64::max)
-        .unwrap_or(detection.result.confidence);
-    NativeResult {
-        category: category.as_str().into(),
-        class_name: detection.result.class_name.clone(),
-        confidence,
-        level: "L1".into(),
-        model: model.into(),
-        duration_ms,
-        layers: vec![LayerResult {
-            level: "L1".into(),
-            layer_type: "native".into(),
-            class_name: detection.result.class_name,
-            confidence,
-            matched: true,
-            duration_ms,
-            thresholds: HashMap::new(),
-            details: detection.details,
-        }],
-        evidence_spans: spans,
-        label_scores: Vec::new(),
-        decision: None,
     }
 }
 
@@ -1069,7 +988,7 @@ mod cascade_tests {
             .native
             .iter()
             .flat_map(|r| &r.layers)
-            .flat_map(|layer| facts_findings(&layer.details))
+            .flat_map(|layer| crate::detectors::threat::facts_findings(&layer.details))
             .collect::<Vec<_>>();
         assert!(!findings.is_empty(), "the unsafe_action points rule hit");
         let model =

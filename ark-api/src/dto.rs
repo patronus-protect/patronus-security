@@ -7,9 +7,10 @@
 use std::collections::HashMap;
 
 use patronus_ark::{
-    DecisionEnvelope, EvidenceSpan, LabelScore, LayerResult, QueuedSecurityScanResult,
-    SecurityFailure, SecurityRequestCompletion, SecurityScanResult, Stage,
+    QueuedSecurityScanResult, SecurityFailure, SecurityRequestCompletion, SecurityScanResult,
 };
+
+use patronus_ark_core::{cascade::Stage, DecisionEnvelope, EvidenceSpan, LabelScore, LayerResult};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -28,7 +29,7 @@ pub struct ScanResultDto {
     pub decided_by: Option<Stage>,
     /// L1's answer when L1 decided the category under the cascade.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub l1_outcome: Option<patronus_ark::StageOutcome>,
+    pub l1_outcome: Option<patronus_ark_core::cascade::StageOutcome>,
     pub evidence_spans: Vec<EvidenceSpanDto>,
     pub label_scores: Vec<LabelScoreDto>,
     pub layers: Vec<LayerResultDto>,
@@ -91,6 +92,12 @@ pub struct FailureDto {
 
 impl From<SecurityScanResult> for ScanResultDto {
     fn from(result: SecurityScanResult) -> Self {
+        let SecurityScanResult {
+            native: result,
+            decided_by,
+            l1_outcome,
+            ..
+        } = result;
         Self {
             category: result.category,
             class_name: result.class_name,
@@ -99,8 +106,8 @@ impl From<SecurityScanResult> for ScanResultDto {
             model: result.model,
             duration_ms: result.duration_ms,
             decision: result.decision,
-            decided_by: result.decided_by,
-            l1_outcome: result.l1_outcome,
+            decided_by,
+            l1_outcome,
             evidence_spans: result.evidence_spans.into_iter().map(Into::into).collect(),
             label_scores: result.label_scores.into_iter().map(Into::into).collect(),
             layers: result.layers.into_iter().map(Into::into).collect(),
@@ -189,19 +196,21 @@ mod tests {
 
     fn result(decided_by: Option<Stage>) -> SecurityScanResult {
         SecurityScanResult {
-            category: "injection".into(),
-            class_name: "safe".into(),
-            confidence: 0.0,
-            level: "L2".into(),
-            model: "m".into(),
-            duration_ms: 0.0,
-            layers: Vec::new(),
+            native: patronus_ark_core::NativeResult {
+                category: "injection".into(),
+                class_name: "safe".into(),
+                confidence: 0.0,
+                level: "L2".into(),
+                model: "m".into(),
+                duration_ms: 0.0,
+                layers: Vec::new(),
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 

@@ -4,7 +4,7 @@
 //! live/test severity; matches report them in `matched_rules`. Token values
 //! are synthetic and assembled at test time.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -12,15 +12,14 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::{
-        dlp::{
-            dlp::{Severity, DLP_PATTERNS},
-            prefilter::FOLDS_TO_ASCII,
-        },
-        validators::crc32_base62,
-    },
-    golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe, SplitMix64},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
+    golden_recipes::SecretRecipe, golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult,
+};
+
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::Severity,
+    detectors::dlp::dlp::DLP_PATTERNS, detectors::dlp::prefilter::FOLDS_TO_ASCII,
+    detectors::validators::crc32_base62, SecurityCategory,
 };
 use regex::Regex;
 use serde::Deserialize;

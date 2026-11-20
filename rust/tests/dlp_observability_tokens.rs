@@ -18,14 +18,17 @@
 //! Tokens come from the golden generator or from random bodies built here at
 //! test time. Tokens are `SECRET_TOKEN` (subtype `access_token`), keys `API_KEY`.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe, SplitMix64},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult,
+};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
 };
 
 /// Prefix rules: generators, subtype and validator strength.

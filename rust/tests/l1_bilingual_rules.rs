@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway,
+};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::pii::pii::PII_PATTERNS, SecurityCategory,
 };
 use serde::Deserialize;
 use std::{
@@ -77,9 +80,9 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
     let mut missing = Vec::new();
     for case in cases {
         gateway.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark::NativeGates {
+            native: patronus_ark_core::native::NativeGates {
                 pii_mode: case.pii_mode,
-                ..patronus_ark::NativeGates::all_enabled()
+                ..patronus_ark_core::native::NativeGates::all_enabled()
             },
             ..ScanGateMatrix::all_enabled()
         });
@@ -168,7 +171,7 @@ fn hard_negatives_are_silent_in_de_and_en() {
             let spans = gateway
                 .scan_category(category, text)
                 .into_iter()
-                .flat_map(|result| result.evidence_spans)
+                .flat_map(|result| result.native.evidence_spans)
                 .map(|span| span.text)
                 .collect::<Vec<_>>();
             if !spans.is_empty() {

@@ -9,12 +9,13 @@
 //! counter-context term. It scores the `balanced` threshold `0.50`, below the
 //! labelled rules of its id in `balanced` and `recall`.
 
-use patronus_ark::detectors::pii::pii::{PiiPipeline, PII_PATTERNS};
-use patronus_ark::detectors::pii::validators;
-use patronus_ark::{
-    NativeGates, ScanGateMatrix, ScoreMode, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::validators;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, native::NativeGates, native::ScoreMode,
+    SecurityCategory,
 };
+use patronus_ark_core::{detectors::pii::pii::PiiPipeline, detectors::pii::pii::PII_PATTERNS};
 
 /// `(rule, label, valid bare value, invalid value, labelled text)`. The invalid
 /// value matches the pattern and fails the validator of the id: a check digit
@@ -484,6 +485,7 @@ fn the_bare_plate_rules_report_the_presidio_forms_and_skip_lookalikes() {
     let scanner = scanner(profile);
     let plates = |text: &str| -> Vec<String> {
         scan(&scanner, text)
+            .native
             .evidence_spans
             .into_iter()
             .filter(|span| span.label == "LICENSEPLATE")
@@ -813,6 +815,7 @@ fn the_bare_routing_number_overlaps_by_the_existing_order() {
         let scanner = scanner(gates);
         let labels = |text: &str| -> Vec<String> {
             let mut labels: Vec<_> = scan(&scanner, text)
+                .native
                 .evidence_spans
                 .into_iter()
                 .map(|span| span.label)
@@ -865,6 +868,7 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
         let scanner = scanner(profile);
         let passports = |text: &str| -> Vec<String> {
             scan(&scanner, text)
+                .native
                 .evidence_spans
                 .into_iter()
                 .filter(|span| span.label == "PASSPORT_NUMBER")
@@ -1065,6 +1069,7 @@ fn the_compat_rules_report_loopback_unspecified_and_unassigned_values() {
         let scanner = scanner(profile);
         let spans = |text: &str, label: &str| -> Vec<String> {
             scan(&scanner, text)
+                .native
                 .evidence_spans
                 .into_iter()
                 .filter(|span| span.label == label)

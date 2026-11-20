@@ -8,6 +8,22 @@ from copy import deepcopy
 import json
 import math
 
+from patronus_ark_core import CascadeConfig, NativeGates
+
+
+class ExecutionGates(NativeGates, total=False):
+    """`execution_gates`: Ark Core's gate keys (`rules`, `models`, the
+    `*_mode` keys, `explain`, ...) plus the layer switches, conditional gates,
+    the L3 worker policy and the opt-in cascade. Unknown keys raise
+    `ValueError`."""
+
+    l1: bool
+    l2: bool
+    l3: bool
+    conditional: list[dict[str, object]]
+    l3_policy: dict[str, object]
+    cascade: CascadeConfig | None
+
 
 def _decode_json_object(value):
     try:
@@ -216,7 +232,7 @@ class SecurityGateway:
         model_dir: str = None,
         download_files: bool = True,
         download_categories: list[str] | None = None,
-        execution_gates: dict | None = None,
+        execution_gates: ExecutionGates | None = None,
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
         ntdb_operating_point: str = _DEFAULT_NTDB_OPERATING_POINT,
@@ -365,7 +381,7 @@ class SecurityGateway:
         results = self.rust_gateway.scan_all(text)
         return [_to_dict(r) for r in results]
 
-    def set_execution_gates(self, execution_gates: dict | None):
+    def set_execution_gates(self, execution_gates: ExecutionGates | None):
         """Replace the gate matrix used by subsequent scan calls.
 
         Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
@@ -470,7 +486,7 @@ class SecurityGateway:
         self,
         text: str,
         categories: list[str] | None = None,
-        execution_gates: dict | None = None,
+        execution_gates: ExecutionGates | None = None,
         metadata: dict | None = None,
         ntdb_operating_point: str | None = None,
         chunk_overlap_tokens: int = 0,

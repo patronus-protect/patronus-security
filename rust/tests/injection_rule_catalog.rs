@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::injection::signal::rule_category;
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 const CATALOG_MODEL: &str = "native:injection_rule_catalog";
 const PROMPT_ARMOR_REVISION: &str = "95e532e275280488b3abacb519f8b14ae17a9dcb";

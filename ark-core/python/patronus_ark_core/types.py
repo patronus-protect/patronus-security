@@ -186,8 +186,9 @@ class CascadeConfig(TypedDict, total=False):
     modules: dict[str, ModuleConfig]
 
 
-class ScannerConfig(TypedDict, total=False):
-    categories: list[NativeCategory]
+class NativeGates(TypedDict, total=False):
+    """Rule, model, mode and `explain` gates: top-level keys of the Core
+    `ScannerConfig` and of Ark's `execution_gates`."""
     rules: dict[str, bool]
     models: dict[str, bool]
     pii_mode: ScoreMode
@@ -206,6 +207,10 @@ class ScannerConfig(TypedDict, total=False):
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode
     explain: bool
+
+
+class ScannerConfig(NativeGates, total=False):
+    categories: list[NativeCategory]
     max_input_bytes: int
     max_findings: int
     wolf: WolfConfig | None

@@ -20,6 +20,7 @@ pub use warmup::{DownloadPolicy, WarmupOptions};
 pub mod aggregation;
 pub mod attack_classes;
 pub mod cascade;
+pub mod shared_models;
 mod wolf_options;
 pub use wolf_options::{WolfExecutionOptions, WolfServingProfile};
 #[cfg(feature = "wolf")]

@@ -13,7 +13,8 @@ Always [measure on your own hardware](run-local-benchmark.md) before and after e
     strings. For example:
 
     ```rust
-    use patronus_ark::{ExecutionBackend, L3Strategy};
+    use patronus_ark::L3Strategy;
+    use patronus_ark_core::ExecutionBackend;
     scanner.set_l3_strategy(L3Strategy::Multi);
     scanner.set_execution_backend(ExecutionBackend::CoreMl);
     ```

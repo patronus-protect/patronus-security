@@ -7,13 +7,11 @@
 
 use std::collections::BTreeSet;
 
-use patronus_ark::{
-    detectors::{
-        dlp::dlp::{SecretSubtype, DLP_PATTERNS},
-        validators::crc32_base62,
-    },
-    golden_recipes::SplitMix64,
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+use patronus_ark::{golden_recipes::SplitMix64, SecurityGateway, SecurityScanResult};
+
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::SecretSubtype,
+    detectors::dlp::dlp::DLP_PATTERNS, detectors::validators::crc32_base62, SecurityCategory,
 };
 
 const SECRET_GROUPS: &[&str] = &[

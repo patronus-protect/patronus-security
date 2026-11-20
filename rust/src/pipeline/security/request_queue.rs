@@ -1200,40 +1200,42 @@ impl SecurityGateway {
     #[cfg(feature = "test-util")]
     fn test_l3_fallback(&self, model: &str) -> SecurityScanResult {
         SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: "benign".to_string(),
-            confidence: 0.5,
-            level: "L2".to_string(),
-            model: model.to_string(),
-            duration_ms: 1.0,
-            layers: vec![
-                LayerResult {
-                    level: "L2".to_string(),
-                    layer_type: "veto_consensus".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.5,
-                    matched: true,
-                    duration_ms: 1.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                },
-                LayerResult {
-                    level: "L3".to_string(),
-                    layer_type: "l3_pending".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.0,
-                    matched: false,
-                    duration_ms: 0.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                },
-            ],
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
+                class_name: "benign".to_string(),
+                confidence: 0.5,
+                level: "L2".to_string(),
+                model: model.to_string(),
+                duration_ms: 1.0,
+                layers: vec![
+                    LayerResult {
+                        level: "L2".to_string(),
+                        layer_type: "veto_consensus".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.5,
+                        matched: true,
+                        duration_ms: 1.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    },
+                    LayerResult {
+                        level: "L3".to_string(),
+                        layer_type: "l3_pending".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.0,
+                        matched: false,
+                        duration_ms: 0.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    },
+                ],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 }
@@ -1330,12 +1332,14 @@ pub(super) fn l1_undecided_inputs(
             undecided.push(input.clone());
             continue;
         }
-        let stage = cascade.l1_stage(
+        // Core's L1 answer; Ark's cascade configures no L1 models.
+        let stage = cascade.l1_answer(
             module,
             execution.gates().native.mode(module),
-            l1_results
-                .iter()
-                .filter(|result| result.category == module.as_str()),
+            true,
+            l1_results.iter().map(|result| &result.native),
+            None,
+            &input.text,
         );
         // Undecided with no later layer to run: L1's answer is final and clear.
         let outcome = match stage.outcome {
@@ -1499,19 +1503,21 @@ mod tests {
     #[test]
     fn rejected_l1_candidate_is_available_to_conditional_l2_gates_only_internally() {
         let mut result = SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: "safe".to_string(),
-            confidence: 0.3,
-            level: "L1".to_string(),
-            model: "native:injection_l1".to_string(),
-            duration_ms: 0.1,
-            layers: Vec::new(),
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
+                class_name: "safe".to_string(),
+                confidence: 0.3,
+                level: "L1".to_string(),
+                model: "native:injection_l1".to_string(),
+                duration_ms: 0.1,
+                layers: Vec::new(),
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         };
         let candidate = crate::DecisionCandidate {
             source: "l1".to_string(),
@@ -1556,14 +1562,16 @@ mod tests {
 
         let mut gates = ScanGateMatrix::all_enabled();
         gates
-            .set_conditional(vec![crate::ConditionalPipelineGate {
+            .set_conditional(vec![patronus_ark_core::cascade::ConditionalPipelineGate {
                 level: SecurityLevel::L2,
                 pipeline: Some("injection".to_string()),
-                when: crate::GateExpression::Result(crate::ResultCondition {
-                    pipeline: "native:injection_l1".to_string(),
-                    classes: vec!["instruction_override".to_string()],
-                    min_confidence: Some(0.6),
-                }),
+                when: patronus_ark_core::cascade::GateExpression::Result(
+                    patronus_ark_core::cascade::ResultCondition {
+                        pipeline: "native:injection_l1".to_string(),
+                        classes: vec!["instruction_override".to_string()],
+                        min_confidence: Some(0.6),
+                    },
+                ),
                 l3_policy: None,
             }])
             .unwrap();
@@ -1742,38 +1750,40 @@ mod tests {
     #[test]
     fn extracts_scored_ntdb_l3_candidates() {
         let result = SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: "attack".to_string(),
-            confidence: 0.9,
-            level: "L2".to_string(),
-            model: "wolf-defender-small".to_string(),
-            duration_ms: 1.0,
-            layers: vec![LayerResult {
-                level: "L2".to_string(),
-                layer_type: "ntdb_l2".to_string(),
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
                 class_name: "attack".to_string(),
                 confidence: 0.9,
-                matched: true,
+                level: "L2".to_string(),
+                model: "wolf-defender-small".to_string(),
                 duration_ms: 1.0,
-                thresholds: HashMap::new(),
-                details: HashMap::from([(
-                    "l3_candidates".to_string(),
-                    serde_json::json!([{
-                        "span": {"start": 10, "end": 42},
-                        "promote_score": 0.9,
-                        "promote_threshold": 0.7,
-                        "source_pipeline": "injection",
-                        "source_model": "injection",
-                        "l2_class": "attack"
-                    }]),
-                )]),
-            }],
+                layers: vec![LayerResult {
+                    level: "L2".to_string(),
+                    layer_type: "ntdb_l2".to_string(),
+                    class_name: "attack".to_string(),
+                    confidence: 0.9,
+                    matched: true,
+                    duration_ms: 1.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::from([(
+                        "l3_candidates".to_string(),
+                        serde_json::json!([{
+                            "span": {"start": 10, "end": 42},
+                            "promote_score": 0.9,
+                            "promote_threshold": 0.7,
+                            "source_pipeline": "injection",
+                            "source_model": "injection",
+                            "l2_class": "attack"
+                        }]),
+                    )]),
+                }],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         };
 
         let candidates = l3_candidates(&result);
@@ -1892,56 +1902,58 @@ mod tests {
         l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     ) -> SecurityScanResult {
         SecurityScanResult {
-            category: category.to_string(),
-            class_name: "benign".to_string(),
-            confidence: 0.5,
-            level: "L2".to_string(),
-            model: model.to_string(),
-            duration_ms: 1.0,
-            layers: vec![
-                LayerResult {
-                    level: "L2".to_string(),
-                    layer_type: "ntdb_l2".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.5,
-                    matched: false,
-                    duration_ms: 1.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::from([
-                        (
-                            "l3_candidates".to_string(),
-                            serde_json::json!([{
-                                "span": {"start": 0, "end": 10},
-                                "promote_score": 0.9,
-                                "promote_threshold": 0.7,
-                                "source_pipeline": category,
-                                "source_model": model,
-                                "l2_class": "benign"
-                            }]),
-                        ),
-                        (
-                            "l2_chunk_outputs".to_string(),
-                            serde_json::json!(l2_chunk_outputs.clone()),
-                        ),
-                    ]),
-                },
-                LayerResult {
-                    level: "L3".to_string(),
-                    layer_type: "l3_pending".to_string(),
-                    class_name: "benign".to_string(),
-                    confidence: 0.0,
-                    matched: false,
-                    duration_ms: 0.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                },
-            ],
+            native: patronus_ark_core::NativeResult {
+                category: category.to_string(),
+                class_name: "benign".to_string(),
+                confidence: 0.5,
+                level: "L2".to_string(),
+                model: model.to_string(),
+                duration_ms: 1.0,
+                layers: vec![
+                    LayerResult {
+                        level: "L2".to_string(),
+                        layer_type: "ntdb_l2".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.5,
+                        matched: false,
+                        duration_ms: 1.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::from([
+                            (
+                                "l3_candidates".to_string(),
+                                serde_json::json!([{
+                                    "span": {"start": 0, "end": 10},
+                                    "promote_score": 0.9,
+                                    "promote_threshold": 0.7,
+                                    "source_pipeline": category,
+                                    "source_model": model,
+                                    "l2_class": "benign"
+                                }]),
+                            ),
+                            (
+                                "l2_chunk_outputs".to_string(),
+                                serde_json::json!(l2_chunk_outputs.clone()),
+                            ),
+                        ]),
+                    },
+                    LayerResult {
+                        level: "L3".to_string(),
+                        layer_type: "l3_pending".to_string(),
+                        class_name: "benign".to_string(),
+                        confidence: 0.0,
+                        matched: false,
+                        duration_ms: 0.0,
+                        thresholds: HashMap::new(),
+                        details: HashMap::new(),
+                    },
+                ],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: l2_chunk_outputs,
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 

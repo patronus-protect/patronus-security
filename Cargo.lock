@@ -117,6 +117,7 @@ dependencies = [
  "clap",
  "futures",
  "patronus-ark",
+ "patronus-ark-core",
  "redis",
  "reqwest",
  "serde",
@@ -2196,6 +2197,7 @@ name = "patronus-ark-python"
 version = "0.1.17"
 dependencies = [
  "patronus-ark",
+ "patronus-ark-core",
  "pyo3",
  "rustc-hash",
  "serde_json",

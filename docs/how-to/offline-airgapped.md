@@ -41,7 +41,8 @@ pattern for installers and locked-down deployments.
 === "Rust"
 
     ```rust
-    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::SecurityGateway;
+    use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
     let scanner = SecurityGateway::with_download_categories(
         vec![SecurityCategory::Injection],

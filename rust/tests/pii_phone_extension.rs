@@ -9,11 +9,10 @@
 //! the number (`4567xl`) still yield no match. Other numbers keep their span, and the
 //! validator checks the number without the extension.
 
-use patronus_ark::detectors::pii::validators;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::validators;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde_json::Value;
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
@@ -24,7 +23,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
         false,
     );
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark::NativeGates {
+        native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
             ..Default::default()
         },

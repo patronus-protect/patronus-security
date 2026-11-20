@@ -5,8 +5,11 @@ use std::{
 };
 
 use patronus_ark::{
-    L3SchedulerPolicy, L3Strategy, ScanGateMatrix, SecurityAssetProgressCallback, SecurityCategory,
-    SecurityGateway, SecurityLevel, SecurityLevelReadiness,
+    L3Strategy, SecurityAssetProgressCallback, SecurityGateway, SecurityLevelReadiness,
+};
+
+use patronus_ark_core::{
+    cascade::L3SchedulerPolicy, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
 };
 
 fn model_dir() -> PathBuf {
@@ -145,7 +148,7 @@ fn hf_short_german_greeting_is_not_an_injection() {
         true,
     );
     scanner.set_l3_strategy(L3Strategy::Multi);
-    scanner.set_execution_backend(patronus_ark::ExecutionBackend::Cpu);
+    scanner.set_execution_backend(patronus_ark_core::ExecutionBackend::Cpu);
     scanner.warmup().unwrap();
 
     let results = scanner.scan_categories(
@@ -390,8 +393,10 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     scanner.set_execution_gates(gates);
 
     scanner.warmup().unwrap();
-    let wolf =
-        patronus_ark_core::warmup::wolf_bundle_dir(&model_dir, patronus_ark::WolfModel::Small);
+    let wolf = patronus_ark_core::warmup::wolf_bundle_dir(
+        &model_dir,
+        patronus_ark_core::wolf::WolfModel::Small,
+    );
     assert!(wolf.join("tokenizer.json").exists());
     assert!(wolf.join("onnx/int8_int4_embeddings/model.onnx").exists());
     assert!(model_dir
@@ -535,7 +540,7 @@ fn ntdb_l2_result<'a>(
 }
 
 #[cfg(unix)]
-fn ntdb_l2_layer(result: &patronus_ark::SecurityScanResult) -> &patronus_ark::LayerResult {
+fn ntdb_l2_layer(result: &patronus_ark::SecurityScanResult) -> &patronus_ark_core::LayerResult {
     result
         .layers
         .iter()

@@ -121,8 +121,15 @@ pub struct WolfProgress {
     /// Absent before the first inference; otherwise the running pooled logit.
     pub document_logit: Option<f64>,
 }
+/// One loaded Wolf graph, shared through [`crate::shared_models`] by every
+/// runner of the process that loads the same graph on the same backend.
+struct WolfSession {
+    session: std::sync::Mutex<Session>,
+    execution_provider: String,
+}
+
 pub struct WolfRunner {
-    session: Session,
+    session: Arc<WolfSession>,
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,
@@ -170,16 +177,37 @@ impl WolfRunner {
         // session pool so its configured thread budget is honored even when
         // the host already initialized a global pool.
         crate::onnx::warmup_runtime();
-        let (mut builder, execution_provider) = crate::onnx::configured_session_builder(
+        let key = format!(
+            "{}|{:?}|{:?}",
+            model.display(),
             config.backend,
-            Some(&config.bundle_dir),
-            config.runtime_options,
-        )
-        .map_err(inference)?;
-        builder = builder.with_independent_thread_pool().map_err(inference)?;
-        let session = crate::onnx::commit_session(builder, &model).map_err(inference)?;
-        let fixed_width =
-            inference::validate_session(&session, &config.bundle_dir, windows, &manifest)?;
+            config.runtime_options
+        );
+        let session = crate::shared_models::shared(&key, || {
+            let (builder, execution_provider) = crate::onnx::configured_session_builder(
+                config.backend,
+                Some(&config.bundle_dir),
+                config.runtime_options,
+            )
+            .map_err(inference)?;
+            let builder = builder.with_independent_thread_pool().map_err(inference)?;
+            Ok::<_, ScanError>(WolfSession {
+                session: std::sync::Mutex::new(
+                    crate::onnx::commit_session(builder, &model).map_err(inference)?,
+                ),
+                execution_provider,
+            })
+        })?;
+        let fixed_width = inference::validate_session(
+            &*session
+                .session
+                .lock()
+                .map_err(|_| inference("Wolf session poisoned"))?,
+            &config.bundle_dir,
+            windows,
+            &manifest,
+        )?;
+        let execution_provider = session.execution_provider.clone();
         let mut runner = Self {
             session,
             tokenizer,

@@ -5,7 +5,7 @@
 //! testnet keys have severity `test`. Keys come from the golden generator;
 //! invalid vectors are built here and are no keys.
 
-use patronus_ark::detectors::score::ValidatorStrength;
+use patronus_ark_core::detectors::score::ValidatorStrength;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -13,11 +13,14 @@ use std::sync::OnceLock;
 mod base58check;
 
 use base58check::base58check_encode;
-use patronus_ark::ScoreMode;
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, validators::BASE58},
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway, SecurityScanResult,
+};
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::validators::BASE58, SecurityCategory,
 };
 
 const MAINNET: [&str; 2] = ["btc_wif_mainnet_uncompressed", "btc_wif_mainnet_compressed"];
@@ -71,9 +74,9 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
                 false,
             );
             scanner.set_execution_gates(ScanGateMatrix {
-                native: patronus_ark::NativeGates {
+                native: patronus_ark_core::native::NativeGates {
                     dlp_mode: mode,
-                    ..patronus_ark::NativeGates::all_enabled()
+                    ..patronus_ark_core::native::NativeGates::all_enabled()
                 },
                 ..ScanGateMatrix::all_enabled()
             });

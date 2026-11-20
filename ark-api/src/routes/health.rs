@@ -28,8 +28,8 @@ pub async fn readyz(State(state): State<AppState>) -> (StatusCode, Json<serde_js
         Json(json!({
             "ready": ready,
             "onnx": {
-                "available_providers": patronus_ark::ml::onnx::available_execution_providers(),
-                "active_providers": patronus_ark::ml::onnx::active_execution_providers(),
+                "available_providers": patronus_ark_core::onnx::available_execution_providers(),
+                "active_providers": patronus_ark_core::onnx::active_execution_providers(),
             }
         })),
     )

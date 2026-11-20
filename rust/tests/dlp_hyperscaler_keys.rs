@@ -16,9 +16,11 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use patronus_ark::{
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway, SecurityScanResult,
 };
+
+use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 /// Rules, the key name their carriers use, generators and lookalike
 /// generators (wrong length).

@@ -8,11 +8,10 @@
 //! creditor identifier (`DE98ZZZ09999999999`) is no IBAN: its length is not the
 //! registry length of its country, even where its digits pass MOD-97.
 
-use patronus_ark::detectors::pii::validators;
-use patronus_ark::ScoreMode;
-use patronus_ark::{
-    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
-};
+use patronus_ark::{SecurityGateway, SecurityScanResult};
+use patronus_ark_core::detectors::pii::validators;
+use patronus_ark_core::native::ScoreMode;
+use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
@@ -132,7 +131,7 @@ thread_local! {
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     SCANNER.with(|scanner| {
         scanner.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark::NativeGates {
+            native: patronus_ark_core::native::NativeGates {
                 pii_mode: mode,
                 ..Default::default()
             },
@@ -149,6 +148,7 @@ fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
 /// Texts of every IBAN span.
 fn ibans(text: &str, mode: ScoreMode) -> Vec<String> {
     pii_result(text, mode)
+        .native
         .evidence_spans
         .into_iter()
         .filter(|span| span.label == "IBAN")

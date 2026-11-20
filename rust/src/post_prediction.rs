@@ -1,5 +1,5 @@
 use crate::SecurityCategory;
-pub use patronus_ark_core::post_prediction::*;
+pub(crate) use patronus_ark_core::post_prediction::*;
 /// K08: DLP vs. PII double labels. When DLP and PII scan the same text, a
 /// DLP secret span owns its range: PII spans overlapping it (a URL password
 /// read as the local part of an e-mail address, token digits read as a card
@@ -110,8 +110,8 @@ mod overlap_grouping_tests {
             .flatten()
             .zip(expected.into_iter().flatten())
         {
-            let actual: patronus_ark_core::NativeResult = actual.into();
-            let expected: patronus_ark_core::NativeResult = expected.into();
+            let actual = actual.native;
+            let expected = expected.native;
             assert_eq!(
                 serde_json::to_value(actual).unwrap(),
                 serde_json::to_value(expected).unwrap()

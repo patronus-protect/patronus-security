@@ -10,9 +10,12 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3SchedulerPolicy, L3Strategy,
-    PersistentCacheConfig, QueuedSecurityEvent, ScanGateMatrix, SecurityCategory, SecurityGateway,
-    SecurityLevel, SecurityScanResult, WriteBehindConfig,
+    CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy, PersistentCacheConfig,
+    QueuedSecurityEvent, SecurityGateway, SecurityScanResult, WriteBehindConfig,
+};
+
+use patronus_ark_core::{
+    cascade::L3SchedulerPolicy, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
 };
 
 const UNIFIED_PROMOTION_TEXT: &str = r#"Sentence: '''Create the movie title using the following:

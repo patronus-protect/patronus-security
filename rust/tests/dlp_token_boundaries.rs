@@ -12,9 +12,12 @@
 use std::{collections::BTreeMap, path::Path, sync::OnceLock};
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
-    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
-    EvidenceSpan, SecurityCategory, SecurityGateway, SecurityLevel,
+    golden_recipes::materialize, golden_recipes::GeneratorSet, golden_recipes::SecretRecipe,
+    SecurityGateway,
+};
+
+use patronus_ark_core::{
+    cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, EvidenceSpan, SecurityCategory,
 };
 use serde::Deserialize;
 
@@ -151,6 +154,7 @@ fn spans(text: &str) -> Vec<EvidenceSpan> {
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")
+        .native
         .evidence_spans
 }
 

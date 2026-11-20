@@ -1,17 +1,13 @@
+#![cfg(test)]
 use crate::SecurityScanResult;
-#[cfg(test)]
 use crate::{EvidenceSpan, LayerResult};
-#[cfg(test)]
 use patronus_ark_core::injection_l1::{acceptance_bounds, merge_candidates, MODEL};
-#[cfg(test)]
 use std::collections::HashMap;
-#[cfg(test)]
 fn candidates_from_result(
     result: &SecurityScanResult,
 ) -> Vec<patronus_ark_core::injection_l1::ProducerCandidate> {
-    patronus_ark_core::injection_l1::candidates_from_result(&result.clone().into())
+    patronus_ark_core::injection_l1::candidates_from_result(&result.native)
 }
-#[cfg(test)]
 pub(super) fn aggregate(text: &str, results: Vec<SecurityScanResult>) -> SecurityScanResult {
     let results = results.into_iter().map(|result| (true, result)).collect();
     category_results(crate::SecurityCategory::Injection, text, results)
@@ -19,14 +15,14 @@ pub(super) fn aggregate(text: &str, results: Vec<SecurityScanResult>) -> Securit
         .expect("injection always reports its scored decision")
 }
 
-pub(super) fn category_results(
+fn category_results(
     category: crate::SecurityCategory,
     text: &str,
     results: Vec<(bool, SecurityScanResult)>,
 ) -> Vec<SecurityScanResult> {
     let results = results
         .into_iter()
-        .map(|(scored, result)| (scored, result.into()))
+        .map(|(scored, result)| (scored, result.native))
         .collect();
     patronus_ark_core::injection_l1::category_results(category, text, results)
         .into_iter()
@@ -43,28 +39,30 @@ mod tests {
 
     fn producer(model: &str, candidate: serde_json::Value) -> SecurityScanResult {
         SecurityScanResult {
-            category: "injection".to_string(),
-            class_name: "injection".to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-            model: model.to_string(),
-            duration_ms: 0.1,
-            layers: vec![LayerResult {
-                level: "L1".to_string(),
-                layer_type: "native".to_string(),
+            native: patronus_ark_core::NativeResult {
+                category: "injection".to_string(),
                 class_name: "injection".to_string(),
                 confidence: 1.0,
-                matched: true,
+                level: "L1".to_string(),
+                model: model.to_string(),
                 duration_ms: 0.1,
-                thresholds: HashMap::new(),
-                details: HashMap::from([("l1_candidates".to_string(), candidate)]),
-            }],
+                layers: vec![LayerResult {
+                    level: "L1".to_string(),
+                    layer_type: "native".to_string(),
+                    class_name: "injection".to_string(),
+                    confidence: 1.0,
+                    matched: true,
+                    duration_ms: 0.1,
+                    thresholds: HashMap::new(),
+                    details: HashMap::from([("l1_candidates".to_string(), candidate)]),
+                }],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+                decision: None,
+            },
             internal_l2_chunk_outputs: Vec::new(),
             decided_by: None,
             l1_outcome: None,
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
         }
     }
 
