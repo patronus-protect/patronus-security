@@ -355,6 +355,7 @@ tasks:
       detector, scorer or gold change, in the same PR or a follow-up; the table shows TPR@0.1% and @1%,
       hard-benign FPR and the baseline columns; README links it as the current state
   - id: JB02
+    status: done
     title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
     type: scorer
     deps: [JB01, S05, S10]
