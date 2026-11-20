@@ -9,13 +9,14 @@ use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    assets::DYNAMIC_PII_ASSET, DynamicPiiConditionalLabels, DynamicPiiConfig,
-    DynamicPiiExecutionGate, DynamicPiiRequestConfig, DynamicPiiResultCondition,
-    QueuedSecurityEvent, SecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, MAX_REQUEST_LABEL_BYTES,
+    assets::DYNAMIC_PII_ASSET, DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway,
+    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
 };
 
-use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    cascade::SecurityLevel, DynamicPiiConditionalLabels, DynamicPiiExecutionGate,
+    DynamicPiiRequestConfig, DynamicPiiResultCondition, SecurityCategory, MAX_REQUEST_LABEL_BYTES,
+};
 
 #[test]
 fn default_labels_are_a_small_core_bundle() {
@@ -607,7 +608,7 @@ fn request_config_replaces_entity_fields_and_keeps_gateway_limits() {
     }))
     .unwrap();
 
-    let config = request.resolve(&base).unwrap();
+    let config = base.with_request(request).unwrap();
 
     assert_eq!(
         config.labels,
@@ -629,7 +630,7 @@ fn request_config_rejects_invalid_blocks() {
     let resolve = |value: serde_json::Value| {
         serde_json::from_value::<DynamicPiiRequestConfig>(value)
             .map_err(|error| error.to_string())
-            .and_then(|request| request.resolve(&base))
+            .and_then(|request| base.with_request(request))
     };
 
     assert!(resolve(serde_json::json!({"labels": ["person"], "timeout_ms": 1})).is_err());
@@ -683,18 +684,19 @@ fn request_config_applies_to_its_own_request_only() {
             )
             .unwrap()
     };
-    let request = DynamicPiiRequestConfig {
-        labels: vec!["street_address".to_string()],
-        threshold: None,
-        label_thresholds: HashMap::new(),
-        execution_gate: DynamicPiiExecutionGate::IfResultIn {
-            pipeline: "dlp".to_string(),
-            results: vec!["safe".to_string()],
-        },
-        conditional_labels: Vec::new(),
-    }
-    .resolve(&gateway.dynamic_pii_config())
-    .unwrap();
+    let request = gateway
+        .dynamic_pii_config()
+        .with_request(DynamicPiiRequestConfig {
+            labels: vec!["street_address".to_string()],
+            threshold: None,
+            label_thresholds: HashMap::new(),
+            execution_gate: DynamicPiiExecutionGate::IfResultIn {
+                pipeline: "dlp".to_string(),
+                results: vec!["safe".to_string()],
+            },
+            conditional_labels: Vec::new(),
+        })
+        .unwrap();
 
     // Without the GLiNER model an enqueued dynamic-pii job degrades; a gated-off
     // one leaves the request complete.

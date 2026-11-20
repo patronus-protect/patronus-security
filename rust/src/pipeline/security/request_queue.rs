@@ -181,7 +181,7 @@ impl SecurityGateway {
     /// `dynamic-pii` configuration. Library callers use the other enqueue methods.
     ///
     /// `dynamic_pii` replaces the gateway's configuration for this request only;
-    /// build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+    /// build it with [`crate::DynamicPiiConfig::with_request`]. It is validated
     /// again here and rejected before anything is queued.
     #[allow(clippy::too_many_arguments)]
     pub fn enqueue_ark_api_categories_with_request_options(
@@ -1081,7 +1081,7 @@ impl SecurityGateway {
     pub fn enqueue_test_dynamic_pii_dependency_request(&self, delay_ms: u64) -> RequestId {
         self.set_dynamic_pii_config(crate::DynamicPiiConfig {
             labels: vec!["person".to_string()],
-            execution_gate: crate::DynamicPiiExecutionGate::IfResultIn {
+            execution_gate: patronus_ark_core::DynamicPiiExecutionGate::IfResultIn {
                 pipeline: "injection".to_string(),
                 results: vec!["test_l3".to_string()],
             },

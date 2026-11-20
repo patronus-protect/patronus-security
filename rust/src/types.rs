@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use patronus_ark_core::wolf::WolfConfig;
 use serde::{Deserialize, Serialize};
 
+use crate::NtdbOperatingPoint;
+
 pub type RequestId = String;
 
 /// Lifecycle state for an accepted queued request until its terminal event is consumed.
@@ -266,50 +268,6 @@ impl std::str::FromStr for OnnxBatchMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-/// Calibrated NTDB operating point selected from each package manifest.
-pub enum NtdbOperatingPoint {
-    BestF1,
-    #[default]
-    BestPromote,
-    /// Internal Ark API routing profile: use utility promotion only for an
-    /// Injection document with at most two normal chunks.
-    ArkApiShortInjectionUtility,
-    BestFprInF1,
-    BestFnrInF1,
-    BestLatencyInF1,
-}
-
-impl NtdbOperatingPoint {
-    /// Return the manifest key for this operating point.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::BestF1 => "best_f1",
-            Self::BestPromote => "best_promote",
-            Self::ArkApiShortInjectionUtility => "ark_api_short_injection_utility",
-            Self::BestFprInF1 => "best_fpr_in_f1",
-            Self::BestFnrInF1 => "best_fnr_in_f1",
-            Self::BestLatencyInF1 => "best_latency_in_f1",
-        }
-    }
-}
-
-impl std::str::FromStr for NtdbOperatingPoint {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().replace('-', "_").as_str() {
-            "best_f1" => Ok(Self::BestF1),
-            "best_promote" => Ok(Self::BestPromote),
-            "ark_api_short_injection_utility" => Ok(Self::ArkApiShortInjectionUtility),
-            "best_fpr_in_f1" => Ok(Self::BestFprInF1),
-            "best_fnr_in_f1" => Ok(Self::BestFnrInF1),
-            "best_latency_in_f1" => Ok(Self::BestLatencyInF1),
-            _ => Err(format!("Unknown NTDB operating point: {s}")),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Physical L3 classifier topology.
 pub enum L3Strategy {
@@ -360,7 +318,7 @@ macro_rules! deserialize_from_str {
         }
     )*};
 }
-deserialize_from_str!(OnnxBatchMode, NtdbOperatingPoint, L3Strategy);
+deserialize_from_str!(OnnxBatchMode, L3Strategy);
 
 impl L3Strategy {
     pub fn as_str(self) -> &'static str {

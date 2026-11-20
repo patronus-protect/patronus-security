@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    DynamicPiiConfig, GatewayConfig, L3Strategy, NtdbOperatingPoint, OnnxBatchMode,
-    QueuedSecurityEvent, QueuedSecurityScanResult, SecurityFailure,
-    SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness,
+    DynamicPiiConfig, GatewayConfig, L3Strategy, OnnxBatchMode, QueuedSecurityEvent,
+    QueuedSecurityScanResult, SecurityFailure, SecurityGateway as RustSecurityGateway,
+    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
-    EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, SecurityCategory,
+    EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, NtdbOperatingPoint, SecurityCategory,
 };
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyBool, PyDict, PyList, PyString};
@@ -197,7 +197,7 @@ impl SecurityGateway {
         chunk_overlap_tokens: i64,
     ) -> PyResult<String> {
         let chunk_overlap_tokens =
-            patronus_ark_core::ml::tokenizer::ChunkOverlapTokens::try_from(chunk_overlap_tokens)
+            patronus_ark_core::ChunkOverlapTokens::try_from(chunk_overlap_tokens)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
         let gates = parse_execution_gates_json(execution_gates_json)?;
         let ntdb_operating_point = ntdb_operating_point

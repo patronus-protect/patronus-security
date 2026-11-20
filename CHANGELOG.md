@@ -44,6 +44,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - **Ark's standalone rules `Pipeline` is removed:** `patronus_ark::Pipeline` (an n-gram rule
   matcher over a directory's `l1_rules.json`) and `patronus_ark::ml::l1_heuristics` had no caller;
   `SecurityGateway` and Ark Core's L1 pass cover the categories.
+- **Scan request options live in Ark Core:** the request `config` of `POST /v1/scan` is one
+  type, `RequestScanConfig` in `patronus_ark_core`, which the Ark API worker and the distributed
+  coordinator both parse and validate, so both accept and refuse the same requests. With it,
+  `NtdbOperatingPoint`, `ChunkOverlapTokens`, `DynamicPiiRequestConfig`,
+  `DynamicPiiExecutionGate`, `DynamicPiiResultCondition`, `DynamicPiiConditionalLabels` and
+  `MAX_REQUEST_LABEL_BYTES` move from `patronus-ark` (and `ml::tokenizer`) to
+  `patronus_ark_core`; `DynamicPiiRequestConfig::resolve(base)` becomes
+  `DynamicPiiConfig::with_request(request)`. The coordinator now reports the worker's error text
+  for a refused config (still status 422).
 - **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
   `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
   environment override) describes a model and Core resolves its directory, checks its revision

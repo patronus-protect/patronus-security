@@ -11,11 +11,9 @@ use patronus_ark::GatewayConfig;
 use patronus_ark_core::warmup::DownloadPolicy;
 use std::time::Duration;
 
-use patronus_ark::{
-    DynamicPiiConfig, DynamicPiiExecutionGate, QueuedSecurityEvent, SecurityGateway,
-};
+use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway};
 
-use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{cascade::SecurityLevel, DynamicPiiExecutionGate, SecurityCategory};
 
 fn main() {
     let mut scanner = SecurityGateway::new({

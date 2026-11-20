@@ -7,11 +7,11 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use futures::StreamExt;
-use patronus_ark::{
-    DynamicPiiConfig, DynamicPiiRequestConfig, NtdbOperatingPoint, QueuedSecurityEvent,
+use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent};
+use patronus_ark_core::{
+    cascade::ScanGateMatrix, cascade::SecurityLevel, require_dynamic_pii_category,
+    ChunkOverlapTokens, NtdbOperatingPoint, RequestScanConfig, SecurityCategory,
 };
-use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
-use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
@@ -21,37 +21,12 @@ use crate::state::AppState;
 
 const MAX_SCAN_INPUTS: usize = 64;
 
-#[derive(Debug, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct RequestScanConfig {
-    #[serde(default)]
-    categories: Option<Vec<SecurityCategory>>,
-    #[serde(default)]
-    max_level: Option<SecurityLevel>,
-    #[serde(default)]
-    gates: Option<ScanGateMatrix>,
-    #[serde(default = "empty_metadata")]
-    metadata: Value,
-    #[serde(default)]
-    ntdb_operating_point: Option<String>,
-    #[serde(default)]
-    chunk_overlap_tokens: Option<i64>,
-    /// Request-local `dynamic-pii` labels, thresholds and gates; the worker's
-    /// `pipeline.dynamic_pii` input limits, chunking and timeouts still apply.
-    #[serde(default)]
-    dynamic_pii: Option<DynamicPiiRequestConfig>,
-}
-
-fn empty_metadata() -> Value {
-    json!({})
-}
-
 struct ResolvedScanConfig {
     categories: Vec<SecurityCategory>,
     gates: ScanGateMatrix,
     metadata: Value,
     ntdb_operating_point: Option<NtdbOperatingPoint>,
-    chunk_overlap_tokens: patronus_ark_core::ml::tokenizer::ChunkOverlapTokens,
+    chunk_overlap_tokens: ChunkOverlapTokens,
     dynamic_pii: Option<DynamicPiiConfig>,
 }
 
@@ -65,21 +40,11 @@ fn resolve_request_config(
         .clone()
         .or_else(|| key.allowed_categories.clone())
         .unwrap_or_else(|| config.gateway.core.categories.clone());
-    let request = request.unwrap_or_else(|| RequestScanConfig {
-        metadata: empty_metadata(),
-        ..Default::default()
-    });
-
-    if !request.metadata.is_object() {
-        return Err("config.metadata must be a JSON object".to_string());
-    }
-    let categories = match request.categories {
-        Some(values) if values.is_empty() => {
-            return Err("config.categories must not be empty".to_string())
-        }
-        Some(values) => values,
-        None => defaults,
-    };
+    let request = request.unwrap_or_else(RequestScanConfig::empty);
+    request.validate()?;
+    let ntdb_operating_point = request.ntdb_operating_point()?;
+    let chunk_overlap_tokens = request.chunk_overlap_tokens()?;
+    let categories = request.categories.unwrap_or(defaults);
     for category in &categories {
         if !config.gateway.core.categories.contains(category) {
             return Err(format!(
@@ -108,26 +73,15 @@ fn resolve_request_config(
             gates.l2 = Some(false);
         }
     }
-    let ntdb_operating_point = request
-        .ntdb_operating_point
-        .as_deref()
-        .map(str::parse::<NtdbOperatingPoint>)
-        .transpose()?;
-    let chunk_overlap_tokens = patronus_ark_core::ml::tokenizer::ChunkOverlapTokens::try_from(
-        request.chunk_overlap_tokens.unwrap_or(0),
-    )
-    .map_err(|error| format!("config.{error}"))?;
     let dynamic_pii = request
         .dynamic_pii
         .map(|dynamic_pii| {
-            if !categories.contains(&SecurityCategory::DynamicPii) {
-                return Err(
-                    "config.dynamic_pii requires the 'dynamic-pii' category in this request"
-                        .to_string(),
-                );
-            }
-            dynamic_pii
-                .resolve(&config.gateway.dynamic_pii)
+            require_dynamic_pii_category(&categories)?;
+            config
+                .gateway
+                .dynamic_pii
+                .clone()
+                .with_request(dynamic_pii)
                 .map_err(|error| format!("config.dynamic_pii: {error}"))
         })
         .transpose()?;

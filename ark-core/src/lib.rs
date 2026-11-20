@@ -15,6 +15,8 @@ pub mod post_prediction;
 pub use control::ScanControl;
 mod scanner;
 pub use scanner::*;
+mod scan_request;
+pub use scan_request::*;
 pub mod warmup;
 pub use warmup::{DownloadPolicy, WarmupOptions};
 pub mod aggregation;

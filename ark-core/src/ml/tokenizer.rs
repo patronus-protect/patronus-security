@@ -2,11 +2,11 @@
 use std::{collections::VecDeque, io, path::Path, sync::Arc};
 
 use super::{mmbert_tokenizer::MmbertPairTokenizer, tokenizer_store::global_tokenizer_store};
+use crate::ChunkOverlapTokens;
 
 pub const TEXT_WINDOW_BYTES: usize = 128 * 1024;
 pub const MODEL_TOKENS: usize = 256;
 pub const CONTENT_TOKENS: usize = MODEL_TOKENS - 2;
-pub const MAX_CHUNK_OVERLAP_TOKENS: usize = 64;
 pub const TOKENIZER_FAMILY: &str = "mmbert";
 
 pub type EncodedInputs = (Vec<i64>, Vec<i64>, Vec<i64>);
@@ -67,43 +67,6 @@ pub(crate) fn assemble_batch_inputs(
 pub struct TokenChunk {
     pub token_ids: Vec<u32>,
     pub byte_span: (usize, usize),
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ChunkOverlapTokens(usize);
-
-impl ChunkOverlapTokens {
-    pub const ZERO: Self = Self(0);
-
-    pub fn get(self) -> usize {
-        self.0
-    }
-}
-
-impl TryFrom<i64> for ChunkOverlapTokens {
-    type Error = String;
-
-    fn try_from(overlap: i64) -> Result<Self, Self::Error> {
-        if !(0..=MAX_CHUNK_OVERLAP_TOKENS as i64).contains(&overlap) {
-            return Err(chunk_overlap_error());
-        }
-        Ok(Self(overlap as usize))
-    }
-}
-
-impl TryFrom<usize> for ChunkOverlapTokens {
-    type Error = String;
-
-    fn try_from(overlap: usize) -> Result<Self, Self::Error> {
-        if overlap > MAX_CHUNK_OVERLAP_TOKENS {
-            return Err(chunk_overlap_error());
-        }
-        Ok(Self(overlap))
-    }
-}
-
-fn chunk_overlap_error() -> String {
-    format!("chunk_overlap_tokens must be between 0 and {MAX_CHUNK_OVERLAP_TOKENS}")
 }
 
 fn empty_token_chunk() -> TokenChunk {

@@ -7,7 +7,8 @@ mod l3_results {
     use patronus_ark::pipeline::{
         degraded_error_result, degraded_timeout_result, has_l3_pending, l3_pending_layer,
     };
-    use patronus_ark::{NtdbOperatingPoint, ScanExecution, SecurityScanResult};
+    use patronus_ark::{ScanExecution, SecurityScanResult};
+    use patronus_ark_core::NtdbOperatingPoint;
     use patronus_ark_core::{cascade::SecurityLevel, EvaluationResult, LayerResult};
 
     #[test]
@@ -179,7 +180,8 @@ mod l3_results {
 }
 
 mod public_strategy_types {
-    use patronus_ark::{L3Strategy, NtdbOperatingPoint};
+    use patronus_ark::L3Strategy;
+    use patronus_ark_core::NtdbOperatingPoint;
 
     #[test]
     fn ntdb_operating_point_defaults_to_best_promote_and_parses_all_variants() {

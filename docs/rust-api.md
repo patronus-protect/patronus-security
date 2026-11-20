@@ -27,17 +27,16 @@ mod post_prediction;
 pub mod types;
 
 // Ark Core's modules and types, used inside this crate as `crate::...`.
-use ml::tokenizer::ChunkOverlapTokens;
 use patronus_ark_core::{
     cascade::{
         EffectiveL3PipelinePolicy, ExternalL1Detector, ExternalL1Input, GateResult,
         L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
         L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
     },
-    detectors, diagnostics, threat, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
-    DecisionRecommendation, DecisionResult, DecisionTerminality, EvaluationResult, EvidenceSpan,
-    ExecutionBackend, LabelScore, LayerResult, OnnxRuntimeOptions, SecurityCategory,
-    WolfExecutionOptions,
+    detectors, diagnostics, threat, ChunkOverlapTokens, DecisionCandidate, DecisionEnvelope,
+    DecisionProvenance, DecisionRecommendation, DecisionResult, DecisionTerminality,
+    EvaluationResult, EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, NtdbOperatingPoint,
+    OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
 };
 
 pub use cache::{
@@ -45,14 +44,11 @@ pub use cache::{
     PersistentCacheConfig, WriteBehindConfig,
 };
 pub use config::GatewayConfig;
-pub use dynamic_pii::{
-    DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
-    DynamicPiiRequestConfig, DynamicPiiResultCondition, MAX_REQUEST_LABEL_BYTES,
-};
+pub use dynamic_pii::DynamicPiiConfig;
 pub use pipeline::SecurityGateway;
 pub use types::defaults;
 pub use types::{
-    L3Strategy, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
+    L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
     SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
@@ -611,7 +607,7 @@ request-local classifier chunk overlap and an optional request-local
 `dynamic-pii` configuration. Library callers use the other enqueue methods.
 
 `dynamic_pii` replaces the gateway's configuration for this request only;
-build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+build it with [`crate::DynamicPiiConfig::with_request`]. It is validated
 again here and rejected before anything is queued.
 
 ```rust
@@ -1554,41 +1550,6 @@ the L1 extension point of an analysis module.
 ## Dynamic PII Types
 
 ```rust
-pub enum DynamicPiiExecutionGate {
-    /// Run whenever the category and L3 model are enabled.
-    #[default]
-    Always,
-    /// Run when a source pipeline returns one of the configured results.
-    IfResultIn {
-        pipeline: String,
-        results: Vec<String>,
-    },
-    /// Run only after a source pipeline finishes without a usable result.
-    IfNoResult { pipeline: String },
-}
-```
-
-Request-local condition controlling whether `dynamic-pii` runs.
-
-```rust
-pub struct DynamicPiiResultCondition {
-    pub pipeline: String,
-    pub results: Vec<String>,
-}
-```
-
-Positive source-result condition used by a conditional label rule.
-
-```rust
-pub struct DynamicPiiConditionalLabels {
-    pub labels: Vec<String>,
-    pub when: DynamicPiiResultCondition,
-}
-```
-
-Extra label group activated on chunks with a matching final source result.
-
-```rust
 pub struct DynamicPiiConfig {
     /// Canonical entity labels; GLiNER receives underscores as spaces in this order.
     pub labels: Vec<String>,
@@ -1631,42 +1592,17 @@ terminal result (including L2 results that do not promote), instead of
 resolving against an interim L2 class.
 
 ```rust
-pub struct DynamicPiiRequestConfig {
-    /// Canonical entity labels of the base GLiNER group.
-    pub labels: Vec<String>,
-    /// Default entity score threshold; the gateway's threshold when absent.
-    #[serde(default)]
-    pub threshold: Option<f32>,
-    /// Optional threshold overrides keyed by entity label.
-    #[serde(default)]
-    pub label_thresholds: HashMap<String, f32>,
-    /// Gate deciding whether this pipeline runs.
-    #[serde(default)]
-    pub execution_gate: DynamicPiiExecutionGate,
-    /// Additional labels activated by final source-pipeline results.
-    #[serde(default)]
-    pub conditional_labels: Vec<DynamicPiiConditionalLabels>,
-}
-```
-
-Request-local labels, thresholds and gates for `dynamic-pii`.
-
-For one request it replaces the entity fields of the gateway's
-[`DynamicPiiConfig`]: `labels`, `label_thresholds`, `execution_gate` and
-`conditional_labels`, and `threshold` when given. Input limits, chunking and
-timeouts stay those of the gateway.
-
-```rust
-pub fn resolve(self, base: &DynamicPiiConfig) -> Result<DynamicPiiConfig, String>;
-```
-
-Apply this request configuration to `base` and validate the result.
-
-```rust
 pub fn validated(mut self) -> Result<Self, String>;
 ```
 
 Validate and normalize this configuration.
+
+```rust
+pub fn with_request(&self, request: DynamicPiiRequestConfig) -> Result<Self, String>;
+```
+
+Apply a request-local configuration to this gateway configuration and
+validate the result.
 
 ## Result And Category Types
 
@@ -1905,28 +1841,6 @@ pub fn as_str(self) -> &'static str;
 ```
 
 Return the canonical snake_case mode string.
-
-```rust
-pub enum NtdbOperatingPoint {
-    BestF1,
-    #[default]
-    BestPromote,
-    /// Internal Ark API routing profile: use utility promotion only for an
-    /// Injection document with at most two normal chunks.
-    ArkApiShortInjectionUtility,
-    BestFprInF1,
-    BestFnrInF1,
-    BestLatencyInF1,
-}
-```
-
-Calibrated NTDB operating point selected from each package manifest.
-
-```rust
-pub fn as_str(self) -> &'static str;
-```
-
-Return the manifest key for this operating point.
 
 ```rust
 pub enum L3Strategy {

@@ -15,15 +15,13 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use patronus_ark_core::RequestScanConfig;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use crate::{
-    config::CoordinatorConfig, cube::orchestrator::CubeOrchestrator,
-    request_config::RequestScanConfig, store::JobStore,
-};
+use crate::{config::CoordinatorConfig, cube::orchestrator::CubeOrchestrator, store::JobStore};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -713,6 +711,26 @@ mod tests {
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(redis_writes.load(Ordering::SeqCst), 0);
         assert_eq!(cube_posts.load(Ordering::SeqCst), 0);
+    }
+
+    /// ark-api checks the same fixture (`routes::scan` tests).
+    #[test]
+    fn request_configs_match_the_shared_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../ark-api/tests/fixtures/scan_request_configs.json"
+        ))
+        .unwrap();
+        let check = |request: &serde_json::Value| {
+            serde_json::from_value::<RequestScanConfig>(request.clone())
+                .map_err(|error| error.to_string())
+                .and_then(|request| request.validate())
+        };
+        for request in fixture["accepted"].as_array().unwrap() {
+            assert_eq!(check(request), Ok(()), "{request}");
+        }
+        for request in fixture["refused"].as_array().unwrap() {
+            assert!(check(request).is_err(), "{request} must be refused");
+        }
     }
 
     #[tokio::test]
