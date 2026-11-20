@@ -387,6 +387,16 @@ pub struct ScanExecution {
     wolf_selection: WolfSelection,
 }
 
+/// ARK serves Wolf in 256-token windows without overlap, its own choice rather
+/// than the model's published 2048/64; unset sizes take these.
+pub fn ark_wolf_options(options: crate::WolfExecutionOptions) -> crate::WolfExecutionOptions {
+    crate::WolfExecutionOptions {
+        window_tokens: Some(options.window_tokens.unwrap_or(256)),
+        overlap_tokens: Some(options.overlap_tokens.unwrap_or(0)),
+        ..options
+    }
+}
+
 /// The Wolf Defender model and ONNX export the dedicated injection L3 loads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -427,7 +437,7 @@ impl ScanExecution {
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
             chunk_overlap_tokens: 0,
-            wolf_execution_options: crate::WolfExecutionOptions::default(),
+            wolf_execution_options: ark_wolf_options(crate::WolfExecutionOptions::default()),
             wolf_selection: WolfSelection::default(),
         }
     }
@@ -448,6 +458,7 @@ impl ScanExecution {
         &mut self,
         options: crate::WolfExecutionOptions,
     ) -> Result<(), String> {
+        let options = ark_wolf_options(options);
         options.validate().map_err(|e| e.to_string())?;
         self.wolf_execution_options = options;
         Ok(())
@@ -621,6 +632,30 @@ pub use patronus_ark_core::{ExecutionBackend, OnnxRuntimeOptions};
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ark_keeps_its_own_wolf_windows_for_unset_sizes() {
+        let full = |batch_size| crate::WolfExecutionOptions {
+            window_tokens: Some(256),
+            overlap_tokens: Some(0),
+            batch_size,
+        };
+        assert_eq!(ScanExecution::default().wolf_execution_options(), full(1));
+        let mut execution = ScanExecution::default();
+        execution
+            .set_wolf_execution_options(crate::WolfExecutionOptions {
+                batch_size: 4,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(execution.wolf_execution_options(), full(4));
+        assert!(execution
+            .set_wolf_execution_options(crate::WolfExecutionOptions {
+                overlap_tokens: Some(254),
+                ..Default::default()
+            })
+            .is_err());
+    }
 
     #[test]
     fn entry_point_defaults_keep_their_documented_values() {

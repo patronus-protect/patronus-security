@@ -1997,6 +1997,13 @@ the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
 plus Ark's runtime and NTDB settings.
 
 ```rust
+pub fn ark_wolf_options(options: crate::WolfExecutionOptions) -> crate::WolfExecutionOptions;
+```
+
+ARK serves Wolf in 256-token windows without overlap, its own choice rather
+than the model's published 2048/64; unset sizes take these.
+
+```rust
 pub struct WolfSelection {
     pub model: crate::WolfModel,
     pub precision: crate::WolfPrecision,
@@ -2542,24 +2549,24 @@ Parent/model/required-rule gates, independent of host level or conditional gates
 
 ```rust
 pub struct WolfExecutionOptions {
-    /// Maximum sequence length, including BOS and EOS.
-    pub window_tokens: usize,
-    /// Content tokens retained between adjacent windows.
-    pub overlap_tokens: usize,
+    /// Maximum sequence length, including BOS and EOS; unset takes the bundle's window.
+    pub window_tokens: Option<usize>,
+    /// Content tokens retained between adjacent windows; unset takes the bundle's overlap.
+    pub overlap_tokens: Option<usize>,
     /// Maximum windows in a single ONNX call (not concurrent requests).
     pub batch_size: usize,
 }
 ```
 
 Wolf document execution. Sizes count tokens, batches count document windows.
-The defaults keep the 254-content-token profile; the published v2.1 reference
-(2048 positions, 64 overlap) is opt-in because long documents cost about 2.5x.
+Unset sizes follow the bundle's published settings (`POOLING.json`; Wolf
+Defender publishes 2048-token windows with 64 overlap).
 
 ```rust
 pub fn validate(self) -> Result<(), ScanError>;
 ```
 
-No public documentation is available yet.
+Check the sizes that are set; unset sizes are checked once the bundle is read.
 
 ## Core ONNX Classification
 
@@ -3065,19 +3072,24 @@ No public documentation is available yet.
 ```rust
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
-    /// Attack-probability threshold; a serialized config without one gets
-    /// [`WolfModel::default_threshold`] of its `model` (0.93 for every size).
-    pub threshold: f64,
+    /// Attack-probability threshold; unset takes the bundle's published one.
+    #[serde(default)]
+    pub threshold: Option<f64>,
+    #[serde(default)]
     pub model: WolfModel,
+    #[serde(default)]
     pub precision: WolfPrecision,
+    #[serde(default)]
     pub backend: crate::ExecutionBackend,
+    #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
 }
 ```
 
 The Wolf Defender L3 of the injection module: bundle, model size,
-precision, backend and the attack-probability threshold it detects at
-(default 0.93 for base, small and edge).
+precision, backend and the attack-probability threshold it detects at.
+Everything unset follows the bundle's published settings (`POOLING.json`):
+Wolf Defender detects strictly above 0.5 over 2048-token windows with 64 overlap.
 
 ```rust
 pub struct BundleFile {
@@ -3130,6 +3142,9 @@ pub struct WolfManifest {
     pub output: LogitOutput,
     pub content_tokens: usize,
     pub sequence_tokens: usize,
+    /// Window overlap the document cases were recorded with.
+    #[serde(default)]
+    pub overlap_tokens: usize,
     #[serde(default)]
     pub dynamic_sequence: bool,
     pub pad_id: u32,
@@ -3179,9 +3194,13 @@ pub struct WolfRunner {
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,
+    /// The published rule: detect only above the threshold.
+    strict: bool,
+    temperature: f64,
     model_path: PathBuf,
     execution_provider: String,
     options: WolfExecutionOptions,
+    windows: WolfWindows,
     fixed_width: Option<usize>,
 }
 ```
@@ -3192,7 +3211,7 @@ No public documentation is available yet.
 pub fn new(config: &WolfConfig) -> Result<Self, ScanError>;
 ```
 
-No public documentation is available yet.
+Construct a runner with the bundle's published windows.
 
 ```rust
 pub fn new_with_options(
@@ -3202,6 +3221,7 @@ pub fn new_with_options(
 ```
 
 Construct and warm a runner; execution sizes are validated against the local export.
+Unset sizes and threshold follow the bundle's `POOLING.json`.
 
 ```rust
 pub fn set_threshold(&mut self, threshold: f64) -> Result<(), ScanError>;
@@ -3275,7 +3295,8 @@ No public documentation is available yet.
 pub fn execution_options(&self) -> WolfExecutionOptions;
 ```
 
-The effective window and batch configuration of this reusable session.
+The window and batch configuration this session was requested with;
+unset sizes run with the bundle's published ones.
 
 ```rust
 pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;

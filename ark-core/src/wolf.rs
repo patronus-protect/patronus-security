@@ -6,69 +6,44 @@ use ort::session::Session;
 mod assets;
 mod inference;
 mod models;
+mod published;
 #[cfg(test)]
 mod tests;
 mod windows;
-use crate::WolfExecutionOptions;
+use crate::{wolf_options::WolfWindows, WolfExecutionOptions};
 pub use assets::graph_candidates;
 use assets::{asset_manifest, verified_file};
 pub(crate) use assets::{asset_manifest_at, model_paths, precision_order};
 pub use models::{
     WolfModel, WolfModelSpec, WolfPrecision, PRECISION_ENV, SUPPORT_FILES, WOLF_MODELS,
 };
+use published::Published;
+pub use published::POOLING_FILE;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-pub const CONTENT_TOKENS: usize = 254;
-pub const SEQUENCE_TOKENS: usize = 256;
-
 /// The Wolf Defender L3 of the injection module: bundle, model size,
-/// precision, backend and the attack-probability threshold it detects at
-/// (default 0.93 for base, small and edge).
+/// precision, backend and the attack-probability threshold it detects at.
+/// Everything unset follows the bundle's published settings (`POOLING.json`):
+/// Wolf Defender detects strictly above 0.5 over 2048-token windows with 64 overlap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "WolfConfigFields")]
+#[serde(deny_unknown_fields)]
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
-    /// Attack-probability threshold; a serialized config without one gets
-    /// [`WolfModel::default_threshold`] of its `model` (0.93 for every size).
-    pub threshold: f64,
+    /// Attack-probability threshold; unset takes the bundle's published one.
+    #[serde(default)]
+    pub threshold: Option<f64>,
+    #[serde(default)]
     pub model: WolfModel,
+    #[serde(default)]
     pub precision: WolfPrecision,
+    #[serde(default)]
     pub backend: crate::ExecutionBackend,
+    #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
-}
-/// The serialized [`WolfConfig`]: `threshold` is optional.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct WolfConfigFields {
-    bundle_dir: PathBuf,
-    #[serde(default)]
-    threshold: Option<f64>,
-    #[serde(default)]
-    model: WolfModel,
-    #[serde(default)]
-    precision: WolfPrecision,
-    #[serde(default)]
-    backend: crate::ExecutionBackend,
-    #[serde(default)]
-    runtime_options: crate::OnnxRuntimeOptions,
-}
-impl From<WolfConfigFields> for WolfConfig {
-    fn from(fields: WolfConfigFields) -> Self {
-        Self {
-            bundle_dir: fields.bundle_dir,
-            threshold: fields
-                .threshold
-                .unwrap_or_else(|| fields.model.default_threshold()),
-            model: fields.model,
-            precision: fields.precision,
-            backend: fields.backend,
-            runtime_options: fields.runtime_options,
-        }
-    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -111,6 +86,9 @@ pub struct WolfManifest {
     pub output: LogitOutput,
     pub content_tokens: usize,
     pub sequence_tokens: usize,
+    /// Window overlap the document cases were recorded with.
+    #[serde(default)]
+    pub overlap_tokens: usize,
     #[serde(default)]
     pub dynamic_sequence: bool,
     pub pad_id: u32,
@@ -148,23 +126,31 @@ pub struct WolfRunner {
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,
+    /// The published rule: detect only above the threshold.
+    strict: bool,
+    temperature: f64,
     model_path: PathBuf,
     execution_provider: String,
     options: WolfExecutionOptions,
+    windows: WolfWindows,
     fixed_width: Option<usize>,
 }
 impl WolfRunner {
+    /// Construct a runner with the bundle's published windows.
     pub fn new(config: &WolfConfig) -> Result<Self, ScanError> {
         Self::new_with_options(config, WolfExecutionOptions::default())
     }
 
     /// Construct and warm a runner; execution sizes are validated against the local export.
+    /// Unset sizes and threshold follow the bundle's `POOLING.json`.
     pub fn new_with_options(
         config: &WolfConfig,
         options: WolfExecutionOptions,
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
+        let published = Published::read(&config.bundle_dir)?;
+        let windows = options.resolve(published.window_tokens, published.overlap_tokens)?;
         let manifest = asset_manifest(config)?;
         let optional_integrity = !manifest.model.blake3.is_empty();
         let model = if optional_integrity {
@@ -193,15 +179,18 @@ impl WolfRunner {
         builder = builder.with_independent_thread_pool().map_err(inference)?;
         let session = crate::onnx::commit_session(builder, &model).map_err(inference)?;
         let fixed_width =
-            inference::validate_session(&session, &config.bundle_dir, options, &manifest)?;
+            inference::validate_session(&session, &config.bundle_dir, windows, &manifest)?;
         let mut runner = Self {
             session,
             tokenizer,
             manifest,
-            threshold: config.threshold,
+            threshold: config.threshold.unwrap_or(published.threshold),
+            strict: published.strict,
+            temperature: published.temperature,
             model_path: model,
             execution_provider,
             options,
+            windows,
             fixed_width,
         };
         // Always execute the actual backend before declaring the scanner ready.
@@ -211,16 +200,16 @@ impl WolfRunner {
         Ok(runner)
     }
     fn verify_reference_cases(&mut self) -> Result<(), ScanError> {
-        if self.manifest.content_tokens != CONTENT_TOKENS
-            || self.manifest.sequence_tokens != SEQUENCE_TOKENS
+        if self.manifest.content_tokens != self.windows.content_tokens()
+            || self.manifest.sequence_tokens != self.windows.window_tokens
         {
-            // Older optional manifests still verify file integrity, but their
-            // short-window references are not evidence for this profile.
+            // Manifests of another window still verify file integrity, but
+            // their references are not evidence for this profile.
             log::debug!("Wolf references skipped for a different execution profile");
             return Ok(());
         }
         for case in self.manifest.parity_cases.clone() {
-            if case.token_ids.len() > self.options.content_tokens() {
+            if case.token_ids.len() > self.windows.content_tokens() {
                 continue;
             }
             if !case.expected_logit.is_finite() {
@@ -255,9 +244,12 @@ impl WolfRunner {
                 )));
             }
         }
-        // Document references also depend on the window/overlap profile. Short
-        // raw-logit/tokenizer references above remain valid for custom batching.
-        if self.options != WolfExecutionOptions::default() {
+        // Document references also depend on the overlap they were recorded
+        // with. Short raw-logit/tokenizer references above remain valid for
+        // custom batching.
+        if self.windows.overlap_tokens != self.manifest.overlap_tokens
+            || self.windows.batch_size != 1
+        {
             return Ok(());
         }
         for case in self.manifest.document_cases.clone() {
@@ -350,7 +342,7 @@ impl WolfRunner {
             });
             control.check()?;
             counted.map_err(inference)?;
-            total_windows = windows::count(tokens, self.options);
+            total_windows = windows::count(tokens, self.windows);
             if let Some(callback) = progress.as_mut() {
                 callback(WolfProgress {
                     windows: 0,
@@ -359,15 +351,15 @@ impl WolfRunner {
                 });
             }
         }
-        let mut pool = ClassPool::default();
+        let mut pool = ClassPool::new(self.temperature);
         let tokenizer = Arc::clone(&self.tokenizer);
-        let mut windows = windows::Windows::new(self.options);
+        let mut windows = windows::Windows::new(self.windows);
         let mut batch = Vec::new();
         let scanned = tokenizer.visit_tokens(text, |token| {
             control.check().map_err(|e| e.to_string())?;
             if let Some(window) = windows.push(token.id) {
                 batch.push(window);
-                if batch.len() == self.options.batch_size {
+                if batch.len() == self.windows.batch_size {
                     self.consume_batch(&batch, control, &mut pool, total_windows, &mut progress)
                         .map_err(|e| e.to_string())?;
                     batch.clear();
@@ -392,14 +384,19 @@ impl WolfRunner {
             document_logit,
             attack_probability: probability,
             threshold: self.threshold,
-            matched: probability >= self.threshold,
+            matched: if self.strict {
+                probability > self.threshold
+            } else {
+                probability >= self.threshold
+            },
             windows: pool.count(),
             model_id: self.manifest.model_id.clone(),
             revision: self.manifest.revision.clone(),
             precision: self.manifest.precision.clone(),
         })
     }
-    /// The effective window and batch configuration of this reusable session.
+    /// The window and batch configuration this session was requested with;
+    /// unset sizes run with the bundle's published ones.
     pub fn execution_options(&self) -> WolfExecutionOptions {
         self.options
     }
@@ -464,13 +461,13 @@ fn validate_threshold(threshold: f64) -> Result<(), ScanError> {
 
 impl WolfConfig {
     pub(crate) fn validate(&self) -> Result<(), ScanError> {
-        validate_threshold(self.threshold)
+        self.threshold.map_or(Ok(()), validate_threshold)
     }
 
     pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self {
         Self {
             bundle_dir: bundle_dir.into(),
-            threshold,
+            threshold: Some(threshold),
             model: WolfModel::default(),
             precision: WolfPrecision::default(),
             backend: crate::ExecutionBackend::default(),

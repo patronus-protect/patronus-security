@@ -235,10 +235,13 @@ impl LazyOnnxTextClassifier {
         self.ensure_wolf_loaded(threshold, backend, options, execution)?;
         control.check()?;
         let runner = self.wolf_runner.as_mut().ok_or("Wolf runner not loaded")?;
-        Ok(match progress {
+        let mut result = match progress {
             Some(callback) => runner.scan_with_progress_and_control(text, control, callback)?,
             None => runner.scan_with_control(text, control)?,
-        })
+        };
+        // ARK detects at its threshold (`>=`); Core follows the model's strict `>`.
+        result.matched = result.attack_probability >= result.threshold;
+        Ok(result)
     }
 
     pub(crate) fn ensure_wolf_loaded(
@@ -251,6 +254,7 @@ impl LazyOnnxTextClassifier {
         if let Some(runner) = self.wolf_runner.as_mut() {
             runner.set_threshold(threshold)?;
         }
+        let execution = crate::types::ark_wolf_options(execution);
         let options = options.normalized();
         if self.wolf_runner.is_none()
             || self.loaded_backend != Some(backend)
@@ -274,7 +278,7 @@ impl LazyOnnxTextClassifier {
                         .parent()
                         .ok_or("invalid Wolf tokenizer path")?
                         .to_path_buf(),
-                    threshold,
+                    threshold: Some(threshold),
                     model: self.wolf_selection.model,
                     precision: self.wolf_selection.precision,
                     backend,
@@ -564,8 +568,8 @@ mod tests {
         .unwrap()
         .unwrap();
         let execution = crate::WolfExecutionOptions {
-            window_tokens: 32,
-            overlap_tokens: 10,
+            window_tokens: Some(32),
+            overlap_tokens: Some(10),
             batch_size: 4,
         };
         // This export has a static batch-one dimension. Reject the requested
@@ -672,8 +676,8 @@ mod tests {
         )
         .unwrap();
         let options = crate::WolfExecutionOptions {
-            window_tokens: 32,
-            overlap_tokens: 10,
+            window_tokens: Some(32),
+            overlap_tokens: Some(10),
             batch_size: 4,
         };
         let output = classifier
@@ -687,6 +691,18 @@ mod tests {
             )
             .unwrap();
         assert_eq!(output.windows, 5);
+        // ARK detects at its threshold (`>=`), unlike the model's strict `>` in Core.
+        let at_threshold = classifier
+            .infer_wolf_document_with_progress(
+                &" a".repeat(100),
+                output.attack_probability,
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+                options,
+                None,
+            )
+            .unwrap();
+        assert!(at_threshold.matched);
         std::fs::remove_file(&model).unwrap();
         assert!(classifier
             .infer_wolf_document_with_progress(

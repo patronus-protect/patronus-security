@@ -1,4 +1,4 @@
-use crate::WolfExecutionOptions;
+use crate::wolf_options::WolfWindows;
 
 /// Keeps only the current window. Retained overlap alone never creates a final window.
 pub(super) struct Windows {
@@ -9,7 +9,7 @@ pub(super) struct Windows {
     emitted: bool,
 }
 impl Windows {
-    pub(super) fn new(options: WolfExecutionOptions) -> Self {
+    pub(super) fn new(options: WolfWindows) -> Self {
         Self {
             pending: Vec::with_capacity(options.content_tokens()),
             capacity: options.content_tokens(),
@@ -36,7 +36,7 @@ impl Windows {
     }
 }
 
-pub(super) fn count(tokens: u64, options: WolfExecutionOptions) -> u64 {
+pub(super) fn count(tokens: u64, options: WolfWindows) -> u64 {
     let capacity = options.content_tokens() as u64;
     1 + tokens
         .saturating_sub(capacity)
@@ -50,7 +50,7 @@ mod tests {
     fn overlap_and_exact_boundaries() {
         for capacity in [1, 3, 254, 2046] {
             for overlap in [0, capacity / 2, capacity - 1] {
-                let options = WolfExecutionOptions {
+                let options = WolfWindows {
                     window_tokens: capacity + 2,
                     overlap_tokens: overlap,
                     batch_size: 4,

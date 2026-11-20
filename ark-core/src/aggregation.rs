@@ -1,14 +1,30 @@
 //! Training-compatible, constant-memory document pooling of binary logits.
 
-/// Incremental `T * (logsumexp(logits / T) - ln(n))`, with Wolf's fixed T=0.1.
-#[derive(Debug, Clone, Default)]
+/// Incremental `T * (logsumexp(logits / T) - ln(n))`. A single window pools
+/// to its own logit at any `T`, so only the multi-window temperature matters.
+#[derive(Debug, Clone)]
 pub struct SmoothMax {
+    temperature: f64,
     maximum: f64,
     scaled_sum: f64,
     count: u64,
 }
+impl Default for SmoothMax {
+    /// Wolf Defender's published multi-window temperature, 0.1.
+    fn default() -> Self {
+        Self::new(0.1)
+    }
+}
 impl SmoothMax {
-    pub const TEMPERATURE: f64 = 0.1;
+    /// `temperature` must be finite and positive.
+    pub fn new(temperature: f64) -> Self {
+        Self {
+            temperature,
+            maximum: 0.0,
+            scaled_sum: 0.0,
+            count: 0,
+        }
+    }
     pub fn push(&mut self, logit: f64) -> Result<(), &'static str> {
         if !logit.is_finite() {
             return Err("non-finite Wolf logit");
@@ -21,10 +37,10 @@ impl SmoothMax {
             self.scaled_sum = 1.0;
         } else if logit > self.maximum {
             self.scaled_sum =
-                self.scaled_sum * ((self.maximum - logit) / Self::TEMPERATURE).exp() + 1.0;
+                self.scaled_sum * ((self.maximum - logit) / self.temperature).exp() + 1.0;
             self.maximum = logit;
         } else {
-            self.scaled_sum += ((logit - self.maximum) / Self::TEMPERATURE).exp();
+            self.scaled_sum += ((logit - self.maximum) / self.temperature).exp();
         }
         self.count += 1;
         Ok(())
@@ -34,7 +50,7 @@ impl SmoothMax {
     }
     pub fn logit(&self) -> Option<f64> {
         (self.count > 0).then(|| {
-            self.maximum + Self::TEMPERATURE * (self.scaled_sum.ln() - (self.count as f64).ln())
+            self.maximum + self.temperature * (self.scaled_sum.ln() - (self.count as f64).ln())
         })
     }
     pub fn probability(&self) -> Option<f64> {
@@ -49,6 +65,13 @@ pub struct ClassPool {
     injection: SmoothMax,
 }
 impl ClassPool {
+    /// Both classes pool with the bundle's multi-window `temperature`.
+    pub fn new(temperature: f64) -> Self {
+        Self {
+            benign: SmoothMax::new(temperature),
+            injection: SmoothMax::new(temperature),
+        }
+    }
     pub fn push(&mut self, [benign, injection]: [f64; 2]) -> Result<(), &'static str> {
         if !benign.is_finite() || !injection.is_finite() {
             return Err("non-finite Wolf logit");
@@ -168,6 +191,19 @@ mod tests {
         assert!((scalar.logit().unwrap() - reference.logit().unwrap()).abs() < 1e-12);
         assert!(scalar.push([f64::NAN, 1.0]).is_err());
         assert_eq!(scalar.count(), 3);
+    }
+    #[test]
+    fn temperature_is_the_callers_and_a_single_window_ignores_it() {
+        let mut pool = SmoothMax::new(1.0);
+        pool.push(0.0).unwrap();
+        pool.push(1.0).unwrap();
+        let reference = 1.0 + ((-1.0_f64).exp() + 1.0).ln() - 2.0_f64.ln();
+        assert!((pool.logit().unwrap() - reference).abs() < 1e-12);
+        for temperature in [0.1, 1.0] {
+            let mut single = ClassPool::new(temperature);
+            single.push([0.25, 1.0]).unwrap();
+            assert_eq!(single.logit(), Some(0.75));
+        }
     }
     #[test]
     fn rejects_non_finite_and_empty_has_no_verdict() {

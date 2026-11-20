@@ -29,10 +29,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()?;
     let mut execution = WolfExecutionOptions::default();
     if let Some(value) = args.next() {
-        execution.window_tokens = value.parse()?;
+        execution.window_tokens = Some(value.parse()?);
     }
     if let Some(value) = args.next() {
-        execution.overlap_tokens = value.parse()?;
+        execution.overlap_tokens = Some(value.parse()?);
     }
     if let Some(value) = args.next() {
         execution.batch_size = value.parse()?;
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ScannerConfig {
             wolf: Some(WolfConfig {
                 bundle_dir: bundle,
-                threshold,
+                threshold: Some(threshold),
                 model: Default::default(),
                 precision: Default::default(),
                 backend: Default::default(),

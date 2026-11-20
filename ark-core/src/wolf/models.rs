@@ -4,8 +4,14 @@ use serde::{Deserialize, Serialize};
 
 /// Environment override for [`WolfPrecision::Auto`]; accepts any precision name.
 pub const PRECISION_ENV: &str = "PATRONUS_L3_PRECISION";
-/// Files every precision needs next to its ONNX graph.
-pub const SUPPORT_FILES: [&str; 3] = ["config.json", "tokenizer.json", "tokenizer_config.json"];
+/// Files every precision needs next to its ONNX graph; `POOLING.json` holds the
+/// published window, overlap, pooling and threshold.
+pub const SUPPORT_FILES: [&str; 4] = [
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    super::POOLING_FILE,
+];
 
 /// Wolf Defender size. All sizes share the export format and tokenizer family.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -108,14 +114,6 @@ impl WolfModel {
             Self::Edge => "edge",
         }
     }
-
-    /// Attack-probability threshold at which this model detects: the value
-    /// Ark's dedicated injection L3 applies to every Wolf size by default.
-    pub fn default_threshold(self) -> f64 {
-        match self {
-            Self::Base | Self::Small | Self::Edge => 0.93,
-        }
-    }
 }
 
 impl WolfModelSpec {
@@ -128,9 +126,15 @@ impl WolfModelSpec {
     }
 
     /// Every file a managed cache holds for one concrete precision.
-    pub fn files(&self, precision: WolfPrecision) -> Option<[&'static str; 4]> {
-        let [config, tokenizer, tokenizer_config] = SUPPORT_FILES;
-        Some([self.graph(precision)?, config, tokenizer, tokenizer_config])
+    pub fn files(&self, precision: WolfPrecision) -> Option<[&'static str; 5]> {
+        let [config, tokenizer, tokenizer_config, pooling] = SUPPORT_FILES;
+        Some([
+            self.graph(precision)?,
+            config,
+            tokenizer,
+            tokenizer_config,
+            pooling,
+        ])
     }
 }
 

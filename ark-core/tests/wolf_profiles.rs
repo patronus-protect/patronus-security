@@ -25,8 +25,8 @@ fn local_export_window_overlap_batch_parity() {
         let mut reference: Option<(f64, f64, u64)> = None;
         for batch_size in [1, 2, 4] {
             let options = WolfExecutionOptions {
-                window_tokens,
-                overlap_tokens,
+                window_tokens: Some(window_tokens),
+                overlap_tokens: Some(overlap_tokens),
                 batch_size,
             };
             let start = Instant::now();

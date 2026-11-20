@@ -63,13 +63,19 @@ impl Bundle {
             serde_json::to_vec(&manifest).unwrap(),
         )
         .unwrap();
+        // The synthetic exports publish the 254-content-token profile of their references.
+        fs::write(
+            path.join("POOLING.json"),
+            r#"{"encoder_positions": 256, "overlap": 0}"#,
+        )
+        .unwrap();
         Self(path)
     }
     fn config(&self, threshold: f64) -> ScannerConfig {
         ScannerConfig {
             wolf: Some(WolfConfig {
                 bundle_dir: self.0.clone(),
-                threshold,
+                threshold: Some(threshold),
                 model: Default::default(),
                 precision: Default::default(),
                 backend: Default::default(),
@@ -99,8 +105,8 @@ fn batches_overlap_padding_and_progress_match_independent_window_oracle() {
             .unwrap();
         for batch_size in [1, 2, 4] {
             let options = WolfExecutionOptions {
-                window_tokens: 8,
-                overlap_tokens: 2,
+                window_tokens: Some(8),
+                overlap_tokens: Some(2),
                 batch_size,
             };
             let mut runner =
@@ -162,7 +168,7 @@ fn execution_options_validate_export_dimensions_and_keep_default_api() {
     let fixed = Bundle::new();
     for options in [
         WolfExecutionOptions {
-            window_tokens: 2048,
+            window_tokens: Some(2048),
             ..Default::default()
         },
         WolfExecutionOptions {
@@ -189,7 +195,7 @@ fn execution_options_validate_export_dimensions_and_keep_default_api() {
         WolfRunner::new_with_options(
             dynamic.config(0.5).wolf.as_ref().unwrap(),
             WolfExecutionOptions {
-                window_tokens: 8193,
+                window_tokens: Some(8193),
                 ..Default::default()
             }
         ),
@@ -223,8 +229,8 @@ fn cancellation_between_batched_rows_never_returns_partial_success() {
     let mut runner = WolfRunner::new_with_options(
         bundle.config(0.5).wolf.as_ref().unwrap(),
         WolfExecutionOptions {
-            window_tokens: 8,
-            overlap_tokens: 2,
+            window_tokens: Some(8),
+            overlap_tokens: Some(2),
             batch_size: 4,
         },
     )
@@ -540,17 +546,13 @@ fn with_a_cascade_wolf_is_the_injection_l3_behind_l1() {
 }
 
 #[test]
-fn wolf_config_threshold_defaults_to_the_model_default() {
-    use patronus_ark_core::wolf::WolfModel;
+fn wolf_config_threshold_is_unset_until_configured() {
     let config: WolfConfig =
         serde_json::from_value(serde_json::json!({"bundle_dir": "/x", "model": "edge"})).unwrap();
-    assert_eq!(config.threshold, WolfModel::Edge.default_threshold());
-    for model in WolfModel::ALL {
-        assert_eq!(model.default_threshold(), 0.93);
-    }
+    assert_eq!(config.threshold, None);
     let explicit: WolfConfig =
         serde_json::from_value(serde_json::json!({"bundle_dir": "/x", "threshold": 0.5})).unwrap();
-    assert_eq!(explicit.threshold, 0.5);
+    assert_eq!(explicit.threshold, Some(0.5));
     assert_eq!(serde_json::to_value(&explicit).unwrap()["threshold"], 0.5);
     assert!(serde_json::from_value::<WolfConfig>(
         serde_json::json!({"bundle_dir": "/x", "unknown": 1})
@@ -640,4 +642,52 @@ fn only_wolf_answers_with_l1_switched_off() {
     let report = scanner.scan(L1_ATTACK).unwrap();
     assert!(report.wolf.is_some());
     assert_eq!(injection_decision(&report)["decided_by"], "l3");
+}
+
+#[test]
+fn unset_settings_follow_the_bundles_published_pooling_json() {
+    use patronus_ark_core::{wolf::WolfRunner, WolfExecutionOptions};
+    let bundle = Bundle::batched(false);
+    let text = " a".repeat(20);
+    let explicit = WolfRunner::new_with_options(
+        bundle.config(0.5).wolf.as_ref().unwrap(),
+        WolfExecutionOptions {
+            window_tokens: Some(8),
+            overlap_tokens: Some(2),
+            batch_size: 1,
+        },
+    )
+    .unwrap()
+    .scan(&text)
+    .unwrap();
+    // The model's rule: strictly above the published threshold.
+    fs::write(
+        bundle.0.join("POOLING.json"),
+        r#"{"encoder_positions": 8, "overlap": 2, "threshold": "strict >0.25"}"#,
+    )
+    .unwrap();
+    let mut config = bundle.config(0.5).wolf.unwrap();
+    config.threshold = None;
+    let mut published = WolfRunner::new(&config).unwrap();
+    let report = published.scan(&text).unwrap();
+    assert_eq!(report.threshold, 0.25);
+    assert_eq!(report.windows, explicit.windows);
+    assert_eq!(report.document_logit, explicit.document_logit);
+    assert_eq!(
+        published.execution_options(),
+        WolfExecutionOptions::default()
+    );
+    published.set_threshold(report.attack_probability).unwrap();
+    assert!(!published.scan(&text).unwrap().matched);
+    // A bundle publishing `>=` also detects at the threshold.
+    fs::write(bundle.0.join("POOLING.json"), r#"{"threshold": ">=0.25"}"#).unwrap();
+    let mut inclusive = WolfRunner::new(&config).unwrap();
+    let probability = inclusive.scan(&text).unwrap().attack_probability;
+    inclusive.set_threshold(probability).unwrap();
+    assert!(inclusive.scan(&text).unwrap().matched);
+    // Without POOLING.json Core uses the model's documented 2048/64 windows.
+    fs::remove_file(bundle.0.join("POOLING.json")).unwrap();
+    let mut documented = WolfRunner::new(&config).unwrap();
+    let report = documented.scan(&" a".repeat(2047)).unwrap();
+    assert_eq!((report.threshold, report.windows), (0.5, 2));
 }

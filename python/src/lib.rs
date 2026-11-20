@@ -333,8 +333,9 @@ impl SecurityGateway {
     fn wolf_options(&self) -> std::collections::HashMap<&'static str, usize> {
         let options = self.inner.distributed_execution().wolf_execution_options();
         [
-            ("window_tokens", options.window_tokens),
-            ("overlap_tokens", options.overlap_tokens),
+            // ScanExecution always holds both window sizes.
+            ("window_tokens", options.window_tokens.unwrap_or_default()),
+            ("overlap_tokens", options.overlap_tokens.unwrap_or_default()),
             ("batch_size", options.batch_size),
         ]
         .into_iter()
@@ -449,7 +450,7 @@ fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecution
         .map(|value| {
             let options: WolfExecutionOptions = serde_json::from_str(value)
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-            options
+            patronus_ark::types::ark_wolf_options(options)
                 .validate()
                 .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
             Ok(options)
