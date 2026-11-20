@@ -595,8 +595,8 @@ fn threat(scorer: bool, points: bool, evidence: bool) -> NativeResult {
         thresholds: HashMap::new(),
         details: HashMap::from([
             ("matched_rules".to_string(), serde_json::json!(rules)),
-            // The combined score (points 0.8) is not the cascade's scale.
-            ("score".to_string(), 0.8.into()),
+            // The reported score; the cascade recomputes its own.
+            ("score".to_string(), 0.5.into()),
             ("registry_id".to_string(), "ark-threat-l1-0.1.7".into()),
         ]),
     });
@@ -660,19 +660,21 @@ fn threat_cuts_read_the_document_scorer_and_points_hits_detect_on_their_own() {
         module_stage(Some(p), None, &low).outcome,
         StageOutcome::Detected
     );
-    // A points rule hit detects whatever the scorer says.
+    // A points rule hit detects whatever the cut says and carries its
+    // points score (0.8), never 0; with the scorer too, the higher one.
     let hit = threat(false, true, true);
+    let stage = module_stage(Some(0.9), Some(0.1), &hit);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Detected, 0.8));
+    let both = module_stage(None, None, &threat(true, true, true));
     assert_eq!(
-        module_stage(Some(0.9), Some(0.1), &hit).outcome,
-        StageOutcome::Detected
+        (both.outcome, both.score),
+        (StageOutcome::Detected, p.max(0.8))
     );
-    // The mode floor dropped the hit's evidence: no rule hit, and the score
-    // is cleared on the scorer's scale (0), not the points score (0.8).
+    // The mode floor dropped the hit's evidence: no rule hit, and its points
+    // score no longer counts (only the scorer's probability, here 0).
     let floored = threat(false, true, false);
-    assert_eq!(
-        module_stage(Some(0.9), Some(0.1), &floored).outcome,
-        StageOutcome::Clear
-    );
+    let stage = module_stage(Some(0.9), Some(0.1), &floored);
+    assert_eq!((stage.outcome, stage.score), (StageOutcome::Clear, 0.0));
 }
 
 #[test]

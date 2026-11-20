@@ -745,10 +745,11 @@ switches clearing off.
 pub struct ModuleConfig {
     /// The heuristic's detect cut on its rule scorer's probability
     /// (`0.0..=1.0`): the injection scorer's candidate score for `injection`
-    /// and the rule classes it feeds, the Threat document scorer's own
-    /// probability (recomputed from `details.matched_rules`) for the Threat
-    /// classes, the confidence of a
-    /// result with evidence for PII and DLP. A score at or above it is
+    /// and the rule classes it feeds (rejected candidates included), for the
+    /// Threat classes the higher of the document scorer's own probability
+    /// (recomputed from `details.matched_rules`, also below its cut) and the
+    /// points score of an accepted points rule that kept its evidence, the
+    /// confidence of a result with evidence for PII and DLP. A score at or above it is
     /// Detected when the module's score mode admits it. A Threat points rule
     /// accepted on its own (with evidence left after the mode floor) is
     /// Detected regardless. `None` (the default) keeps the scorers' shipped
