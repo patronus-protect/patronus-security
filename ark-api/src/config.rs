@@ -71,8 +71,6 @@ pub struct Config {
     pub bind: SocketAddr,
     pub max_upload_bytes: usize,
     pub keys: Vec<ApiKeyConfig>,
-    /// `cache.dir`: the directory of the persistent decision cache.
-    pub cache_dir: Option<PathBuf>,
     /// The `pipeline` section: the gateway's config. Its gate keys apply
     /// when the authenticated key has no gate override.
     pub gateway: GatewayConfig,
@@ -144,6 +142,41 @@ impl Config {
     }
 }
 
+/// `cache.dir` (a directory, friendlier to mount than a file) places the
+/// persistent decision cache at `<dir>/decisions.redb`: it sets the
+/// pipeline's `cache.storage_location` and keeps every other cache key
+/// (encryption, TTL, memory limits). A different `storage_location` in the
+/// pipeline is refused rather than one location silently winning.
+fn place_cache_in_dir(
+    pipeline: &mut serde_json::Map<String, serde_json::Value>,
+    dir: &Path,
+) -> Result<(), ConfigError> {
+    let location = dir.join("decisions.redb");
+    let cache = pipeline
+        .entry("cache")
+        .or_insert_with(|| serde_json::Value::Object(Default::default()))
+        .as_object_mut()
+        .ok_or_else(|| ConfigError::Invalid("pipeline.cache must be a mapping".into()))?;
+    match cache
+        .get("storage_location")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some(set) if Path::new(set) != location => Err(ConfigError::Invalid(format!(
+            "cache.dir places the decision cache at {} but pipeline.cache.storage_location \
+            is {set}; set only one of them",
+            location.display()
+        ))),
+        Some(_) => Ok(()),
+        None => {
+            cache.insert(
+                "storage_location".into(),
+                location.to_string_lossy().into_owned().into(),
+            );
+            Ok(())
+        }
+    }
+}
+
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
         let mut pipeline = self.pipeline;
@@ -157,6 +190,9 @@ impl RawConfig {
         pipeline
             .entry("l3_strategy")
             .or_insert_with(|| patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into());
+        if let Some(dir) = self.cache.dir {
+            place_cache_in_dir(&mut pipeline, Path::new(&dir))?;
+        }
         let gateway: GatewayConfig = serde_json::from_value(pipeline.into())
             .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
         gateway
@@ -218,7 +254,6 @@ impl RawConfig {
             bind,
             max_upload_bytes: self.server.max_upload_mb.saturating_mul(1024 * 1024),
             keys,
-            cache_dir: self.cache.dir.map(PathBuf::from),
             gateway,
         })
     }
@@ -251,6 +286,52 @@ mod tests {
             .map_err(|error| error.to_string())?
             .into_config()
             .map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn cache_dir_places_the_cache_and_keeps_encryption_ttl_and_limits() {
+        let mut value = startup_config();
+        value["cache"] = serde_json::json!({"dir": "/var/cache/ark"});
+        value["pipeline"]["cache"] = serde_json::json!({
+            "encryption_key_hex": "ab".repeat(32),
+            "entry_ttl_seconds": 60,
+            "memory_max_entries": 7,
+            "memory_max_bytes": 4096,
+        });
+        let cache = load(value.clone()).unwrap().gateway.cache;
+        let persistent = cache
+            .persistent
+            .expect("cache.dir enables the persistent cache");
+        assert_eq!(
+            persistent.storage_location,
+            Path::new("/var/cache/ark/decisions.redb")
+        );
+        assert!(
+            persistent.encryption.is_some(),
+            "the encryption key is kept"
+        );
+        assert_eq!(cache.entry_ttl, std::time::Duration::from_secs(60));
+        assert_eq!(
+            (cache.memory.max_entries, cache.memory.max_bytes),
+            (7, 4096)
+        );
+
+        value["pipeline"]["cache"]["storage_location"] = "/var/cache/ark/decisions.redb".into();
+        assert!(
+            load(value.clone()).is_ok(),
+            "the same location is no conflict"
+        );
+        value["pipeline"]["cache"]["storage_location"] = "/elsewhere.redb".into();
+        assert!(load(value).unwrap_err().contains("set only one of them"));
+    }
+
+    #[test]
+    fn an_encryption_key_without_a_cache_location_is_refused() {
+        let mut value = startup_config();
+        value["pipeline"]["cache"] = serde_json::json!({"encryption_key_hex": "ab".repeat(32)});
+        assert!(load(value)
+            .unwrap_err()
+            .contains("set cache.storage_location"));
     }
 
     #[test]

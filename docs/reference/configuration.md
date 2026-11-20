@@ -30,7 +30,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); unset follows the backend. | no | yes |
 | `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` (default `1/1/false`). | no | yes |
 | `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
-| `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. The server takes the storage directory from its own `cache.dir`. | no | yes |
+| `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. The server's `cache.dir` sets `storage_location` to `<dir>/decisions.redb` and keeps the other cache keys; a different `storage_location` next to it is refused. | no | yes |
 
 ```python
 from patronus_ark import SecurityGateway

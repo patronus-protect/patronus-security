@@ -99,7 +99,6 @@ mod tests {
                 bind: "127.0.0.1:0".parse().unwrap(),
                 max_upload_bytes: 1024,
                 keys: Vec::new(),
-                cache_dir: None,
                 gateway: patronus_ark::GatewayConfig {
                     l3_strategy: patronus_ark::L3Strategy::Multi,
                     ..patronus_ark::GatewayConfig::new(categories.clone(), SecurityLevel::L1)
@@ -204,7 +203,6 @@ mod tests {
                 default_categories: None,
                 gates: None,
             }],
-            cache_dir: None,
             gateway: patronus_ark::GatewayConfig {
                 l3_strategy: patronus_ark::L3Strategy::Multi,
                 ..patronus_ark::GatewayConfig::new(categories.clone(), SecurityLevel::L1)

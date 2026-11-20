@@ -424,7 +424,6 @@ mod tests {
                 bind: "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
                 max_upload_bytes: 1024,
                 keys: vec![key.clone()],
-                cache_dir: None,
                 gateway: patronus_ark::GatewayConfig {
                     l3_strategy: patronus_ark::L3Strategy::Multi,
                     ..patronus_ark::GatewayConfig::new(categories, SecurityLevel::L1)

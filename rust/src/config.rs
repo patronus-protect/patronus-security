@@ -160,6 +160,12 @@ impl TryFrom<CacheKeys> for ExactCacheConfig {
         if keys.entry_ttl_seconds == 0 {
             return Err("cache.entry_ttl_seconds must be positive".into());
         }
+        if keys.encryption_key_hex.is_some() && keys.storage_location.is_none() {
+            return Err(
+                "cache.encryption_key_hex encrypts the persistent cache; set cache.storage_location"
+                    .into(),
+            );
+        }
         let encryption = keys
             .encryption_key_hex
             .as_deref()
@@ -229,7 +235,7 @@ mod tests {
             "l3_strategy": "multi",
             "onnx_batch_mode": "tensor_batch",
             "execution_backend": "cpu",
-            "cache": {"entry_ttl_seconds": 60, "encryption_key_hex": "ab".repeat(32)},
+            "cache": {"entry_ttl_seconds": 60},
         }))
         .unwrap();
         assert_eq!(
