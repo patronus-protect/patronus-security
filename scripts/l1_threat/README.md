@@ -195,7 +195,9 @@ Prüfblätter enthalten Datensatztext und werden nie eingecheckt. Tests: `script
 ## Generatoren und Übersetzungen
 
 `generators.py` leitet aus den eingefrorenen Korpora abgeleitete Sätze ab, jede Angriffszeile mit
-sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
+sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`) — außer wo der Doppelgänger für einen
+Injection-Detektor keine harmlose Eingabe ist (Owner-Entscheidung 2026-11-20): dann gibt es keine
+Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
 
 - `carrier_insertion`: eine Angriffszeile des Eingabekorpus in einem Träger (Web, PDF-Text, Ticket,
   Code-Kommentar, RAG-Chunk, Mail), der Zwilling trägt an derselben Stelle einen harmlosen Satz;
@@ -206,14 +208,17 @@ sauberem Zwilling bzw. harmlosem Doppelgänger (`twin_of`):
 - `exfil_lookalikes`: Tool-Ausgabe (JSON, CLI-Log, Datei, MCP-Ergebnis, Suchtreffer) mit einer Anweisung,
   Daten an eine Senke unter `example.invalid` zu schicken, und derselbe Rahmen mit Doppelgänger (Upload-Log,
   Webhook-Konfiguration, Bitte an Menschen), DE und EN nativ;
-- `obfuscation_slices`: Angriffs- und Benign-Zeilen unter je einer Verschleierung (`base64`, `hex`,
+- `obfuscation_slices`: Angriffszeilen unter je einer Verschleierung (`base64`, `hex`,
   `rot13`, `leetspeak`, `zero_width`, `homoglyph`, `spaced`, `unicode_tags`), Slice in `obfuscation`;
-  eine `tool_poisoning`-Zeile und ihr Zwilling behalten einen Tool-Metadaten-Rahmen als Hülle;
+  eine `tool_poisoning`-Zeile behält einen Tool-Metadaten-Rahmen als Hülle. Kein Zwilling: eine harmlose
+  Frage in Hex oder ROT13 ist keine harmlose Eingabe (der Zug der Benign-Quelle bleibt, damit die
+  Angriffszeilen byte-identisch bleiben);
 - `class_templates`: dokumentierte synthetische Angriffe für die Klassen ohne öffentliche Dev-Daten
   (`jailbreak`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `unsafe_action`,
   `resource_exhaustion`), DE und EN nativ. Jede Template-Familie hat die Form öffentlicher Beispiele, die
   `modelled_on` nennt (Paper, Advisories, MCPTox-Muster), und einen harmlosen Doppelgänger im selben
-  Rahmen; nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
+  Rahmen (keinen für `memory_note_in_doc`: ein Dokument mit einer Notiz an den Assistenten ist keine
+  harmlose Eingabe; im Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
 
 Dev und Holdout haben getrennte Seeds und disjunkte Template-Familien (`check_families`). Dev: öffentlicher
 Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`generators_dev_seed`,
@@ -221,7 +226,7 @@ Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`gen
 angelegt, im Manifest nur sein SHA-256), liest nur `HOLDOUT/holdout`, schreibt `HOLDOUT/generated`
 (`generators_holdout_seed`, `ark_blind`). Jede Zeile trägt `template_family`, `carrier`, `source_id` und
 `translated` (nativ vs. übersetzt: Runner-Übersetzungen und der deutsche Teil eines in der Entity-Map
-als `translated` markierten Satzes). Ein Obfuscation-Zwilling trägt die Sprache seiner Benign-Quelle. Ausgabe eingefroren wie die Korpora (JSONL je Generator,
+als `translated` markierten Satzes). Ausgabe eingefroren wie die Korpora (JSONL je Generator,
 `manifest.json`, `.ready`); ein abweichender Lauf schreibt nur mit `--force`, außer die Ausgabe stammt
 von einer älteren Generator-Version (`GENERATOR_VERSION`, im Manifest `generator_version`).
 Jeder Generator hat einen eigenen Zufallsstrom; seine Version (`STREAMS`) steigt nur, wenn sich seine Zeilen
