@@ -354,10 +354,32 @@ tasks:
       a runner step (or task) re-renders research/l1-threat/scoreboard/baseline.md on main after each merged
       detector, scorer or gold change, in the same PR or a follow-up; the table shows TPR@0.1% and @1%,
       hard-benign FPR and the baseline columns; README links it as the current state
+  # Owner, 2026-11-20 (S10 analysis): the train half has almost no German positives (instruction_injection 4,
+  # jailbreak 0, unsafe_action 17, exfiltration 1 against ~5,800 German benign rows, mostly germanquad); only
+  # harmful_content and toxic_language have native German positives (nemotron_safety_v3) and they reach 48-68%
+  # DE TPR. The single pooled 0.1% cut is set by the English benign tail, and German dev positives come from
+  # 1-9 generator templates. A quick retrain with template-split generator rows and German oversampling gave
+  # injection DE 0 -> 11% (53-56% with a German-only cut), EN 49 -> 58%, unsafe_action DE 1 -> 34%.
+  # S11 lands before the class scorers (JB02, PX02, ...) pick a fastText-type candidate.
+  - id: S11
+    title: German positives and per-language cuts for the L1 text models — native German positives in training (template-split generator rows; open German sets such as translated deepset prompt-injections/Gandalf, the German part of PolyGuard/nemotron, translated train halves of wildjailbreak/jackhhao; licences checked, no licence-encumbered sets), German oversampling/translation augmentation, a per-language detect cut each at 0.1% FPR on that language's benign pool, and a more varied German benign pool than germanquad (chat, mail, code comments)
+    type: scorer
+    deps: [S10]
+    accept: >-
+      per class: DE and EN TPR@0.1% FPR on dev for the fastText-type candidate with the per-language cut,
+      each language's FPR <= 0.1% measured on that language's benign data (dev benign pool incl. hard
+      benigns, never train negatives), reported per benign source and next to S10's numbers; no EN
+      regression > 1 pp at 0.1% FPR for any class; German dev positives per class come from >= 5 distinct
+      sources or template families, named in the PR; training, calibration and eval splits are
+      template-disjoint (checked by a test); every added set's licence named (no licence-encumbered sets,
+      third-party data only fetched at eval/train time); model size, p95 ms per 100 KiB and RAM per model
+      unchanged within noise vs S10; Rust parity bit-exact; nothing wired into the scan path before a class
+      task picks it
   - id: JB02
+    status: done
     title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
     type: scorer
-    deps: [JB01, S05, S10]
+    deps: [JB01, S05, S10, S11]
     accept: >-
       target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
       regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
@@ -365,7 +387,7 @@ tasks:
   - id: PX02
     title: prompt_extraction scorer — choose among the S04 and S09 candidates by dev TPR@0.1% FPR within the L1 budget; PX01 rules stay as the precise layer
     type: scorer
-    deps: [PX01, S05, S10]
+    deps: [PX01, S05, S10, S11]
     accept: >-
       target: above the best heuristic baseline at 0.1% FPR on dev and holdout, hard-benign FPR 0 or the
       regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best

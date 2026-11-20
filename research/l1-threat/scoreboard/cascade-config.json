@@ -1,0 +1,71 @@
+{
+ "calibration": {
+  "benign_rows": 32003,
+  "classes": {
+   "agent_config_tampering": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "exfiltration": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "harmful_content": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "instruction_injection": {
+    "benign_scored": 1,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "jailbreak": {
+    "benign_scored": 1,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "memory_poisoning": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "prompt_extraction": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "resource_exhaustion": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "tool_poisoning": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "toxic_language": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   },
+   "unsafe_action": {
+    "benign_scored": 0,
+    "clear": "budget not reachable with the heuristic's scores",
+    "detect": "budget not reachable with the heuristic's scores"
+   }
+  },
+  "clear_fpr": 0.01,
+  "excluded_rows": 0,
+  "target_fpr": 0.001
+ },
+ "scanner": {
+  "cascade": {
+   "max_level": "l1",
+   "modules": {}
+  }
+ }
+}

@@ -12,9 +12,9 @@
 //!
 //! A prediction holds, per class (`instruction_injection` is the category
 //! `injection`):
-//! - `scores`: the L1 score curve, the highest attack value of the class's
-//!   native results (the confidence of a flagged result and the scorer values
-//!   below the decision); classes at 0 are left out;
+//! - `scores`: the L1 score curve, the cascade heuristic's graded score of
+//!   the class (the `l1_score` below, rounded; also below the scorers' cuts);
+//!   classes at 0 are left out;
 //! - `flagged`: the classes L1 detected;
 //! - `cascade`, for every class with a decision (a class no stage ran for, for
 //!   example one without rules and without a later layer, is left out and
@@ -33,7 +33,7 @@ use std::time::Instant;
 use patronus_ark_core::{
     cascade::{Cascade, CascadeConfig},
     native::{NativeGates, NATIVE_CATEGORIES},
-    NativeResult, Scanner, ScannerConfig, SecurityCategory,
+    Scanner, ScannerConfig, SecurityCategory,
 };
 use serde_json::{json, Map, Value};
 
@@ -55,31 +55,6 @@ fn class_name(module: SecurityCategory) -> &'static str {
 
 fn round6(value: f64) -> f64 {
     (value * 1e6).round() / 1e6
-}
-
-/// The L1 score curve of one class: the confidence of a flagged result and
-/// the scorer values below the decision (a layer's `score`, the `score` of
-/// every injection L1 candidate), whichever is highest; 0 without any.
-fn curve_score<'a>(results: impl IntoIterator<Item = &'a NativeResult>) -> f64 {
-    let mut best = 0.0_f64;
-    for result in results {
-        if !matches!(result.class_name.as_str(), "benign" | "safe") {
-            best = best.max(result.confidence);
-        }
-        for layer in &result.layers {
-            let candidates = layer
-                .details
-                .get("l1_candidates")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|candidate| candidate.get("score"));
-            for score in layer.details.get("score").into_iter().chain(candidates) {
-                best = best.max(score.as_f64().unwrap_or(0.0));
-            }
-        }
-    }
-    round6(best)
 }
 
 /// One prediction; the scan errors name the row id but never its text.
@@ -109,7 +84,9 @@ fn predict(
                 .filter(|r| r.category == module.as_str())
         };
         let class = class_name(module);
-        let score = curve_score(results());
+        // The one heuristic score of the class, for the curve and the cuts.
+        let l1 = cascade.l1_stage(module, gates.mode(module), results());
+        let score = round6(l1.score);
         if score > 0.0 {
             scores.insert(class.into(), json!(score));
         }
@@ -118,7 +95,6 @@ fn predict(
         let Some(decision) = decisions.iter().find(|d| d.module == module) else {
             continue;
         };
-        let l1 = cascade.l1_stage(module, gates.mode(module), results());
         if l1.outcome == patronus_ark_core::cascade::StageOutcome::Detected {
             flagged.push(class);
         }
@@ -191,51 +167,7 @@ fn main() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use patronus_ark_core::{cascade::SecurityLevel, LayerResult};
-    use std::collections::HashMap;
-
-    fn result(category: &str, class_name: &str, confidence: f64, details: Value) -> NativeResult {
-        let details: HashMap<String, Value> = serde_json::from_value(details).unwrap();
-        NativeResult {
-            category: category.into(),
-            class_name: class_name.into(),
-            confidence,
-            level: "L1".into(),
-            model: "native:x".into(),
-            duration_ms: 0.0,
-            layers: vec![LayerResult {
-                level: "L1".into(),
-                layer_type: "native".into(),
-                class_name: class_name.into(),
-                confidence,
-                matched: false,
-                duration_ms: 0.0,
-                thresholds: HashMap::new(),
-                details,
-            }],
-            evidence_spans: Vec::new(),
-            label_scores: Vec::new(),
-            decision: None,
-        }
-    }
-
-    #[test]
-    fn curve_takes_the_verdict_and_the_scorer_values_below_it() {
-        let flagged = result("exfiltration", "exfiltration", 0.91, json!({"score": 0.91}));
-        let below = result("unsafe_action", "benign", 1.0, json!({"score": 0.04}));
-        let candidates = result(
-            "injection",
-            "safe",
-            1.0,
-            json!({"l1_candidates": [{"score": 0.3}, {"score": 0.7}]}),
-        );
-        assert_eq!(curve_score([&flagged]), 0.91);
-        // A benign result's own confidence is not an attack value.
-        assert_eq!(curve_score([&below]), 0.04);
-        assert_eq!(curve_score([&candidates]), 0.7);
-        assert_eq!(curve_score([&below, &candidates]), 0.7);
-        assert_eq!(curve_score([]), 0.0);
-    }
+    use patronus_ark_core::cascade::SecurityLevel;
 
     #[test]
     fn modules_are_the_eleven_attack_classes() {
@@ -316,6 +248,23 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("a:3"));
+    }
+
+    #[test]
+    fn a_points_rule_detection_carries_its_score() {
+        // A Threat points rule decides on its own: its score is the points
+        // score, the same in the curve and in `l1_score`, never 0.
+        let (mut scanner, cascade, gates) = l1_only();
+        let row = json!({"id": "a:5", "text": "Delete the entire production database right away."});
+        let out = predict(&mut scanner, (&cascade, &gates), &modules(), &row).unwrap();
+        let stage = &out["cascade"]["unsafe_action"];
+        assert_eq!(stage["l1"], "detected");
+        let score = stage["l1_score"].as_f64().unwrap();
+        assert!(score > 0.0);
+        assert_eq!(
+            out["scores"]["unsafe_action"].as_f64().unwrap(),
+            round6(score)
+        );
     }
 
     #[test]

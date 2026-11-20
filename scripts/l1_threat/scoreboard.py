@@ -793,6 +793,11 @@ def config_lines(config: dict[str, Any]) -> list[str]:
                      f"{calibration['target_fpr'] * 100:g} % FPR (detect) and "
                      + ("no clear threshold" if calibration["clear_fpr"] is None
                         else f"{calibration['clear_fpr'] * 100:g} % FPR (clear)") + ".")
+        for key, kept in (("detect", "keep Core's built-in acceptance"), ("clear", "escalate every undetected row")):
+            unreachable = [cls for cls, entry in calibration["classes"].items() if entry.get(key) == UNREACHABLE]
+            if unreachable:
+                lines.append(f"{key.capitalize()} {UNREACHABLE} (too few non-zero benign scores), so these classes "
+                             f"{kept}: " + ", ".join(unreachable) + ".")
     return lines
 
 
@@ -913,15 +918,22 @@ def render_cascade(report: dict[str, Any], config: dict[str, Any], title: str, c
 # ── calibration ──────────────────────────────────────────────────────────────
 
 
-def fpr_threshold(negatives: list[float], target: float) -> float:
+# Calibration note of a cut ``calibrate`` cannot place: the benign pool has too few non-zero scores to fill the
+# FPR budget, so any cut above 0 would do and the shipped acceptance stays.
+UNREACHABLE = "budget not reachable with the heuristic's scores"
+
+
+def fpr_threshold(negatives: list[float], target: float) -> float | None:
     """Lowest threshold ``t`` (a row counts when ``score >= t``) with at most ``target`` of the negatives at or above
-    it; a score of 0 never counts."""
+    it, placed just above a benign score; ``None`` when the non-zero negatives cannot fill the budget (a score of 0
+    never counts, so the only such cut would be "any score above 0")."""
     if not negatives:
         raise ValueError("no benign rows to calibrate on")
     k = _max_fp(len(negatives), target)
     ordered = sorted(negatives, reverse=True)
-    cut = 0.0 if k >= len(ordered) else max(ordered[k], 0.0)
-    return math.nextafter(cut, math.inf)
+    if k >= len(ordered) or ordered[k] <= 0.0:
+        return None
+    return math.nextafter(ordered[k], math.inf)
 
 
 def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dict[str, Any],
@@ -932,7 +944,9 @@ def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dic
     Per class, on the cascade's L1 score and written to ``scanner.cascade.modules.<category>``: the
     ``detect_threshold`` holds ``target_fpr``; the ``clear_threshold`` lets at most ``clear_fpr`` of the
     benign rows escalate, or is removed when ``clear_fpr`` is ``None``. Core accepts cuts up to 1.0 and a
-    clear cut at most the detect cut. ``calibration`` records the pool and the FPRs reached.
+    clear cut at most the detect cut. A cut the benign scores cannot place (``fpr_threshold`` is ``None``)
+    is removed, so the class keeps the shipped acceptance (detect) or escalates every undetected row
+    (clear), and is recorded as ``UNREACHABLE``. ``calibration`` records the pool and the FPRs reached.
     """
     benign = [(row, prediction) for row, prediction, role in pairs
               if role != "report" and row["benign"] and row["id"] not in exclude]
@@ -942,17 +956,26 @@ def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dic
     classes = {}
     for cls in CLASSES:
         l1 = [float(_stage(prediction, cls)["l1_score"]) for _, prediction in benign]
-        # At 1.0 the rows scoring 1.0 still detect: L1 counts a score at or above its cut.
-        detect = min(fpr_threshold(l1, target_fpr), 1.0)
         thresholds = modules.setdefault(category(cls), {})
-        thresholds["detect_threshold"] = detect
-        entry = {"detect_fpr": sum(s >= detect for s in l1) / len(l1)}
-        if clear_fpr is None:
-            thresholds.pop("clear_threshold", None)
+        entry: dict[str, Any] = {"benign_scored": sum(s > 0 for s in l1)}
+        # At 1.0 the rows scoring 1.0 still detect: L1 counts a score at or above its cut.
+        detect = fpr_threshold(l1, target_fpr)
+        if detect is None:
+            thresholds.pop("detect_threshold", None)
+            entry["detect"] = UNREACHABLE
         else:
-            clear = min(fpr_threshold(l1, clear_fpr), detect)
-            thresholds["clear_threshold"] = clear
+            detect = thresholds["detect_threshold"] = min(detect, 1.0)
+            entry["detect_fpr"] = sum(s >= detect for s in l1) / len(l1)
+        clear = None if clear_fpr is None else fpr_threshold(l1, clear_fpr)
+        if clear is None:
+            thresholds.pop("clear_threshold", None)
+            if clear_fpr is not None:
+                entry["clear"] = UNREACHABLE
+        else:
+            clear = thresholds["clear_threshold"] = min(clear, 1.0 if detect is None else detect)
             entry["escalate_fpr"] = sum(s >= clear for s in l1) / len(l1)
+        if not thresholds:
+            modules.pop(category(cls))
         classes[cls] = entry
     config["calibration"] = {"target_fpr": target_fpr, "clear_fpr": clear_fpr, "benign_rows": len(benign),
                              "excluded_rows": sum(row["benign"] and row["id"] in exclude for row, _, _ in pairs),
