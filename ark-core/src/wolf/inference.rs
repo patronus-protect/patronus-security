@@ -1,5 +1,5 @@
 use super::{inference, LogitOutput, WolfManifest, WolfRunner};
-use crate::{ScanControl, ScanError, WolfExecutionOptions};
+use crate::{wolf_options::WolfWindows, ScanControl, ScanError};
 use ort::{
     session::{RunOptions, Session},
     value::Tensor,
@@ -9,7 +9,7 @@ use std::{path::Path, sync::Arc};
 pub(super) fn validate_session(
     session: &Session,
     directory: &Path,
-    options: WolfExecutionOptions,
+    options: WolfWindows,
     manifest: &WolfManifest,
 ) -> Result<Option<usize>, ScanError> {
     // The existing Small exports use ModernBERT's 8192 position table. Local
@@ -102,7 +102,7 @@ pub(super) fn validate_session(
     if let Some(width) = fixed_width {
         // Fixed padding can exceed the requested content window. Check the
         // actual tensor allocation as well as the public window configuration.
-        WolfExecutionOptions {
+        WolfWindows {
             window_tokens: width,
             ..options
         }
@@ -119,10 +119,10 @@ impl WolfRunner {
     ) -> Result<Vec<[f64; 2]>, ScanError> {
         control.check()?;
         if batch.is_empty()
-            || batch.len() > self.options.batch_size
+            || batch.len() > self.windows.batch_size
             || batch
                 .iter()
-                .any(|t| t.len() > self.options.content_tokens())
+                .any(|t| t.len() > self.windows.content_tokens())
         {
             return Err(inference("invalid Wolf window batch"));
         }
@@ -212,6 +212,7 @@ impl WolfRunner {
 mod tests {
     use super::*;
     use crate::wolf::{WolfConfig, WolfPrecision};
+    use crate::WolfExecutionOptions;
 
     #[test]
     #[ignore = "requires ARK_WOLF_BUNDLE and ARK_WOLF_PRECISION naming one of its exports"]
@@ -227,8 +228,8 @@ mod tests {
             let mut runner = WolfRunner::new_with_options(
                 &config,
                 WolfExecutionOptions {
-                    window_tokens: 32,
-                    overlap_tokens: 0,
+                    window_tokens: Some(32),
+                    overlap_tokens: Some(0),
                     batch_size: 4,
                 },
             )

@@ -84,7 +84,7 @@ A report has three parts:
 
 Core reports findings; your application decides whether to block, redact or log. Interpret
 native results by `class_name`, evidence and `decision`: a native layer's `matched` flag can be
-true for a `safe` class. `wolf.matched` means the attack probability met your threshold.
+true for a `safe` class. `wolf.matched` means the attack probability is above the threshold.
 
 The configuration also takes per-rule gates (`rules`, keyed by the stable rule IDs from the
 [L1 rule catalog](../reference/l1-rule-catalog.md)), the PII/DLP scoring modes and `explain`.
@@ -119,8 +119,8 @@ Wolf Defender is a local prompt-injection classifier and the L3 layer of the inj
 runs on every scan that selects `injection`; with a configured `cascade` it runs only on inputs
 the injection module's L1 stages left undecided (see
 [Analysis framework](../concepts/layered-scanning.md)).
-Point the scanner at a bundle directory; the default threshold is `0.93` for every variant (base,
-small, edge), and the examples set `0.8` explicitly.
+Point the scanner at a bundle directory. Wolf runs with the model's published settings (Edge/Small:
+threshold 0.5, 2048-token windows with 64 overlap); the examples set `0.8` explicitly.
 
 === "Python"
 
@@ -158,9 +158,9 @@ small, edge), and the examples set `0.8` explicitly.
 - **Model:** `model` is `base`, `small` (default) or `edge`: larger is more accurate, smaller is
   faster.
 - **Long inputs:** window size, overlap and batch size are configurable
-  (`wolf_options` in Python, `WolfExecutionOptions` in Rust). The default is 256 tokens, no
-  overlap, batch 1. The model card's 2048 tokens with 64 overlap is opt-in and about 2.5x slower
-  on long documents. Changing them changes the document scores, so recalibrate the threshold.
+  (`wolf_options` in Python, `WolfExecutionOptions` in Rust). The default is the model's published
+  2048 tokens with 64 overlap, batch 1; unset sizes keep these. Smaller windows are faster on long
+  documents but change the document scores, so recalibrate the threshold.
 - **Precision and backend:** `precision` is `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`,
   `int8_int4` or `int8_int4_x86`. `auto` uses `PATRONUS_L3_PRECISION` when set, otherwise the
   x86 build on `x86_64` and `int8_int4` elsewhere. `backend` selects CPU or a GPU execution

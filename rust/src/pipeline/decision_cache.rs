@@ -200,8 +200,13 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     );
     scope.update(execution.l3_strategy().as_str().as_bytes());
     scope.update(&execution.chunk_overlap_tokens().to_le_bytes());
+    // ScanExecution always holds both window sizes.
     let wolf = execution.wolf_execution_options();
-    for value in [wolf.window_tokens, wolf.overlap_tokens, wolf.batch_size] {
+    for value in [
+        wolf.window_tokens.unwrap_or_default(),
+        wolf.overlap_tokens.unwrap_or_default(),
+        wolf.batch_size,
+    ] {
         scope.update(&value.to_le_bytes());
     }
     let selection = execution.wolf_selection();
@@ -387,11 +392,11 @@ mod tests {
         let baseline = ScanExecution::default();
         for options in [
             crate::WolfExecutionOptions {
-                window_tokens: 2048,
+                window_tokens: Some(2048),
                 ..Default::default()
             },
             crate::WolfExecutionOptions {
-                overlap_tokens: 64,
+                overlap_tokens: Some(64),
                 ..Default::default()
             },
             crate::WolfExecutionOptions {

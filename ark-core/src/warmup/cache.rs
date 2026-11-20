@@ -10,6 +10,8 @@ use std::{
 const LOCK: &str = ".patronus-wolf-prepare.lock";
 const PENDING: &str = ".patronus-wolf-pending";
 const REVISION: &str = ".patronus-revision";
+/// A cache's file count: one graph and the support files.
+const FILES: usize = crate::wolf::SUPPORT_FILES.len() + 1;
 fn asset(e: impl std::fmt::Display) -> ScanError {
     ScanError::Asset(e.to_string())
 }
@@ -187,7 +189,7 @@ pub fn prepare_wolf_cache(
             drop(lock);
             externalize_cached(dir, model, precision, deadline);
             if let Some(callback) = progress {
-                callback(4, 4);
+                callback(FILES, FILES);
             }
             return Ok(());
         }
@@ -345,7 +347,7 @@ fn download(
     // Recheck after admission: a different process may already have completed this cache.
     if !dir.join(PENDING).exists() && local_present(dir, model, precision)? {
         if let Some(callback) = progress {
-            callback(4, 4);
+            callback(FILES, FILES);
         }
         return Ok(());
     }
@@ -452,6 +454,11 @@ mod tests {
             .unwrap();
             fs::write(self.0.join("config.json"), r#"{"num_labels":1}"#).unwrap();
             fs::write(self.0.join("tokenizer_config.json"), "{}").unwrap();
+            fs::write(
+                self.0.join("POOLING.json"),
+                r#"{"encoder_positions": 256, "overlap": 0}"#,
+            )
+            .unwrap();
         }
     }
     impl Drop for Directory {

@@ -106,7 +106,7 @@ fn invalid_scan_policy_is_rejected_before_asset_preparation() {
     ));
     assert_eq!(fs::read_dir(&bundle.0).unwrap().count(), 0);
     let mut config = bundle.config();
-    config.wolf.as_mut().unwrap().threshold = f64::NAN;
+    config.wolf.as_mut().unwrap().threshold = Some(f64::NAN);
     assert!(matches!(
         Scanner::warmup(
             config,

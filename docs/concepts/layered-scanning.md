@@ -188,7 +188,7 @@ producers are switched off with the existing `models` gate (for example
 | `cascade.modules.<category>.l1_model.detect_threshold` | The model's detect cut on its score; a score above it is detected. | the model's 0.1 % false-positive cut |
 | `cascade.modules.<category>.l1_model.clear_threshold` | The model's clear cut; a score at or below it is clear. | the model's 1 % false-positive cut |
 | `cascade.modules.<category>.l1_model.clear_enabled` | `false` switches the model's clear cut off. | `true` |
-| `wolf.threshold` | Wolf Defender's attack-probability cut (the L3 of `injection`). | `0.93` for base, small and edge |
+| `wolf.threshold` | Wolf Defender's attack-probability cut (the L3 of `injection`); detects above it. | the model's published settings (Edge/Small: threshold 0.5, 2048-token windows with 64 overlap) |
 | `threat_points_acceptance` | Least score of an accepted threat points rule: a gate on single findings, not a module cut. | `0.5` |
 
 With `cascade` set, the scan report carries `decision`: per scanned module its `outcome`

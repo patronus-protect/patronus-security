@@ -45,6 +45,10 @@ use patronus_ark_core::cascade::{
     aggregate_chunk_outputs, aggregate_decision_index, ChunkDecision, HeadDecisionState,
 };
 
+/// ARK's dedicated injection L3 detects at this attack probability for every
+/// Wolf size unless its pipeline policy sets a threshold.
+const WOLF_THRESHOLD: f64 = 0.93;
+
 pub(super) fn execute(
     state: &Arc<L3WorkerState>,
     job: L3WorkerJob,
@@ -477,7 +481,7 @@ fn run_wolf_document_job(
         Some(crate::L3AggregationStrategy::MajorityVoteOrHighest) => {
             return Err("Wolf requires a probability threshold, not majority voting".into())
         }
-        None => job.execution.wolf_selection().model.default_threshold(),
+        None => WOLF_THRESHOLD,
     };
     let allows_fallback = job.execution.allows_level(SecurityLevel::L2);
     let mut model = model.lock().map_err(|error| error.to_string())?;

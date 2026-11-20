@@ -1,7 +1,6 @@
 //! Resolve local Wolf exports and validate their integrity metadata.
 use super::{
-    asset, BundleFile, LogitOutput, WolfConfig, WolfManifest, WolfModel, WolfPrecision,
-    CONTENT_TOKENS, SEQUENCE_TOKENS,
+    asset, BundleFile, LogitOutput, Published, WolfConfig, WolfManifest, WolfModel, WolfPrecision,
 };
 use crate::ScanError;
 use std::{
@@ -222,8 +221,10 @@ pub(super) fn existing_assets(
         } else {
             LogitOutput::BinaryMargin
         },
-        content_tokens: CONTENT_TOKENS,
-        sequence_tokens: SEQUENCE_TOKENS,
+        // No references: the window fields only describe the model's own profile.
+        content_tokens: Published::MODEL.window_tokens - 2,
+        sequence_tokens: Published::MODEL.window_tokens,
+        overlap_tokens: Published::MODEL.overlap_tokens,
         dynamic_sequence: true,
         pad_id,
         reference: String::new(),

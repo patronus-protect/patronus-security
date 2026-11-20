@@ -144,19 +144,20 @@ if let Some(wolf) = &report.wolf {
 wolf      p(attack)=0.998 matched=true
 ```
 
-- `matched` means the attack probability reached your threshold; thresholds are
-  deployment-specific (examples use `0.8`).
+- Wolf runs with the model's published settings, read from the bundle's `POOLING.json`
+  (Edge/Small: threshold 0.5, 2048-token windows with 64 overlap). `matched` means the attack
+  probability is above the threshold. A `threshold` you set replaces the published one (examples
+  use `0.8`).
 - Only construction touches files. `Scanner::new` never downloads; `Scanner::warmup` (feature
   `download`) fills a missing bundle and rejects an incomplete, unknown one. Scans never download.
 - `model` picks Wolf Defender `base`, `small` (default) or `edge`. `precision` picks the export:
   `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`, `int8_int4` or `int8_int4_x86`. `auto` takes
   `PATRONUS_L3_PRECISION`, else the x86 build on `x86_64` and `int8_int4` elsewhere. `backend`
   picks the ONNX provider.
-- Long inputs are scored over 256-token windows; window scores are pooled per class with a smooth
-  max, then softmax. The published model card uses 2048-token windows with 64 overlap, which
-  costs about 2.5x on long documents. Change window, overlap and batch with
-  `WolfExecutionOptions` and `Scanner::new_with_wolf_options` — and recalibrate the threshold
-  when you do.
+- Long inputs are scored over the published 2048-token windows with 64 overlap; window scores are
+  pooled per class with a smooth max, then softmax. Change window, overlap and batch with
+  `WolfExecutionOptions` and `Scanner::new_with_wolf_options` (unset sizes keep the published
+  ones) — and recalibrate the threshold when you do.
 
 ## Cat: shell commands
 

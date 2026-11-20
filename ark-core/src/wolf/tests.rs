@@ -33,17 +33,18 @@ mod published_model_tests {
         .unwrap();
         // Short dynamic-window logits are profile-independent; document values
         // are checked separately against the independent reference oracle below.
+        let windows = runner.windows;
         reference
             .parity_cases
-            .retain(|case| case.token_ids.len() <= CONTENT_TOKENS);
+            .retain(|case| case.token_ids.len() <= windows.content_tokens());
         reference.document_cases.clear();
-        reference.content_tokens = CONTENT_TOKENS;
-        reference.sequence_tokens = SEQUENCE_TOKENS;
+        reference.content_tokens = windows.content_tokens();
+        reference.sequence_tokens = windows.window_tokens;
         reference.dynamic_sequence = true;
         runner.manifest = reference;
         runner.verify_reference_cases().unwrap();
     }
-    /// Independent oracle of the published `inference.py` profile (opt-in here):
+    /// Independent oracle of the published `inference.py` profile (the default):
     /// 2046-token windows, 64 overlap, classwise SmoothMax, then softmax.
     #[test]
     #[ignore = "requires ARK_WOLF_BUNDLE with local FP16 export and tokenizer.json"]
@@ -153,12 +154,12 @@ mod published_model_tests {
         let mut config = WolfConfig::new(&bundle, 0.8);
         config.precision = WolfPrecision::Fp16;
         config.backend = crate::ExecutionBackend::Cpu;
-        let reference_profile = WolfExecutionOptions {
-            window_tokens: 2048,
-            overlap_tokens: 64,
-            batch_size: 1,
-        };
-        let mut runner = WolfRunner::new_with_options(&config, reference_profile).unwrap();
+        // The bundle's published profile is the default.
+        let mut runner = WolfRunner::new(&config).unwrap();
+        assert_eq!(
+            (runner.windows.window_tokens, runner.windows.overlap_tokens),
+            (2048, 64)
+        );
         for (text, (tokens, windows, reference)) in texts.iter().zip(references) {
             let mut actual_tokens = Vec::new();
             runner
@@ -258,7 +259,8 @@ mod progress_tests {
         .unwrap();
         fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
         let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
-        for (tokens, windows) in [(0, 1), (254, 1), (255, 2), (509, 3)] {
+        // The model's published windows: 2046 content tokens, 64 overlap.
+        for (tokens, windows) in [(0, 1), (2046, 1), (2047, 2), (4029, 3)] {
             let text = " a".repeat(tokens);
             let expected = runner.scan(&text).unwrap();
             let mut updates = Vec::new();
@@ -324,8 +326,8 @@ mod resource_tests {
         assert_eq!(selected.model.path, "onnx/int8_int4_embeddings/model.onnx");
         assert_eq!(selected.precision, "int8_int4");
         assert_eq!(selected.model_id, "wolf-defender-small");
-        assert_eq!(selected.content_tokens, CONTENT_TOKENS);
-        assert_eq!(selected.sequence_tokens, SEQUENCE_TOKENS);
+        assert_eq!(selected.content_tokens, 2046);
+        assert_eq!(selected.sequence_tokens, 2048);
         assert!(existing_assets(&dir, small, WolfPrecision::Fp16, None).is_err());
         assert!(existing_assets(&dir, small, WolfPrecision::Int8Int4X86, None).is_err());
         if std::env::var_os(crate::wolf::PRECISION_ENV).is_none() {

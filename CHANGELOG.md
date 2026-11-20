@@ -11,6 +11,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Detection change (Ark Core):** Wolf Defender now runs in Ark Core with the model's published
+  settings (Edge/Small: threshold 0.5, 2048-token windows with 64 overlap), read from the bundle's
+  `POOLING.json`, which managed downloads now fetch; a bundle without it uses these values. A
+  document matches when its attack probability is above the threshold (before: at or above `0.93`
+  over 256-token windows without overlap). `WolfConfig.threshold` is optional and
+  `WolfExecutionOptions.window_tokens`/`overlap_tokens` are optional; values you set still replace
+  the published ones. `WolfModel::default_threshold` is gone. The full Ark gateway keeps its own
+  Wolf settings (256-token windows without overlap, threshold `0.93`, match at the threshold), so
+  its results do not change.
+
 - The category `threat` is gone. Attacks on models and agents are now reported in eleven
   categories, one per attack class: `injection` (keeps its name), `jailbreak`,
   `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`,
