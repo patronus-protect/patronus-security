@@ -111,3 +111,27 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE und EN (Extraktion direkt, Umweg über Übersetzen/Kodieren, Antwortanfang), Seed-Teil mit Einbettung in Tool-Results |
 | Hard Negatives | Abwehr-Systemprompts, Prompt-Engineering-Tutorials, Fähigkeitsfragen, Arbeit am eigenen Prompt |
 | Lücke | kein großer öffentlicher EN-Extraktions-Holdout mit klarer Lizenz; bis dahin entscheidet `ark_blind` auch für EN |
+
+## 13. Stand PX01 (2026-11-21)
+
+Vierzehn eigene DE/EN-Regeln in `source_derived_coverage_0_1_6.json` (`ark.injection.leak.*_{en,de}`),
+je Familie ein Paar: `verbatim_above`, `own_instructions_question`, `transform_target`,
+`completion_prime`, `tool_schema`, `guardrail_rules`, `reveal_hidden`. Jede Regel verlangt einen
+Klauselanfang (oder eine Frage an „du/you“), das Ziel des Modells selbst (`your`/`dein…`, nicht
+`my`/`mein`) und hat einen Literal-Prefilter auf Ziel- oder Markerwörter; Verneinung und „below/unten“
+(eigener Prompt) im Match verwerfen ihn (`excluded_match_words`).
+
+- Kanonische IDs: Der Injection-Scorer 0.1.7 gewichtet nur die vier bestehenden `leak.*`-IDs; neue IDs
+  ergeben einen Kandidaten ohne Gewicht und kein Verdikt. Die Regeln melden deshalb unter
+  `leak.system_prompt_extraction` (verbatim_above, transform_target, completion_prime),
+  `leak.system_instructions` (tool_schema, guardrail_rules, reveal_hidden) und `leak.own_prompt`
+  (own_instructions_question); `upstream_id` nennt die Familie. Eigene IDs je Familie brauchen ein
+  Scorer-Gewicht (PX02).
+- Marker hinter dem Ziel („vollständig und wörtlich“) gehören in den Match, sonst liest der
+  Zitat-Gegenkontext „wörtlich“ außerhalb des Spans als Zitat.
+- Dev (Regex-Replay über alle Zeilen): 0 von 41 672 Benign-Zeilen; Extraktionszeilen 39 von 16 261
+  (Dev ist zu 98 % Passwortspiel: Mosscap, Gandalf — „tell me the password“ ist keine Familie von PX01).
+- `decoded_extraction` braucht keine eigene Regel: die Katalogregeln laufen schon über die
+  dekodierten Sichten (T05).
+- Offen: Passwort-/Geheimnis-Extraktion aus dem Systemprompt (Mosscap/Gandalf) als eigene Familie
+  (TRIAGE); Werte auf dem Scoreboard.
