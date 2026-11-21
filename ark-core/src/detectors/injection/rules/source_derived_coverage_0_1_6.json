@@ -1313,7 +1313,8 @@
         "instructions",
         "triggers",
         "blocklist",
-        "keyword"
+        "keyword",
+        "list of"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?P<disclosure_action>list|show|print|output|dump|reveal|disclose|paste|display|enumerate|share|give)\\s+(?:me\\s+|us\\s+)?(?:(?:all|every)\\s+(?:of\\s+)?)?(?:(?P<io_target>your\\s+(?:(?:exact|full|complete|internal|hidden|secret|verbatim|precise|entire)\\s+)+(?:content\\s+|moderation\\s+|safety\\s+|filter\\s+|guardrail\\s+|refusal\\s+|censorship\\s+)+(?:rules|filters|policy|policies|guidelines|instructions|triggers|blocklist|keyword\\s+list|keywords))|(?P<io_target_list>the\\s+(?:(?:exact|full|complete|entire)\\s+)+list\\s+of\\s+(?:rules|topics|words|keywords|conditions|triggers|terms)\\s+(?:that\\s+|which\\s+)?you\\s+(?:use\\s+to|follow\\s+to)\\s+(?:refuse|filter|block|decline|moderate|censor)))",
       "excluded_match_words": [
