@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (75)
+## Threat rules (80)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -709,6 +709,11 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ua_invite_and_remove` | `unsafe_action` | `privilege_widening` |  |
 | `ark.threat.ua_delete_by_id` | `unsafe_action` | `destructive_request` |  |
 | `ark.threat.ua_cover_tracks` | `unsafe_action` | `destructive_request` |  |
+| `ark.threat.ua_system_file_delete` | `unsafe_action` | `destructive_request` |  |
+| `ark.threat.ua_destructive_alias` | `unsafe_action` | `persistence` |  |
+| `ark.threat.ua_reverse_shell` | `unsafe_action` | `unsafe_code` |  |
+| `ark.threat.ua_malware_stub` | `unsafe_action` | `unsafe_code` |  |
+| `ark.threat.ua_harmful_code_request` | `unsafe_action` | `unsafe_code` |  |
 | `ark.threat.tp_sensitive_file_param` | `tool_poisoning` | `sensitive_file_param` |  |
 | `ark.threat.tp_secrecy` | `tool_poisoning` | `secrecy_directive` |  |
 | `ark.threat.tp_shadowing` | `tool_poisoning` | `shadowing` |  |
