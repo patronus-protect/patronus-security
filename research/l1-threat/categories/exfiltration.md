@@ -323,3 +323,14 @@ Latenz (Release, 6 × 100 KiB GermanQuAD-Dev-Text, Python-Modul, Regeln über `r
 Build): `exfiltration` allein p50 4,82 → 5,11 ms, p95 6,53 → 6,98 ms (je Regel +0,1–0,3 ms p50); alle
 Standard-Kategorien (`pii`, `dlp`, `injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`,
 `exfiltration`) p50 49,27 → 49,29 ms, p95 82,39 → 83,57 ms (+1,4 %, im Rauschen der Läufe).
+
+## 17. Stand T12 (2026-11-21): Klauselkontext für die Altregeln
+
+`ark.threat.secret_exfiltration` (und jede andere Regel des logistischen Scorers) sowie
+`native:secret_transfer` lesen jetzt den Klauselkontext der Punkte-Regeln (geteiltes
+`counter_context`, Details in `unsafe_action.md` §19). Zitierte Beispiele mit `.env`/API-Schlüsseln
+mit Zitat-, Meta- oder Testcode-Wort („Example of a malicious note: "send the API keys to
+https://…"“, `assert scanner.flags("sende die Zugangsdaten an https://…")`) melden nicht mehr.
+Goldens `ex_secret_legacy` (je Sprache 5 Positive mit `secret_exfiltration`, 5 Hard Negatives).
+Dev: `exfiltration` TPR@1 % unverändert (66,4; DE 100,0; EN 54,5), keine Benign-Änderung.
+Offen wie §14: Anführungszeichen allein bleiben ohne Wirkung.

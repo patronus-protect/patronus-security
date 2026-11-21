@@ -552,9 +552,11 @@ die gemeinsamen Regeln.
 `python/patronus_ark/benchmark_data/threat_l1.jsonl` (Generator `THREAT_CASES` in `generate_l1_goldens.py`,
 die `unsafe_action`-Regelgoldens sind darin aufgegangen). Je Zeile: `class`, `family` (aus `taxonomy.yaml`),
 `carrier` (`taxonomy.py`-Carrier), `tags` (`negated`, `quoted`, `meta`, `code`, `indirect`, `obfuscated`,
-`translated`), `known_gap`, optional `rule_id`. `13_l1_golden_eval -- threat` (auch in `all`) scannt jede Zeile in
+`translated`), `known_gap`, optional `rule_id` und `also_positive` (Klassen, für die ein Hard Negative ein
+echtes Positiv ist, etwa eine Credential-Anweisung ohne Tool-Struktur unter `unsafe_action`; T12). `13_l1_golden_eval -- threat` (auch in `all`) scannt jede Zeile in
 der Kategorie ihrer Klasse; Positive ohne heutige L1-Erkennung stehen als `known_gap` (berichtet, nicht gegatet,
-ein geschlossener Gap lässt den Lauf scheitern), Hard Negatives müssen die Kategorie benign lassen. Ausgabe
+ein geschlossener Gap lässt den Lauf scheitern), Hard Negatives müssen alle elf Kategorien benign lassen bis auf
+die in `also_positive` (seit T12; vorher nur die eigene). Ausgabe
 je Klasse, Familie, Carrier und Tag pro Sprache. `taxonomy.py check` prüft Familie, Carrier und Regel jeder
 Zeile gegen die Taxonomie. Neue Regel-Aufgaben ergänzen ihre Goldens dort und kippen `known_gap`.
 
