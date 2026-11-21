@@ -2009,16 +2009,36 @@ mod tests {
 
     #[test]
     fn prompt_extraction_rules_report_under_prompt_extraction_only() {
-        for rule in [
-            "ark.injection.leak.transform_target",
-            "ark.injection.leak.completion_prime",
-            "ark.injection.leak.tool_schema",
-            "ark.injection.leak.guardrail_rules",
-        ] {
+        // The 0.1.7 scorer weighs only the existing leak ids, so every
+        // extraction family reports under one of them.
+        let families = [
+            "verbatim_above",
+            "own_instructions_question",
+            "transform_target",
+            "completion_prime",
+            "tool_schema",
+            "guardrail_rules",
+            "reveal_hidden",
+        ];
+        let rules = pipeline()
+            .catalogs
+            .iter()
+            .flat_map(|compiled| &compiled.catalog.rules)
+            .filter(|rule| {
+                families.iter().any(|family| {
+                    ["en", "de"].iter().any(|language| {
+                        rule.id == format!("ark.injection.leak.{family}_{language}")
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rules.len(), 2 * families.len());
+        for rule in rules {
             assert_eq!(
-                rule_category(rule),
+                rule_category(rule.rule_id()),
                 SecurityCategory::PromptExtraction,
-                "{rule}"
+                "{}",
+                rule.id
             );
         }
         let extraction =
