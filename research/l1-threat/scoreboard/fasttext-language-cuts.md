@@ -29,6 +29,13 @@ the fair EN comparison is therefore S10's model at its own EN cut.
 | prompt_extraction | – | 98.3 | – | 97.9 | **–** | **98.8** | 0.08 / 0.10 | 0 / 0 |
 | agent_config_tampering | 0.0 | 0.0 | 0.0 | 0.0 | **0.0** | **0.0** | 0.08 / 0.10 | 20 / 1 |
 
+Cost: model form, size and RAM are unchanged (2^15 × 16, 256 KiB resident; the serialised `model.json` 11.2 MB
+in both setups). p95 ms per 100 KiB with `text_model_latency` (`--tokens tf1`), five alternating runs per model,
+median (range): injection S10 setup 4.30 (2.81–5.41), S11 3.07 (2.76–5.36); harmful_content S10 setup 3.36
+(2.75–5.37), S11 4.90 (2.95–5.62) — the same band as S10's 3.5–4.4 ms, i.e. noise. The E03 latency corpus is not
+on this machine; the windows are 17 × 100 KiB packed from `germanquad` and `dolly_15k` dev text. Rust inference is
+unchanged and the parity goldens are untouched (same model form).
+
 Oversampling factor (S11 setup, own cuts, DE / EN TPR): factor 1 — injection 48.6 / 67.8, unsafe_action
 40.3 / 72.1, harmful_content 79.3 / 22.4, toxic_language 75.0 / 59.1; factor 4 (chosen) — see the table;
 factor 8 — injection 74.3 / 69.0, unsafe_action 43.5 / 72.4, harmful_content 84.1 / 26.0, toxic_language
