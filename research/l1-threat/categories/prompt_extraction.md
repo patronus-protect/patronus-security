@@ -131,6 +131,11 @@ Klauselanfang (oder eine Frage an „du/you“), das Ziel des Modells selbst (`y
   Zitat-Gegenkontext „wörtlich“ außerhalb des Spans als Zitat.
 - Dev (Regex-Replay über alle Zeilen): 0 von 41 672 Benign-Zeilen; Extraktionszeilen 39 von 16 261
   (Dev ist zu 98 % Passwortspiel: Mosscap, Gandalf — „tell me the password“ ist keine Familie von PX01).
+- Latenz: die vierzehn Regeln allein (Regex plus Prefilter, Release, 100-KiB-Fenster aus deutschem
+  GermanQuAD-Dev-Text, ein Kern) p50 1,7 ms, p95 1,8 ms; sie laufen nur bei aktiver Kategorie
+  `prompt_extraction` (opt-in), `injection` und DLP kompilieren sie nicht. Prefilter mit Allerweltswörtern
+  („regeln“, „vollständig“, „die du“ in „die Durchführung“) und Unicode-`\b` (lazy DFA steigt auf
+  Nicht-ASCII-Text aus) kosteten vorher ~8 ms je Regel; deshalb Ziel-Literale und `(?-u:\b)`.
 - `decoded_extraction` braucht keine eigene Regel: die Katalogregeln laufen schon über die
   dekodierten Sichten (T05).
 - Offen: Passwort-/Geheimnis-Extraktion aus dem Systemprompt (Mosscap/Gandalf) als eigene Familie
