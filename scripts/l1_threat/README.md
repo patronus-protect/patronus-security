@@ -221,6 +221,25 @@ Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
   `refusal_suppression`, dessen Doppelgänger den Jailbreak-Rahmen behält: keine harmlose Eingabe; im
   Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
 
+Quellfilter (Owner-Entscheidung 2026-11-21, ein Filter statt einer niedrigeren Latte): `carrier_insertion` und
+`obfuscation_slices` nehmen eine Angriffszeile nur, wenn jede ihrer Klassen im eigenen Text sichtbar ist
+(`payload_visible`, je Klasse ein Literal- oder Struktur-Hinweis, Regexe einmal kompiliert und begrenzt).
+Öffentliche Labels zeigen sich nicht immer im Text; verworfen werden:
+
+- `instruction_injection` ohne Anweisung an Modell oder Agent (Override, neue Aufgabe, Vorgabe für Antwort oder
+  Code, untergeschobenes TODO): eine Modus- oder Persona-Behauptung („do-anything bot“, „Verifizierungsmodus“) um
+  eine gewöhnliche Frage zählt nur, wenn Regeln oder Grenzen ausgehebelt werden oder ein geschützter Wert das Ziel ist;
+- `jailbreak` ohne Umgehungsrahmen (Rollenspiel, Persona, Fiktion, Hypothese, Verweigerungsunterdrückung,
+  Regel- oder Policy-Override, Antwort-Priming, Codewörter, Vorwand): eine schädliche Bitte allein ist kein Jailbreak;
+- eine zweite Klasse eines kombinierten Labels, von der nichts im Text steht, etwa `exfiltration` ohne Senden,
+  Hochladen oder Weiterleiten an Dritte (eine Portweiterleitung allein schickt keine Daten hinaus);
+- `unsafe_action`, deren Schaden nur mitgemeint ist: keine schädliche Handlung, kein Befehl, kein Code im Text.
+
+Für `exfiltration` nutzt der Filter zusätzlich die `sink`-Terme des Kontextlexikons
+(`ark-core/src/detectors/anchor_lexicons/context.json`). Klassen ohne Hinweis-Tabelle werden nicht geprüft. Der
+Filter liest nur Text und Klassen, nie eine ID. Eine verworfene Zeile wird nach all ihren Zufallszügen übersprungen:
+alle übrigen Zeilen bleiben byte-identisch unter ihren IDs, die IDs verworfener Zeilen bleiben frei (Version 7).
+
 Dev und Holdout haben getrennte Seeds und disjunkte Template-Familien (`check_families`). Dev: öffentlicher
 Seed, liest `DEV/train_dev` und `DEV/translated`, schreibt `DEV/generated` (`generators_dev_seed`,
 `ark_authored`). Holdout: geheimer Seed (Default `HOLDOUT/.generators-seed`, beim ersten Lauf mit 0600
