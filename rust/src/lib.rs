@@ -14,7 +14,6 @@ pub mod gliner_onnx_engine;
 pub mod golden_recipes;
 pub mod ml;
 pub mod pipeline;
-mod post_prediction;
 pub mod types;
 
 // Ark Core's modules and types, used inside this crate as `crate::...`.

@@ -19,13 +19,17 @@ use crate::{
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
-    post_prediction::filter_evidence,
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
     GatewayConfig, LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
-use patronus_ark_core::{native::NativeEngine, warmup::DownloadPolicy, ScanControl};
+use patronus_ark_core::{
+    native::NativeEngine,
+    post_prediction::{filter_evidence, resolve_dlp_pii_overlaps},
+    warmup::DownloadPolicy,
+    ScanControl,
+};
 
 mod direct_l3;
 mod injection_l1;
@@ -1824,7 +1828,11 @@ impl SecurityGateway {
                 self.scan_category_prepared(input, &execution, &prepared[input.text.as_ref()])
             })
             .collect::<Vec<_>>();
-        crate::post_prediction::resolve_dlp_pii_overlaps(inputs, &mut results);
+        resolve_dlp_pii_overlaps(
+            inputs,
+            |input| (input.category, input.text.as_ref()),
+            &mut results,
+        );
         results.into_iter().flatten().collect()
     }
 

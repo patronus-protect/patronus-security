@@ -246,6 +246,21 @@ impl std::ops::DerefMut for SecurityScanResult {
     }
 }
 
+/// Lets Core's result passes, such as
+/// [`patronus_ark_core::post_prediction::resolve_dlp_pii_overlaps`], work on
+/// Ark results.
+impl std::borrow::Borrow<patronus_ark_core::NativeResult> for SecurityScanResult {
+    fn borrow(&self) -> &patronus_ark_core::NativeResult {
+        &self.native
+    }
+}
+
+impl std::borrow::BorrowMut<patronus_ark_core::NativeResult> for SecurityScanResult {
+    fn borrow_mut(&mut self) -> &mut patronus_ark_core::NativeResult {
+        &mut self.native
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// How model pipelines execute ONNX L3 fallback batches.
 pub enum OnnxBatchMode {

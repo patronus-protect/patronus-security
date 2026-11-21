@@ -43,6 +43,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
   with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
   per-request `gates` are unchanged.
+- **One DLP/PII overlap pass in Ark Core:** Ark Core's `post_prediction::resolve_dlp_pii_overlaps`
+  replaces the public `dlp_secret_ranges` and `retain_pii_outside_secret_ranges`; Core's
+  `Scanner` and Ark both drop PII evidence inside DLP secrets through it, so their PII and DLP
+  evidence is identical.
 - **`download` defaults to `never` everywhere:** the Python `SecurityGateway` no longer defaults
   to `download: "missing"`; like Rust, the Ark API and Ark Core, `warmup()` downloads missing
   models only with `download: "missing"`.

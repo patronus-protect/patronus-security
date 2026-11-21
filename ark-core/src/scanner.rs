@@ -415,11 +415,13 @@ impl Scanner {
         control: &crate::ScanControl,
     ) -> Result<Vec<NativeResult>, ScanError> {
         let prepared = NativeText::new(text);
-        let mut results = Vec::new();
+        let mut scanned = Vec::new();
+        let mut grouped = Vec::new();
         for &category in &self.config.categories {
             control.check()?;
             if categories.contains(&category) {
-                results.extend(self.native.scan_module(
+                scanned.push(category);
+                grouped.push(self.native.scan_module(
                     category,
                     &prepared,
                     self.execution.gates(),
@@ -428,20 +430,12 @@ impl Scanner {
             }
         }
         control.check()?;
-        let secrets = crate::post_prediction::dlp_secret_ranges(
-            results
-                .iter()
-                .filter(|r| r.category == "dlp")
-                .flat_map(|r| &r.evidence_spans),
+        crate::post_prediction::resolve_dlp_pii_overlaps(
+            &scanned,
+            |&category| (category, text),
+            &mut grouped,
         );
-        for result in &mut results {
-            if result.category == "pii" {
-                crate::post_prediction::retain_pii_outside_secret_ranges(
-                    &mut result.evidence_spans,
-                    &secrets,
-                );
-            }
-        }
+        let results = grouped.into_iter().flatten().collect::<Vec<_>>();
         if let Some(limit) = self.config.max_findings.filter(|&limit| {
             results
                 .iter()

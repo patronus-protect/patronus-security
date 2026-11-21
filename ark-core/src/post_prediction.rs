@@ -1,16 +1,66 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+use std::borrow::BorrowMut;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{LazyLock, OnceLock};
 
 use aho_corasick::AhoCorasick;
 
-use crate::{EvidenceSpan, SecurityCategory};
+use crate::{EvidenceSpan, NativeResult, SecurityCategory};
+
+/// K08: DLP vs. PII double labels. When DLP and PII scan the same text, a DLP
+/// secret span owns its range: PII and dynamic-PII spans overlapping it (a URL
+/// password read as the local part of an e-mail address, token digits read as
+/// a card number) are dropped from the PII results. Only evidence changes; the
+/// PII decision stays as scanned.
+///
+/// `results[i]` holds the results of `inputs[i]`, and `input` yields the
+/// category and text of one input. Inputs are grouped by equal text, so a DLP
+/// secret never removes PII evidence of a different text. Core's [`crate::Scanner`]
+/// and Ark's gateway both resolve overlaps here, so their evidence is identical.
+pub fn resolve_dlp_pii_overlaps<'t, I, R: BorrowMut<NativeResult>>(
+    inputs: &'t [I],
+    input: impl Fn(&'t I) -> (SecurityCategory, &'t str),
+    results: &mut [Vec<R>],
+) {
+    debug_assert_eq!(inputs.len(), results.len());
+    let is_pii = |category| {
+        matches!(
+            category,
+            SecurityCategory::Pii | SecurityCategory::DynamicPii
+        )
+    };
+    if !inputs.iter().any(|i| input(i).0 == SecurityCategory::Dlp)
+        || !inputs.iter().any(|i| is_pii(input(i).0))
+    {
+        return;
+    }
+    for (dlp, dlp_input) in inputs.iter().enumerate() {
+        let (category, dlp_text) = input(dlp_input);
+        if category != SecurityCategory::Dlp {
+            continue;
+        }
+        let secrets = dlp_secret_ranges(
+            results[dlp]
+                .iter()
+                .flat_map(|result| &result.borrow().evidence_spans),
+        );
+        if secrets.is_empty() {
+            continue;
+        }
+        for (pii, pii_input) in inputs.iter().enumerate() {
+            let (category, pii_text) = input(pii_input);
+            if !is_pii(category) || pii_text != dlp_text {
+                continue;
+            }
+            for result in &mut results[pii] {
+                retain_pii_outside_secret_ranges(&mut result.borrow_mut().evidence_spans, &secrets);
+            }
+        }
+    }
+}
 
 /// Extract DLP secret byte ranges, sorted by start/end, without cloning evidence.
-/// The host selects the DLP results belonging to the same source text.
-pub fn dlp_secret_ranges<'a>(
-    spans: impl IntoIterator<Item = &'a EvidenceSpan>,
-) -> Vec<(usize, usize)> {
+fn dlp_secret_ranges<'a>(spans: impl IntoIterator<Item = &'a EvidenceSpan>) -> Vec<(usize, usize)> {
     let mut ranges = spans
         .into_iter()
         .filter(|span| crate::detectors::dlp::dlp::SECRET_GROUPS.contains(&span.label.as_str()))
@@ -23,7 +73,7 @@ pub fn dlp_secret_ranges<'a>(
 /// Retain PII evidence outside secret ranges returned by [`dlp_secret_ranges`].
 /// Ranges must be sorted by start/end. Touching end-exclusive byte ranges do not
 /// overlap. This operation changes only evidence, never a classifier decision.
-pub fn retain_pii_outside_secret_ranges(spans: &mut Vec<EvidenceSpan>, secrets: &[(usize, usize)]) {
+fn retain_pii_outside_secret_ranges(spans: &mut Vec<EvidenceSpan>, secrets: &[(usize, usize)]) {
     debug_assert!(secrets.is_sorted());
     spans.retain(|span| {
         let after = secrets.partition_point(|&(start, _)| start < span.end_byte);
@@ -273,5 +323,177 @@ mod overlap_tests {
         assert!(pii.iter().all(|s| s.score == 0.73));
         retain_pii_outside_secret_ranges(&mut pii, &[]);
         assert_eq!(pii.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod overlap_grouping_tests {
+    use super::resolve_dlp_pii_overlaps;
+    use crate::{EvidenceSpan, NativeResult, SecurityCategory};
+
+    fn span(text: &str, label: &str, start: usize, end: usize) -> EvidenceSpan {
+        EvidenceSpan {
+            label: label.into(),
+            text: text[start..end].into(),
+            score: 0.73,
+            start_byte: start,
+            end_byte: end,
+            start_char: text[..start].chars().count(),
+            end_char: text[..end].chars().count(),
+        }
+    }
+
+    fn result(category: &str, spans: Vec<EvidenceSpan>) -> NativeResult {
+        NativeResult {
+            category: category.into(),
+            model: "fixture".into(),
+            class_name: "found".into(),
+            confidence: 0.82,
+            level: "L1".into(),
+            duration_ms: 1.25,
+            layers: Vec::new(),
+            evidence_spans: spans,
+            label_scores: Vec::new(),
+            decision: None,
+        }
+    }
+
+    #[test]
+    fn equal_text_groups_pii_and_dynamic_pii_without_affecting_other_inputs_or_decisions() {
+        let text = "😀abcdefgh";
+        let other = "😀zyxwvuts";
+        let inputs = [
+            (SecurityCategory::Dlp, text),
+            (SecurityCategory::Pii, text),
+            (SecurityCategory::DynamicPii, text),
+            (SecurityCategory::Pii, other),
+        ];
+        let pii_spans = |text| {
+            vec![
+                span(text, "person", 0, 4),
+                span(text, "person", 4, 6),
+                span(text, "person", 8, 10),
+            ]
+        };
+        let mut results = vec![
+            vec![result("dlp", vec![span(text, "CREDENTIAL", 4, 8)])],
+            vec![result("pii", pii_spans(text))],
+            vec![result("dynamic-pii", pii_spans(text))],
+            vec![result("pii", pii_spans(other))],
+        ];
+        let mut expected = results.clone();
+        expected[1][0].evidence_spans.remove(1);
+        expected[2][0].evidence_spans.remove(1);
+        resolve_dlp_pii_overlaps(&inputs, |&input| input, &mut results);
+        assert_eq!(
+            serde_json::to_value(results).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+}
+
+#[cfg(test)]
+mod hook_tests {
+    use super::{
+        filter_evidence, is_real_secret_assignment, LocalPathPersonHook, PostPredictionHook,
+        PrivateNetworkDiagnosticHook,
+    };
+    use crate::{EvidenceSpan, SecurityCategory};
+
+    fn person(text: &str, start: usize) -> EvidenceSpan {
+        EvidenceSpan {
+            label: "person".into(),
+            text: text.into(),
+            score: 0.9,
+            start_byte: start,
+            end_byte: start + text.len(),
+            start_char: start,
+            end_char: start + text.len(),
+        }
+    }
+
+    #[test]
+    fn filters_person_only_inside_local_paths() {
+        let path = "/Users/alice/project/main.rs";
+        let span = person("alice", 7);
+        assert!(!LocalPathPersonHook.retain(SecurityCategory::DynamicPii, path, &span));
+        assert!(LocalPathPersonHook.retain(
+            SecurityCategory::DynamicPii,
+            "Alice works here",
+            &person("Alice", 0)
+        ));
+        assert!(LocalPathPersonHook.retain(
+            SecurityCategory::DynamicPii,
+            path,
+            &EvidenceSpan {
+                label: "location".into(),
+                ..span.clone()
+            }
+        ));
+        assert!(filter_evidence(SecurityCategory::Pii, path, vec![span]).is_empty());
+    }
+
+    #[test]
+    fn local_path_filter_preserves_unicode_whitespace_boundaries() {
+        let text = "Alex\u{202f}Vithurjan works here";
+        let start = "Alex\u{202f}".len();
+
+        assert!(LocalPathPersonHook.retain(
+            SecurityCategory::DynamicPii,
+            text,
+            &person("Vithurjan", start),
+        ));
+    }
+
+    #[test]
+    fn filters_private_ip_evidence_only_from_network_diagnostics() {
+        let private = EvidenceSpan {
+            label: "IP_ADDRESS".into(),
+            text: "192.168.178.96".into(),
+            score: 1.0,
+            start_byte: 41,
+            end_byte: 55,
+            start_char: 41,
+            end_char: 55,
+        };
+        let diagnostic = "NetworkState diagnostics: local endpoint 192.168.178.96";
+
+        assert!(!PrivateNetworkDiagnosticHook.retain(SecurityCategory::Pii, diagnostic, &private));
+        assert!(PrivateNetworkDiagnosticHook.retain(
+            SecurityCategory::Pii,
+            "Connect to 192.168.178.96 now.",
+            &EvidenceSpan {
+                start_byte: 11,
+                end_byte: 25,
+                start_char: 11,
+                end_char: 25,
+                ..private.clone()
+            }
+        ));
+        assert!(PrivateNetworkDiagnosticHook.retain(
+            SecurityCategory::Pii,
+            "Network diagnostics: public endpoint 8.8.8.8",
+            &EvidenceSpan {
+                text: "8.8.8.8".into(),
+                start_byte: 37,
+                end_byte: 44,
+                start_char: 37,
+                end_char: 44,
+                ..private.clone()
+            }
+        ));
+        assert!(filter_evidence(SecurityCategory::Pii, diagnostic, vec![private]).is_empty());
+    }
+
+    #[test]
+    fn base64_padding_is_no_assignment() {
+        // F-GEN2: `KEY: <base64>=` in a Kubernetes Secret keeps its span.
+        assert!(is_real_secret_assignment(
+            "c2stYW50LWFkbWluMDEtRTMzaGpnNmY2OG9ERTdF="
+        ));
+        assert!(is_real_secret_assignment("dXNlcjpLeDdwUTJ2TDlyVDQ=="));
+        assert!(!is_real_secret_assignment("password=changeme"));
+        assert!(!is_real_secret_assignment("token="));
+        assert!(is_real_secret_assignment("password=Kx7pQ2vL9rT4mW"));
     }
 }
