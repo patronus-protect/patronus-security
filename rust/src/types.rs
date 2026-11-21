@@ -60,6 +60,8 @@ pub enum SecurityFailureKind {
     InferenceFailure,
     Timeout,
     QueueFull,
+    /// The input or its findings exceed `max_input_bytes` or `max_findings`.
+    LimitExceeded,
     WorkerUnavailable,
     Internal,
 }
@@ -140,6 +142,7 @@ impl SecurityFailureKind {
             Self::InferenceFailure => "inference_failure",
             Self::Timeout => "timeout",
             Self::QueueFull => "queue_full",
+            Self::LimitExceeded => "limit_exceeded",
             Self::WorkerUnavailable => "worker_unavailable",
             Self::Internal => "internal",
         }
@@ -294,11 +297,13 @@ impl Default for L3Strategy {
 /// purpose; each entry point fills its own value from here when its config
 /// leaves the key unset:
 ///
-/// | entry point | `max_level` | `download` | `l3_strategy` |
-/// |---|---|---|---|
-/// | Rust `GatewayConfig` | `L3` | `never` | `dedicated` |
-/// | Python `SecurityGateway(config)` | `l2` | `missing` | `dedicated` |
-/// | Ark API server (`pipeline`) | required | `never` | `multi` |
+/// | entry point | `max_level` | `l3_strategy` |
+/// |---|---|---|
+/// | Rust `GatewayConfig` | `L3` | `dedicated` |
+/// | Python `SecurityGateway(config)` | `l2` | `dedicated` |
+/// | Ark API server (`pipeline`) | required | `multi` |
+///
+/// `download` is `never` everywhere, as in Ark Core.
 pub mod defaults {
     use super::L3Strategy;
 
@@ -306,8 +311,6 @@ pub mod defaults {
     pub const RUST_L3_STRATEGY: L3Strategy = L3Strategy::Dedicated;
     /// Deepest layer of the Python `SecurityGateway`.
     pub const PYTHON_MAX_LEVEL: &str = "l2";
-    /// Download policy of the Python `SecurityGateway`.
-    pub const PYTHON_DOWNLOAD: &str = "missing";
     /// L3 topology of the Ark API server when `pipeline.l3_strategy` is unset.
     pub const ARK_API_L3_STRATEGY: L3Strategy = L3Strategy::Multi;
 }
@@ -590,13 +593,6 @@ mod tests {
         assert_eq!(
             defaults::PYTHON_MAX_LEVEL.parse::<SecurityLevel>(),
             Ok(SecurityLevel::L2)
-        );
-        assert_eq!(
-            serde_json::from_value::<patronus_ark_core::warmup::DownloadPolicy>(
-                defaults::PYTHON_DOWNLOAD.into()
-            )
-            .unwrap(),
-            patronus_ark_core::warmup::DownloadPolicy::Missing
         );
         assert_eq!(defaults::ARK_API_L3_STRATEGY, L3Strategy::Multi);
         assert_eq!(

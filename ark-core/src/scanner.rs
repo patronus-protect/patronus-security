@@ -188,7 +188,7 @@ impl Scanner {
         let native = NativeEngine::new(&config.categories);
         let execution =
             LayerExecution::with_gates(config.max_level, std::mem::take(&mut config.gates));
-        native.prepare(&execution.gates());
+        native.prepare(execution.gates());
         Ok(Self {
             native,
             execution,
@@ -344,7 +344,7 @@ impl Scanner {
                     .native
                     .producers(module)
                     .iter()
-                    .any(|producer| producer.enabled(&execution.gates()));
+                    .any(|producer| producer.enabled(execution.gates()));
                 cascade.l1_answer(
                     module,
                     execution.gates().mode(module),
@@ -413,7 +413,7 @@ impl Scanner {
                 results.extend(self.native.scan_module(
                     category,
                     &prepared,
-                    &self.execution.gates(),
+                    self.execution.gates(),
                     control,
                 )?);
             }

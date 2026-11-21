@@ -19,8 +19,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `wolf: {model, precision, execution}`, `dynamic_pii_config` is `dynamic_pii`,
   `ntdb_operating_point` is `ntdb_decision_threshold_point`, and the `cache_*` options are
   `cache: {storage_location, encryption_key_hex, entry_ttl_seconds, memory_max_entries,
-  memory_max_bytes}`). Python gateways keep `max_level: "l2"` and `download: "missing"` as
-  defaults. Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
+  memory_max_bytes}`). Python gateways keep `max_level: "l2"` as default. Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
   `with_download_categories` and `try_with_download_categories_and_cache`; `GatewayConfig` holds
   Ark Core's `ScannerConfig` in `core` plus Ark's keys. `WolfSelection`,
   `set_wolf_selection`, `set_wolf_execution_options` and `pin_shell_command_manifest_for_tests`
@@ -28,6 +27,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
   with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
   per-request `gates` are unchanged.
+- **`download` defaults to `never` everywhere:** the Python `SecurityGateway` no longer defaults
+  to `download: "missing"`; like Rust, the Ark API and Ark Core, `warmup()` downloads missing
+  models only with `download: "missing"`.
+- **Ark reads Ark Core's `wolf` block as-is:** `wolf.threshold`, `wolf.backend` and
+  `wolf.runtime_options` are accepted instead of refused. Wolf (the injection L3) now runs on
+  `wolf.backend` and `wolf.runtime_options` and detects at `wolf.threshold` (unset: the serving
+  default; an L3 pipeline policy threshold still wins); `execution_backend` and `onnx_runtime`
+  configure Ark's other models only, so a gateway that set `execution_backend` for Wolf sets
+  `wolf.backend` too.
+- **Ark enforces `max_input_bytes` and `max_findings`:** an input above `max_input_bytes`
+  (default 1 MiB) is refused unscanned, and more L1 evidence spans than `max_findings` (default
+  10000) fail the request instead of publishing results, both as a `limit_exceeded` failure
+  (new `SecurityFailureKind::LimitExceeded`). Raise the limits for larger inputs.
+- **Ark API: one decision cache key:** the top-level `cache.dir` is gone and refused; set
+  `pipeline.cache.storage_location` (e.g. `/data/cache/decisions.redb`) next to the other cache
+  keys. An encryption key without a storage location is still refused.
+- **Python `SecurityGateway` is configured only through its config:** the runtime setters
+  `set_execution_gates`, `set_onnx_batch_mode`, `set_execution_backend`,
+  `set_ntdb_operating_point`, `set_l3_strategy`, `set_dynamic_pii_config` and
+  `set_shell_command_policy_config` and the properties `wolf_options`, `wolf_model`,
+  `wolf_precision`, `l3_strategy`, `categories` and `max_level` are gone; pass the keys in
+  `SecurityGateway(config)` (per-request gates stay on `enqueue`).
+- **Coordinator:** its config type for the `gateway` section is renamed `FleetConfig`; the YAML
+  keys are unchanged.
 - **One gate type:** Ark Core's `NativeGates` is merged into `ScanGateMatrix`. Rust: the rule,
   model, mode and `explain` gates are fields of `ScanGateMatrix` itself (`gates.rules`,
   `gates.pii_mode`, `gates.allows_rule(..)` instead of `gates.native.*`), and `NativeEngine`

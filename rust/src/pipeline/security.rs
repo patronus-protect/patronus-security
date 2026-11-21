@@ -600,6 +600,10 @@ pub struct SecurityGatewayCore {
     max_level: SecurityLevel,
     /// Model cache root (`cache_root`). Defaults to Core's default cache root.
     cache_root: Option<PathBuf>,
+    /// Core's `max_input_bytes`: larger inputs are refused unscanned.
+    max_input_bytes: usize,
+    /// Core's `max_findings`: more L1 evidence spans fail the request.
+    max_findings: usize,
     /// Whether `warmup` may download missing model assets.
     download: DownloadPolicy,
     /// Optional allowlist of categories that may download missing assets.
@@ -851,11 +855,13 @@ impl SecurityGateway {
         let categories = core.categories;
         let max_level = core.max_level;
         let native_engine = NativeEngine::new(&categories);
-        native_engine.prepare(&execution.gates());
+        native_engine.prepare(execution.gates());
         let core = SecurityGatewayCore {
             categories,
             max_level,
             cache_root: core.cache_root,
+            max_input_bytes: core.max_input_bytes,
+            max_findings: core.max_findings,
             download,
             download_categories,
             execution: Mutex::new(execution),
@@ -1492,7 +1498,7 @@ impl SecurityGateway {
             match self.native_engine.scan_module(
                 category,
                 prepared,
-                &execution.gates(),
+                execution.gates(),
                 &ScanControl::default(),
             ) {
                 Ok(native) => results.extend(native.into_iter().map(SecurityScanResult::from)),

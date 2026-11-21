@@ -64,7 +64,8 @@ pub struct GatewayConfig {
     #[serde(flatten)]
     pub core: ScannerConfig,
     /// Whether `warmup`/`prepare_assets` may download missing model files:
-    /// `never` (default) or `missing`.
+    /// `never` (the default of every entry point, as in Ark Core) or
+    /// `missing`.
     pub download: DownloadPolicy,
     /// The categories that may download; unset: every configured category.
     pub download_categories: Option<Vec<SecurityCategory>>,
@@ -74,12 +75,13 @@ pub struct GatewayConfig {
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
     pub ntdb_decision_threshold_point: NtdbOperatingPoint,
-    /// ONNX execution backend of Ark's models: `auto` (default), `cpu`,
-    /// `gpu`, `coreml`, ...
+    /// ONNX execution backend of Ark's own models (Wolf runs on
+    /// `wolf.backend`): `auto` (default), `cpu`, `gpu`, `coreml`, ...
     pub execution_backend: ExecutionBackend,
     /// L3 batch execution; unset follows `execution_backend`.
     pub onnx_batch_mode: Option<OnnxBatchMode>,
-    /// ONNX Runtime session options of Ark's models.
+    /// ONNX Runtime session options of Ark's own models (Wolf takes
+    /// `wolf.runtime_options`).
     pub onnx_runtime: OnnxRuntimeOptions,
     /// The `dynamic_pii` (GLiNER) pipeline's config.
     pub dynamic_pii: DynamicPiiConfig,
@@ -95,9 +97,9 @@ The config of a [`crate::SecurityGateway`]: every key of Ark Core's
 [`ScannerConfig`] (`categories`, `max_level`, the gate keys, `cascade`,
 `cache_root`, `wolf`, `shell`) with the same meaning, plus Ark's own keys.
 Ark accepts every category, not only Core's text-scan ones, and reads
-Core's `wolf` and `shell` for its injection L3 and its `shell_command`
-category. Core's `max_input_bytes` and `max_findings` limit Core's
-scanner only. Unknown keys are refused.
+Core's `wolf` (model, export, windows, `threshold`, `backend`,
+`runtime_options`) and `shell` for its injection L3 and its
+`shell_command` category. Unknown keys are refused.
 
 ```rust
 pub fn new(categories: Vec<SecurityCategory>, max_level: SecurityLevel) -> Self;
@@ -110,9 +112,8 @@ pub fn validate(&self) -> Result<(), String>;
 ```
 
 Refuse what no gateway can run: no categories, a duplicate category,
-zero ONNX threads, invalid Wolf windows (with Ark's serving profile
-filling unset sizes) or Dynamic-PII settings, and Wolf settings Ark
-takes from its own keys.
+zero limits or ONNX threads, an invalid `wolf` (with Ark's serving profile
+filling unset window sizes) or invalid Dynamic-PII settings.
 
 ## Core Gateway
 
@@ -987,8 +988,39 @@ Return the canonical uppercase level string.
 
 ```rust
 pub struct ScanGateMatrix {
-    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
-    pub native: NativeGates,
+    /// Per-rule overrides keyed by stable public rule id.
+    pub rules: HashMap<String, bool>,
+    /// Per-model or per-native-scanner overrides keyed by result model names
+    /// such as `native:mcp_runtime_risk`.
+    pub models: HashMap<String, bool>,
+    /// Native PII output mode.
+    pub pii_mode: ScoreMode,
+    /// Native DLP output mode.
+    pub dlp_mode: ScoreMode,
+    /// Output modes of the attack classes. `strict` keeps each producer's own
+    /// acceptance; `balanced`/`recall` also drop evidence scoring below
+    /// [`ScoreMode::min_score`].
+    pub injection_mode: ScoreMode,
+    pub jailbreak_mode: ScoreMode,
+    pub prompt_extraction_mode: ScoreMode,
+    pub tool_poisoning_mode: ScoreMode,
+    pub agent_config_tampering_mode: ScoreMode,
+    pub memory_poisoning_mode: ScoreMode,
+    pub exfiltration_mode: ScoreMode,
+    pub unsafe_action_mode: ScoreMode,
+    pub resource_exhaustion_mode: ScoreMode,
+    pub harmful_content_mode: ScoreMode,
+    pub toxic_language_mode: ScoreMode,
+    /// Least repetition count (`500000 times`, `2 million words`) that makes
+    /// an output request a `resource_exhaustion` finding; unset means
+    /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`](crate::native::DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD).
+    pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
+    /// Least score of an accepted Threat points rule; unset means
+    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
+    #[serde(deserialize_with = "crate::native::policy::probability")]
+    pub threat_points_acceptance: Option<f64>,
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -996,14 +1028,17 @@ pub struct ScanGateMatrix {
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
+    #[serde(deserialize_with = "conditional_gates")]
     pub conditional: Vec<ConditionalPipelineGate>,
-    /// L3 worker scheduling policy.
+    /// L3 worker scheduling policy; each serialized key overrides its default.
+    #[serde(deserialize_with = "l3_policy")]
     pub l3_policy: L3SchedulerPolicy,
     /// The opt-in cascade: when set, a module L1 decides (or no later layer
     /// can run for) skips L2 and L3 and results carry `decided_by`; its
     /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
     /// and L3 as before. The levels that run are the keys above, with or
     /// without a cascade.
+    #[serde(deserialize_with = "cascade")]
     pub cascade: Option<super::Cascade>,
 }
 ```
@@ -1256,12 +1291,6 @@ pub fn validate(&self) -> Result<(), String>;
 
 Refuse out-of-range values: zero counts, costs and fairness quantum,
 fractions outside `0..=1` and invalid pipeline overrides.
-
-```rust
-pub fn all_enabled() -> Self;
-```
-
-Explicitly enable all native rules, including opt-in DLP content families.
 
 ```rust
 pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
@@ -1671,6 +1700,8 @@ pub enum SecurityFailureKind {
     InferenceFailure,
     Timeout,
     QueueFull,
+    /// The input or its findings exceed `max_input_bytes` or `max_findings`.
+    LimitExceeded,
     WorkerUnavailable,
     Internal,
 }
@@ -2205,7 +2236,7 @@ Initialize only configured native categories; other categories have no
 native producers. An empty selection creates no pipelines.
 
 ```rust
-pub fn prepare(&self, gates: &NativeGates);
+pub fn prepare(&self, gates: &ScanGateMatrix);
 ```
 
 Builds what a scan under `gates` runs, for every enabled producer:
@@ -2227,7 +2258,7 @@ pub fn run_producer(
     &self,
     producer: &NativeProducerSpec,
     prepared: &NativeText<'_>,
-    gates: &NativeGates,
+    gates: &ScanGateMatrix,
     control: &ScanControl,
 ) -> Result<NativeProducerOutcome, ScanError>;
 ```
@@ -2240,7 +2271,7 @@ pub fn scan_module(
     &self,
     category: SecurityCategory,
     prepared: &NativeText<'_>,
-    gates: &NativeGates,
+    gates: &ScanGateMatrix,
     control: &ScanControl,
 ) -> Result<Vec<NativeResult>, ScanError>;
 ```
@@ -2287,52 +2318,6 @@ Default of a rule without an explicit gate, shared by every host: all
 non-DLP rules (Cat's shell policies included) except the bare PII forms
 (opt-in), the DLP credential/secret rules and the classification markings
 are on, the other DLP content rules are opt-in.
-
-```rust
-pub struct NativeGates {
-    /// Per-rule overrides keyed by stable public rule id.
-    pub rules: HashMap<String, bool>,
-    /// Per-model or per-native-scanner overrides keyed by result model names
-    /// such as `native:mcp_runtime_risk`.
-    pub models: HashMap<String, bool>,
-    /// Native PII output mode.
-    pub pii_mode: ScoreMode,
-    /// Native DLP output mode.
-    pub dlp_mode: ScoreMode,
-    /// Output modes of the attack classes. `strict` keeps each producer's own
-    /// acceptance; `balanced`/`recall` also drop evidence scoring below
-    /// [`ScoreMode::min_score`].
-    pub injection_mode: ScoreMode,
-    pub jailbreak_mode: ScoreMode,
-    pub prompt_extraction_mode: ScoreMode,
-    pub tool_poisoning_mode: ScoreMode,
-    pub agent_config_tampering_mode: ScoreMode,
-    pub memory_poisoning_mode: ScoreMode,
-    pub exfiltration_mode: ScoreMode,
-    pub unsafe_action_mode: ScoreMode,
-    pub resource_exhaustion_mode: ScoreMode,
-    pub harmful_content_mode: ScoreMode,
-    pub toxic_language_mode: ScoreMode,
-    /// Least repetition count (`500000 times`, `2 million words`) that makes
-    /// an output request a `resource_exhaustion` finding; unset means
-    /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`].
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
-    /// Least score of an accepted Threat points rule; unset means
-    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "probability"
-    )]
-    pub threat_points_acceptance: Option<f64>,
-    /// Include bounded diagnostic anchor metadata. Disabled by default.
-    pub explain: bool,
-}
-```
-
-Per-call native policy: rule, model, mode and diagnostics gates, shared by
-the Core scanner and the full gateway. Missing rule entries use
-[`default_rule_enabled`], missing model entries are enabled.
 
 ```rust
 pub fn all_enabled() -> Self;
@@ -2409,7 +2394,7 @@ Whether this producer reports `ark.injection.*` rules, whose candidates
 the injection L1 scorer merges into one decision per category.
 
 ```rust
-pub fn enabled(&self, gates: &NativeGates) -> bool;
+pub fn enabled(&self, gates: &ScanGateMatrix) -> bool;
 ```
 
 Parent/model/required-rule gates, independent of host level or conditional gates.

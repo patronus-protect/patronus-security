@@ -449,28 +449,29 @@ impl SecurityGateway {
                 let download = allow_download && self.should_download_assets_for(*category);
                 if *category == SecurityCategory::Injection {
                     // Core pins, prepares and caches Wolf; ARK only picks the model.
-                    let wolf = execution.wolf();
-                    let dir = wolf.dir(Some(&base_dir))?;
-                    if !download
-                        && !patronus_ark_core::warmup::wolf_assets_present(
-                            &dir,
-                            wolf.model,
-                            wolf.precision,
-                        )?
-                    {
-                        return Err(format!(
-                            "missing injection dedicated L3 assets below {}; downloads disabled",
-                            dir.display()
-                        )
-                        .into());
-                    }
-                    patronus_ark_core::warmup::prepare_wolf_cache(
-                        &dir,
-                        wolf.model,
-                        wolf.precision,
+                    let wolf = patronus_ark_core::wolf::WolfConfig {
+                        bundle_dir: Some(execution.wolf().dir(Some(&base_dir))?),
+                        ..execution.wolf().clone()
+                    };
+                    let report = assets::progress_reporter(
+                        progress,
+                        SecurityCategory::Injection,
+                        wolf.model.spec().id,
+                    );
+                    patronus_ark_core::warmup::prepare_wolf_assets_with_progress(
+                        &wolf,
                         &core_warmup_options(download),
-                        None,
-                    )?;
+                        report
+                            .as_ref()
+                            .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
+                    )
+                    .map_err(|error| {
+                        if download {
+                            error.to_string()
+                        } else {
+                            format!("missing injection dedicated L3 assets; downloads disabled: {error}")
+                        }
+                    })?;
                 } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
                     if !asset.assets_present(&base_dir) {
                         if !download {
@@ -606,11 +607,14 @@ impl SecurityGateway {
             return Ok(());
         };
         let execution = self.scan_execution();
-        model.warmup_session(
-            execution.backend(),
-            execution.onnx_runtime_options(),
-            execution.wolf().execution,
-        )?;
+        let wolf = execution.wolf();
+        // Wolf runs on Core's `wolf` keys, Ark's other L3 models on Ark's.
+        let (backend, options) = if config.category == SecurityCategory::Injection {
+            (wolf.backend, wolf.runtime_options)
+        } else {
+            (execution.backend(), execution.onnx_runtime_options())
+        };
+        model.warmup_session(backend, options, wolf.execution)?;
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
     }

@@ -4,7 +4,7 @@ Authenticated HTTP deployment around the `patronus-ark` security pipeline.
 The reference stack exposes `ark-api-entrypoint`: submit text and/or files,
 receive a global `job_id`, and poll the job independently of which worker ran
 it. Redis retains completed jobs for the configured TTL; workers keep their
-own optional decision caches (`cache.dir` in the config).
+own optional decision caches (`pipeline.cache.storage_location` in the config).
 
 ## Running
 

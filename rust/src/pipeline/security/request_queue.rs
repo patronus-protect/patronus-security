@@ -266,6 +266,24 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned")
             .requests
             .insert(request_id.clone(), RequestState::running());
+        // Like Ark Core, an input above `max_input_bytes` is refused unscanned.
+        if inputs
+            .iter()
+            .any(|input| input.text.len() > self.max_input_bytes)
+        {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
+                    stage: SecurityFailureStage::Queue,
+                    level: None,
+                    detector_id: None,
+                    kind: SecurityFailureKind::LimitExceeded,
+                    retryable: false,
+                    message: format!("input exceeds max_input_bytes {}", self.max_input_bytes),
+                },
+            );
+            return request_id;
+        }
         let enqueue_result = self.queue_sender().try_send(QueueWork {
             request_id: request_id.clone(),
             inputs,
@@ -285,25 +303,17 @@ impl SecurityGateway {
                     "gateway queue worker stopped",
                 ),
             };
-            let mut registry = self
-                .requests
-                .state
-                .lock()
-                .expect("request registry mutex poisoned");
-            if let Some(state) = registry.requests.get_mut(&request_id) {
-                state.failures.push(SecurityFailure {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
                     stage: SecurityFailureStage::Queue,
                     level: None,
                     detector_id: None,
                     kind,
                     retryable: true,
                     message: message.to_string(),
-                });
-            }
-            finish_request_if_ready(&mut registry, &request_id);
-            self.requests.available.notify_all();
-            drop(registry);
-            self.requests.cancel_finished_runs(&request_id);
+                },
+            );
         }
         request_id
     }
@@ -358,7 +368,7 @@ impl SecurityGateway {
         })) {
             Ok(results) => results,
             Err(_) => {
-                self.finish_scanner_panic(&request_id, "L1 scanner phase panicked");
+                self.fail_request(&request_id, scanner_panic("L1 scanner phase panicked"));
                 return;
             }
         };
@@ -367,6 +377,29 @@ impl SecurityGateway {
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
         );
         let (mut l1_results, l1_failures) = split_results(raw_l1);
+        // Like Ark Core, more evidence spans than `max_findings` fail the
+        // request instead of publishing a silently truncated report.
+        let findings = l1_results
+            .iter()
+            .map(|result| result.evidence_spans.len())
+            .sum::<usize>();
+        if findings > self.max_findings {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
+                    stage: SecurityFailureStage::Scanner,
+                    level: Some(SecurityLevel::L1),
+                    detector_id: None,
+                    kind: SecurityFailureKind::LimitExceeded,
+                    retryable: false,
+                    message: format!(
+                        "{findings} findings exceed max_findings {}",
+                        self.max_findings
+                    ),
+                },
+            );
+            return;
+        }
         metrics.checkpoint(
             "after_split_l1",
             format!(
@@ -405,7 +438,7 @@ impl SecurityGateway {
         })) {
             Ok(results) => results,
             Err(_) => {
-                self.finish_scanner_panic(&request_id, "L2 scanner phase panicked");
+                self.fail_request(&request_id, scanner_panic("L2 scanner phase panicked"));
                 return;
             }
         };
@@ -537,21 +570,15 @@ impl SecurityGateway {
         self.requests.available.notify_all();
     }
 
-    fn finish_scanner_panic(&self, request_id: &str, message: &str) {
+    /// End a request with `failure`; the consumer receives its terminal event.
+    fn fail_request(&self, request_id: &str, failure: SecurityFailure) {
         let mut registry = self
             .requests
             .state
             .lock()
             .expect("request registry mutex poisoned");
         if let Some(state) = registry.requests.get_mut(request_id) {
-            state.failures.push(SecurityFailure {
-                stage: SecurityFailureStage::Scanner,
-                level: None,
-                detector_id: None,
-                kind: SecurityFailureKind::Internal,
-                retryable: false,
-                message: message.to_string(),
-            });
+            state.failures.push(failure);
         }
         finish_request_if_ready(&mut registry, request_id);
         self.requests.available.notify_all();
@@ -1522,6 +1549,17 @@ fn merge_csvish_field(left: &str, right: &str) -> String {
     values.sort_unstable();
     values.dedup();
     values.join(",")
+}
+
+fn scanner_panic(message: &str) -> SecurityFailure {
+    SecurityFailure {
+        stage: SecurityFailureStage::Scanner,
+        level: None,
+        detector_id: None,
+        kind: SecurityFailureKind::Internal,
+        retryable: false,
+        message: message.to_string(),
+    }
 }
 
 #[cfg(test)]

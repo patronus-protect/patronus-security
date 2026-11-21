@@ -68,9 +68,8 @@ pipeline:
   max_level: "L2"
   cache_root: "/data/models"
   download: never
-
-cache:
-  dir: "/data/cache"
+  cache:
+    storage_location: "/data/cache/decisions.redb"
 ```
 
 ### Gates

@@ -8,15 +8,15 @@ use patronus_ark_core::{cascade::ScanGateMatrix, SecurityCategory};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RawConfig {
     server: RawServer,
     auth: RawAuth,
     /// The gateway config: Ark Core's keys plus Ark's (see
     /// `patronus_ark::GatewayConfig`); `categories` and `max_level` are
-    /// required, `l3_strategy` defaults to the deployment's `multi`.
+    /// required, `l3_strategy` defaults to the deployment's `multi`. The
+    /// decision cache is the pipeline's `cache` key.
     pipeline: serde_json::Map<String, serde_json::Value>,
-    #[serde(default)]
-    cache: RawCache,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,11 +46,6 @@ struct RawApiKey {
     /// Per-key gate override. Falls back to the pipeline's gate keys when absent.
     #[serde(default)]
     gates: Option<ScanGateMatrix>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct RawCache {
-    dir: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -142,41 +137,6 @@ impl Config {
     }
 }
 
-/// `cache.dir` (a directory, friendlier to mount than a file) places the
-/// persistent decision cache at `<dir>/decisions.redb`: it sets the
-/// pipeline's `cache.storage_location` and keeps every other cache key
-/// (encryption, TTL, memory limits). A different `storage_location` in the
-/// pipeline is refused rather than one location silently winning.
-fn place_cache_in_dir(
-    pipeline: &mut serde_json::Map<String, serde_json::Value>,
-    dir: &Path,
-) -> Result<(), ConfigError> {
-    let location = dir.join("decisions.redb");
-    let cache = pipeline
-        .entry("cache")
-        .or_insert_with(|| serde_json::Value::Object(Default::default()))
-        .as_object_mut()
-        .ok_or_else(|| ConfigError::Invalid("pipeline.cache must be a mapping".into()))?;
-    match cache
-        .get("storage_location")
-        .and_then(serde_json::Value::as_str)
-    {
-        Some(set) if Path::new(set) != location => Err(ConfigError::Invalid(format!(
-            "cache.dir places the decision cache at {} but pipeline.cache.storage_location \
-            is {set}; set only one of them",
-            location.display()
-        ))),
-        Some(_) => Ok(()),
-        None => {
-            cache.insert(
-                "storage_location".into(),
-                location.to_string_lossy().into_owned().into(),
-            );
-            Ok(())
-        }
-    }
-}
-
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
         let mut pipeline = self.pipeline;
@@ -190,9 +150,6 @@ impl RawConfig {
         pipeline
             .entry("l3_strategy")
             .or_insert_with(|| patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into());
-        if let Some(dir) = self.cache.dir {
-            place_cache_in_dir(&mut pipeline, Path::new(&dir))?;
-        }
         let gateway: GatewayConfig = serde_json::from_value(pipeline.into())
             .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
         gateway
@@ -289,10 +246,10 @@ mod tests {
     }
 
     #[test]
-    fn cache_dir_places_the_cache_and_keeps_encryption_ttl_and_limits() {
+    fn pipeline_cache_is_the_one_cache_location_and_keeps_encryption_ttl_and_limits() {
         let mut value = startup_config();
-        value["cache"] = serde_json::json!({"dir": "/var/cache/ark"});
         value["pipeline"]["cache"] = serde_json::json!({
+            "storage_location": "/var/cache/ark/decisions.redb",
             "encryption_key_hex": "ab".repeat(32),
             "entry_ttl_seconds": 60,
             "memory_max_entries": 7,
@@ -301,7 +258,7 @@ mod tests {
         let cache = load(value.clone()).unwrap().gateway.cache;
         let persistent = cache
             .persistent
-            .expect("cache.dir enables the persistent cache");
+            .expect("storage_location enables the persistent cache");
         assert_eq!(
             persistent.storage_location,
             Path::new("/var/cache/ark/decisions.redb")
@@ -315,14 +272,9 @@ mod tests {
             (cache.memory.max_entries, cache.memory.max_bytes),
             (7, 4096)
         );
-
-        value["pipeline"]["cache"]["storage_location"] = "/var/cache/ark/decisions.redb".into();
-        assert!(
-            load(value.clone()).is_ok(),
-            "the same location is no conflict"
-        );
-        value["pipeline"]["cache"]["storage_location"] = "/elsewhere.redb".into();
-        assert!(load(value).unwrap_err().contains("set only one of them"));
+        // The former top-level `cache.dir` is refused, not silently ignored.
+        value["cache"] = serde_json::json!({"dir": "/var/cache/ark"});
+        assert!(load(value).unwrap_err().contains("unknown field `cache`"));
     }
 
     #[test]
