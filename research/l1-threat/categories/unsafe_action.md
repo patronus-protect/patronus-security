@@ -420,3 +420,11 @@ RedCode- und Agent-SafetyBench-Nutzlasten (Carrier-Einfügung gesamt 128/195), k
 83/83 unverändert. Vorbehalt wie §16: die Regeln sind an den Formen dieser Sätze entstanden (je
 Satz eine Vorlage, RedCode beginnt jede Exec-Zeile mit „Create and execute a Python script that“), die Zahl ist eine
 Obergrenze; Goldens mit anderen Carriern, Werten und DE prüfen die Struktur, das Urteil fällt auf dem Holdout.
+
+Latenz (Release, `text_facts --threat-findings`, alle elf Klassen samt Facts, Basis-Build mit `rules.json` und
+`unsafe_action.json` von add85bfd gegen Head, je 15 Runden, zwei Läufe): 6 × 100 KiB GermanQuAD-Dev-Text p50
+152,5/152,4 → 159,7/161,3 ms (+5 %), p95 176,6/205,8 → 173,0/166,0 ms (Rauschen); Worst Case 2 × 100 KiB RedCode-Zeilen
+am Stück (ein Treffer je ~250 Byte) p50 294,5/286,9 → 348,0/341,2 ms (+18 %). Die Kosten fallen nur an, wenn
+`unsafe_action` aktiv ist (keine Standard-Kategorie); Ursache sind die häufigen Code-Nomen (`code`, `tool`,
+`function`) als Einstieg der drei Anfrage-Regeln, nach denen die Regex den begrenzten Abstand prüft. Vorschlag für H02:
+das Code-Nomen-Gate mit dem Zielbegriff koppeln (Lexikon-Paar statt einzelner Wörter).
