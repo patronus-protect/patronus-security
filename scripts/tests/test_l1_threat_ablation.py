@@ -442,7 +442,7 @@ def test_cli_calibrate_trains_on_the_hash_half_of_every_rows_file(tmp_path):
                         "--out", str(out)])
     assert code == 0
     train, held_out = MODULE.split_rows(native + generated)
-    # Both files split by the same row-id hash: one half trains, the other calibrates.
+    # Both files split by the same template-key hash: one half trains, the other calibrates.
     assert any(r["dataset"] == "generated_twins" for r in train)
     (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
     assert entry["rows"] == {"train": len(train), "calibration": len(held_out)}

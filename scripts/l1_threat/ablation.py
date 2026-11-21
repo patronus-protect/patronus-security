@@ -20,7 +20,8 @@ Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``tex
 of the class when the class is in ``classes`` and a negative when ``benign``; other rows are left
 out. ``--rows`` is split by a hash of the row's template key into train and eval halves unless
 ``--eval-rows`` is given: a generated row's key is its generator and template family, so every fill of a
-template and its look-alike twins land on one side; any other row's key is its id. Learned stages train on the train rows.
+template and its look-alike twins land on one side; any other row's key is its id. Learned stages train
+on the train rows.
 
 Per stage on the eval rows, per language (``all``, ``de``, ``en``): TPR at matched FPR 1 % and
 0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the same matched thresholds on the
@@ -49,7 +50,8 @@ twins) and what the train-negative cut would have flagged; ``--report-rows`` (se
 ``model.json`` (``--model-out``) records the pool in ``calibration``; it is not wired into any scan path.
 Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
 alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
-source and its TPR per positive source (generator and template family, else the set). ``--oversample-de N`` repeats every German train positive ``N`` times.
+source and its TPR per positive source (generator and template family, else the set).
+``--oversample-de N`` repeats every German train positive ``N`` times.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -420,7 +422,8 @@ def positive_source(row: dict) -> str:
 
 
 def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, Any]:
-    """TPR and FPR at ``cut`` (``score > cut``) per language, and the FPR per benign source."""
+    """TPR and FPR at ``cut`` (``score > cut``) per language, the FPR per benign source and the TPR per
+    positive source."""
     out: dict[str, Any] = {}
     for language in LANGUAGES:
         chosen = [(row, label, score) for row, label, score in scores

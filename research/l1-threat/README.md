@@ -326,7 +326,7 @@ kalibriert ihren Gewinner mit `calibrate` auf ihrem Split. Die Auswahlregel der 
 je 100 KiB zusätzlich; mit der Owner-Freigabe von ~4 ms wäre `FT` dort wählbar — das ändert der Owner.
 
 **Stand JB02.** Jailbreak-Scorer gewählt (`scoreboard/jailbreak-scorer.md`): `ablation.py calibrate` nimmt
-`--rows` mehrfach, jede Datei teilt sich über denselben Zeilen-ID-Hash in Trainings- und Kalibrierhälfte. Mit
+`--rows` mehrfach, jede Datei teilt sich über denselben Hash in Trainings- und Kalibrierhälfte (seit S11 je Template, s. u.). Mit
 `--rows train_dev --rows generated` trainiert der fastText-Kandidat neben WildJailbreak (einzige native
 Jailbreak-Quelle) auf den generierten Trägern (DE + EN) und den Look-alike-Twins als Hard Negatives. Am
 0,1-%-Schnitt auf dem Benign-Pool: TPR 81,3 → 89,2 (DE 0 → 24/24, ungesehene generierte Positive 18 → 57/82),
