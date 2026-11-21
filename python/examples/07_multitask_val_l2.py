@@ -104,11 +104,13 @@ def collect_l2(results: list[dict]) -> dict[str, dict]:
 
 def main() -> None:
     gateway = SecurityGateway(
-        categories=CATEGORIES,
-        max_level="l2",
-        model_dir=os.environ.get("PATRONUS_MODEL_DIR"),
-        download_files=True,
-        download_categories=CATEGORIES,
+        {
+            "categories": CATEGORIES,
+            "max_level": "l2",
+            "cache_root": os.environ.get("PATRONUS_MODEL_DIR"),
+            "download": "missing",
+            "download_categories": CATEGORIES,
+        }
     )
     gateway.warmup()
 

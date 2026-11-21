@@ -1,4 +1,5 @@
-use patronus_ark::{ml::ntdb_executor::NtdbExecutor, NtdbOperatingPoint};
+use patronus_ark::ml::ntdb_executor::NtdbExecutor;
+use patronus_ark_core::NtdbOperatingPoint;
 use serde::Deserialize;
 use serde_json::Value;
 use std::{

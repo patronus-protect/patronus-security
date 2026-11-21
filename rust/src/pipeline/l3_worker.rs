@@ -1556,9 +1556,9 @@ mod tests {
         dynamic.dynamic_pii_config = Some(
             DynamicPiiConfig {
                 labels: vec!["person".to_string()],
-                conditional_labels: vec![crate::DynamicPiiConditionalLabels {
+                conditional_labels: vec![patronus_ark_core::DynamicPiiConditionalLabels {
                     labels: ["person", "employee_id"].map(String::from).to_vec(),
-                    when: crate::DynamicPiiResultCondition {
+                    when: patronus_ark_core::DynamicPiiResultCondition {
                         pipeline: "sensitive_document".to_string(),
                         results: vec!["hr".to_string()],
                     },

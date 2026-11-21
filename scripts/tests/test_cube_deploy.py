@@ -150,7 +150,7 @@ def test_loaded_categories_are_separate_from_default_inference():
     assert set(key["categories"]) == all_categories
     assert set(key["default_categories"]) == {"pii", "dlp", "injection", "jailbreak", "prompt_extraction",
                                               "tool_poisoning", "exfiltration"}
-    gates = worker["pipeline"]["gates"]
+    gates = worker["pipeline"]
     assert gates["l1"] and gates["l2"] and gates["l3"]
     assert gates["conditional"][0]["level"] == "L3"
     assert gates["conditional"][0]["pipeline"] == "unsafe_action"

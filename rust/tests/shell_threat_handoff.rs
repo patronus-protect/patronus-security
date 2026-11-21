@@ -4,6 +4,7 @@
 //! covers its command positives; what K26 does not cover yet stays where it is
 //! and is pinned below as a K26 follow-up.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeSet;
 
 use patronus_ark::SecurityGateway;
@@ -192,12 +193,11 @@ fn policies(pipeline: &ShellRiskPipeline, command: &str) -> Vec<String> {
 /// Rule ids that fire on `command`: threat rules through their attack classes,
 /// MCP policy rules as the argument of a `bash` tool call.
 fn fired(command: &str) -> BTreeSet<String> {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut ids: BTreeSet<String> = SecurityCategory::ATTACK_CLASSES
         .into_iter()
         .flat_map(|category| gateway.scan_category(category, command))
@@ -302,10 +302,8 @@ fn k26_follow_ups_stay_with_their_rule() {
 
 #[test]
 fn removed_threat_rules_are_gone_from_the_catalog() {
-    let catalog: serde_json::Value = serde_json::from_str(include_str!(
-        "../../ark-core/src/detectors/threat/rules.json"
-    ))
-    .unwrap();
+    let catalog: serde_json::Value =
+        serde_json::from_str(patronus_ark_core::test_fixtures::THREAT_RULES).unwrap();
     let ids: BTreeSet<_> = catalog["rules"]
         .as_array()
         .unwrap()

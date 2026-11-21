@@ -129,7 +129,7 @@ See [Configure caching](../how-to/configure-caching.md).
 Native L1 needs no assets, except the small `shell_command` model file. L2/L3 scanners download **Patronus-owned model bundles** from the
 Hugging Face repositories listed in [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
 The manager downloads on first use, verifies integrity by content/source hash, caches under
-the platform cache directory (or a custom `model_dir`), and converts tokenizers into a compact
+the platform cache directory (or a custom `cache_root`), and converts tokenizers into a compact
 on-disk form once. See [Manage model assets](../how-to/manage-assets.md) and
 [Assets](../assets.md).
 

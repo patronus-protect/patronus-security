@@ -181,7 +181,7 @@ impl SecurityGateway {
     /// `dynamic-pii` configuration. Library callers use the other enqueue methods.
     ///
     /// `dynamic_pii` replaces the gateway's configuration for this request only;
-    /// build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+    /// build it with [`crate::DynamicPiiConfig::with_request`]. It is validated
     /// again here and rejected before anything is queued.
     #[allow(clippy::too_many_arguments)]
     pub fn enqueue_ark_api_categories_with_request_options(
@@ -1081,7 +1081,7 @@ impl SecurityGateway {
     pub fn enqueue_test_dynamic_pii_dependency_request(&self, delay_ms: u64) -> RequestId {
         self.set_dynamic_pii_config(crate::DynamicPiiConfig {
             labels: vec!["person".to_string()],
-            execution_gate: crate::DynamicPiiExecutionGate::IfResultIn {
+            execution_gate: patronus_ark_core::DynamicPiiExecutionGate::IfResultIn {
                 pipeline: "injection".to_string(),
                 results: vec!["test_l3".to_string()],
             },
@@ -1530,6 +1530,7 @@ fn merge_csvish_field(left: &str, right: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayConfig;
 
     #[test]
     fn rejected_l1_candidate_is_available_to_conditional_l2_gates_only_internally() {
@@ -1879,12 +1880,11 @@ mod tests {
 
     #[test]
     fn multi_l3_jobs_share_l2_chunk_output_union() {
-        let scanner = SecurityGateway::with_max_level(
+        let scanner = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Injection, SecurityCategory::ToolClass],
             SecurityLevel::L3,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_l3_strategy(crate::L3Strategy::Multi);
         let mut results = vec![

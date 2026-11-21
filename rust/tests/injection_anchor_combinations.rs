@@ -1,15 +1,15 @@
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::detectors::injection::signal::rule_category;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 #[test]
 fn semantic_anchor_combinations_de_en() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let cases = [
         (
             "override.prior_reference",
@@ -112,12 +112,11 @@ fn semantic_anchor_combinations_de_en() {
 
 #[test]
 fn override_and_secret_disclosure_compose_with_negation_controls() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     let rule = "ark.injection.structure.override_sensitive_disclosure";
     for text in [

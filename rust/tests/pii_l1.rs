@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeSet;
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -9,12 +10,11 @@ fn pii_result(text: &str) -> SecurityScanResult {
 }
 
 fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let gates = patronus_ark_core::cascade::ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             explain,

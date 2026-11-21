@@ -1,21 +1,20 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use patronus_ark::{DynamicPiiConfig, L3Strategy, SecurityGateway, WolfSelection};
+use patronus_ark::GatewayConfig;
 
-use patronus_ark_core::{
-    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
-    OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
-};
+use patronus_ark_core::{cascade::ScanGateMatrix, SecurityCategory};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct RawConfig {
     server: RawServer,
     auth: RawAuth,
-    pipeline: RawPipeline,
+    /// The gateway config: Ark Core's keys plus Ark's (see
+    /// `patronus_ark::GatewayConfig`); `categories` and `max_level` are
+    /// required, `l3_strategy` defaults to the deployment's `multi`.
+    pipeline: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     cache: RawCache,
 }
@@ -44,94 +43,9 @@ struct RawApiKey {
     categories: Option<Vec<SecurityCategory>>,
     #[serde(default)]
     default_categories: Option<Vec<SecurityCategory>>,
-    /// Per-key gate override. Falls back to `pipeline.gates` when absent.
+    /// Per-key gate override. Falls back to the pipeline's gate keys when absent.
     #[serde(default)]
     gates: Option<ScanGateMatrix>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RawPipeline {
-    categories: Vec<SecurityCategory>,
-    max_level: SecurityLevel,
-    #[serde(default)]
-    model_dir: Option<String>,
-    #[serde(default)]
-    download_files: bool,
-    /// The deployed shared classifier remains the default; dedicated models are opt-in.
-    #[serde(default = "default_l3_strategy")]
-    l3_strategy: String,
-    /// Dedicated Wolf startup defaults, separate from request chunk-overlap options.
-    #[serde(default)]
-    wolf_options: WolfExecutionOptions,
-    /// Dedicated Wolf model (`base`, `small`, `edge`) and ONNX export.
-    #[serde(default)]
-    wolf: WolfSelection,
-    /// Default execution gates applied to every scan unless a key overrides them.
-    #[serde(default)]
-    gates: Option<ScanGateMatrix>,
-    /// User policies and allowlist of the `shell_command` verdict.
-    #[serde(default)]
-    shell_command: Option<RawShellCommand>,
-    /// Overrides the `dynamic-pii` (GLiNER) pipeline's config — library
-    /// default uses its small core label bundle. Deserializes
-    /// straight into `patronus_ark::DynamicPiiConfig`, which already derives
-    /// Deserialize with `#[serde(default, deny_unknown_fields)]`, so any
-    /// field omitted here (chunk sizing, timeouts, ...) keeps the library
-    /// default while `labels`/`label_thresholds`/`conditional_labels` are
-    /// fully expressible in YAML exactly as the Rust API defines them.
-    #[serde(default)]
-    dynamic_pii: Option<DynamicPiiConfig>,
-    /// Process-wide CPU session tuning. Applied before warmup so every ONNX
-    /// session is created with the same bounded thread policy.
-    #[serde(default)]
-    onnx_runtime: RawOnnxRuntime,
-}
-
-fn default_l3_strategy() -> String {
-    patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into()
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct RawOnnxRuntime {
-    intra_threads: Option<usize>,
-    inter_threads: Option<usize>,
-    spinning: Option<bool>,
-}
-
-impl Default for RawOnnxRuntime {
-    fn default() -> Self {
-        let defaults = OnnxRuntimeOptions::default();
-        Self {
-            intra_threads: defaults.intra_threads,
-            inter_threads: defaults.inter_threads,
-            spinning: defaults.spinning,
-        }
-    }
-}
-
-impl RawOnnxRuntime {
-    fn into_options(self) -> Result<OnnxRuntimeOptions, ConfigError> {
-        if self.intra_threads == Some(0) || self.inter_threads == Some(0) {
-            return Err(ConfigError::Invalid(
-                "pipeline.onnx_runtime thread counts must be positive".to_string(),
-            ));
-        }
-        Ok(OnnxRuntimeOptions {
-            intra_threads: self.intra_threads,
-            inter_threads: self.inter_threads,
-            spinning: self.spinning,
-        })
-    }
-}
-
-/// User policies and allowlist of the `shell_command` verdict: the
-/// `policy_dirs` / `allowlist` keys of Ark Core's `shell` config.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct RawShellCommand {
-    policy_dirs: Vec<PathBuf>,
-    allowlist: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -157,50 +71,18 @@ pub struct Config {
     pub bind: SocketAddr,
     pub max_upload_bytes: usize,
     pub keys: Vec<ApiKeyConfig>,
-    pub categories: Vec<SecurityCategory>,
-    pub max_level: SecurityLevel,
-    pub model_dir: Option<PathBuf>,
-    pub download_files: bool,
-    pub cache_dir: Option<PathBuf>,
-    /// Gates applied when the authenticated key has no override.
-    pub default_gates: ScanGateMatrix,
-    /// `pipeline.shell_command` user policies and allowlist; `None` keeps the
-    /// bundle policies only.
-    pub shell_command: Option<ShellPolicyConfig>,
-    /// `None` keeps the library's core Dynamic-PII bundle.
-    pub dynamic_pii: Option<DynamicPiiConfig>,
-    pub onnx_runtime: OnnxRuntimeOptions,
-    pub l3_strategy: L3Strategy,
-    pub wolf_options: WolfExecutionOptions,
-    pub wolf: WolfSelection,
+    /// The `pipeline` section: the gateway's config. Its gate keys apply
+    /// when the authenticated key has no gate override.
+    pub gateway: GatewayConfig,
 }
 
 impl Config {
-    /// Apply server startup defaults through the existing gateway configuration API.
-    pub fn apply_model_defaults(&self, gateway: &SecurityGateway) -> Result<(), ConfigError> {
-        gateway
-            .set_wolf_execution_options(self.wolf_options)
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
-        gateway
-            .set_wolf_selection(self.wolf)
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf: {error}")))?;
-        gateway.set_l3_strategy(self.l3_strategy);
-        if let Some(shell_command) = &self.shell_command {
-            gateway
-                .set_shell_command_policy_config(shell_command.clone())
-                .map_err(|error| {
-                    ConfigError::Invalid(format!("pipeline.shell_command: {error}"))
-                })?;
-        }
-        Ok(())
-    }
-
     /// Effective gate matrix for a given key: its own override, else the
-    /// pipeline-wide default.
+    /// pipeline's gates.
     pub fn gates_for(&self, key: &ApiKeyConfig) -> ScanGateMatrix {
         key.gates
             .clone()
-            .unwrap_or_else(|| self.default_gates.clone())
+            .unwrap_or_else(|| self.gateway.core.gates.clone())
     }
 }
 
@@ -260,22 +142,62 @@ impl Config {
     }
 }
 
+/// `cache.dir` (a directory, friendlier to mount than a file) places the
+/// persistent decision cache at `<dir>/decisions.redb`: it sets the
+/// pipeline's `cache.storage_location` and keeps every other cache key
+/// (encryption, TTL, memory limits). A different `storage_location` in the
+/// pipeline is refused rather than one location silently winning.
+fn place_cache_in_dir(
+    pipeline: &mut serde_json::Map<String, serde_json::Value>,
+    dir: &Path,
+) -> Result<(), ConfigError> {
+    let location = dir.join("decisions.redb");
+    let cache = pipeline
+        .entry("cache")
+        .or_insert_with(|| serde_json::Value::Object(Default::default()))
+        .as_object_mut()
+        .ok_or_else(|| ConfigError::Invalid("pipeline.cache must be a mapping".into()))?;
+    match cache
+        .get("storage_location")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some(set) if Path::new(set) != location => Err(ConfigError::Invalid(format!(
+            "cache.dir places the decision cache at {} but pipeline.cache.storage_location \
+            is {set}; set only one of them",
+            location.display()
+        ))),
+        Some(_) => Ok(()),
+        None => {
+            cache.insert(
+                "storage_location".into(),
+                location.to_string_lossy().into_owned().into(),
+            );
+            Ok(())
+        }
+    }
+}
+
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
-        let l3_strategy = self
-            .pipeline
-            .l3_strategy
-            .parse::<L3Strategy>()
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.l3_strategy: {error}")))?;
-        patronus_ark_core::WolfServingProfile::ARK
-            .fill(self.pipeline.wolf_options)
+        let mut pipeline = self.pipeline;
+        for required in ["categories", "max_level"] {
+            if !pipeline.contains_key(required) {
+                return Err(ConfigError::Invalid(format!(
+                    "pipeline.{required} is required"
+                )));
+            }
+        }
+        pipeline
+            .entry("l3_strategy")
+            .or_insert_with(|| patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into());
+        if let Some(dir) = self.cache.dir {
+            place_cache_in_dir(&mut pipeline, Path::new(&dir))?;
+        }
+        let gateway: GatewayConfig = serde_json::from_value(pipeline.into())
+            .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
+        gateway
             .validate()
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
-        self.pipeline
-            .wolf
-            .precision
-            .resolve()
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf: {error}")))?;
+            .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
         let bind = self
             .server
             .bind
@@ -309,12 +231,7 @@ impl RawConfig {
             });
         }
 
-        let categories = self.pipeline.categories;
-        if categories.is_empty() {
-            return Err(ConfigError::Invalid(
-                "pipeline.categories must not be empty".to_string(),
-            ));
-        }
+        let categories = &gateway.core.categories;
         for key in &keys {
             if let Some(defaults) = &key.default_categories {
                 for category in defaults {
@@ -333,30 +250,11 @@ impl RawConfig {
                 }
             }
         }
-        let default_gates = self.pipeline.gates.unwrap_or_default();
-        let shell_command = self
-            .pipeline
-            .shell_command
-            .map(|shell| ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist))
-            .transpose()
-            .map_err(|error| ConfigError::Invalid(format!("pipeline.shell_command: {error}")))?;
-
         Ok(Config {
             bind,
             max_upload_bytes: self.server.max_upload_mb.saturating_mul(1024 * 1024),
             keys,
-            categories,
-            max_level: self.pipeline.max_level,
-            model_dir: self.pipeline.model_dir.map(PathBuf::from),
-            download_files: self.pipeline.download_files,
-            cache_dir: self.cache.dir.map(PathBuf::from),
-            default_gates,
-            shell_command,
-            dynamic_pii: self.pipeline.dynamic_pii,
-            onnx_runtime: self.pipeline.onnx_runtime.into_options()?,
-            l3_strategy,
-            wolf_options: self.pipeline.wolf_options,
-            wolf: self.pipeline.wolf,
+            gateway,
         })
     }
 }
@@ -365,7 +263,7 @@ impl RawConfig {
 mod tests {
     use std::path::Path;
 
-    use patronus_ark::{SecurityGateway, WolfSelection};
+    use patronus_ark::{GatewayConfig, SecurityGateway};
 
     use patronus_ark_core::{
         cascade::SecurityLevel, detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory,
@@ -373,7 +271,7 @@ mod tests {
 
     use patronus_ark_core::cascade::ScanGateMatrix;
 
-    use super::{Config, RawConfig, RawOnnxRuntime};
+    use super::{Config, RawConfig};
 
     fn startup_config() -> serde_json::Value {
         serde_json::json!({
@@ -383,23 +281,84 @@ mod tests {
         })
     }
 
+    fn load(value: serde_json::Value) -> Result<Config, String> {
+        serde_json::from_value::<RawConfig>(value)
+            .map_err(|error| error.to_string())?
+            .into_config()
+            .map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn cache_dir_places_the_cache_and_keeps_encryption_ttl_and_limits() {
+        let mut value = startup_config();
+        value["cache"] = serde_json::json!({"dir": "/var/cache/ark"});
+        value["pipeline"]["cache"] = serde_json::json!({
+            "encryption_key_hex": "ab".repeat(32),
+            "entry_ttl_seconds": 60,
+            "memory_max_entries": 7,
+            "memory_max_bytes": 4096,
+        });
+        let cache = load(value.clone()).unwrap().gateway.cache;
+        let persistent = cache
+            .persistent
+            .expect("cache.dir enables the persistent cache");
+        assert_eq!(
+            persistent.storage_location,
+            Path::new("/var/cache/ark/decisions.redb")
+        );
+        assert!(
+            persistent.encryption.is_some(),
+            "the encryption key is kept"
+        );
+        assert_eq!(cache.entry_ttl, std::time::Duration::from_secs(60));
+        assert_eq!(
+            (cache.memory.max_entries, cache.memory.max_bytes),
+            (7, 4096)
+        );
+
+        value["pipeline"]["cache"]["storage_location"] = "/var/cache/ark/decisions.redb".into();
+        assert!(
+            load(value.clone()).is_ok(),
+            "the same location is no conflict"
+        );
+        value["pipeline"]["cache"]["storage_location"] = "/elsewhere.redb".into();
+        assert!(load(value).unwrap_err().contains("set only one of them"));
+    }
+
+    #[test]
+    fn an_encryption_key_without_a_cache_location_is_refused() {
+        let mut value = startup_config();
+        value["pipeline"]["cache"] = serde_json::json!({"encryption_key_hex": "ab".repeat(32)});
+        assert!(load(value)
+            .unwrap_err()
+            .contains("set cache.storage_location"));
+    }
+
     #[test]
     fn pipeline_categories_and_level_accept_their_from_str_names() {
         let mut value = startup_config();
         value["pipeline"] =
             serde_json::json!({"categories": ["PII", "dynamic_pii"], "max_level": "l2"});
-        let config = serde_json::from_value::<RawConfig>(value)
-            .unwrap()
-            .into_config()
-            .unwrap();
+        let config = load(value).unwrap();
         assert_eq!(
-            config.categories,
+            config.gateway.core.categories,
             [SecurityCategory::Pii, SecurityCategory::DynamicPii]
         );
-        assert_eq!(config.max_level, SecurityLevel::L2);
-        let mut value = startup_config();
-        value["pipeline"]["categories"] = serde_json::json!(["nope"]);
-        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        assert_eq!(config.gateway.core.max_level, SecurityLevel::L2);
+        for (key, invalid) in [
+            ("categories", serde_json::json!(["nope"])),
+            ("categories", serde_json::json!([])),
+            ("model_dir", serde_json::json!("/models")),
+        ] {
+            let mut value = startup_config();
+            value["pipeline"][key] = invalid;
+            assert!(load(value).is_err(), "{key}");
+        }
+        for required in ["categories", "max_level"] {
+            let mut value = startup_config();
+            value["pipeline"].as_object_mut().unwrap().remove(required);
+            assert!(load(value).unwrap_err().contains(required));
+        }
     }
 
     #[test]
@@ -412,41 +371,42 @@ mod tests {
         assert!(!gates.native.allows_model("native:pii"));
         assert_eq!(gates.l2, Some(false));
         assert!(serde_yaml::from_str::<ScanGateMatrix>("rule: {pii_email: false}").is_err());
+        // The pipeline's gate keys sit at its top level, like Core's.
+        let mut value = startup_config();
+        value["pipeline"]["rules"] = serde_json::json!({"pii_email": false});
+        let config = load(value).unwrap();
+        assert!(!config.gateway.core.gates.native.allows_rule("pii_email"));
     }
 
     #[test]
     fn startup_wolf_settings_preserve_legacy_multi_and_default_profile() {
-        let raw: RawConfig = serde_json::from_value(startup_config()).unwrap();
-        let config = raw.into_config().unwrap();
-        assert_eq!(config.l3_strategy, patronus_ark::L3Strategy::Multi);
-        assert_eq!(
-            config.wolf_options,
-            patronus_ark_core::WolfExecutionOptions::default()
-        );
-        assert_eq!(config.wolf, WolfSelection::default());
+        let config = load(startup_config()).unwrap();
+        assert_eq!(config.gateway.l3_strategy, patronus_ark::L3Strategy::Multi);
+        assert!(config.gateway.core.wolf.is_none());
     }
 
     #[test]
     fn startup_wolf_settings_reach_the_real_gateway_before_warmup() {
         let mut value = startup_config();
         value["pipeline"]["l3_strategy"] = serde_json::json!("dedicated");
-        value["pipeline"]["wolf_options"] = serde_json::json!({
-            "window_tokens": 32, "overlap_tokens": 4, "batch_size": 2
+        value["pipeline"]["wolf"] = serde_json::json!({
+            "model": "edge",
+            "precision": "mixed_x86",
+            "execution": {"window_tokens": 32, "overlap_tokens": 4, "batch_size": 2}
         });
-        value["pipeline"]["wolf"] = serde_json::json!({"model": "edge", "precision": "mixed_x86"});
-        let raw: RawConfig = serde_json::from_value(value).unwrap();
-        let config = raw.into_config().unwrap();
-        let gateway = SecurityGateway::with_max_level(Vec::new(), SecurityLevel::L1, None, false);
-        config.apply_model_defaults(&gateway).unwrap();
+        let config = load(value).unwrap();
+        let gateway = SecurityGateway::new(config.gateway.clone()).unwrap();
         assert_eq!(gateway.l3_strategy(), patronus_ark::L3Strategy::Dedicated);
         let execution = gateway.distributed_execution();
-        assert_eq!(execution.wolf_execution_options(), config.wolf_options);
+        let wolf = execution.wolf();
         assert_eq!(
-            execution.wolf_selection(),
-            WolfSelection {
-                model: patronus_ark_core::wolf::WolfModel::Edge,
-                precision: patronus_ark_core::wolf::WolfPrecision::MixedX86,
-            }
+            wolf.execution,
+            config.gateway.core.wolf.as_ref().unwrap().execution
+        );
+        assert_eq!(wolf.model, patronus_ark_core::wolf::WolfModel::Edge);
+        assert_eq!(
+            wolf.precision,
+            patronus_ark_core::wolf::WolfPrecision::MixedX86
         );
     }
 
@@ -459,7 +419,7 @@ mod tests {
         ] {
             let mut value = startup_config();
             value["pipeline"]["wolf"] = wolf;
-            assert!(serde_json::from_value::<RawConfig>(value).is_err());
+            assert!(load(value).is_err());
         }
     }
 
@@ -475,68 +435,55 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         )
         .unwrap();
         let mut value = startup_config();
-        value["pipeline"]["shell_command"] = serde_json::json!({
+        value["pipeline"]["categories"] = serde_json::json!(["shell_command"]);
+        value["pipeline"]["shell"] = serde_json::json!({
             "policy_dirs": [dir],
             "allowlist": {"C2-WEBHOOK-SITE": "ask"}
         });
-        let config = serde_json::from_value::<RawConfig>(value.clone())
-            .unwrap()
-            .into_config()
-            .unwrap();
-        let shell = config.shell_command.clone().unwrap();
+        let config = load(value.clone()).unwrap();
+        let gateway = SecurityGateway::new(config.gateway.clone()).unwrap();
+        let shell = gateway.shell_command_policy_config();
         assert_eq!(shell.user_policies.len(), 1);
         assert_eq!(shell.allowlist["C2-WEBHOOK-SITE"], "ask");
-        let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::ShellCommand],
-            SecurityLevel::L1,
-            None,
-            false,
-        );
-        config.apply_model_defaults(&gateway).unwrap();
-        assert_eq!(gateway.shell_command_policy_config(), shell);
 
-        value["pipeline"]["shell_command"]["policy_dirs"] =
-            serde_json::json!([dir.join("missing")]);
-        let error = serde_json::from_value::<RawConfig>(value.clone())
-            .unwrap()
-            .into_config()
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("pipeline.shell_command"),
-            "{error}"
-        );
-        value["pipeline"]["shell_command"] = serde_json::json!({"policies": []});
-        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        value["pipeline"]["shell"]["policy_dirs"] = serde_json::json!([dir.join("missing")]);
+        let config = load(value.clone()).unwrap();
+        let error = SecurityGateway::new(config.gateway).err().unwrap();
+        assert!(error.contains("shell"), "{error}");
+        value["pipeline"]["shell"] = serde_json::json!({"policies": []});
+        assert!(load(value).is_err());
         std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
     fn startup_wolf_settings_validate_profiles_and_strategy_during_config_loading() {
-        for profile in [
+        for execution in [
             serde_json::json!({"batch_size": 0}),
             serde_json::json!({"window_tokens": 2}),
             serde_json::json!({"overlap_tokens": 254}),
+            serde_json::json!({"unknown": 4}),
         ] {
             let mut value = startup_config();
-            value["pipeline"]["wolf_options"] = profile;
-            let raw: RawConfig = serde_json::from_value(value).unwrap();
-            assert!(raw
-                .into_config()
-                .unwrap_err()
-                .to_string()
-                .contains("pipeline.wolf_options"));
+            value["pipeline"]["wolf"] = serde_json::json!({ "execution": execution });
+            assert!(load(value).unwrap_err().contains("pipeline"), "{execution}");
         }
         let mut value = startup_config();
         value["pipeline"]["l3_strategy"] = serde_json::json!("unknown");
-        let raw: RawConfig = serde_json::from_value(value).unwrap();
-        assert!(raw
-            .into_config()
-            .unwrap_err()
-            .to_string()
-            .contains("pipeline.l3_strategy"));
+        assert!(load(value).unwrap_err().contains("pipeline"));
+    }
+
+    #[test]
+    fn onnx_runtime_config_accepts_bounded_threads_and_rejects_zero() {
         let mut value = startup_config();
-        value["pipeline"]["wolf_options"] = serde_json::json!({"unknown": 4});
-        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        value["pipeline"]["onnx_runtime"] =
+            serde_json::json!({"intra_threads": 2, "inter_threads": 1, "spinning": false});
+        let options = load(value).unwrap().gateway.onnx_runtime;
+        assert_eq!(options.intra_threads, Some(2));
+        assert_eq!(options.inter_threads, Some(1));
+        assert_eq!(options.spinning, Some(false));
+        let mut value = startup_config();
+        value["pipeline"]["onnx_runtime"] = serde_json::json!({"intra_threads": 0});
+        assert!(load(value).is_err());
     }
 
     #[test]
@@ -601,24 +548,6 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
     }
 
     #[test]
-    fn onnx_runtime_config_accepts_bounded_threads() {
-        let raw: RawOnnxRuntime =
-            serde_yaml::from_str("intra_threads: 2\ninter_threads: 1\nspinning: false\n").unwrap();
-        let options = raw.into_options().unwrap();
-
-        assert_eq!(options.intra_threads, Some(2));
-        assert_eq!(options.inter_threads, Some(1));
-        assert_eq!(options.spinning, Some(false));
-    }
-
-    #[test]
-    fn onnx_runtime_config_rejects_zero_threads() {
-        let raw: RawOnnxRuntime = serde_yaml::from_str("intra_threads: 0\n").unwrap();
-
-        assert!(raw.into_options().is_err());
-    }
-
-    #[test]
     fn rule_gates_parse_from_yaml_and_default_to_enabled() {
         let gates: ScanGateMatrix =
             serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
@@ -652,7 +581,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
 
         for pattern in DLP_PATTERNS {
             assert_eq!(
-                config.default_gates.native.allows_rule(pattern.name),
+                config.gateway.core.gates.native.allows_rule(pattern.name),
                 credential_groups.contains(&pattern.entity_group)
                     || default_on_groups.contains(&pattern.entity_group),
                 "unexpected default DLP gate for {} ({})",
@@ -662,30 +591,45 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         }
 
         assert!(config
-            .default_gates
+            .gateway
+            .core
+            .gates
             .native
             .allows_rule("dlp_sensitive_material"));
         assert!(config
-            .default_gates
+            .gateway
+            .core
+            .gates
             .native
             .allows_rule("dlp_secret_transfer"));
         assert!(!config
-            .default_gates
+            .gateway
+            .core
+            .gates
             .native
             .allows_rule("dlp_mcp_runtime_risk"));
-        assert!(!config.default_gates.native.allows_rule("dlp_mcp_policy"));
         assert!(!config
-            .default_gates
+            .gateway
+            .core
+            .gates
+            .native
+            .allows_rule("dlp_mcp_policy"));
+        assert!(!config
+            .gateway
+            .core
+            .gates
             .native
             .allows_rule("dlp_destructive_operation"));
 
-        let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::Dlp],
-            SecurityLevel::L1,
-            None,
-            false,
-        );
-        gateway.set_execution_gates(config.default_gates);
+        let gateway = SecurityGateway::new(GatewayConfig {
+            core: patronus_ark_core::ScannerConfig {
+                categories: vec![SecurityCategory::Dlp],
+                max_level: SecurityLevel::L1,
+                ..config.gateway.core
+            },
+            ..GatewayConfig::default()
+        })
+        .unwrap();
         let results = gateway.scan_all(
             "password = CorrectHorseBatteryStaple\n\
              SELECT * FROM customer;\n\

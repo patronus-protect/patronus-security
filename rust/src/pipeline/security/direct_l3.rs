@@ -142,6 +142,7 @@ impl SecurityGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayConfig;
     use crate::{L3Strategy, ScanGateMatrix, SecurityCategory};
 
     fn gateway() -> SecurityGateway {
@@ -153,18 +154,20 @@ mod tests {
         ));
         let bundle = crate::assets::UNIFIED_L3_ASSET.spec.cache_dir(&base);
         std::fs::create_dir_all(&bundle).unwrap();
-        std::fs::copy(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../ark-core/tests/fixtures/tokenizer.mmbpe"),
+        std::fs::write(
             bundle.join("tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
-        let gateway = SecurityGateway::with_max_level(
-            vec![SecurityCategory::Injection, SecurityCategory::ToolTags],
-            SecurityLevel::L3,
-            Some(base),
-            false,
-        );
+        let gateway = SecurityGateway::new({
+            let mut config = GatewayConfig::new(
+                vec![SecurityCategory::Injection, SecurityCategory::ToolTags],
+                SecurityLevel::L3,
+            );
+            config.core.cache_root = Some(base);
+            config
+        })
+        .unwrap();
         gateway.set_l3_strategy(L3Strategy::Multi);
         gateway.set_execution_gates(ScanGateMatrix::levels(false, false, true));
         gateway

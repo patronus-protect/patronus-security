@@ -6,6 +6,7 @@
 //! `fixtures/dlp_synth_vectors.json`. Baseline entities (GOLD-D2) have generators
 //! for carrier gold without an ARK rule.
 
+use patronus_ark::GatewayConfig;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -261,12 +262,11 @@ fn high_entropy_generators_stay_above_the_detect_secrets_limit() {
 fn each_rule_reports_exactly_its_generated_values() {
     let map = rule_map();
     let generators = generators();
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     for (rule, entry) in &map.rules {
         let mut gates = ScanGateMatrix::default();
         for pattern in DLP_PATTERNS {
@@ -315,12 +315,11 @@ fn rules_do_not_report_their_lookalike_values() {
     // F03: a token shape with a wrong check value or length is no match for its rule.
     let map = rule_map();
     let generators = generators();
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let mut checked = 0;
     for (rule, entry) in &map.rules {
         let mut gates = ScanGateMatrix::default();

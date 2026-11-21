@@ -8,6 +8,7 @@
 //! `recall` are opt-in, report the model score and drop candidates below the
 //! PII thresholds.
 
+use patronus_ark::GatewayConfig;
 use std::{path::Path, sync::OnceLock};
 
 use patronus_ark::golden_recipes::{
@@ -39,12 +40,11 @@ const SECRET_GROUPS: &[&str] = &[
 ];
 
 fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     if let Some(gates) = gates {
         scanner.set_execution_gates(gates);
     }
@@ -157,10 +157,7 @@ struct Case {
 }
 
 fn fixture() -> Vec<Case> {
-    serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap()
+    serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap()
 }
 
 fn materialized(generators: &GeneratorSet, case: &Case, template: &str) -> String {

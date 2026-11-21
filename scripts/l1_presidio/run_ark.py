@@ -10,7 +10,7 @@ as the Presidio baseline, so ``external_pii_eval evaluate --predictions`` and la
 comparisons treat both engines alike. Ark labels without a benchmark id are
 namespaced as ``ark.<LABEL>`` and are therefore never scored by accident.
 
-The engine is ``SecurityGateway(categories=["pii"], max_level="l1")`` without model
+The engine is ``SecurityGateway({"categories": ["pii"], "max_level": "l1"})`` without model
 downloads, in the default PII mode ``strict`` unless ``--pii-mode balanced|recall`` asks for
 the scored modes (K02; the sidecar then records ``engine.pii_mode``). ``--gates PATH`` applies the
 ``rules`` of an execution-gates JSON file on top, e.g. the opt-in bare rules of
@@ -23,7 +23,7 @@ of the native module but no timestamps, so a rerun on the same build is
 byte-identical.
 
 ``--dynamic-pii`` adds Ark's L3 ``dynamic-pii`` pipeline (GLiNER) next to L1: a second gateway
-``SecurityGateway(categories=["dynamic-pii"], max_level="l3", download_files=True)`` with the
+``SecurityGateway({"categories": ["dynamic-pii"], "max_level": "l3", "download": "missing"})`` with the
 given labels and thresholds (``--dynamic-pii-labels``, ``--dynamic-pii-threshold``,
 ``--dynamic-pii-label-threshold LABEL=X``) scans every row after L1. Its spans carry
 ``dynamic_pii_label`` and the benchmark id from ``dynamic_pii`` in entity_map.yaml (unmapped labels
@@ -113,8 +113,14 @@ def build_dynamic_gateway(config: dict[str, Any]) -> Any:
     """Create and warm up the L3 dynamic-pii gateway (downloads the GLiNER asset if missing)."""
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway(categories=[DYNAMIC_CATEGORY], max_level=DYNAMIC_MAX_LEVEL, download_files=True,
-                              dynamic_pii_config=config)
+    gateway = SecurityGateway(
+        {
+            "categories": [DYNAMIC_CATEGORY],
+            "max_level": DYNAMIC_MAX_LEVEL,
+            "download": "missing",
+            "dynamic_pii": config,
+        }
+    )
     gateway.warmup()
     return gateway
 
@@ -142,7 +148,7 @@ def build_gateway(pii_mode: str = DEFAULT_PII_MODE, rules: dict[str, bool] | Non
     from patronus_ark import SecurityGateway
 
     _check_pii_mode(pii_mode)
-    gateway = SecurityGateway(categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False)
+    gateway = SecurityGateway({"categories": [CATEGORY], "max_level": MAX_LEVEL, "download": "never"})
     gates: dict[str, Any] = {**({"pii_mode": pii_mode} if pii_mode != DEFAULT_PII_MODE else {}),
                              **({"rules": rules} if rules else {})}
     if gates:

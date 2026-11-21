@@ -10,6 +10,7 @@
 //! for the scored modes. Validators are unchanged: the vectors below pass or fail the
 //! validator or checksum they name, whatever the language of the field name.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeMap;
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -25,12 +26,11 @@ use serde_json::Value;
 const LANGUAGES: [&str; 4] = ["fr", "es", "it", "nl"];
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
@@ -683,10 +683,7 @@ fn validator_vectors_are_language_independent() {
 }
 
 fn lexicon() -> Vec<Value> {
-    serde_json::from_str(include_str!(
-        "../../ark-core/src/detectors/anchor_lexicons/pii.json"
-    ))
-    .unwrap()
+    serde_json::from_str(patronus_ark_core::test_fixtures::PII_ANCHOR_LEXICON).unwrap()
 }
 
 /// Lexicon ids of the anchor rules this task extends.
@@ -795,10 +792,8 @@ struct Probe {
 
 #[test]
 fn rule_fixture_probes_fr_es_it_nl_field_names() {
-    let probes: Vec<Probe> = serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap();
+    let probes: Vec<Probe> =
+        serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap();
     let mut probed = 0;
     for probe in probes.iter().filter(|probe| !probe.multilingual.is_empty()) {
         let languages: Vec<_> = probe.multilingual.keys().map(String::as_str).collect();

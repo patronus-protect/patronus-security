@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use patronus_ark::{
     assets::ntdb_l2_package_manifest_files,
     ml::ntdb_executor::{manifest::parse_package_manifest, NtdbExecutor},
-    NtdbOperatingPoint,
 };
+use patronus_ark_core::NtdbOperatingPoint;
 
 fn fixture(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATRONUS_NTDB_V4_FIXTURE_ROOT")

@@ -3,6 +3,8 @@
 //!
 //! Run: `cargo run --example 08_l3_pipeline_policies`
 
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::time::Duration;
 
 use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
@@ -14,16 +16,19 @@ use patronus_ark_core::{
 };
 
 fn main() {
-    let scanner = SecurityGateway::with_max_level(
-        vec![
-            SecurityCategory::Injection,
-            SecurityCategory::UnsafeAction,
-            SecurityCategory::ToolClass,
-        ],
-        SecurityLevel::L3,
-        None,
-        true,
-    );
+    let scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![
+                SecurityCategory::Injection,
+                SecurityCategory::UnsafeAction,
+                SecurityCategory::ToolClass,
+            ],
+            SecurityLevel::L3,
+        );
+        config.download = DownloadPolicy::Missing;
+        config
+    })
+    .unwrap();
 
     let mut l3 = L3SchedulerPolicy::default();
     l3.pipelines.insert(

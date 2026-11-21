@@ -32,7 +32,8 @@ pub struct LazyOnnxTextClassifier {
     ttl: Duration,
     loaded: Option<OnnxTextClassifier>,
     wolf_runner: Option<patronus_ark_core::wolf::WolfRunner>,
-    wolf_selection: crate::WolfSelection,
+    /// The Wolf model and export this slot loads (`model`, `precision`).
+    wolf: patronus_ark_core::wolf::WolfConfig,
     loaded_backend: Option<ExecutionBackend>,
     loaded_options: Option<OnnxRuntimeOptions>,
     last_used: Option<Instant>,
@@ -131,7 +132,7 @@ impl LazyOnnxTextClassifier {
             ttl: l3_ttl(),
             loaded: None,
             wolf_runner: None,
-            wolf_selection: crate::WolfSelection::default(),
+            wolf: Default::default(),
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
@@ -270,21 +271,22 @@ impl LazyOnnxTextClassifier {
             self.loaded = None;
             self.loaded_backend = None;
             self.loaded_options = None;
-            self.wolf_runner = Some(patronus_ark_core::wolf::WolfRunner::new_with_options(
+            self.wolf_runner = Some(patronus_ark_core::wolf::WolfRunner::new(
                 &patronus_ark_core::wolf::WolfConfig {
-                    bundle_dir: self
-                        .dir
-                        .join(&self.tokenizer_path)
-                        .parent()
-                        .ok_or("invalid Wolf tokenizer path")?
-                        .to_path_buf(),
+                    bundle_dir: Some(
+                        self.dir
+                            .join(&self.tokenizer_path)
+                            .parent()
+                            .ok_or("invalid Wolf tokenizer path")?
+                            .to_path_buf(),
+                    ),
                     threshold: Some(threshold),
-                    model: self.wolf_selection.model,
-                    precision: self.wolf_selection.precision,
+                    model: self.wolf.model,
+                    precision: self.wolf.precision,
                     backend,
                     runtime_options: options,
+                    execution,
                 },
-                execution,
             )?);
             self.loaded_backend = Some(backend);
             self.loaded_options = Some(options);
@@ -328,16 +330,17 @@ impl LazyOnnxTextClassifier {
             ttl: self.ttl,
             loaded: None,
             wolf_runner: None,
-            wolf_selection: self.wolf_selection,
+            wolf: self.wolf.clone(),
             loaded_backend: None,
             loaded_options: None,
             last_used: None,
         }
     }
 
-    /// Load this slot's Wolf session from `selection` instead of the default export.
-    pub(crate) fn with_wolf_selection(mut self, selection: crate::WolfSelection) -> Self {
-        self.wolf_selection = selection;
+    /// Load this slot's Wolf session with the model and export of `wolf`
+    /// instead of the default ones.
+    pub(crate) fn with_wolf(mut self, wolf: patronus_ark_core::wolf::WolfConfig) -> Self {
+        self.wolf = wolf;
         self
     }
 
@@ -479,12 +482,12 @@ mod tests {
         let dir = fake_lazy_onnx_dir("core-eager-classifier");
         std::fs::write(
             dir.join("onnx/model.onnx"),
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_binary.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_BINARY_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         // Existing Ark users receive the Core type through the same public path.
@@ -548,12 +551,12 @@ mod tests {
         let model = dir.join("model_fp16.onnx");
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_SYNTHETIC_FP16_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
@@ -584,7 +587,7 @@ mod tests {
         assert!(!classifier.is_loaded());
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_scalar.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_SCALAR_ONNX,
         )
         .unwrap();
         classifier
@@ -622,12 +625,12 @@ mod tests {
         let _cleanup = Cleanup(dir.clone());
         std::fs::write(
             dir.join("l3/onnx/onnx_fp16/model_fp16.onnx"),
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_SYNTHETIC_FP16_ONNX,
         )
         .unwrap();
         std::fs::write(
             dir.join("l3/tokenizer.mmbpe"),
-            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+            patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
         std::fs::write(dir.join("l3/config.json"), r#"{"num_labels":1}"#).unwrap();
@@ -672,7 +675,7 @@ mod tests {
         let model = dir.join("l3/onnx/onnx_fp16/model_fp16.onnx");
         std::fs::write(
             &model,
-            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_scalar.onnx"),
+            patronus_ark_core::test_fixtures::WOLF_BATCH_SCALAR_ONNX,
         )
         .unwrap();
         let options = crate::WolfExecutionOptions {

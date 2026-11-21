@@ -9,6 +9,7 @@
 //! `balanced` and `recall`, `matched_rules[].context` explains every score:
 //! bonus, penalty and the deciding lexicon term with its side and distance.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::lexical_anchors::LexicalAnchorScanner;
 use patronus_ark_core::native::ScoreMode;
@@ -31,12 +32,11 @@ use serde::Deserialize;
 const PROXIMITY_RULE: &str = "pii_phone_de_national_proximity";
 
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
@@ -921,10 +921,8 @@ struct Case {
 
 #[test]
 fn bilingual_rule_fixture_probes_context_and_counter_context() {
-    let cases: Vec<Case> = serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap();
+    let cases: Vec<Case> =
+        serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap();
     let probed: Vec<_> = cases
         .iter()
         .filter(|case| case.category == "pii")

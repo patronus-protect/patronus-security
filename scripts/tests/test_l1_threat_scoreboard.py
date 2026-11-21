@@ -433,9 +433,9 @@ def test_category_keeps_the_injection_name():
 
 
 def test_config_defaults_to_l1_only_and_hashes_canonically(tmp_path):
-    assert MODULE.load_config(None) == {"scanner": {"cascade": {"max_level": "l1"}}}
+    assert MODULE.load_config(None) == {"scanner": {"max_level": "l1", "cascade": {}}}
     path = tmp_path / "c.json"
-    path.write_text('{"scanner": {"wolf": {"bundle_dir": "/m"}, "cascade": {"max_level": "l3"}}}')
+    path.write_text('{"scanner": {"wolf": {"bundle_dir": "/m"}, "max_level": "l3", "cascade": {}}}')
     config = MODULE.load_config(path)
     assert MODULE.needs_wolf(config) and not MODULE.needs_wolf(MODULE.L1_CASCADE)
     assert MODULE.config_hash(config) == MODULE.config_hash(json.loads(json.dumps(config, sort_keys=True)))
@@ -594,14 +594,14 @@ def test_calibrate_holds_one_per_mille_on_the_benign_pool():
     assert clear <= detect
     assert sum(s >= clear for s in benign) / len(benign) <= 0.01 and entry["escalate_fpr"] <= 0.01
     # The report-only benign row is not in the pool; the base config's deepest layer stays.
-    assert config["calibration"]["benign_rows"] == 4000 and config["scanner"]["cascade"]["max_level"] == "l1"
+    assert config["calibration"]["benign_rows"] == 4000 and config["scanner"]["max_level"] == "l1"
     assert entry["benign_scored"] == 4000 and "detect" not in entry and "clear" not in entry
     # A class without benign scores gets no degenerate cut ("any score above 0"): it keeps the shipped
     # acceptance and escalates every undetected row, reported as not reachable.
     assert "jailbreak" not in config["scanner"]["cascade"]["modules"]
     assert config["calibration"]["classes"]["jailbreak"] == {
         "benign_scored": 0, "detect": MODULE.UNREACHABLE, "clear": MODULE.UNREACHABLE}
-    assert MODULE.L1_CASCADE == {"scanner": {"cascade": {"max_level": "l1"}}}
+    assert MODULE.L1_CASCADE == {"scanner": {"max_level": "l1", "cascade": {}}}
 
 
 def test_calibrate_keeps_the_shipped_cuts_when_the_benign_scores_cannot_fill_the_budget():
@@ -620,7 +620,7 @@ def test_calibrate_keeps_the_shipped_cuts_when_the_benign_scores_cannot_fill_the
     assert cuts == {"detect_threshold": math.nextafter(0.5, math.inf)}
     assert three["calibration"]["classes"][INJ] == {"benign_scored": 3, "detect_fpr": 2 / 2000,
                                                     "clear": MODULE.UNREACHABLE}
-    stale = {"scanner": {"cascade": {"max_level": "l1", "modules": {"injection": {
+    stale = {"scanner": {"max_level": "l1", "cascade": {"modules": {"injection": {
         "detect_threshold": 0.7, "clear_threshold": 0.1}}}}}
     two = MODULE.calibrate(pairs(2), stale)
     assert "injection" not in two["scanner"]["cascade"]["modules"]

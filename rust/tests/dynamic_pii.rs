@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
@@ -8,13 +9,14 @@ use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    assets::DYNAMIC_PII_ASSET, DynamicPiiConditionalLabels, DynamicPiiConfig,
-    DynamicPiiExecutionGate, DynamicPiiRequestConfig, DynamicPiiResultCondition,
-    QueuedSecurityEvent, SecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, MAX_REQUEST_LABEL_BYTES,
+    assets::DYNAMIC_PII_ASSET, DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway,
+    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
 };
 
-use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    cascade::SecurityLevel, DynamicPiiConditionalLabels, DynamicPiiExecutionGate,
+    DynamicPiiRequestConfig, DynamicPiiResultCondition, SecurityCategory, MAX_REQUEST_LABEL_BYTES,
+};
 
 #[test]
 fn default_labels_are_a_small_core_bundle() {
@@ -135,12 +137,11 @@ fn completion_for(gateway: &SecurityGateway, request_id: &str) -> SecurityReques
 
 #[test]
 fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: vec!["person".to_string()],
@@ -206,12 +207,11 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
 
 #[test]
 fn dynamic_pii_gate_waits_for_authoritative_l3_source_result() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let started = Instant::now();
     let request_id = gateway.enqueue_test_dynamic_pii_dependency_request(150);
     let first = gateway
@@ -242,12 +242,11 @@ fn category_and_readiness_expose_l3_only_pipeline() {
         "dynamic_pii".parse::<SecurityCategory>().unwrap(),
         SecurityCategory::DynamicPii
     );
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let readiness = gateway.runtime_readiness();
     assert!(matches!(
         readiness.l1,
@@ -265,12 +264,11 @@ fn category_and_readiness_expose_l3_only_pipeline() {
 
 #[test]
 fn l2_gateway_does_not_run_l3_only_pipeline() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::DynamicPii],
         SecurityLevel::L2,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     assert!(gateway
         .scan_category(SecurityCategory::DynamicPii, "Ada lives in Berlin")
         .is_empty());
@@ -313,12 +311,12 @@ impl Drop for GlinerModelDir {
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn gliner_finds_person_organization_and_location_in_english_and_german() {
     let model_dir = GlinerModelDir::new("patronus_dynamic_pii_entities_test");
-    let mut gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::DynamicPii],
-        SecurityLevel::L3,
-        Some(model_dir.path.clone()),
-        false,
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::DynamicPii], SecurityLevel::L3);
+        config.core.cache_root = Some(model_dir.path.clone());
+        config
+    })
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: ["person", "organization", "location"]
@@ -385,12 +383,15 @@ fn gliner_finds_person_organization_and_location_in_english_and_german() {
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
     let model_dir = GlinerModelDir::new("patronus_dynamic_pii_test");
-    let mut gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-        SecurityLevel::L3,
-        Some(model_dir.path.clone()),
-        false,
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+            SecurityLevel::L3,
+        );
+        config.core.cache_root = Some(model_dir.path.clone());
+        config
+    })
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: ["person", "organization", "location"]
@@ -498,12 +499,15 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
 #[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
 fn hey_person_score_uses_the_stable_base_only_label_group() {
     let model_dir = GlinerModelDir::new("patronus_dynamic_pii_hey_test");
-    let mut gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-        SecurityLevel::L3,
-        Some(model_dir.path.clone()),
-        false,
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+            SecurityLevel::L3,
+        );
+        config.core.cache_root = Some(model_dir.path.clone());
+        config
+    })
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: vec!["person".to_string()],
@@ -547,12 +551,12 @@ fn hey_person_score_uses_the_stable_base_only_label_group() {
 fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
     let model_dir = GlinerModelDir::new("patronus_dynamic_pii_latency_test");
 
-    let mut gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::DynamicPii],
-        SecurityLevel::L3,
-        Some(model_dir.path.clone()),
-        false,
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::DynamicPii], SecurityLevel::L3);
+        config.core.cache_root = Some(model_dir.path.clone());
+        config
+    })
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: ["person", "organization", "location"]
@@ -604,7 +608,7 @@ fn request_config_replaces_entity_fields_and_keeps_gateway_limits() {
     }))
     .unwrap();
 
-    let config = request.resolve(&base).unwrap();
+    let config = base.with_request(request).unwrap();
 
     assert_eq!(
         config.labels,
@@ -626,7 +630,7 @@ fn request_config_rejects_invalid_blocks() {
     let resolve = |value: serde_json::Value| {
         serde_json::from_value::<DynamicPiiRequestConfig>(value)
             .map_err(|error| error.to_string())
-            .and_then(|request| request.resolve(&base))
+            .and_then(|request| base.with_request(request))
     };
 
     assert!(resolve(serde_json::json!({"labels": ["person"], "timeout_ms": 1})).is_err());
@@ -652,12 +656,11 @@ fn request_config_rejects_invalid_blocks() {
 
 #[test]
 fn request_config_applies_to_its_own_request_only() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: vec!["person".to_string()],
@@ -681,18 +684,19 @@ fn request_config_applies_to_its_own_request_only() {
             )
             .unwrap()
     };
-    let request = DynamicPiiRequestConfig {
-        labels: vec!["street_address".to_string()],
-        threshold: None,
-        label_thresholds: HashMap::new(),
-        execution_gate: DynamicPiiExecutionGate::IfResultIn {
-            pipeline: "dlp".to_string(),
-            results: vec!["safe".to_string()],
-        },
-        conditional_labels: Vec::new(),
-    }
-    .resolve(&gateway.dynamic_pii_config())
-    .unwrap();
+    let request = gateway
+        .dynamic_pii_config()
+        .with_request(DynamicPiiRequestConfig {
+            labels: vec!["street_address".to_string()],
+            threshold: None,
+            label_thresholds: HashMap::new(),
+            execution_gate: DynamicPiiExecutionGate::IfResultIn {
+                pipeline: "dlp".to_string(),
+                results: vec!["safe".to_string()],
+            },
+            conditional_labels: Vec::new(),
+        })
+        .unwrap();
 
     // Without the GLiNER model an enqueued dynamic-pii job degrades; a gated-off
     // one leaves the request complete.
@@ -711,12 +715,11 @@ fn request_config_applies_to_its_own_request_only() {
 
 #[test]
 fn request_options_reject_an_invalid_dynamic_pii_config() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::DynamicPii],
         SecurityLevel::L3,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let invalid = DynamicPiiConfig {
         labels: Vec::new(),
         ..DynamicPiiConfig::default()

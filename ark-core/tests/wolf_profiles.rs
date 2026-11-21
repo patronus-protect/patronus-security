@@ -30,7 +30,11 @@ fn local_export_window_overlap_batch_parity() {
                 batch_size,
             };
             let start = Instant::now();
-            let mut runner = WolfRunner::new_with_options(&config, options).unwrap();
+            let mut runner = WolfRunner::new(&WolfConfig {
+                execution: options,
+                ..config.clone()
+            })
+            .unwrap();
             let warmup = start.elapsed();
             let start = Instant::now();
             let report = runner.scan(&text).unwrap();

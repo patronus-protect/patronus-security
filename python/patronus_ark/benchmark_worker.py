@@ -18,17 +18,12 @@ def main():
     config = payload["gateway"]
     process_start_peak_rss_mb = _process_peak_rss_mb()
     gateway = SecurityGateway(
-        categories=["injection", "dynamic-pii"],
-        max_level="l3",
-        model_dir=config["model_dir"],
-        download_files=False,
-        onnx_batch_mode=config["onnx_batch_mode"],
-        execution_backend=config["execution_backend"],
-        ntdb_operating_point=config["ntdb_operating_point"],
-        l3_strategy=config["l3_strategy"],
-        wolf_options=config.get("wolf_options"),
-        wolf_model=config.get("wolf_model", "small"),
-        wolf_precision=config.get("wolf_precision", "auto"),
+        {
+            **config,
+            "categories": ["injection", "dynamic-pii"],
+            "max_level": "l3",
+            "download": "never",
+        }
     )
     gateway.warmup()
 

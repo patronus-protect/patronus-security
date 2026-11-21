@@ -15,12 +15,17 @@ pub mod post_prediction;
 pub use control::ScanControl;
 mod scanner;
 pub use scanner::*;
+mod scan_request;
+pub use scan_request::*;
 pub mod warmup;
 pub use warmup::{DownloadPolicy, WarmupOptions};
 pub mod aggregation;
 pub mod attack_classes;
 pub mod cascade;
 pub mod shared_models;
+#[cfg(any(test, feature = "test-util"))]
+#[doc(hidden)]
+pub mod test_fixtures;
 mod wolf_options;
 pub use wolf_options::{WolfExecutionOptions, WolfServingProfile};
 #[cfg(feature = "wolf")]

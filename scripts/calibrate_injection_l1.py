@@ -495,7 +495,7 @@ def scanner(binary: Path | None = None):
         return JsonlScanner(binary)
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
+    gateway = SecurityGateway({"categories": ["injection"], "max_level": "l1", "download": "never"})
     gateway.warmup()
     return gateway
 

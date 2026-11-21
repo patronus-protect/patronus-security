@@ -13,7 +13,7 @@ use super::decision_cache::DecisionCache;
 use crate::{
     assets::DYNAMIC_PII_ASSET,
     detectors::{
-        shell::{ShellPolicyConfig, ShellRiskPipeline},
+        shell::{ShellConfig, ShellPolicyConfig, ShellRiskPipeline},
         NativeDetection,
     },
     diagnostics::PhaseMetricScope,
@@ -21,11 +21,11 @@ use crate::{
     pipeline::{L3Worker, RequestRegistry},
     post_prediction::filter_evidence,
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
-    LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
+    GatewayConfig, LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
-use patronus_ark_core::{native::NativeEngine, ScanControl};
+use patronus_ark_core::{native::NativeEngine, warmup::DownloadPolicy, ScanControl};
 
 mod direct_l3;
 mod injection_l1;
@@ -118,12 +118,11 @@ mod distributed_plan_tests {
 
     #[test]
     fn tool_tags_plan_preserves_all_canonical_model_bindings() {
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::ToolTags],
             SecurityLevel::L2,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         let execution = ScanExecution::new(SecurityLevel::L2);
         let pipelines = gateway.distributed_l2_pipelines(&[SecurityCategory::ToolTags], &execution);
 
@@ -146,12 +145,11 @@ mod distributed_plan_tests {
 
     #[test]
     fn distributed_l2_plan_marks_l3_as_deferred_for_central_aggregation() {
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Injection],
             SecurityLevel::L3,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         let execution = ScanExecution::new(SecurityLevel::L3);
         let inputs = [ExternalL1Input::new(
             SecurityCategory::Injection,
@@ -175,12 +173,11 @@ mod distributed_plan_tests {
     }
 
     fn injection_gateway() -> SecurityGateway {
-        SecurityGateway::with_max_level(
+        SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Injection],
             SecurityLevel::L2,
-            None,
-            false,
-        )
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -269,12 +266,11 @@ mod distributed_plan_tests {
     #[test]
     fn queue_and_distributed_plan_mark_the_same_final_l1_results() {
         // Up to L1 only, an undecided module ends clear at L1 in both paths.
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::Injection],
             SecurityLevel::L1,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         gateway.set_execution_gates(cascade_gates());
         let queued = queued_events(&gateway, "ordinary prose", |result| {
             format!("{}:{:?}", result.level, result.decided_by)
@@ -312,12 +308,11 @@ mod distributed_plan_tests {
             cascade: Some(patronus_ark_core::cascade::Cascade::new(config).unwrap()),
             ..crate::ScanGateMatrix::default()
         };
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::UnsafeAction],
             SecurityLevel::L2,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         let inputs = [ExternalL1Input::new(
             SecurityCategory::UnsafeAction,
             "Delete the entire production database right away.",
@@ -603,10 +598,10 @@ pub struct SecurityGatewayCore {
     categories: Vec<SecurityCategory>,
     /// Maximum layer to evaluate for configured categories.
     max_level: SecurityLevel,
-    /// Optional asset root. Defaults to the platform cache directory.
-    model_dir: Option<PathBuf>,
-    /// Whether missing model assets may be downloaded during `warmup`.
-    download_files: bool,
+    /// Model cache root (`cache_root`). Defaults to Core's default cache root.
+    cache_root: Option<PathBuf>,
+    /// Whether `warmup` may download missing model assets.
+    download: DownloadPolicy,
     /// Optional allowlist of categories that may download missing assets.
     download_categories: Option<Vec<SecurityCategory>>,
     /// Execution gates consumed by scan methods.
@@ -617,8 +612,9 @@ pub struct SecurityGatewayCore {
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
     /// User policies and allowlist of the `shell_command` verdict.
     shell_command_policy_config: Mutex<ShellPolicyConfig>,
-    /// sha256 of the `shell_command` release manifest that warmup accepts.
-    shell_command_manifest_sha256: String,
+    /// Cat's bundle (`shell`): its directory (unset: below the cache root)
+    /// and the release manifest warmup accepts.
+    shell: ShellConfig,
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
@@ -770,12 +766,11 @@ mod native_adapter_tests {
 
     #[test]
     fn ark_only_categories_do_not_initialize_shared_native_producers() {
-        let gateway = SecurityGateway::with_max_level(
+        let gateway = SecurityGateway::new(GatewayConfig::new(
             vec![SecurityCategory::ShellCommand, SecurityCategory::Routing],
             SecurityLevel::L1,
-            None,
-            false,
-        );
+        ))
+        .unwrap();
         for category in patronus_ark_core::native::NATIVE_CATEGORIES {
             assert!(gateway.native_engine.producers(category).is_empty());
         }
@@ -810,25 +805,6 @@ impl SecurityGateway {
             .store(worker_count.max(1), Ordering::Relaxed);
     }
 
-    /// Configure dedicated Wolf windowing and batching for subsequent scans.
-    pub fn set_wolf_execution_options(
-        &self,
-        options: crate::WolfExecutionOptions,
-    ) -> Result<(), String> {
-        self.execution
-            .lock()
-            .expect("execution mutex poisoned")
-            .set_wolf_execution_options(options)
-    }
-
-    /// Choose the dedicated Wolf model and ONNX export; set before warmup.
-    pub fn set_wolf_selection(&self, selection: crate::WolfSelection) -> Result<(), String> {
-        self.execution
-            .lock()
-            .expect("execution mutex poisoned")
-            .set_wolf_selection(selection)
-    }
-
     /// Set ONNX Runtime session options for subsequent scans.
     pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions) {
         self.execution
@@ -837,76 +813,56 @@ impl SecurityGateway {
             .set_onnx_runtime_options(options);
     }
 
-    /// Create a gateway with `SecurityLevel::L2` as the maximum level.
-    pub fn new(
-        categories: Vec<SecurityCategory>,
-        model_dir: Option<PathBuf>,
-        download_files: bool,
-    ) -> Self {
-        Self::with_max_level(categories, SecurityLevel::L2, model_dir, download_files)
-    }
-
-    /// Create a gateway with an explicit maximum security level.
-    pub fn with_max_level(
-        categories: Vec<SecurityCategory>,
-        max_level: SecurityLevel,
-        model_dir: Option<PathBuf>,
-        download_files: bool,
-    ) -> Self {
-        Self::with_download_categories(categories, max_level, model_dir, download_files, None)
-    }
-
-    /// Create a gateway with an optional per-category asset download allowlist.
-    ///
-    /// When `download_categories` is `None`, all configured categories may
-    /// download missing assets if `download_files` is `true`.
-    pub fn with_download_categories(
-        categories: Vec<SecurityCategory>,
-        max_level: SecurityLevel,
-        model_dir: Option<PathBuf>,
-        download_files: bool,
-        download_categories: Option<Vec<SecurityCategory>>,
-    ) -> Self {
-        Self::try_with_download_categories_and_cache(
-            categories,
-            max_level,
-            model_dir,
-            download_files,
+    /// Create a gateway from its config (see [`GatewayConfig`]); refuses an
+    /// invalid config, unreadable `shell` policies and a persistent cache
+    /// that does not open. Persistent caching is enabled only when
+    /// `cache.storage_location` is set; requests cannot override it.
+    pub fn new(config: GatewayConfig) -> Result<Self, String> {
+        config.validate()?;
+        let GatewayConfig {
+            core,
+            download,
             download_categories,
-            crate::ExactCacheConfig::default(),
-        )
-        .expect("memory-only exact cache must initialize")
-    }
-
-    /// Create a gateway with lifecycle-scoped exact-cache configuration.
-    ///
-    /// Persistent caching is enabled only when `cache_config.persistent`
-    /// contains an explicit storage location. Requests cannot override it.
-    pub fn try_with_download_categories_and_cache(
-        categories: Vec<SecurityCategory>,
-        max_level: SecurityLevel,
-        model_dir: Option<PathBuf>,
-        download_files: bool,
-        download_categories: Option<Vec<SecurityCategory>>,
-        cache_config: crate::ExactCacheConfig,
-    ) -> Result<Self, crate::CacheError> {
+            l3_strategy,
+            ntdb_operating_point,
+            ntdb_decision_threshold_point,
+            execution_backend,
+            onnx_batch_mode,
+            onnx_runtime,
+            dynamic_pii,
+            cache,
+        } = config;
+        let shell = core.shell.unwrap_or_default();
+        let shell_policies = ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist)
+            .map_err(|error| format!("shell: {error}"))?;
+        let mut execution = ScanExecution::with_gates(core.max_level, core.gates);
+        execution.set_wolf(core.wolf.unwrap_or_default())?;
+        execution.set_backend(execution_backend);
+        if let Some(mode) = onnx_batch_mode {
+            execution.set_onnx_batch_mode(mode);
+        }
+        execution.set_onnx_runtime_options(onnx_runtime);
+        execution.set_ntdb_operating_point(ntdb_operating_point);
+        execution.set_ntdb_decision_threshold_point(ntdb_decision_threshold_point);
+        execution.set_l3_strategy(l3_strategy);
         let requests = Arc::new(RequestRegistry::default());
-        let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
+        let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache)
+            .map_err(|error| format!("cache: {error}"))?;
+        let categories = core.categories;
+        let max_level = core.max_level;
         let native_engine = NativeEngine::new(&categories);
-        let execution = ScanExecution::new(max_level);
         native_engine.prepare(&execution.gates().native);
         let core = SecurityGatewayCore {
             categories,
             max_level,
-            model_dir,
-            download_files,
+            cache_root: core.cache_root,
+            download,
             download_categories,
             execution: Mutex::new(execution),
             external_l1: Mutex::new(HashMap::new()),
-            dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
-            shell_command_policy_config: Mutex::new(ShellPolicyConfig::default()),
-            shell_command_manifest_sha256: patronus_ark_core::warmup::SHELL_MANIFEST_SHA256
-                .to_string(),
+            dynamic_pii_config: Mutex::new(dynamic_pii.validated()?),
+            shell_command_policy_config: Mutex::new(shell_policies),
+            shell,
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
@@ -1088,7 +1044,7 @@ impl SecurityGateway {
 
     #[doc(hidden)]
     pub fn should_download_assets_for(&self, category: SecurityCategory) -> bool {
-        if !self.download_files {
+        if self.download == DownloadPolicy::Never {
             return false;
         }
 
@@ -1463,13 +1419,6 @@ impl SecurityGateway {
         Ok(())
     }
 
-    /// Accept a `shell_command` bundle with this manifest instead of the
-    /// pinned release (synthetic bundles in tests).
-    #[cfg(feature = "test-util")]
-    pub fn pin_shell_command_manifest_for_tests(&mut self, manifest_sha256: impl Into<String>) {
-        self.shell_command_manifest_sha256 = manifest_sha256.into();
-    }
-
     /// Return the configured `shell_command` user policies and allowlist.
     pub fn shell_command_policy_config(&self) -> ShellPolicyConfig {
         self.shell_command_policy_config
@@ -1497,16 +1446,11 @@ impl SecurityGateway {
 
     /// Whether the shell command model is configured and allowed by the gates.
     /// Cat's bundle in Core's layout below `base_dir`, pinned to this gateway's manifest.
-    fn shell_command_config(
-        &self,
-        base_dir: &std::path::Path,
-    ) -> crate::detectors::shell::ShellConfig {
-        crate::detectors::shell::ShellConfig {
-            bundle_dir: patronus_ark_core::warmup::shell_bundle_dir(base_dir),
-            manifest_sha256: self.shell_command_manifest_sha256.clone(),
-            policy_dirs: Vec::new(),
-            allowlist: Default::default(),
-        }
+    fn shell_command_config(&self, base_dir: &std::path::Path) -> Result<ShellConfig, String> {
+        Ok(ShellConfig {
+            bundle_dir: Some(self.shell.dir(Some(base_dir))?),
+            ..self.shell.clone()
+        })
     }
 
     fn shell_command_configured(&self, execution: &ScanExecution) -> bool {

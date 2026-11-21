@@ -11,6 +11,58 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **One config for Ark Core and Ark:** a gateway is now built from one config, and Ark Core's
+  scanner config keys mean the same in Ark. Python: `SecurityGateway(config)` takes one dict, the
+  dict of Ark Core's `Scanner(config)` plus Ark's keys; the keyword arguments are gone
+  (`model_dir` is `cache_root`, `download_files` is `download: "never" | "missing"`,
+  `execution_gates` are top-level gate keys, `wolf_model`/`wolf_precision`/`wolf_options` are
+  `wolf: {model, precision, execution}`, `dynamic_pii_config` is `dynamic_pii`,
+  `ntdb_operating_point` is `ntdb_decision_threshold_point`, and the `cache_*` options are
+  `cache: {storage_location, encryption_key_hex, entry_ttl_seconds, memory_max_entries,
+  memory_max_bytes}`). Python gateways keep `max_level: "l2"` and `download: "missing"` as
+  defaults. Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
+  `with_download_categories` and `try_with_download_categories_and_cache`; `GatewayConfig` holds
+  Ark Core's `ScannerConfig` in `core` plus Ark's keys. `WolfSelection`,
+  `set_wolf_selection`, `set_wolf_execution_options` and `pin_shell_command_manifest_for_tests`
+  are gone (use the `wolf` and `shell` keys). Ark API: the `pipeline` section takes the same keys
+  (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
+  with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
+  per-request `gates` are unchanged.
+- **One meaning for the levels:** `max_level`, `l1`, `l2`, `l3` and `conditional` are gate keys
+  in Ark Core as in Ark and decide which layers run, with or without a cascade; the `cascade` key
+  takes only `modules`. Ark Core's `ScannerConfig` holds its gates as a `ScanGateMatrix` and gains
+  `max_level` and `cache_root`; `CascadeConfig` lost its level keys and `validate_for_gates`.
+  Without a cascade, Core now honours the level keys too (`l1: false` runs no rules, `l3: false`
+  or a lower `max_level` runs no Wolf); the defaults run every layer as before. A cascade's L1
+  models load when the config is read, so a missing model is a config error (Python
+  `ValueError`).
+- **Ark Core's bundles default to the model cache root:** `wolf.bundle_dir` and
+  `shell.bundle_dir` are optional and default to the model's directory below `cache_root`.
+  Wolf's windows are the `wolf.execution` key: `Scanner::new_with_wolf_options`,
+  `Scanner::warmup_with_wolf_options`, `WolfRunner::new_with_options` and the Python
+  `wolf_options` argument are gone.
+- **Ark's standalone rules `Pipeline` is removed:** `patronus_ark::Pipeline` (an n-gram rule
+  matcher over a directory's `l1_rules.json`) and `patronus_ark::ml::l1_heuristics` had no caller;
+  `SecurityGateway` and Ark Core's L1 pass cover the categories.
+- **Scan request options live in Ark Core:** the request `config` of `POST /v1/scan` is one
+  type, `RequestScanConfig` in `patronus_ark_core`, which the Ark API worker and the distributed
+  coordinator both parse and validate, so both accept and refuse the same requests. With it,
+  `NtdbOperatingPoint`, `ChunkOverlapTokens`, `DynamicPiiRequestConfig`,
+  `DynamicPiiExecutionGate`, `DynamicPiiResultCondition`, `DynamicPiiConditionalLabels` and
+  `MAX_REQUEST_LABEL_BYTES` move from `patronus-ark` (and `ml::tokenizer`) to
+  `patronus_ark_core`; `DynamicPiiRequestConfig::resolve(base)` becomes
+  `DynamicPiiConfig::with_request(request)`. The coordinator now reports the worker's error text
+  for a refused config (still status 422).
+- **Ark results serialize themselves:** `SecurityScanResult` and `QueuedSecurityScanResult`
+  implement `Serialize` (Core's result fields flat, `request_id`, and `decided_by` and
+  `l1_outcome` when set). The Python `SecurityGateway` builds its result and progress dicts from
+  that serialization; the dicts keep their keys and values. The internal result classes of the
+  native module (`PyEvaluationResult`, `PyLayerResult`, `PyLabelScore`) are gone, and events carry
+  `result` and `progress` dicts instead of `progress_json`.
+- **Typed gate options in Python:** Ark Core's Python package adds TypedDicts for the gate
+  schema's conditional gates and L3 worker policy (`ConditionalPipelineGate`, `GateExpression`,
+  `MetadataCondition`, `ResultCondition`, `L3PipelinePolicy`, `L3AggregationStrategy`,
+  `L3SchedulerPolicy`), used by Ark's `ExecutionGates` and Core's `CascadeConfig`.
 - **Ark's models use Ark Core's model mechanism:** Ark Core gains `model_assets`, where a
   `ModelSpec` (id, repository, pinned revision, source prefix, cache directory, optional
   environment override) describes a model and Core resolves its directory, checks its revision
@@ -124,6 +176,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and a producer left without evidence reports `benign`. Unknown values are rejected.
 
 ### Added
+
+- **Ark Core lists its PII rules in Python:** `patronus_ark_core.pii_rule_ids()` returns the ids
+  of the registered PII rules.
 
 - **L1 models in Ark's cascade:** Ark's execution gates accept
   `cascade.modules.<category>.l1_model` like Ark Core; the model runs on what the heuristic

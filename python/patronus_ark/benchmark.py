@@ -659,7 +659,7 @@ def _run_dynamic_pii(
             "reason": "dynamic-pii requires the configured category and max_level=l3",
         }
 
-    snapshot = deepcopy(getattr(gateway, "_dynamic_pii_config", {}))
+    snapshot = deepcopy(getattr(gateway, "_config", {}).get("dynamic_pii", {}))
     try:
         samples = _load_samples("dynamic_pii")
         if limit_per_pipeline:
@@ -690,6 +690,7 @@ def _run_isolated_l2_l3_gliner(gateway, samples, _benchmark_start_peak_rss_mb=No
     worker_config = getattr(gateway, "_benchmark_worker_config", None)
     if worker_config is None:
         raise RuntimeError("gateway does not expose isolated benchmark worker settings")
+    worker_config = worker_config()
     completed = subprocess.run(
         [sys.executable, "-m", "patronus_ark.benchmark_worker"],
         input=json.dumps({"gateway": worker_config, "samples": samples}),
@@ -1491,8 +1492,8 @@ def _run_strategy_benchmark_process(
     load_requests,
     native_l1_iterations,
 ):
-    config = deepcopy(gateway._benchmark_gateway_config)
-    config["l3_strategy"] = strategy
+    config = gateway._benchmark_config()
+    config["config"]["l3_strategy"] = strategy
     completed = subprocess.run(
         [sys.executable, "-m", "patronus_ark.benchmark_strategy_worker"],
         input=json.dumps(

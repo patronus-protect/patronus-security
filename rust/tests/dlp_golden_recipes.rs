@@ -4,6 +4,7 @@
 //! time) and check that
 //! the checked-in file itself carries no detectable secret.
 
+use patronus_ark::GatewayConfig;
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
@@ -123,11 +124,10 @@ fn generators_are_deterministic_and_fixed_length() {
 /// Whether `phrase` is a BIP 39 mnemonic of `words` words from the `language` list with a
 /// valid checksum (decoded here, independently of the generator).
 fn is_valid_bip39(phrase: &str, language: &str, words: usize) -> bool {
-    let list = std::fs::read_to_string(
-        repo_root().join(format!("ark-core/src/detectors/dlp/bip39/{language}.txt")),
-    )
-    .expect("BIP 39 word list");
-    let list = list.split_whitespace().collect::<Vec<_>>();
+    let list = patronus_ark_core::detectors::dlp::seed_phrase::word_list(language)
+        .expect("BIP 39 word list")
+        .split_whitespace()
+        .collect::<Vec<_>>();
     let Some(indices) = phrase
         .split(' ')
         .map(|word| list.iter().position(|entry| *entry == word))
@@ -557,12 +557,11 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
 
 #[test]
 fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
-    let gateway = SecurityGateway::with_max_level(
+    let gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     let synth = repo_root().join("python/patronus_ark/dlp_synth");
     let spec = std::fs::read_to_string(synth.join("generators.json")).unwrap();
     let rules = std::fs::read_to_string(synth.join("rules.json")).unwrap();

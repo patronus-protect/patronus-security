@@ -15,9 +15,11 @@ def main() -> None:
     print(f"normalized: {normalized!r}\n")
 
     scanner = SecurityGateway(
-        categories=["injection"],
-        max_level="l1",
-        download_files=False,
+        {
+            "categories": ["injection"],
+            "max_level": "l1",
+            "download": "never",
+        }
     )
     for result in scanner.scan_all(normalized):
         print(

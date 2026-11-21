@@ -10,6 +10,8 @@
 //! model repo requires it):
 //!   `cargo run --example 03_l2_l3_promotion`
 
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::time::Duration;
 
 use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
@@ -17,13 +19,13 @@ use patronus_ark::{QueuedSecurityEvent, SecurityGateway};
 use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
-    let mut scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L3,
-        None,
-        true,
-        Some(vec![SecurityCategory::Injection]),
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::Injection]);
+        config
+    })
+    .unwrap();
 
     // Delivery/installer phase: this is the only call that may download.
     if let Err(failure) = scanner.prepare_assets() {

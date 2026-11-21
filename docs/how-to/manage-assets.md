@@ -7,41 +7,44 @@ optional downloads. For the generated inventory (sizes, exact paths), see the
 ## Where assets are cached
 
 By default, assets are stored under the platform cache directory in `patronus_ark/`.
-Override the location with `model_dir` (Python) / the model-dir argument (Rust):
+Override the location with the `cache_root` key (Ark Core and Ark share it):
 
 === "Python"
 
     ```python
     scanner = SecurityGateway(
-        categories=["injection"],
-        max_level="l3",
-        model_dir="/opt/patronus-ark-assets",
-        download_files=True,
-        download_categories=["injection"],
+        {
+            "categories": ["injection"],
+            "max_level": "l3",
+            "cache_root": "/opt/patronus-ark-assets",
+            "download": "missing",
+            "download_categories": ["injection"],
+        }
     )
     ```
 
 === "Rust"
 
     ```rust
-    let scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L3,
-        Some("/opt/patronus-ark-assets".into()),   // model_dir
-        true,                                       // download_files
-        Some(vec![SecurityCategory::Injection]),
-    );
+    let scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+        config.core.cache_root = Some("/opt/patronus-ark-assets".into());
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::Injection]);
+        config
+
+    }).unwrap();
     ```
 
-A custom `model_dir` is convenient for shipping a pre-populated cache to another machine
+A custom `cache_root` is convenient for shipping a pre-populated cache to another machine
 (see [Offline & air-gapped](offline-airgapped.md)).
 
 ## Control what downloads
 
 | Setting | Effect |
 | --- | --- |
-| `download_files=False` | Never download; use native L1 + already-cached assets only. |
-| `download_files=True` | Download required assets for configured categories on demand. |
+| `"download": "never"` | Never download; use native L1 + already-cached assets only. |
+| `"download": "missing"` | Download required assets for configured categories on demand. |
 | `download_categories=[…]` | Restrict automatic downloads to just these categories. |
 | `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` | Also fetch non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest), which are skipped by default. |
 
@@ -53,9 +56,9 @@ skipped unless the environment variable is set.
 `shell_command` is the one L1 category with a model file. `prepare_assets()` / `warmup()` fetch
 `patronus-studio/cat-shell-risk-commander` (Apache-2.0) at pinned revision
 `54617685bc2bc3b7f06ba0c7e7f86c2899940d1f` (K26) into
-`<model_dir>/shell_command/cat_shell_risk_commander/` (4.4 MiB: `manifest.json`, `config.json`,
+`<cache_root>/shell_command/cat_shell_risk_commander/` (4.4 MiB: `manifest.json`, `config.json`,
 `model.json`, `policy_levels.json`, `LICENSE`, `.patronus-revision`). It honours
-`download_files` / `download_categories`; with downloads disabled and files missing, warmup fails
+`download` / `download_categories`; with downloads disabled and files missing, warmup fails
 with `missing shell_command assets ... downloads disabled`. At load, the SHA-256 of `manifest.json`
 must equal the one pinned in the binary (`patronus_ark_core::warmup::SHELL_MANIFEST_SHA256`), every file ARK reads is
 verified against `manifest.json`, and a release whose DefenseClaw rules or shell vocabulary differ
@@ -80,7 +83,7 @@ export HF_TOKEN=hf_xxx
 If downloads must not happen at runtime, use the two-phase lifecycle (**Rust only**):
 `prepare_assets()` while the network is available, then `warmup_from_local_assets()` at runtime
 (local-only). In Python, `warmup()` always performs the combined prepare-and-warmup cycle; ship a
-pre-populated `model_dir` and reconstruct offline with `download_files=False` instead (see
+pre-populated `cache_root` and reconstruct offline with `"download": "never"` instead (see
 [Offline & air-gapped](offline-airgapped.md)). See
 [Architecture → asset & runtime lifecycle](../concepts/architecture.md#asset-and-runtime-lifecycle).
 

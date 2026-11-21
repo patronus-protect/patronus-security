@@ -22,7 +22,7 @@ Run the Rust examples from `rust/`.
 | 13 | L1 golden eval | Check native PII/DLP against the golden suites (`pii`, `dlp` or `all`) | `cargo run --example 13_l1_golden_eval -- all` | — |
 | 14 | Shell commands | `shell_command` (Cat) with user Cedar policies next to PII, DLP and injection | `cargo run --example 14_shell_command` | — |
 
-Examples 01, 02, 04, 10, 11, 12 and 13 run fully offline (`download_files=false`, native L1 +
+Examples 01, 02, 04, 10, 11, 12 and 13 run fully offline (`download: "never"`, native L1 +
 cached L2). Examples 03, 05, 06, 07, 08, 09 and 14 need model assets and will print a
 warmup error if they are missing.
 

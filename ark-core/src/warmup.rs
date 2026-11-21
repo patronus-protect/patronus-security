@@ -21,6 +21,34 @@ pub const SHELL_FILES: &[&str] = &[
 pub const SHELL_MANIFEST_SHA256: &str =
     "b60905b95780ff7ab2cd55c63b1eaf296ddea2f53e53d50a8f97bfdf46d8f39a";
 
+/// An explicit bundle directory, else `layout` below the model cache root:
+/// `root` when given, else [`default_cache_root`]. Every bundle a config
+/// does not place explicitly lives below this one root.
+pub fn bundle_dir_or_default(
+    explicit: Option<&Path>,
+    root: Option<&Path>,
+    layout: impl FnOnce(&Path) -> PathBuf,
+) -> Result<PathBuf, ScanError> {
+    if let Some(dir) = explicit {
+        return Ok(dir.to_path_buf());
+    }
+    if let Some(root) = root {
+        return Ok(layout(root));
+    }
+    #[cfg(feature = "download")]
+    if let Some(root) = default_cache_root() {
+        return Ok(layout(&root));
+    }
+    Err(ScanError::Config(
+        "no bundle_dir and no model cache root: set bundle_dir or cache_root".into(),
+    ))
+}
+
+/// The model cache root: `root` when given, else [`default_cache_root`].
+pub fn model_cache_root(root: Option<&Path>) -> Result<PathBuf, ScanError> {
+    bundle_dir_or_default(None, root, Path::to_path_buf)
+}
+
 /// The model cache root when the caller names none: `<user cache>/patronus_ark`.
 /// Core and ARK keep every model they share once below this root.
 #[cfg(feature = "download")]
@@ -96,23 +124,14 @@ impl WarmupOptions {
 impl Scanner {
     /// Prepare configured assets, then construct one warm scanner used by subsequent scans.
     pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, ScanError> {
-        Self::warmup_with_wolf_options(config, options, crate::WolfExecutionOptions::default())
-    }
-
-    /// Prepare assets and warm one reusable scanner with explicit Wolf execution options.
-    pub fn warmup_with_wolf_options(
-        config: ScannerConfig,
-        options: WarmupOptions,
-        execution: crate::WolfExecutionOptions,
-    ) -> Result<Self, ScanError> {
-        execution.validate()?;
         prepare_assets(&config, &options)?;
-        Self::new_with_wolf_options(config, execution)
+        Self::new(config)
     }
 }
 /// Prepare model files without creating a tokenizer, ONNX session or scanner.
 pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError> {
     config.validate()?;
+    let config = &config.resolved()?;
     options.validate()?;
     #[cfg(feature = "wolf")]
     if let Some(wolf) = &config.wolf {
@@ -132,7 +151,10 @@ pub fn shell_assets_present(config: &crate::detectors::shell::ShellConfig) -> bo
 
 /// Why `config.bundle_dir` is not the complete pinned release, if it is not.
 fn shell_bundle_problem(config: &crate::detectors::shell::ShellConfig) -> Option<String> {
-    let dir = &config.bundle_dir;
+    let dir = &match config.dir(None) {
+        Ok(dir) => dir,
+        Err(problem) => return Some(problem),
+    };
     if !dir.join("manifest.json").is_file() {
         return Some(format!("{} holds no Cat bundle", dir.display()));
     }
@@ -188,7 +210,7 @@ pub fn prepare_shell_assets_with_progress(
         use crate::assets::download::{
             download_hf_file_with_options, get_hf_token, DownloadOptions,
         };
-        let dir = &config.bundle_dir;
+        let dir = &config.dir(None).map_err(ScanError::Config)?;
         let deadline = std::time::Instant::now()
             + std::time::Duration::from_millis(options.download_timeout_ms);
         let token = get_hf_token();
@@ -239,7 +261,7 @@ pub fn prepare_wolf_assets_with_progress(
 ) -> Result<(), ScanError> {
     config.validate()?;
     prepare_wolf_cache(
-        &config.bundle_dir,
+        &config.dir(None)?,
         config.model,
         config.precision,
         options,
@@ -292,26 +314,26 @@ mod tests {
     #[test]
     fn shell_bundle_is_ready_only_at_the_pinned_manifest() {
         let root = std::env::temp_dir().join(format!("core-shell-pin-{}", std::process::id()));
-        let mut config = crate::detectors::shell::ShellConfig::new(shell_bundle_dir(&root));
+        let bundle_dir = shell_bundle_dir(&root);
+        let mut config = crate::detectors::shell::ShellConfig::new(&bundle_dir);
         assert!(!shell_assets_present(&config));
         let never = WarmupOptions::default();
         assert!(prepare_shell_assets(&config, &never).is_err());
         config.manifest_sha256 =
-            crate::detectors::shell::testing::write_synthetic_bundle(&config.bundle_dir, None)
-                .unwrap();
+            crate::detectors::shell::testing::write_synthetic_bundle(&bundle_dir, None).unwrap();
         assert!(shell_assets_present(&config));
         prepare_shell_assets(&config, &never).unwrap();
         // A pinned manifest without the files it lists is not a complete bundle.
-        let model = std::fs::read(config.bundle_dir.join("model.json")).unwrap();
-        std::fs::remove_file(config.bundle_dir.join("model.json")).unwrap();
+        let model = std::fs::read(bundle_dir.join("model.json")).unwrap();
+        std::fs::remove_file(bundle_dir.join("model.json")).unwrap();
         assert!(!shell_assets_present(&config));
         let error = prepare_shell_assets(&config, &never)
             .unwrap_err()
             .to_string();
         assert!(error.contains("model.json"), "{error}");
-        std::fs::write(config.bundle_dir.join("model.json"), b"{}").unwrap();
+        std::fs::write(bundle_dir.join("model.json"), b"{}").unwrap();
         assert!(!shell_assets_present(&config));
-        std::fs::write(config.bundle_dir.join("model.json"), model).unwrap();
+        std::fs::write(bundle_dir.join("model.json"), model).unwrap();
         assert!(shell_assets_present(&config));
         // A bundle of another release is outdated, not ready.
         config.manifest_sha256 = SHELL_MANIFEST_SHA256.into();

@@ -158,7 +158,7 @@ threshold 0.5, 2048-token windows with 64 overlap); the examples set `0.8` expli
 - **Model:** `model` is `base`, `small` (default) or `edge`: larger is more accurate, smaller is
   faster.
 - **Long inputs:** window size, overlap and batch size are configurable
-  (`wolf_options` in Python, `WolfExecutionOptions` in Rust). The default is the model's published
+  (the `wolf.execution` key: `window_tokens`, `overlap_tokens`, `batch_size`). The default is the model's published
   2048 tokens with 64 overlap, batch 1; unset sizes keep these. Smaller windows are faster on long
   documents but change the document scores, so recalibrate the threshold.
 - **Precision and backend:** `precision` is `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`,

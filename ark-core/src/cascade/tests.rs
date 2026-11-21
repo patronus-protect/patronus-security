@@ -124,6 +124,7 @@ fn run(cascade: &Cascade, l1_result: &NativeResult, l3: &mut Fake) -> ModuleDeci
     let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [l1_result]);
     cascade
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             "text",
             stage,
@@ -190,6 +191,7 @@ fn escalation_without_a_configured_later_layer_is_clear() {
     assert_eq!(stage.outcome, StageOutcome::Escalate);
     let decision = cascade
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             "text",
             stage,
@@ -207,12 +209,25 @@ fn escalation_without_a_configured_later_layer_is_clear() {
 
     // A max level of L1 keeps a configured L3 from running.
     let mut l3 = Fake::new(SecurityLevel::L3, 0.99);
-    let capped = Cascade::new(CascadeConfig {
-        max_level: SecurityLevel::L1,
-        ..CascadeConfig::default()
-    })
-    .unwrap();
-    let decision = run(&capped, &l1(0.5, false), &mut l3);
+    let capped = &cascade;
+    let stage = capped.l1_stage(
+        SecurityCategory::Injection,
+        ScoreMode::Strict,
+        [&l1(0.5, false)],
+    );
+    let decision = capped
+        .decide(
+            &LayerExecution::new(SecurityLevel::L1),
+            SecurityCategory::Injection,
+            "text",
+            stage,
+            &[],
+            &mut [],
+            Some(&mut l3),
+            &ScanControl::default(),
+        )
+        .unwrap()
+        .expect("a stage ran");
     assert_eq!(l3.calls, 0);
     assert_eq!(decision.outcome, StageOutcome::Clear);
 }
@@ -229,6 +244,7 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
     );
     let decision = cascade
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             "text",
             stage,
@@ -254,6 +270,7 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
     );
     let decision = cascade
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             "text",
             stage,
@@ -274,16 +291,19 @@ fn l2_runs_first_and_l3_only_when_l2_escalates() {
 #[test]
 fn conditional_gates_read_every_modules_l1_results() {
     // L3 of injection only when PII's L1 found an email.
-    let config: CascadeConfig = serde_json::from_value(serde_json::json!({
-        "conditional": [{
-            "level": "l3",
-            "pipeline": "injection",
-            "when": {"result": {"pipeline": "pii", "classes": ["email"]}}
-        }]
-    }))
-    .unwrap();
-    let cascade = Cascade::new(config).unwrap();
-    assert!(cascade.has_conditional_gates() && !Cascade::default().has_conditional_gates());
+    let levels = LayerExecution::with_gates(
+        SecurityLevel::L3,
+        serde_json::from_value(serde_json::json!({
+            "conditional": [{
+                "level": "l3",
+                "pipeline": "injection",
+                "when": {"result": {"pipeline": "pii", "classes": ["email"]}}
+            }],
+            "cascade": {}
+        }))
+        .unwrap(),
+    );
+    let cascade = levels.gates().cascade.as_ref().unwrap();
     let pii = GateResult {
         pipeline: "pii".into(),
         class_name: "email".into(),
@@ -299,6 +319,7 @@ fn conditional_gates_read_every_modules_l1_results() {
         );
         let decision = cascade
             .decide(
+                &levels,
                 SecurityCategory::Injection,
                 "text",
                 stage,
@@ -319,12 +340,6 @@ fn conditional_gates_read_every_modules_l1_results() {
             }
         );
     }
-    // Core scans carry no request metadata.
-    let metadata: CascadeConfig = serde_json::from_value(serde_json::json!({
-        "conditional": [{"level": "l3", "when": {"not": {"metadata": {"path": "tenant", "exists": true}}}}]
-    }))
-    .unwrap();
-    assert!(metadata.validate().unwrap_err().contains("metadata"));
 }
 
 #[test]
@@ -374,8 +389,6 @@ fn evidence_without_a_decision_envelope_counts_as_detected() {
 #[test]
 fn cascade_config_serde_round_trips_and_validates() {
     let value = serde_json::json!({
-        "max_level": "L2",
-        "conditional": [],
         "modules": {"injection": {"clear_threshold": 0.25}}
     });
     let config: CascadeConfig = serde_json::from_value(value.clone()).unwrap();
@@ -386,8 +399,9 @@ fn cascade_config_serde_round_trips_and_validates() {
     );
     for invalid in [
         serde_json::json!({"modules": {"injection": {"clear_threshold": 1.5}}}),
-        serde_json::json!({"conditional": [{"level": "l1", "when": {"metadata": {"path": "a", "exists": true}}}]}),
-        serde_json::json!({"max_level": "L4"}),
+        // The levels that run are gate keys, not cascade keys.
+        serde_json::json!({"conditional": []}),
+        serde_json::json!({"max_level": "L2"}),
         serde_json::json!({"unknown": true}),
     ] {
         let parsed = serde_json::from_value::<CascadeConfig>(invalid.clone())
@@ -476,6 +490,7 @@ fn run_with_model(
     let stage = cascade.l1_model_stage(stage, Some(model), TEXT, &[]);
     cascade
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             TEXT,
             stage,
@@ -822,17 +837,21 @@ fn each_level_maps_to_the_stage_that_answers_there() {
 
 #[test]
 fn level_switches_turn_single_layers_off() {
-    let no_l2 = Cascade::new(CascadeConfig {
-        l2: Some(false),
-        ..CascadeConfig::default()
-    })
-    .unwrap();
-    assert!(!no_l2.allows_level(SecurityLevel::L2) && no_l2.allows_level(SecurityLevel::L3));
+    let no_l2 = Cascade::default();
+    let levels = LayerExecution::with_gates(
+        SecurityLevel::L3,
+        ScanGateMatrix {
+            l2: Some(false),
+            ..ScanGateMatrix::default()
+        },
+    );
+    assert!(!levels.allows_level(SecurityLevel::L2) && levels.allows_level(SecurityLevel::L3));
     let mut l2 = Fake::new(SecurityLevel::L2, 0.99);
     let mut l3 = Fake::new(SecurityLevel::L3, 0.95);
     let stage = no_l2.l1_off(SecurityCategory::Injection);
     let decision = no_l2
         .decide(
+            &levels,
             SecurityCategory::Injection,
             "text",
             stage,
@@ -852,6 +871,7 @@ fn level_switches_turn_single_layers_off() {
     // No stage ran at all: no decision, never one "by the heuristic".
     let none = cascade(None)
         .decide(
+            &LayerExecution::default(),
             SecurityCategory::Injection,
             "text",
             stage,

@@ -218,7 +218,7 @@ class BenchmarkDataTests(unittest.TestCase):
         class FakeGateway:
             categories = ["injection", "dynamic-pii"]
             max_level = "l3"
-            _dynamic_pii_config = {"labels": ["original"]}
+            _config = {"dynamic_pii": {"labels": ["original"]}}
 
             def __init__(self):
                 self.configs = []
@@ -469,12 +469,13 @@ class BenchmarkDataTests(unittest.TestCase):
         }
 
         class FakeGateway:
-            _benchmark_worker_config = {
-                "model_dir": "/models",
-                "onnx_batch_mode": "lazy_batches",
-                "execution_backend": "cpu",
-                "ntdb_operating_point": "best_promote",
-            }
+            def _benchmark_worker_config(self):
+                return {
+                    "cache_root": "/models",
+                    "onnx_batch_mode": "lazy_batches",
+                    "execution_backend": "cpu",
+                    "ntdb_decision_threshold_point": "best_promote",
+                }
 
         completed = benchmark.subprocess.CompletedProcess(
             args=[], returncode=0, stdout=json.dumps(worker_result), stderr=""
@@ -488,7 +489,7 @@ class BenchmarkDataTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[-2:], ["-m", "patronus_ark.benchmark_worker"])
         payload = json.loads(run.call_args.kwargs["input"])
-        self.assertEqual(payload["gateway"]["model_dir"], "/models")
+        self.assertEqual(payload["gateway"]["cache_root"], "/models")
         self.assertEqual(payload["samples"][0]["text"], "ignore previous instructions")
 
     def test_load_uses_one_producer_and_one_consumer(self):
@@ -912,7 +913,8 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_run_local_benchmark_runs_both_strategies_in_workers(self):
         class FakeGateway:
-            _benchmark_gateway_config = {"categories": ["injection"]}
+            def _benchmark_config(self):
+                return {"config": {"categories": ["injection"]}, "execution_gates": None}
 
         strategy_result = {
             "example": {},

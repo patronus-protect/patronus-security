@@ -116,7 +116,7 @@ def main() -> None:
     if args.arm == "l1":
         labels = []
         metrics = L1_METRICS
-        gateway = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        gateway = SecurityGateway({"categories": ["pii"], "max_level": "l1", "download": "never"})
         category = "pii"
     else:
         labels = GLINER_CORE_LABELS if args.arm == "gliner-core" else GLINER_PAIRWISE_LABELS
@@ -133,11 +133,13 @@ def main() -> None:
             "conditional_labels": [],
         }
         gateway = SecurityGateway(
-            categories=["dynamic-pii"],
-            max_level="l3",
-            download_files=False,
-            dynamic_pii_config=config,
-            **({"model_dir": args.model_dir} if args.model_dir else {}),
+            {
+                "categories": ["dynamic-pii"],
+                "max_level": "l3",
+                "download": "never",
+                "dynamic_pii": config,
+                **({"cache_root": args.model_dir} if args.model_dir else {}),
+            }
         )
         gateway.warmup()
         category = "dynamic-pii"

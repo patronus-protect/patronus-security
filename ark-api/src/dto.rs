@@ -1,8 +1,8 @@
 //! JSON wire types mirroring `docs/reference/result-schema.md`.
 //!
-//! `patronus_ark::SecurityScanResult` and friends intentionally do not derive
-//! `Serialize` (see the Python bindings, which build dictionaries by hand for
-//! the same reason). These DTOs are the API's one conversion point.
+//! The API's one conversion point from `patronus_ark` results: unlike
+//! `SecurityScanResult`'s own `Serialize` (Core's `decision: null` when unset),
+//! these omit an unset `decision` and spell failure stages and kinds as here.
 
 use std::collections::HashMap;
 

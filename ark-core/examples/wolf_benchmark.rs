@@ -43,20 +43,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let before = rss_kib();
     let start = Instant::now();
-    let mut scanner = Scanner::new_with_wolf_options(
-        ScannerConfig {
-            wolf: Some(WolfConfig {
-                bundle_dir: bundle,
-                threshold: Some(threshold),
-                model: Default::default(),
-                precision: Default::default(),
-                backend: Default::default(),
-                runtime_options: Default::default(),
-            }),
-            ..Default::default()
-        },
-        execution,
-    )?;
+    let mut scanner = Scanner::new(ScannerConfig {
+        wolf: Some(WolfConfig {
+            execution,
+            ..WolfConfig::new(bundle, threshold)
+        }),
+        ..Default::default()
+    })?;
     let startup_ms = start.elapsed().as_secs_f64() * 1000.0;
     let short = "Please summarize the meeting agenda and opening hours.";
     let model = scanner.scan(short)?.wolf.ok_or("Wolf result missing")?;

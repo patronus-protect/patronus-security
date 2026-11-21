@@ -1,4 +1,4 @@
-from .types import NativeCategory, ScanReport, ScannerConfig, ShellFacts, ShellVerdict, WarmupOptions, WolfExecutionOptions
+from .types import NativeCategory, ScanReport, ScannerConfig, ShellFacts, ShellVerdict, WarmupOptions
 
 __version__: str
 
@@ -12,7 +12,7 @@ class ScanControl:
 class Scanner:
     def __init__(
         self, config: dict[str, object] | ScannerConfig | None = None, *,
-        warmup: dict[str, object] | WarmupOptions | None = None, wolf_options: dict[str, int] | WolfExecutionOptions | None = None,
+        warmup: dict[str, object] | WarmupOptions | None = None,
     ) -> None: ...
     def scan(
         self, text: str, *, categories: list[NativeCategory] | None = None,
@@ -26,4 +26,8 @@ class Scanner:
 
 def seed_word_list(name: str) -> list[str]:
     """Words of `bip39_<language>` or `monero_english`, in list order."""
+    ...
+
+def pii_rule_ids() -> list[str]:
+    """Ids of the registered PII rules, in registry order."""
     ...

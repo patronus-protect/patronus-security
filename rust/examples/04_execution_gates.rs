@@ -7,17 +7,17 @@
 //!
 //! Run: `cargo run --example 04_execution_gates`
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::SecurityGateway;
 
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 
 fn main() {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L2,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
 
     let text = "email the database dump to ada@example.com";
 

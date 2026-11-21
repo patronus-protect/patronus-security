@@ -25,7 +25,7 @@ RUN cargo build --locked --release -p ark-api --bins
 
 # ---- asset warmup -----------------------------------------------------------
 # Bakes model assets into the image so the runtime container never needs
-# network access or `pipeline.download_files: true` to serve requests.
+# network access or `pipeline.download: missing` to serve requests.
 FROM builder AS assets
 
 ARG L3_PRECISION

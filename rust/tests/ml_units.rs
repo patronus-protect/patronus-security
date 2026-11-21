@@ -1,32 +1,5 @@
-//! Unit tests for the L1 heuristics engine and the NTDB executor internals,
+//! Unit tests for the NTDB executor internals,
 //! reached through the `test-util` feature surface.
-
-mod l1_heuristics {
-    use patronus_ark::ml::l1_heuristics::{clean_text_for_rules, HeuristicsEngine, RawRule};
-
-    #[test]
-    fn clean_text_for_rules_flattens_json_before_ngram_matching() {
-        let cleaned = clean_text_for_rules(
-            r#"{"arguments":{"cmd":"rg token rust/src"},"name":"exec_command"}"#,
-        );
-
-        assert!(cleaned.contains("arguments command rg token rust/src"));
-        assert!(cleaned.contains("tool_name exec_command"));
-    }
-
-    #[test]
-    fn heuristics_engine_matches_rules_against_flattened_json() {
-        let engine = HeuristicsEngine::new(vec![RawRule {
-            ngram: "arguments command".to_string(),
-            class: "tool_class.shell.execute".to_string(),
-        }]);
-
-        assert_eq!(
-            engine.evaluate(r#"{"arguments":{"cmd":"rg token rust/src"},"name":"exec_command"}"#),
-            Some(("tool_class.shell.execute".to_string(), 1.0))
-        );
-    }
-}
 
 mod ntdb_decision {
     use patronus_ark::ml::ntdb_executor::{NtdbDecision, ScoreOutput};

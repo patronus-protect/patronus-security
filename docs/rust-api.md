@@ -15,6 +15,7 @@ Import public items from the `patronus_ark` crate.
 pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
+mod config;
 pub mod dynamic_pii;
 pub mod gliner_onnx_engine;
 #[cfg(feature = "test-util")]
@@ -26,38 +27,92 @@ mod post_prediction;
 pub mod types;
 
 // Ark Core's modules and types, used inside this crate as `crate::...`.
-use ml::tokenizer::ChunkOverlapTokens;
 use patronus_ark_core::{
     cascade::{
         EffectiveL3PipelinePolicy, ExternalL1Detector, ExternalL1Input, GateResult,
         L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
         L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
     },
-    detectors, diagnostics, threat,
-    wolf::{WolfModel, WolfPrecision},
-    DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
-    DecisionResult, DecisionTerminality, EvaluationResult, EvidenceSpan, ExecutionBackend,
-    LabelScore, LayerResult, OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
+    detectors, diagnostics, threat, ChunkOverlapTokens, DecisionCandidate, DecisionEnvelope,
+    DecisionProvenance, DecisionRecommendation, DecisionResult, DecisionTerminality,
+    EvaluationResult, EvidenceSpan, ExecutionBackend, LabelScore, LayerResult, NtdbOperatingPoint,
+    OnnxRuntimeOptions, SecurityCategory, WolfExecutionOptions,
 };
 
 pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
     PersistentCacheConfig, WriteBehindConfig,
 };
-pub use dynamic_pii::{
-    DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
-    DynamicPiiRequestConfig, DynamicPiiResultCondition, MAX_REQUEST_LABEL_BYTES,
-};
-pub use pipeline::{Pipeline, SecurityGateway};
+pub use config::GatewayConfig;
+pub use dynamic_pii::DynamicPiiConfig;
+pub use pipeline::SecurityGateway;
 pub use types::defaults;
 pub use types::{
-    L3Strategy, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
+    L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
     SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult, WolfSelection,
+    SecurityRuntimeReadiness, SecurityScanResult,
 };
 ```
+
+## Gateway Config
+
+```rust
+pub struct GatewayConfig {
+    /// Core's keys, at the top level of the config.
+    #[serde(flatten)]
+    pub core: ScannerConfig,
+    /// Whether `warmup`/`prepare_assets` may download missing model files:
+    /// `never` (default) or `missing`.
+    pub download: DownloadPolicy,
+    /// The categories that may download; unset: every configured category.
+    pub download_categories: Option<Vec<SecurityCategory>>,
+    /// Physical L3 classifier topology: `dedicated` (default) or `multi`.
+    pub l3_strategy: L3Strategy,
+    /// Calibrated NTDB operating point. Default: `best_promote`.
+    pub ntdb_operating_point: NtdbOperatingPoint,
+    /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
+    pub ntdb_decision_threshold_point: NtdbOperatingPoint,
+    /// ONNX execution backend of Ark's models: `auto` (default), `cpu`,
+    /// `gpu`, `coreml`, ...
+    pub execution_backend: ExecutionBackend,
+    /// L3 batch execution; unset follows `execution_backend`.
+    pub onnx_batch_mode: Option<OnnxBatchMode>,
+    /// ONNX Runtime session options of Ark's models.
+    pub onnx_runtime: OnnxRuntimeOptions,
+    /// The `dynamic_pii` (GLiNER) pipeline's config.
+    pub dynamic_pii: DynamicPiiConfig,
+    /// The exact decision cache (key `cache`): `storage_location`,
+    /// `encryption_key_hex`, `entry_ttl_seconds`, `memory_max_entries`,
+    /// `memory_max_bytes`. Without a storage location it stays in memory.
+    #[serde(deserialize_with = "deserialize_cache")]
+    pub cache: ExactCacheConfig,
+}
+```
+
+The config of a [`crate::SecurityGateway`]: every key of Ark Core's
+[`ScannerConfig`] (`categories`, `max_level`, the gate keys, `cascade`,
+`cache_root`, `wolf`, `shell`) with the same meaning, plus Ark's own keys.
+Ark accepts every category, not only Core's text-scan ones, and reads
+Core's `wolf` and `shell` for its injection L3 and its `shell_command`
+category. Core's `max_input_bytes` and `max_findings` limit Core's
+scanner only. Unknown keys are refused.
+
+```rust
+pub fn new(categories: Vec<SecurityCategory>, max_level: SecurityLevel) -> Self;
+```
+
+The default config for `categories` up to `max_level`.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse what no gateway can run: no categories, a duplicate category,
+zero ONNX threads, invalid Wolf windows (with Ark's serving profile
+filling unset sizes) or Dynamic-PII settings, and Wolf settings Ark
+takes from its own keys.
 
 ## Core Gateway
 
@@ -137,77 +192,19 @@ pub fn set_queue_worker_count(&self, worker_count: usize);
 Set the number of Ark queue workers spawned on first queued request.
 
 ```rust
-pub fn set_wolf_execution_options(
-    &self,
-    options: crate::WolfExecutionOptions,
-) -> Result<(), String>;
-```
-
-Configure dedicated Wolf windowing and batching for subsequent scans.
-
-```rust
-pub fn set_wolf_selection(&self, selection: crate::WolfSelection) -> Result<(), String>;
-```
-
-Choose the dedicated Wolf model and ONNX export; set before warmup.
-
-```rust
 pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions);
 ```
 
 Set ONNX Runtime session options for subsequent scans.
 
 ```rust
-pub fn new(
-    categories: Vec<SecurityCategory>,
-    model_dir: Option<PathBuf>,
-    download_files: bool,
-) -> Self;
+pub fn new(config: GatewayConfig) -> Result<Self, String>;
 ```
 
-Create a gateway with `SecurityLevel::L2` as the maximum level.
-
-```rust
-pub fn with_max_level(
-    categories: Vec<SecurityCategory>,
-    max_level: SecurityLevel,
-    model_dir: Option<PathBuf>,
-    download_files: bool,
-) -> Self;
-```
-
-Create a gateway with an explicit maximum security level.
-
-```rust
-pub fn with_download_categories(
-    categories: Vec<SecurityCategory>,
-    max_level: SecurityLevel,
-    model_dir: Option<PathBuf>,
-    download_files: bool,
-    download_categories: Option<Vec<SecurityCategory>>,
-) -> Self;
-```
-
-Create a gateway with an optional per-category asset download allowlist.
-
-When `download_categories` is `None`, all configured categories may
-download missing assets if `download_files` is `true`.
-
-```rust
-pub fn try_with_download_categories_and_cache(
-    categories: Vec<SecurityCategory>,
-    max_level: SecurityLevel,
-    model_dir: Option<PathBuf>,
-    download_files: bool,
-    download_categories: Option<Vec<SecurityCategory>>,
-    cache_config: crate::ExactCacheConfig,
-) -> Result<Self, crate::CacheError>;
-```
-
-Create a gateway with lifecycle-scoped exact-cache configuration.
-
-Persistent caching is enabled only when `cache_config.persistent`
-contains an explicit storage location. Requests cannot override it.
+Create a gateway from its config (see [`GatewayConfig`]); refuses an
+invalid config, unreadable `shell` policies and a persistent cache
+that does not open. Persistent caching is enabled only when
+`cache.storage_location` is set; requests cannot override it.
 
 ```rust
 pub fn categories(&self) -> &[SecurityCategory];
@@ -437,13 +434,6 @@ A loaded pipeline applies them at once (a refused configuration changes
 nothing); otherwise `warmup` applies them.
 
 ```rust
-pub fn pin_shell_command_manifest_for_tests(&mut self, manifest_sha256: impl Into<String>);
-```
-
-Accept a `shell_command` bundle with this manifest instead of the
-pinned release (synthetic bundles in tests).
-
-```rust
 pub fn shell_command_policy_config(&self) -> ShellPolicyConfig;
 ```
 
@@ -617,7 +607,7 @@ request-local classifier chunk overlap and an optional request-local
 `dynamic-pii` configuration. Library callers use the other enqueue methods.
 
 `dynamic_pii` replaces the gateway's configuration for this request only;
-build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+build it with [`crate::DynamicPiiConfig::with_request`]. It is validated
 again here and rejected before anything is queued.
 
 ```rust
@@ -771,51 +761,21 @@ One analysis module's cascade settings.
 
 ```rust
 pub struct CascadeConfig {
-    /// Deepest layer that may run. Default: `L3`.
-    pub max_level: SecurityLevel,
-    /// `false` switches L1 (heuristics and L1 models) off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l1: Option<bool>,
-    /// `false` switches L2 off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l2: Option<bool>,
-    /// `false` switches L3 off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l3: Option<bool>,
-    /// Conditional L2/L3 gates, evaluated over the L1 results of every
-    /// scanned module and the module's own later results. Core has no
-    /// request metadata, so `metadata` conditions are refused.
-    pub conditional: Vec<ConditionalPipelineGate>,
     /// Per-module settings keyed by category.
     pub modules: HashMap<SecurityCategory, ModuleConfig>,
 }
 ```
 
-The opt-in cascade: which layers run, with early exit between them, and
-per module its L1 cuts and optional L1 model. Its level keys are the
-gate keys of [`ScanGateMatrix`] with the same meaning: `max_level` is the
-ceiling and `l1`, `l2`, `l3` switch a level off (unset: on), so any one
-layer can run alone (for example `l1: false` leaves Wolf, the injection
-L3, to answer every input). Per module, the L1 model runs when
-`l1_model` is configured and the heuristic runs unless its native
-producers are switched off with the existing `models` gates (for
-example `native:injection_l1`, `native:threat_l1`).
-
-```rust
-pub fn allows_level(&self, level: SecurityLevel) -> bool;
-```
-
-Whether `level` may run: at most `max_level` and not switched off,
-the rule of [`ScanGateMatrix`] and [`LayerExecution`].
-
-```rust
-pub fn validate_for_gates(&self) -> Result<(), String>;
-```
-
-The cascade as Ark's gate key `cascade`: Ark takes the levels and
-conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
-`l3`, `conditional`), so only `modules` (L1 cuts and L1 models) may
-be set.
+The opt-in cascade: early exit between the layers that run, and per
+module its L1 cuts and optional L1 model. Which layers run is not part of
+the cascade: the level keys of the gates decide that for Core and Ark
+alike ([`LayerExecution`]: `max_level` is the ceiling, `l1`, `l2`, `l3`
+switch a level off and `conditional` gates L2 and L3), so any one layer
+can run alone (for example `l1: false` leaves Wolf, the injection L3, to
+answer every input). Per module, the L1 model runs when `l1_model` is
+configured and the heuristic runs unless its native producers are
+switched off with the existing `models` gates (for example
+`native:injection_l1`, `native:threat_l1`).
 
 ```rust
 pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)>;
@@ -827,9 +787,8 @@ The configured L1 models by module.
 pub fn validate(&self) -> Result<(), String>;
 ```
 
-Refuse invalid conditional gates, gates over request metadata (Core
-scans have none) and heuristic cuts outside `0..=1` or with the clear
-cut above the detect cut.
+Refuse heuristic cuts outside `0..=1` or with the clear cut above the
+detect cut.
 
 ```rust
 pub struct ModuleDecision {
@@ -904,12 +863,6 @@ pub fn l1_model(&self, module: SecurityCategory) -> Option<&L1TextModel>;
 The loaded L1 model of `module`, if one is configured.
 
 ```rust
-pub fn allows_level(&self, level: SecurityLevel) -> bool;
-```
-
-Whether `level` may run in this cascade.
-
-```rust
 pub fn l1_off(&self, module: SecurityCategory) -> L1Stage;
 ```
 
@@ -917,13 +870,6 @@ L1's answer for `module` when its heuristic did not run (L1 switched
 off, or its rules switched off or failed): the input escalates to the
 next stage that runs and is never cleared for lack of evidence; if no
 stage runs, [`Self::decide`] reports no decision for the module.
-
-```rust
-pub fn has_conditional_gates(&self) -> bool;
-```
-
-Whether conditional gates decide which later layer may run; only then
-does [`Self::decide`] read the L1 gate results.
 
 ```rust
 pub fn l1_stage<'a, R: LayeredResult + 'a>(
@@ -980,6 +926,7 @@ them (the accepted Threat points findings, see
 ```rust
 pub fn decide(
     &self,
+    levels: &LayerExecution,
     module: SecurityCategory,
     text: &str,
     l1: L1Stage,
@@ -991,13 +938,13 @@ pub fn decide(
 ```
 
 Final decision of `module`: L1's Detected or Clear stands; an
-escalation runs the first allowed L2 model of the module, then the L3
-executor, each only while the previous layer escalates. An escalation
-no configured layer answers ends Clear, decided by the last stage that
-ran. `None` when no stage ran at all (L1 switched off and no later
-layer answered): the module has no decision.
+escalation runs the first L2 model of the module `levels` allows, then
+the L3 executor, each only while the previous layer escalates. An
+escalation no configured layer answers ends Clear, decided by the last
+stage that ran. `None` when no stage ran at all (L1 switched off and no
+later layer answered): the module has no decision.
 `l1_results` are the L1 gate results of every scanned module, read
-only when [`Self::has_conditional_gates`].
+only when `levels` has conditional gates.
 
 ```rust
 pub fn gate_result(result: &impl LayeredResult) -> Option<GateResult>;
@@ -1055,8 +1002,8 @@ pub struct ScanGateMatrix {
     /// The opt-in cascade: when set, a module L1 decides (or no later layer
     /// can run for) skips L2 and L3 and results carry `decided_by`; its
     /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
-    /// and L3 as before. Levels and conditional gates stay the keys above;
-    /// see [`super::CascadeConfig::validate_for_gates`].
+    /// and L3 as before. The levels that run are the keys above, with or
+    /// without a cascade.
     pub cascade: Option<super::Cascade>,
 }
 ```
@@ -1603,41 +1550,6 @@ the L1 extension point of an analysis module.
 ## Dynamic PII Types
 
 ```rust
-pub enum DynamicPiiExecutionGate {
-    /// Run whenever the category and L3 model are enabled.
-    #[default]
-    Always,
-    /// Run when a source pipeline returns one of the configured results.
-    IfResultIn {
-        pipeline: String,
-        results: Vec<String>,
-    },
-    /// Run only after a source pipeline finishes without a usable result.
-    IfNoResult { pipeline: String },
-}
-```
-
-Request-local condition controlling whether `dynamic-pii` runs.
-
-```rust
-pub struct DynamicPiiResultCondition {
-    pub pipeline: String,
-    pub results: Vec<String>,
-}
-```
-
-Positive source-result condition used by a conditional label rule.
-
-```rust
-pub struct DynamicPiiConditionalLabels {
-    pub labels: Vec<String>,
-    pub when: DynamicPiiResultCondition,
-}
-```
-
-Extra label group activated on chunks with a matching final source result.
-
-```rust
 pub struct DynamicPiiConfig {
     /// Canonical entity labels; GLiNER receives underscores as spaces in this order.
     pub labels: Vec<String>,
@@ -1680,42 +1592,17 @@ terminal result (including L2 results that do not promote), instead of
 resolving against an interim L2 class.
 
 ```rust
-pub struct DynamicPiiRequestConfig {
-    /// Canonical entity labels of the base GLiNER group.
-    pub labels: Vec<String>,
-    /// Default entity score threshold; the gateway's threshold when absent.
-    #[serde(default)]
-    pub threshold: Option<f32>,
-    /// Optional threshold overrides keyed by entity label.
-    #[serde(default)]
-    pub label_thresholds: HashMap<String, f32>,
-    /// Gate deciding whether this pipeline runs.
-    #[serde(default)]
-    pub execution_gate: DynamicPiiExecutionGate,
-    /// Additional labels activated by final source-pipeline results.
-    #[serde(default)]
-    pub conditional_labels: Vec<DynamicPiiConditionalLabels>,
-}
-```
-
-Request-local labels, thresholds and gates for `dynamic-pii`.
-
-For one request it replaces the entity fields of the gateway's
-[`DynamicPiiConfig`]: `labels`, `label_thresholds`, `execution_gate` and
-`conditional_labels`, and `threshold` when given. Input limits, chunking and
-timeouts stay those of the gateway.
-
-```rust
-pub fn resolve(self, base: &DynamicPiiConfig) -> Result<DynamicPiiConfig, String>;
-```
-
-Apply this request configuration to `base` and validate the result.
-
-```rust
 pub fn validated(mut self) -> Result<Self, String>;
 ```
 
 Validate and normalize this configuration.
+
+```rust
+pub fn with_request(&self, request: DynamicPiiRequestConfig) -> Result<Self, String>;
+```
+
+Apply a request-local configuration to this gateway configuration and
+validate the result.
 
 ## Result And Category Types
 
@@ -1907,27 +1794,33 @@ pub struct QueuedSecurityScanResult {
     /// Request id returned by `SecurityGateway::enqueue`.
     pub request_id: RequestId,
     /// Complete classifier result published by L1/L2 or the L3 worker.
+    #[serde(flatten)]
     pub result: SecurityScanResult,
 }
 ```
 
 A completed queued scan result together with the request that produced it.
+Serializes as the result with its `request_id`.
 
 ```rust
 pub struct SecurityScanResult {
     /// The result fields Ark Core defines; Ark serializes them flat.
+    #[serde(flatten)]
     pub native: patronus_ark_core::NativeResult,
     /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
     /// before results are published outside the gateway.
     #[doc(hidden)]
+    #[serde(skip)]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     /// Stage that gave the category its final answer (`heuristic` for an L1
     /// result, `l2`, `l3`); `None` while a later layer still answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub decided_by: Option<Stage>,
     /// With the opt-in cascade, L1's answer (`detected` or `clear`) when L1
     /// decided the category, as Core's `ModuleDecision::outcome`: a detection
     /// at a lowered `detect_threshold` shows here even when the native class
     /// stays `safe`. `None` otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_outcome: Option<StageOutcome>,
 }
 ```
@@ -1954,28 +1847,6 @@ pub fn as_str(self) -> &'static str;
 ```
 
 Return the canonical snake_case mode string.
-
-```rust
-pub enum NtdbOperatingPoint {
-    BestF1,
-    #[default]
-    BestPromote,
-    /// Internal Ark API routing profile: use utility promotion only for an
-    /// Injection document with at most two normal chunks.
-    ArkApiShortInjectionUtility,
-    BestFprInF1,
-    BestFnrInF1,
-    BestLatencyInF1,
-}
-```
-
-Calibrated NTDB operating point selected from each package manifest.
-
-```rust
-pub fn as_str(self) -> &'static str;
-```
-
-Return the manifest key for this operating point.
 
 ```rust
 pub enum L3Strategy {
@@ -2005,23 +1876,15 @@ pub struct ScanExecution {
     l3_strategy: L3Strategy,
     defer_l3: bool,
     chunk_overlap_tokens: usize,
-    wolf_execution_options: crate::WolfExecutionOptions,
-    wolf_selection: WolfSelection,
+    /// The dedicated injection L3: Core's Wolf config, its unset window
+    /// sizes filled with Ark's serving profile.
+    wolf: WolfConfig,
 }
 ```
 
 Effective execution state consumed by scan methods and model pipelines:
 the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
 plus Ark's runtime and NTDB settings.
-
-```rust
-pub struct WolfSelection {
-    pub model: crate::WolfModel,
-    pub precision: crate::WolfPrecision,
-}
-```
-
-The Wolf Defender model and ONNX export the dedicated injection L3 loads.
 
 ```rust
 pub fn new(max_level: SecurityLevel) -> Self;
@@ -2036,31 +1899,18 @@ pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
 Create an execution with explicit gates up to `max_level`.
 
 ```rust
-pub fn set_wolf_selection(&mut self, selection: WolfSelection) -> Result<(), String>;
+pub fn set_wolf(&mut self, wolf: WolfConfig) -> Result<(), String>;
 ```
 
-Choose the Wolf model and export; an unknown `auto` override fails here, not on first use.
+Choose the Wolf model, export and windows; unset window sizes take
+Ark's serving profile. Invalid sizes or an unknown `auto` precision
+override fail here, not on first use.
 
 ```rust
-pub fn wolf_selection(&self) -> WolfSelection;
+pub fn wolf(&self) -> &WolfConfig;
 ```
 
-No public documentation is available yet.
-
-```rust
-pub fn set_wolf_execution_options(
-    &mut self,
-    options: crate::WolfExecutionOptions,
-) -> Result<(), String>;
-```
-
-Configure dedicated Wolf execution using the shared Core validation.
-
-```rust
-pub fn wolf_execution_options(&self) -> crate::WolfExecutionOptions;
-```
-
-No public documentation is available yet.
+The dedicated injection L3's Wolf config.
 
 ```rust
 pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
@@ -2170,33 +2020,50 @@ Return the overlap between adjacent classifier chunks.
 pub struct ScannerConfig {
     /// Native text-scan categories: `pii`, `dlp` and the eleven attack classes.
     pub categories: Vec<SecurityCategory>,
-    /// Rule, model, mode and `explain` gates; their keys sit at the top level
-    /// of the serialized config.
+    /// Deepest layer that may run. Default: `L3`.
+    pub max_level: SecurityLevel,
+    /// The gates: rules, models, `<category>_mode`, `explain`, the level
+    /// switches `l1`, `l2`, `l3`, `conditional` (result conditions; Core
+    /// scans carry no request metadata), the opt-in `cascade` and Ark's L3
+    /// worker policy `l3_policy`. Their keys sit at the top level of the
+    /// config.
+    ///
+    /// The levels run the same way with or without a cascade: L1 (the
+    /// native producers and L1 models) unless switched off, Wolf (the
+    /// injection L3) up to `max_level` unless switched off. With a cascade
+    /// (see [`crate::cascade::CascadeConfig`]), Wolf runs only where the
+    /// cascade escalates, conditional gates apply, and
+    /// [`ScanReport::decision`] reports each scanned module's final answer.
     #[serde(flatten)]
-    pub gates: NativeGates,
+    pub gates: ScanGateMatrix,
     /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
     pub max_input_bytes: usize,
     /// Maximum actionable evidence spans; reports are never silently truncated.
     pub max_findings: usize,
+    /// Model cache root of the bundles a config does not place with its own
+    /// `bundle_dir`. Default: [`crate::warmup::default_cache_root`].
+    pub cache_root: Option<PathBuf>,
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
     pub shell: Option<ShellConfig>,
-    /// The opt-in cascade (see [`crate::cascade::CascadeConfig`]): which
-    /// layers run with early exit between them, the per-module L1 cuts and
-    /// optional L1 models (loaded once here). When set, Wolf (the injection
-    /// L3) runs only where the cascade escalates, and
-    /// [`ScanReport::decision`] reports each scanned module's final answer.
-    /// `None` (the default) leaves every scan as before: all native
-    /// producers, and Wolf on every scan that selects `injection`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cascade: Option<CascadeConfig>,
 }
 ```
 
 Queue-free scanner policy. Defaults to pii, dlp and the core attack classes
 (injection, jailbreak, prompt_extraction, tool_poisoning, exfiltration), no
-Wolf and no Cat.
+Wolf and no Cat. Unknown keys are refused (by the gate keys, which take
+every key the scanner does not name).
+
+Ark's gateway config is this config plus Ark's own keys: every key here
+means the same in Ark.
+
+```rust
+pub fn resolved(&self) -> Result<Self, ScanError>;
+```
+
+This config with every bundle directory set: a bundle without its own
+`bundle_dir` lives below the model cache root.
 
 ```rust
 pub enum ScanError {
@@ -2247,8 +2114,9 @@ Complete scan output; native decisions and model probabilities remain separate.
 
 ```rust
 pub struct Scanner {
+    /// The config; its gates live in `execution`.
     config: ScannerConfig,
-    cascade: Cascade,
+    execution: LayerExecution,
     native: NativeEngine,
     #[cfg(feature = "wolf")]
     wolf: Option<crate::wolf::WolfRunner>,
@@ -2262,16 +2130,8 @@ No public documentation is available yet.
 pub fn new(config: ScannerConfig) -> Result<Self, ScanError>;
 ```
 
-Initialize native detectors and warm/verify an explicitly configured local Wolf bundle.
-
-```rust
-pub fn new_with_wolf_options(
-    config: ScannerConfig,
-    options: crate::WolfExecutionOptions,
-) -> Result<Self, ScanError>;
-```
-
-Initialize with explicit Wolf windowing and batching; native stages are unchanged.
+Initialize native detectors and warm/verify the configured local Wolf
+and Cat bundles.
 
 ```rust
 pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError>;
@@ -2704,6 +2564,24 @@ No public documentation is available yet.
 ## Core Asset Preparation And Warmup
 
 ```rust
+pub fn bundle_dir_or_default(
+    explicit: Option<&Path>,
+    root: Option<&Path>,
+    layout: impl FnOnce(&Path) -> PathBuf,
+) -> Result<PathBuf, ScanError>;
+```
+
+An explicit bundle directory, else `layout` below the model cache root:
+`root` when given, else [`default_cache_root`]. Every bundle a config
+does not place explicitly lives below this one root.
+
+```rust
+pub fn model_cache_root(root: Option<&Path>) -> Result<PathBuf, ScanError>;
+```
+
+The model cache root: `root` when given, else [`default_cache_root`].
+
+```rust
 pub fn default_cache_root() -> Option<PathBuf>;
 ```
 
@@ -2748,16 +2626,6 @@ pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, Sca
 ```
 
 Prepare configured assets, then construct one warm scanner used by subsequent scans.
-
-```rust
-pub fn warmup_with_wolf_options(
-    config: ScannerConfig,
-    options: WarmupOptions,
-    execution: crate::WolfExecutionOptions,
-) -> Result<Self, ScanError>;
-```
-
-Prepare assets and warm one reusable scanner with explicit Wolf execution options.
 
 ```rust
 pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError>;
@@ -3157,7 +3025,10 @@ No public documentation is available yet.
 
 ```rust
 pub struct WolfConfig {
-    pub bundle_dir: PathBuf,
+    /// The model's bundle directory; unset takes the model's directory below
+    /// the model cache root ([`crate::warmup::wolf_bundle_dir`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_dir: Option<PathBuf>,
     /// Attack-probability threshold; unset takes the bundle's published one.
     #[serde(default)]
     pub threshold: Option<f64>,
@@ -3169,13 +3040,17 @@ pub struct WolfConfig {
     pub backend: crate::ExecutionBackend,
     #[serde(default)]
     pub runtime_options: crate::OnnxRuntimeOptions,
+    /// Document windows and batching; unset sizes follow the bundle.
+    #[serde(default)]
+    pub execution: WolfExecutionOptions,
 }
 ```
 
-The Wolf Defender L3 of the injection module: bundle, model size,
-precision, backend and the attack-probability threshold it detects at.
-Everything unset follows the bundle's published settings (`POOLING.json`):
-Wolf Defender detects strictly above 0.5 over 2048-token windows with 64 overlap.
+The Wolf Defender L3 of the injection module: model size, precision,
+bundle, document windows, backend and the attack-probability threshold it
+detects at. Everything unset follows the bundle's published settings
+(`POOLING.json`): Wolf Defender detects strictly above 0.5 over
+2048-token windows with 64 overlap.
 
 ```rust
 pub struct BundleFile {
@@ -3297,15 +3172,6 @@ No public documentation is available yet.
 pub fn new(config: &WolfConfig) -> Result<Self, ScanError>;
 ```
 
-Construct a runner with the bundle's published windows.
-
-```rust
-pub fn new_with_options(
-    config: &WolfConfig,
-    options: WolfExecutionOptions,
-) -> Result<Self, ScanError>;
-```
-
 Construct and warm a runner; execution sizes are validated against the local export.
 Unset sizes and threshold follow the bundle's `POOLING.json`.
 
@@ -3385,10 +3251,24 @@ The window and batch configuration this session was requested with;
 unset sizes run with the bundle's published ones.
 
 ```rust
+pub fn validate(&self) -> Result<(), ScanError>;
+```
+
+Refuse a threshold outside `[0,1]`, invalid window sizes and an
+unknown `auto` precision override.
+
+```rust
 pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;
 ```
 
 No public documentation is available yet.
+
+```rust
+pub fn dir(&self, root: Option<&Path>) -> Result<PathBuf, ScanError>;
+```
+
+The bundle directory: `bundle_dir`, else the model's directory below
+the model cache root `root` (unset: the default cache root).
 
 ## Asset Manifest Helpers
 

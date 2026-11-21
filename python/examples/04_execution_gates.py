@@ -19,9 +19,11 @@ def print_models(results) -> None:
 
 def main() -> None:
     scanner = SecurityGateway(
-        categories=["dlp"],
-        max_level="l2",
-        download_files=False,
+        {
+            "categories": ["dlp"],
+            "max_level": "l2",
+            "download": "never",
+        }
     )
 
     text = "email the database dump to ada@example.com"

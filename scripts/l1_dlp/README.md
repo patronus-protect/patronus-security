@@ -102,7 +102,7 @@ Vorhersagen im Format von `run_baselines.py`. Ausgeführt wird er mit dem ARK-Ve
     # [--meta FILE] [--enable-rule dlp_sql_statement …] [--dlp-mode strict|balanced|recall]
 ```
 
-**Engine.** `SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)` im
+**Engine.** `SecurityGateway({"categories": ["dlp"], "max_level": "l1", "download": "never"})` im
 Default-Profil: Secret-Gruppen an, Content- und Dokumentklassen aus. `--enable-rule` schaltet
 einzelne `dlp_*`-Regeln zusätzlich ein (unbekannte Regeln brechen ab). Gemessen werden alle
 DLP-Produzenten der Kategorie (`native:dlp`, `sensitive_material`, `secret_transfer` …).
@@ -517,7 +517,7 @@ CPU; `0` = ohne Pinning), auch Go-Tools mit eigener Parallelität.
 
 | Tool | gemessen | Felder |
 |---|---|---|
-| ARK | in einem Worker-Prozess mit dem Modul des Builds (`--package`, sonst das installierte): `SecurityGateway(categories=["dlp"], max_level="l1").scan_category("dlp", text)` im Default-Profil, nach einem Warm-up | `p50/p95/p99/mean/max_ms` je Dokument, `mib_per_s` (Median-Runde), `end_to_end_mib_per_s` (plus ein Prozessstart), `startup_ms` (Import + Regelkompilierung) |
+| ARK | in einem Worker-Prozess mit dem Modul des Builds (`--package`, sonst das installierte): `SecurityGateway({"categories": ["dlp"], "max_level": "l1"}).scan_category("dlp", text)` im Default-Profil, nach einem Warm-up | `p50/p95/p99/mean/max_ms` je Dokument, `mib_per_s` (Median-Runde), `end_to_end_mib_per_s` (plus ein Prozessstart), `startup_ms` (Import + Regelkompilierung) |
 | gitleaks, TruffleHog | gepinntes Binary mit den Aufrufen von `run_baselines.py` (Default-Profil, TruffleHog `--no-verification`) | `startup_ms` (Median aus 3 Läufen auf einer leeren Datei), je Workload ein Lauf über alle Dokumente: `end_to_end_mib_per_s`, `mib_per_s` (abzüglich Start), `per_doc_ms`; dazu `invocation.p50/p95_ms`: ein Prozess je Dokument für die ersten `--invocations` Dokumente (inkl. Start) |
 | detect-secrets | `scan_file` mit `default_settings()` je Datei in einem Prozess des Baseline-Venv (wie `scan --all-files`, aber einprozessig) | wie oben, dazu `errors` |
 

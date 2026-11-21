@@ -17,6 +17,7 @@
 //!
 //! Validators are not loosened: an impossible date stays negative in every order.
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::pii::validators;
 use patronus_ark_core::native::ScoreMode;
@@ -24,12 +25,11 @@ use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, Securit
 use serde_json::Value;
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,

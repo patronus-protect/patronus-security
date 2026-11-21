@@ -141,9 +141,8 @@ def fake_package(path: Path, delay: float, fail: bool = False) -> Path:
     (path / "patronus_ark" / "__init__.py").write_text(
         "import time\n"
         "class SecurityGateway:\n"
-        "    def __init__(self, **kwargs):\n"
-        "        assert kwargs['categories'] == ['dlp'] and kwargs['max_level'] == 'l1'\n"
-        "        assert kwargs['execution_gates'] is None\n"
+        "    def __init__(self, config):\n"
+        "        assert config == {'categories': ['dlp'], 'max_level': 'l1', 'download': 'never'}\n"
         "    def scan_category(self, category, text):\n"
         f"        time.sleep({delay})\n"
         f"        return [{{'class_name': {'error' if fail else 'dlp'!r}}}]\n"

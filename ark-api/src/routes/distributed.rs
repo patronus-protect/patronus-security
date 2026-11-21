@@ -14,8 +14,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use patronus_ark::ml::ntdb_executor::{ByteSpan, NtdbModelChunkInferences, PreparedNtdbChunk};
-use patronus_ark::{L3Strategy, NtdbOperatingPoint, ScanExecution};
+use patronus_ark::{L3Strategy, ScanExecution};
 use patronus_ark_core::cascade::escalates;
+use patronus_ark_core::NtdbOperatingPoint;
 use patronus_ark_core::SecurityCategory;
 use serde_json::json;
 
@@ -128,7 +129,7 @@ fn validate_request_compatibility(
             .category
             .parse::<SecurityCategory>()
             .map_err(|error| format!("unknown category '{}': {error}", pipeline.category))?;
-        if !state.config.categories.contains(&category) {
+        if !state.config.gateway.core.categories.contains(&category) {
             return Err(format!(
                 "category '{}' is not configured on this worker",
                 pipeline.category

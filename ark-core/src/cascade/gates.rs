@@ -94,8 +94,8 @@ pub struct ScanGateMatrix {
     /// The opt-in cascade: when set, a module L1 decides (or no later layer
     /// can run for) skips L2 and L3 and results carry `decided_by`; its
     /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
-    /// and L3 as before. Levels and conditional gates stay the keys above;
-    /// see [`super::CascadeConfig::validate_for_gates`].
+    /// and L3 as before. The levels that run are the keys above, with or
+    /// without a cascade.
     pub cascade: Option<super::Cascade>,
 }
 
@@ -465,7 +465,12 @@ impl ScanGateMatrix {
     /// Return whether the level is allowed by this matrix before max-level
     /// enforcement.
     pub fn allows_level(&self, level: SecurityLevel) -> bool {
-        level_switch([self.l1, self.l2, self.l3], level)
+        match level {
+            SecurityLevel::L1 => self.l1,
+            SecurityLevel::L2 => self.l2,
+            SecurityLevel::L3 => self.l3,
+        }
+        .unwrap_or(true)
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -515,17 +520,6 @@ pub fn pipeline_allowed(
                     .is_none_or(|target| target == pipeline)
         })
         .all(|gate| gate.when.matches(metadata, results))
-}
-
-/// The one rule of the per-level switches `l1`, `l2`, `l3` of every host:
-/// unset means enabled.
-pub(super) fn level_switch(switches: [Option<bool>; 3], level: SecurityLevel) -> bool {
-    let index = match level {
-        SecurityLevel::L1 => 0,
-        SecurityLevel::L2 => 1,
-        SecurityLevel::L3 => 2,
-    };
-    switches[index].unwrap_or(true)
 }
 
 /// The serialized [`ScanGateMatrix`]; missing keys keep the defaults.
@@ -603,10 +597,7 @@ impl TryFrom<GateConfig> for ScanGateMatrix {
             l3_policy: policy,
             cascade: config
                 .cascade
-                .map(|cascade| {
-                    cascade.validate_for_gates()?;
-                    super::Cascade::new(cascade).map_err(|error| error.to_string())
-                })
+                .map(|cascade| super::Cascade::new(cascade).map_err(|error| error.to_string()))
                 .transpose()?,
             ..Self::default()
         };

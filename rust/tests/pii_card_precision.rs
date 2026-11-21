@@ -9,6 +9,7 @@
 //! its brand ([`validators::CARD_IIN_RANGES`]) besides Luhn, in every mode, so the
 //! context-free card of `balanced` passes the same table. Luhn itself is unchanged.
 
+use patronus_ark::GatewayConfig;
 use std::path::Path;
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -24,12 +25,11 @@ use serde::Deserialize;
 const MODES: [ScoreMode; 2] = [ScoreMode::Strict, ScoreMode::Balanced];
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,

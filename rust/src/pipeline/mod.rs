@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod decision_cache;
 mod decision_thresholds;
-mod generic;
 mod l3_engine;
 mod l3_result;
 mod l3_routing;
@@ -10,7 +9,6 @@ mod l3_worker;
 mod security;
 mod strategy;
 
-pub use generic::Pipeline;
 pub use l3_result::{
     degraded_error_result, degraded_fallback_confidence, degraded_timeout_result, has_l3_pending,
     l3_metadata_layer, l3_pending_layer,

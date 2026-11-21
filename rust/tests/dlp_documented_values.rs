@@ -6,6 +6,7 @@
 //! HMAC) or assemble them from pieces, and compare their SHA-256 with
 //! `research/dlp/documented_values.yaml`.
 
+use patronus_ark::GatewayConfig;
 use std::{collections::BTreeSet, path::PathBuf, sync::OnceLock};
 
 use patronus_ark::{SecurityGateway, SecurityScanResult};
@@ -19,12 +20,11 @@ fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
     SCANNER
         .get_or_init(|| {
-            SecurityGateway::with_max_level(
+            SecurityGateway::new(GatewayConfig::new(
                 vec![SecurityCategory::Dlp],
                 SecurityLevel::L1,
-                None,
-                false,
-            )
+            ))
+            .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()

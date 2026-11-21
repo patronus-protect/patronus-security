@@ -20,6 +20,7 @@
 //! their bare forms and the lower-case Nigerian plate are opt-in rules
 //! (`rust/tests/pii_bare_rules.rs`).
 
+use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::native::ScoreMode;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
@@ -41,12 +42,11 @@ const LABEL: &str = "LICENSEPLATE";
 const MODES: [ScoreMode; 3] = [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall];
 
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,

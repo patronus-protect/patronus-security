@@ -6,7 +6,7 @@ change the cache path or write mode.
 The short version:
 
 - Do nothing for a bounded, process-local memory cache.
-- Pass `cache_storage_location` in Python for persistent asynchronous writes.
+- Set `cache.storage_location` in the gateway config for persistent asynchronous writes.
 - Use `ExactCacheConfig` in Rust to choose persistent asynchronous or
   write-through writes.
 - Call `flush_cache()` before a durability boundary or controlled shutdown.
@@ -126,8 +126,10 @@ the comparison is strictly greater than.
 from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
-    categories=["injection"],
-    max_level="l3",
+    {
+        "categories": ["injection"],
+        "max_level": "l3",
+    }
 )
 ```
 
@@ -139,13 +141,11 @@ No persistent file is created. Entries disappear with the gateway/process.
 import os
 
 scanner = SecurityGateway(
-    categories=["injection", "dynamic-pii"],
-    max_level="l3",
-    cache_storage_location="/var/lib/my-app/patronus-cache.redb",
-    cache_encryption_key_hex=os.environ["PATRONUS_CACHE_KEY_HEX"],
-    cache_entry_ttl_seconds=30 * 24 * 60 * 60,
-    cache_memory_max_entries=100_000,
-    cache_memory_max_bytes=128 * 1024 * 1024,
+    {
+        "categories": ["injection", "dynamic-pii"],
+        "max_level": "l3",
+        "cache": {"storage_location": "/var/lib/my-app/patronus-cache.redb", "encryption_key_hex": os.environ["PATRONUS_CACHE_KEY_HEX"], "entry_ttl_seconds": 30 * 24 * 60 * 60, "memory_max_entries": 100_000, "memory_max_bytes": 128 * 1024 * 1024},
+    }
 )
 
 # Wait until queued writes are durable.
@@ -163,12 +163,12 @@ Rust-only, so write-through and custom queue sizing are not reachable from Pytho
 use patronus_ark::SecurityGateway;
 use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
-let scanner = SecurityGateway::with_max_level(
-    vec![SecurityCategory::Injection],
-    SecurityLevel::L3,
-    None,
-    true,
-);
+let scanner = SecurityGateway::new({
+    let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+    config.download = DownloadPolicy::Missing;
+    config
+
+}).unwrap();
 ```
 
 ### Rust: persistent async
@@ -189,14 +189,10 @@ let config = ExactCacheConfig {
     ..ExactCacheConfig::default()
 };
 
-let scanner = SecurityGateway::try_with_download_categories_and_cache(
-    vec![SecurityCategory::Injection],
-    SecurityLevel::L3,
-    None,
-    true,
-    None,
-    config,
-).expect("cache initialization");
+let mut gateway_config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+gateway_config.download = DownloadPolicy::Missing;
+gateway_config.cache = config;
+let scanner = SecurityGateway::new(gateway_config).expect("cache initialization");
 
 scanner.flush_cache().expect("durable cache flush");
 ```

@@ -5,15 +5,17 @@ were fetched during a separate, controlled window.
 
 ## Native-only (no assets at all)
 
-Native L1 detectors need no downloads. Set `download_files=False` and cap at L1:
+Native L1 detectors need no downloads. Set `"download": "never"` and cap at L1:
 
 ```python
 from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
-    categories=["injection", "dlp", "pii"],
-    max_level="l1",
-    download_files=False,
+    {
+        "categories": ["injection", "dlp", "pii"],
+        "max_level": "l1",
+        "download": "never",
+    }
 )
 scanner.warmup()
 
@@ -44,13 +46,14 @@ pattern for installers and locked-down deployments.
     use patronus_ark::SecurityGateway;
     use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
-    let scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L3,
-        Some("/opt/patronus-ark-assets".into()),
-        true,
-        Some(vec![SecurityCategory::Injection]),
-    );
+    let scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+        config.core.cache_root = Some("/opt/patronus-ark-assets".into());
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::Injection]);
+        config
+
+    }).unwrap();
 
     // Phase 1 — delivery/installer window: network allowed.
     scanner.prepare_assets()?;
@@ -66,17 +69,19 @@ pattern for installers and locked-down deployments.
 
     ```python
     scanner = SecurityGateway(
-        categories=["injection"],
-        max_level="l3",
-        model_dir="/opt/patronus-ark-assets",
-        download_files=True,
-        download_categories=["injection"],
+        {
+            "categories": ["injection"],
+            "max_level": "l3",
+            "cache_root": "/opt/patronus-ark-assets",
+            "download": "missing",
+            "download_categories": ["injection"],
+        }
     )
     scanner.warmup()   # run this once where the network IS available
     ```
 
-    Ship the populated `model_dir` to the air-gapped host, then construct with
-    `download_files=False` and the same `model_dir` so runtime start is local-only.
+    Ship the populated `cache_root` to the air-gapped host, then construct with
+    `"download": "never"` and the same `cache_root` so runtime start is local-only.
 
 ## Verify readiness without downloading or loading
 
@@ -100,6 +105,6 @@ Decide whether that runtime fallback is acceptable for your risk posture.
 - `dynamic-pii` is L3-only and needs its GLiNER bundle present — there is no offline fallback
   for it.
 - `shell_command` runs in L1 but needs its `cat-shell-risk-commander` bundle (4.4 MiB) under
-  `<model_dir>/shell_command/cat_shell_risk_commander/`; sync it with the other assets. With
+  `<cache_root>/shell_command/cat_shell_risk_commander/`; sync it with the other assets. With
   downloads disabled and the files missing, warmup fails.
 - Set `HF_TOKEN` during the asset-sync phase if the model repos require authentication.

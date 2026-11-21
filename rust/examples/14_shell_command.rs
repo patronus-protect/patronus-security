@@ -9,11 +9,12 @@
 //! `layers[0].details["verdict"]`.
 //!
 //! For harness context (cwd, home) and the facts of earlier commands, use the
-//! Core `Scanner::shell_verdict` (`ark-core/examples/core_scanner.rs`).
+//! Core `Scanner::shell_verdict` (Core's `core_scanner` example).
 //!
 //! Run: `cargo run --example 14_shell_command`
 
-use std::path::Path;
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 
 use patronus_ark::SecurityGateway;
 
@@ -21,24 +22,36 @@ use patronus_ark_core::{
     cascade::SecurityLevel, detectors::shell::ShellPolicyConfig, SecurityCategory,
 };
 
+/// A user policy: `forbid` with `@id("user.<name>")` and `@decision("block")`
+/// or `@decision("ask")`; `Action::"segment"` sees one command of a pipeline.
+const KUBECTL_DELETE_POLICY: &str = r#"
+@id("user.no_kubectl_delete")
+@title("kubectl delete needs a human")
+@decision("block")
+forbid (principal, action == Action::"segment", resource)
+when { context.program == "kubectl" && context.verb == "DELETE" };
+"#;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use SecurityCategory::{Dlp, Injection, Pii, ShellCommand};
 
     // Raise the level to L3 for model-backed injection (Wolf); see 03_l2_l3_promotion.
-    let mut gateway = SecurityGateway::with_download_categories(
-        vec![Pii, Dlp, Injection, ShellCommand],
-        SecurityLevel::L1,
-        None, // platform cache directory
-        true,
-        Some(vec![ShellCommand]),
-    );
+    let mut gateway = SecurityGateway::new({
+        let mut config =
+            GatewayConfig::new(vec![Pii, Dlp, Injection, ShellCommand], SecurityLevel::L1);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![ShellCommand]);
+        config
+    })
+    .unwrap();
 
-    // User policies: every `*.cedar` file of the directory. Set before or after
-    // warmup; a refused configuration changes nothing.
-    let mut policies = ShellPolicyConfig::default();
-    policies.add_cedar_dir(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../ark-core/examples/shell_policies"),
-    )?;
+    // User policies: Cedar sources, here inline; `add_cedar_dir` loads every
+    // `*.cedar` file of a directory. Set before or after warmup; a refused
+    // configuration changes nothing.
+    let policies = ShellPolicyConfig {
+        user_policies: vec![KUBECTL_DELETE_POLICY.to_string()],
+        ..ShellPolicyConfig::default()
+    };
     gateway.set_shell_command_policy_config(policies)?;
 
     if let Err(failure) = gateway.warmup() {

@@ -7,25 +7,28 @@
 //!
 //! Needs GLiNER assets. Run: `cargo run --example 05_dynamic_pii`
 
+use patronus_ark::GatewayConfig;
+use patronus_ark_core::warmup::DownloadPolicy;
 use std::time::Duration;
 
-use patronus_ark::{
-    DynamicPiiConfig, DynamicPiiExecutionGate, QueuedSecurityEvent, SecurityGateway,
-};
+use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway};
 
-use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{cascade::SecurityLevel, DynamicPiiExecutionGate, SecurityCategory};
 
 fn main() {
-    let mut scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
-        SecurityLevel::L3,
-        None,
-        true,
-        Some(vec![
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(
+            vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
+            SecurityLevel::L3,
+        );
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![
             SecurityCategory::Injection,
             SecurityCategory::DynamicPii,
-        ]),
-    );
+        ]);
+        config
+    })
+    .unwrap();
 
     // Run GLiNER only when injection flags the text, with runtime-chosen labels.
     scanner

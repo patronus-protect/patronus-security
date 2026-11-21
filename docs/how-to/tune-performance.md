@@ -25,7 +25,7 @@ The cheapest lever is not running L3. If you don't need transformer-grade accura
 cap it:
 
 ```python
-scanner = SecurityGateway(categories=["injection"], max_level="l2")
+scanner = SecurityGateway({"categories": ["injection"], "max_level": "l2"})
 ```
 
 Or gate L3 off per request while keeping the ceiling:
@@ -55,9 +55,11 @@ in a single inference:
 
 ```python
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_document", "unsafe_action", "routing"],
-    max_level="l3",
-    l3_strategy="multi",     # one inference vs. one per category
+    {
+        "categories": ["injection", "sensitive_document", "unsafe_action", "routing"],
+        "max_level": "l3",
+        "l3_strategy": "multi",
+    }
 )
 ```
 

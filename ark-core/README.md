@@ -156,7 +156,7 @@ wolf      p(attack)=0.998 matched=true
   picks the ONNX provider.
 - Long inputs are scored over the published 2048-token windows with 64 overlap; window scores are
   pooled per class with a smooth max, then softmax. Change window, overlap and batch with
-  `WolfExecutionOptions` and `Scanner::new_with_wolf_options` (unset sizes keep the published
+  the `wolf.execution` key (`WolfExecutionOptions`; unset sizes keep the published
   ones) — and recalibrate the threshold when you do.
 
 ## Cat: shell commands

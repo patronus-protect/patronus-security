@@ -12,7 +12,7 @@ use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
 use clap::Parser;
-use patronus_ark::{ExactCacheConfig, PersistentCacheConfig, SecurityGateway};
+use patronus_ark::SecurityGateway;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 
@@ -42,38 +42,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load(&args.config)?;
     tracing::info!(path = %args.config.display(), "loaded config");
 
-    // `cache.dir` in the config is a directory (friendlier to configure/mount
-    // than a bare file path); `PersistentCacheConfig::storage_location` wants
-    // the redb database file itself, so append a fixed filename.
-    let cache_config = ExactCacheConfig {
-        persistent: config.cache_dir.clone().map(|dir| PersistentCacheConfig {
-            storage_location: dir.join("decisions.redb"),
-            write_mode: patronus_ark::CacheWriteMode::Async,
-            write_behind: Default::default(),
-            encryption: None,
-        }),
-        ..Default::default()
-    };
-    let mut gateway = SecurityGateway::try_with_download_categories_and_cache(
-        config.categories.clone(),
-        config.max_level,
-        config.model_dir.clone(),
-        config.download_files,
-        None,
-        cache_config,
-    )?;
     // Multi remains the deployment default. Explicit dedicated configurations
     // require their matching model assets; startup never changes the image.
-    config.apply_model_defaults(&gateway)?;
+    let mut gateway =
+        SecurityGateway::new(config.gateway.clone()).map_err(|err| format!("pipeline: {err}"))?;
     // Keep one request worker for either classifier topology. Horizontal API
     // capacity comes from multiple containers, not an in-container backlog.
     gateway.set_queue_worker_count(1);
-    gateway.set_onnx_runtime_options(config.onnx_runtime);
-    if let Some(dynamic_pii) = config.dynamic_pii.clone() {
-        gateway
-            .set_dynamic_pii_config(dynamic_pii)
-            .map_err(|err| format!("pipeline.dynamic_pii: {err}"))?;
-    }
     gateway.warmup()?;
 
     if args.warmup_only {

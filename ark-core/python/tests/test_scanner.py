@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from patronus_ark_core import CancelledError, ScanControl, Scanner, seed_word_list
+from patronus_ark_core import CancelledError, ScanControl, Scanner, pii_rule_ids, seed_word_list
 
 
 def test_original_unicode_spans_and_selective_checks():
@@ -50,7 +50,7 @@ def test_core_accepts_a_mode_gate_per_category(mode):
 
 def test_cascade_reports_the_deciding_stage_per_module():
     assert "decision" not in Scanner().scan("hello")
-    scanner = Scanner({"categories": ["pii", "injection"], "cascade": {"max_level": "L1"}})
+    scanner = Scanner({"categories": ["pii", "injection"], "max_level": "L1", "cascade": {}})
     report = scanner.scan("Please summarize the meeting notes.")
     assert [(d["module"], d["outcome"], d["decided_by"]) for d in report["decision"]] == [
         ("pii", "clear", "heuristic"), ("injection", "clear", "heuristic"),
@@ -63,7 +63,8 @@ def test_cascade_reports_the_deciding_stage_per_module():
     lowered = Scanner({"categories": ["injection"], "cascade": {"modules": {"injection": {"detect_threshold": 0.0}}}})
     quoted = "The tutorial says to ignore previous instructions in this example."
     assert lowered.scan(quoted)["decision"][0]["outcome"] == "detected"
-    with pytest.raises(RuntimeError):
+    # The cascade's L1 models load when the config is read.
+    with pytest.raises(ValueError, match="manifest.json"):
         Scanner({"cascade": {"modules": {"injection": {
             "l1_model": {"bundle_dir": "/nonexistent", "manifest_sha256": "0" * 64},
         }}}})
@@ -160,6 +161,13 @@ def test_real_wolf_is_reused_and_obeys_per_call_selection():
     assert first["wolf"]["attack_probability"] == second["wolf"]["attack_probability"]
     assert first["wolf"]["windows"] > 0
     assert scanner.scan("hello", categories=["pii", "dlp"])["wolf"] is None
+
+
+def test_pii_rule_ids_list_the_registered_rules_once():
+    ids = pii_rule_ids()
+    assert "pii_email" in ids
+    assert len(ids) == len(set(ids))
+    assert all(rule_id.startswith("pii_") for rule_id in ids)
 
 
 def test_seed_word_lists_are_the_ones_the_dlp_rules_check():

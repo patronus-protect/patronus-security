@@ -450,12 +450,16 @@ def main() -> int:
     from patronus_ark import SecurityGateway
 
     gateway = SecurityGateway(
-        categories=THROUGHPUT_CATEGORIES, max_level="l3", l3_strategy="multi",
-        model_dir=None if args.model_dir is None else str(args.model_dir),
-        download_files=args.download_files, execution_gates=throughput_gates(),
-        ntdb_operating_point=args.ntdb_operating_point,
-        cache_memory_max_entries=0,
-        cache_memory_max_bytes=0,
+        {
+            "categories": THROUGHPUT_CATEGORIES,
+            "max_level": "l3",
+            "l3_strategy": "multi",
+            "cache_root": None if args.model_dir is None else str(args.model_dir),
+            "download": ("missing" if args.download_files else "never"),
+            "ntdb_decision_threshold_point": args.ntdb_operating_point,
+            "cache": {"memory_max_entries": 0, "memory_max_bytes": 0},
+            **(throughput_gates()),
+        }
     )
     warmup_started = time.monotonic()
     gateway.warmup()

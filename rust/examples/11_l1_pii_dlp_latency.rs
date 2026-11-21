@@ -1,3 +1,4 @@
+use patronus_ark::GatewayConfig;
 use std::{hint::black_box, time::Instant};
 
 use patronus_ark::SecurityGateway;
@@ -149,12 +150,11 @@ fn main() {
         ),
     );
 
-    let mut gateway = SecurityGateway::with_max_level(
+    let mut gateway = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii, SecurityCategory::Dlp],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     gateway.warmup().expect("native L1 warmup must succeed");
     print_latency(
         "PII gateway short",

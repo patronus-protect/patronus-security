@@ -69,7 +69,7 @@ def main() -> None:
     if args.output and args.output.exists():
         parser.error(f"refusing to overwrite {args.output}")
 
-    gateway = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
+    gateway = SecurityGateway({"categories": ["injection"], "max_level": "l1", "download": "never"})
     profiles = {}
     for size in SIZES:
         profiles[str(size)] = {

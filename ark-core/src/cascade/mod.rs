@@ -148,76 +148,24 @@ pub struct ModuleConfig {
     pub l1_model: Option<L1ModelConfig>,
 }
 
-/// The opt-in cascade: which layers run, with early exit between them, and
-/// per module its L1 cuts and optional L1 model. Its level keys are the
-/// gate keys of [`ScanGateMatrix`] with the same meaning: `max_level` is the
-/// ceiling and `l1`, `l2`, `l3` switch a level off (unset: on), so any one
-/// layer can run alone (for example `l1: false` leaves Wolf, the injection
-/// L3, to answer every input). Per module, the L1 model runs when
-/// `l1_model` is configured and the heuristic runs unless its native
-/// producers are switched off with the existing `models` gates (for
-/// example `native:injection_l1`, `native:threat_l1`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// The opt-in cascade: early exit between the layers that run, and per
+/// module its L1 cuts and optional L1 model. Which layers run is not part of
+/// the cascade: the level keys of the gates decide that for Core and Ark
+/// alike ([`LayerExecution`]: `max_level` is the ceiling, `l1`, `l2`, `l3`
+/// switch a level off and `conditional` gates L2 and L3), so any one layer
+/// can run alone (for example `l1: false` leaves Wolf, the injection L3, to
+/// answer every input). Per module, the L1 model runs when `l1_model` is
+/// configured and the heuristic runs unless its native producers are
+/// switched off with the existing `models` gates (for example
+/// `native:injection_l1`, `native:threat_l1`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CascadeConfig {
-    /// Deepest layer that may run. Default: `L3`.
-    pub max_level: SecurityLevel,
-    /// `false` switches L1 (heuristics and L1 models) off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l1: Option<bool>,
-    /// `false` switches L2 off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l2: Option<bool>,
-    /// `false` switches L3 off.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l3: Option<bool>,
-    /// Conditional L2/L3 gates, evaluated over the L1 results of every
-    /// scanned module and the module's own later results. Core has no
-    /// request metadata, so `metadata` conditions are refused.
-    pub conditional: Vec<ConditionalPipelineGate>,
     /// Per-module settings keyed by category.
     pub modules: HashMap<SecurityCategory, ModuleConfig>,
 }
 
-impl Default for CascadeConfig {
-    fn default() -> Self {
-        Self {
-            max_level: SecurityLevel::L3,
-            l1: None,
-            l2: None,
-            l3: None,
-            conditional: Vec::new(),
-            modules: HashMap::new(),
-        }
-    }
-}
-
 impl CascadeConfig {
-    /// Whether `level` may run: at most `max_level` and not switched off,
-    /// the rule of [`ScanGateMatrix`] and [`LayerExecution`].
-    pub fn allows_level(&self, level: SecurityLevel) -> bool {
-        level <= self.max_level && gates::level_switch([self.l1, self.l2, self.l3], level)
-    }
-
-    /// The cascade as Ark's gate key `cascade`: Ark takes the levels and
-    /// conditional gates from its own gate keys (`max_level`, `l1`, `l2`,
-    /// `l3`, `conditional`), so only `modules` (L1 cuts and L1 models) may
-    /// be set.
-    pub fn validate_for_gates(&self) -> Result<(), String> {
-        let levels = Self {
-            modules: HashMap::new(),
-            ..self.clone()
-        };
-        if levels != Self::default() {
-            return Err(
-                "cascade: set max_level, l1, l2, l3 and conditional as gate keys; \
-                the cascade key takes only modules"
-                    .into(),
-            );
-        }
-        self.validate()
-    }
-
     /// The configured L1 models by module.
     pub fn l1_models(&self) -> impl Iterator<Item = (SecurityCategory, &L1ModelConfig)> {
         self.modules
@@ -225,20 +173,9 @@ impl CascadeConfig {
             .filter_map(|(module, config)| Some((*module, config.l1_model.as_ref()?)))
     }
 
-    /// Refuse invalid conditional gates, gates over request metadata (Core
-    /// scans have none) and heuristic cuts outside `0..=1` or with the clear
-    /// cut above the detect cut.
+    /// Refuse heuristic cuts outside `0..=1` or with the clear cut above the
+    /// detect cut.
     pub fn validate(&self) -> Result<(), String> {
-        for gate in &self.conditional {
-            gate.validate()?;
-            if gate.when.reads_metadata() {
-                return Err(
-                    "cascade.conditional: Core scans carry no request metadata; \
-                    use result conditions"
-                        .into(),
-                );
-            }
-        }
         for (module, config) in &self.modules {
             for (name, value) in [
                 ("detect_threshold", config.detect_threshold),
@@ -357,11 +294,6 @@ impl Cascade {
         self.l1_models.get(&module).map(|model| model.as_ref())
     }
 
-    /// Whether `level` may run in this cascade.
-    pub fn allows_level(&self, level: SecurityLevel) -> bool {
-        self.config.allows_level(level)
-    }
-
     /// L1's answer for `module` when its heuristic did not run (L1 switched
     /// off, or its rules switched off or failed): the input escalates to the
     /// next stage that runs and is never cleared for lack of evidence; if no
@@ -375,12 +307,6 @@ impl Cascade {
             layers: Vec::new(),
             ran: false,
         }
-    }
-
-    /// Whether conditional gates decide which later layer may run; only then
-    /// does [`Self::decide`] read the L1 gate results.
-    pub fn has_conditional_gates(&self) -> bool {
-        !self.config.conditional.is_empty()
     }
 
     /// The heuristic's outcome for `module` from its L1 results (see
@@ -495,16 +421,17 @@ impl Cascade {
     }
 
     /// Final decision of `module`: L1's Detected or Clear stands; an
-    /// escalation runs the first allowed L2 model of the module, then the L3
-    /// executor, each only while the previous layer escalates. An escalation
-    /// no configured layer answers ends Clear, decided by the last stage that
-    /// ran. `None` when no stage ran at all (L1 switched off and no later
-    /// layer answered): the module has no decision.
+    /// escalation runs the first L2 model of the module `levels` allows, then
+    /// the L3 executor, each only while the previous layer escalates. An
+    /// escalation no configured layer answers ends Clear, decided by the last
+    /// stage that ran. `None` when no stage ran at all (L1 switched off and no
+    /// later layer answered): the module has no decision.
     /// `l1_results` are the L1 gate results of every scanned module, read
-    /// only when [`Self::has_conditional_gates`].
+    /// only when `levels` has conditional gates.
     #[allow(clippy::too_many_arguments)]
     pub fn decide(
         &self,
+        levels: &LayerExecution,
         module: SecurityCategory,
         text: &str,
         l1: L1Stage,
@@ -524,7 +451,8 @@ impl Cascade {
             mut layers,
             mut ran,
         } = l1;
-        let gated = self.has_conditional_gates();
+        let conditional = &levels.gates().conditional;
+        let gated = !conditional.is_empty();
         let mut results = Vec::new();
         if gated {
             results.extend_from_slice(l1_results);
@@ -539,19 +467,13 @@ impl Cascade {
             let Some(signal) = escalation.take() else {
                 break;
             };
-            if !self.config.allows_level(level) {
+            if !levels.allows_level(level) {
                 // Switched off: the escalation passes on.
                 escalation = Some(signal);
                 continue;
             }
             let allowed = !gated
-                || pipeline_allowed(
-                    &self.config.conditional,
-                    level,
-                    module.as_str(),
-                    &Value::Null,
-                    &results,
-                );
+                || pipeline_allowed(conditional, level, module.as_str(), &Value::Null, &results);
             let output = match level {
                 _ if !allowed => None,
                 SecurityLevel::L2 => l2

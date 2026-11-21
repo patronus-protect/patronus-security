@@ -1,7 +1,8 @@
-use patronus_ark::{
-    gliner_onnx_engine::GlinerEngine, NtdbOperatingPoint, SecurityGateway, SecurityScanResult,
+use patronus_ark::GatewayConfig;
+use patronus_ark::{gliner_onnx_engine::GlinerEngine, SecurityGateway, SecurityScanResult};
+use patronus_ark_core::{
+    cascade::SecurityLevel, ExecutionBackend, NtdbOperatingPoint, SecurityCategory,
 };
-use patronus_ark_core::{cascade::SecurityLevel, ExecutionBackend, SecurityCategory};
 use serde::Deserialize;
 use serde_json::json;
 use std::{
@@ -88,12 +89,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("PATRONUS_NTDB_INJECTION_DIR", l2_dir);
 
     let started = Instant::now();
-    let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L3,
-        Some(model_root),
-        false,
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+        config.core.cache_root = Some(model_root);
+        config
+    })
+    .unwrap();
     scanner.set_execution_backend(ExecutionBackend::Cpu);
     scanner.set_ntdb_operating_point(NtdbOperatingPoint::BestLatencyInF1);
     scanner.warmup()?;

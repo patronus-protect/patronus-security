@@ -11,6 +11,7 @@
 //! scored modes resolve these overlaps instead (K07) and list nothing. Validators are
 //! not relaxed: the vectors below pass or fail the checksum they name.
 
+use patronus_ark::GatewayConfig;
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -22,12 +23,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 fn scanner(mode: ScoreMode) -> SecurityGateway {
-    let scanner = SecurityGateway::with_max_level(
+    let scanner = SecurityGateway::new(GatewayConfig::new(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
-        None,
-        false,
-    );
+    ))
+    .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
         native: patronus_ark_core::native::NativeGates {
             pii_mode: mode,
@@ -434,10 +434,8 @@ struct SecondaryProbe {
 
 #[test]
 fn bilingual_secondary_probes_mark_their_rule() {
-    let probes: Vec<Probe> = serde_json::from_str(include_str!(
-        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap();
+    let probes: Vec<Probe> =
+        serde_json::from_str(patronus_ark_core::test_fixtures::L1_BILINGUAL_RULES).unwrap();
     let scanner = scanner(ScoreMode::Strict);
     let mut probed = BTreeSet::new();
     for probe in probes.iter().filter(|probe| probe.category == "pii") {

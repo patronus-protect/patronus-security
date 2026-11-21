@@ -33,10 +33,12 @@ clear), and the last layer you allow gives the final answer: with `l1`, what L1 
 
     ```python
     scanner = SecurityGateway(
-        categories=["injection", "unsafe_action"],
-        max_level="l2",          # learned classifiers, no L3
-        download_files=True,
-        download_categories=["injection", "unsafe_action"],
+        {
+            "categories": ["injection", "unsafe_action"],
+            "max_level": "l2",
+            "download": "missing",
+            "download_categories": ["injection", "unsafe_action"],
+        }
     )
     scanner.warmup()
     ```
@@ -47,13 +49,13 @@ clear), and the last layer you allow gives the final answer: with `l1`, what L1 
     use patronus_ark::SecurityGateway;
     use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
-    let mut scanner = SecurityGateway::with_download_categories(
-        vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
-        SecurityLevel::L2,       // learned classifiers, no L3
-        None,
-        true,                    // download_files
-        Some(vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction]),
-    );
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction], SecurityLevel::L2);
+        config.download = DownloadPolicy::Missing;
+        config.download_categories = Some(vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction]);
+        config
+
+    }).unwrap();
     scanner.warmup().expect("warmup");
     ```
 
@@ -68,7 +70,7 @@ identifiers (`dlp.de.*`, `dlp.record.*`, project and organization IDs), content 
 security reports, export control, R&D) are off until a `rules` gate turns their rule on:
 
 ```python
-scanner = SecurityGateway(categories=["dlp"], max_level="l1")
+scanner = SecurityGateway({"categories": ["dlp"], "max_level": "l1"})
 scanner.set_execution_gates({
     "dlp_mode": "balanced",                  # scored findings instead of strict 1.0
     "rules": {
@@ -107,10 +109,12 @@ Enable downloads for just the categories you configured with `download_categorie
 
 ```python
 scanner = SecurityGateway(
-    categories=["injection", "dlp", "pii"],
-    max_level="l2",
-    download_files=True,
-    download_categories=["injection"],   # dlp/pii are native; only injection downloads
+    {
+        "categories": ["injection", "dlp", "pii"],
+        "max_level": "l2",
+        "download": "missing",
+        "download_categories": ["injection"],
+    }
 )
 ```
 

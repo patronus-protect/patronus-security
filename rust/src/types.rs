@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
 
+use patronus_ark_core::wolf::WolfConfig;
 use serde::{Deserialize, Serialize};
+
+use crate::NtdbOperatingPoint;
 
 pub type RequestId = String;
 
@@ -188,34 +191,40 @@ pub struct QueuedSecurityProgress {
     pub details: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// A completed queued scan result together with the request that produced it.
+/// Serializes as the result with its `request_id`.
 pub struct QueuedSecurityScanResult {
     /// Request id returned by `SecurityGateway::enqueue`.
     pub request_id: RequestId,
     /// Complete classifier result published by L1/L2 or the L3 worker.
+    #[serde(flatten)]
     pub result: SecurityScanResult,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// Public scan result returned by `SecurityGateway` methods: Core's
 /// [`patronus_ark_core::NativeResult`] (category, class, confidence, level,
 /// model, layers, evidence, label scores, decision envelope) plus what only
 /// the layered gateway reports. It dereferences to the Core result.
 pub struct SecurityScanResult {
     /// The result fields Ark Core defines; Ark serializes them flat.
+    #[serde(flatten)]
     pub native: patronus_ark_core::NativeResult,
     /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
     /// before results are published outside the gateway.
     #[doc(hidden)]
+    #[serde(skip)]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     /// Stage that gave the category its final answer (`heuristic` for an L1
     /// result, `l2`, `l3`); `None` while a later layer still answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub decided_by: Option<Stage>,
     /// With the opt-in cascade, L1's answer (`detected` or `clear`) when L1
     /// decided the category, as Core's `ModuleDecision::outcome`: a detection
     /// at a lowered `detect_threshold` shows here even when the native class
     /// stays `safe`. `None` otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_outcome: Option<StageOutcome>,
 }
 
@@ -265,50 +274,6 @@ impl std::str::FromStr for OnnxBatchMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-/// Calibrated NTDB operating point selected from each package manifest.
-pub enum NtdbOperatingPoint {
-    BestF1,
-    #[default]
-    BestPromote,
-    /// Internal Ark API routing profile: use utility promotion only for an
-    /// Injection document with at most two normal chunks.
-    ArkApiShortInjectionUtility,
-    BestFprInF1,
-    BestFnrInF1,
-    BestLatencyInF1,
-}
-
-impl NtdbOperatingPoint {
-    /// Return the manifest key for this operating point.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::BestF1 => "best_f1",
-            Self::BestPromote => "best_promote",
-            Self::ArkApiShortInjectionUtility => "ark_api_short_injection_utility",
-            Self::BestFprInF1 => "best_fpr_in_f1",
-            Self::BestFnrInF1 => "best_fnr_in_f1",
-            Self::BestLatencyInF1 => "best_latency_in_f1",
-        }
-    }
-}
-
-impl std::str::FromStr for NtdbOperatingPoint {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().replace('-', "_").as_str() {
-            "best_f1" => Ok(Self::BestF1),
-            "best_promote" => Ok(Self::BestPromote),
-            "ark_api_short_injection_utility" => Ok(Self::ArkApiShortInjectionUtility),
-            "best_fpr_in_f1" => Ok(Self::BestFprInF1),
-            "best_fnr_in_f1" => Ok(Self::BestFnrInF1),
-            "best_latency_in_f1" => Ok(Self::BestLatencyInF1),
-            _ => Err(format!("Unknown NTDB operating point: {s}")),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Physical L3 classifier topology.
 pub enum L3Strategy {
@@ -324,14 +289,16 @@ impl Default for L3Strategy {
     }
 }
 
-/// The defaults of Ark's three entry points, named in one place. They differ
-/// on purpose and each entry point reads its own value from here:
+/// The defaults of Ark's three entry points that differ from the
+/// [`crate::GatewayConfig`] defaults, named in one place. They differ on
+/// purpose; each entry point fills its own value from here when its config
+/// leaves the key unset:
 ///
-/// | entry point | max level | L3 strategy | NTDB operating point |
+/// | entry point | `max_level` | `download` | `l3_strategy` |
 /// |---|---|---|---|
-/// | Rust `SecurityGateway` / `ScanExecution` | `L3` | `dedicated` | `best_promote` |
-/// | Python `SecurityGateway(...)` | `l2` | `dedicated` | `best_f1` |
-/// | Ark API server (`pipeline.l3_strategy`) | per config | `multi` | per config |
+/// | Rust `GatewayConfig` | `L3` | `never` | `dedicated` |
+/// | Python `SecurityGateway(config)` | `l2` | `missing` | `dedicated` |
+/// | Ark API server (`pipeline`) | required | `never` | `multi` |
 pub mod defaults {
     use super::L3Strategy;
 
@@ -339,13 +306,25 @@ pub mod defaults {
     pub const RUST_L3_STRATEGY: L3Strategy = L3Strategy::Dedicated;
     /// Deepest layer of the Python `SecurityGateway`.
     pub const PYTHON_MAX_LEVEL: &str = "l2";
-    /// L3 topology of the Python `SecurityGateway`.
-    pub const PYTHON_L3_STRATEGY: &str = "dedicated";
-    /// NTDB operating point of the Python `SecurityGateway`.
-    pub const PYTHON_NTDB_OPERATING_POINT: &str = "best_f1";
+    /// Download policy of the Python `SecurityGateway`.
+    pub const PYTHON_DOWNLOAD: &str = "missing";
     /// L3 topology of the Ark API server when `pipeline.l3_strategy` is unset.
     pub const ARK_API_L3_STRATEGY: L3Strategy = L3Strategy::Multi;
 }
+
+/// `Deserialize` through the type's `FromStr` names and aliases.
+macro_rules! deserialize_from_str {
+    ($($type:ty),*) => {$(
+        impl<'de> Deserialize<'de> for $type {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                String::deserialize(deserializer)?
+                    .parse()
+                    .map_err(serde::de::Error::custom)
+            }
+        }
+    )*};
+}
+deserialize_from_str!(OnnxBatchMode, L3Strategy);
 
 impl L3Strategy {
     pub fn as_str(self) -> &'static str {
@@ -382,16 +361,9 @@ pub struct ScanExecution {
     l3_strategy: L3Strategy,
     defer_l3: bool,
     chunk_overlap_tokens: usize,
-    wolf_execution_options: crate::WolfExecutionOptions,
-    wolf_selection: WolfSelection,
-}
-
-/// The Wolf Defender model and ONNX export the dedicated injection L3 loads.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct WolfSelection {
-    pub model: crate::WolfModel,
-    pub precision: crate::WolfPrecision,
+    /// The dedicated injection L3: Core's Wolf config, its unset window
+    /// sizes filled with Ark's serving profile.
+    wolf: WolfConfig,
 }
 
 impl std::ops::Deref for ScanExecution {
@@ -426,36 +398,30 @@ impl ScanExecution {
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
             chunk_overlap_tokens: 0,
-            wolf_execution_options: patronus_ark_core::WolfServingProfile::ARK
-                .fill(crate::WolfExecutionOptions::default()),
-            wolf_selection: WolfSelection::default(),
+            wolf: WolfConfig {
+                execution: patronus_ark_core::WolfServingProfile::ARK
+                    .fill(crate::WolfExecutionOptions::default()),
+                ..WolfConfig::default()
+            },
         }
     }
 
-    /// Choose the Wolf model and export; an unknown `auto` override fails here, not on first use.
-    pub fn set_wolf_selection(&mut self, selection: WolfSelection) -> Result<(), String> {
-        selection.precision.resolve().map_err(|e| e.to_string())?;
-        self.wolf_selection = selection;
+    /// Choose the Wolf model, export and windows; unset window sizes take
+    /// Ark's serving profile. Invalid sizes or an unknown `auto` precision
+    /// override fail here, not on first use.
+    pub fn set_wolf(&mut self, wolf: WolfConfig) -> Result<(), String> {
+        let wolf = WolfConfig {
+            execution: patronus_ark_core::WolfServingProfile::ARK.fill(wolf.execution),
+            ..wolf
+        };
+        wolf.validate().map_err(|e| e.to_string())?;
+        self.wolf = wolf;
         Ok(())
     }
 
-    pub fn wolf_selection(&self) -> WolfSelection {
-        self.wolf_selection
-    }
-
-    /// Configure dedicated Wolf execution using the shared Core validation.
-    pub fn set_wolf_execution_options(
-        &mut self,
-        options: crate::WolfExecutionOptions,
-    ) -> Result<(), String> {
-        let options = patronus_ark_core::WolfServingProfile::ARK.fill(options);
-        options.validate().map_err(|e| e.to_string())?;
-        self.wolf_execution_options = options;
-        Ok(())
-    }
-
-    pub fn wolf_execution_options(&self) -> crate::WolfExecutionOptions {
-        self.wolf_execution_options
+    /// The dedicated injection L3's Wolf config.
+    pub fn wolf(&self) -> &WolfConfig {
+        &self.wolf
     }
 
     /// Replace the ONNX batch execution mode.
@@ -597,20 +563,24 @@ mod tests {
             overlap_tokens: Some(0),
             batch_size,
         };
-        assert_eq!(ScanExecution::default().wolf_execution_options(), full(1));
+        assert_eq!(ScanExecution::default().wolf().execution, full(1));
         let mut execution = ScanExecution::default();
+        let wolf = |execution| WolfConfig {
+            execution,
+            ..WolfConfig::default()
+        };
         execution
-            .set_wolf_execution_options(crate::WolfExecutionOptions {
+            .set_wolf(wolf(crate::WolfExecutionOptions {
                 batch_size: 4,
                 ..Default::default()
-            })
+            }))
             .unwrap();
-        assert_eq!(execution.wolf_execution_options(), full(4));
+        assert_eq!(execution.wolf().execution, full(4));
         assert!(execution
-            .set_wolf_execution_options(crate::WolfExecutionOptions {
+            .set_wolf(wolf(crate::WolfExecutionOptions {
                 overlap_tokens: Some(254),
                 ..Default::default()
-            })
+            }))
             .is_err());
     }
 
@@ -622,12 +592,11 @@ mod tests {
             Ok(SecurityLevel::L2)
         );
         assert_eq!(
-            defaults::PYTHON_L3_STRATEGY.parse::<L3Strategy>(),
-            Ok(L3Strategy::Dedicated)
-        );
-        assert_eq!(
-            defaults::PYTHON_NTDB_OPERATING_POINT.parse::<NtdbOperatingPoint>(),
-            Ok(NtdbOperatingPoint::BestF1)
+            serde_json::from_value::<patronus_ark_core::warmup::DownloadPolicy>(
+                defaults::PYTHON_DOWNLOAD.into()
+            )
+            .unwrap(),
+            patronus_ark_core::warmup::DownloadPolicy::Missing
         );
         assert_eq!(defaults::ARK_API_L3_STRATEGY, L3Strategy::Multi);
         assert_eq!(

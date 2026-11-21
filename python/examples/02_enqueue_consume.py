@@ -13,9 +13,11 @@ from patronus_ark import SecurityGateway
 
 def main() -> None:
     scanner = SecurityGateway(
-        categories=["injection", "dlp"],
-        max_level="l2",
-        download_files=False,
+        {
+            "categories": ["injection", "dlp"],
+            "max_level": "l2",
+            "download": "never",
+        }
     )
 
     pending = {
