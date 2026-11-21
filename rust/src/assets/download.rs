@@ -1016,7 +1016,7 @@ mod tests {
         let asset = ntdb_l2_package_asset(
             SecurityCategory::Injection,
             SecurityLevel::L3,
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
         )
         .unwrap();
         let package_dir = asset.spec.cache_dir(&root);
@@ -1047,7 +1047,7 @@ mod tests {
         assert!(!ntdb_l2_package_assets_present(
             SecurityCategory::Injection,
             SecurityLevel::L3,
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             &root,
         ));
         fs::copy(
@@ -1058,7 +1058,7 @@ mod tests {
         assert!(ntdb_l2_package_assets_present(
             SecurityCategory::Injection,
             SecurityLevel::L3,
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             &root,
         ));
 

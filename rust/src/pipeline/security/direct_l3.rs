@@ -73,7 +73,7 @@ impl SecurityGateway {
                     vec![pending],
                 );
                 if execution.l3_strategy() == crate::L3Strategy::Dedicated
-                    && config.public_model == "wolf-defender-small"
+                    && config.public_model == crate::assets::WOLF_PIPELINE_MODEL
                 {
                     // Core receives the original document; no throwaway token
                     // handoff or second chunk plan is needed for Wolf.

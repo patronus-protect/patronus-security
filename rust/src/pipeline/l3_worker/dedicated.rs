@@ -752,7 +752,7 @@ fn run_model_job(
     similarity_cache: Arc<HistoricalSimilarityCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
-    if job.model == "wolf-defender-small" {
+    if job.model == crate::assets::WOLF_PIPELINE_MODEL {
         return run_wolf_document_job(job, model, worker_state);
     }
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
@@ -1838,7 +1838,7 @@ fn decorate_l3_layers(
 
 fn l3_safe_class(job: &L3WorkerJob) -> &'static str {
     if job.category == "injection"
-        || job.model == "wolf-defender-small"
+        || job.model == crate::assets::WOLF_PIPELINE_MODEL
         || job.category == "unsafe_action"
     {
         "benign"
@@ -2172,7 +2172,7 @@ mod tests {
             let classifier = crate::ml::onnx::LazyOnnxTextClassifier::from_dir_with_paths(
                 &dir,
                 vec!["benign".into(), "attack".into()],
-                "wolf-defender-small",
+                crate::assets::WOLF_PIPELINE_MODEL,
                 &["model_fp16.onnx"],
                 "tokenizer.json",
                 258,
@@ -2180,12 +2180,12 @@ mod tests {
             .unwrap()
             .unwrap();
             worker.models.lock().unwrap().insert(
-                "wolf-defender-small".into(),
+                crate::assets::WOLF_PIPELINE_MODEL.into(),
                 Arc::new(Mutex::new(classifier)),
             );
             let mut job = lifecycle_test_job();
             job.category = "injection".into();
-            job.model = "wolf-defender-small".into();
+            job.model = crate::assets::WOLF_PIPELINE_MODEL.into();
             job.input = L3WorkerInput::Text(Arc::from(" a".repeat(257)));
             job.fallback.category = "injection".into();
             let mut gates = crate::ScanGateMatrix::default();

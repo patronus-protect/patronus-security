@@ -555,7 +555,7 @@ impl L3Worker {
     fn input_for_spec(&self, spec: &L3JobSpec) -> Result<L3WorkerInput, String> {
         if spec.dynamic_pii_config.is_some()
             || (spec.execution.l3_strategy() == L3Strategy::Dedicated
-                && spec.model == "wolf-defender-small")
+                && spec.model == crate::assets::WOLF_PIPELINE_MODEL)
         {
             // Wolf owns its complete document tokenization/windowing in Core.
             return Ok(L3WorkerInput::Text(spec.text.clone()));
@@ -1775,7 +1775,7 @@ mod tests {
             1,
             ScanExecution::new(SecurityLevel::L3),
         );
-        spec.model = "wolf-defender-small".into();
+        spec.model = crate::assets::WOLF_PIPELINE_MODEL.into();
         spec.text = Arc::from(" a".repeat(2000));
         spec.l2_chunk_outputs = Vec::new().into();
         spec.l3_candidates.clear();

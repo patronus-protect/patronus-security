@@ -167,7 +167,7 @@ impl WolfFixture {
         let mut classifier = crate::ml::onnx::LazyOnnxTextClassifier::from_dir_with_paths(
             &dir,
             vec!["benign".into(), "attack".into()],
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             &["model_fp16.onnx"],
             "tokenizer.json",
             256,
@@ -191,11 +191,10 @@ impl WolfFixture {
             .remove(&3);
         let worker = Arc::new(test_worker_state(Arc::clone(&requests)));
         let model = Arc::new(std::sync::Mutex::new(classifier));
-        worker
-            .models
-            .lock()
-            .unwrap()
-            .insert("wolf-defender-small".into(), Arc::clone(&model));
+        worker.models.lock().unwrap().insert(
+            crate::assets::WOLF_PIPELINE_MODEL.into(),
+            Arc::clone(&model),
+        );
         Self {
             directory: dir,
             requests,
@@ -206,7 +205,7 @@ impl WolfFixture {
 
     fn job(&self, id: u64, text: &str, timeout_ms: u64) -> super::super::L3WorkerJob {
         let mut job = test_job("request", "injection", 0, id);
-        job.model = "wolf-defender-small".into();
+        job.model = crate::assets::WOLF_PIPELINE_MODEL.into();
         job.input = L3WorkerInput::Text(Arc::from(text));
         job.inference_timeout_ms = timeout_ms;
         job.execution.set_backend(crate::ExecutionBackend::Cpu);
@@ -299,7 +298,7 @@ fn request_early_exit_terminates_active_onnx_and_preserves_terminal_lifecycle() 
         QueuedSecurityProgress {
             request_id: "request".into(),
             category: "injection".into(),
-            model: "wolf-defender-small".into(),
+            model: crate::assets::WOLF_PIPELINE_MODEL.into(),
             stage: "late".into(),
             completed_chunks: 1,
             total_chunks: 1,

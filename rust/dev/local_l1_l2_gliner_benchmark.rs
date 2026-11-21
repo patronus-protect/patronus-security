@@ -9,7 +9,6 @@ use std::{fs, path::Path, process::Command, time::Instant};
 
 const SAMPLES_PER_CLASS: usize = 10;
 const MAX_TEXT_TOKENS: usize = 256;
-const RESULT_MODEL: &str = "wolf-defender-small";
 const LABELS: &[&str] = &[
     "instruction",
     "secret",
@@ -223,7 +222,9 @@ fn select_samples(
 }
 
 fn final_result(results: &[SecurityScanResult]) -> Option<&SecurityScanResult> {
-    results.iter().find(|result| result.model == RESULT_MODEL)
+    results
+        .iter()
+        .find(|result| result.model == patronus_ark::assets::WOLF_PIPELINE_MODEL)
 }
 
 fn load_rows(path: &Path) -> Result<Vec<Row>, Box<dyn std::error::Error>> {

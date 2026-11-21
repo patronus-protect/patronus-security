@@ -1731,7 +1731,7 @@ mod tests {
     fn final_results_are_marked_only_with_a_cascade() {
         let l3 = super::super::scan_result(
             SecurityCategory::Injection,
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             crate::EvaluationResult {
                 class_name: "attack".to_string(),
                 confidence: 0.9,
@@ -1822,7 +1822,7 @@ mod tests {
                 class_name: "attack".to_string(),
                 confidence: 0.9,
                 level: "L2".to_string(),
-                model: "wolf-defender-small".to_string(),
+                model: crate::assets::WOLF_PIPELINE_MODEL.to_string(),
                 duration_ms: 1.0,
                 layers: vec![LayerResult {
                     level: "L2".to_string(),
@@ -1925,7 +1925,7 @@ mod tests {
         let mut results = vec![
             pending_l3_result_with_chunks(
                 "injection",
-                "wolf-defender-small",
+                crate::assets::WOLF_PIPELINE_MODEL,
                 vec![l2_chunk_output(0, 10, "injection", "benign", false)],
             ),
             pending_l3_result_with_chunks(

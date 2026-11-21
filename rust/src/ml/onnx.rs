@@ -563,7 +563,7 @@ mod tests {
         let mut classifier = LazyOnnxTextClassifier::from_dir_with_paths(
             &dir,
             vec!["benign".into(), "attack".into()],
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             &["model_fp16.onnx"],
             "tokenizer.json",
             256,
@@ -637,7 +637,7 @@ mod tests {
         let mut classifier = LazyOnnxTextClassifier::from_dir_with_paths(
             &dir,
             vec!["benign".into(), "attack".into()],
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             &["l3/onnx/onnx_fp16/model_fp16.onnx"],
             "l3/tokenizer.json",
             256,

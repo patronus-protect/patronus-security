@@ -48,12 +48,14 @@ pub(super) fn classifier_model_configs_for_category(
     match category {
         SecurityCategory::Injection => {
             if execution.gates().allows_model("injection")
-                && execution.gates().allows_model("wolf-defender-small")
+                && execution
+                    .gates()
+                    .allows_model(specs::WOLF_PIPELINE_MODEL)
             {
                 vec![NtdbL2ModelConfig {
                     category,
                     model_id: "injection",
-                    public_model: "wolf-defender-small",
+                    public_model: specs::WOLF_PIPELINE_MODEL,
                     package: specs::NTDB_INJECTION.spec,
                     has_l3: true,
                 }]

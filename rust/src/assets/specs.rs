@@ -86,11 +86,13 @@ pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
-/// Injection's public model: its L2 package lives in Core's pinned Wolf Small
-/// repository, and its dedicated L3 is the Wolf model Core prepares.
-pub const WOLF_PIPELINE_MODEL: &str = "wolf-defender-small";
 const WOLF_SMALL: &patronus_ark_core::wolf::WolfModelSpec =
     &patronus_ark_core::wolf::WOLF_MODELS[patronus_ark_core::wolf::WolfModel::Small as usize];
+/// Injection's Wolf pipeline key in results, gates, policies and caches: Core's
+/// Wolf Small id, whose repository holds the L2 package. It stays the same for
+/// every configured Wolf size; the dedicated L3 runs the Wolf model Core
+/// prepares and reports its id as the `wolf_model` metadata.
+pub const WOLF_PIPELINE_MODEL: &str = WOLF_SMALL.id;
 
 /// Injection has no entry: Core prepares and pins the configured Wolf model.
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
