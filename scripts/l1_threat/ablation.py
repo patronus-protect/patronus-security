@@ -18,8 +18,9 @@ Every stage scores the same rows; the comparison shows what each building block 
 Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``text_facts`` example),
 ``classes``, ``benign``, ``language`` and ``dataset``, as in the frozen corpora. A row is a positive
 of the class when the class is in ``classes`` and a negative when ``benign``; other rows are left
-out. ``--rows`` is split by a hash of the row id into train and eval halves unless ``--eval-rows``
-is given. Learned stages train on the train rows.
+out. ``--rows`` is split by a hash of the row's template key into train and eval halves unless
+``--eval-rows`` is given: a generated row's key is its generator and template family, so every fill of a
+template and its look-alike twins land on one side; any other row's key is its id. Learned stages train on the train rows.
 
 Per stage on the eval rows, per language (``all``, ``de``, ``en``): TPR at matched FPR 1 % and
 0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the same matched thresholds on the
@@ -46,6 +47,9 @@ language, the TPR and FPR at the detect cut, the FPR per benign source (set, ``t
 twins) and what the train-negative cut would have flagged; ``--report-rows`` (sets with the role
 ``report``) are scored at the same cuts in their own scope and never move them. The calibrated
 ``model.json`` (``--model-out``) records the pool in ``calibration``; it is not wired into any scan path.
+Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
+alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
+source and its positives per source. ``--oversample-de N`` repeats every German train positive ``N`` times.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -232,20 +236,36 @@ def labelled(rows: Iterable[dict], cls: str) -> list[tuple[dict, int]]:
     return out
 
 
+def template_key(row: dict) -> str:
+    """The unit of the train/eval split: a generated row's generator and template family (every fill of a
+    template, in every language, and its look-alike twins stay on one side), else the row id."""
+    if row.get("generator") and row.get("template_family"):
+        return f"{row['generator']}:{row['template_family']}"
+    return row["id"]
+
+
 def split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Train and eval halves by the parity of the first byte of sha256(row id)."""
+    """Train and eval halves by the parity of the first byte of sha256(``template_key``)."""
     train, test = [], []
     for row in rows:
-        (test if hashlib.sha256(row["id"].encode("utf-8")).digest()[0] & 1 else train).append(row)
+        (test if hashlib.sha256(template_key(row).encode("utf-8")).digest()[0] & 1 else train).append(row)
     return train, test
 
 
+def oversample(rows: list[dict], cls: str, language: str, factor: int) -> list[dict]:
+    """``rows`` with every positive of ``cls`` in ``language`` repeated ``factor`` times in all."""
+    if factor < 1:
+        raise ValueError("the oversampling factor is at least 1")
+    extra = [row for row in rows if row.get("language") == language and cls in row["classes"]]
+    return rows + extra * (factor - 1)
+
+
 def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS, iterations: int = 400,
-               min_df: int = 2, stages: Iterable[str] = STAGES) -> list[Stage]:
-    """The chosen ``stages`` but ``B0``, trained on ``rows``."""
+               min_df: int = 2, stages: Iterable[str] = STAGES, oversample_de: int = 1) -> list[Stage]:
+    """The chosen ``stages`` but ``B0``, trained on ``rows`` (German positives ``oversample_de`` times)."""
     wanted = set(stages)
     category = SCOREBOARD.category(cls)
-    train = labelled(rows, cls)
+    train = labelled(oversample(rows, cls, "de", oversample_de), cls)
     model_rows = [{**row, "label": label} for row, label in train]
 
     def rules(row: dict) -> int:
@@ -418,6 +438,21 @@ def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, 
     return out
 
 
+def cuts(benign: list[float], target_fpr: float, clear_fpr: float) -> dict[str, float]:
+    """The detect cut at ``target_fpr`` and the clear cut at ``clear_fpr`` (never above detect) of benign scores."""
+    detect = MODEL.fpr_cut(benign, target_fpr)
+    return {MODEL.ASK_THRESHOLD: min(MODEL.fpr_cut(benign, clear_fpr), detect), MODEL.BLOCK_THRESHOLD: detect}
+
+
+def positive_sources(rows: Iterable[dict]) -> dict[str, int]:
+    """Positives per source: a generated row's generator and template family, else its set."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = template_key(row) if row.get("generator") else row["dataset"]
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[dict], list[str]],
               target_fpr: float = SCOREBOARD.TARGET_FPR, clear_fpr: float = SCOREBOARD.CLEAR_FPR,
               report_rows: Iterable[dict] = ()) -> tuple[dict, dict[str, Any]]:
@@ -433,16 +468,29 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
     benign = [score for _, label, score in calibration if not label]
     if not benign:
         raise ValueError(f"{cls}: no benign rows to calibrate on")
-    detect = MODEL.fpr_cut(benign, target_fpr)
-    clear = min(MODEL.fpr_cut(benign, clear_fpr), detect)
+    thresholds = cuts(benign, target_fpr, clear_fpr)
+    detect, clear = thresholds[MODEL.BLOCK_THRESHOLD], thresholds[MODEL.ASK_THRESHOLD]
+    per_language: dict[str, Any] = {}
+    for language in LANGUAGES[1:]:
+        chosen = [entry for entry in calibration if entry[0].get("language") == language]
+        own = [score for _, label, score in chosen if not label]
+        if not own:
+            continue
+        language_cuts = cuts(own, target_fpr, clear_fpr)
+        detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD])
+        per_language[language] = {"thresholds": language_cuts, **detections[language],
+                                  "benign_sources": detections["benign_sources"],
+                                  "positive_sources": positive_sources(row for row, label, _ in chosen if label)}
     train_cut = document["thresholds"].get(MODEL.BLOCK_THRESHOLD)
-    calibrated = {**document, "thresholds": {MODEL.ASK_THRESHOLD: clear, MODEL.BLOCK_THRESHOLD: detect},
+    calibrated = {**document, "thresholds": thresholds,
                   "calibration": {"target_fpr": target_fpr, "clear_fpr": clear_fpr, "benign_rows": len(benign),
                                   "benign_sources": sorted({SCOREBOARD._benign_source(row)
-                                                            for row, label, _ in calibration if not label})}}
+                                                            for row, label, _ in calibration if not label}),
+                                  "language_thresholds": {language: cell["thresholds"]
+                                                          for language, cell in per_language.items()}}}
     report: dict[str, Any] = {
         "class": cls, "model": document["name"], "target_fpr": target_fpr, "clear_fpr": clear_fpr,
-        "thresholds": calibrated["thresholds"], "calibration": _detections(calibration, detect),
+        "thresholds": thresholds, "calibration": _detections(calibration, detect), "per_language": per_language,
         "escalate_fpr": sum(score > clear for score in benign) / len(benign),
     }
     if train_cut is not None:
@@ -455,16 +503,16 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
 
 def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str = "FT",
                     report_rows: Iterable[dict] = (), bench_bin: Path | None = None, windows: Path | None = None,
-                    target_fpr: float = SCOREBOARD.TARGET_FPR,
-                    clear_fpr: float = SCOREBOARD.CLEAR_FPR) -> tuple[dict, dict[str, Any]]:
+                    target_fpr: float = SCOREBOARD.TARGET_FPR, clear_fpr: float = SCOREBOARD.CLEAR_FPR,
+                    oversample_de: int = 1) -> tuple[dict, dict[str, Any]]:
     """Train ``stage`` on ``train``, calibrate it on the rows of ``test`` that are not in ``train`` and time it."""
     if stage not in TOKENS:
         raise ValueError(f"{stage} is not a model stage with its own model.json")
-    fitted = fit_stages(train, cls, stages=[stage])[0]
+    fitted = fit_stages(train, cls, stages=[stage], oversample_de=oversample_de)[0]
     rows = calibration_rows(train, test)
     document, report = calibrate(fitted.model, rows, cls, tokens=fitted.tokens, target_fpr=target_fpr,
                                  clear_fpr=clear_fpr, report_rows=calibration_rows(train, report_rows))
-    report.update({"stage": stage, "rows": {"train": len(train), "calibration": len(rows)},
+    report.update({"stage": stage, "oversample_de": oversample_de, "rows": {"train": len(train), "calibration": len(rows)},
                    "ram_bytes": model_ram_bytes(document),
                    "ms_per_100kib": None if bench_bin is None or windows is None
                    else bench(bench_bin, windows, Stage(stage, fitted.score, model=document))})
@@ -489,6 +537,23 @@ def calibration_markdown(reports: list[dict[str, Any]]) -> str:
                      f"{report['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {tpr('all')} | {tpr('de')} | {tpr('en')} | "
                      f"{_pct(cells['all']['fpr'], 2)} | {_pct(train.get('fpr'), 2)} | {'–' if ms is None else ms} | "
                      f"{'–' if ram is None else round(ram / 1024, 1)} |")
+    lines += ["", "## Per-language cuts", "",
+              "Each language's detect cut sits at the target FPR of that language's benign rows.", "",
+              "| Class | Language | benign rows | detect cut | TPR | FPR | positives | positive sources |",
+              "|---|---|---|---|---|---|---|---|"]
+    for report in reports:
+        for language, cell in report.get("per_language", {}).items():
+            sources = cell["positive_sources"]
+            lines.append(f"| {report['class']} | {language.upper()} | {cell['negatives']} | "
+                         f"{cell['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {_pct(cell['tpr'])} | "
+                         f"{_pct(cell['fpr'], 2)} | {cell['positives']} | {len(sources)} |")
+    for report in reports:
+        for language, cell in report.get("per_language", {}).items():
+            lines += ["", f"## {report['class']} {language.upper()}: sources at the {language.upper()} cut", "",
+                      "| Kind | Source | rows | hits | rate |", "|---|---|---|---|---|"]
+            lines += [f"| benign | {source} | {c['rows']} | {c['fp']} | {_pct(c['fpr'], 2)} |"
+                      for source, c in cell["benign_sources"].items()]
+            lines += [f"| positive | {source} | {n} | | |" for source, n in cell["positive_sources"].items()]
     for report in reports:
         lines += ["", f"## {report['class']}: FPR per benign source at the detect cut", "",
                   "| Scope | Source | rows | FP | FPR |", "|---|---|---|---|---|"]
@@ -560,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--stage", default="FT", choices=sorted(TOKENS))
     cal.add_argument("--target-fpr", type=float, default=SCOREBOARD.TARGET_FPR)
     cal.add_argument("--clear-fpr", type=float, default=SCOREBOARD.CLEAR_FPR)
+    cal.add_argument("--oversample-de", type=int, default=1, help="repeat German train positives this often")
     cal.add_argument("--bench-bin", type=Path, help="text_model_latency example binary")
     cal.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
     cal.add_argument("--model-out", type=Path, help="calibrated model.json (one --class only)")
@@ -577,7 +643,8 @@ def main(argv: list[str] | None = None) -> int:
         for cls in args.classes:
             document, report = calibrate_class(train, test, cls, stage=args.stage, report_rows=reported,
                                                bench_bin=args.bench_bin, windows=args.windows,
-                                               target_fpr=args.target_fpr, clear_fpr=args.clear_fpr)
+                                               target_fpr=args.target_fpr, clear_fpr=args.clear_fpr,
+                                               oversample_de=args.oversample_de)
             if args.model_out is not None:
                 args.model_out.write_text(MODEL.dump_model(document), encoding="utf-8")
             reports.append(report)
