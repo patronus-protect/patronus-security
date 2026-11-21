@@ -229,11 +229,11 @@ policy with its tier, scope and level.
 
     ```rust
     let config = ScannerConfig {
-        gates: NativeGates {
+        gates: ScanGateMatrix {
             rules: [("cat.core.remote_to_exec", false), ("cat.CMD-PIPE-CURL", false)]
                 .map(|(id, on)| (id.to_string(), on))
                 .into(),
-            ..NativeGates::default()
+            ..ScanGateMatrix::default()
         },
         shell: Some(shell),
         ..ScannerConfig::default()
@@ -252,7 +252,10 @@ policy with its tier, scope and level.
 === "Ark Python"
 
     ```python
-    gateway.set_execution_gates({"rules": {"cat.core.remote_to_exec": False, "cat.CMD-PIPE-CURL": False}})
+    gateway = SecurityGateway({
+        "categories": ["shell_command"],
+        "rules": {"cat.core.remote_to_exec": False, "cat.CMD-PIPE-CURL": False},
+    })
     # or per request: gateway.enqueue(command, ["shell_command"], execution_gates={"rules": {...}})
     ```
 
@@ -303,12 +306,16 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
     ```python
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway({"categories": ["shell_command"], "max_level": "l1"})
-    gateway.set_shell_command_policy_config(
-        policy_dirs=["/etc/patronus/shell-policies"],
-        allowlist={"C2-WEBHOOK-SITE": "ask"},
-    )  # ValueError on a refused configuration
-    gateway.warmup()
+    gateway = SecurityGateway({
+        "categories": ["shell_command"],
+        "max_level": "l1",
+        "download": "missing",
+        "shell": {
+            "policy_dirs": ["/etc/patronus/shell-policies"],
+            "allowlist": {"C2-WEBHOOK-SITE": "ask"},
+        },
+    })  # ValueError on unreadable policy dirs
+    gateway.warmup()  # ValueError on an allowlist the bundle refuses
     ```
 
 === "Ark API"

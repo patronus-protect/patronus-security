@@ -22,7 +22,6 @@ pub(super) fn direct_l3_configs(
         || (execution.l3_strategy() == crate::L3Strategy::Multi
             && !execution
                 .gates()
-                .native
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL))
     {
         return Vec::new();

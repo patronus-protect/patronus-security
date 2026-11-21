@@ -851,7 +851,7 @@ impl SecurityGateway {
         let categories = core.categories;
         let max_level = core.max_level;
         let native_engine = NativeEngine::new(&categories);
-        native_engine.prepare(&execution.gates().native);
+        native_engine.prepare(&execution.gates());
         let core = SecurityGatewayCore {
             categories,
             max_level,
@@ -968,7 +968,6 @@ impl SecurityGateway {
                 if has_classifier_l3
                     && execution
                         .gates()
-                        .native
                         .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL) =>
             {
                 vec![crate::ml::unified_onnx::UNIFIED_MODEL]
@@ -982,10 +981,7 @@ impl SecurityGateway {
         };
         if self.categories.contains(&SecurityCategory::DynamicPii)
             && execution.allows_level(SecurityLevel::L3)
-            && execution
-                .gates()
-                .native
-                .allows_model(DYNAMIC_PII_ASSET.spec.id)
+            && execution.gates().allows_model(DYNAMIC_PII_ASSET.spec.id)
         {
             l3_models.push(DYNAMIC_PII_ASSET.spec.id);
         }
@@ -1057,7 +1053,7 @@ impl SecurityGateway {
     /// Replace the execution gate matrix used by subsequent scans. The
     /// native rules the new gates enable are built here, not on a scan.
     pub fn set_execution_gates(&self, gates: ScanGateMatrix) {
-        self.native_engine.prepare(&gates.native);
+        self.native_engine.prepare(&gates);
         self.execution
             .lock()
             .expect("execution mutex poisoned")
@@ -1458,7 +1454,6 @@ impl SecurityGateway {
             && execution.allows_level(SecurityLevel::L1)
             && execution
                 .gates()
-                .native
                 .allows_model(patronus_ark_core::warmup::SHELL_MODEL)
     }
 
@@ -1467,7 +1462,7 @@ impl SecurityGateway {
     }
 
     fn model_enabled(&self, execution: &ScanExecution, model: &str) -> bool {
-        execution.gates().native.allows_model(model)
+        execution.gates().allows_model(model)
     }
 
     #[cfg(test)]
@@ -1497,7 +1492,7 @@ impl SecurityGateway {
             match self.native_engine.scan_module(
                 category,
                 prepared,
-                &execution.gates().native,
+                &execution.gates(),
                 &ScanControl::default(),
             ) {
                 Ok(native) => results.extend(native.into_iter().map(SecurityScanResult::from)),
@@ -1522,7 +1517,7 @@ impl SecurityGateway {
                             Some(ref pipeline) => {
                                 timed_native_detection_scan_result(category, model, text, || {
                                     pipeline.detect_with_rules(text, |id| {
-                                        execution.gates().native.allows_rule(id)
+                                        execution.gates().allows_rule(id)
                                     })
                                 })
                             }

@@ -280,8 +280,12 @@ class CascadeConfig(TypedDict, total=False):
     modules: dict[str, ModuleConfig]
 
 
-class NativeGates(TypedDict, total=False):
-    """Rule, model, mode and `explain` gates, the native part of `ScanGates`."""
+class ScanGates(TypedDict, total=False):
+    """The one gate type (rules, models, modes, `explain` and the layer keys):
+    top-level keys of the Core `ScannerConfig`, of Ark's config and Ark's
+    `execution_gates`. Core scans carry no request metadata and run
+    no L3 worker, so they read only result `conditional` gates and ignore
+    `l3_policy`."""
     rules: dict[str, bool]
     models: dict[str, bool]
     pii_mode: ScoreMode
@@ -300,13 +304,6 @@ class NativeGates(TypedDict, total=False):
     harmful_content_mode: ScoreMode
     toxic_language_mode: ScoreMode
     explain: bool
-
-
-class ScanGates(NativeGates, total=False):
-    """The gates: top-level keys of the Core `ScannerConfig`, of Ark's config
-    and Ark's `execution_gates`. Core scans carry no request metadata and run
-    no L3 worker, so they read only result `conditional` gates and ignore
-    `l3_policy`."""
     l1: bool
     l2: bool
     l3: bool

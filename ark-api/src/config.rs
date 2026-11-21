@@ -367,15 +367,15 @@ mod tests {
             "rules: {pii_email: false}\nmodels: {'native:pii': false}\nl2: false\n",
         )
         .unwrap();
-        assert!(!gates.native.allows_rule("pii_email"));
-        assert!(!gates.native.allows_model("native:pii"));
+        assert!(!gates.allows_rule("pii_email"));
+        assert!(!gates.allows_model("native:pii"));
         assert_eq!(gates.l2, Some(false));
         assert!(serde_yaml::from_str::<ScanGateMatrix>("rule: {pii_email: false}").is_err());
         // The pipeline's gate keys sit at its top level, like Core's.
         let mut value = startup_config();
         value["pipeline"]["rules"] = serde_json::json!({"pii_email": false});
         let config = load(value).unwrap();
-        assert!(!config.gateway.core.gates.native.allows_rule("pii_email"));
+        assert!(!config.gateway.core.gates.allows_rule("pii_email"));
     }
 
     #[test]
@@ -502,9 +502,9 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
 
     #[test]
     fn explain_is_explicit_and_disabled_by_default() {
-        assert!(!ScanGateMatrix::default().native.explain);
+        assert!(!ScanGateMatrix::default().explain);
         let gates: ScanGateMatrix = serde_yaml::from_str("explain: true").unwrap();
-        assert!(gates.native.explain);
+        assert!(gates.explain);
         assert!(serde_yaml::from_str::<ScanGateMatrix>("explain: verbose").is_err());
     }
 
@@ -528,13 +528,13 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         ] {
             let category_id: SecurityCategory = category.parse().unwrap();
             assert_eq!(
-                ScanGateMatrix::default().native.mode(category_id),
+                ScanGateMatrix::default().mode(category_id),
                 ScoreMode::Strict
             );
             for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
                 let gates: ScanGateMatrix =
                     serde_yaml::from_str(&format!("{category}_mode: {mode}")).unwrap();
-                assert_eq!(gates.native.mode(category_id), mode, "{category}");
+                assert_eq!(gates.mode(category_id), mode, "{category}");
             }
             for invalid in ["fast", "Balanced"] {
                 let yaml = format!("{category}_mode: {invalid}");
@@ -552,11 +552,9 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         let gates: ScanGateMatrix =
             serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
 
-        assert!(!gates.native.allows_rule("pii_email"));
-        assert!(gates.native.allows_rule("dlp_openai_key"));
-        assert!(gates
-            .native
-            .allows_rule("ark.injection.override.discard_prior"));
+        assert!(!gates.allows_rule("pii_email"));
+        assert!(gates.allows_rule("dlp_openai_key"));
+        assert!(gates.allows_rule("ark.injection.override.discard_prior"));
     }
 
     #[test]
@@ -581,7 +579,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
 
         for pattern in DLP_PATTERNS {
             assert_eq!(
-                config.gateway.core.gates.native.allows_rule(pattern.name),
+                config.gateway.core.gates.allows_rule(pattern.name),
                 credential_groups.contains(&pattern.entity_group)
                     || default_on_groups.contains(&pattern.entity_group),
                 "unexpected default DLP gate for {} ({})",
@@ -594,31 +592,18 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
             .gateway
             .core
             .gates
-            .native
             .allows_rule("dlp_sensitive_material"));
-        assert!(config
-            .gateway
-            .core
-            .gates
-            .native
-            .allows_rule("dlp_secret_transfer"));
+        assert!(config.gateway.core.gates.allows_rule("dlp_secret_transfer"));
         assert!(!config
             .gateway
             .core
             .gates
-            .native
             .allows_rule("dlp_mcp_runtime_risk"));
+        assert!(!config.gateway.core.gates.allows_rule("dlp_mcp_policy"));
         assert!(!config
             .gateway
             .core
             .gates
-            .native
-            .allows_rule("dlp_mcp_policy"));
-        assert!(!config
-            .gateway
-            .core
-            .gates
-            .native
             .allows_rule("dlp_destructive_operation"));
 
         let gateway = SecurityGateway::new(GatewayConfig {

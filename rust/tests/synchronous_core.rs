@@ -98,7 +98,7 @@ fn core_preserves_gateway_native_decisions_and_source_evidence() {
 
 #[test]
 fn native_policy_gates_and_scored_modes_preserve_complete_results() {
-    use patronus_ark_core::{native::NativeGates, native::ScoreMode};
+    use patronus_ark_core::native::ScoreMode;
     let (secret_text, _) = materialize_fragments(
         &generators(),
         "DB_PASSWORD='<<secret:0>>'",
@@ -118,12 +118,9 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
     ] {
         policies.push(ScannerConfig {
             gates: ScanGateMatrix {
-                native: NativeGates {
-                    pii_mode,
-                    dlp_mode,
-                    explain: true,
-                    ..Default::default()
-                },
+                pii_mode,
+                dlp_mode,
+                explain: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -136,14 +133,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         "native:dlp",
     ] {
         let mut policy = ScannerConfig::default();
-        policy.gates.native.models.insert(model.into(), false);
+        policy.gates.models.insert(model.into(), false);
         policies.push(policy);
     }
     let mut rules = ScannerConfig::default();
-    rules.gates.native.rules.insert("pii_email".into(), false);
+    rules.gates.rules.insert("pii_email".into(), false);
     rules
         .gates
-        .native
         .rules
         .insert("ark.injection.override.discard_prior".into(), false);
     policies.push(rules);
@@ -160,13 +156,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
             let direct = core.scan(text).unwrap();
             let queued = gateway.scan_all(text);
             assert_native_parity(&direct.native, &queued);
-            if policy.gates.native.models.get("native:injection_l1") == Some(&false) {
+            if policy.gates.models.get("native:injection_l1") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
                     .all(|result| result.category != "injection"));
             }
-            if policy.gates.native.rules.get("pii_email") == Some(&false) {
+            if policy.gates.rules.get("pii_email") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()

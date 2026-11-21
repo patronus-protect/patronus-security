@@ -28,6 +28,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
   with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
   per-request `gates` are unchanged.
+- **One gate type:** Ark Core's `NativeGates` is merged into `ScanGateMatrix`. Rust: the rule,
+  model, mode and `explain` gates are fields of `ScanGateMatrix` itself (`gates.rules`,
+  `gates.pii_mode`, `gates.allows_rule(..)` instead of `gates.native.*`), and `NativeEngine`
+  takes a `&ScanGateMatrix`. Python (Ark Core): the `NativeGates` type is gone; `ScanGates` lists
+  every gate key. The config keys are unchanged.
 - **One meaning for the levels:** `max_level`, `l1`, `l2`, `l3` and `conditional` are gate keys
   in Ark Core as in Ark and decide which layers run, with or without a cascade; the `cascade` key
   takes only `modules`. Ark Core's `ScannerConfig` holds its gates as a `ScanGateMatrix` and gains

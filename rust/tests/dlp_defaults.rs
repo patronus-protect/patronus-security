@@ -26,26 +26,22 @@ fn default_and_partial_matrices_share_the_credential_and_marking_inventory() {
             // M23: classification markings are the one document class on by default.
             let marking = pattern.entity_group == "dlp.document.classification_marking";
             assert_eq!(
-                gates.native.allows_rule(pattern.name),
+                gates.allows_rule(pattern.name),
                 credential || marking,
                 "{}",
                 pattern.name
             );
-            assert!(ScanGateMatrix::all_enabled()
-                .native
-                .allows_rule(pattern.name));
+            assert!(ScanGateMatrix::all_enabled().allows_rule(pattern.name));
         }
-        assert!(gates.native.allows_rule("pii_email"));
-        assert!(gates
-            .native
-            .allows_rule("ark.injection.escalation.multi_turn"));
+        assert!(gates.allows_rule("pii_email"));
+        assert!(gates.allows_rule("ark.injection.escalation.multi_turn"));
         for id in [
             "dlp_mcp_policy",
             "dlp_mcp_runtime_risk",
             "dlp_destructive_operation",
         ] {
-            assert!(!gates.native.allows_rule(id));
-            assert!(gates.clone().with_rule(id, true).native.allows_rule(id));
+            assert!(!gates.allows_rule(id));
+            assert!(gates.clone().with_rule(id, true).allows_rule(id));
         }
     }
 }

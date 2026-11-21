@@ -74,7 +74,7 @@ prediction, `unsafe_action` for credential access or tool abuse), while `layers`
 `label_scores` keep the model's own labels.
 
 Each attack class has its own output mode gate `<category>_mode` (`injection_mode`,
-`jailbreak_mode`, …, `toxic_language_mode`; Rust `NativeGates`, Python
+`jailbreak_mode`, …, `toxic_language_mode`; Rust `ScanGateMatrix`, Python
 `execution_gates={"unsafe_action_mode": "balanced"}`, Ark API `gates: {unsafe_action_mode:
 balanced}`), next to `pii_mode` and `dlp_mode`. `strict` (default) keeps each native producer's
 own acceptance and scores. `balanced` and `recall` additionally drop the producer's evidence spans

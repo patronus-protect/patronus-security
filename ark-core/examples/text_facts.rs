@@ -13,11 +13,11 @@
 use std::io::{self, BufRead, BufWriter, Write};
 
 use patronus_ark_core::{
+    cascade::ScanGateMatrix,
     detectors::{
         text::extract,
         threat::{facts_findings, ThreatPipeline},
     },
-    native::NativeGates,
     threat::NativeText,
     SecurityCategory,
 };
@@ -30,7 +30,7 @@ fn main() -> io::Result<()> {
         Some(other) => return Err(io::Error::other(format!("unknown argument {other}"))),
     };
     let pipeline = ThreatPipeline::new();
-    let thresholds = NativeGates::default().threat_thresholds();
+    let thresholds = ScanGateMatrix::default().threat_thresholds();
     let mut out = BufWriter::new(io::stdout().lock());
     for (number, line) in io::stdin().lock().lines().enumerate() {
         let line = line?;

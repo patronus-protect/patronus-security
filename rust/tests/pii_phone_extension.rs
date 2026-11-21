@@ -23,10 +23,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     ))
     .unwrap();
     scanner.set_execution_gates(ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            pii_mode: mode,
-            ..Default::default()
-        },
+        pii_mode: mode,
         ..Default::default()
     });
     scanner

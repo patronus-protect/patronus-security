@@ -142,7 +142,6 @@ impl SecurityGateway {
             && execution.allows_level(SecurityLevel::L3)
             && execution
                 .gates()
-                .native
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
             && self.categories.iter().copied().any(|category| {
                 super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
@@ -167,7 +166,6 @@ impl SecurityGateway {
             && self
                 .scan_execution()
                 .gates()
-                .native
                 .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)
         {
             let bundle_dir = assets::DYNAMIC_PII_ASSET.spec.cache_dir(&base_dir);
@@ -222,7 +220,6 @@ impl SecurityGateway {
         let unified_l3_allowed = execution.allows_level(SecurityLevel::L3);
         let unified_model_allowed = execution
             .gates()
-            .native
             .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
         let unified_category_has_l3 = self.categories.iter().copied().any(|category| {
             super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
@@ -313,7 +310,6 @@ impl SecurityGateway {
                     || !execution.allows_level(SecurityLevel::L3)
                     || !execution
                         .gates()
-                        .native
                         .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)
                 {
                     continue;
@@ -518,7 +514,6 @@ impl SecurityGateway {
         let classifier_l3 = if execution.l3_strategy() == L3Strategy::Multi {
             execution
                 .gates()
-                .native
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
                 && self.categories.iter().copied().any(|category| {
                     super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
@@ -537,7 +532,6 @@ impl SecurityGateway {
                 || (self.categories.contains(&SecurityCategory::DynamicPii)
                     && execution
                         .gates()
-                        .native
                         .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)));
         SecurityAssetReadiness {
             l1: configured_level_readiness(self.shell_command_configured(&execution)),

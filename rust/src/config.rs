@@ -242,7 +242,7 @@ mod tests {
             config.core.categories,
             [SecurityCategory::Pii, SecurityCategory::DynamicPii]
         );
-        assert!(!config.core.gates.native.allows_rule("pii_email"));
+        assert!(!config.core.gates.allows_rule("pii_email"));
         assert_eq!(config.core.gates.l2, Some(false));
         assert!(config.core.gates.cascade.is_some());
         assert_eq!(config.core.cache_root, Some(PathBuf::from("/models")));

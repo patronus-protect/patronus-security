@@ -1336,7 +1336,7 @@ pub(super) fn l1_undecided_inputs(
         // Core's L1 answer, with the cascade's L1 model of the module.
         let stage = cascade.l1_answer(
             module,
-            execution.gates().native.mode(module),
+            execution.gates().mode(module),
             heuristic,
             l1_results.iter().map(|result| &result.native),
             &input.text,
@@ -1402,10 +1402,7 @@ pub(super) fn dynamic_pii_runs(
     gate_results: &[GateResult],
 ) -> bool {
     execution.allows_level(SecurityLevel::L3)
-        && execution
-            .gates()
-            .native
-            .allows_model(DYNAMIC_PII_ASSET.spec.id)
+        && execution.gates().allows_model(DYNAMIC_PII_ASSET.spec.id)
         && execution.l3_policy().enabled
         && patronus_ark_core::cascade::pipeline_allowed(
             &execution.gates().conditional,

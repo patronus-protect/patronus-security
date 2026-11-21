@@ -230,7 +230,7 @@ seam, a set of traits that Core defines and full Ark implements:
 
 PII, DLP and CAT keep their interfaces. In Rust: `Scanner::new`, `scan`, `scan_categories`,
 `scan_with_control`, `shell_verdict`, warmup and prepare functions, `ScannerConfig`,
-`NativeGates`, `ShellConfig`, `ShellVerdict`, `WolfConfig`, `ScanReport`, `NativeResult`,
+`ScanGateMatrix`, `ShellConfig`, `ShellVerdict`, `WolfConfig`, `ScanReport`, `NativeResult`,
 `LayerResult`, `DecisionEnvelope`, `PiiPipeline`, `DlpPipeline` and `ShellRiskPipeline`. In
 Python: `Scanner(...).scan` and `.shell_verdict` with their types. The framework adds an
 optional cascade block to the configuration and an optional verdict to the report; nothing

@@ -188,7 +188,7 @@ impl Scanner {
         let native = NativeEngine::new(&config.categories);
         let execution =
             LayerExecution::with_gates(config.max_level, std::mem::take(&mut config.gates));
-        native.prepare(&execution.gates().native);
+        native.prepare(&execution.gates());
         Ok(Self {
             native,
             execution,
@@ -344,10 +344,10 @@ impl Scanner {
                     .native
                     .producers(module)
                     .iter()
-                    .any(|producer| producer.enabled(&execution.gates().native));
+                    .any(|producer| producer.enabled(&execution.gates()));
                 cascade.l1_answer(
                     module,
-                    execution.gates().native.mode(module),
+                    execution.gates().mode(module),
                     heuristic,
                     native.iter(),
                     text,
@@ -395,7 +395,7 @@ impl Scanner {
         }
         pipeline
             .verdict(command, context, prior_facts, |id| {
-                self.execution.gates().native.allows_rule(id)
+                self.execution.gates().allows_rule(id)
             })
             .map_err(ScanError::Shell)
     }
@@ -413,7 +413,7 @@ impl Scanner {
                 results.extend(self.native.scan_module(
                     category,
                     &prepared,
-                    &self.execution.gates().native,
+                    &self.execution.gates(),
                     control,
                 )?);
             }
@@ -702,9 +702,9 @@ mod config_tests {
             config.categories,
             [SecurityCategory::Pii, SecurityCategory::Dlp]
         );
-        assert_eq!(config.gates.native.rules.get("pii_email"), Some(&false));
-        assert_eq!(config.gates.native.pii_mode, ScoreMode::Recall);
-        assert!(config.gates.native.explain);
+        assert_eq!(config.gates.rules.get("pii_email"), Some(&false));
+        assert_eq!(config.gates.pii_mode, ScoreMode::Recall);
+        assert!(config.gates.explain);
         assert_eq!(config.max_level, SecurityLevel::L3);
         for unknown in [
             r#"{"pii_mod":"recall"}"#,
@@ -1032,11 +1032,7 @@ mod cascade_tests {
             },
             ..ScannerConfig::default()
         };
-        config
-            .gates
-            .native
-            .models
-            .insert("native:pii".into(), false);
+        config.gates.models.insert("native:pii".into(), false);
         let report = Scanner::new(config).unwrap().scan(MIXED).unwrap();
         assert!(!report.native.iter().any(|r| r.category == "pii"));
         // No PII stage ran: no decision, never a clear for lack of evidence.
@@ -1066,7 +1062,6 @@ mod cascade_tests {
             };
             config
                 .gates
-                .native
                 .models
                 .insert("native:injection_l1".into(), false);
             config.gates.cascade = cascade([(

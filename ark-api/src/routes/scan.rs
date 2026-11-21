@@ -662,9 +662,8 @@ mod tests {
         let defaults = resolve_request_config(&config, &key, None).unwrap();
         assert!(!defaults
             .gates
-            .native
             .allows_rule("ark.injection.override.discard_prior"));
-        assert!(defaults.gates.native.allows_rule("pii_email"));
+        assert!(defaults.gates.allows_rule("pii_email"));
 
         let request: RequestScanConfig = serde_json::from_value(json!({
             "categories": ["injection"],
@@ -680,11 +679,9 @@ mod tests {
 
         assert!(overridden
             .gates
-            .native
             .allows_rule("ark.injection.override.discard_prior"));
         assert!(!overridden
             .gates
-            .native
             .allows_rule("ark.injection.exfil.external_sink"));
     }
 

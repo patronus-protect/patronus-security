@@ -1101,10 +1101,7 @@ mod l3_worker_streaming {
         .unwrap();
 
         let gates = patronus_ark_core::cascade::ScanGateMatrix {
-            native: patronus_ark_core::native::NativeGates {
-                explain: true,
-                ..Default::default()
-            },
+            explain: true,
             ..Default::default()
         };
         scanner.set_execution_gates(gates);

@@ -45,10 +45,7 @@ fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
 
 fn with_mode(mode: ScoreMode) -> Option<ScanGateMatrix> {
     Some(ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            pii_mode: mode,
-            ..Default::default()
-        },
+        pii_mode: mode,
         ..Default::default()
     })
 }
@@ -100,15 +97,12 @@ fn rule_score(rule_id: &str) -> f64 {
 
 #[test]
 fn strict_is_the_default_mode() {
-    assert_eq!(ScanGateMatrix::default().native.pii_mode, ScoreMode::Strict);
+    assert_eq!(ScanGateMatrix::default().pii_mode, ScoreMode::Strict);
     assert_eq!(
-        ScanGateMatrix::levels(true, false, false).native.pii_mode,
+        ScanGateMatrix::levels(true, false, false).pii_mode,
         ScoreMode::Strict
     );
-    assert_eq!(
-        ScanGateMatrix::all_enabled().native.pii_mode,
-        ScoreMode::Strict
-    );
+    assert_eq!(ScanGateMatrix::all_enabled().pii_mode, ScoreMode::Strict);
 }
 
 #[test]

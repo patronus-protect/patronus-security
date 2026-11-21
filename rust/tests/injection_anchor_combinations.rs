@@ -56,7 +56,7 @@ fn semantic_anchor_combinations_de_en() {
                 assert_eq!(&text[span.start_byte..span.end_byte], span.text);
             }
             let mut gates = ScanGateMatrix::all_enabled();
-            gates.native.rules.insert(id.clone(), false);
+            gates.rules.insert(id.clone(), false);
             gateway.set_execution_gates(gates);
             assert!(injection_l1(&gateway, category, text)
                 .is_none_or(|result| !has_rule(&result.layers[0].details["l1_candidates"], &id)));
@@ -96,7 +96,7 @@ fn semantic_anchor_combinations_de_en() {
                     .is_none_or(|result| !has_rule(&result.layers[0].details["l1_candidates"], id)),
                 "{text}"
             );
-            gates.native.rules.insert(id.clone(), false);
+            gates.rules.insert(id.clone(), false);
         }
         gateway.set_execution_gates(gates);
         for (id, enabled) in ids.iter().zip(&enabled) {
