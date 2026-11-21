@@ -33,18 +33,12 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     /// `config_json`: the gateway config (`patronus_ark::GatewayConfig`),
-    /// Ark Core's `Scanner` config plus Ark's keys. An unset `max_level`
-    /// takes the Python default.
+    /// Ark Core's `Scanner` config plus Ark's keys, with the Rust defaults.
     #[new]
     fn new(config_json: &str) -> PyResult<Self> {
         let value_error = |error: String| pyo3::exceptions::PyValueError::new_err(error);
-        let mut config: serde_json::Map<String, serde_json::Value> =
+        let config: GatewayConfig =
             serde_json::from_str(config_json).map_err(|error| value_error(error.to_string()))?;
-        config
-            .entry("max_level")
-            .or_insert_with(|| patronus_ark::defaults::PYTHON_MAX_LEVEL.into());
-        let config: GatewayConfig = serde_json::from_value(config.into())
-            .map_err(|error| value_error(error.to_string()))?;
         // `dynamic_pii` runs only on L3; below it every scan would silently return nothing.
         if config
             .core

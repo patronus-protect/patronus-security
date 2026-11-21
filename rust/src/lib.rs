@@ -37,7 +37,6 @@ pub use cache::{
 pub use config::GatewayConfig;
 pub use dynamic_pii::DynamicPiiConfig;
 pub use pipeline::SecurityGateway;
-pub use types::defaults;
 pub use types::{
     L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,

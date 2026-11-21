@@ -15,7 +15,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | Key | Type | Meaning | Core | Ark |
 | --- | --- | --- | --- | --- |
 | `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | text-scan categories | every category |
-| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"`; Python `"l2"`; required in the server config. | yes | yes |
+| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"` in Rust and Python; required in the server config. | yes | yes |
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
 | `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`, `threshold` (unset: the serving default), and Wolf's ONNX `backend` and `runtime_options`. | yes | yes |
@@ -23,7 +23,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
 | `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | warmup option | yes |
 | `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
-| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"`; server `"multi"`. | no | yes |
+| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"` in Rust, Python and the server. | no | yes |
 | `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
 | `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
 | `execution_backend` | str | ONNX [execution backend](#execution-backend) of Ark's own models (default `"auto"`); Wolf runs on `wolf.backend`. | no | yes |
@@ -86,8 +86,8 @@ be smaller than `window_tokens - 2`. The export must support the chosen window
 and batch size. Warmup validates and loads that actual profile; unchanged profiles
 reuse the warmed session. The profile is also retained by benchmark workers.
 
-The HTTP server keeps its previous `multi` default. Dedicated Wolf is an explicit
-server-start choice and needs the corresponding installed assets. Add this fragment
+The HTTP server defaults to `dedicated` like Rust and Python; the shipped server
+templates set `multi` explicitly. Dedicated Wolf needs the corresponding installed assets. Add this fragment
 to the server configuration:
 
 ```yaml

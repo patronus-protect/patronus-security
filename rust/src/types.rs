@@ -293,42 +293,15 @@ impl std::str::FromStr for OnnxBatchMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-/// Physical L3 classifier topology.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+/// Physical L3 classifier topology. `Dedicated` is the default of every entry
+/// point (Rust, Python and the Ark API server).
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
-}
-
-impl Default for L3Strategy {
-    fn default() -> Self {
-        defaults::RUST_L3_STRATEGY
-    }
-}
-
-/// The defaults of Ark's three entry points that differ from the
-/// [`crate::GatewayConfig`] defaults, named in one place. They differ on
-/// purpose; each entry point fills its own value from here when its config
-/// leaves the key unset:
-///
-/// | entry point | `max_level` | `l3_strategy` |
-/// |---|---|---|
-/// | Rust `GatewayConfig` | `L3` | `dedicated` |
-/// | Python `SecurityGateway(config)` | `l2` | `dedicated` |
-/// | Ark API server (`pipeline`) | required | `multi` |
-///
-/// `download` is `never` everywhere, as in Ark Core.
-pub mod defaults {
-    use super::L3Strategy;
-
-    /// L3 topology of the Rust API (`L3Strategy::default()`).
-    pub const RUST_L3_STRATEGY: L3Strategy = L3Strategy::Dedicated;
-    /// Deepest layer of the Python `SecurityGateway`.
-    pub const PYTHON_MAX_LEVEL: &str = "l2";
-    /// L3 topology of the Ark API server when `pipeline.l3_strategy` is unset.
-    pub const ARK_API_L3_STRATEGY: L3Strategy = L3Strategy::Multi;
 }
 
 /// `Deserialize` through the type's `FromStr` names and aliases.
@@ -601,13 +574,8 @@ mod tests {
     }
 
     #[test]
-    fn entry_point_defaults_keep_their_documented_values() {
+    fn entry_points_share_one_default() {
         assert_eq!(L3Strategy::default(), L3Strategy::Dedicated);
-        assert_eq!(
-            defaults::PYTHON_MAX_LEVEL.parse::<SecurityLevel>(),
-            Ok(SecurityLevel::L2)
-        );
-        assert_eq!(defaults::ARK_API_L3_STRATEGY, L3Strategy::Multi);
         assert_eq!(
             NtdbOperatingPoint::default(),
             NtdbOperatingPoint::BestPromote

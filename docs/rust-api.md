@@ -23,7 +23,6 @@ pub mod gliner_onnx_engine;
 pub mod golden_recipes;
 pub mod ml;
 pub mod pipeline;
-mod post_prediction;
 pub mod types;
 
 // Ark Core's modules and types, used inside this crate as `crate::...`.
@@ -47,7 +46,6 @@ pub use cache::{
 pub use config::GatewayConfig;
 pub use dynamic_pii::DynamicPiiConfig;
 pub use pipeline::SecurityGateway;
-pub use types::defaults;
 pub use types::{
     L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
@@ -1888,13 +1886,15 @@ Return the canonical snake_case mode string.
 ```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
 }
 ```
 
-Physical L3 classifier topology.
+Physical L3 classifier topology. `Dedicated` is the default of every entry
+point (Rust, Python and the Ark API server).
 
 ```rust
 pub fn as_str(self) -> &'static str;

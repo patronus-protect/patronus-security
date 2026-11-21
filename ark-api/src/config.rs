@@ -14,7 +14,7 @@ pub struct RawConfig {
     auth: RawAuth,
     /// The gateway config: Ark Core's keys plus Ark's (see
     /// `patronus_ark::GatewayConfig`); `categories` and `max_level` are
-    /// required, `l3_strategy` defaults to the deployment's `multi`. The
+    /// required; unset keys take the Rust defaults. The
     /// decision cache is the pipeline's `cache` key.
     pipeline: serde_json::Map<String, serde_json::Value>,
 }
@@ -139,7 +139,7 @@ impl Config {
 
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
-        let mut pipeline = self.pipeline;
+        let pipeline = self.pipeline;
         for required in ["categories", "max_level"] {
             if !pipeline.contains_key(required) {
                 return Err(ConfigError::Invalid(format!(
@@ -147,9 +147,6 @@ impl RawConfig {
                 )));
             }
         }
-        pipeline
-            .entry("l3_strategy")
-            .or_insert_with(|| patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into());
         let gateway: GatewayConfig = serde_json::from_value(pipeline.into())
             .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
         gateway
@@ -331,9 +328,9 @@ mod tests {
     }
 
     #[test]
-    fn startup_wolf_settings_preserve_legacy_multi_and_default_profile() {
+    fn unset_l3_strategy_is_the_rust_default_dedicated() {
         let config = load(startup_config()).unwrap();
-        assert_eq!(config.gateway.l3_strategy, patronus_ark::L3Strategy::Multi);
+        assert_eq!(config.gateway.l3_strategy, patronus_ark::L3Strategy::Dedicated);
         assert!(config.gateway.core.wolf.is_none());
     }
 

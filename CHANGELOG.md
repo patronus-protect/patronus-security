@@ -35,7 +35,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `wolf: {model, precision, execution}`, `dynamic_pii_config` is `dynamic_pii`,
   `ntdb_operating_point` is `ntdb_decision_threshold_point`, and the `cache_*` options are
   `cache: {storage_location, encryption_key_hex, entry_ttl_seconds, memory_max_entries,
-  memory_max_bytes}`). Python gateways keep `max_level: "l2"` as default. Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
+  memory_max_bytes}`). Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
   `with_download_categories` and `try_with_download_categories_and_cache`; `GatewayConfig` holds
   Ark Core's `ScannerConfig` in `core` plus Ark's keys. `WolfSelection`,
   `set_wolf_selection`, `set_wolf_execution_options` and `pin_shell_command_manifest_for_tests`
@@ -43,6 +43,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
   with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
   per-request `gates` are unchanged.
+- **One default for `max_level` and `l3_strategy` everywhere:** an unset `max_level` is `l3`
+  and an unset `l3_strategy` is `dedicated` in Rust, Python and the Ark API. Python users get L3
+  by default (set `max_level: "l2"` to keep the old ceiling); Ark API users get dedicated L3
+  models unless the `pipeline` sets `l3_strategy: multi`. The shipped server templates set
+  `multi` explicitly, so their deployments keep the shared multi-head model.
+  Rust: `patronus_ark::defaults` is gone; `L3Strategy::default()` is `Dedicated`.
 - **One DLP/PII overlap pass in Ark Core:** Ark Core's `post_prediction::resolve_dlp_pii_overlaps`
   replaces the public `dlp_secret_ranges` and `retain_pii_outside_secret_ranges`; Core's
   `Scanner` and Ark both drop PII evidence inside DLP secrets through it, so their PII and DLP

@@ -545,8 +545,8 @@ class PublicApiTests(unittest.TestCase):
             with self.subTest(max_level=max_level):
                 with self.assertRaisesRegex(ValueError, 'max_level="l3"'):
                     SecurityGateway({"categories": ["pii", "dynamic-pii"], "max_level": max_level})
-        with self.assertRaisesRegex(ValueError, 'max_level="l3"'):
-            SecurityGateway({"categories": ["dynamic-pii"]})
+        # The default max_level is l3, as in Rust and the Ark API.
+        SecurityGateway({"categories": ["dynamic-pii"], "download": "never"})
 
     def test_dynamic_pii_scan_without_loaded_model_raises(self):
         scanner = SecurityGateway(

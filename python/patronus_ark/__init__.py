@@ -111,7 +111,7 @@ class SecurityGateway:
             Ark Core's `Scanner` config with the same meaning, plus Ark's own.
 
             Core keys: `categories` (any Ark category), `max_level` (`l1`,
-            `l2` or `l3`; default `l2` here), the gate keys at the top level
+            `l2` or `l3`; default `l3`), the gate keys at the top level
             (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`, `dlp_mode`, one
             `<category>_mode` per attack class, `explain`, `conditional`, the
             L3 worker policy `l3_policy` and the opt-in `cascade`
