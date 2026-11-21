@@ -293,7 +293,9 @@ pub struct NativeResult {
     pub evidence_spans: Vec<EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.
     pub label_scores: Vec<LabelScore>,
-    /// Structured classifier decision contract for policy consumers.
+    /// Structured classifier decision contract for policy consumers; omitted
+    /// from the serialized result while unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<DecisionEnvelope>,
 }
 

@@ -57,7 +57,7 @@ class NativeResult(TypedDict):
     layers: list[LayerResult]
     evidence_spans: list[EvidenceSpan]
     label_scores: list[LabelScore]
-    decision: dict[str, object] | None
+    decision: NotRequired[dict[str, object]]
 
 
 class WolfResult(TypedDict):
