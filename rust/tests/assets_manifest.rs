@@ -2,13 +2,12 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
-    assets::category_assets, assets::dedicated_l3_asset, assets::ntdb_l2_package_assets,
-    assets::ntdb_l2_package_assets_present, assets::required_assets_present,
-    assets::DEDICATED_L3_ASSETS, assets::DYNAMIC_PII_ASSET, assets::NTDB_L2_PACKAGE_MANIFEST,
-    assets::UNIFIED_L3_ASSET,
+    assets::dedicated_l3_asset, assets::ntdb_l2_package_assets,
+    assets::ntdb_l2_package_assets_present, assets::DEDICATED_L3_ASSETS, assets::DYNAMIC_PII_ASSET,
+    assets::NTDB_L2_PACKAGE_MANIFEST, assets::UNIFIED_L3_ASSET,
 };
 
-use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{cascade::SecurityLevel, warmup::DownloadPolicy, SecurityCategory};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
@@ -51,7 +50,9 @@ fn dynamic_pii_bundle_is_complete_and_revision_pinned() {
     assert!(DYNAMIC_PII_ASSET.files.contains(&"tokenizer.json"));
 
     let dir = temp_dir("dynamic_pii");
-    assert!(!DYNAMIC_PII_ASSET.assets_present(&dir));
+    let offline =
+        |dir: &std::path::Path| DYNAMIC_PII_ASSET.prepare(dir, DownloadPolicy::Never, false, None);
+    assert!(offline(&dir).is_err());
     for file in DYNAMIC_PII_ASSET.files {
         let path = dir.join(DYNAMIC_PII_ASSET.spec.cache_subdir).join(file);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -63,7 +64,10 @@ fn dynamic_pii_bundle_is_complete_and_revision_pinned() {
         DYNAMIC_PII_ASSET.spec.revision,
     )
     .unwrap();
-    assert!(DYNAMIC_PII_ASSET.assets_present(&dir));
+    assert_eq!(
+        offline(&dir).unwrap(),
+        DYNAMIC_PII_ASSET.spec.cache_dir(&dir)
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -203,46 +207,21 @@ fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
 }
 
 #[test]
-fn l3_model_categories_have_required_l3_assets() {
-    let assets = category_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L3);
-    assert!(assets
-        .iter()
-        .any(|asset| asset.level == SecurityLevel::L3 && asset.required));
+fn sensitive_document_l3_bundle_lands_where_its_l3_model_loads() {
+    let sensitive = dedicated_l3_asset(SecurityCategory::SensitiveDocument).unwrap();
+    // The dedicated L3 model loads `prompts/` below the category cache directory.
+    assert_eq!(sensitive.spec.cache_subdir, "sensitive_document/prompts");
+    for file in [
+        "onnx/int8_int4_embeddings/model.onnx",
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+    ] {
+        assert!(sensitive.selected_files().contains(&file), "{file}");
+    }
     // Injection L3 is Wolf: Core prepares the configured model.
-    assert!(
-        category_assets(SecurityCategory::Injection, SecurityLevel::L3)
-            .iter()
-            .all(|asset| asset.level != SecurityLevel::L3)
-    );
     assert!(dedicated_l3_asset(SecurityCategory::Injection).is_none());
-
-    for category in [
-        SecurityCategory::ToolClass,
-        SecurityCategory::Routing,
-        SecurityCategory::Pii,
-    ] {
-        assert!(category_assets(category, SecurityLevel::L3)
-            .iter()
-            .all(|asset| asset.level == SecurityLevel::L1));
-    }
-}
-
-#[test]
-fn static_manifest_has_no_legacy_l2_file_assets() {
-    for category in [
-        SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocument,
-        SecurityCategory::ToolClass,
-        SecurityCategory::ToolAction,
-        SecurityCategory::ToolTags,
-        SecurityCategory::Routing,
-        SecurityCategory::UnsafeAction,
-        SecurityCategory::Pii,
-    ] {
-        assert!(category_assets(category, SecurityLevel::L3)
-            .iter()
-            .all(|asset| asset.level != SecurityLevel::L2));
-    }
+    assert!(dedicated_l3_asset(SecurityCategory::Pii).is_none());
 }
 
 #[test]
@@ -348,29 +327,6 @@ fn ntdb_l2_package_cache_requires_the_pinned_revision() {
 }
 
 #[test]
-fn asset_manifest_has_unique_destination_paths_per_category() {
-    for category in [
-        SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocument,
-        SecurityCategory::ToolClass,
-        SecurityCategory::ToolAction,
-        SecurityCategory::ToolTags,
-        SecurityCategory::Routing,
-        SecurityCategory::UnsafeAction,
-        SecurityCategory::Pii,
-    ] {
-        let mut seen = HashSet::new();
-        for asset in category_assets(category, SecurityLevel::L3) {
-            assert!(
-                seen.insert(asset.destination_path),
-                "duplicate destination for {category:?}: {}",
-                asset.destination_path
-            );
-        }
-    }
-}
-
-#[test]
 fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
     for category in [
         SecurityCategory::Injection,
@@ -397,38 +353,14 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
     }
 }
 
-#[test]
-fn only_required_assets_are_needed_for_presence_check() {
-    let dir = temp_dir("required_only");
-    let required: Vec<_> = category_assets(SecurityCategory::ToolClass, SecurityLevel::L3)
-        .into_iter()
-        .filter(|asset| asset.required)
-        .collect();
-
-    for asset in required {
-        let path = dir.join(asset.destination_path);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, b"asset").unwrap();
-    }
-
-    assert!(required_assets_present(
-        SecurityCategory::ToolClass,
-        SecurityLevel::L3,
-        &dir
-    ));
-
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
 mod asset_downloads {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use patronus_ark::assets::{
-        category_assets, ntdb_l2_package_assets, ntdb_l2_package_manifest_files,
-        required_assets_present, ASSET_MANIFEST,
+        dedicated_l3_asset, ntdb_l2_package_assets, ntdb_l2_package_manifest_files,
     };
-    use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
+    use patronus_ark_core::{cascade::SecurityLevel, warmup::DownloadPolicy, SecurityCategory};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let suffix = SystemTime::now()
@@ -443,18 +375,6 @@ mod asset_downloads {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    #[test]
-    fn static_manifest_has_no_legacy_l2_assets() {
-        let l1_assets = category_assets(SecurityCategory::Injection, SecurityLevel::L1);
-        assert!(l1_assets.is_empty());
-
-        let l2_assets = category_assets(SecurityCategory::Injection, SecurityLevel::L2);
-        assert!(l2_assets.is_empty());
-        assert!(ASSET_MANIFEST
-            .iter()
-            .all(|asset| asset.level != SecurityLevel::L2));
     }
 
     #[test]
@@ -497,75 +417,23 @@ mod asset_downloads {
     }
 
     #[test]
-    fn manifest_excludes_legacy_l1_rules_and_keeps_l3_assets() {
-        let injection_assets = category_assets(SecurityCategory::Injection, SecurityLevel::L3);
-        assert!(injection_assets
-            .iter()
-            .all(|asset| !asset.destination_path.starts_with("l3/")));
-
-        let tool_assets = category_assets(SecurityCategory::ToolClass, SecurityLevel::L3);
-        assert!(tool_assets.is_empty());
-
-        let user_intent_assets = category_assets(SecurityCategory::Routing, SecurityLevel::L3);
-        assert!(user_intent_assets.is_empty());
-
-        let sensitive_document_assets =
-            category_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L3);
-        assert!(sensitive_document_assets
-            .iter()
-            .any(
-                |asset| asset.source_path == "onnx/int8_int4_embeddings/model.onnx"
-                    && asset.destination_path == "prompts/onnx/int8_int4_embeddings/model.onnx"
-                    && asset.required
-            ));
-        assert!(sensitive_document_assets
-            .iter()
-            .all(|asset| asset.level == SecurityLevel::L3));
-    }
-
-    #[test]
-    fn optional_assets_do_not_block_presence_check() {
-        let dir = temp_dir("optional");
-        let required_assets: Vec<_> =
-            category_assets(SecurityCategory::Injection, SecurityLevel::L3)
-                .into_iter()
-                .filter(|asset| asset.required)
-                .collect();
-
-        for asset in required_assets {
-            let path = dir.join(asset.destination_path);
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(path, b"test").unwrap();
-        }
-
-        assert!(required_assets_present(
-            SecurityCategory::Injection,
-            SecurityLevel::L3,
-            &dir
-        ));
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn missing_required_asset_blocks_presence_check() {
+    fn a_missing_bundle_file_blocks_offline_preparation() {
         let dir = temp_dir("missing_required");
-        let category = SecurityCategory::SensitiveDocument;
-        let assets = category_assets(category, SecurityLevel::L3);
-        // Every required file except the first one.
-        for asset in assets.into_iter().filter(|asset| asset.required).skip(1) {
-            let path = dir.join(asset.destination_path);
+        let asset = dedicated_l3_asset(SecurityCategory::SensitiveDocument).unwrap();
+        let bundle = asset.spec.cache_dir(&dir);
+        // Every selected file except the first one, at the pinned revision.
+        for file in asset.selected_files().into_iter().skip(1) {
+            let path = bundle.join(file);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, b"test").unwrap();
         }
+        fs::write(bundle.join(".patronus-revision"), asset.spec.revision).unwrap();
 
-        assert!(!required_assets_present(category, SecurityLevel::L3, &dir));
+        let error = asset
+            .prepare(&dir, DownloadPolicy::Never, false, None)
+            .unwrap_err();
+        assert!(error.to_string().contains("downloads disabled"), "{error}");
         fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn pii_has_no_l3_assets_even_when_l3_is_requested() {
-        let pii_assets = category_assets(SecurityCategory::Pii, SecurityLevel::L3);
-        assert!(pii_assets.is_empty());
     }
 
     #[test]

@@ -24,6 +24,7 @@ use super::ntdb_l2::{
 };
 use super::SecurityGateway;
 use crate::detectors::shell::shell_risk::ShellRiskPipeline;
+use patronus_ark_core::warmup::DownloadPolicy;
 
 struct PreparedNtdbAssets {
     config: NtdbL2ModelConfig,
@@ -226,16 +227,14 @@ impl SecurityGateway {
                 .iter()
                 .any(|config| config.has_l3)
         });
-        let unified_assets_present = assets::UNIFIED_L3_ASSET.assets_present(&base_dir);
         log::debug!(
-            "checked unified L3 asset preparation state; base_dir={}; allow_download={}; strategy_multi={}; l3_allowed={}; unified_model_allowed={}; category_has_l3={}; unified_assets_present={}",
+            "checked unified L3 asset preparation state; base_dir={}; allow_download={}; strategy_multi={}; l3_allowed={}; unified_model_allowed={}; category_has_l3={}",
             base_dir.display(),
             allow_download,
             unified_strategy_multi,
             unified_l3_allowed,
             unified_model_allowed,
-            unified_category_has_l3,
-            unified_assets_present
+            unified_category_has_l3
         );
 
         if unified_strategy_multi
@@ -243,35 +242,21 @@ impl SecurityGateway {
             && unified_model_allowed
             && unified_category_has_l3
         {
-            let bundle_dir = assets::UNIFIED_L3_ASSET.spec.cache_dir(&base_dir);
-            if !unified_assets_present {
-                let may_download = allow_download
-                    && self
-                        .categories
-                        .iter()
-                        .copied()
-                        .filter(|category| category.is_unified_classifier())
-                        .any(|category| self.should_download_assets_for(category));
-                log::debug!(
-                    "unified L3 assets missing during preparation; bundle_dir={}; may_download={}",
-                    bundle_dir.display(),
-                    may_download
-                );
-                if may_download {
-                    assets::UNIFIED_L3_ASSET.download(&base_dir, progress)?;
-                } else {
-                    return Err(format!(
-                        "missing unified L3 assets at {}; downloads disabled",
-                        bundle_dir.display()
-                    )
-                    .into());
-                }
-            }
+            let may_download = allow_download
+                && self
+                    .categories
+                    .iter()
+                    .copied()
+                    .filter(|category| category.is_unified_classifier())
+                    .any(|category| self.should_download_assets_for(category));
             // Runtime startup and readiness checks only consume prepared files.
             // Converting the source tokenizer and weights belongs to delivery.
-            if allow_download {
-                assets::UNIFIED_L3_ASSET.prepare_cached(&base_dir);
-            }
+            assets::UNIFIED_L3_ASSET.prepare(
+                &base_dir,
+                download_policy(may_download),
+                allow_download,
+                progress,
+            )?;
         }
 
         for category in &self.categories {
@@ -314,36 +299,12 @@ impl SecurityGateway {
                 {
                     continue;
                 }
-                let bundle_dir = assets::DYNAMIC_PII_ASSET.spec.cache_dir(&base_dir);
-                if !assets::DYNAMIC_PII_ASSET.assets_present(&base_dir) {
-                    if allow_download && self.should_download_assets_for(*category) {
-                        assets::DYNAMIC_PII_ASSET.download(&base_dir, progress)?;
-                    } else {
-                        return Err(format!(
-                            "missing dynamic-pii assets at {}; downloads disabled",
-                            bundle_dir.display()
-                        )
-                        .into());
-                    }
-                }
-                let missing_files = assets::DYNAMIC_PII_ASSET
-                    .files
-                    .iter()
-                    .filter(|file| assets::DYNAMIC_PII_ASSET.selected_files().contains(file))
-                    .filter(|file| !bundle_dir.join(file).is_file())
-                    .copied()
-                    .collect::<Vec<_>>();
-                if !missing_files.is_empty() {
-                    return Err(format!(
-                        "missing dynamic-pii bundle files at {}: {}",
-                        bundle_dir.display(),
-                        missing_files.join(", ")
-                    )
-                    .into());
-                }
-                if allow_download {
-                    assets::DYNAMIC_PII_ASSET.prepare_cached(&base_dir);
-                }
+                assets::DYNAMIC_PII_ASSET.prepare(
+                    &base_dir,
+                    download_policy(allow_download && self.should_download_assets_for(*category)),
+                    allow_download,
+                    progress,
+                )?;
                 continue;
             }
 
@@ -438,11 +399,6 @@ impl SecurityGateway {
                 });
             }
 
-            let asset_level = if execution.l3_strategy() == L3Strategy::Multi {
-                SecurityLevel::L2.min(self.max_level)
-            } else {
-                self.max_level
-            };
             if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
             {
@@ -473,32 +429,7 @@ impl SecurityGateway {
                         }
                     })?;
                 } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
-                    if !asset.assets_present(&base_dir) {
-                        if !download {
-                            return Err(format!(
-                                "missing {} dedicated L3 assets below {}; downloads disabled",
-                                category.as_str(),
-                                base_dir.display()
-                            )
-                            .into());
-                        }
-                        asset.download(&base_dir, None)?;
-                    }
-                    if allow_download {
-                        asset.prepare_cached(&base_dir);
-                    }
-                }
-            }
-            if !assets::required_assets_present(*category, asset_level, &category_dir) {
-                if allow_download && self.should_download_assets_for(*category) {
-                    assets::download_category_assets(*category, asset_level, &category_dir)?;
-                } else {
-                    return Err(format!(
-                        "missing {} assets at {}; downloads disabled",
-                        category.as_str(),
-                        category_dir.display()
-                    )
-                    .into());
+                    asset.prepare(&base_dir, download_policy(download), allow_download, None)?;
                 }
             }
         }
@@ -703,14 +634,19 @@ fn ntdb_injection_l3_worker_model(
     .map(|model| model.with_wolf(wolf.clone())))
 }
 
+/// Core's download policy for one ARK preparation step.
+fn download_policy(download: bool) -> DownloadPolicy {
+    if download {
+        DownloadPolicy::Missing
+    } else {
+        DownloadPolicy::Never
+    }
+}
+
 /// Core's warmup options for one ARK preparation step.
 fn core_warmup_options(download: bool) -> patronus_ark_core::warmup::WarmupOptions {
     patronus_ark_core::warmup::WarmupOptions {
-        download: if download {
-            patronus_ark_core::warmup::DownloadPolicy::Missing
-        } else {
-            patronus_ark_core::warmup::DownloadPolicy::Never
-        },
+        download: download_policy(download),
         ..Default::default()
     }
 }

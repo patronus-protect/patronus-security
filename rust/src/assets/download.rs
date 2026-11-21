@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Ark's model table on Core's model mechanism: Core resolves, checks, fetches and
-//! prepares each registered [`ModelSpec`]; this module keeps Ark's file selection,
-//! the NTDB manifest-first package layout and its shared embedder links.
+//! NTDB L2 packages on Core's model mechanism: the package's [`ModelSpec`] pins and
+//! fetches its files, while the file list comes from the package's own NTDB manifest.
+//! This module keeps what is NTDB specific: manifest-first fetching, the shared
+//! embedder cache with its package links, and the migration of older embedder layouts.
+//!
+//! [`ModelSpec`]: patronus_ark_core::model_assets::ModelSpec
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use patronus_ark_core::model_assets::{fetch_files, prepare_generated_files, ModelFile, Progress};
+use patronus_ark_core::model_assets::{fetch_files, ModelFile, Progress};
 
-use crate::{
-    SecurityAssetProgress, SecurityAssetProgressCallback, SecurityCategory, SecurityLevel,
-};
+use crate::{SecurityAssetProgressCallback, SecurityCategory, SecurityLevel};
 
 use crate::ml::ntdb_executor::manifest::PackageManifest;
 
 use super::{
     mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
-    specs::{
-        AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
-        DEDICATED_L3_ASSETS, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
-    },
+    progress_reporter,
+    specs::{NtdbL2PackageAssetSpec, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET},
 };
 
 #[derive(Clone)]
@@ -28,33 +27,6 @@ struct SharedEmbedderFile {
     relative_path: String,
     shared_file: PathBuf,
     package_file: PathBuf,
-}
-
-/// Report Core's `(completed, total)` file progress as one model's asset progress.
-pub(crate) fn progress_reporter<'a>(
-    progress: Option<&'a SecurityAssetProgressCallback>,
-    category: SecurityCategory,
-    model: &'a str,
-) -> Option<impl Fn(usize, usize) + Send + Sync + 'a> {
-    progress.map(move |progress| {
-        move |completed_files, total_files| {
-            progress(SecurityAssetProgress {
-                category,
-                model: model.to_string(),
-                completed_files,
-                total_files,
-            })
-        }
-    })
-}
-
-/// Return manifest entries needed for a category up to `max_level`.
-pub fn category_assets(category: SecurityCategory, max_level: SecurityLevel) -> Vec<AssetSpec> {
-    ASSET_MANIFEST
-        .iter()
-        .copied()
-        .filter(|asset| asset.category == category && asset.level <= max_level)
-        .collect()
 }
 
 /// Return NTDB L2 package entries needed for a category up to `max_level`.
@@ -136,120 +108,6 @@ fn l3_compatible_tokenizer_matches_unified(
     let package_tokenizer = package_dir.join(relative_tokenizer);
     package_tokenizer.is_file()
         && same_cached_file(&package_tokenizer, &unified_tokenizer).unwrap_or(false)
-}
-
-/// Check whether all required assets for a category are present in `target_dir`.
-pub fn required_assets_present(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> bool {
-    category_assets(category, max_level)
-        .into_iter()
-        .filter(|asset| asset.required)
-        .all(|asset| target_dir.join(asset.destination_path).exists())
-}
-
-/// Return the revision-pinned dedicated L3 bundle for a classifier category.
-pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec> {
-    DEDICATED_L3_ASSETS
-        .iter()
-        .copied()
-        .find(|asset| asset.category == category)
-}
-
-impl PipelineModelAssetSpec {
-    /// The bundle files this process loads: the fp16 graph replaces the quantized one
-    /// when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
-    pub fn selected_files(&self) -> Vec<&'static str> {
-        let fp16 = prefer_fp16_l3();
-        let fp16_path = if self.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
-            Some("onnx/onnx_fp16/model_fp16.onnx")
-        } else if self.files.contains(&"onnx/fp16/model_fp16.onnx") {
-            Some("onnx/fp16/model_fp16.onnx")
-        } else {
-            None
-        };
-        self.files
-            .iter()
-            .copied()
-            .filter(|path| {
-                if fp16 && fp16_path.is_some() {
-                    *path != "onnx/int8_int4_embeddings/model.onnx"
-                        && *path != "model_int4_embeddings_int8.onnx"
-                } else {
-                    Some(*path) != fp16_path
-                }
-            })
-            .collect()
-    }
-
-    /// Whether the model cache `root` holds the complete pinned bundle.
-    pub fn assets_present(&self, root: &Path) -> bool {
-        self.spec
-            .files_present(&self.spec.cache_dir(root), &self.selected_files())
-    }
-
-    /// Fetch the pinned bundle into the model cache `root` and prepare its generated files.
-    pub fn download(
-        &self,
-        root: &Path,
-        progress: Option<&SecurityAssetProgressCallback>,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let files = self.selected_files();
-        let report = progress_reporter(progress, self.category, self.spec.id);
-        let dir = self.spec.fetch(
-            root,
-            &files,
-            report.as_ref().map(|report| report as &Progress<'_>),
-        )?;
-        prepare_generated_files(self.spec.id, &dir, &files);
-        Ok(dir)
-    }
-
-    /// Prepare the generated files of the cached bundle: the compact tokenizer and the
-    /// external weight data of its selected ONNX graphs. An incomplete bundle stays as it is.
-    pub(crate) fn prepare_cached(&self, root: &Path) {
-        if self.assets_present(root) {
-            prepare_generated_files(
-                self.spec.id,
-                &self.spec.cache_dir(root),
-                &self.selected_files(),
-            );
-        }
-    }
-}
-
-pub(crate) fn prefer_fp16_l3() -> bool {
-    std::env::var("PATRONUS_L3_PRECISION").is_ok_and(|value| value.eq_ignore_ascii_case("fp16"))
-}
-
-/// Download missing manifest assets for a category into `target_dir`.
-///
-/// Required asset failures return an error. Optional asset failures are skipped.
-pub fn download_category_assets(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let assets = category_assets(category, max_level)
-        .into_iter()
-        .filter(|asset| asset.required || download_optional_assets())
-        .collect::<Vec<_>>();
-    let missing = assets
-        .iter()
-        .filter(|asset| !target_dir.join(asset.destination_path).exists())
-        .map(|asset| ModelFile {
-            repository: asset.repo,
-            revision: asset.revision.unwrap_or("main"),
-            source: asset.source_path.to_owned(),
-            dest: target_dir.join(asset.destination_path),
-            required: asset.required,
-            label: category.as_str(),
-        })
-        .collect::<Vec<_>>();
-    fetch_files(&missing, assets.len(), None)?;
-    Ok(())
 }
 
 /// Download a missing NTDB L2 package from Hugging Face below the model cache `root`.
@@ -847,10 +705,6 @@ fn normalize_manifest_file_path(path: &str) -> Result<String, Box<dyn std::error
     Ok(parts.join("/"))
 }
 
-fn download_optional_assets() -> bool {
-    std::env::var("PATRONUS_DOWNLOAD_OPTIONAL_ASSETS").as_deref() == Ok("1")
-}
-
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1211,37 +1065,6 @@ mod tests {
 
         assert_eq!(fs::read_link(&package_file).unwrap(), shared_file);
         assert_eq!(fs::read_to_string(&package_file).unwrap(), "shared");
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn cached_pipeline_model_prepare_moves_graph_weights_to_external_data() {
-        use patronus_ark_core::onnx::{external_data_path, has_inline_weights, testing};
-        let root = temp_dir("pipeline_external_data");
-        let asset = PipelineModelAssetSpec {
-            category: SecurityCategory::ToolClass,
-            spec: patronus_ark_core::model_assets::ModelSpec::new(
-                "external-data-test",
-                "example/repo",
-                "rev",
-                "pipeline",
-            ),
-            files: &["onnx/int8_int4_embeddings/model.onnx"],
-        };
-        let graph = root.join("pipeline/onnx/int8_int4_embeddings/model.onnx");
-        fs::create_dir_all(graph.parent().unwrap()).unwrap();
-        fs::write(&graph, testing::model_with_weights()).unwrap();
-
-        // Without its revision marker the bundle is not a cached model and stays as it is.
-        asset.prepare_cached(&root);
-        assert!(has_inline_weights(&graph).unwrap());
-
-        fs::write(root.join("pipeline/.patronus-revision"), "rev").unwrap();
-        asset.prepare_cached(&root);
-        assert!(!has_inline_weights(&graph).unwrap());
-        assert!(external_data_path(&graph).is_file());
-        assert!(asset.assets_present(&root));
 
         fs::remove_dir_all(root).unwrap();
     }

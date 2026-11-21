@@ -2,10 +2,10 @@
 //! Revision-pinned models that a Core user registers. A [`ModelSpec`] names a
 //! model's repository, pin, cache directory and optional environment override;
 //! Core resolves the directory, checks that it holds the pinned revision,
-//! fetches the files the caller lists and prepares their generated files, so a
-//! user such as Ark keeps only its model table and model-specific file lists.
-#[cfg(feature = "download")]
-use crate::ScanError;
+//! fetches the files the caller lists and prepares their generated files in one
+//! [`ModelSpec::prepare`], so a user such as Ark keeps only its model table and
+//! model-specific file lists.
+use crate::{warmup::DownloadPolicy, ScanError};
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -108,26 +108,57 @@ impl ModelSpec {
         }
     }
 
-    /// Fetch `files` into the cache directory below `root`: those missing, or all of them
-    /// when the directory holds another pin. Then mark the directory current. Progress
-    /// reports `(completed, total)` files.
-    #[cfg(feature = "download")]
-    pub fn fetch(
+    /// Prepare this model in the cache directory below `root` for loading `files`: when
+    /// the directory does not hold the pin with every file, fetch them (all of them for
+    /// another pin) and mark it current, or fail under [`DownloadPolicy::Never`]. With
+    /// `generate`, then write the generated files (see [`PrepareOptions::generate`]).
+    pub fn prepare(
         &self,
         root: &Path,
         files: &[&str],
-        progress: Option<&Progress<'_>>,
+        options: &PrepareOptions<'_>,
     ) -> Result<PathBuf, ScanError> {
         let dir = self.cache_dir(root);
-        let current = self.is_current(&dir);
+        if !self.files_present(&dir, files) {
+            if options.download == DownloadPolicy::Never {
+                return Err(ScanError::Asset(format!(
+                    "missing {} assets at {}; downloads disabled",
+                    self.id,
+                    dir.display()
+                )));
+            }
+            self.fetch(&dir, files, options.progress)?;
+        }
+        if options.generate {
+            prepare_generated_files(self.id, &dir, files);
+        }
+        Ok(dir)
+    }
+
+    /// Fetch `files` into `dir`: those missing, or all of them when `dir` holds another
+    /// pin. Then mark it current.
+    #[cfg(feature = "download")]
+    fn fetch(
+        &self,
+        dir: &Path,
+        files: &[&str],
+        progress: Option<&Progress<'_>>,
+    ) -> Result<(), ScanError> {
+        let current = self.is_current(dir);
         let missing = files
             .iter()
             .filter(|file| !current || !dir.join(file).is_file())
             .map(|file| self.file(file, dir.join(file)))
             .collect::<Vec<_>>();
         fetch_files(&missing, files.len(), progress)?;
-        self.mark_current(&dir)?;
-        Ok(dir)
+        self.mark_current(dir)
+    }
+
+    #[cfg(not(feature = "download"))]
+    fn fetch(&self, _: &Path, _: &[&str], _: Option<&Progress<'_>>) -> Result<(), ScanError> {
+        Err(ScanError::Config(
+            "asset download requires the Core download feature".into(),
+        ))
     }
 
     /// Write `dir`'s revision marker; call it once every file of the pin is in place.
@@ -136,6 +167,19 @@ impl ModelSpec {
         fs::create_dir_all(dir).map_err(asset)?;
         atomic_marker(dir, REVISION_MARKER, self.revision)
     }
+}
+
+/// How [`ModelSpec::prepare`] treats a missing model and its generated files.
+#[derive(Clone, Copy, Default)]
+pub struct PrepareOptions<'a> {
+    /// Whether a missing model, or one cached at another pin, is fetched.
+    pub download: DownloadPolicy,
+    /// Whether the generated files are written: the compact mmBERT tokenizer next to its
+    /// `tokenizer.json` and external weight data for the `.onnx` graphs among the files.
+    /// Loading only consumes them, so a delivery step sets it and a runtime start does not.
+    pub generate: bool,
+    /// Reports `(completed, total)` files of a fetch.
+    pub progress: Option<&'a Progress<'a>>,
 }
 
 /// One file to fetch from a pinned repository.
@@ -252,7 +296,7 @@ fn run_bounded<T: Sync>(
 /// next to its `tokenizer.json`, and external weight data for the `.onnx` graphs among
 /// `files`, so ONNX Runtime memory-maps them. Both steps are best effort: a failure is
 /// logged and leaves the source files, which load as before.
-pub fn prepare_generated_files(id: &str, dir: &Path, files: &[&str]) {
+fn prepare_generated_files(id: &str, dir: &Path, files: &[&str]) {
     let tokenizer = dir.join("tokenizer.json");
     if tokenizer.is_file() {
         match crate::assets::mmbert_tokenizer::ensure_mmbert_compact_tokenizer(id, &tokenizer) {
@@ -389,6 +433,43 @@ mod tests {
         assert!(!SPEC.files_present(&dir.0, &["model.onnx"]));
     }
 
+    #[test]
+    fn preparing_a_present_model_needs_no_download_and_a_missing_one_needs_permission() {
+        let root = Directory::new("prepare-policy");
+        let dir = SPEC.cache_dir(&root.0);
+        let files = ["model.onnx"];
+        let offline = PrepareOptions::default();
+        let error = SPEC.prepare(&root.0, &files, &offline).unwrap_err();
+        assert!(matches!(error, ScanError::Asset(_)), "{error}");
+        assert!(error.to_string().contains("test-model"), "{error}");
+        assert!(error.to_string().contains("downloads disabled"), "{error}");
+
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("model.onnx"), b"graph").unwrap();
+        fs::write(dir.join(REVISION_MARKER), "rev-a").unwrap();
+        for download in [DownloadPolicy::Never, DownloadPolicy::Missing] {
+            let options = PrepareOptions {
+                download,
+                ..PrepareOptions::default()
+            };
+            assert_eq!(SPEC.prepare(&root.0, &files, &options).unwrap(), dir);
+        }
+    }
+
+    #[cfg(not(feature = "download"))]
+    #[test]
+    fn preparing_a_missing_model_without_the_download_feature_is_a_config_error() {
+        let root = Directory::new("prepare-no-download");
+        let options = PrepareOptions {
+            download: DownloadPolicy::Missing,
+            ..PrepareOptions::default()
+        };
+        let error = SPEC
+            .prepare(&root.0, &["model.onnx"], &options)
+            .unwrap_err();
+        assert!(matches!(error, ScanError::Config(_)), "{error}");
+    }
+
     #[cfg(feature = "download")]
     #[test]
     fn marking_current_writes_the_pin_atomically() {
@@ -456,7 +537,7 @@ mod tests {
     }
 
     #[test]
-    fn preparing_generated_files_writes_the_compact_tokenizer_and_external_weights() {
+    fn only_a_generating_preparation_writes_the_compact_tokenizer_and_external_weights() {
         use crate::onnx::{external_data_path, has_inline_weights, testing};
         let dir = Directory::new("prepare");
         crate::assets::mmbert_tokenizer::tests::write_supported_tokenizer(
@@ -466,11 +547,18 @@ mod tests {
         let graph = dir.0.join("onnx/model.onnx");
         fs::create_dir_all(graph.parent().unwrap()).unwrap();
         fs::write(&graph, testing::model_with_weights()).unwrap();
-        prepare_generated_files(
-            "mmbert-test",
-            &dir.0,
-            &["onnx/model.onnx", "tokenizer.json"],
-        );
+        let files = ["onnx/model.onnx", "tokenizer.json"];
+        let spec = ModelSpec::new("mmbert-test", "org/repo", "rev", "");
+        fs::write(dir.0.join(REVISION_MARKER), "rev").unwrap();
+        spec.prepare(&dir.0, &files, &PrepareOptions::default())
+            .unwrap();
+        assert!(!dir.0.join("tokenizer.mmbpe").exists());
+        assert!(has_inline_weights(&graph).unwrap());
+        let generate = PrepareOptions {
+            generate: true,
+            ..PrepareOptions::default()
+        };
+        spec.prepare(&dir.0, &files, &generate).unwrap();
         assert!(dir.0.join("tokenizer.mmbpe").is_file());
         assert!(!has_inline_weights(&graph).unwrap());
         assert!(external_data_path(&graph).is_file());

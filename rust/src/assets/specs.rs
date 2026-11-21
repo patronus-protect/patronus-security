@@ -1,25 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{SecurityCategory, SecurityLevel};
-use patronus_ark_core::model_assets::ModelSpec;
+use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy)]
-/// A model asset declared in the static download manifest.
-pub struct AssetSpec {
-    /// Scanner category that owns this asset.
-    pub category: SecurityCategory,
-    /// Minimum security level that needs this asset.
-    pub level: SecurityLevel,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision, when the asset is pinned.
-    pub revision: Option<&'static str>,
-    /// File path inside the Hugging Face repository.
-    pub source_path: &'static str,
-    /// Relative path below the category cache directory.
-    pub destination_path: &'static str,
-    /// Whether missing or failed downloads should block `warmup`.
-    pub required: bool,
-}
+use crate::{SecurityAssetProgressCallback, SecurityCategory, SecurityLevel};
+use patronus_ark_core::{
+    model_assets::{ModelSpec, PrepareOptions, Progress},
+    warmup::DownloadPolicy,
+    ScanError,
+};
 
 #[derive(Debug, Clone, Copy)]
 /// A manifest-first NTDB L2 package declared for Hugging Face download.
@@ -86,6 +73,58 @@ pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
+impl PipelineModelAssetSpec {
+    /// The bundle files this process loads: the fp16 graph replaces the quantized one
+    /// when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
+    pub fn selected_files(&self) -> Vec<&'static str> {
+        let fp16 = prefer_fp16_l3();
+        let fp16_path = if self.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
+            Some("onnx/onnx_fp16/model_fp16.onnx")
+        } else if self.files.contains(&"onnx/fp16/model_fp16.onnx") {
+            Some("onnx/fp16/model_fp16.onnx")
+        } else {
+            None
+        };
+        self.files
+            .iter()
+            .copied()
+            .filter(|path| {
+                if fp16 && fp16_path.is_some() {
+                    *path != "onnx/int8_int4_embeddings/model.onnx"
+                        && *path != "model_int4_embeddings_int8.onnx"
+                } else {
+                    Some(*path) != fp16_path
+                }
+            })
+            .collect()
+    }
+
+    /// Prepare the selected bundle files below the model cache `root` with Core's
+    /// [`ModelSpec::prepare`], reporting fetch progress as this model's asset progress.
+    pub fn prepare(
+        &self,
+        root: &Path,
+        download: DownloadPolicy,
+        generate: bool,
+        progress: Option<&SecurityAssetProgressCallback>,
+    ) -> Result<PathBuf, ScanError> {
+        let report = super::progress_reporter(progress, self.category, self.spec.id);
+        self.spec.prepare(
+            root,
+            &self.selected_files(),
+            &PrepareOptions {
+                download,
+                generate,
+                progress: report.as_ref().map(|report| report as &Progress<'_>),
+            },
+        )
+    }
+}
+
+pub(crate) fn prefer_fp16_l3() -> bool {
+    std::env::var("PATRONUS_L3_PRECISION").is_ok_and(|value| value.eq_ignore_ascii_case("fp16"))
+}
+
 const WOLF_SMALL: &patronus_ark_core::wolf::WolfModelSpec =
     &patronus_ark_core::wolf::WOLF_MODELS[patronus_ark_core::wolf::WolfModel::Small as usize];
 /// Injection's Wolf pipeline key in results, gates, policies and caches: Core's
@@ -93,6 +132,14 @@ const WOLF_SMALL: &patronus_ark_core::wolf::WolfModelSpec =
 /// every configured Wolf size; the dedicated L3 runs the Wolf model Core
 /// prepares and reports its id as the `wolf_model` metadata.
 pub const WOLF_PIPELINE_MODEL: &str = WOLF_SMALL.id;
+
+/// Return the revision-pinned dedicated L3 bundle for a classifier category.
+pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec> {
+    DEDICATED_L3_ASSETS
+        .iter()
+        .copied()
+        .find(|asset| asset.category == category)
+}
 
 /// Injection has no entry: Core prepares and pins the configured Wolf model.
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
@@ -187,45 +234,6 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
             "tokenizer.json",
             "tokenizer_config.json",
         ],
-    },
-];
-
-pub const ASSET_MANIFEST: &[AssetSpec] = &[
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: Some("c038771b10b00b8da67d31e2b0280f85e13b808c"),
-        source_path: "config.json",
-        destination_path: "prompts/config.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: Some("c038771b10b00b8da67d31e2b0280f85e13b808c"),
-        source_path: "tokenizer.json",
-        destination_path: "prompts/tokenizer.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: Some("c038771b10b00b8da67d31e2b0280f85e13b808c"),
-        source_path: "tokenizer_config.json",
-        destination_path: "prompts/tokenizer_config.json",
-        required: false,
-    },
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        revision: Some("c038771b10b00b8da67d31e2b0280f85e13b808c"),
-        source_path: "onnx/int8_int4_embeddings/model.onnx",
-        destination_path: "prompts/onnx/int8_int4_embeddings/model.onnx",
-        required: true,
     },
 ];
 
@@ -367,3 +375,47 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
     NTDB_ROUTING,
     NTDB_THREAT,
 ];
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn preparing_a_cached_bundle_moves_its_graph_weights_only_when_asked_and_pinned() {
+        use patronus_ark_core::onnx::{external_data_path, has_inline_weights, testing};
+        let root =
+            std::env::temp_dir().join(format!("patronus_pipeline_prepare_{}", std::process::id()));
+        let asset = PipelineModelAssetSpec {
+            category: SecurityCategory::ToolClass,
+            spec: ModelSpec::new("external-data-test", "example/repo", "rev", "pipeline"),
+            files: &["onnx/int8_int4_embeddings/model.onnx"],
+        };
+        let graph = root.join("pipeline/onnx/int8_int4_embeddings/model.onnx");
+        fs::create_dir_all(graph.parent().unwrap()).unwrap();
+        fs::write(&graph, testing::model_with_weights()).unwrap();
+
+        // Without its revision marker the bundle is not the cached pin: offline
+        // preparation fails and leaves it as it is.
+        let error = asset
+            .prepare(&root, DownloadPolicy::Never, true, None)
+            .unwrap_err();
+        assert!(error.to_string().contains("downloads disabled"), "{error}");
+        assert!(has_inline_weights(&graph).unwrap());
+
+        fs::write(root.join("pipeline/.patronus-revision"), "rev").unwrap();
+        asset
+            .prepare(&root, DownloadPolicy::Never, false, None)
+            .unwrap();
+        assert!(has_inline_weights(&graph).unwrap());
+        let dir = asset
+            .prepare(&root, DownloadPolicy::Never, true, None)
+            .unwrap();
+        assert_eq!(dir, root.join("pipeline"));
+        assert!(!has_inline_weights(&graph).unwrap());
+        assert!(external_data_path(&graph).is_file());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+}
