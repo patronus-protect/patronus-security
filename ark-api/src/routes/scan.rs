@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::time::Duration;
 
+use ark_distributed_protocol::{require_dynamic_pii_category, RequestScanConfig};
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -9,8 +10,8 @@ use axum::{Extension, Json};
 use futures::StreamExt;
 use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent};
 use patronus_ark_core::{
-    cascade::ScanGateMatrix, cascade::SecurityLevel, require_dynamic_pii_category,
-    ChunkOverlapTokens, NtdbOperatingPoint, RequestScanConfig, SecurityCategory,
+    cascade::ScanGateMatrix, cascade::SecurityLevel, ChunkOverlapTokens, NtdbOperatingPoint,
+    SecurityCategory,
 };
 use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};

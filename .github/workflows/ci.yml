@@ -48,8 +48,8 @@ jobs:
       wrapper_base: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core == 'true' || steps.scope.outputs.wrapper == 'true' }}
       wrapper: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core == 'true' || steps.scope.outputs.wrapper == 'true' || steps.scope.outputs.core_shared == 'true' || steps.scope.outputs.l1_shared == 'true' || steps.scope.outputs.pii == 'true' || steps.scope.outputs.golden == 'true' || steps.scope.outputs.dlp == 'true' }}
       api: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.protocol == 'true' }}
-      coordinator: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.coordinator == 'true' }}
-      protocol: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.protocol == 'true' }}
+      coordinator: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.coordinator == 'true' || steps.scope.outputs.protocol == 'true' }}
+      protocol: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.protocol == 'true' }}
       bindings: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.bindings == 'true' }}
       python: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.python == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.protocol == 'true' }}
       licenses: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.licenses == 'true' }}

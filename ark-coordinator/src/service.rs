@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use ark_distributed_protocol::RequestScanConfig;
 use axum::{
     extract::{Multipart, Path, State},
     http::{header, HeaderMap, StatusCode},
@@ -15,7 +16,6 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use patronus_ark_core::RequestScanConfig;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
