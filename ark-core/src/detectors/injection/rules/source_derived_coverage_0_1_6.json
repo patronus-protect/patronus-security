@@ -1415,6 +1415,228 @@
         "keinem",
         "keiner"
       ]
+    },
+    {
+      "id": "ark.injection.memory.persistent_directive_en",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.persistent_directive_en",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "Asks the agent to store a behaviour-changing rule in its memory or keep it permanently",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "memor",
+        "notes",
+        "profile",
+        "permanently",
+        "forever",
+        "for good",
+        "future"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:save|store|write|put|add|commit|keep)\\s+(?:(?:this|that|it|the\\s+following(?:\\s+rule)?|this\\s+rule)\\s+)?(?:to|in|into)\\s+(?:your\\s+)?(?:long[-\\s]term\\s+|permanent\\s+|persistent\\s+)?(?:memory|memories|notes|profile)|update\\s+(?:your\\s+)?(?:long[-\\s]term\\s+|permanent\\s+|persistent\\s+)?(?:memory|memories|notes|profile)|(?:remember|memorize|store|save)\\s+(?:(?:this|that|it|the\\s+following)\\s+)?(?:permanently|forever|for\\s+good|for\\s+all\\s+future\\s+(?:conversations|chats|sessions)))(?-u:\\b)[^.!?\\n]{0,120}?(?-u:\\b)(?:always|from\\s+now\\s+on|every\\s+time|whenever|going\\s+forward|in\\s+all\\s+(?:future|later|subsequent)\\s+(?:conversations|chats|sessions|answers|replies)|for\\s+all\\s+(?:future|later|subsequent)\\s+(?:conversations|chats|sessions)|treat\\s+(?:every|all|any)|(?:every|each|all|any)\\s+(?:messages?|e-?mails?|requests?|instructions?)\\s+from|(?:has|have)\\s+(?:already\\s+)?(?:approved|authori[sz]ed|pre-?approved|consented|been\\s+verified)|pre-?approved|verified|is\\s+(?:now\\s+)?(?:an?\\s+|the\\s+)?(?:admin|administrator|owner|developer)|without\\s+(?:asking|confirmation|checking))(?-u:\\b)",
+      "excluded_match_words": [
+        "not",
+        "never",
+        "don't",
+        "don’t",
+        "dont"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.persistent_directive_de",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.persistent_directive_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "German request to store a behaviour-changing rule in the agent's memory or keep it permanently",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "gedächtnis",
+        "speicher",
+        "notizen",
+        "profil",
+        "erinnerungen",
+        "dauerhaft",
+        "für immer",
+        "permanent",
+        "künftig"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:speichere|speicher|schreibe|schreib|notiere|hinterlege|übernimm)\\s+(?:(?:das|dies|folgendes|folgende\\s+regel|diese\\s+regel)\\s+)?(?:in|ins|im)\\s+(?:dein(?:em|en|e)?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|erinnerungen)|aktualisiere\\s+(?:dein(?:em|en|e)?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|erinnerungen)|(?:merke|merk|speichere|speicher|notiere)\\s+(?:dir\\s+)?(?:(?:das|dies|folgendes)\\s+)?(?:dauerhaft|für\\s+immer|permanent|für\\s+alle\\s+(?:künftigen|zukünftigen)\\s+gespräche))[^.!?\\n]{0,120}?(?:immer|stets|ab\\s+jetzt|ab\\s+sofort|künftig|zukünftig|jedes\\s+mal|in\\s+allen\\s+(?:künftigen|zukünftigen|weiteren)\\s+gesprächen|jede(?:s|n|r)?\\s+(?:nachricht|anfrage|e-mail|mail|anweisung)|vorab\\s+(?:freigegeben|genehmigt|bestätigt|autorisiert)|freigegeben\\s+hat|verifiziert|ist\\s+(?:jetzt\\s+|ab\\s+sofort\\s+)?(?:ein\\s+|eine\\s+|der\\s+|die\\s+)?(?:admin|administrator|administratorin|inhaber|inhaberin|entwickler|entwicklerin)|anweisung\\s+(?:des|der|vom)\\s+(?:administrators?|admins?|entwicklers?|betreibers?)|ohne\\s+(?:rückfrage|bestätigung|nachfrage))",
+      "excluded_match_words": [
+        "nicht",
+        "niemals",
+        "nie",
+        "keinesfalls",
+        "keine",
+        "keinen",
+        "keinem"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.conditional_trigger_en",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.conditional_trigger_en",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "Installs a trigger for later conversations: when someone asks about X in future, answer or act differently",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "future",
+        "next time",
+        "from now on",
+        "later on"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:whenever|if|when|once)\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer|any\\s+customer)\\s+(?:ever\\s+|later\\s+|again\\s+)?(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,60}?(?-u:\\b)(?:in\\s+(?:the\\s+)?future|in\\s+(?:all\\s+|any\\s+)?(?:future|later|subsequent|other)\\s+(?:conversations?|chats?|sessions?)|from\\s+now\\s+on|later\\s+on)(?-u:\\b)[^,.!?\\n]{0,40}?|next\\s+time\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer)\\s+(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,80}?),\\s*(?:then\\s+)?(?:always\\s+)?(?:reply|respond|answer|tell|say|send|redirect|recommend|claim|insist|direct|point|refer|state|inform|give|share|forward|include|add|use)(?-u:\\b)",
+      "excluded_match_words": [
+        "not",
+        "never",
+        "don't",
+        "don’t",
+        "dont"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.conditional_trigger_de",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.conditional_trigger_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "German trigger for later conversations: when someone asks about X in future, answer or act differently",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "künftig",
+        "zukunft",
+        "nächste",
+        "ab jetzt",
+        "später"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:wenn|falls|sobald)\\s+(?:(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+(?:\\w+\\s+)?(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,80}?|(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,40}?(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+[^,.!?\\n]{0,80}?)(?:fragt|erwähnt|anspricht|schreibt|sagt|eingibt|bittet|anfragt|wissen\\s+will|wissen\\s+möchte)\\s*,\\s*(?:dann\\s+)?(?:immer\\s+)?(?:antworte|antwort|sag|sage|schreib|schreibe|schicke|schick|empfiehl|leite|verweise|behaupte|erkläre|teile|nenne|gib|erzähle|erzähl)(?-u:\\b)",
+      "excluded_match_words": [
+        "nicht",
+        "niemals",
+        "nie",
+        "keinesfalls",
+        "keine",
+        "keinen",
+        "keinem"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.self_replication_en",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.self_replication_en",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "Asks the agent to copy this instruction into every answer, message or note",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "each",
+        "every",
+        "all",
+        "propagate",
+        "spread"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:append|add|attach|include|insert|copy|paste|repeat|prepend)\\s+(?:this|these|the\\s+following)\\s+(?:(?:exact|same|entire|whole)\\s+)?(?:(?:paragraph|text|instructions?|message|note|line|sentence|block|prompt|section)\\s+)?(?:verbatim\\s+)?(?:to|in|into|at\\s+the\\s+(?:end|start)\\s+of)\\s+(?:each|every|all)\\s+(?:of\\s+)?(?:your\\s+)?(?:(?:future|subsequent|later)\\s+)?(?:responses?|repl(?:y|ies)|answers?|outputs?|messages?|e-?mails?|notes?|summar(?:y|ies)|documents?)|(?:propagate|spread)\\s+(?:this|these)\\s+(?:instructions?|messages?|prompts?|notes?|rules?))(?-u:\\b)",
+      "excluded_match_words": [
+        "not",
+        "never",
+        "don't",
+        "don’t",
+        "dont"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.self_replication_de",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.self_replication_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "German request to copy this instruction into every answer, message or note",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "diese",
+        "folgende"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:füge|hänge|kopiere|übernimm|wiederhole|setze|schreibe|schreib)\\s+(?:diesen|diese|dieses|den\\s+folgenden|die\\s+folgende|folgenden)\\s+(?:(?:genauen|gesamten|ganzen)\\s+)?(?:absatz|text|satz|anweisung(?:en)?|nachricht|hinweis|zeile|block|abschnitt|prompt)\\s+(?:wörtlich\\s+)?(?:an|in|unter|ans\\s+ende)\\s+(?:jede|jeden|jedes|alle)\\s+(?:(?:deiner|deine|ihrer)\\s+)?(?:(?:künftigen|zukünftigen|weiteren)\\s+)?(?:antworten|antwort|ausgaben|ausgabe|nachrichten|nachricht|e-mails|e-mail|mails|mail|notizen|notiz|zusammenfassungen|zusammenfassung|dokumente|dokument)|verbreite\\s+(?:diese|diesen)\\s+(?:anweisung(?:en)?|nachricht|hinweis|prompt|regel))",
+      "excluded_match_words": [
+        "nicht",
+        "niemals",
+        "nie",
+        "keinesfalls",
+        "keine",
+        "keinen",
+        "keinem"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.hidden_store_en",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.hidden_store_en",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "Asks the agent to store something in memory and keep it from the user",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "mention",
+        "tell",
+        "reveal",
+        "disclose",
+        "inform",
+        "notifying"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:save|store|write|put|add|commit|keep)\\s+(?:(?:this|that|it|the\\s+following(?:\\s+rule)?|this\\s+rule)\\s+)?(?:to|in|into)\\s+(?:your\\s+)?(?:long[-\\s]term\\s+|permanent\\s+|persistent\\s+)?(?:memory|memories|notes|profile)|update\\s+(?:your\\s+)?(?:long[-\\s]term\\s+|permanent\\s+|persistent\\s+)?(?:memory|memories|notes|profile)|(?:remember|memorize|store|save)\\s+(?:(?:this|that|it|the\\s+following)\\s+)?(?:permanently|forever|for\\s+good|for\\s+all\\s+future\\s+(?:conversations|chats|sessions)))(?-u:\\b)[^.!?\\n]{0,160}?(?-u:\\b)(?:(?:do\\s+not|don't|don’t|never)\\s+(?:mention|tell|reveal|disclose|show|inform)(?-u:\\b)[^.!?\\n]{0,30}?(?-u:\\b)(?:the\\s+user|users|anyone|them)|without\\s+(?:telling|informing|notifying)\\s+(?:the\\s+user|anyone|them))(?-u:\\b)"
+    },
+    {
+      "id": "ark.injection.memory.hidden_store_de",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.hidden_store_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "German request to store something in the agent's memory and keep it from the user",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "required_literals_any": [
+        "gedächtnis",
+        "speicher",
+        "notizen",
+        "profil",
+        "erinnerungen",
+        "dauerhaft",
+        "für immer",
+        "permanent"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:speichere|speicher|schreibe|schreib|notiere|hinterlege|übernimm)\\s+(?:(?:das|dies|folgendes|folgende\\s+regel|diese\\s+regel)\\s+)?(?:in|ins|im)\\s+(?:dein(?:em|en|e)?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|erinnerungen)|aktualisiere\\s+(?:dein(?:em|en|e)?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|erinnerungen)|(?:merke|merk|speichere|speicher|notiere)\\s+(?:dir\\s+)?(?:(?:das|dies|folgendes)\\s+)?(?:dauerhaft|für\\s+immer|permanent|für\\s+alle\\s+(?:künftigen|zukünftigen)\\s+gespräche))[^.!?\\n]{0,160}?(?:(?:erwähne|erwähn|sag|sage|verrate|zeige|nenne)\\s+(?:(?:das|dies|es)\\s+)?(?:\\w+\\s+){0,3}?(?:nicht|niemals|nie)(?-u:\\b)|ohne\\s+(?:(?:es|das)\\s+)?(?:dem\\s+nutzer|der\\s+nutzerin|jemandem)\\s+zu\\s+(?:sagen|erwähnen|verraten))"
     }
   ]
 }
