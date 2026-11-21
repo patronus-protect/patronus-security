@@ -409,3 +409,39 @@ fn ark_runs_the_cascade_l1_model_like_core() {
         }
     }
 }
+
+/// The configuration reference lists Core's text categories and Ark's other
+/// categories; Core's `Scanner` takes exactly the first and refuses the rest.
+#[test]
+fn documented_core_and_ark_only_categories_match_the_scanner() {
+    let docs = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/reference/configuration.md"),
+    )
+    .unwrap();
+    let row = |prefix: &str| -> Vec<SecurityCategory> {
+        let line = docs.lines().find(|line| line.starts_with(prefix)).unwrap();
+        line.split('`')
+            .skip(1)
+            .step_by(2)
+            .map(|name| name.parse().unwrap())
+            .collect()
+    };
+    let text = row("| Text: ");
+    let ark_only = row("| Ark-only: ");
+    assert_eq!(text, patronus_ark_core::native::NATIVE_CATEGORIES);
+    assert!(Scanner::new(ScannerConfig {
+        categories: text,
+        ..Default::default()
+    })
+    .is_ok());
+    for category in ark_only {
+        assert!(
+            Scanner::new(ScannerConfig {
+                categories: vec![category],
+                ..Default::default()
+            })
+            .is_err(),
+            "{category:?}"
+        );
+    }
+}

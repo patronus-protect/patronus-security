@@ -14,7 +14,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 
 | Key | Type | Meaning | Core | Ark |
 | --- | --- | --- | --- | --- |
-| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | text-scan categories | every category |
+| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | [Core categories](#core-and-ark-only-categories) | every category |
 | `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"` in Rust and Python; required in the server config. | yes | yes |
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
@@ -31,6 +31,19 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of Ark's own models (default `1/1/false`); Wolf takes `wolf.runtime_options`. | no | yes |
 | `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
 | `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. | no | yes |
+
+### Core and Ark-only categories
+
+Ark Core's `Scanner` scans text, so its `categories` take only the text categories; it refuses
+any other category with an error. Ark accepts every category.
+
+| Categories | Core `Scanner` | Ark |
+| --- | --- | --- |
+| Text: `pii`, `dlp`, `injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `exfiltration`, `unsafe_action`, `resource_exhaustion`, `harmful_content`, `toxic_language` | yes | yes |
+| Ark-only: `dynamic-pii`, `sensitive_document`, `routing`, `tool_class`, `tool_action`, `tool_tags`, `shell_command` | no | yes |
+
+Core judges shell commands with `Scanner::shell_verdict` instead of the `shell_command`
+category.
 
 ```python
 from patronus_ark import SecurityGateway
