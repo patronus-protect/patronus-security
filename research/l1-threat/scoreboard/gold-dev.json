@@ -1,4 +1,8 @@
 {
+  "chat_pool": {
+    "de": 11172,
+    "en": 11225
+  },
   "class_sets": {
     "agent_config_tampering": {
       "generated/class_templates": 84,
@@ -17,6 +21,8 @@
       "train_dev/bipia": 47,
       "train_dev/dolly_15k": 14635,
       "train_dev/germanquad": 11451,
+      "train_dev/massive_de": 11172,
+      "train_dev/massive_en": 11225,
       "train_dev/spml": 3326,
       "train_dev/wildguardmix": 490,
       "train_dev/wildjailbreak": 23
@@ -48,7 +54,8 @@
       "generated/class_templates": 84,
       "generated/obfuscation_slices": 33,
       "report/jackhhao_jailbreak": 544,
-      "train_dev/wildjailbreak": 2000
+      "train_dev/wildjailbreak": 2000,
+      "train_dev/xl_safetybench": 450
     },
     "memory_poisoning": {
       "generated/class_templates": 83
@@ -86,8 +93,8 @@
       "en": 42
     },
     "benign": {
-      "de": 11949,
-      "en": 19558
+      "de": 23121,
+      "en": 30783
     },
     "exfiltration": {
       "de": 151,
@@ -102,7 +109,7 @@
       "en": 3211
     },
     "jailbreak": {
-      "de": 42,
+      "de": 492,
       "en": 2124
     },
     "memory_poisoning": {
@@ -127,6 +134,223 @@
     "unsafe_action": {
       "de": 145,
       "en": 681
+    }
+  },
+  "coverage": {
+    "agent_config_tampering": {
+      "de": {
+        "provenance": {
+          "synthetic": 42,
+          "translated": 3
+        },
+        "sources": {
+          "approve_or_deny_de": 3,
+          "generators": 42
+        }
+      },
+      "en": {
+        "provenance": {
+          "synthetic": 42
+        },
+        "sources": {
+          "generators": 42
+        }
+      }
+    },
+    "exfiltration": {
+      "de": {
+        "provenance": {
+          "synthetic": 150,
+          "translated": 1
+        },
+        "sources": {
+          "approve_or_deny_de": 1,
+          "generators": 150
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 113,
+          "synthetic": 313
+        },
+        "sources": {
+          "agentdojo": 63,
+          "bipia": 50,
+          "generators": 313
+        }
+      }
+    },
+    "harmful_content": {
+      "de": {
+        "provenance": {
+          "translated": 316
+        },
+        "sources": {
+          "nemotron_safety_v3": 316
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 483
+        },
+        "sources": {
+          "nemotron_safety_v3": 483
+        }
+      }
+    },
+    "instruction_injection": {
+      "de": {
+        "provenance": {
+          "synthetic": 68,
+          "translated": 9
+        },
+        "sources": {
+          "cyberseceval_multilingual": 9,
+          "generators": 68
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 2727,
+          "synthetic": 484
+        },
+        "sources": {
+          "agentdojo": 136,
+          "bipia": 188,
+          "generators": 484,
+          "spml": 2403
+        }
+      }
+    },
+    "jailbreak": {
+      "de": {
+        "provenance": {
+          "native": 450,
+          "synthetic": 42
+        },
+        "sources": {
+          "generators": 42,
+          "xl_safetybench": 450
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 2000,
+          "synthetic": 124
+        },
+        "sources": {
+          "generators": 124,
+          "wildjailbreak": 2000
+        }
+      }
+    },
+    "memory_poisoning": {
+      "de": {
+        "provenance": {
+          "synthetic": 42
+        },
+        "sources": {
+          "generators": 42
+        }
+      },
+      "en": {
+        "provenance": {
+          "synthetic": 41
+        },
+        "sources": {
+          "generators": 41
+        }
+      }
+    },
+    "prompt_extraction": {
+      "en": {
+        "provenance": {
+          "native": 15000,
+          "synthetic": 87
+        },
+        "sources": {
+          "generators": 87,
+          "mosscap": 15000
+        }
+      }
+    },
+    "resource_exhaustion": {
+      "de": {
+        "provenance": {
+          "synthetic": 42
+        },
+        "sources": {
+          "generators": 42
+        }
+      },
+      "en": {
+        "provenance": {
+          "synthetic": 41
+        },
+        "sources": {
+          "generators": 41
+        }
+      }
+    },
+    "tool_poisoning": {
+      "de": {
+        "provenance": {
+          "synthetic": 42
+        },
+        "sources": {
+          "generators": 42
+        }
+      },
+      "en": {
+        "provenance": {
+          "synthetic": 41
+        },
+        "sources": {
+          "generators": 41
+        }
+      }
+    },
+    "toxic_language": {
+      "de": {
+        "provenance": {
+          "translated": 55
+        },
+        "sources": {
+          "nemotron_safety_v3": 55
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 51
+        },
+        "sources": {
+          "nemotron_safety_v3": 51
+        }
+      }
+    },
+    "unsafe_action": {
+      "de": {
+        "provenance": {
+          "synthetic": 110,
+          "translated": 35
+        },
+        "sources": {
+          "approve_or_deny_de": 35,
+          "generators": 110
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 382,
+          "synthetic": 299
+        },
+        "sources": {
+          "agent_safetybench": 59,
+          "agentdojo": 30,
+          "generators": 299,
+          "redcode": 293
+        }
+      }
     }
   },
   "flagged": [
@@ -487,9 +711,9 @@
       "translated": 3
     },
     "benign": {
-      "native": 30156,
+      "native": 41381,
       "synthetic": 1304,
-      "translated": 47
+      "translated": 11219
     },
     "exfiltration": {
       "native": 113,
@@ -506,7 +730,7 @@
       "translated": 9
     },
     "jailbreak": {
-      "native": 2000,
+      "native": 2450,
       "synthetic": 166
     },
     "memory_poisoning": {
@@ -721,6 +945,28 @@
       "unclear": 0,
       "wrong": 0
     },
+    "train_dev/massive_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "massive_de",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 11172,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/massive_en": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "massive_en",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 11225,
+      "unclear": 0,
+      "wrong": 0
+    },
     "train_dev/mosscap": {
       "benign_errors": 0,
       "benign_reviewed": 0,
@@ -785,6 +1031,17 @@
       "role": "dev",
       "rows": 2023,
       "unclear": 1,
+      "wrong": 0
+    },
+    "train_dev/xl_safetybench": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "xl_safetybench",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 450,
+      "unclear": 0,
       "wrong": 0
     }
   },

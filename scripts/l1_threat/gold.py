@@ -10,12 +10,16 @@ row text), so the holdout parts can run where the holdout is readable and leave 
     python3 scripts/l1_threat/gold.py summary DIR [DIR ...] --split dev|holdout --review SHEET.jsonl --out SUMMARY.json
     python3 scripts/l1_threat/gold.py leakage --dev DIR [DIR ...] --holdout DIR [DIR ...] --out LEAKAGE.json
     python3 scripts/l1_threat/gold.py render --dev SUMMARY.json [--holdout SUMMARY.json] [--leakage LEAKAGE.json] [--notes NOTES.md] --out gold.md
+    python3 scripts/l1_threat/gold.py targets SUMMARY.json                   # exit 1 unless the dev targets hold
 
 ``sample`` draws a fixed hash sample of at least ``--per-set`` rows from every set, stratified by label
 (benign or class combination), into a review sheet; the reviewer sets ``verdict`` of each row to ``ok``
 (label right), ``wrong`` (label wrong) or ``unclear``. ``summary`` checks the sheet against the pool
 and writes rows per class and language, provenance per class (native / translated / synthetic) and the
-error rate per set. ``leakage`` counts holdout rows that duplicate a dev row (exact and MinHash, the
+error rate per set, and per class and language the scored positives by source and provenance plus
+the rows of the benign chat pool (sets marked ``pool: chat`` in the entity map). ``targets`` checks a dev
+summary against the dev targets (``TARGET_ROWS`` positives per class and language from at least
+``MIN_TARGET_SOURCES`` sources, ``MIN_CHAT_ROWS`` chat-pool rows per language). ``leakage`` counts holdout rows that duplicate a dev row (exact and MinHash, the
 dedup settings of the corpora). ``render`` writes the report with a go/no-go per class. Only the dev
 summary lists the flagged rows (id, label, verdict, note); a holdout summary holds counts alone.
 """
@@ -58,6 +62,18 @@ PROVENANCE = ("native", "translated", "synthetic")
 MIN_REVIEWED = 50
 MAX_ERROR_RATE = 0.05
 MIN_CLASS_ROWS = 50
+# Dev targets per class and language: scored positives (200 resolve TPR in 0.5 pp steps; 100 for the classes
+# whose data is mostly documented-synthetic or translated), from at least two sources (all generator sets
+# count as one source), and a benign chat pool of ordinary user turns per language.
+TARGET_ROWS = {
+    "instruction_injection": 200, "jailbreak": 200, "prompt_extraction": 200, "harmful_content": 200,
+    "toxic_language": 200, "tool_poisoning": 100, "memory_poisoning": 100, "resource_exhaustion": 100,
+    "agent_config_tampering": 100, "exfiltration": 100, "unsafe_action": 100,
+}
+MIN_TARGET_SOURCES = 2
+MIN_CHAT_ROWS = 10_000
+TARGET_LANGUAGES = ("de", "en")
+GENERATOR_SOURCE = "generators"
 
 
 def read_pool(directories: list[Path]) -> list[tuple[str, dict[str, Any], list[dict[str, Any]]]]:
@@ -145,10 +161,13 @@ def check_sheet(sheet: list[dict[str, Any]], pool: list[tuple[str, dict[str, Any
 
 
 def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet: list[dict[str, Any]], split: str,
-            translated_sets: set[str]) -> dict[str, Any]:
-    """Counts of one split (no row text): rows per class and language, provenance, error rate per set."""
+            translated_sets: set[str], chat_sets: set[str]) -> dict[str, Any]:
+    """Counts of one split (no row text): rows per class and language, provenance, error rate per set,
+    scored positives per class and language by source and provenance, chat-pool rows per language."""
     classes: dict[str, Counter[str]] = defaultdict(Counter)
     origin: dict[str, Counter[str]] = defaultdict(Counter)
+    coverage: dict[str, dict[str, dict[str, Counter[str]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(Counter)))
+    chat: Counter[str] = Counter()
     class_sets: dict[str, Counter[str]] = defaultdict(Counter)
     sets: dict[str, Any] = {}
     verdicts: dict[str, Counter[str]] = defaultdict(Counter)
@@ -159,13 +178,21 @@ def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet:
             benign_verdicts[item["set"]][item["verdict"]] += 1
     for key, entry, rows in pool:
         scored = entry["role"] != "report"
+        source = GENERATOR_SOURCE if entry["generated"] else entry.get("dataset", key.split("/", 1)[1])
         for row in rows:
             names = ["benign"] if row["benign"] else row["classes"]
             for name in names:
                 if scored:
                     classes[name][row["language"]] += 1
-                    origin[name][provenance(row, entry, translated_sets)] += 1
+                    kind = provenance(row, entry, translated_sets)
+                    origin[name][kind] += 1
+                    if name != "benign":
+                        cell = coverage[name][row["language"]]
+                        cell["sources"][source] += 1
+                        cell["provenance"][kind] += 1
                 class_sets[name][key] += 1
+            if scored and row["benign"] and source in chat_sets:
+                chat[row["language"]] += 1
         counted = verdicts[key]
         reviewed = sum(counted.values())
         errors = counted["wrong"] + counted["unclear"]
@@ -191,7 +218,31 @@ def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet:
         "classes": {name: dict(sorted(by_lang.items())) for name, by_lang in sorted(classes.items())},
         "provenance": {name: dict(sorted(counts.items())) for name, counts in sorted(origin.items())},
         "class_sets": {name: dict(sorted(counts.items())) for name, counts in sorted(class_sets.items())},
+        "coverage": {name: {language: {part: dict(sorted(counts.items())) for part, counts in sorted(cell.items())}
+                            for language, cell in sorted(by_lang.items())} for name, by_lang in sorted(coverage.items())},
+        "chat_pool": dict(sorted(chat.items())),
     }
+
+
+def targets(dev: dict[str, Any]) -> tuple[list[tuple[str, str, int, int, int, bool]], list[str]]:
+    """``(class, language, target, positives, sources, met)`` per class and language of a dev summary, and the
+    problems (unmet targets, a chat pool below ``MIN_CHAT_ROWS``)."""
+    cells, problems = [], []
+    coverage = dev.get("coverage", {})
+    for name, target in TARGET_ROWS.items():
+        for language in TARGET_LANGUAGES:
+            sources = coverage.get(name, {}).get(language, {}).get("sources", {})
+            rows, count = sum(sources.values()), len(sources)
+            met = rows >= target and count >= MIN_TARGET_SOURCES
+            cells.append((name, language, target, rows, count, met))
+            if not met:
+                problems.append(f"{name} {language}: {rows} scored positives from {count} sources "
+                                f"(needs {target} from {MIN_TARGET_SOURCES})")
+    for language in TARGET_LANGUAGES:
+        rows = dev.get("chat_pool", {}).get(language, 0)
+        if rows < MIN_CHAT_ROWS:
+            problems.append(f"chat pool {language}: {rows} rows (needs {MIN_CHAT_ROWS})")
+    return cells, problems
 
 
 def leakage(dev: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], holdout: list[tuple[str, dict[str, Any], list[dict[str, Any]]]],
@@ -297,6 +348,22 @@ def render(classes: list[str], dev: dict[str, Any], holdout: dict[str, Any] | No
             data = splits.get(split)
             cells += [str(data["provenance"].get(name, {}).get(p, 0)) if data else "?" for p in PROVENANCE]
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
+    lines += ["", "## Dev targets per class and language", ""]
+    if "coverage" not in dev:
+        lines.append("Pending: the dev summary predates the per-source counts.")
+    else:
+        lines += [f"Scored dev positives per class and language against the target, from at least {MIN_TARGET_SOURCES} "
+                  f"sources (all generator sets count as one source); benign chat pool at least {MIN_CHAT_ROWS} rows per "
+                  "language.", "",
+                  "| Class | Lang | Target | Positives | Sources | " + " | ".join(PROVENANCE) + " | Met |",
+                  "|---|---|---:|---:|---:|" + "---:|" * len(PROVENANCE) + "---|"]
+        for name, language, target, rows, count, met in targets(dev)[0]:
+            kinds = dev["coverage"].get(name, {}).get(language, {}).get("provenance", {})
+            lines.append(f"| {name} | {language} | {target} | {rows} | {count} | "
+                         + " | ".join(str(kinds.get(p, 0)) for p in PROVENANCE) + f" | {'yes' if met else 'no'} |")
+        chat = dev.get("chat_pool", {})
+        lines += ["", "Benign chat pool (dev): " + ", ".join(f"{language} {chat.get(language, 0)}" for language in TARGET_LANGUAGES)
+                  + " rows."]
     for split in SPLITS:
         data = splits.get(split)
         lines += ["", f"## Spot-check {split}", ""]
@@ -363,6 +430,8 @@ def main(argv: list[str] | None = None) -> int:
     rend.add_argument("--leakage", type=Path)
     rend.add_argument("--notes", type=Path, help="hand-written findings (Markdown) appended to the report")
     rend.add_argument("--out", type=Path, required=True)
+    targ = sub.add_parser("targets")
+    targ.add_argument("summary", type=Path)
     args = parser.parse_args(argv)
 
     if args.command == "sample":
@@ -378,7 +447,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         emap = CORPORA.entity_map.load()
         translated = {d["id"] for d in emap["datasets"] if d.get("translated")}
-        _write_json(args.out, summary(pool, sheet, args.split, translated))
+        chat = {d["id"] for d in emap["datasets"] if d.get("pool") == "chat"}
+        _write_json(args.out, summary(pool, sheet, args.split, translated, chat))
         print(f"{args.out}: written")
         return 0
     if args.command == "leakage":
@@ -387,6 +457,12 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(args.out, result)
         print(f"{args.out}: {result['leaked']} holdout rows leak from dev")
         return 1 if result["leaked"] else 0
+    if args.command == "targets":
+        dev = _load_summary(args.summary, "dev")
+        assert dev is not None
+        problems = targets(dev)[1]
+        print("\n".join(problems) if problems else f"{args.summary}: dev targets met")
+        return 1 if problems else 0
     dev = _load_summary(args.dev, "dev")
     assert dev is not None
     leak_data = json.loads(args.leakage.read_text(encoding="utf-8")) if args.leakage else None

@@ -23,7 +23,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | instruction_injection | 77 | 3211 | 0 | 11711 | 2727 | 9 | 552 | 11711 | 0 | 0 |
-| jailbreak | 42 | 2124 | 63 | 1086 | 2000 | 0 | 166 | 647 | 0 | 502 |
+| jailbreak | 492 | 2124 | 63 | 1086 | 2450 | 0 | 166 | 647 | 0 | 502 |
 | prompt_extraction | 0 | 15087 | 0 | 725 | 15000 | 0 | 87 | 331 | 0 | 394 |
 | tool_poisoning | 42 | 41 | 63 | 894 | 0 | 0 | 83 | 474 | 0 | 483 |
 | agent_config_tampering | 45 | 42 | 63 | 347 | 0 | 3 | 84 | 285 | 0 | 125 |
@@ -33,7 +33,38 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
 | harmful_content | 316 | 483 | 0 | 172 | 483 | 316 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
-| benign | 11949 | 19558 | 17191 | 15030 | 30156 | 47 | 1304 | 37235 | 0 | 2100 |
+| benign | 23121 | 30783 | 17191 | 15030 | 41381 | 11219 | 1304 | 37235 | 0 | 2100 |
+
+## Dev targets per class and language
+
+Scored dev positives per class and language against the target, from at least 2 sources (all generator sets count as one source); benign chat pool at least 10000 rows per language.
+
+| Class | Lang | Target | Positives | Sources | native | translated | synthetic | Met |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| instruction_injection | de | 200 | 77 | 2 | 0 | 9 | 68 | no |
+| instruction_injection | en | 200 | 3211 | 4 | 2727 | 0 | 484 | yes |
+| jailbreak | de | 200 | 492 | 2 | 450 | 0 | 42 | yes |
+| jailbreak | en | 200 | 2124 | 2 | 2000 | 0 | 124 | yes |
+| prompt_extraction | de | 200 | 0 | 0 | 0 | 0 | 0 | no |
+| prompt_extraction | en | 200 | 15087 | 2 | 15000 | 0 | 87 | yes |
+| harmful_content | de | 200 | 316 | 1 | 0 | 316 | 0 | no |
+| harmful_content | en | 200 | 483 | 1 | 483 | 0 | 0 | no |
+| toxic_language | de | 200 | 55 | 1 | 0 | 55 | 0 | no |
+| toxic_language | en | 200 | 51 | 1 | 51 | 0 | 0 | no |
+| tool_poisoning | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
+| tool_poisoning | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
+| memory_poisoning | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
+| memory_poisoning | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
+| resource_exhaustion | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
+| resource_exhaustion | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
+| agent_config_tampering | de | 100 | 45 | 2 | 0 | 3 | 42 | no |
+| agent_config_tampering | en | 100 | 42 | 1 | 0 | 0 | 42 | no |
+| exfiltration | de | 100 | 151 | 2 | 0 | 1 | 150 | yes |
+| exfiltration | en | 100 | 426 | 3 | 113 | 0 | 313 | yes |
+| unsafe_action | de | 100 | 145 | 2 | 0 | 35 | 110 | yes |
+| unsafe_action | en | 100 | 681 | 4 | 382 | 0 | 299 | yes |
+
+Benign chat pool (dev): de 11172, en 11225 rows.
 
 ## Spot-check dev
 
@@ -56,14 +87,17 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | train_dev/cyberseceval_multilingual | dev | 9 | 9 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| train_dev/massive_de | dev | 11172 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| train_dev/massive_en | dev | 11225 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/nemotron_safety_v3 | dev | 905 | 60 | 0 | 3 | 5.0% | 0 / 0 |
 | train_dev/redcode | dev | 293 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
+| train_dev/xl_safetybench | dev | 450 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 
-Benign pool (dev, scored sets): 0 of 326 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 426 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -421,6 +455,26 @@ full. Notes describe requests and never repeat their content.
 `unsafe_action` gains 352 native EN dev rows (before: 30 from AgentDojo). The two sets were summarised with
 `gold.py summary` on a freeze of these two sets alone and merged into `gold-dev.json`; the generated sets that embed
 dev rows are re-frozen with generation 16 and keep their last review.
+
+## Findings (benign chat pool and German jailbreak source, 2026-11-21)
+
+M09 adds three train_dev sets, each reviewed with 50 rows (0 wrong, 0 unclear):
+
+- **MASSIVE en-US and de-DE (benign, CC-BY-4.0): 0 of 50 wrong in each.** Crowd-written requests to a voice
+  assistant (alarms, music, weather, calendar, lists, shopping, short factual questions); the German rows are the
+  English utterances localised by translators, so they count as translated. They form the benign chat pool:
+  11,225 EN and 11,172 DE rows after deduplication. Short, lower-case and unpunctuated, so they cover ordinary chat
+  turns, not long documents.
+- **XL-SafetyBench, German jailbreak prompts (CC-BY-4.0): 0 of 50 wrong.** Every reviewed row wraps its request in a
+  forged directive (agency, institute or system notice with file numbers and clearance levels), a staged system
+  override ("filters disabled", "ethics checks offline") or a researcher or auditor pretext, and closes with a
+  demand to start the output at once. Only jailbreak is scored: the base queries (misinformation, socioeconomic
+  conflict, discrimination, alternative medicine, crime) mostly lie outside the harmful_content hazards.
+
+The three sets were summarised with `gold.py summary` on a freeze of these sets alone and merged into
+`gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool
+with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
+`gold.py targets` lists the class and language pairs still short of the dev targets.
 
 ## How this report is made
 
