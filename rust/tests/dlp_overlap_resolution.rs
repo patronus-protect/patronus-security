@@ -684,10 +684,7 @@ fn scored_modes_resolve_overlaps_like_strict() {
         ))
         .unwrap();
         gateway.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark_core::native::NativeGates {
-                dlp_mode: mode,
-                ..Default::default()
-            },
+            dlp_mode: mode,
             ..ScanGateMatrix::default()
         });
         let result = gateway

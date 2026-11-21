@@ -18,19 +18,19 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"`; Python `"l2"`; required in the server config. | yes | yes |
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
-| `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`. Core also reads `threshold`, `backend`, `runtime_options`. | yes | yes |
+| `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`, `threshold` (unset: the serving default), and Wolf's ONNX `backend` and `runtime_options`. | yes | yes |
 | `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, `allowlist`, optional `bundle_dir`. | yes | yes |
-| `max_input_bytes`, `max_findings` | integer | Limits of Ark Core's `Scanner`. | yes | no (Ark queues and chunks long input) |
-| `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`; Python `"missing"`. | warmup option | yes |
+| `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
+| `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | warmup option | yes |
 | `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"`; server `"multi"`. | no | yes |
 | `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
 | `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
-| `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | no | yes |
+| `execution_backend` | str | ONNX [execution backend](#execution-backend) of Ark's own models (default `"auto"`); Wolf runs on `wolf.backend`. | no | yes |
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); unset follows the backend. | no | yes |
-| `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` (default `1/1/false`). | no | yes |
+| `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of Ark's own models (default `1/1/false`); Wolf takes `wolf.runtime_options`. | no | yes |
 | `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
-| `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. The server's `cache.dir` sets `storage_location` to `<dir>/decisions.redb` and keeps the other cache keys; a different `storage_location` next to it is refused. | no | yes |
+| `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. | no | yes |
 
 ```python
 from patronus_ark import SecurityGateway
@@ -79,7 +79,6 @@ gateway = SecurityGateway(
     }
 )
 gateway.warmup()
-assert gateway.wolf_options["window_tokens"] == 256
 ```
 
 `window_tokens` includes BOS/EOS; `overlap_tokens` counts content tokens and must
@@ -107,19 +106,20 @@ and the `256/0/1` Wolf profile. Python gateways default to `dedicated`.
 The generic request `chunk_overlap_tokens` setting remains separate from Wolf's
 content-token overlap.
 
-## Runtime setters
+## Runtime setters (Rust)
 
-Change behavior on a live gateway (Python names; Rust has equivalents):
+Python takes every key above in the `SecurityGateway(config)` dict and has no setters. The Rust
+gateway can also change these on a live gateway:
 
 | Setter | Values | Effect |
 | --- | --- | --- |
-| `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to shared defaults. |
-| `set_l3_strategy(str)` | `dedicated`, `multi` | Switch the [L3 strategy](#l3-strategy). |
-| `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
-| `set_onnx_batch_mode(str)` | `lazy_batches`, `tensor_batch` | How L3 fallback batches execute. |
-| `set_execution_backend(str)` | see [below](#execution-backend) | ONNX execution provider. |
-| `set_onnx_runtime_options(...)` | constrained CPU | Configure ONNX Runtime intra/inter threads and spin-wait behavior. |
-| `set_dynamic_pii_config(dict)` | see [dynamic PII](#dynamic-pii) | Reconfigure the GLiNER pipeline. |
+| `set_execution_gates(ScanGateMatrix)` | see [below](#execution-gates) | Enable/disable levels and detectors. |
+| `set_l3_strategy(L3Strategy)` | `Dedicated`, `Multi` | Switch the [L3 strategy](#l3-strategy). |
+| `set_ntdb_decision_threshold_point(NtdbOperatingPoint)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
+| `set_onnx_batch_mode(OnnxBatchMode)` | `LazyBatches`, `TensorBatch` | How L3 fallback batches execute. |
+| `set_execution_backend(ExecutionBackend)` | see [below](#execution-backend) | ONNX execution provider. |
+| `set_onnx_runtime_options(OnnxRuntimeOptions)` | constrained CPU | Configure ONNX Runtime intra/inter threads and spin-wait behavior. |
+| `set_dynamic_pii_config(DynamicPiiConfig)` | see [dynamic PII](#dynamic-pii) | Reconfigure the GLiNER pipeline. |
 
 ## Levels
 
@@ -140,7 +140,7 @@ Gates decide which levels and which model/native scanners are active for subsequ
 Unspecified rules inherit shared defaults: credential/secret DLP rules and the classification
 markings (`dlp_marking_*`) are enabled, broader DLP rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
 
-Python (`execution_gates`, `set_execution_gates`, `enqueue`), the Ark API (`gates` in the server
+Python (the gate keys of the config, `enqueue`), the Ark API (`gates` in the server
 config, per key and per request) and Rust (`ScanGateMatrix`, which deserializes it) share **one
 gate schema**. Unknown keys and out-of-range values are refused (`ValueError` in Python, HTTP 400 or a
 config error in the Ark API).
@@ -157,7 +157,8 @@ and run no L3 worker, so Core ignores `l3_policy`. Per-request gates (Python `ex
 gateway's other keys.
 
 ```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["pii", "dlp", "shell_command"],
     "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
     "rules": {"pii_email": False, "dlp_password_assignment": False, "cat.core.remote_to_exec": False},
@@ -186,7 +187,7 @@ scanner.set_execution_gates({
   it on with the scorers' shipped cuts; `{"cascade": {"modules": {"<category>": {"detect_threshold":
   0.9, "clear_threshold": 0.1}}}}` also sets a category's L1 cuts on its rule score. A category L1
   decides, or one no later layer can run for, then skips L2 and L3, and results carry
-  `decided_by`. Levels and conditional gates stay the keys above; `l1_model` is not supported in
+  `module_decision`. Levels and conditional gates stay the keys above; `l1_model` is not supported in
   Ark. The same `cascade.modules` keys configure Ark Core's scanner (see
   [Analysis framework](../concepts/layered-scanning.md#configuration-keys)).
 - `pii_mode` — native PII output mode: `strict` (default; every finding scores `1.0`),
@@ -308,11 +309,12 @@ value scores at least as high and wins the overlap. The example profile
 
 ```python
 import json
-scanner.set_execution_gates(json.load(open("docs/how-to/pii-bare-formats.gates.json")))
+gates = json.load(open("docs/how-to/pii-bare-formats.gates.json"))
+scanner = SecurityGateway({"categories": ["pii"], **gates})
 ```
 
 Bare numbers are often order, invoice or record numbers: enable only the forms your data holds.
-Rust callers that use `NativeGates::all_enabled()` get the bare rules too; the low-level
+Rust callers that use `ScanGateMatrix::all_enabled()` get the bare rules too; the low-level
 `PiiPipeline::evaluate()` keeps the defaults.
 
 The compatibility rules (`*_compat`) report values that the default rules reject by design,
@@ -446,7 +448,9 @@ earlier in the same request. This lets you, for example, run the expensive `dyna
 pass **only** when `injection` flagged the text.
 
 ```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["injection", "dynamic-pii"],
+    "max_level": "l3",
     "conditional": [
         {
             "level": "l3",
@@ -462,7 +466,9 @@ execution, clustering, aggregation, and early-exit fields override that pipeline
 policy. A policy conditional does not suppress the pipeline when its predicate does not match:
 
 ```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["injection", "routing"],
+    "max_level": "l3",
     "conditional": [{
         "level": "l3",
         "pipeline": "injection",
@@ -525,9 +531,9 @@ ONNX execution provider for L3 (and model-backed L2 where applicable):
 `auto` selects a provider based on the platform; `cpu` is the portable default. Availability of
 GPU providers depends on the ONNX Runtime build.
 
-Setting the backend also **resets `onnx_batch_mode`**: `auto`/`cpu` → `lazy_batches`, and the GPU
-providers (`gpu`/`coreml`/`cuda`/`directml`/`tensorrt`) → `tensor_batch`. If you need a non-default
-batch mode, call `set_onnx_batch_mode(...)` *after* `set_execution_backend(...)`.
+The backend sets the default `onnx_batch_mode`: `auto`/`cpu` → `lazy_batches`, and the GPU
+providers (`gpu`/`coreml`/`cuda`/`directml`/`tensorrt`) → `tensor_batch`. Set `onnx_batch_mode`
+to override it.
 
 ## ONNX batch mode
 
@@ -538,8 +544,7 @@ batch mode, call `set_onnx_batch_mode(...)` *after* `set_execution_backend(...)`
 
 ## Dynamic PII
 
-The `dynamic-pii` pipeline is configured with a dict (constructor `dynamic_pii_config` or
-`set_dynamic_pii_config`):
+The `dynamic-pii` pipeline is configured with the `dynamic_pii` config dict:
 
 ```python
 dynamic_pii_config = {

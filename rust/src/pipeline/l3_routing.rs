@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Ark's L3 model table: priority, timeout and cost defaults per category or
 //! model. A configured `l3_policy` entry overrides the table per key.
+use crate::assets::WOLF_PIPELINE_MODEL;
 use crate::{EffectiveL3PipelinePolicy, L3SchedulerPolicy};
 
 /// Default L3 order when the policy configures none.
 const DEFAULT_PRIORITY: &[&str] = &[
     "injection",
-    "wolf-defender-small",
+    WOLF_PIPELINE_MODEL,
     "unsafe_action",
     "unified-v3-threat",
     "dynamic-pii",
@@ -37,7 +38,7 @@ const UNIFIED_HEADS: &[&str] = &[
 /// `(timeout ms, initial cost estimate ms)` of a known category or model.
 fn default_ttl_and_cost(name: &str) -> Option<(u64, u64)> {
     match name {
-        "injection" | "wolf-defender-small" => Some((15_000, 200)),
+        "injection" | WOLF_PIPELINE_MODEL => Some((15_000, 200)),
         "dynamic-pii" | "gliner_small-v2.5-edge" => Some((12_000, 240)),
         "sensitive_document" | "orca-sonar-document-classifier" => Some((12_000, 150)),
         "unified-multitask-model-augmented-v3" => Some((15_000, 200)),
@@ -94,7 +95,7 @@ pub fn pipeline_policy(
     model: &str,
 ) -> EffectiveL3PipelinePolicy {
     let request_wide_positive = matches!(category, "injection" | "unsafe_action")
-        || matches!(model, "wolf-defender-small" | "unified-v3-threat");
+        || matches!(model, WOLF_PIPELINE_MODEL | "unified-v3-threat");
     policy.pipeline_policy(category, model, request_wide_positive)
 }
 
@@ -106,7 +107,7 @@ mod tests {
     #[test]
     fn model_table_fills_what_the_policy_leaves_open() {
         let mut policy = L3SchedulerPolicy::default();
-        assert_eq!(ttl_ms(&policy, "injection", "wolf-defender-small"), 15_000);
+        assert_eq!(ttl_ms(&policy, "injection", WOLF_PIPELINE_MODEL), 15_000);
         assert_eq!(
             ttl_ms(&policy, "tool_class", "unified-v3-tool-class"),
             10_500
@@ -121,7 +122,7 @@ mod tests {
         // A configured key wins for that key only; model keys beat category keys.
         policy.ttl_ms.insert("injection".into(), 99);
         assert_eq!(ttl_ms(&policy, "injection", "other-model"), 99);
-        assert_eq!(ttl_ms(&policy, "injection", "wolf-defender-small"), 15_000);
+        assert_eq!(ttl_ms(&policy, "injection", WOLF_PIPELINE_MODEL), 15_000);
         policy.priority = vec!["routing".into()];
         assert_eq!(priority_index(&policy, "routing", "x"), 0);
         assert_eq!(priority_index(&policy, "injection", "x"), 1);

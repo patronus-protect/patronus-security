@@ -247,9 +247,9 @@ def _field(block: str, name: str) -> str:
 def _resolve(value: str) -> str:
     # A string constant of `specs.rs` itself, such as the injection model name.
     specs = (ROOT / "rust/src/assets/specs.rs").read_text()
-    local = re.search(rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*"([^"\n]+)";', specs, re.M)
+    local = re.search(rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*([^;\n]+);', specs, re.M)
     if local:
-        return json.dumps(local.group(1))
+        return _resolve(local.group(1).strip())
     # Core's Wolf Small pin, which the injection L2 package shares.
     if value.startswith("WOLF_SMALL."):
         source = (ROOT / "ark-core/src/wolf/models.rs").read_text()

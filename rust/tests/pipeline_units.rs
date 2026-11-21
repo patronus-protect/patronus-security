@@ -71,13 +71,13 @@ mod l3_results {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 
     /// The public result shape (`docs/reference/result-schema.md`): Core's
-    /// fields flat, `decided_by`/`l1_outcome` only when set, no internal fields.
+    /// fields flat, `decision` and `module_decision` only when set, no internal
+    /// fields.
     #[test]
     fn scan_results_serialize_flat_with_optional_cascade_fields() {
         let mut result = fallback_result();
@@ -95,7 +95,6 @@ mod l3_results {
                 "category",
                 "class_name",
                 "confidence",
-                "decision",
                 "duration_ms",
                 "evidence_spans",
                 "label_scores",
@@ -104,16 +103,25 @@ mod l3_results {
                 "model",
             ]
         );
-        result.decided_by = Some(patronus_ark_core::cascade::Stage::L2);
+        result.module_decision = Some(patronus_ark_core::cascade::ModuleDecision {
+            module: patronus_ark_core::SecurityCategory::Injection,
+            outcome: patronus_ark_core::cascade::StageOutcome::Clear,
+            decided_by: patronus_ark_core::cascade::Stage::L2,
+            score: 0.8,
+            layers: Vec::new(),
+        });
         let queued = patronus_ark::QueuedSecurityScanResult {
             request_id: "rq".to_string(),
             result,
         };
         let json = serde_json::to_value(&queued).unwrap();
         assert_eq!(json["request_id"], "rq");
-        assert_eq!(json["decided_by"], "l2");
+        assert_eq!(
+            json["module_decision"],
+            serde_json::json!({"module": "injection", "outcome": "clear", "decided_by": "l2", "score": 0.8})
+        );
         assert_eq!(json["category"], "injection");
-        assert!(json.get("l1_outcome").is_none());
+        assert!(json.get("decision").is_none());
         assert!(json.get("result").is_none());
     }
 

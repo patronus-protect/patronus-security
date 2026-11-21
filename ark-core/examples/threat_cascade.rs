@@ -31,9 +31,8 @@ use std::io::{self, BufRead, BufWriter, Write};
 use std::time::Instant;
 
 use patronus_ark_core::{
-    cascade::Cascade,
-    native::{NativeGates, NATIVE_CATEGORIES},
-    Scanner, ScannerConfig, SecurityCategory,
+    cascade::Cascade, cascade::ScanGateMatrix, native::NATIVE_CATEGORIES, Scanner, ScannerConfig,
+    SecurityCategory,
 };
 use serde_json::{json, Map, Value};
 
@@ -60,7 +59,7 @@ fn round6(value: f64) -> f64 {
 /// One prediction; the scan errors name the row id but never its text.
 fn predict(
     scanner: &mut Scanner,
-    (cascade, gates): (&Cascade, &NativeGates),
+    (cascade, gates): (&Cascade, &ScanGateMatrix),
     modules: &[SecurityCategory],
     row: &Value,
 ) -> Result<Value, String> {
@@ -147,7 +146,7 @@ fn main() -> Result<(), String> {
     };
     let config = load_config(path)?;
     let cascade = config.gates.cascade.clone().unwrap_or_default();
-    let gates = config.gates.native.clone();
+    let gates = config.gates.clone();
     let mut scanner = Scanner::new(config).map_err(|e| e.to_string())?;
     let modules = modules();
     let mut out = BufWriter::new(io::stdout().lock());
@@ -175,14 +174,14 @@ mod tests {
         assert!(!classes.contains(&"pii") && !classes.contains(&"dlp"));
     }
 
-    fn l1_only() -> (Scanner, Cascade, NativeGates) {
+    fn l1_only() -> (Scanner, Cascade, ScanGateMatrix) {
         let mut config = ScannerConfig {
             categories: modules(),
             max_level: patronus_ark_core::cascade::SecurityLevel::L1,
             ..ScannerConfig::default()
         };
         config.gates.cascade = Some(Cascade::default());
-        let gates = config.gates.native.clone();
+        let gates = config.gates.clone();
         (Scanner::new(config).unwrap(), Cascade::default(), gates)
     }
 

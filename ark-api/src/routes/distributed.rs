@@ -619,7 +619,7 @@ mod tests {
             pipeline_id: "injection".into(),
             category: SecurityCategory::Injection,
             model_id: "injection".into(),
-            public_model: "wolf-defender-small".into(),
+            public_model: patronus_ark::assets::WOLF_PIPELINE_MODEL.into(),
             has_l3: true,
         }];
         let mut request = request();

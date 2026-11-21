@@ -23,12 +23,11 @@ def main():
             "categories": ["injection", "dynamic-pii"],
             "max_level": "l3",
             "download": "never",
+            "dynamic_pii": _benchmark_dynamic_config(GLINER_LABELS[:30]),
         }
     )
     gateway.warmup()
 
-    labels = GLINER_LABELS[:30]
-    gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
     warmup_text = payload["samples"][0]["text"] + " isolated-memory-warmup"
     for _ in range(2):
         gateway.scan_categories(["injection", "dynamic-pii"], warmup_text)

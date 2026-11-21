@@ -61,10 +61,7 @@ fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
 
 fn with_mode(mode: ScoreMode) -> ScanGateMatrix {
     ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            dlp_mode: mode,
-            ..patronus_ark_core::native::NativeGates::all_enabled()
-        },
+        dlp_mode: mode,
         ..ScanGateMatrix::all_enabled()
     }
 }
@@ -223,15 +220,12 @@ fn pattern(rule_id: &str) -> &'static patronus_ark_core::detectors::dlp::dlp::Dl
 
 #[test]
 fn strict_is_the_default_mode() {
-    assert_eq!(ScanGateMatrix::default().native.dlp_mode, ScoreMode::Strict);
+    assert_eq!(ScanGateMatrix::default().dlp_mode, ScoreMode::Strict);
     assert_eq!(
-        ScanGateMatrix::levels(true, false, false).native.dlp_mode,
+        ScanGateMatrix::levels(true, false, false).dlp_mode,
         ScoreMode::Strict
     );
-    assert_eq!(
-        ScanGateMatrix::all_enabled().native.dlp_mode,
-        ScoreMode::Strict
-    );
+    assert_eq!(ScanGateMatrix::all_enabled().dlp_mode, ScoreMode::Strict);
 }
 
 #[test]
@@ -240,10 +234,7 @@ fn strict_output_is_the_unscored_rule_acceptance() {
     let strict = mode_scanner(ScoreMode::Strict);
     let unset = scanner(None);
     let explicit = scanner(Some(ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            dlp_mode: ScoreMode::Strict,
-            ..Default::default()
-        },
+        dlp_mode: ScoreMode::Strict,
         ..ScanGateMatrix::default()
     }));
     let texts = corpus();

@@ -6,7 +6,7 @@ from ._patronus_ark_core import (
 )
 from .types import (
     EvidenceSpan, NativeCategory, NativeResult, ScanReport, WolfResult, ScannerConfig, WolfConfig,
-    NativeGates, ScanGates, WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
+    ScanGates, WarmupOptions, WolfExecutionOptions, OnnxRuntimeOptions, ShellConfig, ShellFacts,
     ShellVerdict, CascadeConfig, ModuleConfig, L1ModelConfig, ModuleDecision,
     ConditionalPipelineGate, GateExpression, MetadataCondition, ResultCondition,
     L3SchedulerPolicy, L3PipelinePolicy, L3AggregationStrategy, L3ClusteringStrategy,
@@ -16,7 +16,7 @@ from .types import (
 __all__ = [
     "Scanner", "ScanControl", "CancelledError", "ScannerBusyError", "__version__", "seed_word_list",
     "pii_rule_ids", "EvidenceSpan", "NativeCategory", "NativeResult", "ScanReport", "WolfResult",
-    "NativeGates", "ScanGates", "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions",
+    "ScanGates", "ScannerConfig", "WolfConfig", "WarmupOptions", "WolfExecutionOptions",
     "OnnxRuntimeOptions",
     "ShellConfig", "ShellFacts", "ShellVerdict", "CascadeConfig", "ModuleConfig", "L1ModelConfig",
     "ModuleDecision", "ConditionalPipelineGate", "GateExpression", "MetadataCondition",

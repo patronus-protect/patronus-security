@@ -5,11 +5,12 @@
 //! their model tables (priorities, timeouts, costs) on their side; empty maps
 //! here mean "use the host default".
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::native::NativeGates;
+use crate::native::ScoreMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Maximum scanner depth to run.
@@ -63,7 +64,7 @@ impl std::str::FromStr for SecurityLevel {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(try_from = "GateConfig")]
+#[serde(remote = "Self", default, deny_unknown_fields)]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
 /// Unspecified rules use the shared credentials/secrets-only DLP default;
@@ -79,8 +80,39 @@ impl std::str::FromStr for SecurityLevel {
 /// `cascade` (L1 early exit and per-module L1 cuts). Unknown keys and
 /// out-of-range values are refused.
 pub struct ScanGateMatrix {
-    /// Native rule, model, mode and `explain` gates, shared with Ark Core.
-    pub native: NativeGates,
+    /// Per-rule overrides keyed by stable public rule id.
+    pub rules: HashMap<String, bool>,
+    /// Per-model or per-native-scanner overrides keyed by result model names
+    /// such as `native:mcp_runtime_risk`.
+    pub models: HashMap<String, bool>,
+    /// Native PII output mode.
+    pub pii_mode: ScoreMode,
+    /// Native DLP output mode.
+    pub dlp_mode: ScoreMode,
+    /// Output modes of the attack classes. `strict` keeps each producer's own
+    /// acceptance; `balanced`/`recall` also drop evidence scoring below
+    /// [`ScoreMode::min_score`].
+    pub injection_mode: ScoreMode,
+    pub jailbreak_mode: ScoreMode,
+    pub prompt_extraction_mode: ScoreMode,
+    pub tool_poisoning_mode: ScoreMode,
+    pub agent_config_tampering_mode: ScoreMode,
+    pub memory_poisoning_mode: ScoreMode,
+    pub exfiltration_mode: ScoreMode,
+    pub unsafe_action_mode: ScoreMode,
+    pub resource_exhaustion_mode: ScoreMode,
+    pub harmful_content_mode: ScoreMode,
+    pub toxic_language_mode: ScoreMode,
+    /// Least repetition count (`500000 times`, `2 million words`) that makes
+    /// an output request a `resource_exhaustion` finding; unset means
+    /// [`DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD`](crate::native::DEFAULT_RESOURCE_EXHAUSTION_COUNT_THRESHOLD).
+    pub resource_exhaustion_count_threshold: Option<NonZeroU64>,
+    /// Least score of an accepted Threat points rule; unset means
+    /// [`DEFAULT_POINTS_ACCEPTANCE`](crate::detectors::threat::DEFAULT_POINTS_ACCEPTANCE) (0.5).
+    #[serde(deserialize_with = "crate::native::policy::probability")]
+    pub threat_points_acceptance: Option<f64>,
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -88,14 +120,17 @@ pub struct ScanGateMatrix {
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
+    #[serde(deserialize_with = "conditional_gates")]
     pub conditional: Vec<ConditionalPipelineGate>,
-    /// L3 worker scheduling policy.
+    /// L3 worker scheduling policy; each serialized key overrides its default.
+    #[serde(deserialize_with = "l3_policy")]
     pub l3_policy: L3SchedulerPolicy,
     /// The opt-in cascade: when set, a module L1 decides (or no later layer
     /// can run for) skips L2 and L3 and results carry `decided_by`; its
     /// `modules` set the per-module L1 cuts. `None` (the default) runs L2
     /// and L3 as before. The levels that run are the keys above, with or
     /// without a cascade.
+    #[serde(deserialize_with = "cascade")]
     pub cascade: Option<super::Cascade>,
 }
 
@@ -404,14 +439,6 @@ impl L3SchedulerPolicy {
 }
 
 impl ScanGateMatrix {
-    /// Explicitly enable all native rules, including opt-in DLP content families.
-    pub fn all_enabled() -> Self {
-        Self {
-            native: NativeGates::all_enabled(),
-            ..Self::default()
-        }
-    }
-
     /// Create a matrix with explicit level gates.
     pub fn levels(l1: bool, l2: bool, l3: bool) -> Self {
         Self {
@@ -433,7 +460,7 @@ impl ScanGateMatrix {
 
     /// Set one model/native scanner gate.
     pub fn set_model(&mut self, model: impl Into<String>, enabled: bool) {
-        self.native.models.insert(model.into(), enabled);
+        self.models.insert(model.into(), enabled);
     }
 
     /// Builder-style model/native scanner gate setter.
@@ -444,7 +471,7 @@ impl ScanGateMatrix {
 
     /// Set one stable rule-id gate.
     pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool) {
-        self.native.rules.insert(rule_id.into(), enabled);
+        self.rules.insert(rule_id.into(), enabled);
     }
 
     /// Builder-style stable rule-id gate setter.
@@ -522,20 +549,6 @@ pub fn pipeline_allowed(
         .all(|gate| gate.when.matches(metadata, results))
 }
 
-/// The serialized [`ScanGateMatrix`]; missing keys keep the defaults.
-#[derive(Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct GateConfig {
-    #[serde(flatten)]
-    native: NativeGates,
-    l1: Option<bool>,
-    l2: Option<bool>,
-    l3: Option<bool>,
-    conditional: Vec<ConditionalPipelineGate>,
-    l3_policy: L3PolicyConfig,
-    cascade: Option<super::CascadeConfig>,
-}
-
 /// The serialized [`L3SchedulerPolicy`]: each key overrides its default;
 /// `ttl_ms` and `estimated_cost_ms` entries override the default per key.
 #[derive(Default, Deserialize)]
@@ -558,52 +571,65 @@ struct L3PolicyConfig {
     pipelines: HashMap<String, L3PipelinePolicy>,
 }
 
-impl TryFrom<GateConfig> for ScanGateMatrix {
-    type Error = String;
-
-    fn try_from(config: GateConfig) -> Result<Self, String> {
-        let raw = config.l3_policy;
-        let mut policy = L3SchedulerPolicy::default();
-        macro_rules! set {
-            ($($field:ident),*) => {$(
-                if let Some(value) = raw.$field {
-                    policy.$field = value;
-                }
-            )*};
-        }
-        set!(
-            enabled,
-            priority,
-            fairness_quantum_ms,
-            max_wait_ms,
-            degraded_factor,
-            early_exit,
-            progress,
-            clustering,
-            representatives_per_cluster,
-            verify_representatives_per_cluster,
-            min_cluster_similarity,
-            max_cluster_size
-        );
-        policy.ttl_ms.extend(raw.ttl_ms);
-        policy.estimated_cost_ms.extend(raw.estimated_cost_ms);
-        policy.pipelines = raw.pipelines;
-        policy.validate()?;
-        let mut gates = Self {
-            native: config.native,
-            l1: config.l1,
-            l2: config.l2,
-            l3: config.l3,
-            l3_policy: policy,
-            cascade: config
-                .cascade
-                .map(|cascade| super::Cascade::new(cascade).map_err(|error| error.to_string()))
-                .transpose()?,
-            ..Self::default()
-        };
-        gates.set_conditional(config.conditional)?;
-        Ok(gates)
+/// Read as a map so that, flattened into a config, the gates receive every
+/// key the config does not own and refuse the unknown ones.
+impl<'de> Deserialize<'de> for ScanGateMatrix {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let keys = serde_json::Map::<String, Value>::deserialize(deserializer)?;
+        ScanGateMatrix::deserialize(Value::Object(keys)).map_err(serde::de::Error::custom)
     }
+}
+
+fn conditional_gates<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<ConditionalPipelineGate>, D::Error> {
+    let gates = Vec::<ConditionalPipelineGate>::deserialize(deserializer)?;
+    for gate in &gates {
+        gate.validate().map_err(serde::de::Error::custom)?;
+    }
+    Ok(gates)
+}
+
+fn l3_policy<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<L3SchedulerPolicy, D::Error> {
+    let raw = L3PolicyConfig::deserialize(deserializer)?;
+    let mut policy = L3SchedulerPolicy::default();
+    macro_rules! set {
+        ($($field:ident),*) => {$(
+            if let Some(value) = raw.$field {
+                policy.$field = value;
+            }
+        )*};
+    }
+    set!(
+        enabled,
+        priority,
+        fairness_quantum_ms,
+        max_wait_ms,
+        degraded_factor,
+        early_exit,
+        progress,
+        clustering,
+        representatives_per_cluster,
+        verify_representatives_per_cluster,
+        min_cluster_similarity,
+        max_cluster_size
+    );
+    policy.ttl_ms.extend(raw.ttl_ms);
+    policy.estimated_cost_ms.extend(raw.estimated_cost_ms);
+    policy.pipelines = raw.pipelines;
+    policy.validate().map_err(serde::de::Error::custom)?;
+    Ok(policy)
+}
+
+fn cascade<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<super::Cascade>, D::Error> {
+    Option::<super::CascadeConfig>::deserialize(deserializer)?
+        .map(super::Cascade::new)
+        .transpose()
+        .map_err(serde::de::Error::custom)
 }
 
 fn check_fraction(value: f64, field: &str) -> Result<(), String> {

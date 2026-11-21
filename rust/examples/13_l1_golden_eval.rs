@@ -71,15 +71,12 @@ struct FixtureEntity {
 /// in the PII and DLP modes the row names (default `strict`).
 fn gates_for(target_label: &str, pii_mode: ScoreMode, dlp_mode: ScoreMode) -> ScanGateMatrix {
     let mut gates = ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            pii_mode,
-            dlp_mode,
-            ..Default::default()
-        },
+        pii_mode,
+        dlp_mode,
         ..ScanGateMatrix::default()
     };
     for pattern in DLP_PATTERNS {
-        if pattern.entity_group == target_label && !gates.native.allows_rule(pattern.name) {
+        if pattern.entity_group == target_label && !gates.allows_rule(pattern.name) {
             gates.set_rule(pattern.name, true);
         }
     }

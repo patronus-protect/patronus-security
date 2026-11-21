@@ -494,8 +494,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 
@@ -741,8 +740,7 @@ mod tests {
                     decision: None,
                 },
                 internal_l2_chunk_outputs: Vec::new(),
-                decided_by: None,
-                l1_outcome: None,
+                module_decision: None,
             }),
             SecurityScanResult {
                 native: patronus_ark_core::NativeResult {
@@ -758,8 +756,7 @@ mod tests {
                     decision: None,
                 },
                 internal_l2_chunk_outputs: Vec::new(),
-                decided_by: None,
-                l1_outcome: None,
+                module_decision: None,
             },
             NtdbOperatingPoint::BestF1,
         );

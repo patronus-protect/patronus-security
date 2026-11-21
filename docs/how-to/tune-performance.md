@@ -5,19 +5,12 @@ levers, see [Performance & memory](../concepts/performance.md).
 
 Always [measure on your own hardware](run-local-benchmark.md) before and after each change.
 
-!!! note "Both APIs expose the same knobs"
-    The examples below are shown in Python. The Rust gateway has the identical setters —
-    `set_l3_strategy`, `set_execution_backend`, `set_ntdb_operating_point`,
-    `set_onnx_batch_mode`, `set_execution_gates` — the only difference is that Rust takes typed
-    enums (`L3Strategy::Multi`, `ExecutionBackend::CoreMl`, …) where Python takes the equivalent
-    strings. For example:
-
-    ```rust
-    use patronus_ark::L3Strategy;
-    use patronus_ark_core::ExecutionBackend;
-    scanner.set_l3_strategy(L3Strategy::Multi);
-    scanner.set_execution_backend(ExecutionBackend::CoreMl);
-    ```
+!!! note "Both APIs take the same keys"
+    The examples below are shown as Python config keys. The Rust `GatewayConfig` has the same
+    keys as fields (`l3_strategy`, `execution_backend`, `ntdb_decision_threshold_point`,
+    `onnx_batch_mode`, and the gate keys in `core.gates`) — the only difference is that Rust takes
+    typed enums (`L3Strategy::Multi`, `ExecutionBackend::CoreMl`, …) where Python takes the
+    equivalent strings.
 
 ## Cap escalation
 
@@ -28,10 +21,11 @@ cap it:
 scanner = SecurityGateway({"categories": ["injection"], "max_level": "l2"})
 ```
 
-Or gate L3 off per request while keeping the ceiling:
+Or switch L3 off with the `l3` gate key while keeping the ceiling; a request can override it
+with `enqueue(..., execution_gates=...)`:
 
 ```python
-scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
+scanner = SecurityGateway({"categories": ["injection"], "max_level": "l3", "l3": False})
 ```
 
 ## Choose a final-decision threshold profile
@@ -39,7 +33,10 @@ scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
 Trade final-decision recall and precision with the NTDB threshold profile:
 
 ```python
-scanner.set_ntdb_operating_point("best_fpr_in_f1")   # lower false positives within an F1 band
+scanner = SecurityGateway({
+    "categories": ["injection"],
+    "ntdb_decision_threshold_point": "best_fpr_in_f1",  # lower false positives within an F1 band
+})
 ```
 
 Options: `best_f1`, `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`, `best_latency_in_f1`.
@@ -83,7 +80,10 @@ scanner.set_onnx_runtime_options(OnnxRuntimeOptions {
 For async workloads that promote many texts, coalesce L3 fallback batches:
 
 ```python
-scanner.set_onnx_batch_mode("tensor_batch")   # vs. "lazy_batches"
+scanner = SecurityGateway({
+    "categories": ["injection"],
+    "onnx_batch_mode": "tensor_batch",  # vs. "lazy_batches"
+})
 ```
 
 ## Manage L3 session lifetime

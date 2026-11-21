@@ -22,7 +22,6 @@ pub(super) fn direct_l3_configs(
         || (execution.l3_strategy() == crate::L3Strategy::Multi
             && !execution
                 .gates()
-                .native
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL))
     {
         return Vec::new();
@@ -74,7 +73,7 @@ impl SecurityGateway {
                     vec![pending],
                 );
                 if execution.l3_strategy() == crate::L3Strategy::Dedicated
-                    && config.public_model == "wolf-defender-small"
+                    && config.public_model == crate::assets::WOLF_PIPELINE_MODEL
                 {
                     // Core receives the original document; no throwaway token
                     // handoff or second chunk plan is needed for Wolf.

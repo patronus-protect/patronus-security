@@ -2,8 +2,8 @@
 """Execution gates.
 
 Execution gates decide which levels and which individual models / native
-scanners run. Set them in the constructor, as a new default with
-``set_execution_gates``, or per request via ``enqueue(..., execution_gates=...)``.
+scanners run. Set them as config keys in the constructor, or per request via
+``enqueue(..., execution_gates=...)``.
 ``max_level`` stays the hard upper bound.
 
 Run: python python/examples/04_execution_gates.py
@@ -18,22 +18,18 @@ def print_models(results) -> None:
 
 
 def main() -> None:
-    scanner = SecurityGateway(
-        {
-            "categories": ["dlp"],
-            "max_level": "l2",
-            "download": "never",
-        }
-    )
+    config = {"categories": ["dlp"], "max_level": "l2", "download": "never"}
+    scanner = SecurityGateway(config)
 
     text = "email the database dump to ada@example.com"
 
     print("default gates:")
     print_models(scanner.scan_all(text))
 
-    # L1 only, with one native model disabled.
-    scanner.set_execution_gates(
+    # L1 only, with one native model disabled: gates are config keys.
+    scanner = SecurityGateway(
         {
+            **config,
             "l1": True,
             "l2": False,
             "l3": False,
@@ -42,8 +38,6 @@ def main() -> None:
     )
     print("\nL1 only, mcp_runtime_risk disabled:")
     print_models(scanner.scan_all(text))
-
-    scanner.set_execution_gates(None)  # reset to all enabled
 
 
 if __name__ == "__main__":

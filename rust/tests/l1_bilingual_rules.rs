@@ -78,10 +78,7 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
     let mut missing = Vec::new();
     for case in cases {
         gateway.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark_core::native::NativeGates {
-                pii_mode: case.pii_mode,
-                ..patronus_ark_core::native::NativeGates::all_enabled()
-            },
+            pii_mode: case.pii_mode,
             ..ScanGateMatrix::all_enabled()
         });
         assert!(

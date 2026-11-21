@@ -19,7 +19,12 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
         "level": "L1",
         "model": "native:dlp",
         "duration_ms": 0.4,
-        "decided_by": "heuristic",
+        "module_decision": {
+            "module": "dlp",
+            "outcome": "clear",
+            "decided_by": "heuristic",
+            "score": 0.0,
+        },
         "evidence_spans": [],
         "label_scores": [],
         "layers": [
@@ -46,9 +51,8 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `level` | str | The level that produced the winning verdict: `L1`, `L2`, or `L3`. |
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
-| `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
-| `decided_by` | str | Only with the opt-in gate key `cascade`: the stage that gave the category its final answer, `heuristic` (L1), `l2` or `l3`. Absent without a cascade and while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3). Rust exposes `SecurityScanResult.decided_by: Option<Stage>`. |
-| `l1_outcome` | str | Only with the opt-in gate key `cascade`, on the L1 results of a category L1 decided: `detected` or `clear`. A detection at a lowered `cascade.modules.<category>.detect_threshold` shows here even when `class_name` stays `safe`. |
+| `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Omitted when no authoritative classifier decision exists (Python, Rust's serialized result and the Ark API alike); Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
+| `module_decision` | dict | Only with the opt-in gate key `cascade`: the category's final answer, in the shape of an entry of Ark Core's scan-report `decision` list: `module`, `outcome` (`detected` or `clear`), `decided_by` (`heuristic` or `l1_model` for L1, `l2`, `l3`), `score` (the deciding stage's score: a probability, the decision logit for the L1 model) and, when an L1 model ran, its `layers`. On L1 results it is L1's answer: a detection at a lowered `cascade.modules.<category>.detect_threshold` shows as `detected` even when `class_name` stays `safe`. An L2 or L3 result answers `clear` for a `safe`/`benign` class, else `detected`, with its `confidence` as `score`. Absent without a cascade and while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3). Rust exposes `SecurityScanResult.module_decision: Option<ModuleDecision>`. |
 | `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
@@ -74,7 +78,7 @@ prediction, `unsafe_action` for credential access or tool abuse), while `layers`
 `label_scores` keep the model's own labels.
 
 Each attack class has its own output mode gate `<category>_mode` (`injection_mode`,
-`jailbreak_mode`, …, `toxic_language_mode`; Rust `NativeGates`, Python
+`jailbreak_mode`, …, `toxic_language_mode`; Rust `ScanGateMatrix`, Python
 `execution_gates={"unsafe_action_mode": "balanced"}`, Ark API `gates: {unsafe_action_mode:
 balanced}`), next to `pii_mode` and `dlp_mode`. `strict` (default) keeps each native producer's
 own acceptance and scores. `balanced` and `recall` additionally drop the producer's evidence spans
@@ -744,12 +748,12 @@ command.
 One request can emit **several** `result` events. L1 results are visible as soon as L1
 finishes; L2 and a later promoted L3 result follow independently, and L3 runs only when L2
 promotes. With the opt-in gate key `cascade`, a category L1 decides is final at L1 (it detects,
-or its score is below a configured `clear_threshold`): its results carry `decided_by:
-"heuristic"` and it gets no L2 or L3 result. So does a category L1 left undecided when no later
+or its score is below a configured `clear_threshold`): its results carry a `module_decision` with
+`decided_by: "heuristic"` and it gets no L2 or L3 result. So does a category L1 left undecided when no later
 layer can run for it (`max_level` `l1`, its L2 and L3 gated off, or no model
 for it): its L1 result is its clear answer. Only the other categories go on to L2. The queue and
 the distributed plan mark results the same way. Without `cascade`, results carry no
-`decided_by`.
+`module_decision`.
 
 Promoting NTDB L2 layers expose `details.l3_candidates` (each entry: byte `span`,
 `promote_score`, `promote_threshold`, `source_pipeline`, `source_model`, `l2_class`) and
@@ -819,7 +823,7 @@ Each `failures` entry is a structured `SecurityFailure` dict:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `stage` | str | `warmup`, `asset`, `scanner`, `inference`, `queue`, or `worker`. |
-| `kind` | str | `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`, `inference_failure`, `timeout`, `queue_full`, `worker_unavailable`, or `internal`. |
+| `kind` | str | `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`, `inference_failure`, `timeout`, `queue_full`, `limit_exceeded` (input above `max_input_bytes` or more findings than `max_findings`), `worker_unavailable`, or `internal`. |
 | `level` | str \| null | The level that failed (`L1`/`L2`/`L3`), if applicable. |
 | `detector_id` | str \| null | The specific detector or model that failed, if applicable. |
 | `retryable` | bool | Whether the failure is transient and could succeed on retry. |

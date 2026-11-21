@@ -46,18 +46,15 @@ fn one_gate_schema_reads_every_key() {
         }
     }))
     .unwrap();
-    assert!(!gates.native.allows_rule("cat.core.remote_to_exec"));
-    assert!(!gates.native.allows_model("native:pii"));
-    assert_eq!(gates.native.pii_mode, ScoreMode::Recall);
+    assert!(!gates.allows_rule("cat.core.remote_to_exec"));
+    assert!(!gates.allows_model("native:pii"));
+    assert_eq!(gates.pii_mode, ScoreMode::Recall);
     assert_eq!(
-        gates.native.mode(SecurityCategory::UnsafeAction),
+        gates.mode(SecurityCategory::UnsafeAction),
         ScoreMode::Recall
     );
-    assert_eq!(
-        gates.native.mode(SecurityCategory::Injection),
-        ScoreMode::Strict
-    );
-    assert!(gates.native.explain);
+    assert_eq!(gates.mode(SecurityCategory::Injection), ScoreMode::Strict);
+    assert!(gates.explain);
     assert_eq!(
         (gates.l1, gates.l2, gates.l3),
         (Some(true), Some(false), Some(false))
@@ -81,7 +78,7 @@ fn one_gate_schema_reads_every_key() {
     let default = self::gates(serde_json::json!({})).unwrap();
     assert!(default.l3_policy.priority.is_empty());
     assert!(default.l3_policy.ttl_ms.is_empty());
-    assert!(default.native.allows_rule("pii_email"));
+    assert!(default.allows_rule("pii_email"));
 }
 
 #[test]

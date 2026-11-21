@@ -167,16 +167,6 @@ def main():
     label_map = DEFAULT_LABEL_MAP
     labels = args.labels or list(label_map)
 
-    gateway = SecurityGateway(
-        {
-            "categories": ["dynamic-pii"],
-            "max_level": "l3",
-            "download": "never",
-            **({"cache_root": args.model_dir} if args.model_dir else {}),
-        }
-    )
-    gateway.warmup()
-
     min_threshold = min(args.thresholds)
     results = {}
     for label in labels:
@@ -184,14 +174,22 @@ def main():
         positives, negatives = build_examples(
             rows, source_labels, args.max_positives, args.max_negatives, rng
         )
-        gateway.set_dynamic_pii_config(
+        # One gateway per label: the label set is part of the config.
+        gateway = SecurityGateway(
             {
-                "labels": [label],
-                "threshold": min_threshold,
-                "execution_gate": {"type": "always"},
-                "conditional_labels": [],
+                "categories": ["dynamic-pii"],
+                "max_level": "l3",
+                "download": "never",
+                **({"cache_root": args.model_dir} if args.model_dir else {}),
+                "dynamic_pii": {
+                    "labels": [label],
+                    "threshold": min_threshold,
+                    "execution_gate": {"type": "always"},
+                    "conditional_labels": [],
+                },
             }
         )
+        gateway.warmup()
         measured = []
         for example in positives + negatives:
             scan = gateway.scan_category("dynamic-pii", example["text"])

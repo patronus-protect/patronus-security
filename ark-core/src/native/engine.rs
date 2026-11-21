@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use super::{registry, NativeGates, NativeProducerSpec};
+use super::{registry, NativeProducerSpec};
+use crate::cascade::ScanGateMatrix;
 use crate::{
     detectors::NativeDetection, threat::NativeText, LayerResult, NativeResult, ScanControl,
     ScanError, SecurityCategory,
@@ -60,7 +61,7 @@ impl NativeEngine {
     /// config, a gateway's execution gates) so that no scan under them
     /// builds anything; a scan under other gates builds what they enable on
     /// first use. What is built stays, also after a gate change turns it off.
-    pub fn prepare(&self, gates: &NativeGates) {
+    pub fn prepare(&self, gates: &ScanGateMatrix) {
         for producer in self.groups.iter().flatten() {
             if producer.enabled(gates) {
                 producer.prepare(gates);
@@ -80,7 +81,7 @@ impl NativeEngine {
         &self,
         producer: &NativeProducerSpec,
         prepared: &NativeText<'_>,
-        gates: &NativeGates,
+        gates: &ScanGateMatrix,
         control: &ScanControl,
     ) -> Result<NativeProducerOutcome, ScanError> {
         control.check()?;
@@ -113,7 +114,7 @@ impl NativeEngine {
         &self,
         category: SecurityCategory,
         prepared: &NativeText<'_>,
-        gates: &NativeGates,
+        gates: &ScanGateMatrix,
         control: &ScanControl,
     ) -> Result<Vec<NativeResult>, ScanError> {
         let text = prepared.text();

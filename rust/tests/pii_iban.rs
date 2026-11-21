@@ -127,10 +127,7 @@ thread_local! {
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
     SCANNER.with(|scanner| {
         scanner.set_execution_gates(ScanGateMatrix {
-            native: patronus_ark_core::native::NativeGates {
-                pii_mode: mode,
-                ..Default::default()
-            },
+            pii_mode: mode,
             ..Default::default()
         });
         scanner

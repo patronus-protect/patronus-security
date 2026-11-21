@@ -93,7 +93,7 @@ fn offline_missing_and_corrupt_assets_fail_instead_of_starting_clean() {
 fn invalid_scan_policy_is_rejected_before_asset_preparation() {
     let bundle = Bundle::new();
     let mut config = bundle.config();
-    config.max_input_bytes = 0;
+    config.max_input_bytes = Some(0);
     assert!(matches!(
         Scanner::warmup(
             config,

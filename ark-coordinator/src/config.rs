@@ -11,7 +11,7 @@ use std::{
 pub struct CoordinatorConfig {
     pub server: ServerConfig,
     pub auth: CoordinatorAuthConfig,
-    pub gateway: GatewayConfig,
+    pub gateway: FleetConfig,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -34,9 +34,11 @@ pub struct CoordinatorApiKey {
     pub key_hash: String,
 }
 
+/// The `gateway` section: the cube fleet behind the coordinator, its Redis
+/// queue and the chunking limits.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GatewayConfig {
+pub struct FleetConfig {
     pub redis_url_file: PathBuf,
     pub cube_token_file: PathBuf,
     pub cubes: Vec<Cube>,
@@ -191,7 +193,7 @@ mod tests {
 // The shipped Compose service allows 310s for shutdown. Bound parent work to
 // 300s plus 5s for draining/persistence, leaving 5s for process termination.
 pub const MAX_COORDINATOR_PARENT_DEADLINE_MS: u64 = 300_000;
-impl GatewayConfig {
+impl FleetConfig {
     pub fn drain_timeout_ms(&self) -> Option<u64> {
         self.parent_deadline_ms.checked_add(5_000)
     }

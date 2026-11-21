@@ -55,7 +55,8 @@ DLP_TOOLS = {"ark": "**Ark L1** ²", "gitleaks": "gitleaks 8.30.1", "trufflehog"
              "detect-secrets": "detect-secrets 1.5.0"}
 
 CONFIG_PYTHON = """```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["pii", "dlp"],
     "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
     "rules": {"pii_email": False, "dlp_password_assignment": False},

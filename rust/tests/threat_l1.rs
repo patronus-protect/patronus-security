@@ -133,7 +133,7 @@ fn every_threat_rule_can_be_disabled_individually() {
     let gateway = gateway();
     for case in cases() {
         let mut gates = ScanGateMatrix::all_enabled();
-        gates.native.rules.insert(case.rule_id.clone(), false);
+        gates.rules.insert(case.rule_id.clone(), false);
         gateway.set_execution_gates(gates);
         for text in [&case.en, &case.de] {
             let result = threat_result(&gateway, rule_category(&case.rule_id), text);
@@ -154,7 +154,7 @@ fn threat_level_model_category_and_readiness_contracts() {
         SecurityLevelReadiness::Ready
     ));
     let mut gates = ScanGateMatrix::all_enabled();
-    gates.native.models.insert("native:threat_l1".into(), false);
+    gates.models.insert("native:threat_l1".into(), false);
     gateway.set_execution_gates(gates);
     assert!(gateway
         .scan_category(

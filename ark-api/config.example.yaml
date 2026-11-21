@@ -26,6 +26,9 @@ pipeline:
   max_level: "L3"
   # The model cache root (Ark Core's `cache_root`).
   cache_root: "/data/models"
+  # The decision cache; without storage_location it stays in memory.
+  cache:
+    storage_location: "/data/cache/decisions.redb"
   # Assets are baked into the image at build time (see Dockerfile); leave
   # this `never` in production so a misconfigured deployment fails fast
   # instead of silently downloading models at request time.
@@ -103,6 +106,3 @@ pipeline:
           metadata:
             path: "channel_risk"
             equals: "low"
-
-cache:
-  dir: "/data/cache"

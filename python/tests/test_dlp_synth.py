@@ -1532,18 +1532,21 @@ class StructureTests(unittest.TestCase):
 class RuleProbeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.gateway = SecurityGateway({"categories": ["dlp"], "max_level": "l1", "download": "never"})
+        cls.config = {"categories": ["dlp"], "max_level": "l1", "download": "never"}
         cls.all_rules = set(rules.load_rule_map()) | set(rules.content_rules())
+
+    def gateway_with_only(self, rule_id):
+        """A DLP gateway that runs `rule_id` and no other DLP rule."""
+        rule_gates = {other: other == rule_id for other in self.all_rules}
+        return SecurityGateway({**self.config, "rules": rule_gates})
 
     def test_each_rule_reports_exactly_its_generated_values(self):
         for rule_id in rules.load_rule_map():
-            self.gateway.set_execution_gates(
-                {"rules": {other: other == rule_id for other in self.all_rules}}
-            )
+            gateway = self.gateway_with_only(rule_id)
             for sample in rules.samples(rule_id, range(8)):
                 spans = {
                     (span["start_char"], span["end_char"])
-                    for result in self.gateway.scan_category("dlp", sample.text)
+                    for result in gateway.scan_category("dlp", sample.text)
                     if result["model"] == "native:dlp"
                     for span in result["evidence_spans"]
                 }
@@ -1552,25 +1555,21 @@ class RuleProbeTests(unittest.TestCase):
                     {sample.span},
                     f"{rule_id} gen={sample.generator} probe={sample.probe} seed={sample.seed}",
                 )
-        self.gateway.set_execution_gates(None)
 
     def test_rules_do_not_report_their_lookalike_values(self):
         # F03: a token shape with a wrong check value or length is no match for its rule.
         checked = 0
         for rule_id in rules.load_rule_map():
-            self.gateway.set_execution_gates(
-                {"rules": {other: other == rule_id for other in self.all_rules}}
-            )
+            gateway = self.gateway_with_only(rule_id)
             for sample in rules.samples(rule_id, range(8), lookalike=True):
                 spans = [
                     span
-                    for result in self.gateway.scan_category("dlp", sample.text)
+                    for result in gateway.scan_category("dlp", sample.text)
                     if result["model"] == "native:dlp"
                     for span in result["evidence_spans"]
                 ]
                 self.assertEqual(spans, [], f"{rule_id} gen={sample.generator} probe={sample.probe} seed={sample.seed}")
                 checked += 1
-        self.gateway.set_execution_gates(None)
         self.assertGreater(checked, 0)
 
 if __name__ == "__main__":

@@ -216,6 +216,9 @@ class BenchmarkDataTests(unittest.TestCase):
         }
 
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             categories = ["injection", "dynamic-pii"]
             max_level = "l3"
             _config = {"dynamic_pii": {"labels": ["original"]}}
@@ -224,7 +227,7 @@ class BenchmarkDataTests(unittest.TestCase):
                 self.configs = []
 
             def set_dynamic_pii_config(self, config):
-                self.configs.append(config)
+                self.configs.append(json.loads(config))
 
             def scan_categories(self, categories, _text):
                 dynamic = {
@@ -359,6 +362,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_load_records_l3_early_exit_and_clustering_diagnostics(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             max_level = "l3"
 
             def __init__(self):
@@ -469,13 +475,13 @@ class BenchmarkDataTests(unittest.TestCase):
         }
 
         class FakeGateway:
-            def _benchmark_worker_config(self):
-                return {
-                    "cache_root": "/models",
-                    "onnx_batch_mode": "lazy_batches",
-                    "execution_backend": "cpu",
-                    "ntdb_decision_threshold_point": "best_promote",
-                }
+            _config = {
+                "categories": ["injection"],
+                "cache_root": "/models",
+                "onnx_batch_mode": "lazy_batches",
+                "execution_backend": "cpu",
+                "ntdb_decision_threshold_point": "best_promote",
+            }
 
         completed = benchmark.subprocess.CompletedProcess(
             args=[], returncode=0, stdout=json.dumps(worker_result), stderr=""
@@ -490,10 +496,15 @@ class BenchmarkDataTests(unittest.TestCase):
         self.assertEqual(command[-2:], ["-m", "patronus_ark.benchmark_worker"])
         payload = json.loads(run.call_args.kwargs["input"])
         self.assertEqual(payload["gateway"]["cache_root"], "/models")
+        # Only the Ark keys reach the worker; it sets its own categories.
+        self.assertNotIn("categories", payload["gateway"])
         self.assertEqual(payload["samples"][0]["text"], "ignore previous instructions")
 
     def test_load_uses_one_producer_and_one_consumer(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             max_level = "l2"
 
             def __init__(self):
@@ -541,6 +552,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_load_can_submit_at_ten_requests_per_second(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             max_level = "l2"
 
             def __init__(self):
@@ -600,6 +614,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_load_consumer_does_not_block_l2_behind_an_l3_request(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             max_level = "l3"
 
             def __init__(self):
@@ -799,6 +816,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_native_l1_benchmark_uses_10kb_texts_and_isolates_models(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             categories = ["injection", "dlp", "pii"]
 
             def __init__(self):
@@ -806,7 +826,7 @@ class BenchmarkDataTests(unittest.TestCase):
                 self.scans = []
 
             def set_execution_gates(self, gates):
-                self.gates.append(gates)
+                self.gates.append(None if gates is None else json.loads(gates))
 
             def scan_categories(self, categories, text):
                 self.scans.append((list(categories), text))
@@ -853,6 +873,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_strategy_benchmark_writes_native_l1_and_dynamic_pii_results(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             categories = ["injection", "dlp", "pii"]
             max_level = "l1"
 
@@ -913,8 +936,7 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_run_local_benchmark_runs_both_strategies_in_workers(self):
         class FakeGateway:
-            def _benchmark_config(self):
-                return {"config": {"categories": ["injection"]}, "execution_gates": None}
+            _config = {"categories": ["injection"]}
 
         strategy_result = {
             "example": {},
@@ -948,6 +970,9 @@ class BenchmarkDataTests(unittest.TestCase):
 
     def test_queue_example_preserves_every_consumed_result(self):
         class FakeGateway:
+            @property
+            def rust_gateway(self):
+                return self
             categories = ["injection", "dlp"]
 
             def __init__(self):

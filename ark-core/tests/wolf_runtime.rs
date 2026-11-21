@@ -659,7 +659,6 @@ fn only_wolf_answers_with_l1_switched_off() {
     config.gates.cascade = Some(Default::default());
     config
         .gates
-        .native
         .models
         .insert("native:injection_l1".into(), false);
     let mut scanner = Scanner::new(config).unwrap();

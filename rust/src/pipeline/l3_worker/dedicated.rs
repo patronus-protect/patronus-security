@@ -469,6 +469,8 @@ fn run_wolf_document_job(
         &job.category,
         &job.model,
     );
+    // Wolf runs on Core's `wolf` keys: threshold, backend and runtime options.
+    let wolf = job.execution.wolf();
     let threshold = match policy.aggregation {
         Some(crate::L3AggregationStrategy::AnyPositiveOrHighest { threshold, .. })
         | Some(crate::L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold }) => {
@@ -477,8 +479,11 @@ fn run_wolf_document_job(
         Some(crate::L3AggregationStrategy::MajorityVoteOrHighest) => {
             return Err("Wolf requires a probability threshold, not majority voting".into())
         }
-        // Every Wolf size detects at ARK's profile unless the pipeline policy sets one.
-        None => patronus_ark_core::WolfServingProfile::ARK.threshold,
+        // Every Wolf size detects at `wolf.threshold`, else at ARK's profile,
+        // unless the pipeline policy sets one.
+        None => wolf
+            .threshold
+            .unwrap_or(patronus_ark_core::WolfServingProfile::ARK.threshold),
     };
     let allows_fallback = job.execution.allows_level(SecurityLevel::L2);
     let mut model = model.lock().map_err(|error| error.to_string())?;
@@ -494,9 +499,9 @@ fn run_wolf_document_job(
     model
         .ensure_wolf_loaded(
             threshold,
-            job.execution.backend(),
-            job.execution.onnx_runtime_options(),
-            job.execution.wolf().execution,
+            wolf.backend,
+            wolf.runtime_options,
+            wolf.execution,
         )
         .map_err(|error| error.to_string())?;
     let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
@@ -545,8 +550,7 @@ fn run_wolf_document_job(
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
         let mut layer = l3_metadata_layer(class, &job.model, confidence, preview.duration_ms);
         layer.matched = matched;
@@ -593,9 +597,9 @@ fn run_wolf_document_job(
     let output = model.infer_wolf_document_with_progress_and_control(
         source_text,
         threshold,
-        job.execution.backend(),
-        job.execution.onnx_runtime_options(),
-        job.execution.wolf().execution,
+        wolf.backend,
+        wolf.runtime_options,
+        wolf.execution,
         active.control(),
         callback,
     );
@@ -747,7 +751,7 @@ fn run_model_job(
     similarity_cache: Arc<HistoricalSimilarityCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
-    if job.model == "wolf-defender-small" {
+    if job.model == crate::assets::WOLF_PIPELINE_MODEL {
         return run_wolf_document_job(job, model, worker_state);
     }
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
@@ -1833,7 +1837,7 @@ fn decorate_l3_layers(
 
 fn l3_safe_class(job: &L3WorkerJob) -> &'static str {
     if job.category == "injection"
-        || job.model == "wolf-defender-small"
+        || job.model == crate::assets::WOLF_PIPELINE_MODEL
         || job.category == "unsafe_action"
     {
         "benign"
@@ -2067,8 +2071,7 @@ mod tests {
                     decision: None,
                 },
                 internal_l2_chunk_outputs: Vec::new(),
-                decided_by: None,
-                l1_outcome: None,
+                module_decision: None,
             },
             priority: 0,
             ttl_ms: 10_000,
@@ -2167,7 +2170,7 @@ mod tests {
             let classifier = crate::ml::onnx::LazyOnnxTextClassifier::from_dir_with_paths(
                 &dir,
                 vec!["benign".into(), "attack".into()],
-                "wolf-defender-small",
+                crate::assets::WOLF_PIPELINE_MODEL,
                 &["model_fp16.onnx"],
                 "tokenizer.json",
                 258,
@@ -2175,12 +2178,12 @@ mod tests {
             .unwrap()
             .unwrap();
             worker.models.lock().unwrap().insert(
-                "wolf-defender-small".into(),
+                crate::assets::WOLF_PIPELINE_MODEL.into(),
                 Arc::new(Mutex::new(classifier)),
             );
             let mut job = lifecycle_test_job();
             job.category = "injection".into();
-            job.model = "wolf-defender-small".into();
+            job.model = crate::assets::WOLF_PIPELINE_MODEL.into();
             job.input = L3WorkerInput::Text(Arc::from(" a".repeat(257)));
             job.fallback.category = "injection".into();
             let mut gates = crate::ScanGateMatrix::default();

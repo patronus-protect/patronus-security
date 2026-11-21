@@ -5,7 +5,7 @@ use crate::L3AggregationStrategy;
 
 pub(crate) fn chunk_aggregation(category: &str, model: &str) -> L3AggregationStrategy {
     match (category, model) {
-        ("injection", _) | (_, "wolf-defender-small") => {
+        ("injection", _) | (_, crate::assets::WOLF_PIPELINE_MODEL) => {
             L3AggregationStrategy::AnyPositiveOrHighest {
                 positive_class: "attack".to_string(),
                 threshold: 0.93,

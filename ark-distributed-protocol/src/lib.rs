@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+mod scan_request;
+pub use scan_request::{require_dynamic_pii_category, RequestScanConfig};
+
 pub const PROTOCOL_VERSION_V1: u16 = 1;
 pub const MAX_CONTENT_TOKENS: usize = 254;
 pub const MAX_CHUNKS_PER_BATCH: usize = 64;

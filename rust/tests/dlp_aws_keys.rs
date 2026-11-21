@@ -71,10 +71,7 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
             ))
             .unwrap();
             scanner.set_execution_gates(ScanGateMatrix {
-                native: patronus_ark_core::native::NativeGates {
-                    dlp_mode: mode,
-                    ..Default::default()
-                },
+                dlp_mode: mode,
                 ..ScanGateMatrix::default()
             });
             scanner

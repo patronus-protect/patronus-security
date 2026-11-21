@@ -13,8 +13,7 @@ use patronus_ark::GatewayConfig;
 use patronus_ark::{SecurityGateway, SecurityScanResult};
 use patronus_ark_core::detectors::pii::validators;
 use patronus_ark_core::{
-    cascade::ScanGateMatrix, cascade::SecurityLevel, native::NativeGates, native::ScoreMode,
-    SecurityCategory,
+    cascade::ScanGateMatrix, cascade::SecurityLevel, native::ScoreMode, SecurityCategory,
 };
 use patronus_ark_core::{detectors::pii::pii::PiiPipeline, detectors::pii::pii::PII_PATTERNS};
 
@@ -214,10 +213,7 @@ fn scanner(gates: ScanGateMatrix) -> SecurityGateway {
 
 fn gates(rule: Option<&str>, mode: ScoreMode) -> ScanGateMatrix {
     let mut gates = ScanGateMatrix {
-        native: NativeGates {
-            pii_mode: mode,
-            ..Default::default()
-        },
+        pii_mode: mode,
         ..Default::default()
     };
     if let Some(rule) = rule {
@@ -260,9 +256,9 @@ fn every_bare_rule_is_tested_and_off_by_default() {
     registered.sort_unstable();
     assert_eq!(tested, registered);
     for rule in registered {
-        assert!(!NativeGates::default().allows_rule(rule), "{rule}");
-        assert!(NativeGates::default().allows_rule(rule.trim_end_matches("_bare")));
-        assert!(NativeGates::all_enabled().allows_rule(rule), "{rule}");
+        assert!(!ScanGateMatrix::default().allows_rule(rule), "{rule}");
+        assert!(ScanGateMatrix::default().allows_rule(rule.trim_end_matches("_bare")));
+        assert!(ScanGateMatrix::all_enabled().allows_rule(rule), "{rule}");
     }
 }
 
@@ -448,7 +444,6 @@ fn the_example_profile_enables_exactly_the_bare_rules() {
     ))
     .unwrap();
     let mut enabled: Vec<_> = profile
-        .native
         .rules
         .iter()
         .filter(|(_, on)| **on)
@@ -458,7 +453,7 @@ fn the_example_profile_enables_exactly_the_bare_rules() {
     let mut expected = bare_rule_ids();
     expected.sort_unstable();
     assert_eq!(enabled, expected);
-    assert_eq!(profile.native.rules.len(), expected.len());
+    assert_eq!(profile.rules.len(), expected.len());
     // Every listed rule reports in the mode of the profile.
     let scanner = scanner(profile);
     for &(rule, _, value, ..) in CASES {
@@ -809,7 +804,7 @@ fn the_bare_routing_number_overlaps_by_the_existing_order() {
             "../../docs/how-to/pii-bare-formats.gates.json"
         ))
         .unwrap();
-        gates.native.pii_mode = mode;
+        gates.pii_mode = mode;
         let scanner = scanner(gates);
         let labels = |text: &str| -> Vec<String> {
             let mut labels: Vec<_> = scan(&scanner, text)
@@ -862,7 +857,7 @@ fn the_bare_passport_rules_report_letter_prefixed_forms_only() {
     .unwrap();
     for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let mut profile = profile.clone();
-        profile.native.pii_mode = mode;
+        profile.pii_mode = mode;
         let scanner = scanner(profile);
         let passports = |text: &str| -> Vec<String> {
             scan(&scanner, text)
@@ -936,7 +931,6 @@ fn compat_rule_ids() -> Vec<&'static str> {
 
 fn enabled_rules(profile: &ScanGateMatrix) -> Vec<&str> {
     let mut enabled: Vec<_> = profile
-        .native
         .rules
         .iter()
         .filter(|(_, on)| **on)
@@ -969,11 +963,11 @@ fn the_compatibility_profile_adds_the_compat_rules_to_the_bare_profile() {
     expected.sort_unstable();
     assert_eq!(compat_rule_ids().len(), 3);
     assert_eq!(enabled_rules(&compat), expected);
-    assert_eq!(compat.native.rules.len(), expected.len());
-    assert_eq!(compat.native.pii_mode, bare.native.pii_mode);
+    assert_eq!(compat.rules.len(), expected.len());
+    assert_eq!(compat.pii_mode, bare.pii_mode);
     for rule in compat_rule_ids() {
-        assert!(!NativeGates::default().allows_rule(rule), "{rule}");
-        assert!(NativeGates::all_enabled().allows_rule(rule), "{rule}");
+        assert!(!ScanGateMatrix::default().allows_rule(rule), "{rule}");
+        assert!(ScanGateMatrix::all_enabled().allows_rule(rule), "{rule}");
     }
 }
 
@@ -1063,7 +1057,7 @@ const COMPAT_NEGATIVES: &[(&str, &str)] = &[
 fn the_compat_rules_report_loopback_unspecified_and_unassigned_values() {
     for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let mut profile = compat_profile();
-        profile.native.pii_mode = mode;
+        profile.pii_mode = mode;
         let scanner = scanner(profile);
         let spans = |text: &str, label: &str| -> Vec<String> {
             scan(&scanner, text)
@@ -1091,7 +1085,7 @@ fn compat_values_stay_silent_without_the_compatibility_profile() {
     .unwrap();
     for mode in [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall] {
         let mut bare = bare.clone();
-        bare.native.pii_mode = mode;
+        bare.pii_mode = mode;
         for scanner in [scanner(gates(None, mode)), scanner(bare)] {
             for &(text, label, _) in COMPAT_POSITIVES {
                 let result = scan(&scanner, text);
