@@ -50,7 +50,7 @@ pub use types::{
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
     SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult,
+    SecurityRuntimeReadiness, SecurityScanResult, CONTROL_POLL,
 };
 ```
 
@@ -906,8 +906,8 @@ else Escalate.
 pub fn l1_scan_answer<'a>(
     &self,
     levels: &LayerExecution,
-    native: &crate::native::NativeEngine,
     module: SecurityCategory,
+    ran: bool,
     scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
     text: &str,
 ) -> L1Stage;
@@ -916,11 +916,13 @@ pub fn l1_scan_answer<'a>(
 L1's answer for `module` in one scan, shared by the Core scanner and
 Ark's gateway. With L1 switched off in `levels`, [`Self::l1_off`].
 Else the heuristic ([`Self::l1_stage`]) over the module's results in
-`scan` when one of its producers in `native` is enabled (also when it
-reported no result: the module is then clear of evidence), else
-[`Self::l1_off`]; then the module's L1 model ([`Self::l1_model`]) on
-an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1
-result of the scan: the model reads their rule findings, as in training.
+`scan` when the caller's L1 producers of the module ran (`ran`: Core's
+enabled native producers, see [`crate::native::NativeEngine::runs`],
+and a host's own L1 producers; also when they reported no result: the
+module is then clear of evidence), else [`Self::l1_off`]; then the
+module's L1 model ([`Self::l1_model`]) on an escalation
+([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+scan: the model reads their rule findings, as in training.
 
 ```rust
 pub fn l1_model_stage(
@@ -1665,7 +1667,7 @@ pub enum SecurityRequestState {
 }
 ```
 
-Lifecycle state for an accepted queued request until its terminal event is consumed.
+No public documentation is available yet.
 
 ```rust
 pub enum SecurityRequestCompletion {
@@ -2299,6 +2301,13 @@ pub fn producers(&self, category: SecurityCategory) -> &[NativeProducerSpec];
 
 Producers in the established category order, or empty for an unselected
 or non-native category.
+
+```rust
+pub fn runs(&self, category: SecurityCategory, gates: &ScanGateMatrix) -> bool;
+```
+
+Whether `gates` enable one of the producers of `category`: its L1
+pass runs ([`Self::scan_module`]).
 
 ```rust
 pub fn run_producer(

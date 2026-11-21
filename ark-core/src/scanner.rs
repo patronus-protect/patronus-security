@@ -385,8 +385,13 @@ impl Scanner {
                 .map(|layer| layer as &mut dyn L3Executor);
             #[cfg(not(feature = "wolf"))]
             let l3: Option<&mut dyn L3Executor> = None;
-            let stage =
-                cascade.l1_scan_answer(execution, &self.native, module, native.iter(), text);
+            let stage = cascade.l1_scan_answer(
+                execution,
+                module,
+                self.native.runs(module, execution.gates()),
+                native.iter(),
+                text,
+            );
             // A module no stage ran for (L1 off, nothing later) has no decision.
             decisions.extend(cascade.decide(
                 execution,

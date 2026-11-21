@@ -9,6 +9,10 @@ use crate::NtdbOperatingPoint;
 pub type RequestId = String;
 
 /// Lifecycle state for an accepted queued request until its terminal event is consumed.
+/// How often a scan under Ark Core's `ScanControl` checks the control while
+/// it waits; also the Python binding's period for the caller's control.
+pub const CONTROL_POLL: std::time::Duration = std::time::Duration::from_millis(10);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecurityRequestState {
     /// At least one planned scanner or promoted L3 job can still publish an event.

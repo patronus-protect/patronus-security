@@ -41,5 +41,5 @@ pub use types::{
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
     SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult,
+    SecurityRuntimeReadiness, SecurityScanResult, CONTROL_POLL,
 };

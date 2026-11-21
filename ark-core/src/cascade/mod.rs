@@ -361,27 +361,25 @@ impl Cascade {
     /// L1's answer for `module` in one scan, shared by the Core scanner and
     /// Ark's gateway. With L1 switched off in `levels`, [`Self::l1_off`].
     /// Else the heuristic ([`Self::l1_stage`]) over the module's results in
-    /// `scan` when one of its producers in `native` is enabled (also when it
-    /// reported no result: the module is then clear of evidence), else
-    /// [`Self::l1_off`]; then the module's L1 model ([`Self::l1_model`]) on
-    /// an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1
-    /// result of the scan: the model reads their rule findings, as in training.
+    /// `scan` when the caller's L1 producers of the module ran (`ran`: Core's
+    /// enabled native producers, see [`crate::native::NativeEngine::runs`],
+    /// and a host's own L1 producers; also when they reported no result: the
+    /// module is then clear of evidence), else [`Self::l1_off`]; then the
+    /// module's L1 model ([`Self::l1_model`]) on an escalation
+    /// ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
+    /// scan: the model reads their rule findings, as in training.
     pub fn l1_scan_answer<'a>(
         &self,
         levels: &LayerExecution,
-        native: &crate::native::NativeEngine,
         module: SecurityCategory,
+        ran: bool,
         scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
         text: &str,
     ) -> L1Stage {
         if !levels.allows_level(SecurityLevel::L1) {
             return self.l1_off(module);
         }
-        let heuristic = native
-            .producers(module)
-            .iter()
-            .any(|producer| producer.enabled(levels.gates()));
-        self.l1_answer(module, levels.gates().mode(module), heuristic, scan, text)
+        self.l1_answer(module, levels.gates().mode(module), ran, scan, text)
     }
 
     fn l1_answer<'a>(

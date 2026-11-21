@@ -3,7 +3,7 @@
 use patronus_ark::{
     DynamicPiiConfig, GatewayConfig, QueuedSecurityEvent, SecurityFailure,
     SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult, CONTROL_POLL,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel,
@@ -258,9 +258,6 @@ impl SecurityGateway {
         Ok(report)
     }
 }
-
-/// How often a scan checks the caller's `patronus_ark_core.ScanControl`.
-const CONTROL_POLL: Duration = Duration::from_millis(10);
 
 /// Run `scan` without the GIL under `control`, a `patronus_ark_core.ScanControl`
 /// of Ark Core's extension: a Core control of this extension follows it,

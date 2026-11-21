@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::diagnostics::PhaseMetricScope;
 use crate::dynamic_pii::{DynamicPiiSourceChunk, DynamicPiiTextRange};
@@ -34,9 +34,6 @@ pub(super) struct QueueWork {
     #[cfg(feature = "test-util")]
     delay_ms: Option<u64>,
 }
-
-/// How often a scan under a [`ScanControl`] checks it while it waits.
-const CONTROL_POLL: Duration = Duration::from_millis(10);
 
 #[derive(Default)]
 struct EnqueueExecutionOptions {
@@ -648,6 +645,9 @@ impl SecurityGateway {
         request_id: Option<&str>,
         timeout: Option<Duration>,
     ) -> Option<QueuedSecurityEvent> {
+        // One deadline for the whole wait: notifications for other requests
+        // do not restart it.
+        let deadline = timeout.map(|timeout| Instant::now() + timeout);
         let mut registry = self
             .requests
             .state
@@ -689,17 +689,17 @@ impl SecurityGateway {
                 }
             }
 
-            registry = match timeout {
-                Some(timeout) => {
-                    let (guard, wait_result) = self
-                        .requests
-                        .available
-                        .wait_timeout(registry, timeout)
-                        .expect("request registry mutex poisoned");
-                    if wait_result.timed_out() {
+            registry = match deadline {
+                Some(deadline) => {
+                    let left = deadline.saturating_duration_since(Instant::now());
+                    if left.is_zero() {
                         return None;
                     }
-                    guard
+                    self.requests
+                        .available
+                        .wait_timeout(registry, left)
+                        .expect("request registry mutex poisoned")
+                        .0
                 }
                 None => self
                     .requests
@@ -780,8 +780,8 @@ impl SecurityGateway {
     ) -> Result<ScanReport<SecurityScanResult>, ScanError> {
         let mut results = Vec::new();
         loop {
-            let event =
-                self.consume_matching_event(Some(&request_id), control.map(|_| CONTROL_POLL));
+            let event = self
+                .consume_matching_event(Some(&request_id), control.map(|_| crate::CONTROL_POLL));
             if let Some(Err(error)) = control.map(ScanControl::check) {
                 self.abandon_request(&request_id);
                 return Err(error);
@@ -1490,16 +1490,18 @@ pub(super) fn l1_undecided_inputs(
     let mut undecided = Vec::new();
     for input in inputs {
         let module = input.category;
-        let stage = cascade.l1_scan_answer(
-            execution,
-            native,
-            module,
-            l1_results.iter().map(|result| &result.native),
-            &input.text,
-        );
         let mut has_result = l1_results
             .iter()
             .any(|result| result.category == module.as_str());
+        // L1 ran for the module when Core's native producers did or another
+        // L1 producer (Ark's shell pipeline, an external L1 detector) reported.
+        let stage = cascade.l1_scan_answer(
+            execution,
+            module,
+            has_result || native.runs(module, execution.gates()),
+            l1_results.iter().map(|result| &result.native),
+            &input.text,
+        );
         if !l1_failed && !has_result && !stage.layers().is_empty() {
             l1_results.push(l1_decision_result(module, stage.layers(), stage.score));
             has_result = true;
@@ -1886,6 +1888,78 @@ mod tests {
                 None
             ]
         );
+    }
+
+    #[test]
+    fn an_l1_result_of_a_category_without_native_producers_counts_as_l1() {
+        // `tool_class` has no Core producer; an external L1 detector's result
+        // is its L1 stage, which decides it when no later layer runs.
+        let module = SecurityCategory::ToolClass;
+        let mut results = vec![super::super::scan_result(
+            module,
+            "external:test",
+            crate::EvaluationResult {
+                class_name: "safe".to_string(),
+                confidence: 0.9,
+                level: "L1".to_string(),
+            },
+            Vec::new(),
+        )];
+        let undecided = l1_undecided_inputs(
+            &NativeEngine::new(&[module]),
+            &[ExternalL1Input::new(module, "x")],
+            &mut results,
+            false,
+            &ScanExecution::with_gates(
+                SecurityLevel::L1,
+                crate::ScanGateMatrix {
+                    cascade: Some(patronus_ark_core::cascade::Cascade::default()),
+                    ..crate::ScanGateMatrix::default()
+                },
+            ),
+            &serde_json::json!({}),
+            &[],
+        );
+        assert!(undecided.is_empty());
+        let decision = results[0].module_decision.as_ref().expect("decided at L1");
+        assert_eq!(
+            (decision.module, decision.decided_by),
+            (module, crate::Stage::Heuristic)
+        );
+    }
+
+    #[test]
+    fn a_timed_wait_ends_on_time_under_constant_notifications() {
+        let gateway = SecurityGateway::new(crate::GatewayConfig::new(
+            vec![SecurityCategory::Pii],
+            SecurityLevel::L1,
+        ))
+        .unwrap();
+        gateway
+            .requests
+            .state
+            .lock()
+            .unwrap()
+            .requests
+            .insert("rq-busy".to_string(), RequestState::running());
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let notifier = {
+            let (stop, requests) = (Arc::clone(&stop), Arc::clone(&gateway.requests));
+            thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    requests.available.notify_all();
+                    thread::sleep(Duration::from_millis(1));
+                }
+            })
+        };
+        let started = Instant::now();
+        assert!(gateway
+            .consume_matching_event(Some("rq-busy"), Some(Duration::from_millis(30)))
+            .is_none());
+        let waited = started.elapsed();
+        stop.store(true, Ordering::Relaxed);
+        notifier.join().unwrap();
+        assert!(waited < Duration::from_millis(500), "{waited:?}");
     }
 
     #[test]
