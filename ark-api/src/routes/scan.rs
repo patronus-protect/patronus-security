@@ -1,22 +1,23 @@
 use std::convert::Infallible;
 use std::time::Duration;
 
+use ark_distributed_protocol::{require_dynamic_pii_category, RequestScanConfig};
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use futures::StreamExt;
-use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent};
+use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, QueuedSecurityScanResult};
 use patronus_ark_core::{
-    cascade::ScanGateMatrix, cascade::SecurityLevel, require_dynamic_pii_category,
-    ChunkOverlapTokens, NtdbOperatingPoint, RequestScanConfig, SecurityCategory,
+    cascade::ScanGateMatrix, cascade::SecurityLevel, ChunkOverlapTokens, NtdbOperatingPoint,
+    SecurityCategory,
 };
 use serde_json::{json, Value};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use crate::auth::AuthenticatedKey;
-use crate::dto::{CompletionDto, QueuedScanResultDto};
+use crate::dto::CompletionDto;
 use crate::state::AppState;
 
 const MAX_SCAN_INPUTS: usize = 64;
@@ -251,7 +252,7 @@ pub async fn submit_scan(
 async fn wait_for_scan(
     state: &AppState,
     request_id: &str,
-) -> Result<(Vec<QueuedScanResultDto>, CompletionDto), String> {
+) -> Result<(Vec<QueuedSecurityScanResult>, CompletionDto), String> {
     let Some((buffered, mut receiver)) = state.subscribe(request_id) else {
         return Err("request event channel unavailable".to_string());
     };
@@ -266,7 +267,7 @@ async fn wait_for_scan(
                 .map_err(|error| format!("request event stream failed: {error}"))?,
         };
         match event {
-            QueuedSecurityEvent::Result(result) => results.push(result.into()),
+            QueuedSecurityEvent::Result(result) => results.push(result),
             QueuedSecurityEvent::Finished { completion, .. } => {
                 return Ok((results, completion.into()))
             }
@@ -371,11 +372,11 @@ fn to_sse_event(event: QueuedSecurityEvent) -> Event {
             .unwrap_or_else(|_| Event::default().event("progress")),
         QueuedSecurityEvent::Provisional(result) => Event::default()
             .event("provisional")
-            .json_data(QueuedScanResultDto::from(result))
+            .json_data(result)
             .unwrap_or_else(|_| Event::default().event("provisional")),
         QueuedSecurityEvent::Result(result) => Event::default()
             .event("result")
-            .json_data(QueuedScanResultDto::from(result))
+            .json_data(result)
             .unwrap_or_else(|_| Event::default().event("result")),
         QueuedSecurityEvent::Finished {
             request_id,
@@ -662,9 +663,8 @@ mod tests {
         let defaults = resolve_request_config(&config, &key, None).unwrap();
         assert!(!defaults
             .gates
-            .native
             .allows_rule("ark.injection.override.discard_prior"));
-        assert!(defaults.gates.native.allows_rule("pii_email"));
+        assert!(defaults.gates.allows_rule("pii_email"));
 
         let request: RequestScanConfig = serde_json::from_value(json!({
             "categories": ["injection"],
@@ -680,11 +680,9 @@ mod tests {
 
         assert!(overridden
             .gates
-            .native
             .allows_rule("ark.injection.override.discard_prior"));
         assert!(!overridden
             .gates
-            .native
             .allows_rule("ark.injection.exfil.external_sink"));
     }
 

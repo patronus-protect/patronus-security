@@ -47,13 +47,13 @@ pub(super) fn classifier_model_configs_for_category(
 ) -> Vec<NtdbL2ModelConfig> {
     match category {
         SecurityCategory::Injection => {
-            if execution.gates().native.allows_model("injection")
-                && execution.gates().native.allows_model("wolf-defender-small")
+            if execution.gates().allows_model("injection")
+                && execution.gates().allows_model(specs::WOLF_PIPELINE_MODEL)
             {
                 vec![NtdbL2ModelConfig {
                     category,
                     model_id: "injection",
-                    public_model: "wolf-defender-small",
+                    public_model: specs::WOLF_PIPELINE_MODEL,
                     package: specs::NTDB_INJECTION.spec,
                     has_l3: true,
                 }]
@@ -62,10 +62,9 @@ pub(super) fn classifier_model_configs_for_category(
             }
         }
         SecurityCategory::SensitiveDocument => {
-            if execution.gates().native.allows_model("sensitive_document")
+            if execution.gates().allows_model("sensitive_document")
                 && execution
                     .gates()
-                    .native
                     .allows_model("orca-sonar-document-classifier")
             {
                 vec![NtdbL2ModelConfig {
@@ -98,12 +97,9 @@ pub(super) fn classifier_model_configs_for_category(
         ]
         .into_iter()
         .filter(|package| {
-            execution.gates().native.allows_model("tool_tags")
-                && execution
-                    .gates()
-                    .native
-                    .allows_model("unified-v3-tool-tags")
-                && execution.gates().native.allows_model(package.id)
+            execution.gates().allows_model("tool_tags")
+                && execution.gates().allows_model("unified-v3-tool-tags")
+                && execution.gates().allows_model(package.id)
         })
         .map(|package| NtdbL2ModelConfig {
             category,
@@ -122,7 +118,7 @@ pub(super) fn classifier_model_configs_for_category(
         // The unified threat head; its labels map onto the attack classes in
         // `patronus_ark_core::attack_classes`.
         SecurityCategory::UnsafeAction => {
-            if execution.gates().native.allows_model("unified-v3-threat") {
+            if execution.gates().allows_model("unified-v3-threat") {
                 vec![NtdbL2ModelConfig {
                     category,
                     model_id: "threat",
@@ -156,8 +152,8 @@ fn model_config(
     public_model: &'static str,
     package: ModelSpec,
 ) -> Vec<NtdbL2ModelConfig> {
-    if !execution.gates().native.allows_model(category.as_str())
-        || !execution.gates().native.allows_model(public_model)
+    if !execution.gates().allows_model(category.as_str())
+        || !execution.gates().allows_model(public_model)
     {
         return Vec::new();
     }
@@ -339,7 +335,6 @@ pub fn ntdb_l2_scan_result(
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution
                 .gates()
-                .native
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
     let (result, layers) =
         ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3, &source_pipeline);

@@ -19,7 +19,7 @@ Args:
         L3 worker policy `l3_policy` and the opt-in `cascade`
         (`{"modules": {...}}`: L1 early exit with per-category
         `detect_threshold`/`clear_threshold`; results then carry
-        `decided_by`)), `cache_root` (the model cache root; default the
+        `module_decision`)), `cache_root` (the model cache root; default the
         platform cache directory plus `patronus_ark`), `wolf` (the
         dedicated injection L3: `model` `base`, `small` (default) or
         `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
@@ -28,8 +28,9 @@ Args:
         retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
         the `shell_command` verdict).
 
-        Ark keys: `download` (`missing`, the default here, lets `warmup()`
-        download missing model assets; `never`), `download_categories`,
+        Ark keys: `download` (`never`, the default as in Rust and Ark
+        Core; `missing` lets `warmup()` download missing model assets),
+        `download_categories`,
         `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
         `ntdb_decision_threshold_point` (`best_f1` (default),
         `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
@@ -42,37 +43,13 @@ Args:
         `entry_ttl_seconds`, `memory_max_entries`, `memory_max_bytes`;
         without a storage location the cache stays in memory).
 
-### `wolf_options() -> dict[str, int]`
-
-Effective dedicated-Wolf windows; returned as an independent copy.
-
-### `wolf_model() -> str`
-
-Dedicated-Wolf model: `base`, `small` or `edge`.
-
-### `wolf_precision() -> str`
-
-Requested dedicated-Wolf ONNX export, `auto` unless set explicitly.
-
-### `categories() -> list[str]`
-
-Categories configured for `scan_all`.
-
-### `max_level() -> str`
-
-Maximum scanner level configured for this gateway.
-
-### `l3_strategy() -> str`
-
-Active global L3 model strategy.
-
 ### `warmup()`
 
 Initialize model-backed scanners and download allowed missing assets.
 
 Native scanners are available without calling `warmup()`. Model-backed
 L2/L3 scanners are initialized only when their required assets are
-already cached or can be downloaded according to the download settings.
+already cached or, with `download: "missing"`, can be downloaded.
 L3 ONNX sessions are lazy-loaded on first L3 inference, not during
 `warmup()`.
 
@@ -105,54 +82,6 @@ file is preserved.
 ### `scan_all(text: str) -> list[dict]`
 
 Scan text with every category configured on this gateway.
-
-### `set_execution_gates(execution_gates: ScanGates | None)`
-
-Replace the gate matrix used by subsequent scan calls.
-
-Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
-uses the shared gate schema (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`,
-`dlp_mode`, the attack-class `<category>_mode` keys, `explain`, `conditional`,
-`l3_policy`); model keys match result
-`model` values such as `native:mcp_runtime_risk`.
-
-### `set_onnx_batch_mode(mode: str)`
-
-Replace the ONNX batch mode for subsequent batch calls.
-
-`lazy_batches` preserves the per-text ONNX execution path.
-`tensor_batch` executes L3 fallbacks as one ONNX tensor batch when
-pipelines can batch their fallback texts.
-
-### `set_execution_backend(backend: str)`
-
-Replace execution backend and apply its default L3 mode.
-
-`auto` and `cpu` default to lazy L3 execution. `gpu`, `coreml`,
-`cuda`, `directml`, and `tensorrt` default to tensor batches. Call
-`set_onnx_batch_mode` afterwards to override.
-
-### `set_ntdb_operating_point(point: str)`
-
-Select the calibrated NTDB final-decision threshold set for subsequent scans.
-
-### `set_l3_strategy(strategy: str)`
-
-Select `dedicated` per-pipeline L3 models or the shared `multi` model.
-
-### `set_dynamic_pii_config(config: dict)`
-
-Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`.
-
-### `set_shell_command_policy_config(policy_dirs: list[str] | None = None, allowlist: dict[str, str] | None = None)`
-
-Replace the user policies and allowlist of the `shell_command` verdict.
-
-`policy_dirs` are directories of user `*.cedar` policies, read in file-name
-order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
-Ark Core's `shell` config and the Ark API's `pipeline.shell`. A loaded
-bundle applies the configuration at once, otherwise `warmup()` does. A refused
-configuration raises `ValueError` and changes nothing.
 
 ### `scan_category(category: str, text: str) -> list[dict]`
 

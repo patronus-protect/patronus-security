@@ -1068,6 +1068,68 @@ mod l3_worker_streaming {
         }));
     }
 
+    /// The failure that ended `request_id` (its only terminal event).
+    fn terminal_failures(
+        scanner: &SecurityGateway,
+        request_id: &str,
+    ) -> Vec<patronus_ark::SecurityFailure> {
+        loop {
+            match scanner
+                .consume_next_event(Some(Duration::from_secs(10)))
+                .expect("the request must end")
+            {
+                QueuedSecurityEvent::Finished {
+                    request_id: finished,
+                    completion,
+                } => {
+                    assert_eq!(finished, request_id);
+                    let SecurityRequestCompletion::Failed { failures } = completion else {
+                        panic!("the request must fail, got {completion:?}");
+                    };
+                    return failures;
+                }
+                QueuedSecurityEvent::Result(queued) => {
+                    panic!("no result may be published: {:?}", queued.result.category)
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn input_and_finding_limits_fail_the_request_like_core() {
+        let config = |max_input_bytes, max_findings| patronus_ark::GatewayConfig {
+            core: patronus_ark_core::ScannerConfig {
+                categories: vec![SecurityCategory::Pii],
+                max_level: SecurityLevel::L1,
+                max_input_bytes: Some(max_input_bytes),
+                max_findings: Some(max_findings),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let text = "mail a@example.com and b@example.com";
+
+        let scanner = SecurityGateway::new(config(8, 10_000)).unwrap();
+        let failures = terminal_failures(&scanner, &scanner.enqueue(text, None));
+        assert!(failures.iter().any(|failure| {
+            failure.kind == patronus_ark::SecurityFailureKind::LimitExceeded
+                && !failure.retryable
+                && failure.message.contains("max_input_bytes 8")
+        }));
+        assert!(scanner.scan_all(text).is_empty(), "nothing is scanned");
+
+        let scanner = SecurityGateway::new(config(1024, 1)).unwrap();
+        let failures = terminal_failures(&scanner, &scanner.enqueue(text, None));
+        assert!(failures.iter().any(|failure| {
+            failure.kind == patronus_ark::SecurityFailureKind::LimitExceeded
+                && failure.message.contains("exceed max_findings 1")
+        }));
+
+        let scanner = SecurityGateway::new(config(1024, 2)).unwrap();
+        assert!(!scanner.scan_all(text).is_empty(), "within both limits");
+    }
+
     #[test]
     fn enqueue_only_submits_work_to_the_gateway_worker() {
         let scanner = SecurityGateway::new(patronus_ark::GatewayConfig::new(
@@ -1101,10 +1163,7 @@ mod l3_worker_streaming {
         .unwrap();
 
         let gates = patronus_ark_core::cascade::ScanGateMatrix {
-            native: patronus_ark_core::native::NativeGates {
-                explain: true,
-                ..Default::default()
-            },
+            explain: true,
             ..Default::default()
         };
         scanner.set_execution_gates(gates);

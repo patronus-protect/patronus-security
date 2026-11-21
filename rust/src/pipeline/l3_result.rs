@@ -59,14 +59,33 @@ pub fn has_l3_pending(result: &SecurityScanResult) -> bool {
         .any(|layer| layer.level == "L3" && layer.layer_type == "l3_pending")
 }
 
-/// Marks a result published as its module's final answer with the stage of
-/// its layer: an L2 fallback after a skipped or failed L3 stays `l2`.
+/// Whether `class_name` is a benign answer (`safe` or `benign`).
+pub(crate) fn is_benign_class(class_name: &str) -> bool {
+    matches!(class_name, "safe" | "benign")
+}
+
+/// Marks a result published as its module's final answer with Core's
+/// decision of the stage of its layer: an L2 fallback after a skipped or
+/// failed L3 stays `l2`. A benign class is `clear`, any other `detected`;
+/// the score is the result's confidence.
 pub(crate) fn mark_decided(result: &mut SecurityScanResult) {
-    result.decided_by = result
-        .level
-        .parse::<crate::SecurityLevel>()
-        .ok()
-        .map(crate::Stage::from);
+    let (Ok(module), Ok(level)) = (
+        result.category.parse::<crate::SecurityCategory>(),
+        result.level.parse::<crate::SecurityLevel>(),
+    ) else {
+        return;
+    };
+    result.module_decision = Some(crate::ModuleDecision {
+        module,
+        outcome: if is_benign_class(&result.class_name) {
+            crate::StageOutcome::Clear
+        } else {
+            crate::StageOutcome::Detected
+        },
+        decided_by: crate::Stage::from(level),
+        score: result.confidence,
+        layers: Vec::new(),
+    });
 }
 
 pub fn degraded_timeout_result(
@@ -245,8 +264,7 @@ mod tests {
                 }),
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
 
         let degraded = degraded_timeout_result(result, 100.0, 50, 0.75);

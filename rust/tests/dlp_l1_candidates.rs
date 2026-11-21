@@ -23,7 +23,7 @@ fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     .unwrap();
     scanner.warmup().unwrap();
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::all_enabled();
-    gates.native.explain = explain;
+    gates.explain = explain;
     scanner.set_execution_gates(gates);
     scanner
         .scan_category(SecurityCategory::Dlp, text)

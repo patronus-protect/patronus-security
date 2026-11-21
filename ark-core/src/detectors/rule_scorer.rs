@@ -7,7 +7,7 @@
 //! the caller, loading, the golden check and scoring live here.
 //!
 //! A scorer's `acceptance_threshold` is the default of its acceptance cut;
-//! hosts may override it ([`crate::native::NativeGates`]).
+//! hosts may override it ([`crate::cascade::ScanGateMatrix`]).
 
 use std::collections::HashSet;
 

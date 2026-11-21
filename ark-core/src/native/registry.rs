@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use super::{NativeGates, ScoreMode};
+use super::ScoreMode;
+use crate::cascade::ScanGateMatrix;
 use crate::detectors::NativeDetector;
 use crate::{
     detectors::{dlp, injection::*, mcp, pii, threat, NativeDetection},
@@ -10,8 +11,8 @@ use std::sync::{Arc, LazyLock, OnceLock};
 
 const INJECTION_L1: &str = crate::injection_l1::MODEL;
 
-type Detect = Box<dyn Fn(&NativeText<'_>, &NativeGates) -> NativeDetection + Send + Sync>;
-type Prepare = Box<dyn Fn(&NativeGates) + Send + Sync>;
+type Detect = Box<dyn Fn(&NativeText<'_>, &ScanGateMatrix) -> NativeDetection + Send + Sync>;
+type Prepare = Box<dyn Fn(&ScanGateMatrix) + Send + Sync>;
 
 /// An opaque producer and its shared outer gates. Pipeline state lives with the spec.
 pub struct NativeProducerSpec {
@@ -41,21 +42,21 @@ impl NativeProducerSpec {
     }
 
     /// Parent/model/required-rule gates, independent of host level or conditional gates.
-    pub fn enabled(&self, gates: &NativeGates) -> bool {
+    pub fn enabled(&self, gates: &ScanGateMatrix) -> bool {
         self.parent.is_none_or(|id| gates.allows_model(id))
             && gates.allows_model(self.id)
             && self.rule.is_none_or(|id| gates.allows_rule(id))
     }
 
     /// Builds what a scan under `gates` runs; call it for an enabled producer.
-    pub(super) fn prepare(&self, gates: &NativeGates) {
+    pub(super) fn prepare(&self, gates: &ScanGateMatrix) {
         (self.prepare)(gates);
     }
 
     /// PII and DLP apply their mode inside the pipeline (per match before
     /// overlap resolution, per text view before the decoded merge); the
     /// attack classes share the floor of their `<category>_mode` here.
-    pub(super) fn detect(&self, text: &NativeText<'_>, gates: &NativeGates) -> NativeDetection {
+    pub(super) fn detect(&self, text: &NativeText<'_>, gates: &ScanGateMatrix) -> NativeDetection {
         let detection = (self.detect)(text, gates);
         match self.category {
             SecurityCategory::Pii | SecurityCategory::Dlp => detection,

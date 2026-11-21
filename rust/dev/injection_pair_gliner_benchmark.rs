@@ -11,7 +11,6 @@ use std::{
     time::Instant,
 };
 
-const WOLF_MODEL: &str = "wolf-defender-small";
 const WARMUP_SUFFIX: &str = " [benchmark warmup only]";
 const L3_CHUNK_TOKENS: usize = 256;
 const L3_OVERLAP_TOKENS: usize = 32;
@@ -239,7 +238,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn final_wolf_result(results: &[SecurityScanResult]) -> Option<&SecurityScanResult> {
     results
         .iter()
-        .filter(|result| result.model == WOLF_MODEL)
+        .filter(|result| result.model == patronus_ark::assets::WOLF_PIPELINE_MODEL)
         .max_by_key(|result| if result.level == "L3" { 1 } else { 0 })
 }
 

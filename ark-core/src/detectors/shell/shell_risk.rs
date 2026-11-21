@@ -248,7 +248,7 @@ impl ShellRiskPipeline {
     /// earlier commands of the same session, kept by the caller) reach the
     /// policies through the facts; the model sees the text only. Policies
     /// whose id `allows_rule` refuses do not fire: Cat's policy ids are L1
-    /// rule ids, gated like every other rule ([`NativeGates::allows_rule`](crate::native::NativeGates::allows_rule)).
+    /// rule ids, gated like every other rule ([`ScanGateMatrix::allows_rule`](crate::cascade::ScanGateMatrix::allows_rule)).
     pub fn verdict(
         &self,
         text: &str,

@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut l3 = OnnxTextClassifier::from_dir_with_paths(
         &args[2],
         vec!["benign".to_string(), "attack".to_string()],
-        "wolf-defender-small",
+        patronus_ark::assets::WOLF_PIPELINE_MODEL,
         &["model.ort", "model.onnx"],
         "tokenizer.json",
         256,

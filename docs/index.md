@@ -14,7 +14,9 @@ and only promoted model-backed cases reach a transformer model.
 ```python
 from patronus_ark import SecurityGateway
 
-scanner = SecurityGateway({"categories": ["injection", "dlp", "pii"], "max_level": "l2"})
+scanner = SecurityGateway(
+    {"categories": ["injection", "dlp", "pii"], "max_level": "l2", "download": "missing"}
+)
 scanner.warmup()
 
 # Enqueue work and drain results from the shared queue. In a real app the consume

@@ -209,8 +209,8 @@ Guide: [Check shell commands](https://patronus-protect.github.io/patronus-securi
 
 ## Limits, timeouts and cancellation
 
-- `max_input_bytes` (default 1 MiB) and `max_findings` (default 10,000 spans): exceeding either
-  is an error, never a truncated report.
+- `max_input_bytes` and `max_findings` (evidence spans) are unset by default (no limit); when
+  set, exceeding either is an error, never a truncated report.
 - `scan_with_control(text, categories, &control)` runs under a `ScanControl`:
 
   ```rust
@@ -228,7 +228,7 @@ Guide: [Check shell commands](https://patronus-protect.github.io/patronus-securi
   of scanners. `shell_verdict` takes `&self`.
 - No threads per call: ONNX deadlines share one process-wide timer thread.
 - Hosts with their own levels and queues (like full Ark) can drive the detectors through
-  `native::NativeEngine` with a `NativeGates` policy; it returns raw detections and leaves error
+  `native::NativeEngine` with the `ScanGateMatrix` gates; it returns raw detections and leaves error
   policy and aggregation to the host.
 
 ## Development

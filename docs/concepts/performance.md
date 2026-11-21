@@ -95,10 +95,9 @@ chunks and known entity spans the same way. The cache is memory-only by default;
 
 ## Execution backend and threading
 
-The ONNX execution provider is configured via
-[`set_execution_backend`](../reference/configuration.md#execution-backend) (CPU, CoreML, CUDA, …).
-Threading and spin-wait behavior are configured with `OnnxRuntimeOptions` through
-`set_onnx_runtime_options`. Defaults target constrained CPU execution. See the
+The ONNX execution provider is configured with the
+[`execution_backend`](../reference/configuration.md#execution-backend) key (CPU, CoreML, CUDA, …).
+Threading and spin-wait behavior are configured with the `onnx_runtime` key. Defaults target constrained CPU execution. See the
 [configuration reference](../reference/configuration.md).
 
 ## Measuring on your hardware

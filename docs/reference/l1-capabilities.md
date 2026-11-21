@@ -642,7 +642,8 @@ Every rule above can be switched on or off on its own with the `rules` execution
 Python:
 
 ```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["pii", "dlp"],
     "l1": True, "l2": False, "l3": False,
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
     "rules": {"pii_email": False, "dlp_password_assignment": False},

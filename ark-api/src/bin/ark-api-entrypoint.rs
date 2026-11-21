@@ -70,7 +70,7 @@ struct Args {
 struct RawConfig {
     server: ServerConfig,
     auth: AuthConfig,
-    gateway: GatewayConfig,
+    gateway: WorkerFleetConfig,
 }
 
 #[derive(Deserialize)]
@@ -88,8 +88,9 @@ struct ApiKey {
     key_hash: String,
 }
 
+/// The `gateway` section: the workers behind the entrypoint and its Redis queue.
 #[derive(Clone, Deserialize)]
-struct GatewayConfig {
+struct WorkerFleetConfig {
     redis_url: String,
     worker_token: String,
     workers: Vec<WorkerConfig>,

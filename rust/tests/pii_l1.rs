@@ -16,10 +16,7 @@ fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     ))
     .unwrap();
     let gates = patronus_ark_core::cascade::ScanGateMatrix {
-        native: patronus_ark_core::native::NativeGates {
-            explain,
-            ..Default::default()
-        },
+        explain,
         ..Default::default()
     };
     scanner.set_execution_gates(gates);

@@ -19,6 +19,7 @@ scanner = SecurityGateway(
         "categories": ["injection", "sensitive_document", "unsafe_action", "routing"],
         "max_level": "l3",
         "l3_strategy": "multi",
+        "download": "missing",
     }
 )
 scanner.warmup()

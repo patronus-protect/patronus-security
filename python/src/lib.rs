@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    DynamicPiiConfig, GatewayConfig, L3Strategy, OnnxBatchMode, QueuedSecurityEvent,
-    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevelReadiness,
-    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    DynamicPiiConfig, GatewayConfig, QueuedSecurityEvent, SecurityFailure,
+    SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
 use patronus_ark_core::{
-    cascade::ScanGateMatrix, cascade::SecurityLevel, detectors::shell::ShellPolicyConfig,
+    cascade::ScanGateMatrix, cascade::SecurityLevel,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
-    ExecutionBackend, NtdbOperatingPoint, SecurityCategory,
+    NtdbOperatingPoint, SecurityCategory,
 };
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -35,19 +33,16 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     /// `config_json`: the gateway config (`patronus_ark::GatewayConfig`),
-    /// Ark Core's `Scanner` config plus Ark's keys. Unset `max_level` and
-    /// `download` take the Python defaults.
+    /// Ark Core's `Scanner` config plus Ark's keys. An unset `max_level`
+    /// takes the Python default.
     #[new]
     fn new(config_json: &str) -> PyResult<Self> {
         let value_error = |error: String| pyo3::exceptions::PyValueError::new_err(error);
         let mut config: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(config_json).map_err(|error| value_error(error.to_string()))?;
-        for (key, default) in [
-            ("max_level", patronus_ark::defaults::PYTHON_MAX_LEVEL),
-            ("download", patronus_ark::defaults::PYTHON_DOWNLOAD),
-        ] {
-            config.entry(key).or_insert_with(|| default.into());
-        }
+        config
+            .entry("max_level")
+            .or_insert_with(|| patronus_ark::defaults::PYTHON_MAX_LEVEL.into());
         let config: GatewayConfig = serde_json::from_value(config.into())
             .map_err(|error| value_error(error.to_string()))?;
         // `dynamic_pii` runs only on L3; below it every scan would silently return nothing.
@@ -104,48 +99,12 @@ impl SecurityGateway {
         Ok(())
     }
 
-    fn set_onnx_batch_mode(&mut self, mode: &str) -> PyResult<()> {
-        self.inner.set_onnx_batch_mode(parse_onnx_batch_mode(mode)?);
-        Ok(())
-    }
-
-    fn set_execution_backend(&mut self, backend: &str) -> PyResult<()> {
-        self.inner
-            .set_execution_backend(parse_execution_backend(backend)?);
-        Ok(())
-    }
-
-    fn set_ntdb_operating_point(&mut self, point: &str) -> PyResult<()> {
-        self.inner
-            .set_ntdb_decision_threshold_point(parse_ntdb_operating_point(point)?);
-        Ok(())
-    }
-
-    fn set_l3_strategy(&mut self, strategy: &str) -> PyResult<()> {
-        self.inner.set_l3_strategy(parse_l3_strategy(strategy)?);
-        Ok(())
-    }
-
     fn set_dynamic_pii_config(&self, config_json: &str) -> PyResult<()> {
         let config = parse_dynamic_pii_config_json(Some(config_json))?
             .expect("dynamic-pii config JSON was provided");
         self.inner
             .set_dynamic_pii_config(config)
             .map_err(pyo3::exceptions::PyValueError::new_err)
-    }
-
-    #[pyo3(signature = (policy_dirs=None, allowlist=None))]
-    fn set_shell_command_policy_config(
-        &self,
-        policy_dirs: Option<Vec<PathBuf>>,
-        allowlist: Option<std::collections::BTreeMap<String, String>>,
-    ) -> PyResult<()> {
-        ShellPolicyConfig::load(
-            &policy_dirs.unwrap_or_default(),
-            &allowlist.unwrap_or_default(),
-        )
-        .and_then(|config| self.inner.set_shell_command_policy_config(config))
-        .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     fn scan_category(&self, py: Python<'_>, category: &str, text: &str) -> PyResult<Vec<PyObject>> {
@@ -263,29 +222,6 @@ impl SecurityGateway {
     }
 
     #[getter]
-    fn wolf_options(&self) -> std::collections::HashMap<&'static str, usize> {
-        let options = self.inner.distributed_execution().wolf().execution;
-        [
-            // ScanExecution always holds both window sizes.
-            ("window_tokens", options.window_tokens.unwrap_or_default()),
-            ("overlap_tokens", options.overlap_tokens.unwrap_or_default()),
-            ("batch_size", options.batch_size),
-        ]
-        .into_iter()
-        .collect()
-    }
-
-    #[getter]
-    fn wolf_model(&self) -> &'static str {
-        self.inner.distributed_execution().wolf().model.as_str()
-    }
-
-    #[getter]
-    fn wolf_precision(&self) -> &'static str {
-        self.inner.distributed_execution().wolf().precision.as_str()
-    }
-
-    #[getter]
     fn categories(&self) -> Vec<&'static str> {
         self.inner
             .categories()
@@ -297,11 +233,6 @@ impl SecurityGateway {
     #[getter]
     fn max_level(&self) -> &'static str {
         self.inner.max_level().as_str()
-    }
-
-    #[getter]
-    fn l3_strategy(&self) -> String {
-        self.inner.l3_strategy().as_str().to_string()
     }
 }
 
@@ -316,27 +247,9 @@ fn parse_categories(categories: Vec<String>) -> PyResult<Vec<SecurityCategory>> 
         .collect()
 }
 
-fn parse_onnx_batch_mode(value: &str) -> PyResult<OnnxBatchMode> {
-    value
-        .parse::<OnnxBatchMode>()
-        .map_err(pyo3::exceptions::PyValueError::new_err)
-}
-
-fn parse_execution_backend(value: &str) -> PyResult<ExecutionBackend> {
-    value
-        .parse::<ExecutionBackend>()
-        .map_err(pyo3::exceptions::PyValueError::new_err)
-}
-
 fn parse_ntdb_operating_point(value: &str) -> PyResult<NtdbOperatingPoint> {
     value
         .parse::<NtdbOperatingPoint>()
-        .map_err(pyo3::exceptions::PyValueError::new_err)
-}
-
-fn parse_l3_strategy(value: &str) -> PyResult<L3Strategy> {
-    value
-        .parse::<L3Strategy>()
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
@@ -396,32 +309,17 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
 }
 
 /// The public result dicts, from the results' own `Serialize`: Core's result
-/// fields, flat, plus `decided_by` and `l1_outcome` when set
+/// fields, flat (`decision` only when set), plus `module_decision` when set
 /// (`docs/reference/result-schema.md`).
 fn results_to_py(py: Python<'_>, results: Vec<SecurityScanResult>) -> PyResult<Vec<PyObject>> {
     let mut strings = PyStrings::new(py);
     let dicts = results
         .iter()
-        .map(|result| result_dict(&mut strings, result).map(Bound::unbind))
+        .map(|result| py_serde::to_py(&mut strings, result).map(Bound::unbind))
         .collect::<PyResult<Vec<_>>>()?;
     let matched_rules = results.iter().map(matched_rules).sum();
     release(results, matched_rules);
     Ok(dicts)
-}
-
-/// One result dict; Python omits `decision` while it is unset.
-fn result_dict<'py, T: serde::Serialize>(
-    strings: &mut PyStrings<'py>,
-    result: &T,
-) -> PyResult<Bound<'py, PyAny>> {
-    let dict = py_serde::to_py(strings, result)?.downcast_into::<PyDict>()?;
-    if dict
-        .get_item("decision")?
-        .is_some_and(|decision| decision.is_none())
-    {
-        dict.del_item("decision")?;
-    }
-    Ok(dict.into_any())
 }
 
 fn matched_rules(result: &SecurityScanResult) -> usize {
@@ -600,7 +498,7 @@ fn security_event(py: Python<'_>, event: QueuedSecurityEvent) -> PyResult<PySecu
             });
         }
     };
-    let result = result_dict(&mut PyStrings::new(py), &queued)?;
+    let result = py_serde::to_py(&mut PyStrings::new(py), &queued)?;
     let matched_rules = matched_rules(&queued.result);
     let request_id = queued.request_id.clone();
     release(queued, matched_rules);

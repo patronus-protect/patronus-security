@@ -139,10 +139,10 @@ dependencies = [
 name = "ark-coordinator"
 version = "0.1.17"
 dependencies = [
+ "ark-distributed-protocol",
  "axum",
  "clap",
  "futures",
- "patronus-ark-core",
  "redis",
  "reqwest",
  "serde",
@@ -162,6 +162,7 @@ dependencies = [
 name = "ark-distributed-protocol"
 version = "0.1.17"
 dependencies = [
+ "patronus-ark-core",
  "serde",
  "serde_json",
  "sha2",

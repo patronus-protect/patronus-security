@@ -148,12 +148,11 @@ def build_gateway(pii_mode: str = DEFAULT_PII_MODE, rules: dict[str, bool] | Non
     from patronus_ark import SecurityGateway
 
     _check_pii_mode(pii_mode)
-    gateway = SecurityGateway({"categories": [CATEGORY], "max_level": MAX_LEVEL, "download": "never"})
     gates: dict[str, Any] = {**({"pii_mode": pii_mode} if pii_mode != DEFAULT_PII_MODE else {}),
                              **({"rules": rules} if rules else {})}
-    if gates:
-        gateway.set_execution_gates(gates)
-    return gateway
+    return SecurityGateway(
+        {"categories": [CATEGORY], "max_level": MAX_LEVEL, "download": "never", **gates}
+    )
 
 
 def build_info() -> dict[str, str]:

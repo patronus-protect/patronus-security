@@ -16,9 +16,9 @@ use crate::pipeline::{
 use crate::LayerResult;
 use crate::{
     assets::DYNAMIC_PII_ASSET, ChunkOverlapTokens, DynamicPiiConfig, ExternalL1Input, GateResult,
-    QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution, ScanGateMatrix,
-    SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityRequestState, SecurityScanResult, StageOutcome,
+    ModuleDecision, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
+    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
+    SecurityLevel, SecurityRequestState, SecurityScanResult, StageOutcome,
 };
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
@@ -266,6 +266,24 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned")
             .requests
             .insert(request_id.clone(), RequestState::running());
+        // Like Ark Core, an input above a set `max_input_bytes` is refused unscanned.
+        if let Some(limit) = self
+            .max_input_bytes
+            .filter(|&limit| inputs.iter().any(|input| input.text.len() > limit))
+        {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
+                    stage: SecurityFailureStage::Queue,
+                    level: None,
+                    detector_id: None,
+                    kind: SecurityFailureKind::LimitExceeded,
+                    retryable: false,
+                    message: format!("input exceeds max_input_bytes {limit}"),
+                },
+            );
+            return request_id;
+        }
         let enqueue_result = self.queue_sender().try_send(QueueWork {
             request_id: request_id.clone(),
             inputs,
@@ -285,25 +303,17 @@ impl SecurityGateway {
                     "gateway queue worker stopped",
                 ),
             };
-            let mut registry = self
-                .requests
-                .state
-                .lock()
-                .expect("request registry mutex poisoned");
-            if let Some(state) = registry.requests.get_mut(&request_id) {
-                state.failures.push(SecurityFailure {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
                     stage: SecurityFailureStage::Queue,
                     level: None,
                     detector_id: None,
                     kind,
                     retryable: true,
                     message: message.to_string(),
-                });
-            }
-            finish_request_if_ready(&mut registry, &request_id);
-            self.requests.available.notify_all();
-            drop(registry);
-            self.requests.cancel_finished_runs(&request_id);
+                },
+            );
         }
         request_id
     }
@@ -358,7 +368,7 @@ impl SecurityGateway {
         })) {
             Ok(results) => results,
             Err(_) => {
-                self.finish_scanner_panic(&request_id, "L1 scanner phase panicked");
+                self.fail_request(&request_id, scanner_panic("L1 scanner phase panicked"));
                 return;
             }
         };
@@ -367,6 +377,26 @@ impl SecurityGateway {
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
         );
         let (mut l1_results, l1_failures) = split_results(raw_l1);
+        // Like Ark Core, more evidence spans than a set `max_findings` fail
+        // the request instead of publishing a silently truncated report.
+        let findings = l1_results
+            .iter()
+            .map(|result| result.evidence_spans.len())
+            .sum::<usize>();
+        if let Some(limit) = self.max_findings.filter(|&limit| findings > limit) {
+            self.fail_request(
+                &request_id,
+                SecurityFailure {
+                    stage: SecurityFailureStage::Scanner,
+                    level: Some(SecurityLevel::L1),
+                    detector_id: None,
+                    kind: SecurityFailureKind::LimitExceeded,
+                    retryable: false,
+                    message: format!("{findings} findings exceed max_findings {limit}"),
+                },
+            );
+            return;
+        }
         metrics.checkpoint(
             "after_split_l1",
             format!(
@@ -405,7 +435,7 @@ impl SecurityGateway {
         })) {
             Ok(results) => results,
             Err(_) => {
-                self.finish_scanner_panic(&request_id, "L2 scanner phase panicked");
+                self.fail_request(&request_id, scanner_panic("L2 scanner phase panicked"));
                 return;
             }
         };
@@ -537,21 +567,15 @@ impl SecurityGateway {
         self.requests.available.notify_all();
     }
 
-    fn finish_scanner_panic(&self, request_id: &str, message: &str) {
+    /// End a request with `failure`; the consumer receives its terminal event.
+    fn fail_request(&self, request_id: &str, failure: SecurityFailure) {
         let mut registry = self
             .requests
             .state
             .lock()
             .expect("request registry mutex poisoned");
         if let Some(state) = registry.requests.get_mut(request_id) {
-            state.failures.push(SecurityFailure {
-                stage: SecurityFailureStage::Scanner,
-                level: None,
-                detector_id: None,
-                kind: SecurityFailureKind::Internal,
-                retryable: false,
-                message: message.to_string(),
-            });
+            state.failures.push(failure);
         }
         finish_request_if_ready(&mut registry, request_id);
         self.requests.available.notify_all();
@@ -1234,8 +1258,7 @@ impl SecurityGateway {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 }
@@ -1304,7 +1327,7 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
 /// queue and the distributed plan: a module L1 decides (core
 /// [`patronus_ark_core::cascade::Cascade::l1_stage`] at the cascade's module cuts) is final, and so is
 /// an undecided module no later layer can run for (its answer is clear, as
-/// in Core); their L1 results carry `decided_by`. Returns the inputs of the
+/// in Core); their L1 results carry Core's L1 decision as `module_decision`. Returns the inputs of the
 /// modules that go on to L2 or L3: without a cascade, every input, as
 /// before. `gate_results` are the L1 gate results of the request. A module
 /// without an L1 result (its rules switched off or not reporting), or any
@@ -1336,7 +1359,7 @@ pub(super) fn l1_undecided_inputs(
         // Core's L1 answer, with the cascade's L1 model of the module.
         let stage = cascade.l1_answer(
             module,
-            execution.gates().native.mode(module),
+            execution.gates().mode(module),
             heuristic,
             l1_results.iter().map(|result| &result.native),
             &input.text,
@@ -1355,12 +1378,18 @@ pub(super) fn l1_undecided_inputs(
             StageOutcome::Escalate => StageOutcome::Clear,
             decided => decided,
         };
+        let decision = ModuleDecision {
+            module,
+            outcome,
+            decided_by: stage.decided_by,
+            score: stage.score,
+            layers: stage.layers().to_vec(),
+        };
         for result in l1_results
             .iter_mut()
             .filter(|result| result.category == module.as_str())
         {
-            result.decided_by = Some(stage.decided_by);
-            result.l1_outcome = Some(outcome);
+            result.module_decision = Some(decision.clone());
         }
     }
     undecided
@@ -1402,10 +1431,7 @@ pub(super) fn dynamic_pii_runs(
     gate_results: &[GateResult],
 ) -> bool {
     execution.allows_level(SecurityLevel::L3)
-        && execution
-            .gates()
-            .native
-            .allows_model(DYNAMIC_PII_ASSET.spec.id)
+        && execution.gates().allows_model(DYNAMIC_PII_ASSET.spec.id)
         && execution.l3_policy().enabled
         && patronus_ark_core::cascade::pipeline_allowed(
             &execution.gates().conditional,
@@ -1527,6 +1553,17 @@ fn merge_csvish_field(left: &str, right: &str) -> String {
     values.join(",")
 }
 
+fn scanner_panic(message: &str) -> SecurityFailure {
+    SecurityFailure {
+        stage: SecurityFailureStage::Scanner,
+        level: None,
+        detector_id: None,
+        kind: SecurityFailureKind::Internal,
+        retryable: false,
+        message: message.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1548,8 +1585,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
         let candidate = crate::DecisionCandidate {
             source: "l1".to_string(),
@@ -1679,16 +1715,20 @@ mod tests {
         assert_eq!(
             results
                 .iter()
-                .map(|result| result.decided_by)
+                .map(|result| result.module_decision.as_ref().map(|decision| (
+                    decision.module,
+                    decision.outcome,
+                    decision.decided_by
+                )))
                 .collect::<Vec<_>>(),
-            vec![Some(crate::Stage::Heuristic), None]
-        );
-        assert_eq!(
-            results
-                .iter()
-                .map(|result| result.l1_outcome)
-                .collect::<Vec<_>>(),
-            vec![Some(StageOutcome::Detected), None]
+            vec![
+                Some((
+                    SecurityCategory::Pii,
+                    StageOutcome::Detected,
+                    crate::Stage::Heuristic
+                )),
+                None
+            ]
         );
     }
 
@@ -1696,7 +1736,7 @@ mod tests {
     fn final_results_are_marked_only_with_a_cascade() {
         let l3 = super::super::scan_result(
             SecurityCategory::Injection,
-            "wolf-defender-small",
+            crate::assets::WOLF_PIPELINE_MODEL,
             crate::EvaluationResult {
                 class_name: "attack".to_string(),
                 confidence: 0.9,
@@ -1706,7 +1746,7 @@ mod tests {
         );
         let mut plain = [l3.clone()];
         mark_final(&mut plain, &ScanExecution::new(SecurityLevel::L3));
-        assert_eq!(plain[0].decided_by, None);
+        assert!(plain[0].module_decision.is_none());
         let cascade = ScanGateMatrix {
             cascade: Some(patronus_ark_core::cascade::Cascade::default()),
             ..ScanGateMatrix::default()
@@ -1716,28 +1756,42 @@ mod tests {
             &mut cascaded,
             &ScanExecution::with_gates(SecurityLevel::L3, cascade),
         );
-        assert_eq!(cascaded[0].decided_by, Some(crate::Stage::L3));
+        let decision = cascaded[0].module_decision.as_ref().unwrap();
+        assert_eq!(
+            (decision.outcome, decision.decided_by, decision.score),
+            (StageOutcome::Detected, crate::Stage::L3, 0.9)
+        );
     }
 
     #[test]
     fn published_results_are_marked_with_the_stage_of_their_layer() {
-        for (level, stage) in [
-            ("L1", crate::Stage::Heuristic),
-            ("L2", crate::Stage::L2),
-            ("L3", crate::Stage::L3),
+        for (level, stage, class_name, outcome) in [
+            ("L1", crate::Stage::Heuristic, "safe", StageOutcome::Clear),
+            ("L2", crate::Stage::L2, "benign", StageOutcome::Clear),
+            ("L3", crate::Stage::L3, "attack", StageOutcome::Detected),
         ] {
             let mut result = super::super::scan_result(
                 SecurityCategory::Injection,
                 "m",
                 crate::EvaluationResult {
-                    class_name: "safe".to_string(),
-                    confidence: 0.0,
+                    class_name: class_name.to_string(),
+                    confidence: 0.25,
                     level: level.to_string(),
                 },
                 Vec::new(),
             );
             mark_decided(&mut result);
-            assert_eq!(result.decided_by, Some(stage));
+            let decision = result.module_decision.unwrap();
+            assert_eq!(
+                (
+                    decision.module,
+                    decision.outcome,
+                    decision.decided_by,
+                    decision.score
+                ),
+                (SecurityCategory::Injection, outcome, stage, 0.25)
+            );
+            assert!(decision.layers.is_empty(), "the layer stays on the result");
         }
     }
 
@@ -1787,7 +1841,7 @@ mod tests {
                 class_name: "attack".to_string(),
                 confidence: 0.9,
                 level: "L2".to_string(),
-                model: "wolf-defender-small".to_string(),
+                model: crate::assets::WOLF_PIPELINE_MODEL.to_string(),
                 duration_ms: 1.0,
                 layers: vec![LayerResult {
                     level: "L2".to_string(),
@@ -1814,8 +1868,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
 
         let candidates = l3_candidates(&result);
@@ -1890,7 +1943,7 @@ mod tests {
         let mut results = vec![
             pending_l3_result_with_chunks(
                 "injection",
-                "wolf-defender-small",
+                crate::assets::WOLF_PIPELINE_MODEL,
                 vec![l2_chunk_output(0, 10, "injection", "benign", false)],
             ),
             pending_l3_result_with_chunks(
@@ -1983,8 +2036,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: l2_chunk_outputs,
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 

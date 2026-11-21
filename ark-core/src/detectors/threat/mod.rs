@@ -30,7 +30,7 @@ const OVERLAP_BYTES: usize = 4096;
 pub const DEFAULT_POINTS_ACCEPTANCE: f64 = 0.5;
 
 /// The configurable cuts of the Threat rules; [`Default`] holds the shipped
-/// values ([`crate::native::NativeGates::threat_thresholds`]).
+/// values ([`crate::cascade::ScanGateMatrix::threat_thresholds`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ThreatThresholds {
     /// Least repetition count of a huge output request

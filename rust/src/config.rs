@@ -18,9 +18,9 @@ use crate::{
 /// [`ScannerConfig`] (`categories`, `max_level`, the gate keys, `cascade`,
 /// `cache_root`, `wolf`, `shell`) with the same meaning, plus Ark's own keys.
 /// Ark accepts every category, not only Core's text-scan ones, and reads
-/// Core's `wolf` and `shell` for its injection L3 and its `shell_command`
-/// category. Core's `max_input_bytes` and `max_findings` limit Core's
-/// scanner only. Unknown keys are refused.
+/// Core's `wolf` (model, export, windows, `threshold`, `backend`,
+/// `runtime_options`) and `shell` for its injection L3 and its
+/// `shell_command` category. Unknown keys are refused.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct GatewayConfig {
@@ -28,7 +28,8 @@ pub struct GatewayConfig {
     #[serde(flatten)]
     pub core: ScannerConfig,
     /// Whether `warmup`/`prepare_assets` may download missing model files:
-    /// `never` (default) or `missing`.
+    /// `never` (the default of every entry point, as in Ark Core) or
+    /// `missing`.
     pub download: DownloadPolicy,
     /// The categories that may download; unset: every configured category.
     pub download_categories: Option<Vec<SecurityCategory>>,
@@ -38,12 +39,13 @@ pub struct GatewayConfig {
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
     pub ntdb_decision_threshold_point: NtdbOperatingPoint,
-    /// ONNX execution backend of Ark's models: `auto` (default), `cpu`,
-    /// `gpu`, `coreml`, ...
+    /// ONNX execution backend of Ark's own models (Wolf runs on
+    /// `wolf.backend`): `auto` (default), `cpu`, `gpu`, `coreml`, ...
     pub execution_backend: ExecutionBackend,
     /// L3 batch execution; unset follows `execution_backend`.
     pub onnx_batch_mode: Option<OnnxBatchMode>,
-    /// ONNX Runtime session options of Ark's models.
+    /// ONNX Runtime session options of Ark's own models (Wolf takes
+    /// `wolf.runtime_options`).
     pub onnx_runtime: OnnxRuntimeOptions,
     /// The `dynamic_pii` (GLiNER) pipeline's config.
     pub dynamic_pii: DynamicPiiConfig,
@@ -58,7 +60,7 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             core: ScannerConfig::default(),
-            download: DownloadPolicy::Never,
+            download: DownloadPolicy::default(),
             download_categories: None,
             l3_strategy: L3Strategy::default(),
             ntdb_operating_point: NtdbOperatingPoint::default(),
@@ -86,9 +88,8 @@ impl GatewayConfig {
     }
 
     /// Refuse what no gateway can run: no categories, a duplicate category,
-    /// zero ONNX threads, invalid Wolf windows (with Ark's serving profile
-    /// filling unset sizes) or Dynamic-PII settings, and Wolf settings Ark
-    /// takes from its own keys.
+    /// zero limits or ONNX threads, an invalid `wolf` (with Ark's serving profile
+    /// filling unset window sizes) or invalid Dynamic-PII settings.
     pub fn validate(&self) -> Result<(), String> {
         let categories = &self.core.categories;
         if categories.is_empty() {
@@ -101,6 +102,9 @@ impl GatewayConfig {
         {
             return Err(format!("duplicate category {}", category.as_str()));
         }
+        if self.core.max_input_bytes == Some(0) || self.core.max_findings == Some(0) {
+            return Err("max_input_bytes and max_findings must be positive when set".into());
+        }
         if self.onnx_runtime.intra_threads == Some(0) || self.onnx_runtime.inter_threads == Some(0)
         {
             return Err("onnx_runtime thread counts must be positive".into());
@@ -109,17 +113,6 @@ impl GatewayConfig {
             crate::ScanExecution::default()
                 .set_wolf(wolf.clone())
                 .map_err(|error| format!("wolf: {error}"))?;
-            if wolf.threshold.is_some()
-                || wolf.backend != ExecutionBackend::default()
-                || wolf.runtime_options != OnnxRuntimeOptions::default()
-            {
-                return Err(
-                    "wolf.threshold, wolf.backend and wolf.runtime_options: Ark calibrates \
-                    Wolf with ntdb_decision_threshold_point and runs it on \
-                    execution_backend and onnx_runtime"
-                        .into(),
-                );
-            }
         }
         self.dynamic_pii
             .clone()
@@ -242,7 +235,7 @@ mod tests {
             config.core.categories,
             [SecurityCategory::Pii, SecurityCategory::DynamicPii]
         );
-        assert!(!config.core.gates.native.allows_rule("pii_email"));
+        assert!(!config.core.gates.allows_rule("pii_email"));
         assert_eq!(config.core.gates.l2, Some(false));
         assert!(config.core.gates.cascade.is_some());
         assert_eq!(config.core.cache_root, Some(PathBuf::from("/models")));
@@ -263,6 +256,23 @@ mod tests {
             defaults.ntdb_operating_point,
             NtdbOperatingPoint::BestPromote
         );
+    }
+
+    #[test]
+    fn core_wolf_block_is_accepted_as_is() {
+        let config = parse(serde_json::json!({
+            "wolf": {
+                "threshold": 0.7,
+                "backend": "cpu",
+                "runtime_options": {"intra_threads": 2},
+            },
+        }))
+        .unwrap();
+        config.validate().unwrap();
+        let wolf = config.core.wolf.unwrap();
+        assert_eq!(wolf.threshold, Some(0.7));
+        assert_eq!(wolf.backend, ExecutionBackend::Cpu);
+        assert_eq!(wolf.runtime_options.intra_threads, Some(2));
     }
 
     #[test]
@@ -289,14 +299,12 @@ mod tests {
                 serde_json::json!({"wolf": {"execution": {"overlap_tokens": 254}}}),
                 "wolf",
             ),
-            (
-                serde_json::json!({"wolf": {"backend": "cpu"}}),
-                "execution_backend",
-            ),
+            (serde_json::json!({"wolf": {"threshold": 1.5}}), "wolf"),
             (
                 serde_json::json!({"onnx_runtime": {"intra_threads": 0}}),
                 "positive",
             ),
+            (serde_json::json!({"max_findings": 0}), "positive"),
         ] {
             let error = parse(json.clone()).unwrap().validate().unwrap_err();
             assert!(error.contains(message), "{json}: {error}");

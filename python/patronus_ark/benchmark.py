@@ -51,6 +51,32 @@ from .gliner_category_map import (
     labels_for_contexts,
 )
 
+
+# Ark keys the isolated benchmark worker keeps from the gateway's config.
+_WORKER_KEYS = (
+    "cache_root",
+    "onnx_batch_mode",
+    "execution_backend",
+    "ntdb_decision_threshold_point",
+    "l3_strategy",
+    "wolf",
+)
+
+
+def _worker_config(gateway):
+    """The Ark keys of `gateway`'s config an isolated benchmark worker keeps."""
+    return {key: deepcopy(gateway._config[key]) for key in _WORKER_KEYS if key in gateway._config}
+
+
+def _set_gates(gateway, gates):
+    """Swap the gates of a warm gateway between benchmark phases; `None` restores the defaults."""
+    gateway.rust_gateway.set_execution_gates(None if gates is None else json.dumps(gates))
+
+
+def _set_dynamic_pii(gateway, config):
+    """Swap the `dynamic_pii` config of a warm gateway between benchmark phases."""
+    gateway.rust_gateway.set_dynamic_pii_config(json.dumps(config))
+
 try:
     import resource
 except ImportError:  # pragma: no cover - unavailable on Windows
@@ -179,8 +205,8 @@ def _host_info():
 
 def _gateway_info(gateway):
     return {
-        "categories": list(gateway.categories),
-        "max_level": gateway.max_level,
+        "categories": list(gateway.rust_gateway.categories),
+        "max_level": gateway.rust_gateway.max_level,
     }
 
 
@@ -247,14 +273,14 @@ def _run_benign(gateway):
 
 def _classifier_modes(gateway):
     modes = [("l2_only", {"l3": False})]
-    if gateway.max_level == "l3":
+    if gateway.rust_gateway.max_level == "l3":
         modes.append(("with_l3", {}))
     return modes
 
 
 def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gates):
     gates = dict(mode_gates)
-    gateway.set_execution_gates(gates or None)
+    _set_gates(gateway, gates or None)
 
     expected, predicted, latencies, rows = [], [], [], []
     l3_scans = 0
@@ -313,7 +339,7 @@ def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gat
 
 
 def _run_classifier(gateway, limit_per_pipeline):
-    configured = set(gateway.categories)
+    configured = set(gateway.rust_gateway.categories)
     pipelines = {}
     for name, category, tool_gates, model in CLASSIFIER_PIPELINES:
         if category not in configured:
@@ -329,7 +355,7 @@ def _run_classifier(gateway, limit_per_pipeline):
             )
         pipelines[name] = {"model": model, "modes": modes}
 
-    gateway.set_execution_gates(None)
+    _set_gates(gateway, None)
     return {"pipelines": pipelines}
 
 
@@ -436,7 +462,7 @@ def _run_dynamic_pii_quality(gateway, samples):
         if not labels:
             skipped_samples += len(group)
             continue
-        gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
+        _set_dynamic_pii(gateway, _benchmark_dynamic_config(labels))
         if warmup_ms is None and group:
             started = time.perf_counter()
             gateway.scan_categories(["dynamic-pii"], group[0]["text"])
@@ -558,7 +584,7 @@ def _run_l2_l3_gliner_latency(
         # The runtime supports at most 30 labels in one request. The catalog
         # may be larger because classification-specific maps use only a subset.
         labels = GLINER_LABELS[:30]
-        gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
+        _set_dynamic_pii(gateway, _benchmark_dynamic_config(labels))
         # The classifier phase scans the same corpus first. A trailing space is
         # tokenization-neutral but keeps this latency phase out of its decision cache.
         text = sample["text"] + " "
@@ -652,14 +678,14 @@ def _run_dynamic_pii(
     benchmark_start_peak_rss_mb=None,
     combined_runner=None,
 ):
-    configured = set(gateway.categories)
-    if "dynamic-pii" not in configured or gateway.max_level != "l3":
+    configured = set(gateway.rust_gateway.categories)
+    if "dynamic-pii" not in configured or gateway.rust_gateway.max_level != "l3":
         return {
             "enabled": False,
             "reason": "dynamic-pii requires the configured category and max_level=l3",
         }
 
-    snapshot = deepcopy(getattr(gateway, "_config", {}).get("dynamic_pii", {}))
+    snapshot = deepcopy(gateway._config.get("dynamic_pii", {}))
     try:
         samples = _load_samples("dynamic_pii")
         if limit_per_pipeline:
@@ -682,15 +708,12 @@ def _run_dynamic_pii(
             }
         return {"enabled": True, "quality": quality, "combined_latency": combined}
     finally:
-        gateway.set_dynamic_pii_config(snapshot)
+        _set_dynamic_pii(gateway, snapshot)
 
 
 def _run_isolated_l2_l3_gliner(gateway, samples, _benchmark_start_peak_rss_mb=None):
     """Run the joint latency and memory phase in a fresh, model-scoped process."""
-    worker_config = getattr(gateway, "_benchmark_worker_config", None)
-    if worker_config is None:
-        raise RuntimeError("gateway does not expose isolated benchmark worker settings")
-    worker_config = worker_config()
+    worker_config = _worker_config(gateway)
     completed = subprocess.run(
         [sys.executable, "-m", "patronus_ark.benchmark_worker"],
         input=json.dumps({"gateway": worker_config, "samples": samples}),
@@ -776,7 +799,7 @@ def _run_native_l1_10kb(
     warmup_iterations=NATIVE_L1_WARMUP_ITERATIONS,
 ):
     """Measure native L1 paths through the configured gateway on 10 KiB inputs."""
-    configured = set(gateway.categories)
+    configured = set(gateway.rust_gateway.categories)
     profiles = []
     if "injection" in configured:
         profiles.append(
@@ -838,7 +861,7 @@ def _run_native_l1_10kb(
     sequence = 0
     try:
         for name, categories, gates, head, match_tail in profiles:
-            gateway.set_execution_gates(gates)
+            _set_gates(gateway, gates)
             results[name] = {
                 "categories": categories,
                 "benign": _native_l1_case(
@@ -862,7 +885,7 @@ def _run_native_l1_10kb(
             }
             sequence += 2 * (warmup_iterations + iterations)
     finally:
-        gateway.set_execution_gates(None)
+        _set_gates(gateway, None)
 
     return {
         "text_bytes": NATIVE_L1_TEXT_BYTES,
@@ -928,7 +951,7 @@ fn render_wallet_status(status: &WalletStatus) -> String {
         "source_code_hidden_injection": source_code_hidden_injection,
         "cache_hits": benign[:5],
     }
-    if gateway.max_level == "l3":
+    if gateway.rust_gateway.max_level == "l3":
         scenarios["l3_promote"] = attacks[:50]
     return scenarios
 
@@ -1138,7 +1161,7 @@ def _run_queue_example(gateway):
         "sample_id": sample["id"],
         "input": sample["text"],
         "request_id": request_id,
-        "configured_categories": list(gateway.categories),
+        "configured_categories": list(gateway.rust_gateway.categories),
         "observed_levels": levels,
         "l2_and_l3_observed": "L2" in levels and "L3" in levels,
         "results": results,
@@ -1349,7 +1372,7 @@ def _print_summary(benign, classifier, load, native_l1=None, dynamic_pii=None):
 def _warm_l3_sessions(gateway):
     """Exercise the lazy L3 ONNX sessions once so session build time does not
     count as scan latency (first L3 inference loads the transformer)."""
-    if gateway.max_level != "l3":
+    if gateway.rust_gateway.max_level != "l3":
         return
     attack = next(
         (s["text"] for s in _load_samples("injection") if s["expected_class"] == "attack"),
@@ -1492,8 +1515,7 @@ def _run_strategy_benchmark_process(
     load_requests,
     native_l1_iterations,
 ):
-    config = gateway._benchmark_config()
-    config["config"]["l3_strategy"] = strategy
+    config = {**deepcopy(gateway._config), "l3_strategy": strategy}
     completed = subprocess.run(
         [sys.executable, "-m", "patronus_ark.benchmark_strategy_worker"],
         input=json.dumps(

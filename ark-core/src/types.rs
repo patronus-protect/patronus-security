@@ -293,7 +293,9 @@ pub struct NativeResult {
     pub evidence_spans: Vec<EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.
     pub label_scores: Vec<LabelScore>,
-    /// Structured classifier decision contract for policy consumers.
+    /// Structured classifier decision contract for policy consumers; omitted
+    /// from the serialized result while unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<DecisionEnvelope>,
 }
 
@@ -346,6 +348,7 @@ pub enum ExecutionBackend {
     /// CUDA execution provider.
     Cuda,
     /// DirectML execution provider.
+    #[serde(rename = "directml", alias = "direct_ml")]
     DirectMl,
     /// TensorRT execution provider.
     #[serde(rename = "tensorrt", alias = "tensor_rt")]
@@ -419,6 +422,17 @@ impl Default for OnnxRuntimeOptions {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn execution_backends_deserialize_from_their_canonical_names() {
+        use super::ExecutionBackend::*;
+        for backend in [Auto, Cpu, Gpu, CoreMl, Cuda, DirectMl, TensorRt] {
+            let parsed: super::ExecutionBackend =
+                serde_json::from_value(backend.as_str().into()).unwrap();
+            assert_eq!(parsed, backend);
+            assert_eq!(serde_json::to_value(backend).unwrap(), backend.as_str());
+        }
+    }
+
     use super::SecurityCategory;
 
     #[test]

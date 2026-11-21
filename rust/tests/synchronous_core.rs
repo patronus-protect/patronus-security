@@ -3,7 +3,9 @@ use patronus_ark::{
     golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
     golden_recipes::SecretRecipe, SecurityGateway,
 };
-use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    cascade::ModuleDecision, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
+};
 use patronus_ark_core::{NativeResult, ScanError, Scanner, ScannerConfig};
 
 fn generators() -> GeneratorSet {
@@ -98,7 +100,7 @@ fn core_preserves_gateway_native_decisions_and_source_evidence() {
 
 #[test]
 fn native_policy_gates_and_scored_modes_preserve_complete_results() {
-    use patronus_ark_core::{native::NativeGates, native::ScoreMode};
+    use patronus_ark_core::native::ScoreMode;
     let (secret_text, _) = materialize_fragments(
         &generators(),
         "DB_PASSWORD='<<secret:0>>'",
@@ -118,12 +120,9 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
     ] {
         policies.push(ScannerConfig {
             gates: ScanGateMatrix {
-                native: NativeGates {
-                    pii_mode,
-                    dlp_mode,
-                    explain: true,
-                    ..Default::default()
-                },
+                pii_mode,
+                dlp_mode,
+                explain: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -136,14 +135,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         "native:dlp",
     ] {
         let mut policy = ScannerConfig::default();
-        policy.gates.native.models.insert(model.into(), false);
+        policy.gates.models.insert(model.into(), false);
         policies.push(policy);
     }
     let mut rules = ScannerConfig::default();
-    rules.gates.native.rules.insert("pii_email".into(), false);
+    rules.gates.rules.insert("pii_email".into(), false);
     rules
         .gates
-        .native
         .rules
         .insert("ark.injection.override.discard_prior".into(), false);
     policies.push(rules);
@@ -160,13 +158,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
             let direct = core.scan(text).unwrap();
             let queued = gateway.scan_all(text);
             assert_native_parity(&direct.native, &queued);
-            if policy.gates.native.models.get("native:injection_l1") == Some(&false) {
+            if policy.gates.models.get("native:injection_l1") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
                     .all(|result| result.category != "injection"));
             }
-            if policy.gates.native.rules.get("pii_email") == Some(&false) {
+            if policy.gates.rules.get("pii_email") == Some(&false) {
                 assert!(direct
                     .native
                     .iter()
@@ -251,7 +249,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
 fn synchronous_limits_are_errors_not_clean_results() {
     let mut core = Scanner::new(ScannerConfig {
         categories: vec![SecurityCategory::Pii],
-        max_input_bytes: 8,
+        max_input_bytes: Some(8),
         ..Default::default()
     })
     .unwrap();
@@ -261,7 +259,7 @@ fn synchronous_limits_are_errors_not_clean_results() {
     ));
     let mut core = Scanner::new(ScannerConfig {
         categories: vec![SecurityCategory::Pii],
-        max_findings: 1,
+        max_findings: Some(1),
         ..Default::default()
     })
     .unwrap();
@@ -275,6 +273,16 @@ fn synchronous_limits_are_errors_not_clean_results() {
 /// and, without `categories`, Ark's execution gates. At `max_level` L1 both
 /// report the same native results (all fields but timings) and the same L1
 /// cascade answer per module.
+/// A module decision as JSON, with its layers' durations zeroed.
+fn untimed_decision(decision: &ModuleDecision) -> serde_json::Value {
+    let mut decision = decision.clone();
+    decision
+        .layers
+        .iter_mut()
+        .for_each(|layer| layer.duration_ms = 0.0);
+    serde_json::to_value(decision).unwrap()
+}
+
 #[test]
 fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
     let gates = serde_json::json!({
@@ -316,13 +324,8 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
             let module = decision.module.as_str();
             for result in ark.iter().filter(|result| result.category == module) {
                 assert_eq!(
-                    result.l1_outcome,
-                    Some(decision.outcome),
-                    "{module}: {text}"
-                );
-                assert_eq!(
-                    result.decided_by,
-                    Some(decision.decided_by),
+                    result.module_decision.as_ref().map(untimed_decision),
+                    Some(untimed_decision(&decision)),
                     "{module}: {text}"
                 );
             }
@@ -373,13 +376,8 @@ fn ark_runs_the_cascade_l1_model_like_core() {
         assert!(!injection.is_empty(), "rules_off={rules_off}");
         for result in injection {
             assert_eq!(
-                result.l1_outcome,
-                Some(decision.outcome),
-                "rules_off={rules_off}"
-            );
-            assert_eq!(
-                result.decided_by,
-                Some(Stage::L1Model),
+                result.module_decision.as_ref().map(untimed_decision),
+                Some(untimed_decision(decision)),
                 "rules_off={rules_off}"
             );
         }
