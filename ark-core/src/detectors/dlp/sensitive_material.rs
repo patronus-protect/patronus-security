@@ -19,12 +19,15 @@ impl crate::detectors::NativeDetector for SensitiveMaterialPipeline {
         &self,
         prepared: &crate::threat::NativeText<'_>,
     ) -> crate::detectors::NativeDetection {
-        let text = prepared.text();
         crate::detectors::evidence::detection_from_matches(
-            text,
+            prepared.text(),
             "dlp_sensitive_material",
             "sensitive_material",
-            crate::threat::native_matches_prepared("sensitive_material", prepared),
+            crate::detectors::threat::native_requests(
+                prepared,
+                "sensitive_material",
+                crate::SecurityCategory::UnsafeAction,
+            ),
         )
     }
 }

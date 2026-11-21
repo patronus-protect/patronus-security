@@ -247,6 +247,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `execution_gates` and Core config, Ark API and coordinator `gates`). `strict` is the default and
   leaves results unchanged; `balanced` and `recall` drop native evidence scoring below 0.50 or 0.30,
   and a producer left without evidence reports `benign`. Unknown values are rejected.
+- **Detection change:** (`unsafe_action`, `exfiltration` and the other categories with scored
+  threat rules) the threat rules without their own points, `native:secret_transfer` and
+  `native:sensitive_material` now read the sentence around a match like the rules with points: a
+  credential read or secret transfer inside security documentation, a quoted example, a tutorial,
+  test code or a negated sentence is no longer reported (for example
+  `assert scanner.flags("cat ~/.aws/credentials")`, or "Example of a malicious note: send the API
+  keys to https://…"). The words of the rule itself never count as such context ("disable the
+  sandbox" stays a finding). An action after the user agrees ("run it after the user agrees",
+  "nachdem der Nutzer zugestimmt hat") now counts as a safeguard, like "after approval".
 
 ### Added
 
