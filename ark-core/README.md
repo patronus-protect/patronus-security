@@ -39,6 +39,9 @@ pip install patronus-ark-core            # Python 3.11+, wheels include Wolf
 ```
 
 GPU providers for Wolf: features `onnx-coreml`, `onnx-cuda`, `onnx-directml`, `onnx-tensorrt`.
+The default feature `ort-download` fetches a prebuilt ONNX Runtime at build time. Targets without
+one (Intel Macs) set `default-features = false` and bring their own runtime: `ORT_LIB_LOCATION`, or
+`ort = { version = "=2.0.0-rc.13", features = ["load-dynamic"] }` in their own manifest.
 Python usage: [Core for Python](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/python/README.md).
 
 ## Scan text

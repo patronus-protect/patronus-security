@@ -173,6 +173,18 @@ jobs:
           components: clippy, rustfmt
       - run: cargo clippy -p patronus-ark-core --no-default-features --lib -- -D warnings
       - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
+      # Consumers on targets without a pyke prebuilt (x86_64-apple-darwin) must be able to turn
+      # the ONNX Runtime download off; a hard-coded `download-binaries` cannot be removed later.
+      - name: ONNX Runtime download stays opt-out
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for args in "-p patronus-ark-core --features wolf" "-p patronus-ark"; do
+            if cargo tree --locked $args --no-default-features -e normal,build,features -i ort-sys | grep -q download-binaries; then
+              echo "::error::ort download-binaries is enabled without default features ($args)"
+              exit 1
+            fi
+          done
       - run: python scripts/ci_rust_tests.py core-all-features
 
   python:

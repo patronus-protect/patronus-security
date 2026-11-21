@@ -81,6 +81,18 @@ patronus-ark = { version = "0.1", features = ["onnx-coreml"] }   # macOS
 
 See [Tune performance & memory](../how-to/tune-performance.md) for when each backend helps.
 
+### Bring your own ONNX Runtime
+
+By default the build downloads a prebuilt ONNX Runtime (feature `ort-download`). There is none
+for some targets, such as Intel Macs (`x86_64-apple-darwin`). Turn the download off and either
+point `ORT_LIB_LOCATION` at your build, or load the library at runtime:
+
+```toml
+patronus-ark = { version = "0.1", default-features = false }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic"] }
+# at runtime: ORT_DYLIB_PATH=/path/to/libonnxruntime.dylib
+```
+
 ## Logging
 
 The library logs through the [`log`](https://crates.io/crates/log) facade (warmup progress,
