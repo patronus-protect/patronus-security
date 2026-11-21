@@ -160,9 +160,12 @@ pub enum ScanError {
 }
 #[derive(Debug, Clone, Serialize)]
 /// Complete scan output; native decisions and model probabilities remain separate.
-pub struct ScanReport {
+///
+/// `R` is the per-category result: Core's [`NativeResult`]; Ark's gateway
+/// reports its own result type, which embeds `NativeResult`, in the same envelope.
+pub struct ScanReport<R = NativeResult> {
     pub input_bytes: usize,
-    pub native: Vec<NativeResult>,
+    pub native: Vec<R>,
     /// Wolf's result when it ran. Without a cascade Wolf runs on every scan
     /// that selects `injection`, as before. `None` when Wolf is not
     /// configured, when `injection` was not selected, or, with a configured

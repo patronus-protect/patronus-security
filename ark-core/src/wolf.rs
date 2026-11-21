@@ -109,7 +109,7 @@ pub struct WolfManifest {
     #[serde(default = "default_probability_tolerance")]
     pub probability_tolerance: f64,
 }
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WolfResult {
     pub document_logit: f64,
     pub attack_probability: f64,
