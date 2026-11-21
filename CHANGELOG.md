@@ -49,6 +49,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   models unless the `pipeline` sets `l3_strategy: multi`. The shipped server templates set
   `multi` explicitly, so their deployments keep the shared multi-head model.
   Rust: `patronus_ark::defaults` is gone; `L3Strategy::default()` is `Dedicated`.
+- **Per-key gates are an override of the pipeline gates:** an Ark API key's `auth.keys[].gates`
+  now changes only the gate keys it sets and keeps the pipeline's other gate keys (`rules`,
+  `models`, `l3_policy` and `cascade` merge per entry) instead of replacing all pipeline gates.
 - **One DLP/PII overlap pass in Ark Core:** Ark Core's `post_prediction::resolve_dlp_pii_overlaps`
   replaces the public `dlp_secret_ranges` and `retain_pii_outside_secret_ranges`; Core's
   `Scanner` and Ark both drop PII evidence inside DLP secrets through it, so their PII and DLP

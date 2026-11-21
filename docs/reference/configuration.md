@@ -227,8 +227,12 @@ scanner.set_execution_gates(
 );
 ```
 
-The Ark API takes the same keys in YAML (`pipeline.gates`, `auth.keys[].gates`) and JSON
-(`config.gates` of a request). For example:
+The Ark API takes the same keys in YAML (at the top level of `pipeline`, and in
+`auth.keys[].gates`) and JSON (`config.gates` of a request). `auth.keys[].gates` is a **per-key
+override of the pipeline gates**: it changes only the keys it sets and keeps the pipeline's
+other gate keys; the maps `rules`, `models`, `l3_policy` and `cascade` merge per entry, other
+values (`conditional` included) replace the pipeline's. A request's `config.gates` replaces
+the key's gates for that request. For example:
 
 ```yaml
 gates:

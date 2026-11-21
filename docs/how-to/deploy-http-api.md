@@ -74,8 +74,8 @@ pipeline:
 
 ### Gates
 
-The gate keys at the top level of `pipeline` (Ark Core's gate keys; an optional per-key override
-sits at `auth.keys[].gates`) mirror
+The gate keys at the top level of `pipeline` (Ark Core's gate keys; `auth.keys[].gates` is an
+optional per-key override of the pipeline gates that changes only the keys it sets) mirror
 `ScanGateMatrix` from the [Rust API](../rust-api.md): `l1`/`l2`/`l3` toggle whole levels,
 `models` disables individual native scanners or models by their result `model` name (e.g.
 `native:mcp_runtime_risk`), and `conditional` is the deep gate logic — the same
