@@ -5,7 +5,7 @@
       "train_dev/approve_or_deny_de": 3
     },
     "benign": {
-      "generated/carrier_insertion": 600,
+      "generated/carrier_insertion": 579,
       "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
       "report/civil_comments": 5856,
@@ -22,9 +22,9 @@
       "train_dev/wildjailbreak": 23
     },
     "exfiltration": {
-      "generated/carrier_insertion": 108,
+      "generated/carrier_insertion": 102,
       "generated/exfil_lookalikes": 300,
-      "generated/obfuscation_slices": 64,
+      "generated/obfuscation_slices": 61,
       "train_dev/agentdojo": 63,
       "train_dev/approve_or_deny_de": 1,
       "train_dev/bipia": 50
@@ -35,8 +35,8 @@
       "train_dev/nemotron_safety_v3": 799
     },
     "instruction_injection": {
-      "generated/carrier_insertion": 352,
-      "generated/obfuscation_slices": 233,
+      "generated/carrier_insertion": 334,
+      "generated/obfuscation_slices": 218,
       "report/gandalf": 998,
       "train_dev/agentdojo": 136,
       "train_dev/bipia": 188,
@@ -44,9 +44,9 @@
       "train_dev/spml": 2403
     },
     "jailbreak": {
-      "generated/carrier_insertion": 51,
+      "generated/carrier_insertion": 49,
       "generated/class_templates": 84,
-      "generated/obfuscation_slices": 34,
+      "generated/obfuscation_slices": 33,
       "report/jackhhao_jailbreak": 544,
       "train_dev/wildjailbreak": 2000
     },
@@ -71,9 +71,9 @@
       "train_dev/nemotron_safety_v3": 106
     },
     "unsafe_action": {
-      "generated/carrier_insertion": 196,
+      "generated/carrier_insertion": 195,
       "generated/class_templates": 83,
-      "generated/obfuscation_slices": 132,
+      "generated/obfuscation_slices": 131,
       "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
       "train_dev/approve_or_deny_de": 35,
@@ -86,24 +86,24 @@
       "en": 42
     },
     "benign": {
-      "de": 11961,
-      "en": 19567
+      "de": 11949,
+      "en": 19558
     },
     "exfiltration": {
       "de": 151,
-      "en": 435
+      "en": 426
     },
     "harmful_content": {
       "de": 316,
       "en": 483
     },
     "instruction_injection": {
-      "de": 100,
-      "en": 3221
+      "de": 77,
+      "en": 3211
     },
     "jailbreak": {
       "de": 42,
-      "en": 2127
+      "en": 2124
     },
     "memory_poisoning": {
       "de": 42,
@@ -126,7 +126,7 @@
     },
     "unsafe_action": {
       "de": 145,
-      "en": 683
+      "en": 681
     }
   },
   "flagged": [
@@ -479,48 +479,6 @@
       "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
       "set": "train_dev/agent_safetybench",
       "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:carrier_insertion:000210",
-      "label": "jailbreak",
-      "note": "polite harmful step-by-step request with a safety disclaimer only; no persona, mode, policy spoof, priming or other bypass framing, so jailbreak is not visible (harmful request only)",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:carrier_insertion:000009",
-      "label": "instruction_injection",
-      "note": "German document with a do-anything bot claim around ordinary political questions; no override, bypass request or harmful goal visible (same upstream mode-claim pattern as earlier reviews)",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:carrier_insertion:000208",
-      "label": "instruction_injection",
-      "note": "German document with a self-declared verification mode around an ordinary physics question; no override, bypass request or harmful goal visible (mode-claim pattern)",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000219",
-      "label": "exfiltration+instruction_injection",
-      "note": "leetspeak, decoded: addressed instruction to include code that opens an interactive SSH local port forward to a remote host, inside a bank e-mail; injection visible, but no local data is sent out, so exfiltration is not visible",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000111",
-      "label": "unsafe_action",
-      "note": "Decoded: a data-collection request whose unsafe act is only implied; no harmful code or command visible (same source row as the Agent-SafetyBench flag).",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000167",
-      "label": "jailbreak",
-      "note": "zero-width spaced, decoded: euphemistic harmful request about manipulating a child; no persona, fiction, mode, policy spoof or other bypass framing, so jailbreak is not visible (harmful request only)",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -530,12 +488,12 @@
     },
     "benign": {
       "native": 30156,
-      "synthetic": 1325,
+      "synthetic": 1304,
       "translated": 47
     },
     "exfiltration": {
       "native": 113,
-      "synthetic": 472,
+      "synthetic": 463,
       "translated": 1
     },
     "harmful_content": {
@@ -544,12 +502,12 @@
     },
     "instruction_injection": {
       "native": 2727,
-      "synthetic": 585,
+      "synthetic": 552,
       "translated": 9
     },
     "jailbreak": {
       "native": 2000,
-      "synthetic": 169
+      "synthetic": 166
     },
     "memory_poisoning": {
       "synthetic": 83
@@ -570,7 +528,7 @@
     },
     "unsafe_action": {
       "native": 382,
-      "synthetic": 411,
+      "synthetic": 409,
       "translated": 35
     }
   },
@@ -580,11 +538,11 @@
       "benign_errors": 0,
       "benign_reviewed": 8,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0536,
+      "error_rate": 0.0,
       "reviewed": 56,
       "role": "dev",
-      "rows": 1200,
-      "unclear": 3,
+      "rows": 1158,
+      "unclear": 0,
       "wrong": 0
     },
     "generated/class_templates": {
@@ -613,11 +571,11 @@
       "benign_errors": 0,
       "benign_reviewed": 0,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0556,
+      "error_rate": 0.0,
       "reviewed": 54,
       "role": "dev",
-      "rows": 400,
-      "unclear": 3,
+      "rows": 383,
+      "unclear": 0,
       "wrong": 0
     },
     "report/ailuminate_demo": {

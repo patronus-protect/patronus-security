@@ -6,7 +6,7 @@
     "shingle_chars": 5,
     "threshold": 0.8
   },
-  "dev_rows": 70454,
+  "dev_rows": 70395,
   "leaked": 0,
   "schema": "ark-l1-threat-gold-leakage-v1",
   "sets": {
