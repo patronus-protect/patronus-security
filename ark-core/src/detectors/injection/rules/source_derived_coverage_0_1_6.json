@@ -1427,7 +1427,7 @@
       "description": "Asks the agent to store a behaviour-changing rule in its memory or keep it permanently",
       "source": "ark-source-derived",
       "source_revision": "0.1.7",
-      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words; first-person content (the user's own preference) is excluded.",
       "required_literals_any": [
         "memor",
         "notes",
@@ -1443,7 +1443,11 @@
         "never",
         "don't",
         "don’t",
-        "dont"
+        "dont",
+        "i",
+        "i'm",
+        "i’m",
+        "my"
       ]
     },
     {
@@ -1457,7 +1461,7 @@
       "description": "German request to store a behaviour-changing rule in the agent's memory or keep it permanently",
       "source": "ark-source-derived",
       "source_revision": "0.1.7",
-      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words; first-person content (the user's own preference) is excluded.",
       "required_literals_any": [
         "gedächtnis",
         "speicher",
@@ -1477,7 +1481,14 @@
         "keinesfalls",
         "keine",
         "keinen",
-        "keinem"
+        "keinem",
+        "ich",
+        "mein",
+        "meine",
+        "meinem",
+        "meinen",
+        "meiner",
+        "meines"
       ]
     },
     {
@@ -1496,7 +1507,11 @@
         "future",
         "next time",
         "from now on",
-        "later on"
+        "later",
+        "subsequent",
+        "other conversation",
+        "other chat",
+        "other session"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:whenever|if|when|once)\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer|any\\s+customer)\\s+(?:ever\\s+|later\\s+|again\\s+)?(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,60}?(?-u:\\b)(?:in\\s+(?:the\\s+)?future|in\\s+(?:all\\s+|any\\s+)?(?:future|later|subsequent|other)\\s+(?:conversations?|chats?|sessions?)|from\\s+now\\s+on|later\\s+on)(?-u:\\b)[^,.!?\\n]{0,40}?|next\\s+time\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer)\\s+(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,80}?),\\s*(?:then\\s+)?(?:always\\s+)?(?:reply|respond|answer|tell|say|send|redirect|recommend|claim|insist|direct|point|refer|state|inform|give|share|forward|include|add|use)(?-u:\\b)",
       "excluded_match_words": [
@@ -1609,6 +1624,7 @@
         "tell",
         "reveal",
         "disclose",
+        "show",
         "inform",
         "notifying"
       ],

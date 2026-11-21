@@ -126,7 +126,9 @@ zählt nicht), `self_replication` (append/copy this paragraph/instruction to eve
 propagate this instruction; füge/kopiere diesen Absatz/diese Anweisung an/in jede/alle Antworten/Notizen),
 `hidden_store` (Speichern + „do not mention this to the user“/„erwähne das dem Nutzer gegenüber nicht“).
 Jede Regel verlangt einen Klauselanfang (ein Zitatzeichen davor zählt nicht; JSON `"key": "` schon),
-hat einen Literal-Prefilter und ASCII-Wortgrenzen; Verneinung im Match verwirft ihn (außer `hidden_store`).
+hat einen Literal-Prefilter (notwendig für jede Regex-Alternative) und ASCII-Wortgrenzen; Verneinung im
+Match verwirft ihn (außer `hidden_store`), bei `persistent_directive` auch die erste Person („I/my“,
+„ich/mein…“: die eigene Präferenz des Nutzers).
 
 - Kanonische ID: Alle melden unter `skillspector.persistent_override` (Tabelle → `memory_poisoning`);
   `upstream_id` nennt die Familie. Eigene IDs je Familie brauchen ein Scorer-Gewicht (MP02).

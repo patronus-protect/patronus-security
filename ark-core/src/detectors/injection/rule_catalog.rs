@@ -91,7 +91,8 @@ struct RuleDefinition {
     ordered_relation: Option<OrderedRelationDefinition>,
     #[serde(default)]
     excluded_match_terms: Vec<String>,
-    // A match that contains one of these words is dropped (a negated directive).
+    // A match that contains one of these words is dropped (a negated directive,
+    // or first-person content that only stores the user's own preference).
     #[serde(default)]
     excluded_match_words: Vec<String>,
     // The encoded_payload capture must decode to an existing native injection signal.
