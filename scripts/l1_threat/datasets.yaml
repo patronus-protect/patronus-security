@@ -75,7 +75,7 @@ schema: ark-l1-threat-datasets-v1
 # 19: native text-visible sources for the agent classes — MalSkillBench (skills), MemForm (memory,
 #     with clean twins); format `text` and rule operator `matches`.
 # 20: MASSIVE (en-US and the localised de-DE training utterances) joins train_dev as the benign chat pool of
-#     each language.
+#     each language; the German jailbreak prompts of XL-SafetyBench join train_dev.
 generation: 20
 
 dedup:
@@ -981,7 +981,15 @@ datasets:
       - {label: "every prompt"}
   - id: xl_safetybench
     commercial: true
-    pending: recipe not written yet
+    source: https://huggingface.co/datasets/AIM-Intelligence/XL-SafetyBench
+    revision: 9817e3b99b8b5555ecc7f45e9541b19f3d84b1f3
+    files:
+      - {path: data/jailbreak/germany/attack_prompts.csv, sha256: d507d98786ad6081309f2dc423928078043f2f160b0cce3b0dfcf1880c182438}
+    format: csv
+    text: attack_prompt
+    language: de
+    labels:
+      - {label: "attack prompt"}
   - id: ai_safety_brazil
     commercial: true
     pending: recipe not written yet

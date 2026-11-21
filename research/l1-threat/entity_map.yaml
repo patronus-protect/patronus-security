@@ -824,14 +824,20 @@ datasets:
       test split (1,725 prompts) from the ungated ODC-BY copy walledai/WildGuardTest; only the vanilla benign prompts
       are scored, as hard negatives
   - id: xl_safetybench
-    name: XL-SafetyBench
-    source: XL-SafetyBench (DE/FR/ES jailbreaks, synthetic)
+    name: XL-SafetyBench, German jailbreak prompts
+    source: hf:AIM-Intelligence/XL-SafetyBench (jailbreak, germany)
     licence: CC-BY-4.0
-    languages: [de, en, fr, es]
+    languages: [de]
     split: train_dev
     family: neutral
     labels:
-      - {label: "jailbreak prompt", classes: [jailbreak, harmful_content]}
+      - {label: "attack prompt", classes: [jailbreak]}
+    note: >-
+      450 attack prompts written in German for Germany (150 base queries, 3 attack variants each), not translated:
+      a forged authority or research directive, a pretext persona or a staged system override around the request
+      (M09 dev review). Only jailbreak is scored: most base queries (misinformation, socioeconomic conflict,
+      discrimination, alternative medicine) lie outside the harmful_content hazards. The other languages are not
+      read; English jailbreak rows come from WildJailbreak
   - id: ai_safety_brazil
     name: ai-safety-brazil prompt injection / jailbreak
     source: hf:ai-safety-brazil
