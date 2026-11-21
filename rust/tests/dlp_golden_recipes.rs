@@ -573,6 +573,7 @@ fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
     {
         let spans = gateway
             .scan_category(SecurityCategory::Dlp, line)
+            .native
             .into_iter()
             .flat_map(|result| result.native.evidence_spans)
             .map(|span| (span.label, span.start_char, span.end_char))

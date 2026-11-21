@@ -5,7 +5,7 @@ from copy import deepcopy
 import json
 import math
 
-from patronus_ark_core import ScanGates, ScannerConfig
+from patronus_ark_core import ScanGates, ScannerConfig, ScanReport
 
 
 def _failure_to_dict(failure):
@@ -116,8 +116,8 @@ class SecurityGateway:
             `<category>_mode` per attack class, `explain`, `conditional`, the
             L3 worker policy `l3_policy` and the opt-in `cascade`
             (`{"modules": {...}}`: L1 early exit with per-category
-            `detect_threshold`/`clear_threshold`; results then carry
-            `module_decision`)), `cache_root` (the model cache root; default the
+            `detect_threshold`/`clear_threshold`; scan reports then carry
+            `decision`, one entry per module)), `cache_root` (the model cache root; default the
             platform cache directory plus `patronus_ark`), `wolf` (the
             dedicated injection L3: `model` `base`, `small` (default) or
             `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
@@ -187,8 +187,14 @@ class SecurityGateway:
         """
         return self.rust_gateway.reset_cache(_unix_ms_from_ts(until_ts))
 
-    def scan_all(self, text: str) -> list[dict]:
-        """Scan text with every category configured on this gateway."""
+    def scan_all(self, text: str) -> ScanReport:
+        """Scan text with every category configured on this gateway.
+
+        Returns Ark Core's report shape: `input_bytes`, the per-category
+        results in `native`, `wolf` (the dedicated injection L3's Wolf result
+        when it ran, else `None`) and, with the opt-in `cascade`, `decision`
+        (one final answer per module).
+        """
         self._require_loaded_dynamic_pii(self.rust_gateway.categories)
         return self.rust_gateway.scan_all(text)
 
@@ -203,13 +209,13 @@ class SecurityGateway:
                 f"dynamic-pii needs its L3 model loaded; call warmup() before scanning ({reasons})"
             )
 
-    def scan_category(self, category: str, text: str) -> list[dict]:
-        """Scan text with a single category."""
+    def scan_category(self, category: str, text: str) -> ScanReport:
+        """Scan text with a single category; the report as in `scan_all`."""
         self._require_loaded_dynamic_pii([category])
         return self.rust_gateway.scan_category(category, text)
 
-    def scan_categories(self, categories: list[str], text: str) -> list[dict]:
-        """Scan text with a caller-provided category subset."""
+    def scan_categories(self, categories: list[str], text: str) -> ScanReport:
+        """Scan text with a caller-provided category subset; the report as in `scan_all`."""
         self._require_loaded_dynamic_pii(categories)
         return self.rust_gateway.scan_categories(categories, text)
 

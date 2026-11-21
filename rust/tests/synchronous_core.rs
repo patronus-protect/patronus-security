@@ -88,7 +88,7 @@ fn core_preserves_gateway_native_decisions_and_source_evidence() {
                 }
             };
             let direct = core.scan(&text).unwrap();
-            let queued = gateway.scan_all(&text);
+            let queued = gateway.scan_all(&text).native;
             assert_native_parity(&direct.native, &queued);
             count += 1;
         }
@@ -156,7 +156,7 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         gateway.set_execution_gates(policy.gates.clone());
         for text in &texts {
             let direct = core.scan(text).unwrap();
-            let queued = gateway.scan_all(text);
+            let queued = gateway.scan_all(text).native;
             assert_native_parity(&direct.native, &queued);
             if policy.gates.models.get("native:injection_l1") == Some(&false) {
                 assert!(direct
@@ -197,7 +197,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
     ))
     .unwrap();
     let combined = core.scan(&text).unwrap();
-    assert_native_parity(&combined.native, &gateway.scan_all(&text));
+    assert_native_parity(&combined.native, &gateway.scan_all(&text).native);
     let pii_alone = core
         .scan_categories(&text, &[SecurityCategory::Pii])
         .unwrap();
@@ -283,6 +283,15 @@ fn untimed_decision(decision: &ModuleDecision) -> serde_json::Value {
     serde_json::to_value(decision).unwrap()
 }
 
+/// A report's module decisions without timings, in module order.
+fn untimed_decisions(decisions: Option<&[ModuleDecision]>) -> Option<Vec<serde_json::Value>> {
+    decisions.map(|decisions| {
+        let mut untimed = decisions.iter().map(untimed_decision).collect::<Vec<_>>();
+        untimed.sort_by_key(|decision| decision["module"].to_string());
+        untimed
+    })
+}
+
 #[test]
 fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
     let gates = serde_json::json!({
@@ -315,21 +324,29 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
         let ark = gateway.scan_all(text);
         assert_eq!(
             direct.native.iter().map(untimed).collect::<Vec<_>>(),
-            ark.iter()
+            ark.native
+                .iter()
                 .map(|result| untimed(&result.native))
                 .collect::<Vec<_>>(),
             "text={text}"
         );
-        for decision in direct.decision.unwrap() {
-            let module = decision.module.as_str();
-            for result in ark.iter().filter(|result| result.category == module) {
-                assert_eq!(
-                    result.module_decision.as_ref().map(untimed_decision),
-                    Some(untimed_decision(&decision)),
-                    "{module}: {text}"
-                );
-            }
-        }
+        // Ark decides at L1 only the modules with an L1 result; Core also
+        // answers `clear` for a module without one.
+        let with_results = direct
+            .decision
+            .unwrap()
+            .into_iter()
+            .filter(|decision| {
+                ark.native
+                    .iter()
+                    .any(|result| result.category == decision.module.as_str())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            untimed_decisions(ark.decision.as_deref()),
+            untimed_decisions(Some(&with_results)),
+            "text={text}"
+        );
     }
 }
 
@@ -368,19 +385,18 @@ fn ark_runs_the_cascade_l1_model_like_core() {
             (StageOutcome::Detected, Stage::L1Model),
             "rules_off={rules_off}"
         );
-        let ark = gateway.scan_all(text);
+        let report = gateway.scan_all(text);
+        assert_eq!(
+            untimed_decisions(report.decision.as_deref()),
+            untimed_decisions(Some(std::slice::from_ref(decision))),
+            "rules_off={rules_off}"
+        );
+        let ark = report.native;
         let injection = ark
             .iter()
             .filter(|result| result.category == "injection")
             .collect::<Vec<_>>();
         assert!(!injection.is_empty(), "rules_off={rules_off}");
-        for result in injection {
-            assert_eq!(
-                result.module_decision.as_ref().map(untimed_decision),
-                Some(untimed_decision(decision)),
-                "rules_off={rules_off}"
-            );
-        }
         if rules_off {
             assert_eq!(ark.len(), 1, "only the model's result");
             let layer_types = |layers: &[patronus_ark_core::LayerResult]| {

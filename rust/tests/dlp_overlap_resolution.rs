@@ -75,6 +75,7 @@ fn dlp_gateway() -> &'static SecurityGateway {
 fn scan(text: &str) -> SecurityScanResult {
     dlp_gateway()
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")
@@ -653,6 +654,7 @@ fn content_classes_keep_their_spans_over_secrets() {
     );
     let result = gateway
         .scan_category(SecurityCategory::Dlp, &text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .unwrap();
@@ -689,6 +691,7 @@ fn scored_modes_resolve_overlaps_like_strict() {
         });
         let result = gateway
             .scan_category(SecurityCategory::Dlp, &text)
+            .native
             .into_iter()
             .find(|result| result.model == "native:dlp")
             .unwrap();
@@ -801,9 +804,11 @@ fn url_password_is_not_also_reported_as_an_email_address() {
             SecurityLevel::L1,
         ))
         .unwrap()
-        .scan_category(SecurityCategory::Pii, &text);
-        let results =
-            both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);
+        .scan_category(SecurityCategory::Pii, &text)
+        .native;
+        let results = both_gateway()
+            .scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text)
+            .native;
         let dlp = spans_of(&results, "dlp");
         let pii = spans_of(&results, "pii");
         assert!(
@@ -833,8 +838,9 @@ fn pii_outside_secret_spans_stays_reported() {
         "url_userinfo_password",
         19,
     );
-    let results =
-        both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);
+    let results = both_gateway()
+        .scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text)
+        .native;
     let pii = spans_of(&results, "pii");
     assert!(
         pii.iter()
@@ -851,8 +857,9 @@ fn digits_inside_provider_tokens_are_not_pii() {
     let mut checked = 0;
     for seed in 0..200 {
         let (text, value) = fill("SLACK_BOT_TOKEN=<<secret:0>>\n", "slack_bot_token", seed);
-        let results =
-            both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);
+        let results = both_gateway()
+            .scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text)
+            .native;
         let dlp = spans_of(&results, "dlp");
         if !dlp
             .iter()
@@ -883,9 +890,11 @@ fn pii_decision_is_kept_when_its_span_defers_to_dlp() {
         SecurityLevel::L1,
     ))
     .unwrap()
-    .scan_category(SecurityCategory::Pii, &text);
-    let results =
-        both_gateway().scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text);
+    .scan_category(SecurityCategory::Pii, &text)
+    .native;
+    let results = both_gateway()
+        .scan_categories(&[SecurityCategory::Dlp, SecurityCategory::Pii], &text)
+        .native;
     let class = |results: &[SecurityScanResult]| {
         results
             .iter()

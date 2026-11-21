@@ -110,6 +110,7 @@ fn unicode_tag_instructions_have_bilingual_source_evidence_and_safe_emoji() {
         let text = format!("Grüße {hidden}");
         let result = gateway
             .scan_category(SecurityCategory::Injection, &text)
+            .native
             .remove(0);
         assert_ne!(result.class_name, "safe", "{clear}: {result:?}");
         assert!(!result.evidence_spans.is_empty());
@@ -130,7 +131,10 @@ fn unicode_tag_instructions_have_bilingual_source_evidence_and_safe_emoji() {
     for clear in ["hello world", "guten tag", "gbeng"] {
         let text = format!("\u{1f3f4}{}\u{e007f}", tags(clear));
         assert_eq!(
-            gateway.scan_category(SecurityCategory::Injection, &text)[0].class_name,
+            gateway
+                .scan_category(SecurityCategory::Injection, &text)
+                .native[0]
+                .class_name,
             "safe"
         );
     }
@@ -139,7 +143,10 @@ fn unicode_tag_instructions_have_bilingual_source_evidence_and_safe_emoji() {
         "a ".repeat(508)
     ));
     assert_ne!(
-        gateway.scan_category(SecurityCategory::Injection, &text)[0].class_name,
+        gateway
+            .scan_category(SecurityCategory::Injection, &text)
+            .native[0]
+            .class_name,
         "safe"
     );
 }
@@ -153,6 +160,7 @@ fn injection_l1(
 ) -> Option<patronus_ark::SecurityScanResult> {
     gateway
         .scan_category(category, text)
+        .native
         .into_iter()
         .find(|r| r.model == "native:injection_l1")
 }

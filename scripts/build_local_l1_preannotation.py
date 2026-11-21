@@ -465,7 +465,7 @@ def main() -> int:
                         "explain": True,
                     }
                 )
-            return gateways.value.scan_categories(["pii", "dlp"], text)
+            return gateways.value.scan_categories(["pii", "dlp"], text)["native"]
         except Exception as exc:
             raise RuntimeError(f"Ark scan failed ({type(exc).__name__}); input withheld") from None
 

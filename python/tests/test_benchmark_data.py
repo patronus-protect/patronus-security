@@ -253,8 +253,8 @@ class BenchmarkDataTests(unittest.TestCase):
                     else [],
                 }
                 if categories == ["dynamic-pii"]:
-                    return [dynamic]
-                return [
+                    return {"native": [dynamic]}
+                return {"native": [
                     {
                         "category": "injection",
                         "level": "L2",
@@ -282,7 +282,7 @@ class BenchmarkDataTests(unittest.TestCase):
                         "evidence_spans": [],
                     },
                     dynamic,
-                ]
+                ]}
 
         def samples(name):
             return [ner_sample] if name == "dynamic_pii" else [injection_sample]
@@ -831,12 +831,12 @@ class BenchmarkDataTests(unittest.TestCase):
             def scan_categories(self, categories, text):
                 self.scans.append((list(categories), text))
                 category = categories[0]
-                return [
+                return {"native": [
                     {
                         "category": category,
                         "class_name": "safe",
                     }
-                ]
+                ]}
 
         gateway = FakeGateway()
         result = benchmark._run_native_l1_10kb(

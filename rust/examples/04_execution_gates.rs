@@ -23,14 +23,14 @@ fn main() {
 
     // 1) Default gates: everything enabled.
     println!("default gates:");
-    print_models(&scanner.scan_all(text));
+    print_models(&scanner.scan_all(text).native);
 
     // 2) L1 only, with one native model disabled — set as the new default.
     scanner.set_execution_gates(
         ScanGateMatrix::levels(true, false, false).with_model("native:mcp_runtime_risk", false),
     );
     println!("\nL1 only, mcp_runtime_risk disabled:");
-    print_models(&scanner.scan_all(text));
+    print_models(&scanner.scan_all(text).native);
 
     // 3) Per-request override via enqueue — does not change the default above.
     let _id = scanner.enqueue(text, Some(ScanGateMatrix::levels(true, true, false)));

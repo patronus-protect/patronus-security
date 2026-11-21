@@ -50,6 +50,7 @@ fn scan(text: &str) -> SecurityScanResult {
             .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")

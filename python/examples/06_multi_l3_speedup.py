@@ -54,7 +54,7 @@ def run_strategy(strategy: str) -> dict:
     last_l3 = []
     for index in range(RUNS):
         started = time.perf_counter()
-        results = scanner.scan_all(PROMOTION_TEXT + f"\nunique comparison run {index}")
+        results = scanner.scan_all(PROMOTION_TEXT + f"\nunique comparison run {index}")["native"]
         durations.append((time.perf_counter() - started) * 1000.0)
         last_l3 = [result for result in results if result["level"] == "L3"]
         categories = {result["category"] for result in last_l3}

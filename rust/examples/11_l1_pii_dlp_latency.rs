@@ -160,7 +160,11 @@ fn main() {
         "PII gateway short",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Pii, black_box(short_pii)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Pii, black_box(short_pii))
+                        .native,
+                );
             },
             1_000,
             50,
@@ -170,7 +174,11 @@ fn main() {
         "DLP gateway short",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Dlp, black_box(short_dlp)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Dlp, black_box(short_dlp))
+                        .native,
+                );
             },
             1_000,
             50,
@@ -180,7 +188,11 @@ fn main() {
         "PII gateway 100 KiB benign",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Pii, black_box(&large_benign)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Pii, black_box(&large_benign))
+                        .native,
+                );
             },
             200,
             1,
@@ -190,7 +202,11 @@ fn main() {
         "PII gateway 100 KiB match",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Pii, black_box(&large_pii)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Pii, black_box(&large_pii))
+                        .native,
+                );
             },
             200,
             1,
@@ -200,7 +216,11 @@ fn main() {
         "DLP gateway 100 KiB benign",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Dlp, black_box(&large_benign)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Dlp, black_box(&large_benign))
+                        .native,
+                );
             },
             200,
             1,
@@ -210,7 +230,11 @@ fn main() {
         "DLP gateway 100 KiB match",
         measure(
             || {
-                black_box(gateway.scan_category(SecurityCategory::Dlp, black_box(&large_dlp)));
+                black_box(
+                    gateway
+                        .scan_category(SecurityCategory::Dlp, black_box(&large_dlp))
+                        .native,
+                );
             },
             200,
             1,

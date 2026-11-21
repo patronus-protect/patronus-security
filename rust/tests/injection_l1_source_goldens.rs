@@ -16,7 +16,7 @@ fn native_l1_results(text: &str) -> Vec<SecurityScanResult> {
     });
     SecurityCategory::ATTACK_CLASSES
         .into_iter()
-        .flat_map(|category| gateway.scan_category(category, text))
+        .flat_map(|category| gateway.scan_category(category, text).native)
         .filter(|result| result.model == "native:injection_l1")
         .collect()
 }

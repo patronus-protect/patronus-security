@@ -293,6 +293,7 @@ fn each_rule_reports_exactly_its_generated_values() {
                     let (text, spans) = materialize(&generators, &probe, &recipes).unwrap();
                     let predicted = gateway
                         .scan_category(SecurityCategory::Dlp, &text)
+                        .native
                         .into_iter()
                         .filter(|result| result.model == "native:dlp")
                         .flat_map(|result| result.native.evidence_spans)
@@ -334,6 +335,7 @@ fn rules_do_not_report_their_lookalike_values() {
                     let (text, _) = materialize(&generators, probe, &recipes).unwrap();
                     let predicted = gateway
                         .scan_category(SecurityCategory::Dlp, &text)
+                        .native
                         .into_iter()
                         .filter(|result| result.model == "native:dlp")
                         .flat_map(|result| result.native.evidence_spans)

@@ -56,6 +56,7 @@ fn governance_attack_goldens_preserve_terminal_and_nonterminal_taxonomy() {
             .filter_map(|category| {
                 gateway
                     .scan_category(category, &case.text)
+                    .native
                     .into_iter()
                     .find(|result| result.model == "native:injection_l1")
             })
@@ -127,6 +128,7 @@ fn governance_attack_goldens_preserve_terminal_and_nonterminal_taxonomy() {
                 for category in SecurityCategory::ATTACK_CLASSES {
                     for result in gateway
                         .scan_category(category, &case.text)
+                        .native
                         .into_iter()
                         .filter(|result| result.model == "native:injection_l1")
                     {

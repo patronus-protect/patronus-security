@@ -19,7 +19,9 @@ fn main() {
             "threat" => SecurityCategory::UnsafeAction,
             _ => panic!("unsupported calibration category"),
         };
-        let results = gateway.scan_category(category, input["text"].as_str().expect("text"));
+        let results = gateway
+            .scan_category(category, input["text"].as_str().expect("text"))
+            .native;
         let output: Vec<_> = results.into_iter().map(|r| serde_json::json!({
             "model": r.model, "class_name": r.class_name,
             "layers": r.native.layers.into_iter().map(|l| serde_json::json!({"details": l.details})).collect::<Vec<_>>()

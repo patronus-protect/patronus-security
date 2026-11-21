@@ -8,7 +8,7 @@ use patronus_ark::{
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
-    NtdbOperatingPoint, SecurityCategory,
+    NtdbOperatingPoint, ScanReport, SecurityCategory,
 };
 use pyo3::prelude::*;
 use std::sync::mpsc::{self, SyncSender};
@@ -87,9 +87,9 @@ impl SecurityGateway {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<Vec<PyObject>> {
-        let results = py.allow_threads(|| self.inner.scan_all(text));
-        results_to_py(py, results)
+    fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<PyObject> {
+        let report = py.allow_threads(|| self.inner.scan_all(text));
+        report_to_py(py, report)
     }
 
     #[pyo3(signature = (execution_gates_json=None))]
@@ -107,13 +107,13 @@ impl SecurityGateway {
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
-    fn scan_category(&self, py: Python<'_>, category: &str, text: &str) -> PyResult<Vec<PyObject>> {
+    fn scan_category(&self, py: Python<'_>, category: &str, text: &str) -> PyResult<PyObject> {
         let cat = match category.parse::<SecurityCategory>() {
             Ok(c) => c,
             Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
         };
-        let results = py.allow_threads(|| self.inner.scan_category(cat, text));
-        results_to_py(py, results)
+        let report = py.allow_threads(|| self.inner.scan_category(cat, text));
+        report_to_py(py, report)
     }
 
     fn scan_categories(
@@ -121,13 +121,13 @@ impl SecurityGateway {
         py: Python<'_>,
         categories: Vec<String>,
         text: &str,
-    ) -> PyResult<Vec<PyObject>> {
+    ) -> PyResult<PyObject> {
         let rust_categories = parse_categories(categories)?;
         let profile = std::env::var_os("PATRONUS_PHASE_METRICS").is_some_and(|v| v == "1");
         let started = std::time::Instant::now();
-        let results = py.allow_threads(|| self.inner.scan_categories(&rust_categories, text));
+        let report = py.allow_threads(|| self.inner.scan_categories(&rust_categories, text));
         let scanned = std::time::Instant::now();
-        let results = results_to_py(py, results)?;
+        let report = report_to_py(py, report)?;
         if profile {
             eprintln!(
                 "L1_BINDING_PROFILE scan_ms={} result_conversion_ms={}",
@@ -135,7 +135,7 @@ impl SecurityGateway {
                 scanned.elapsed().as_secs_f64() * 1000.0
             );
         }
-        Ok(results)
+        Ok(report)
     }
 
     #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None, chunk_overlap_tokens=0))]
@@ -308,18 +308,16 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
         .transpose()
 }
 
-/// The public result dicts, from the results' own `Serialize`: Core's result
-/// fields, flat (`decision` only when set), plus `module_decision` when set
+/// The public report dict, from the report's own `Serialize`: Ark Core's
+/// `ScanReport` keys (`input_bytes`, `native`, `wolf`, `decision` when set),
+/// each `native` entry with Core's result fields, flat
 /// (`docs/reference/result-schema.md`).
-fn results_to_py(py: Python<'_>, results: Vec<SecurityScanResult>) -> PyResult<Vec<PyObject>> {
+fn report_to_py(py: Python<'_>, report: ScanReport<SecurityScanResult>) -> PyResult<PyObject> {
     let mut strings = PyStrings::new(py);
-    let dicts = results
-        .iter()
-        .map(|result| py_serde::to_py(&mut strings, result).map(Bound::unbind))
-        .collect::<PyResult<Vec<_>>>()?;
-    let matched_rules = results.iter().map(matched_rules).sum();
-    release(results, matched_rules);
-    Ok(dicts)
+    let dict = py_serde::to_py(&mut strings, &report)?.unbind();
+    let matched_rules = report.native.iter().map(matched_rules).sum();
+    release(report, matched_rules);
+    Ok(dict)
 }
 
 fn matched_rules(result: &SecurityScanResult) -> usize {

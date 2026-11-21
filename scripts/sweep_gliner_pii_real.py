@@ -192,7 +192,7 @@ def main():
         gateway.warmup()
         measured = []
         for example in positives + negatives:
-            scan = gateway.scan_category("dynamic-pii", example["text"])
+            scan = gateway.scan_category("dynamic-pii", example["text"])["native"]
             dynamic = next(
                 (item for item in scan if item["category"] == "dynamic-pii"), None
             )

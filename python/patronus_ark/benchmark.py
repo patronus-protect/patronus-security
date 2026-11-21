@@ -229,7 +229,7 @@ def _run_benign(gateway):
     distribution = {}
     for sample in samples:
         started = time.perf_counter()
-        results = gateway.scan_all(sample["text"])
+        results = gateway.scan_all(sample["text"])["native"]
         latency_ms = (time.perf_counter() - started) * 1000.0
         latencies.append(latency_ms)
 
@@ -286,7 +286,7 @@ def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gat
     l3_scans = 0
     for sample in samples:
         started = time.perf_counter()
-        results = gateway.scan_categories([category], sample["text"])
+        results = gateway.scan_categories([category], sample["text"])["native"]
         latency_ms = (time.perf_counter() - started) * 1000.0
         latencies.append(latency_ms)
 
@@ -473,7 +473,7 @@ def _run_dynamic_pii_quality(gateway, samples):
                 entity for entity in sample["entities"] if entity["label"] in labels
             ]
             started = time.perf_counter()
-            results = gateway.scan_categories(["dynamic-pii"], sample["text"])
+            results = gateway.scan_categories(["dynamic-pii"], sample["text"])["native"]
             latency_ms = (time.perf_counter() - started) * 1000.0
             latencies.append(latency_ms)
             result = _dynamic_pii_result(results)
@@ -589,7 +589,7 @@ def _run_l2_l3_gliner_latency(
         # tokenization-neutral but keeps this latency phase out of its decision cache.
         text = sample["text"] + " "
         started = time.perf_counter()
-        results = gateway.scan_categories(["injection", "dynamic-pii"], text)
+        results = gateway.scan_categories(["injection", "dynamic-pii"], text)["native"]
         total_ms = (time.perf_counter() - started) * 1000.0
         l2 = next(
             (
@@ -757,7 +757,7 @@ def _native_l1_case(
     for index in range(total_runs):
         text = _native_l1_text(head=head, tail=tail, sequence=sequence + index)
         started = time.perf_counter()
-        results = gateway.scan_categories(categories, text)
+        results = gateway.scan_categories(categories, text)["native"]
         latency_ms = (time.perf_counter() - started) * 1000.0
         if index < warmup_iterations:
             continue

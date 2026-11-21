@@ -117,7 +117,7 @@ def main() -> None:
     mismatches = []
     for sample in SAMPLES:
         print(f"\nval id: {sample['id']}\ntext: {sample['text']}")
-        actual = collect_l2(gateway.scan_all(sample["text"]))
+        actual = collect_l2(gateway.scan_all(sample["text"])["native"])
         missing = set(CATEGORIES) - set(actual)
         if missing:
             raise RuntimeError(f"missing L2 results: {sorted(missing)}")

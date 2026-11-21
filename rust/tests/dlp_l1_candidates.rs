@@ -27,6 +27,7 @@ fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     scanner.set_execution_gates(gates);
     scanner
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")
@@ -834,7 +835,9 @@ fn provider_prefix_does_not_suppress_a_real_password() {
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::default();
     gates.set_rule("dlp_github_token", false);
     scanner.set_execution_gates(gates);
-    let results = scanner.scan_category(SecurityCategory::Dlp, &format!("password = {token}"));
+    let results = scanner
+        .scan_category(SecurityCategory::Dlp, &format!("password = {token}"))
+        .native;
     assert_span(
         results
             .iter()

@@ -180,7 +180,7 @@ def predict_rows(
             raise ValueError(f"row {row_id!r} requires text")
         # Several spans may share range and rule; keep each once with its best score.
         best: dict[tuple[int, int, str], dict[str, Any]] = {}
-        for result in gateway.scan_category(CATEGORY, text):
+        for result in gateway.scan_category(CATEGORY, text)["native"]:
             if result.get("class_name") == "error" or any(
                 layer.get("layer_type") == "scanner_error" for layer in result.get("layers") or []
             ):

@@ -94,7 +94,7 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
                 SecurityCategory::Dlp
             };
             let model = format!("native:{}", case.category);
-            let results = gateway.scan_category(category, text);
+            let results = gateway.scan_category(category, text).native;
             let result = results.iter().find(|r| r.model == model).unwrap();
             let matched = result.layers[0]
                 .details
@@ -162,6 +162,7 @@ fn hard_negatives_are_silent_in_de_and_en() {
         {
             let spans = gateway
                 .scan_category(category, text)
+                .native
                 .into_iter()
                 .flat_map(|result| result.native.evidence_spans)
                 .map(|span| span.text)

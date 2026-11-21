@@ -153,6 +153,7 @@ fn expected_spans(row: &FixtureRow) -> Result<BTreeSet<Span>, String> {
 fn predicted_spans(gateway: &SecurityGateway, text: &str) -> BTreeSet<Span> {
     gateway
         .scan_category(SecurityCategory::Pii, text)
+        .native
         .into_iter()
         .find(|result| result.native.model == "native:pii")
         .expect("native PII result must exist")

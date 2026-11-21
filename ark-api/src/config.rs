@@ -567,12 +567,14 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
             ..GatewayConfig::default()
         })
         .unwrap();
-        let results = gateway.scan_all(
-            "password = CorrectHorseBatteryStaple\n\
+        let results = gateway
+            .scan_all(
+                "password = CorrectHorseBatteryStaple\n\
              SELECT * FROM customer;\n\
              Gehalt 74.500 EUR\n\
              Fallnummer: FALL-2026-4711",
-        );
+            )
+            .native;
         let labels = results
             .iter()
             .flat_map(|result| result.evidence_spans.iter())

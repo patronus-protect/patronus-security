@@ -221,9 +221,9 @@ def predict_rows(
             raise ValueError(f"row {row_id!r} requires text")
         language = str(row.get("language", "und"))
         started = time.perf_counter_ns()
-        scans = [(result, None) for result in gateway.scan_category(CATEGORY, text)]
+        scans = [(result, None) for result in gateway.scan_category(CATEGORY, text)["native"]]
         if dynamic is not None:
-            scans += [(result, dynamic_labels or {}) for result in dynamic.scan_category(DYNAMIC_CATEGORY, text)]
+            scans += [(result, dynamic_labels or {}) for result in dynamic.scan_category(DYNAMIC_CATEGORY, text)["native"]]
         if timings is not None:
             timings[language].append(time.perf_counter_ns() - started)
         # Several rules may report the same span; keep it once with its best score.

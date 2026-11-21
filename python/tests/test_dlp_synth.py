@@ -1546,7 +1546,7 @@ class RuleProbeTests(unittest.TestCase):
             for sample in rules.samples(rule_id, range(8)):
                 spans = {
                     (span["start_char"], span["end_char"])
-                    for result in gateway.scan_category("dlp", sample.text)
+                    for result in gateway.scan_category("dlp", sample.text)["native"]
                     if result["model"] == "native:dlp"
                     for span in result["evidence_spans"]
                 }
@@ -1564,7 +1564,7 @@ class RuleProbeTests(unittest.TestCase):
             for sample in rules.samples(rule_id, range(8), lookalike=True):
                 spans = [
                     span
-                    for result in gateway.scan_category("dlp", sample.text)
+                    for result in gateway.scan_category("dlp", sample.text)["native"]
                     if result["model"] == "native:dlp"
                     for span in result["evidence_spans"]
                 ]

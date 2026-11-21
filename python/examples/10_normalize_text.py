@@ -21,7 +21,7 @@ def main() -> None:
             "download": "never",
         }
     )
-    for result in scanner.scan_all(normalized):
+    for result in scanner.scan_all(normalized)["native"]:
         print(
             f"[{result['level']:<3}] {result['category']:<12} "
             f"class={result['class_name']:<22} "

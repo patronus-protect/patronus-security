@@ -54,6 +54,7 @@ fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
 fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
     scanner
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")

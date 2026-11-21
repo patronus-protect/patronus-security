@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for case in &cases {
         for _ in 0..5 {
-            let _ = scanner.scan_all(&case.text);
+            let _ = scanner.scan_all(&case.text).native;
         }
     }
 
@@ -123,7 +123,7 @@ fn run_case(scanner: &SecurityGateway, case: &Case) -> CaseStats {
 
     for _ in 0..case.iterations {
         let start = Instant::now();
-        let results = scanner.scan_all(&case.text);
+        let results = scanner.scan_all(&case.text).native;
         samples.push(start.elapsed());
         result_count = results.len();
     }

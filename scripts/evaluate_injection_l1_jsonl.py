@@ -28,7 +28,7 @@ def scan_corpus(gateway: SecurityGateway, texts: list[str]) -> dict[str, int]:
     candidate_documents = 0
     accepted_documents = 0
     for text in texts:
-        results = gateway.scan_category("injection", text)
+        results = gateway.scan_category("injection", text)["native"]
         native = [result for result in results if result["model"] == "native:injection_l1"]
         if len(native) != 1:
             raise RuntimeError(f"expected one native Injection L1 result, got {len(native)}")

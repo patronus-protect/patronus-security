@@ -226,7 +226,8 @@ pub struct SecurityScanResult {
     /// decision: a detection at a lowered `detect_threshold` shows as
     /// `detected` even when the native class stays `safe`, and its `layers`
     /// are the L1 model's. An L2 or L3 result keeps its layer in its own
-    /// `layers`.
+    /// `layers`. The synchronous `scan_*` reports move it to the report's
+    /// `decision` list, once per module.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_decision: Option<crate::ModuleDecision>,
 }

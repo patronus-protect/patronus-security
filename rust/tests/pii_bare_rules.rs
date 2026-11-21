@@ -225,6 +225,7 @@ fn gates(rule: Option<&str>, mode: ScoreMode) -> ScanGateMatrix {
 fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
     scanner
         .scan_category(SecurityCategory::Pii, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:pii")
         .expect("native PII result must be present")

@@ -221,6 +221,7 @@ fn first_matching_rule_in_registry_order_sets_the_class() {
                 password_hash = 5f4dcc3b5aa765d61d8327deb882cf99\n";
     let result = gateway
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result");

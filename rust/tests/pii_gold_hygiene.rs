@@ -169,6 +169,7 @@ fn every_l1_finding_on_a_positive_is_gold_or_a_known_detector_fp() {
             .collect::<BTreeSet<_>>();
         let result = gateway
             .scan_category(SecurityCategory::Pii, &row.text)
+            .native
             .into_iter()
             .find(|result| result.model == "native:pii")
             .expect("native PII result must be present");

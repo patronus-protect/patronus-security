@@ -477,12 +477,12 @@ class JsonlScanner:
         import atexit
         atexit.register(self.close)
 
-    def scan_category(self, category: str, text: str) -> list[dict]:
+    def scan_category(self, category: str, text: str) -> dict:
         self.process.stdin.write(json.dumps({"category": category, "text": text}) + "\n")
         self.process.stdin.flush()
         line = self.process.stdout.readline()
         require(bool(line), "Rust calibration scanner exited unexpectedly")
-        return json.loads(line)
+        return {"native": json.loads(line)}
 
     def close(self) -> None:
         if self.process.poll() is None:
@@ -518,7 +518,7 @@ def extract_source(
     rejected_weak_positives = 0
     for index, row in enumerate(rows):
         text = row["text"]
-        candidates = aggregate_candidates(gateway.scan_category("injection", text))
+        candidates = aggregate_candidates(gateway.scan_category("injection", text)["native"])
         documents_with_candidates += bool(candidates)
         scoring_candidates = [
             candidate
@@ -534,7 +534,7 @@ def extract_source(
         for candidate in scoring_candidates:
             if spec.label == 1:
                 excerpt = candidate_excerpt(text, candidate)
-                isolated = aggregate_candidates(gateway.scan_category("injection", excerpt))
+                isolated = aggregate_candidates(gateway.scan_category("injection", excerpt)["native"])
                 isolated_rules = {
                     rule
                     for item in isolated
@@ -942,7 +942,7 @@ def source_golden_records(gateway, path: Path) -> list[dict]:
         require(isinstance(name, str) and name and name not in names, "invalid source golden name")
         require(isinstance(text, str) and text, f"invalid source golden text for {name}")
         names.add(name)
-        candidates = aggregate_candidates(gateway.scan_category("injection", text))
+        candidates = aggregate_candidates(gateway.scan_category("injection", text)["native"])
         audited = [
             candidate
             for candidate in candidates
@@ -1311,7 +1311,7 @@ def cmd_add_regressions(args: argparse.Namespace) -> None:
                     digest = normalized_text_hash(text)
                     require(digest not in validation_hashes, "regression overlaps development validation")
                     regression_hashes.add(digest)
-                    candidates = aggregate_candidates(gateway.scan_category("injection", text))
+                    candidates = aggregate_candidates(gateway.scan_category("injection", text)["native"])
                     eligible = [c for c in candidates if not candidate_is_candidate_only(c)]
                     only = [c for c in candidates if candidate_is_candidate_only(c)]
                     any_count += bool(candidates); scoring_count += bool(eligible); only_count += bool(only); only_records += len(only)

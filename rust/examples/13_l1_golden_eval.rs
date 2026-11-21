@@ -220,6 +220,7 @@ fn evaluate(
         let text = row.materialized_text(generators)?;
         let result = gateway
             .scan_category(category, &text)
+            .native
             .into_iter()
             .find(|result| result.model == model)
             .expect("native L1 result must exist");
@@ -382,7 +383,9 @@ fn evaluate_threat(
         if row.known_gap && row.case_type != "positive" {
             return Err(format!("{}: only positives can be known gaps", row.id).into());
         }
-        let results = gateway.scan_category(threat_category(&row.class)?, &row.text);
+        let results = gateway
+            .scan_category(threat_category(&row.class)?, &row.text)
+            .native;
         let detected = results
             .iter()
             .any(|result| !matches!(result.class_name.as_str(), "benign" | "safe"));
