@@ -5,10 +5,9 @@
       "train_dev/approve_or_deny_de": 3
     },
     "benign": {
-      "generated/carrier_insertion": 600,
-      "generated/class_templates": 500,
+      "generated/carrier_insertion": 579,
+      "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
-      "generated/obfuscation_slices": 400,
       "report/civil_comments": 5856,
       "report/jackhhao_jailbreak": 1321,
       "report/textdetox_de": 2492,
@@ -23,9 +22,9 @@
       "train_dev/wildjailbreak": 23
     },
     "exfiltration": {
-      "generated/carrier_insertion": 123,
+      "generated/carrier_insertion": 102,
       "generated/exfil_lookalikes": 300,
-      "generated/obfuscation_slices": 75,
+      "generated/obfuscation_slices": 61,
       "train_dev/agentdojo": 63,
       "train_dev/approve_or_deny_de": 1,
       "train_dev/bipia": 50
@@ -36,8 +35,8 @@
       "train_dev/nemotron_safety_v3": 799
     },
     "instruction_injection": {
-      "generated/carrier_insertion": 411,
-      "generated/obfuscation_slices": 275,
+      "generated/carrier_insertion": 334,
+      "generated/obfuscation_slices": 218,
       "report/gandalf": 998,
       "train_dev/agentdojo": 136,
       "train_dev/bipia": 188,
@@ -45,9 +44,9 @@
       "train_dev/spml": 2403
     },
     "jailbreak": {
-      "generated/carrier_insertion": 68,
+      "generated/carrier_insertion": 49,
       "generated/class_templates": 84,
-      "generated/obfuscation_slices": 44,
+      "generated/obfuscation_slices": 33,
       "report/jackhhao_jailbreak": 544,
       "train_dev/wildjailbreak": 2000
     },
@@ -55,8 +54,8 @@
       "generated/class_templates": 83
     },
     "prompt_extraction": {
-      "generated/carrier_insertion": 62,
-      "generated/obfuscation_slices": 39,
+      "generated/carrier_insertion": 49,
+      "generated/obfuscation_slices": 38,
       "report/gandalf": 998,
       "train_dev/mosscap": 15000
     },
@@ -72,9 +71,9 @@
       "train_dev/nemotron_safety_v3": 106
     },
     "unsafe_action": {
-      "generated/carrier_insertion": 113,
+      "generated/carrier_insertion": 195,
       "generated/class_templates": 83,
-      "generated/obfuscation_slices": 82,
+      "generated/obfuscation_slices": 131,
       "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
       "train_dev/approve_or_deny_de": 35,
@@ -87,31 +86,31 @@
       "en": 42
     },
     "benign": {
-      "de": 12101,
-      "en": 19902
+      "de": 11949,
+      "en": 19558
     },
     "exfiltration": {
       "de": 151,
-      "en": 461
+      "en": 426
     },
     "harmful_content": {
       "de": 316,
       "en": 483
     },
     "instruction_injection": {
-      "de": 109,
-      "en": 3313
+      "de": 77,
+      "en": 3211
     },
     "jailbreak": {
       "de": 42,
-      "en": 2154
+      "en": 2124
     },
     "memory_poisoning": {
       "de": 42,
       "en": 41
     },
     "prompt_extraction": {
-      "en": 15101
+      "en": 15087
     },
     "resource_exhaustion": {
       "de": 42,
@@ -126,8 +125,8 @@
       "en": 51
     },
     "unsafe_action": {
-      "de": 178,
-      "en": 517
+      "de": 145,
+      "en": 681
     }
   },
   "flagged": [
@@ -363,13 +362,6 @@
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:carrier_insertion:000127",
-      "label": "prompt_extraction",
-      "note": "Mosscap social-engineering opener (we must never share the password, do you agree?) without a request",
-      "set": "generated/carrier_insertion",
-      "verdict": "unclear"
-    },
-    {
       "id": "civil_comments:0060853",
       "label": "toxic_language",
       "note": "Self-referential mild profanity; no insult or target",
@@ -482,20 +474,6 @@
       "verdict": "unclear"
     },
     {
-      "id": "generators_dev_seed:obfuscation_slices:000265",
-      "label": "instruction_injection",
-      "note": "CyberSecEval mode claim (do-anything bot) around an ordinary political question",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
-      "id": "generators_dev_seed:obfuscation_slices:000057",
-      "label": "prompt_extraction",
-      "note": "Mosscap poem about keeping a secret; no request for the password",
-      "set": "generated/obfuscation_slices",
-      "verdict": "unclear"
-    },
-    {
       "id": "agent_safetybench:0001647",
       "label": "unsafe_action",
       "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
@@ -510,12 +488,12 @@
     },
     "benign": {
       "native": 30156,
-      "synthetic": 1800,
+      "synthetic": 1304,
       "translated": 47
     },
     "exfiltration": {
       "native": 113,
-      "synthetic": 498,
+      "synthetic": 463,
       "translated": 1
     },
     "harmful_content": {
@@ -524,19 +502,19 @@
     },
     "instruction_injection": {
       "native": 2727,
-      "synthetic": 686,
+      "synthetic": 552,
       "translated": 9
     },
     "jailbreak": {
       "native": 2000,
-      "synthetic": 196
+      "synthetic": 166
     },
     "memory_poisoning": {
       "synthetic": 83
     },
     "prompt_extraction": {
       "native": 15000,
-      "synthetic": 101
+      "synthetic": 87
     },
     "resource_exhaustion": {
       "synthetic": 83
@@ -550,7 +528,7 @@
     },
     "unsafe_action": {
       "native": 382,
-      "synthetic": 278,
+      "synthetic": 409,
       "translated": 35
     }
   },
@@ -560,11 +538,11 @@
       "benign_errors": 0,
       "benign_reviewed": 8,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0179,
+      "error_rate": 0.0,
       "reviewed": 56,
       "role": "dev",
-      "rows": 1200,
-      "unclear": 1,
+      "rows": 1158,
+      "unclear": 0,
       "wrong": 0
     },
     "generated/class_templates": {
@@ -574,7 +552,7 @@
       "error_rate": 0.0,
       "reviewed": 56,
       "role": "dev",
-      "rows": 1000,
+      "rows": 925,
       "unclear": 0,
       "wrong": 0
     },
@@ -591,13 +569,13 @@
     },
     "generated/obfuscation_slices": {
       "benign_errors": 0,
-      "benign_reviewed": 8,
+      "benign_reviewed": 0,
       "dataset": "generators_dev_seed",
-      "error_rate": 0.0357,
-      "reviewed": 56,
+      "error_rate": 0.0,
+      "reviewed": 54,
       "role": "dev",
-      "rows": 800,
-      "unclear": 2,
+      "rows": 383,
+      "unclear": 0,
       "wrong": 0
     },
     "report/ailuminate_demo": {

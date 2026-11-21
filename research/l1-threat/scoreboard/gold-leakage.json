@@ -6,7 +6,7 @@
     "shingle_chars": 5,
     "threshold": 0.8
   },
-  "dev_rows": 70929,
+  "dev_rows": 70395,
   "leaked": 0,
   "schema": "ark-l1-threat-gold-leakage-v1",
   "sets": {
@@ -28,7 +28,17 @@
     "generated/obfuscation_slices": {
       "exact": 0,
       "minhash": 0,
-      "rows": 1200
+      "rows": 600
+    },
+    "holdout/agentharm": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 147
+    },
+    "holdout/autoredclaw": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 146
     },
     "holdout/cyberseceval_pi": {
       "exact": 0,
@@ -45,6 +55,11 @@
       "minhash": 0,
       "rows": 3153
     },
+    "holdout/jbb_artifacts": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 647
+    },
     "holdout/jbb_behaviors": {
       "exact": 0,
       "minhash": 0,
@@ -54,6 +69,26 @@
       "exact": 0,
       "minhash": 0,
       "rows": 11711
+    },
+    "holdout/malskillbench": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 3641
+    },
+    "holdout/mcptox": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 474
+    },
+    "holdout/memform": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 232
+    },
+    "holdout/memform_clean": {
+      "exact": 0,
+      "minhash": 0,
+      "rows": 234
     },
     "holdout/multijail": {
       "exact": 0,

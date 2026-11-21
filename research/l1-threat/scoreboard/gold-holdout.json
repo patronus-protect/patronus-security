@@ -1,15 +1,17 @@
 {
   "class_sets": {
     "agent_config_tampering": {
-      "generated/class_templates": 125
+      "generated/class_templates": 125,
+      "holdout/malskillbench": 285
     },
     "benign": {
       "generated/carrier_insertion": 900,
       "generated/class_templates": 750,
       "generated/exfil_lookalikes": 450,
-      "generated/obfuscation_slices": 600,
       "holdout/hatecheck_de": 845,
       "holdout/hatecheck_en": 991,
+      "holdout/malskillbench": 3274,
+      "holdout/memform_clean": 234,
       "holdout/notinject": 339,
       "holdout/oasst2": 14985,
       "holdout/or_bench_hard": 1318,
@@ -27,34 +29,44 @@
       "holdout/llmail_inject": 11711
     },
     "jailbreak": {
-      "generated/class_templates": 125
+      "generated/carrier_insertion": 214,
+      "generated/class_templates": 125,
+      "generated/obfuscation_slices": 163,
+      "holdout/jbb_artifacts": 647
     },
     "memory_poisoning": {
-      "generated/class_templates": 125
+      "generated/carrier_insertion": 224,
+      "generated/class_templates": 125,
+      "generated/obfuscation_slices": 147,
+      "holdout/memform": 232
     },
     "prompt_extraction": {
-      "generated/carrier_insertion": 900,
-      "generated/obfuscation_slices": 600,
+      "generated/carrier_insertion": 227,
+      "generated/obfuscation_slices": 167,
       "holdout/tensortrust_extraction": 331
     },
     "resource_exhaustion": {
       "generated/class_templates": 125
     },
     "tool_poisoning": {
-      "generated/class_templates": 125
+      "generated/carrier_insertion": 235,
+      "generated/class_templates": 125,
+      "generated/obfuscation_slices": 123,
+      "holdout/mcptox": 474
     },
     "toxic_language": {
       "holdout/hatecheck_de": 1999,
       "holdout/hatecheck_en": 2162
     },
     "unsafe_action": {
-      "generated/class_templates": 125
+      "generated/class_templates": 125,
+      "holdout/malskillbench": 82
     }
   },
   "classes": {
     "agent_config_tampering": {
       "de": 63,
-      "en": 62
+      "en": 347
     },
     "benign": {
       "ar": 8,
@@ -62,7 +74,7 @@
       "cs": 2,
       "da": 4,
       "de": 17191,
-      "en": 12122,
+      "en": 15030,
       "eo": 38,
       "es": 2805,
       "eu": 21,
@@ -96,14 +108,14 @@
     },
     "jailbreak": {
       "de": 63,
-      "en": 62
+      "en": 1086
     },
     "memory_poisoning": {
       "de": 63,
-      "en": 62
+      "en": 665
     },
     "prompt_extraction": {
-      "en": 1831
+      "en": 725
     },
     "resource_exhaustion": {
       "de": 63,
@@ -111,7 +123,7 @@
     },
     "tool_poisoning": {
       "de": 63,
-      "en": 62
+      "en": 894
     },
     "toxic_language": {
       "de": 1999,
@@ -119,16 +131,17 @@
     },
     "unsafe_action": {
       "de": 63,
-      "en": 62
+      "en": 144
     }
   },
   "provenance": {
     "agent_config_tampering": {
+      "native": 285,
       "synthetic": 125
     },
     "benign": {
-      "native": 33727,
-      "synthetic": 2700
+      "native": 37235,
+      "synthetic": 2100
     },
     "exfiltration": {
       "native": 11711,
@@ -141,25 +154,29 @@
       "native": 11711
     },
     "jailbreak": {
-      "synthetic": 125
+      "native": 647,
+      "synthetic": 502
     },
     "memory_poisoning": {
-      "synthetic": 125
+      "native": 232,
+      "synthetic": 496
     },
     "prompt_extraction": {
       "native": 331,
-      "synthetic": 1500
+      "synthetic": 394
     },
     "resource_exhaustion": {
       "synthetic": 125
     },
     "tool_poisoning": {
-      "synthetic": 125
+      "native": 474,
+      "synthetic": 483
     },
     "toxic_language": {
       "native": 4161
     },
     "unsafe_action": {
+      "native": 82,
       "synthetic": 125
     }
   },
@@ -167,14 +184,14 @@
   "sets": {
     "generated/carrier_insertion": {
       "benign_errors": 0,
-      "benign_reviewed": 25,
+      "benign_reviewed": 10,
       "dataset": "generators_holdout_seed",
-      "error_rate": 0.02,
+      "error_rate": 0.04,
       "reviewed": 50,
       "role": "decisive",
       "rows": 1800,
       "unclear": 1,
-      "wrong": 0
+      "wrong": 1
     },
     "generated/class_templates": {
       "benign_errors": 0,
@@ -200,14 +217,36 @@
     },
     "generated/obfuscation_slices": {
       "benign_errors": 0,
-      "benign_reviewed": 25,
+      "benign_reviewed": 0,
       "dataset": "generators_holdout_seed",
-      "error_rate": 0.0,
+      "error_rate": 0.0192,
+      "reviewed": 52,
+      "role": "decisive",
+      "rows": 600,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "holdout/agentharm": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "agentharm",
+      "error_rate": 0.28,
       "reviewed": 50,
       "role": "decisive",
-      "rows": 1200,
-      "unclear": 0,
-      "wrong": 0
+      "rows": 147,
+      "unclear": 8,
+      "wrong": 6
+    },
+    "holdout/autoredclaw": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "autoredclaw",
+      "error_rate": 0.82,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 146,
+      "unclear": 17,
+      "wrong": 24
     },
     "holdout/cyberseceval_pi": {
       "benign_errors": 0,
@@ -242,6 +281,17 @@
       "unclear": 0,
       "wrong": 0
     },
+    "holdout/jbb_artifacts": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "jbb_artifacts",
+      "error_rate": 0.04,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 647,
+      "unclear": 0,
+      "wrong": 2
+    },
     "holdout/jbb_behaviors": {
       "benign_errors": 0,
       "benign_reviewed": 0,
@@ -262,6 +312,50 @@
       "role": "decisive",
       "rows": 11711,
       "unclear": 7,
+      "wrong": 0
+    },
+    "holdout/malskillbench": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "malskillbench",
+      "error_rate": 0.0196,
+      "reviewed": 51,
+      "role": "decisive",
+      "rows": 3641,
+      "unclear": 1,
+      "wrong": 0
+    },
+    "holdout/mcptox": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "mcptox",
+      "error_rate": 0.04,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 474,
+      "unclear": 2,
+      "wrong": 0
+    },
+    "holdout/memform": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "memform",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 232,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "holdout/memform_clean": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "memform_clean",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "decisive",
+      "rows": 234,
+      "unclear": 0,
       "wrong": 0
     },
     "holdout/multijail": {
