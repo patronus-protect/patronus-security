@@ -528,7 +528,8 @@ def test_calibrate_reads_each_language_cut_off_that_language_s_benign_rows():
         assert cell["fp"] == sum(s > cell["thresholds"]["0_1pct_fpr"] for s in benign)
         assert cell["fpr"] <= 0.1
         assert sum(c["rows"] for c in cell["benign_sources"].values()) == len(benign)
-        assert sum(cell["positive_sources"].values()) == cell["positives"]
+        assert sum(c["rows"] for c in cell["positive_sources"].values()) == cell["positives"]
+        assert sum(c["tp"] for c in cell["positive_sources"].values()) == cell["tp"]
     # Generated positives count per template, other positives per set.
     assert "class_templates:plain_mail" in report["per_language"]["de"]["positive_sources"]
     assert "toy" in report["per_language"]["de"]["positive_sources"]

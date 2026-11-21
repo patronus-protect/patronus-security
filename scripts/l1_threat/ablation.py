@@ -49,7 +49,7 @@ twins) and what the train-negative cut would have flagged; ``--report-rows`` (se
 ``model.json`` (``--model-out``) records the pool in ``calibration``; it is not wired into any scan path.
 Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
 alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
-source and its positives per source. ``--oversample-de N`` repeats every German train positive ``N`` times.
+source and its TPR per positive source (generator and template family, else the set). ``--oversample-de N`` repeats every German train positive ``N`` times.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -414,6 +414,11 @@ def calibration_rows(train: list[dict], rows: Iterable[dict]) -> list[dict]:
     return [row for row in rows if row["id"] not in seen]
 
 
+def positive_source(row: dict) -> str:
+    """The source of a positive: a generated row's generator and template family, else its set."""
+    return template_key(row) if row.get("generator") else row["dataset"]
+
+
 def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, Any]:
     """TPR and FPR at ``cut`` (``score > cut``) per language, and the FPR per benign source."""
     out: dict[str, Any] = {}
@@ -428,13 +433,20 @@ def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, 
             out[language] = {"positives": positives, "tp": tp, "tpr": tp / positives if positives else None,
                              "negatives": negatives, "fp": fp, "fpr": fp / negatives if negatives else None}
     sources: dict[str, dict[str, int]] = {}
+    positives_by: dict[str, dict[str, int]] = {}
     for row, label, score in scores:
-        if not label:
+        if label:
+            source = positives_by.setdefault(positive_source(row), {"rows": 0, "tp": 0})
+            source["rows"] += 1
+            source["tp"] += score > cut
+        else:
             source = sources.setdefault(SCOREBOARD._benign_source(row), {"rows": 0, "fp": 0})
             source["rows"] += 1
             source["fp"] += score > cut
     out["benign_sources"] = {name: {**cell, "fpr": cell["fp"] / cell["rows"]}
                              for name, cell in sorted(sources.items())}
+    out["positive_sources"] = {name: {**cell, "tpr": cell["tp"] / cell["rows"]}
+                               for name, cell in sorted(positives_by.items())}
     return out
 
 
@@ -442,15 +454,6 @@ def cuts(benign: list[float], target_fpr: float, clear_fpr: float) -> dict[str, 
     """The detect cut at ``target_fpr`` and the clear cut at ``clear_fpr`` (never above detect) of benign scores."""
     detect = MODEL.fpr_cut(benign, target_fpr)
     return {MODEL.ASK_THRESHOLD: min(MODEL.fpr_cut(benign, clear_fpr), detect), MODEL.BLOCK_THRESHOLD: detect}
-
-
-def positive_sources(rows: Iterable[dict]) -> dict[str, int]:
-    """Positives per source: a generated row's generator and template family, else its set."""
-    counts: dict[str, int] = {}
-    for row in rows:
-        key = template_key(row) if row.get("generator") else row["dataset"]
-        counts[key] = counts.get(key, 0) + 1
-    return dict(sorted(counts.items()))
 
 
 def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[dict], list[str]],
@@ -480,7 +483,7 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
         detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD])
         per_language[language] = {"thresholds": language_cuts, **detections[language],
                                   "benign_sources": detections["benign_sources"],
-                                  "positive_sources": positive_sources(row for row, label, _ in chosen if label)}
+                                  "positive_sources": detections["positive_sources"]}
     train_cut = document["thresholds"].get(MODEL.BLOCK_THRESHOLD)
     calibrated = {**document, "thresholds": thresholds,
                   "calibration": {"target_fpr": target_fpr, "clear_fpr": clear_fpr, "benign_rows": len(benign),
@@ -553,7 +556,8 @@ def calibration_markdown(reports: list[dict[str, Any]]) -> str:
                       "| Kind | Source | rows | hits | rate |", "|---|---|---|---|---|"]
             lines += [f"| benign | {source} | {c['rows']} | {c['fp']} | {_pct(c['fpr'], 2)} |"
                       for source, c in cell["benign_sources"].items()]
-            lines += [f"| positive | {source} | {n} | | |" for source, n in cell["positive_sources"].items()]
+            lines += [f"| positive | {source} | {c['rows']} | {c['tp']} | {_pct(c['tpr'], 1)} |"
+                      for source, c in cell["positive_sources"].items()]
     for report in reports:
         lines += ["", f"## {report['class']}: FPR per benign source at the detect cut", "",
                   "| Scope | Source | rows | FP | FPR |", "|---|---|---|---|---|"]
