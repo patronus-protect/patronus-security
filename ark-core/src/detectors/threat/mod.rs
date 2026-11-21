@@ -715,10 +715,12 @@ pub(crate) fn counter_context(
     }
     shape.push(from..span.end.max(from));
     // A host label (`example.test`) is part of an address, no context.
+    let before = scan.before(text, span.clone());
     shape.extend(
         clause
             .hits
             .iter()
+            .chain(before.iter().flat_map(|before| before.hits.iter()))
             .filter(|hit| {
                 text[..hit.range.start]
                     .strip_suffix('.')
