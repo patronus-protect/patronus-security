@@ -117,7 +117,7 @@ class SecurityGateway:
             L3 worker policy `l3_policy` and the opt-in `cascade`
             (`{"modules": {...}}`: L1 early exit with per-category
             `detect_threshold`/`clear_threshold`; results then carry
-            `decided_by`)), `cache_root` (the model cache root; default the
+            `module_decision`)), `cache_root` (the model cache root; default the
             platform cache directory plus `patronus_ark`), `wolf` (the
             dedicated injection L3: `model` `base`, `small` (default) or
             `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,

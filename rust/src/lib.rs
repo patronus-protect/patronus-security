@@ -22,7 +22,8 @@ use patronus_ark_core::{
     cascade::{
         EffectiveL3PipelinePolicy, ExternalL1Detector, ExternalL1Input, GateResult,
         L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
-        L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
+        L3ProgressMode, L3SchedulerPolicy, ModuleDecision, ScanGateMatrix, SecurityLevel, Stage,
+        StageOutcome,
     },
     detectors, diagnostics, threat, ChunkOverlapTokens, DecisionCandidate, DecisionEnvelope,
     DecisionProvenance, DecisionRecommendation, DecisionResult, DecisionTerminality,

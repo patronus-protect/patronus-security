@@ -587,6 +587,23 @@ class PublicApiTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     SecurityGateway({"download": "never", **config})
 
+    def test_cascade_results_carry_the_module_decision(self):
+        config = {"categories": ["dlp"], "max_level": "l1", "download": "never"}
+        plain = SecurityGateway(config).scan_all(f"key {OPENAI_KEY}")
+        self.assertTrue(plain)
+        self.assertTrue(all("module_decision" not in result for result in plain))
+
+        results = SecurityGateway({**config, "cascade": {}}).scan_all(f"key {OPENAI_KEY}")
+
+        self.assertTrue(results)
+        for result in results:
+            decision = result["module_decision"]
+            self.assertEqual(
+                (decision["module"], decision["outcome"], decision["decided_by"]),
+                ("dlp", "detected", "heuristic"),
+            )
+            self.assertIsInstance(decision["score"], float)
+
     def test_result_dicts_keep_the_documented_shape(self):
         scanner = SecurityGateway({"categories": ["pii", "dlp"], "max_level": "l1", "download": "never"})
         scanner.warmup()
@@ -598,7 +615,7 @@ class PublicApiTests(unittest.TestCase):
             "category", "class_name", "confidence", "level", "model", "duration_ms",
             "layers", "evidence_spans", "label_scores",
         }
-        optional = {"request_id", "decision", "decided_by", "l1_outcome"}
+        optional = {"request_id", "decision", "module_decision"}
         for result in results:
             self.assertLessEqual(required, set(result))
             self.assertLessEqual(set(result) - required, optional)

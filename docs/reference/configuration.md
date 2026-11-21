@@ -187,7 +187,7 @@ scanner = SecurityGateway({
   it on with the scorers' shipped cuts; `{"cascade": {"modules": {"<category>": {"detect_threshold":
   0.9, "clear_threshold": 0.1}}}}` also sets a category's L1 cuts on its rule score. A category L1
   decides, or one no later layer can run for, then skips L2 and L3, and results carry
-  `decided_by`. Levels and conditional gates stay the keys above; `l1_model` is not supported in
+  `module_decision`. Levels and conditional gates stay the keys above; `l1_model` is not supported in
   Ark. The same `cascade.modules` keys configure Ark Core's scanner (see
   [Analysis framework](../concepts/layered-scanning.md#configuration-keys)).
 - `pii_mode` — native PII output mode: `strict` (default; every finding scores `1.0`),

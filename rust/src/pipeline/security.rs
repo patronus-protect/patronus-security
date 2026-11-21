@@ -116,6 +116,22 @@ mod distributed_plan_tests {
     use super::*;
     use crate::QueuedSecurityEvent;
 
+    /// The stage of the result's module decision.
+    fn decided_by(result: &SecurityScanResult) -> Option<crate::Stage> {
+        result
+            .module_decision
+            .as_ref()
+            .map(|decision| decision.decided_by)
+    }
+
+    /// The outcome of the result's module decision.
+    fn outcome(result: &SecurityScanResult) -> Option<crate::StageOutcome> {
+        result
+            .module_decision
+            .as_ref()
+            .map(|decision| decision.outcome)
+    }
+
     #[test]
     fn tool_tags_plan_preserves_all_canonical_model_bindings() {
         let gateway = SecurityGateway::new(GatewayConfig::new(
@@ -195,7 +211,7 @@ mod distributed_plan_tests {
             .iter()
             .find(|result| result.model == "native:injection_l1")
             .unwrap();
-        assert_eq!(l1.decided_by, Some(crate::Stage::Heuristic));
+        assert_eq!(decided_by(l1), Some(crate::Stage::Heuristic));
 
         let prose = [ExternalL1Input::new(
             SecurityCategory::Injection,
@@ -206,7 +222,7 @@ mod distributed_plan_tests {
         assert!(plan
             .l1_results
             .iter()
-            .all(|result| result.decided_by.is_none()));
+            .all(|result| result.module_decision.is_none()));
     }
 
     /// Results and failure levels of one queued Injection request.
@@ -273,7 +289,7 @@ mod distributed_plan_tests {
         .unwrap();
         gateway.set_execution_gates(cascade_gates());
         let queued = queued_events(&gateway, "ordinary prose", |result| {
-            format!("{}:{:?}", result.level, result.decided_by)
+            format!("{}:{:?}", result.level, decided_by(&result))
         });
         assert!(!queued.is_empty());
         assert!(
@@ -294,7 +310,7 @@ mod distributed_plan_tests {
         assert!(plan
             .l1_results
             .iter()
-            .all(|result| result.decided_by == Some(crate::Stage::Heuristic)));
+            .all(|result| decided_by(result) == Some(crate::Stage::Heuristic)));
     }
 
     #[test]
@@ -326,7 +342,7 @@ mod distributed_plan_tests {
         assert!(plan
             .l1_results
             .iter()
-            .any(|result| result.decided_by == Some(crate::Stage::Heuristic)));
+            .any(|result| decided_by(result) == Some(crate::Stage::Heuristic)));
     }
 
     #[test]
@@ -355,12 +371,12 @@ mod distributed_plan_tests {
             .find(|result| result.model == "native:injection_l1")
             .unwrap();
         assert_eq!(l1.class_name, "safe");
-        assert_eq!(l1.l1_outcome, Some(crate::StageOutcome::Detected));
-        assert_eq!(l1.decided_by, Some(crate::Stage::Heuristic));
+        assert_eq!(outcome(l1), Some(crate::StageOutcome::Detected));
+        assert_eq!(decided_by(l1), Some(crate::Stage::Heuristic));
 
         gateway.set_execution_gates(gates());
         let queued = queued_events(&gateway, "ordinary prose", |result| {
-            format!("{}:{:?}", result.level, result.l1_outcome)
+            format!("{}:{:?}", result.level, outcome(&result))
         });
         assert!(
             queued.iter().all(|event| event == "L1:Some(Detected)"),
@@ -412,7 +428,7 @@ mod distributed_plan_tests {
             .find(|result| result.model == "native:injection_l1")
             .unwrap();
         assert_eq!(
-            (l1.decided_by, l1.l1_outcome),
+            (decided_by(l1), outcome(l1)),
             (
                 Some(crate::Stage::Heuristic),
                 Some(crate::StageOutcome::Clear)
@@ -425,7 +441,7 @@ mod distributed_plan_tests {
         // An L1 detection does not stop L2, in the queue and the distributed plan.
         let gateway = injection_gateway();
         let queued = queued_events(&gateway, L1_ATTACK, |result| {
-            format!("{}:{:?}", result.level, result.decided_by)
+            format!("{}:{:?}", result.level, decided_by(&result))
         });
         // L2 answers (a result, or a failure entry without model assets).
         assert!(
@@ -446,7 +462,7 @@ mod distributed_plan_tests {
         assert!(plan
             .l1_results
             .iter()
-            .all(|result| result.decided_by.is_none()));
+            .all(|result| result.module_decision.is_none()));
     }
 }
 
@@ -670,8 +686,7 @@ fn scan_result(
             decision: None,
         },
         internal_l2_chunk_outputs: Vec::new(),
-        decided_by: None,
-        l1_outcome: None,
+        module_decision: None,
     }
 }
 
@@ -1235,7 +1250,7 @@ impl SecurityGateway {
         results
             .iter_mut()
             .for_each(ntdb_l2::publish_threat_model_result);
-        // As in the queue: a final L3 result carries decided_by.
+        // As in the queue: a final L3 result carries its module decision.
         request_queue::mark_final(&mut results, execution);
         Ok(results)
     }

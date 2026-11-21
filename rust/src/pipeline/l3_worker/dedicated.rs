@@ -550,8 +550,7 @@ fn run_wolf_document_job(
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
         let mut layer = l3_metadata_layer(class, &job.model, confidence, preview.duration_ms);
         layer.matched = matched;
@@ -2072,8 +2071,7 @@ mod tests {
                     decision: None,
                 },
                 internal_l2_chunk_outputs: Vec::new(),
-                decided_by: None,
-                l1_outcome: None,
+                module_decision: None,
             },
             priority: 0,
             ttl_ms: 10_000,

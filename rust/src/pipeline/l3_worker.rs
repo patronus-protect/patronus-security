@@ -1181,8 +1181,7 @@ pub(super) fn request_wide_early_exit(result: &SecurityScanResult) -> Option<Str
     if result.category != "injection" && result.category != "unsafe_action" {
         return None;
     }
-    let class = result.class_name.as_str();
-    if matches!(class, "safe" | "benign") {
+    if super::is_benign_class(&result.class_name) {
         return None;
     }
     if result.confidence < REQUEST_WIDE_EARLY_EXIT_CONFIDENCE {
@@ -2286,8 +2285,7 @@ mod tests {
                     decision: None,
                 },
                 internal_l2_chunk_outputs: Vec::new(),
-                decided_by: None,
-                l1_outcome: None,
+                module_decision: None,
             },
             priority,
             ttl_ms: 10_000,
@@ -2331,8 +2329,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 }

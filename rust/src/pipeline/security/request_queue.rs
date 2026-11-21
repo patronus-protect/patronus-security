@@ -16,9 +16,9 @@ use crate::pipeline::{
 use crate::LayerResult;
 use crate::{
     assets::DYNAMIC_PII_ASSET, ChunkOverlapTokens, DynamicPiiConfig, ExternalL1Input, GateResult,
-    QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution, ScanGateMatrix,
-    SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityRequestState, SecurityScanResult, StageOutcome,
+    ModuleDecision, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
+    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
+    SecurityLevel, SecurityRequestState, SecurityScanResult, StageOutcome,
 };
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
@@ -1261,8 +1261,7 @@ impl SecurityGateway {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 }
@@ -1331,7 +1330,7 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
 /// queue and the distributed plan: a module L1 decides (core
 /// [`patronus_ark_core::cascade::Cascade::l1_stage`] at the cascade's module cuts) is final, and so is
 /// an undecided module no later layer can run for (its answer is clear, as
-/// in Core); their L1 results carry `decided_by`. Returns the inputs of the
+/// in Core); their L1 results carry Core's L1 decision as `module_decision`. Returns the inputs of the
 /// modules that go on to L2 or L3: without a cascade, every input, as
 /// before. `gate_results` are the L1 gate results of the request. A module
 /// without an L1 result (its rules switched off or not reporting), or any
@@ -1382,12 +1381,18 @@ pub(super) fn l1_undecided_inputs(
             StageOutcome::Escalate => StageOutcome::Clear,
             decided => decided,
         };
+        let decision = ModuleDecision {
+            module,
+            outcome,
+            decided_by: stage.decided_by,
+            score: stage.score,
+            layers: stage.layers().to_vec(),
+        };
         for result in l1_results
             .iter_mut()
             .filter(|result| result.category == module.as_str())
         {
-            result.decided_by = Some(stage.decided_by);
-            result.l1_outcome = Some(outcome);
+            result.module_decision = Some(decision.clone());
         }
     }
     undecided
@@ -1583,8 +1588,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
         let candidate = crate::DecisionCandidate {
             source: "l1".to_string(),
@@ -1714,16 +1718,20 @@ mod tests {
         assert_eq!(
             results
                 .iter()
-                .map(|result| result.decided_by)
+                .map(|result| result.module_decision.as_ref().map(|decision| (
+                    decision.module,
+                    decision.outcome,
+                    decision.decided_by
+                )))
                 .collect::<Vec<_>>(),
-            vec![Some(crate::Stage::Heuristic), None]
-        );
-        assert_eq!(
-            results
-                .iter()
-                .map(|result| result.l1_outcome)
-                .collect::<Vec<_>>(),
-            vec![Some(StageOutcome::Detected), None]
+            vec![
+                Some((
+                    SecurityCategory::Pii,
+                    StageOutcome::Detected,
+                    crate::Stage::Heuristic
+                )),
+                None
+            ]
         );
     }
 
@@ -1741,7 +1749,7 @@ mod tests {
         );
         let mut plain = [l3.clone()];
         mark_final(&mut plain, &ScanExecution::new(SecurityLevel::L3));
-        assert_eq!(plain[0].decided_by, None);
+        assert!(plain[0].module_decision.is_none());
         let cascade = ScanGateMatrix {
             cascade: Some(patronus_ark_core::cascade::Cascade::default()),
             ..ScanGateMatrix::default()
@@ -1751,28 +1759,42 @@ mod tests {
             &mut cascaded,
             &ScanExecution::with_gates(SecurityLevel::L3, cascade),
         );
-        assert_eq!(cascaded[0].decided_by, Some(crate::Stage::L3));
+        let decision = cascaded[0].module_decision.as_ref().unwrap();
+        assert_eq!(
+            (decision.outcome, decision.decided_by, decision.score),
+            (StageOutcome::Detected, crate::Stage::L3, 0.9)
+        );
     }
 
     #[test]
     fn published_results_are_marked_with_the_stage_of_their_layer() {
-        for (level, stage) in [
-            ("L1", crate::Stage::Heuristic),
-            ("L2", crate::Stage::L2),
-            ("L3", crate::Stage::L3),
+        for (level, stage, class_name, outcome) in [
+            ("L1", crate::Stage::Heuristic, "safe", StageOutcome::Clear),
+            ("L2", crate::Stage::L2, "benign", StageOutcome::Clear),
+            ("L3", crate::Stage::L3, "attack", StageOutcome::Detected),
         ] {
             let mut result = super::super::scan_result(
                 SecurityCategory::Injection,
                 "m",
                 crate::EvaluationResult {
-                    class_name: "safe".to_string(),
-                    confidence: 0.0,
+                    class_name: class_name.to_string(),
+                    confidence: 0.25,
                     level: level.to_string(),
                 },
                 Vec::new(),
             );
             mark_decided(&mut result);
-            assert_eq!(result.decided_by, Some(stage));
+            let decision = result.module_decision.unwrap();
+            assert_eq!(
+                (
+                    decision.module,
+                    decision.outcome,
+                    decision.decided_by,
+                    decision.score
+                ),
+                (SecurityCategory::Injection, outcome, stage, 0.25)
+            );
+            assert!(decision.layers.is_empty(), "the layer stays on the result");
         }
     }
 
@@ -1849,8 +1871,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: Vec::new(),
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         };
 
         let candidates = l3_candidates(&result);
@@ -2018,8 +2039,7 @@ mod tests {
                 decision: None,
             },
             internal_l2_chunk_outputs: l2_chunk_outputs,
-            decided_by: None,
-            l1_outcome: None,
+            module_decision: None,
         }
     }
 

@@ -11,7 +11,6 @@ use patronus_ark_core::{
     NtdbOperatingPoint, SecurityCategory,
 };
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -310,32 +309,17 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
 }
 
 /// The public result dicts, from the results' own `Serialize`: Core's result
-/// fields, flat, plus `decided_by` and `l1_outcome` when set
+/// fields, flat (`decision` only when set), plus `module_decision` when set
 /// (`docs/reference/result-schema.md`).
 fn results_to_py(py: Python<'_>, results: Vec<SecurityScanResult>) -> PyResult<Vec<PyObject>> {
     let mut strings = PyStrings::new(py);
     let dicts = results
         .iter()
-        .map(|result| result_dict(&mut strings, result).map(Bound::unbind))
+        .map(|result| py_serde::to_py(&mut strings, result).map(Bound::unbind))
         .collect::<PyResult<Vec<_>>>()?;
     let matched_rules = results.iter().map(matched_rules).sum();
     release(results, matched_rules);
     Ok(dicts)
-}
-
-/// One result dict; Python omits `decision` while it is unset.
-fn result_dict<'py, T: serde::Serialize>(
-    strings: &mut PyStrings<'py>,
-    result: &T,
-) -> PyResult<Bound<'py, PyAny>> {
-    let dict = py_serde::to_py(strings, result)?.downcast_into::<PyDict>()?;
-    if dict
-        .get_item("decision")?
-        .is_some_and(|decision| decision.is_none())
-    {
-        dict.del_item("decision")?;
-    }
-    Ok(dict.into_any())
 }
 
 fn matched_rules(result: &SecurityScanResult) -> usize {
@@ -514,7 +498,7 @@ fn security_event(py: Python<'_>, event: QueuedSecurityEvent) -> PyResult<PySecu
             });
         }
     };
-    let result = result_dict(&mut PyStrings::new(py), &queued)?;
+    let result = py_serde::to_py(&mut PyStrings::new(py), &queued)?;
     let matched_rules = matched_rules(&queued.result);
     let request_id = queued.request_id.clone();
     release(queued, matched_rules);

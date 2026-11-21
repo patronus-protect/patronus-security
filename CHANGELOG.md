@@ -11,6 +11,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **One decision field per result:** with the opt-in `cascade`, a result that gives a category's
+  final answer now carries `module_decision` (`module`, `outcome`, `decided_by`, `score` and,
+  when an L1 model ran, its `layers`) in the same shape as an entry of Ark Core's scan-report
+  `decision` list, instead of the separate `decided_by` and `l1_outcome` keys. L2 and L3 results
+  now also say `detected` or `clear`. In Rust, `SecurityScanResult.decided_by` and
+  `l1_outcome` are replaced by `module_decision: Option<ModuleDecision>`.
+- **Unset `decision` is omitted everywhere:** Ark Core's results (`Scanner.scan` in Rust and
+  Python) and Ark's serialized Rust results leave out `decision` while it is unset instead of
+  writing `null`, as Ark's Python results and the Ark API already did.
 - **One config for Ark Core and Ark:** a gateway is now built from one config, and Ark Core's
   scanner config keys mean the same in Ark. Python: `SecurityGateway(config)` takes one dict, the
   dict of Ark Core's `Scanner(config)` plus Ark's keys; the keyword arguments are gone

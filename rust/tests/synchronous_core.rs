@@ -3,7 +3,9 @@ use patronus_ark::{
     golden_recipes::materialize_fragments, golden_recipes::GeneratorSet,
     golden_recipes::SecretRecipe, SecurityGateway,
 };
-use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
+use patronus_ark_core::{
+    cascade::ModuleDecision, cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory,
+};
 use patronus_ark_core::{NativeResult, ScanError, Scanner, ScannerConfig};
 
 fn generators() -> GeneratorSet {
@@ -271,6 +273,16 @@ fn synchronous_limits_are_errors_not_clean_results() {
 /// and, without `categories`, Ark's execution gates. At `max_level` L1 both
 /// report the same native results (all fields but timings) and the same L1
 /// cascade answer per module.
+/// A module decision as JSON, with its layers' durations zeroed.
+fn untimed_decision(decision: &ModuleDecision) -> serde_json::Value {
+    let mut decision = decision.clone();
+    decision
+        .layers
+        .iter_mut()
+        .for_each(|layer| layer.duration_ms = 0.0);
+    serde_json::to_value(decision).unwrap()
+}
+
 #[test]
 fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
     let gates = serde_json::json!({
@@ -312,13 +324,8 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
             let module = decision.module.as_str();
             for result in ark.iter().filter(|result| result.category == module) {
                 assert_eq!(
-                    result.l1_outcome,
-                    Some(decision.outcome),
-                    "{module}: {text}"
-                );
-                assert_eq!(
-                    result.decided_by,
-                    Some(decision.decided_by),
+                    result.module_decision.as_ref().map(untimed_decision),
+                    Some(untimed_decision(&decision)),
                     "{module}: {text}"
                 );
             }
@@ -369,13 +376,8 @@ fn ark_runs_the_cascade_l1_model_like_core() {
         assert!(!injection.is_empty(), "rules_off={rules_off}");
         for result in injection {
             assert_eq!(
-                result.l1_outcome,
-                Some(decision.outcome),
-                "rules_off={rules_off}"
-            );
-            assert_eq!(
-                result.decided_by,
-                Some(Stage::L1Model),
+                result.module_decision.as_ref().map(untimed_decision),
+                Some(untimed_decision(decision)),
                 "rules_off={rules_off}"
             );
         }

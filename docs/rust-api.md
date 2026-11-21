@@ -31,7 +31,8 @@ use patronus_ark_core::{
     cascade::{
         EffectiveL3PipelinePolicy, ExternalL1Detector, ExternalL1Input, GateResult,
         L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit,
-        L3ProgressMode, L3SchedulerPolicy, ScanGateMatrix, SecurityLevel, Stage, StageOutcome,
+        L3ProgressMode, L3SchedulerPolicy, ModuleDecision, ScanGateMatrix, SecurityLevel, Stage,
+        StageOutcome,
     },
     detectors, diagnostics, threat, ChunkOverlapTokens, DecisionCandidate, DecisionEnvelope,
     DecisionProvenance, DecisionRecommendation, DecisionResult, DecisionTerminality,
@@ -1843,16 +1844,16 @@ pub struct SecurityScanResult {
     #[doc(hidden)]
     #[serde(skip)]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
-    /// Stage that gave the category its final answer (`heuristic` for an L1
-    /// result, `l2`, `l3`); `None` while a later layer still answers.
+    /// With the opt-in cascade, the category's final answer as Core's
+    /// [`patronus_ark_core::cascade::ModuleDecision`] (`outcome`, `decided_by`,
+    /// `score`) on every result that gives it; `None` without a cascade and
+    /// while a later layer still answers. On L1 results it is Core's L1
+    /// decision: a detection at a lowered `detect_threshold` shows as
+    /// `detected` even when the native class stays `safe`, and its `layers`
+    /// are the L1 model's. An L2 or L3 result keeps its layer in its own
+    /// `layers`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub decided_by: Option<Stage>,
-    /// With the opt-in cascade, L1's answer (`detected` or `clear`) when L1
-    /// decided the category, as Core's `ModuleDecision::outcome`: a detection
-    /// at a lowered `detect_threshold` shows here even when the native class
-    /// stays `safe`. `None` otherwise.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub l1_outcome: Option<StageOutcome>,
+    pub module_decision: Option<crate::ModuleDecision>,
 }
 ```
 
@@ -2941,7 +2942,9 @@ pub struct NativeResult {
     pub evidence_spans: Vec<EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.
     pub label_scores: Vec<LabelScore>,
-    /// Structured classifier decision contract for policy consumers.
+    /// Structured classifier decision contract for policy consumers; omitted
+    /// from the serialized result while unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<DecisionEnvelope>,
 }
 ```
