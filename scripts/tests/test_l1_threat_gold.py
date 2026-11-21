@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -161,6 +162,18 @@ def test_targets_cli_and_render_section(tmp_path):
     assert "Benign chat pool (dev): de 0, en 12000 rows." in text
     legacy = {key: value for key, value in dev.items() if key != "coverage"}
     assert "predates the per-source counts" in MODULE.render(["jailbreak"], legacy, None, None)
+
+
+def test_m09_is_done_only_when_the_committed_dev_targets_hold():
+    # M09's acceptance is the dev targets check; S12 starts once M09 is done, so a done M09 with unmet
+    # targets would hand S12 a gold pool without the coverage it was promised.
+    backlog = yaml.safe_load((ROOT / "research" / "l1-threat" / "backlog.yaml").read_text(encoding="utf-8"))
+    m09 = next(task for task in backlog["tasks"] if task["id"] == "M09")
+    if m09.get("status") != "done":
+        pytest.skip("M09 is open")
+    dev = json.loads((ROOT / "research" / "l1-threat" / "scoreboard" / "gold-dev.json").read_text(encoding="utf-8"))
+    problems = MODULE.targets(dev)[1]
+    assert not problems, f"M09 is done but {len(problems)} dev targets fail (gold.py targets gold-dev.json)"
 
 
 def summaries(pool, wrong=()):
