@@ -27,6 +27,15 @@ detector (owner decision 2026-11-20; out of scope, so no row at all):
   whose look-alike keeps the jailbreak frame: no benign input). Placeholders and
   reserved ``.invalid`` hosts only; the rows show the shape of an attack, not a working payload.
 
+Source filter (owner decision 2026-11-21): carrier insertion and obfuscation slices take an attack row
+only if each of its classes is visible in the row's own text (``payload_visible``, one literal or
+structural cue per class). Public labels do not always show in the text: a mode or persona claim around
+an ordinary question labelled injection, a harmful request without any bypass framing labelled jailbreak,
+a second class of a combined label with nothing of it in the text (no outward send for exfiltration),
+harm that is only implied for unsafe_action. Such a row is dropped after all its random draws, so every
+other row stays byte-identical and keeps its id (the ids of dropped rows stay unused). The filter reads
+only text and classes, never an id.
+
 Dev and holdout use separate seeds and disjoint template families. The dev seed is public
 (``DEV_SEED``) and reads ``DEV/train_dev`` plus the runner translations ``DEV/translated``;
 the holdout seed is secret (default ``HOLDOUT/.generators-seed``, created on first use, only
@@ -55,6 +64,7 @@ import codecs
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -78,6 +88,8 @@ def _load_file(name: str, path: Path) -> ModuleType:
 # Frozen-directory helpers and the entity map (corpora), seeded RNG and secret seed file (PII goldset).
 CORPORA = _load_file("_ark_l1_threat_prepare_corpora", HERE / "prepare_corpora.py")
 SYNTH = _load_file("_ark_l1_presidio_synth_goldset", HERE.parent / "l1_presidio" / "synth_goldset.py")
+# The L1 context lexica (support terms such as outside sinks), shared with ark-core.
+LEXICONS = _load_file("_ark_l1_threat_lexicons", HERE / "lexicons.py")
 entity_map = CORPORA.entity_map
 Rng = SYNTH.Rng
 
@@ -85,9 +97,10 @@ SCHEMA = CORPORA.GENERATED_SCHEMA
 # v2: class_templates; v3: jailbreak templates, cue-filtered inputs; v4: the runner translations of SPML and
 # Mosscap and the German CyberSecEval rows join the inputs (carrier and obfuscation sets get German attack rows);
 # v5: tool_poisoning rows only in tool-metadata carriers (rows of the other classes keep their texts), the OpenAPI
-# class template as JSON.
+# class template as JSON; v6: no benign twin for obfuscation slices and two class template families; v7: carrier and
+# obfuscation rows only from attack rows whose classes are visible in their own text (``payload_visible``).
 # A frozen output of a lower version is regenerated without --force.
-GENERATOR_VERSION = 6
+GENERATOR_VERSION = 7
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -609,6 +622,160 @@ def attack_label(labels: list[tuple[str, set[str]]], classes: list[str]) -> str 
     return next((label for label, allowed in labels if set(classes) <= allowed), None)
 
 
+# ── payload filter ────────────────────────────────────────────────────────────
+
+
+def _lexicon_cue(lexicon_id: str) -> str:
+    """Regex of the English and German terms of a context lexicon (``lexicons.py`` term syntax)."""
+    entry = next(item for item in LEXICONS.load() if item["id"] == lexicon_id)
+    terms = []
+    for term in entry["en"] + entry["de"]:
+        parts = []
+        for part in term.split(LEXICONS.SEPARATOR):
+            core = re.escape(part.strip("*"))
+            parts.append(("\\w*" if part.startswith("*") else "(?<!\\w)") + core + ("\\w*" if part.endswith("*") else "(?!\\w)"))
+        terms.append("[^.!?\\n]{0,80}?".join(parts))
+    return "|".join(terms)
+
+
+# A request, instruction or tool call the payload addresses to the model or agent: an override of its
+# instructions, a new task, an instruction about its answer or code, a planted to-do.
+_DIRECTIVE = (
+    r"\b(?:ignor\w*|disregard\w*|forg[eo]t\w*|overrid\w*|bypass\w*|abandon\w*|skip)\b[^.!?\n]{0,40}"
+    r"\b(?:instructions?|iunstructions|directions?|rules?|guidelines?|programming|restrictions?|directives?|prompt|"
+    r"regulations|protocols?|everything|context|task|conditions?|limitations?|limits|above|safeguards|boundaries|filters?)"
+    r"|\bpretend\b[^.!?\n]{0,40}\b(?:no|without|forg[eo]t\w*|not)\b"
+    r"|\bpretend to be\b|\bswitch roles?\b|\b(?:stray|break) (?:away|free) from\b|\bprevious instructions\b|\bjailbreak"
+    r"|\bwithout (?:any )?(?:restrictions|limitations|limits|filters|rules)\b|\bno longer (?:bound|restricted|limited)\b"
+    r"|\b(?:ignorier\w*|missacht\w*|vergiss|vergessen sie|übergeh\w*|olvida)\b[^.!?\n]{0,60}"
+    r"\b(?:\w*anweisung\w*|instruktion\w*|regeln|vorgaben|richtlinien|funktion|alles|instrucciones)"
+    r"|\b(?:new|updated|additional|following|real) (?:instructions?|task)\b|\bneue (?:anweisung|aufgabe)"
+    r"|\binstead\b|\bstattdessen\b|todo:|\bimportant!|\bdo the following\b|\bbefore you (?:can )?(?:solve|do|answer|continue)\b"
+    r"|\b(?:in|into|to|within|throughout|for) (?:your|the) (?:response|reply|answer|output|code|solution|implementation|"
+    r"elucidation|explanation|algorithm|summary)\b|\byour (?:response|reply|answer|code|solution|algorithm|message)\b"
+    r"|\breply (?:in|using|with)\b|\b(?:replace|jumble|invert|reverse|swap|rewrite|translate|encode|render)\b[^.!?\n]{0,40}"
+    r"\b(?:letters?|words?|vowels?|message|text|characters?)\b"
+    r"|\b(?:the )?(?:following|below|subsequent) (?:code|snippet|instruction)"
+    r"|\bin (?:deiner|ihrer|der) antwort\b|\b(?:deine|ihre) antwort\b"
+    r"|\b(?:you must|du musst|sie müssen|you have to|you are required to)\b"
+)
+# The payload asks for a protected value or names what the model must not give out.
+_SECRET = (
+    r"\bpass ?words?\b|passwor[dt]\w*|kennw[oö]rt\w*|passphrase|\bsecret|geheim\w*|\bconfidential|vertraulich\w*"
+    r"|\bcode ?words?\b|magic word|\bhidden (?:word|phrase|key|value|code)|\b(?:system|hidden|initial|original|previous|above|your) (?:prompt|instructions?)\b"
+    r"|\bsystem-?prompt|\b(?:deine|ihre|die) (?:anweisungen|instruktionen)\b|kontostand|account balance|api.?key|credentials|zugangsdaten"
+)
+# A bypass framing of a request (Wei et al. 2023; the WildJailbreak tactics): role-play, persona, fiction,
+# hypothetical, refusal suppression, rule or policy override, response priming, coded language, pretext.
+_FRAMING = (
+    r"\bimagin|\bpretend|\brole|\bcharacter|\bpersona\b|\byou are (?:a|an|now|the)\b|\bact(?:ing)? as\b|\bplay(?:ing)? (?:the|a)\b"
+    r"|\bstor(?:y|ies)\b|\bnovel|\bfiction|\bscreenplay|\bscript\b|\bnarrat|\btale\b|\bpoem|\bgame\b|\bscenario|\bhypothetic"
+    r"|\balternate|\bparallel (?:universe|world)|\buniverse\b|\bworld where|\bsimulat|\bdystopi|\bfantasy|\bdialogue"
+    r"|\brefus|\bdecline|\bwarnings?\b|\bdisclaimer|\bapolog|\bcaveat|\bmoraliz|\bno matter\b|\bregardless\b"
+    r"|\bignore|\bdisregard|\brules?\b|\bguidelines?\b|\bpolic(?:y|ies)\b|\bethic|\bmoral|\brestrict|\bfilter|censor"
+    r"|\blegal|\blaws?\b|\bpermi(?:t|ssion)|\ballowed\b|\bconsent|\bexempt|\bunrestricted|\bunfiltered|\bno limits?\b"
+    r"|\bboundar|\bjailbreak|\bdeveloper mode|\bDAN\b|\boverrid|\bnormali[sz]|\bdesensiti"
+    r"|\b(?:begin|start) (?:by|with|your)\b|\bsure,|\b(?:reply|respond) with\b"
+    r"|\bcode ?words?\b|\bcoded\b|\beuphemis|\bmetaphor|\bin other words\b"
+    r"|\b(?:research|educational|academic|training|awareness|study|scientific|university|school|class) (?:purposes?|project|paper|study)\b"
+    r"|\bresearch|\bdebate\b|\bviewpoints?\b|\bperspectives?\b|\bdevil'?s advocate|\bsugarcoat|\bhold back\b"
+    r"|\bmy (?:friend|grandmother|grandma|grandfather|colleague|cousin|brother|sister|uncle|aunt|neighbou?r)\b"
+    r"|\bcode ?names?\b|\bpseudonym|\blet'?s (?:call|relive|assume|say)\b|\btheoretical|\bthought experiment|\bpurely\b"
+    r"|\bin the (?:realm|spirit|context|capacity|interest|pursuit|name) of\b|\bin the capacity as\b|\bonce upon a time"
+    r"|\bin the (?:distant |near )?future\b|\bsketch\b|\bcomedy|\btheat(?:er|re)\b|\bscene\b|\bactors?\b|\bin good fun"
+    r"|\bharmless\b|\breal harm|\bdownplay|\bconstraints?\b|\bbroken free|\bliberat|\bauthority\b|\bwithout questioning"
+    r"|\bacademic|\bscholar|\bstudy\b|\bcourse\b|\bexercise\b|\bjournalis|\bawareness|\bexperiment|\bsuppose\b|\bassume\b"
+    r"|\bpuzzle|\bchallenge\b|\b(?:in|into) (?:french|italian|spanish|german|portuguese|another language)\b|\bswitch to english"
+    r"|\bsubtl|\bdelicate|\bagreeable terms|\bsystem update|\bannouncement"
+    r"|\bas an? (?:\w+ ){0,2}(?:researcher|historian|scientist|journalist|writer|author|novelist|detective|expert|professor|analyst|consultant)"
+    r"|\bstell dir vor|\btu so|\brolle\b|\bgeschichte|\broman\b|\bfiktiv|\bhypothetisch|\bszenario|\bregeln\b|\brichtlinien"
+    r"|\bethik|\bverweiger|\bwarnhinweis|\bbeginne (?:mit|deine)"
+)
+# The outward step of an exfiltration: a send, upload or forward to an outside party, or code that does it.
+_OUTWARD = (
+    r"\b(?:send|sends|sending|post|posts|posting|upload|uploads|forward|forwards|e-?mail|transmit|share|leak|exfiltrat\w*"
+    r"|transfer|publish|report|deliver|include|includes|including)\b(?:[^.!?]|\.(?=\S)){0,120}?\bto\b"
+    r"(?:[^.!?]|\.(?=\S)){0,40}?(?:\S+@\S+\.\w+|https?://|www\.|[A-Z]{2}\d{2}[A-Z0-9]{8,}|website|web ?site|server|url|address|endpoint|"
+    r"link|account|inbox)"
+    r"|\brequests\.(?:post|put|get|patch)\s*\(|\burlopen\s*\(|\bstorbinary\b|\bsmtplib\b|\bsendmail\b|\.send(?:all|to)?\s*\("
+    r"|\bcurl\b[^\n]{0,80}(?:[\s\"'](?:-d|-F|-T)\b|--data|--form|--upload)|\bscp\b|\brsync\b|\bmqtt\b|\bwget\b[^\n]{0,80}--post"
+    r"|\b(?:sende|schicke|schick|senden sie|schicken sie|übermittle|übermitteln sie|leite|leiten sie)\b[^.!?\n]{0,80}\b(?:an|weiter)\b"
+)
+# The harmful act an agent is asked to perform, or its command or code: deleting or overwriting data or
+# system files, disabling security, backdoors, attacks, credential abuse, unauthorised money or account changes.
+_HARMFUL_ACT = (
+    r"\brm\s+-|\brmtree\b|\bos\.(?:remove|unlink|system|rmdir)\b|\.unlink\s*\(|\bdrop\s+(?:table|database)\b|\bdelete\s+from\b"
+    r"|open\([^()\n]*,\s*['\"]wb?['\"]\)|\bexecut\w* (?:any|all|untrusted|unknown|arbitrary|received|downloaded)\b"
+    r"|\blisten\w* for (?:commands|connections)|\bexecutes? them\b|\bremote (?:commands?|shell|access|code)"
+    r"|\bignor\w*\b[^.!?\n]{0,30}\b(?:permissions?|security|checks?|warnings?|safety)|\bsecurity checks?\b"
+    r"|\btruncate\b|\bchmod\b|\b777\b|\bmkfs|\bdd\s+if=|\bshutdown\b|\bkill(?:all)?\s+-|\bsudo\b|\bformat\b"
+    r"|/etc/|/root\b|/var/|/home/|/usr/|/boot|\.bashrc|\.ssh|\bcrontab|\bsystemctl"
+    r"|\bdelet\w*|\bremov\w*|\berase|\bwipe|\boverwrit\w*|\bdestroy|\bcorrupt"
+    r"|\bbypass\w*|\bdisabl\w*|\bturn(?:s|ing)? off\b|\bwithout (?:[\w-]+ ){0,3}?(?:security|authenti\w*|identi\w*|verification|"
+    r"validation|checks?|confirmation|asking|permission|consent|encryption|sanitiz\w*|awareness|knowledge)|\bskip\w*\b[^.!?\n]{0,30}\b(?:login|verification|"
+    r"authenti\w*|checks?|confirmation)|\bplain ?text\b|\bhard-?coded\b"
+    r"|\bbackdoor|\breverse.?shell|\b(?:interactive|remote|client) shell|\bshell session|\bexecut\w* (?:the )?commands\b"
+    r"|\bkeylog|\bkeystrokes?\b|\bkeypress|\bapi keys?\b|\bmoney\b|\bflood|\bddos|\bdenial.of.service|\battack|\bexploit|\bmalware"
+    r"|\bransomware|\bvirus|\btrojan|\bworm\b|\bbotnet|\bcrack|\bbrute.?force|\binject|\bescalat|\bprivileges?\b|\broot access"
+    r"|\bfirewall|\bport\s+\d+|\bany (?:external|incoming|ip)|\ball ports\b|\bfull access|\ball users\b|\bpasswords?\b|\bcredential"
+    r"|\bsecretly|\bcovertly|\bwithout (?:the )?(?:user|owner)|\bspy|\bsurveil"
+    r"|\btransfer\w*\b[^.!?\n]{0,40}(?:\$|€|\d)|\bwire\b|\bpayments?\b|\brecipient\b|\binvite\b|\bgrant\w*\b|\badmin"
+    r"|\blösch\w*|\bentfern\w*|\büberschreib\w*|\bdeaktivier\w*|\bumgeh\w*|\bohne (?:rückfrage|bestätigung|nachfrage|prüfung)"
+    r"|\büberweis\w*|\bberechtigung\w*|\brechte\b|\bpasswort\w*"
+)
+# Per class: the cue that makes the class visible in a payload's own text. A class without an entry is not
+# checked (no public dev source carries it into these generators).
+PAYLOAD_CUES = {
+    "instruction_injection": re.compile(_DIRECTIVE, re.IGNORECASE),
+    "jailbreak": re.compile(_FRAMING, re.IGNORECASE),
+    "prompt_extraction": re.compile(_SECRET, re.IGNORECASE),
+    "exfiltration": re.compile(_OUTWARD + "|" + _lexicon_cue("sink"), re.IGNORECASE),
+    "unsafe_action": re.compile(_HARMFUL_ACT, re.IGNORECASE),
+}
+# A mode, persona or authority claim ("you are now a do-anything bot", "I am entering verification mode").
+_MODE_CLAIM = re.compile(
+    r"\bmode\b|\bmodus\b|\w+modus\b|\bbot\b|\bDAN\b|\byou are now\b|\bdu bist jetzt\b|\bsie sind jetzt\b|\bi am (?:god|your)\b"
+    r"|\bich bin (?:gott|dein)\b|\bin die rolle\b|\b(?:als|as) (?:von|an ai|eine? ki)\b",
+    re.IGNORECASE,
+)
+# What turns a mode claim into an injection: a bypass of rules or limits, or a protected value as the goal.
+_CLAIM_GOAL = re.compile(
+    r"\b(?:rules?|regeln|restrictions?|einschränkung\w*|grenzen|limits?|limitations?|filters?|guidelines?|richtlinien"
+    r"|zensur|censor\w*|ethics?|ethik)\b|" + _SECRET,
+    re.IGNORECASE,
+)
+
+
+def payload_visible(row: dict[str, Any]) -> bool:
+    """Whether every attack class of ``row`` is visible in its own text (owner decision 2026-11-21).
+
+    Carrier insertion and obfuscation slices take attack rows of public corpora whose labels do not always
+    show in the text. A row is dropped when one of its classes has no literal or structural cue of its own:
+
+    * ``instruction_injection`` needs an instruction to the model or agent (an override of its instructions,
+      a new task, an instruction about its answer or code, a planted to-do) or a mode or persona claim that
+      comes with a bypass of rules or limits or a protected value as its goal; a mode claim around an
+      ordinary question is no injection;
+    * ``jailbreak`` needs a bypass framing (role-play, persona, fiction, hypothetical, refusal suppression,
+      rule or policy override, response priming, coded language, pretext); a harmful request alone is not;
+    * ``prompt_extraction`` needs the protected value or the hidden instructions;
+    * ``exfiltration`` needs the outward step: a send, upload or forward to an outside party or code that
+      does it;
+    * ``unsafe_action`` needs the harmful act itself, its command or code; harm that is only implied is not.
+
+    Only the text and the classes are read, never an id.
+    """
+    text = row["text"]
+    for name in row["classes"]:
+        cue = PAYLOAD_CUES.get(name)
+        if cue is None or cue.search(text):
+            continue
+        if name == "instruction_injection" and _MODE_CLAIM.search(text) and _CLAIM_GOAL.search(text):
+            continue
+        return False
+    return True
+
+
 # ── generators ────────────────────────────────────────────────────────────────
 
 
@@ -688,6 +855,8 @@ def carrier_insertion(r: Any, split: str, dataset: str, label_of: Callable[[list
         base = {**_base(dataset, "carrier_insertion", family, lang, source), "carrier_kind": carrier}
         attack = {**base, "classes": list(source["classes"]), "text": _insert(template, lang, values, " ".join(source["text"].split()))}
         twin = {**base, "text": _insert(template, lang, values, twin_sentence)}
+        if not payload_visible(source):
+            continue  # dropped after its draws, so the other pairs stay byte-identical
         rows.extend(_pair(dataset, "carrier_insertion", index, label, attack, twin))
     return rows
 
@@ -738,6 +907,8 @@ def obfuscation_slices(r: Any, split: str, dataset: str, label_of: Callable[[lis
             base.update(carrier="indirect", carrier_kind="tool_metadata")
             values["n"] = str(r.randint(1, 9))
         attack = {**base, "classes": list(source["classes"]), "text": _insert(wrapper, lang, values, OBFUSCATIONS[name](source["text"]))}
+        if not payload_visible(source):
+            continue  # dropped after its draws, so the other rows stay byte-identical
         rows.extend(_pair(dataset, "obfuscation_slices", index, label_of(source["classes"]), attack, None))
     return rows
 
