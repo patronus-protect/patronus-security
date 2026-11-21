@@ -619,7 +619,7 @@ tasks:
       regression goldens first (the four tool_poisoning hard negatives from UA02 and the quoted .env/API-key
       examples from EX02 fail before the fix); 0 hard-benign FP on the threat goldens across categories; dev
       TPR@1% of unsafe_action and exfiltration unchanged; the points rules' clause context reused, not copied
-  - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01]}
+  - {id: MP01, title: "memory_poisoning rules (remember/store-for-future directives, permanence adverbs, conditional future triggers, self-replication into outputs)", type: new-family, deps: [IJ01], status: done}
   - {id: MP02, title: "memory_poisoning points + ablation decision", type: scorer, deps: [MP01, S05]}
   - {id: RE01, title: "resource_exhaustion rules (unbounded repetition quantifiers with configurable count threshold resource_exhaustion_count_threshold, recursive spawning, infinite-loop directives, decoy compute tasks in foreign content) + points", type: new-family, deps: [S04], status: done}
   - id: T09
