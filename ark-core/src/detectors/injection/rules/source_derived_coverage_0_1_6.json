@@ -1036,15 +1036,15 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
-        "wörtlich",
-        "wort für wort",
-        "unverändert",
-        "ungekürzt",
-        "vollständig",
-        "wortlaut",
-        "zeichen für zeichen",
-        "codeblock",
-        "du bist"
+        "oberhalb",
+        "davor",
+        "weiter oben",
+        "vor dies",
+        "über dies",
+        "vor mein",
+        "über mein",
+        "vor der ersten",
+        "über der ersten"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?P<disclosure_action>wiederhole|gib|drucke|kopiere|schreibe|schreib|zeige|zeig|nenne|liste)\\s+(?:(?:mir|uns|jetzt|bitte|nun|einmal|noch)\\s+){0,3}(?P<io_target>alles|den\\s+(?:gesamten\\s+|ganzen\\s+|kompletten\\s+|vollständigen\\s+)?text|alle\\s+(?:wörter|zeilen|nachrichten|anweisungen|sätze))\\s+(?P<io_prior>oberhalb|davor|weiter\\s+oben|(?:vor|über)\\s+(?:dieser|diesem|dieses|meiner|meinem|der\\s+ersten)\\s+(?:nachricht|zeile|eingabe|anfrage|kommentar\\w*|stelle|frage))\\b[^.!?\\n]{0,80}?(?P<verbatim>wörtlich|wort\\s+für\\s+wort|unverändert|ungekürzt|vollständig|im\\s+wortlaut|zeichen\\s+für\\s+zeichen|in\\s+(?:einem|einen)\\s+codeblock|als\\s+codeblock|beginnend\\s+mit\\s+[„\\\"'‚]?du\\s+bist)(?:(?:\\s*,|\\s+und)\\s+(?:wörtlich|wort\\s+für\\s+wort|unverändert|ungekürzt|vollständig|im\\s+wortlaut|komplett|lückenlos|zeichen\\s+für\\s+zeichen))*",
       "excluded_match_words": [
@@ -1095,9 +1095,12 @@
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
         "deine",
-        "anweisungen",
-        "instruktionen",
-        "vorgaben"
+        "hast du",
+        "hast dir",
+        "wurden du",
+        "wurden dir",
+        "hattest du",
+        "hattest dir"
       ],
       "pattern": "\\b(?:was|welche|wie)\\s+(?:sind|waren|ist|war|lauten|lauteten|lautet)\\s+(?P<io_target>deine\\s+(?:(?:gesamten|ganzen|kompletten|vollständigen|versteckten|geheimen|internen|ursprünglichen|anfänglichen|genauen|exakten|ersten|vorgegebenen|vertraulichen)\\s+)+(?:anweisungen|instruktionen|vorgaben|regeln|richtlinien|systemanweisungen))\\b|\\b(?:was|welche)\\s+(?:anweisungen|instruktionen|vorgaben)\\s+(?:hast|wurden|hattest)\\s+(?:du|dir)\\s+(?:du\\s+)?(?:vor|zu\\s+beginn|am\\s+anfang)\\s+(?:dieses|diesem|unseres|unserem|des|dem|der)\\s+(?:gesprächs?|chats?|unterhaltung|sitzung)",
       "excluded_match_words": [
@@ -1154,19 +1157,7 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
-        "systemprompt",
-        "system-prompt",
-        "system prompt",
-        "systemnachricht",
-        "systemanweisungen",
-        "systemvorgaben",
-        "entwickleranweisungen",
-        "startanweisungen",
-        "initialprompt",
-        "anweisungen",
-        "instruktionen",
-        "vorgaben",
-        "regeln"
+        "dein"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?P<transform>übersetze|übersetz|kodiere|codiere|verschlüssele|verschlüssle|fasse|schreibe|schreib|wandle|formuliere|konvertiere|gib)\\s+(?:(?:mir|uns|bitte|jetzt|einmal)\\s+){0,2}(?P<io_target>(?:deinen|deine|dein)\\s+(?:(?:gesamten|ganzen|kompletten|vollständigen|versteckten|geheimen|internen|ursprünglichen|anfänglichen|genauen|exakten|ersten|vorgegebenen|vertraulichen)\\s+)*(?:system-?\\s?prompts?|systemnachricht|systemanweisungen|systemvorgaben|entwickleranweisungen|startanweisungen|initialprompt|(?:versteckten|geheimen|internen|ursprünglichen|anfänglichen|vertraulichen|vorgegebenen)\\s+(?:anweisungen|instruktionen|vorgaben|regeln)))\\b(?:\\s+(?P<own>unten|hier|im\\s+anhang|niemals|nie|nicht))?[^.!?\\n]{0,60}?\\b(?P<form>ins\\s+\\w+|in\\s+(?:base64|hex|rot13|json|\\w+e)|als\\s+\\w+|zusammen\\b)",
       "excluded_match_words": [
@@ -1226,12 +1217,7 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
-        "beginnt",
-        "beginnen",
-        "startet",
-        "starten",
-        "fängt",
-        "fangen",
+        "dein",
         "antwort mit",
         "ausgabe mit"
       ],
@@ -1289,11 +1275,8 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
-        "definition",
-        "schema",
-        "signatur",
-        "beschreibung",
-        "parameter"
+        "dein",
+        "die du"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?P<disclosure_action>liste|zeige|zeig|gib|nenne|drucke|kopiere|verrate|teile)\\s+(?:(?:mir|uns|bitte|jetzt|nun)\\s+){0,2}(?:(?:alle|sämtliche)\\s+)?(?P<io_target>(?:deine|deiner)\\s+(?:(?:verfügbaren|internen|versteckten|vollständigen|kompletten|genauen|rohen)\\s+)*(?:tool-?definitionen|funktionsdefinitionen|werkzeugdefinitionen|tool-?schemas?|tool-?schemata|funktionsschemas?|funktionsschemata|funktionssignaturen|tool-?beschreibungen)|(?:das|die)\\s+(?:vollständige\\s+|komplette\\s+|rohe\\s+)?(?:json-?)?schemas?\\s+(?:aller\\s+|all\\s+)?(?:deiner|deine)\\s+(?:tools|werkzeuge|funktionen)|alle\\s+(?:tools|werkzeuge|funktionen),?\\s+die\\s+du\\s+(?:hast|aufrufen\\s+kannst|nutzen\\s+kannst|verwenden\\s+kannst|benutzen\\s+kannst)\\b[^.!?\\n]{0,30}?\\b(?:mit|samt|inklusive|einschließlich)\\s+(?:ihren\\s+|allen\\s+)?(?:parametern|schemas?|schemata|definitionen|signaturen))",
       "excluded_match_words": [
@@ -1416,19 +1399,7 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for prompt extraction; literal prefilter on the target or marker words.",
       "required_literals_any": [
-        "systemprompt",
-        "system-prompt",
-        "system prompt",
-        "systemnachricht",
-        "systemanweisungen",
-        "systemvorgaben",
-        "entwickleranweisungen",
-        "startanweisungen",
-        "initialprompt",
-        "anweisungen",
-        "instruktionen",
-        "vorgaben",
-        "regeln"
+        "dein"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?:(?P<disclosure_action>verrate|verrat|nenne|teile|kopiere|poste|sende|schicke|schick|liste|füge|plaudere)\\s+(?:(?:mir|uns|bitte|jetzt|nun|einmal)\\s+){0,2}(?P<io_target>(?:deinen|deine|dein)\\s+(?:(?:gesamten|ganzen|kompletten|vollständigen|versteckten|geheimen|internen|ursprünglichen|anfänglichen|genauen|exakten|ersten|vorgegebenen|vertraulichen)\\s+)*(?:system-?\\s?prompts?|systemnachricht|systemanweisungen|systemvorgaben|entwickleranweisungen|startanweisungen|initialprompt|(?:versteckten|geheimen|internen|ursprünglichen|anfänglichen|vertraulichen|vorgegebenen)\\s+(?:anweisungen|instruktionen|vorgaben|regeln)))\\b(?:\\s+(?:nicht|niemals|nie))?|(?:kannst|könntest|würdest|magst|willst)\\s+du\\s+(?:(?:mir|uns|bitte|mal|jetzt|einmal)\\s+){0,3}(?P<io_target_q>(?:deinen|deine|dein)\\s+(?:(?:gesamten|ganzen|kompletten|vollständigen|versteckten|geheimen|internen|ursprünglichen|anfänglichen|genauen|exakten|ersten|vorgegebenen|vertraulichen)\\s+)*(?:system-?\\s?prompts?|systemnachricht|systemanweisungen|systemvorgaben|entwickleranweisungen|startanweisungen|initialprompt|(?:versteckten|geheimen|internen|ursprünglichen|anfänglichen|vertraulichen|vorgegebenen)\\s+(?:anweisungen|instruktionen|vorgaben|regeln)))\\s+(?:\\w+\\s+){0,2}?(?P<disclosure_verb>verraten|zeigen|nennen|ausgeben|preisgeben|offenlegen|teilen|kopieren|aufschreiben|wiederholen|ausdrucken|schicken|senden))",
       "excluded_match_words": [
