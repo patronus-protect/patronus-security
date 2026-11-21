@@ -94,27 +94,25 @@ def main():
     rows = load_rows(args.fixture)
     labels = sorted({row["label"] for row in rows if row["label"] != "negative"})
     negatives = [row for row in rows if row["label"] == "negative"]
-    gateway = SecurityGateway(
-        {
-            "categories": ["dynamic-pii"],
-            "max_level": "l3",
-            "cache_root": args.model_dir,
-            "download": "never",
-        }
-    )
-    gateway.warmup()
-
     results = {}
     for label in labels:
         evaluation_rows = [row for row in rows if row["label"] == label] + negatives
-        gateway.set_dynamic_pii_config(
+        # One gateway per label: the label set is part of the config.
+        gateway = SecurityGateway(
             {
-                "labels": [label],
-                "threshold": min(args.thresholds),
-                "execution_gate": {"type": "always"},
-                "conditional_labels": [],
+                "categories": ["dynamic-pii"],
+                "max_level": "l3",
+                "cache_root": args.model_dir,
+                "download": "never",
+                "dynamic_pii": {
+                    "labels": [label],
+                    "threshold": min(args.thresholds),
+                    "execution_gate": {"type": "always"},
+                    "conditional_labels": [],
+                },
             }
         )
+        gateway.warmup()
         measured = []
         for row in evaluation_rows:
             text = row["text"]

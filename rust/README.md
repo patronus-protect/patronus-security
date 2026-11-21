@@ -151,9 +151,13 @@ code, business identifiers, …), which are opt-in. All ids are in the
 
 ```python
 text = "Mail to jane.doe@example.com:\nSELECT id, email FROM customers WHERE created_at > '2024-01-01';"
-gateway = SecurityGateway({"categories": ["pii", "dlp"], "max_level": "l1", "download": "never"})
+gateway = SecurityGateway({
+    "categories": ["pii", "dlp"],
+    "max_level": "l1",
+    "download": "never",
+    "rules": {"pii_email": False, "dlp_sql_statement": True},
+})
 gateway.warmup()
-gateway.set_execution_gates({"rules": {"pii_email": False, "dlp_sql_statement": True}})
 print([r["class_name"] for r in gateway.scan_all(text)])
 ```
 
@@ -161,8 +165,8 @@ print([r["class_name"] for r in gateway.scan_all(text)])
 ['safe', 'dlp.content.sql', 'safe', 'safe']
 ```
 
-The same gates can be passed per request (`enqueue(..., execution_gates=...)`) or as top-level
-keys of the config (`SecurityGateway({"categories": [...], "rules": {...}})`). In Rust:
+The gates are top-level keys of the config; a request can override them
+(`enqueue(..., execution_gates=...)`). In Rust:
 
 ```rust
 use patronus_ark_core::cascade::ScanGateMatrix;
@@ -210,8 +214,12 @@ block class=shell_risk policies=[{"id":"core.remote_to_exec",...},{"id":"CMD-PIP
 In Python:
 
 ```python
-gateway = SecurityGateway({"categories": ["shell_command"], "max_level": "l1"})
-gateway.set_shell_command_policy_config(policy_dirs=["ark-core/examples/shell_policies"])
+gateway = SecurityGateway({
+    "categories": ["shell_command"],
+    "max_level": "l1",
+    "download": "missing",
+    "shell": {"policy_dirs": ["ark-core/examples/shell_policies"]},
+})
 gateway.warmup()
 for command in ["git status", "kubectl delete pod web-1", "terraform plan"]:
     result = gateway.scan_all(command)[0]

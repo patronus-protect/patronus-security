@@ -70,8 +70,9 @@ identifiers (`dlp.de.*`, `dlp.record.*`, project and organization IDs), content 
 security reports, export control, R&D) are off until a `rules` gate turns their rule on:
 
 ```python
-scanner = SecurityGateway({"categories": ["dlp"], "max_level": "l1"})
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["dlp"],
+    "max_level": "l1",
     "dlp_mode": "balanced",                  # scored findings instead of strict 1.0
     "rules": {
         "dlp_document_hr": True,             # opt-in document class
@@ -121,14 +122,15 @@ scanner = SecurityGateway(
 ## Turn levels or detectors off per request
 
 Use [execution gates](../reference/configuration.md#execution-gates) to disable a level or a
-specific detector below the ceiling, without rebuilding the gateway:
+specific detector below the ceiling: as config keys, or per request without rebuilding the
+gateway:
 
 === "Python"
 
     ```python
-    scanner.set_execution_gates({"l1": True, "l2": True, "l3": False})
-    # ... later ...
-    scanner.set_execution_gates(None)   # reset to all enabled
+    scanner = SecurityGateway({"categories": ["injection"], "l3": False})
+    # or for one request only:
+    scanner.enqueue(text, execution_gates={"l1": True, "l2": True, "l3": False})
     ```
 
 === "Rust"

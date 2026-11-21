@@ -177,7 +177,8 @@ the former model keys such as `native:instruction_override` still disable only t
 producer:
 
 ```python
-scanner.set_execution_gates({
+scanner = SecurityGateway({
+    "categories": ["pii", "dlp", "injection"],
     "l1": True, "l2": False, "l3": False,
     "models": {"native:instruction_override": False},
     "rules": {"pii_employee_id": False, "dlp_sql_statement": False},

@@ -199,7 +199,9 @@ The Python package can measure a gateway on the validation samples it ships with
 datasets or configuration:
 
 ```python
-scanner = SecurityGateway({"categories": ["injection", "unsafe_action"], "max_level": "l3"})
+scanner = SecurityGateway(
+    {"categories": ["injection", "unsafe_action"], "max_level": "l3", "download": "missing"}
+)
 scanner.warmup()
 scanner.run_local_benchmark()   # writes ./benchmark/…
 ```

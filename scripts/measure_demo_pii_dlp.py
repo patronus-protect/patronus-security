@@ -177,14 +177,16 @@ def collect_predictions(gateway, rows: list[dict], categories: tuple[str, ...]) 
 def measure_l1(rows: list[dict]) -> dict:
     from patronus_ark import SecurityGateway
 
-    gateway = SecurityGateway({"categories": ["pii", "dlp"], "max_level": "l1", "download": "never"})
     # This benchmark measures the full detector inventory, not the default profile.
     source = "".join(
         path.read_text() for path in sorted((ROOT / "ark-core/src/detectors/dlp/rules").glob("*.rs"))
     )
-    gateway.set_execution_gates({"rules": {
-        rule_id: True for rule_id in re.findall(r'name: "(dlp_[^"]+)"', source)
-    }})
+    gateway = SecurityGateway({
+        "categories": ["pii", "dlp"],
+        "max_level": "l1",
+        "download": "never",
+        "rules": {rule_id: True for rule_id in re.findall(r'name: "(dlp_[^"]+)"', source)},
+    })
     predictions = collect_predictions(gateway, rows, ("pii", "dlp"))
     return score_with_slices(rows, {"pii", "dlp"}, predictions)
 

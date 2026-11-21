@@ -58,14 +58,6 @@ def _execution_gates_json(execution_gates):
     return json.dumps(execution_gates)
 
 
-def _dynamic_pii_config_json(config):
-    if config is None:
-        return None
-    if not isinstance(config, dict):
-        raise ValueError("dynamic_pii_config must be a dict")
-    return json.dumps(config)
-
-
 def _normalization_configs_json(configs):
     if configs is None:
         return None
@@ -111,17 +103,6 @@ class GatewayConfig(ScannerConfig, total=False):
     cache: dict[str, object]
 
 
-# Ark keys the isolated benchmark worker keeps from the gateway's config.
-_BENCHMARK_WORKER_KEYS = (
-    "cache_root",
-    "onnx_batch_mode",
-    "execution_backend",
-    "ntdb_decision_threshold_point",
-    "l3_strategy",
-    "wolf",
-)
-
-
 class SecurityGateway:
     """Python gateway for Patronus Ark scanners.
 
@@ -145,8 +126,9 @@ class SecurityGateway:
             retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
             the `shell_command` verdict).
 
-            Ark keys: `download` (`missing`, the default here, lets `warmup()`
-            download missing model assets; `never`), `download_categories`,
+            Ark keys: `download` (`never`, the default as in Rust and Ark
+            Core; `missing` lets `warmup()` download missing model assets),
+            `download_categories`,
             `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
             `ntdb_decision_threshold_point` (`best_f1` (default),
             `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
@@ -164,68 +146,14 @@ class SecurityGateway:
         if not isinstance(config, dict):
             raise ValueError("config must be a dict")
         self._config = deepcopy(config)
-        self._execution_gates = None
         self.rust_gateway = RustSecurityGateway(json.dumps(config))
-
-    @classmethod
-    def _from_benchmark_config(cls, benchmark_config: dict):
-        """A gateway from `_benchmark_config()`: the config and any later gates."""
-        gateway = cls(benchmark_config["config"])
-        if benchmark_config["execution_gates"] is not None:
-            gateway.set_execution_gates(benchmark_config["execution_gates"])
-        return gateway
-
-    def _benchmark_config(self) -> dict:
-        """This gateway's config and later gates, for isolated benchmark gateways."""
-        return {
-            "config": deepcopy(self._config),
-            "execution_gates": deepcopy(self._execution_gates),
-        }
-
-    def _benchmark_worker_config(self) -> dict:
-        """The Ark keys an isolated benchmark worker keeps."""
-        return {
-            key: deepcopy(self._config[key])
-            for key in _BENCHMARK_WORKER_KEYS
-            if key in self._config
-        }
-
-    @property
-    def wolf_options(self) -> dict[str, int]:
-        """Effective dedicated-Wolf windows; returned as an independent copy."""
-        return dict(self.rust_gateway.wolf_options)
-
-    @property
-    def wolf_model(self) -> str:
-        """Dedicated-Wolf model: `base`, `small` or `edge`."""
-        return self.rust_gateway.wolf_model
-
-    @property
-    def wolf_precision(self) -> str:
-        """Requested dedicated-Wolf ONNX export, `auto` unless set explicitly."""
-        return self.rust_gateway.wolf_precision
-
-    @property
-    def categories(self) -> list[str]:
-        """Categories configured for `scan_all`."""
-        return list(self.rust_gateway.categories)
-
-    @property
-    def max_level(self) -> str:
-        """Maximum scanner level configured for this gateway."""
-        return self.rust_gateway.max_level
-
-    @property
-    def l3_strategy(self) -> str:
-        """Active global L3 model strategy."""
-        return self.rust_gateway.l3_strategy
 
     def warmup(self):
         """Initialize model-backed scanners and download allowed missing assets.
 
         Native scanners are available without calling `warmup()`. Model-backed
         L2/L3 scanners are initialized only when their required assets are
-        already cached or can be downloaded according to the download settings.
+        already cached or, with `download: "missing"`, can be downloaded.
         L3 ONNX sessions are lazy-loaded on first L3 inference, not during
         `warmup()`.
 
@@ -261,81 +189,8 @@ class SecurityGateway:
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""
-        self._require_loaded_dynamic_pii(self.categories)
+        self._require_loaded_dynamic_pii(self.rust_gateway.categories)
         return self.rust_gateway.scan_all(text)
-
-    def set_execution_gates(self, execution_gates: ScanGates | None):
-        """Replace the gate matrix used by subsequent scan calls.
-
-        Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
-        uses the shared gate schema (`l1`/`l2`/`l3`, `rules`, `models`, `pii_mode`,
-        `dlp_mode`, the attack-class `<category>_mode` keys, `explain`, `conditional`,
-        `l3_policy`); model keys match result
-        `model` values such as `native:mcp_runtime_risk`.
-        """
-        self.rust_gateway.set_execution_gates(_execution_gates_json(execution_gates))
-        self._execution_gates = deepcopy(execution_gates)
-
-    def set_onnx_batch_mode(self, mode: str):
-        """Replace the ONNX batch mode for subsequent batch calls.
-
-        `lazy_batches` preserves the per-text ONNX execution path.
-        `tensor_batch` executes L3 fallbacks as one ONNX tensor batch when
-        pipelines can batch their fallback texts.
-        """
-        self.rust_gateway.set_onnx_batch_mode(mode)
-        self._config["onnx_batch_mode"] = mode
-
-    def set_execution_backend(self, backend: str):
-        """Replace execution backend and apply its default L3 mode.
-
-        `auto` and `cpu` default to lazy L3 execution. `gpu`, `coreml`,
-        `cuda`, `directml`, and `tensorrt` default to tensor batches. Call
-        `set_onnx_batch_mode` afterwards to override.
-        """
-        self.rust_gateway.set_execution_backend(backend)
-        self._config["execution_backend"] = backend
-        # The backend's default batch mode replaces an earlier one.
-        self._config.pop("onnx_batch_mode", None)
-
-    def set_ntdb_operating_point(self, point: str):
-        """Select the calibrated NTDB final-decision threshold set for subsequent scans."""
-        self.rust_gateway.set_ntdb_operating_point(point)
-        self._config["ntdb_decision_threshold_point"] = point
-
-    def set_l3_strategy(self, strategy: str):
-        """Select `dedicated` per-pipeline L3 models or the shared `multi` model."""
-        self.rust_gateway.set_l3_strategy(strategy)
-        self._config["l3_strategy"] = strategy
-
-    def set_dynamic_pii_config(self, config: dict):
-        """Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`."""
-        self.rust_gateway.set_dynamic_pii_config(_dynamic_pii_config_json(config))
-        self._config["dynamic_pii"] = deepcopy(config)
-
-    def set_shell_command_policy_config(
-        self,
-        policy_dirs: list[str] | None = None,
-        allowlist: dict[str, str] | None = None,
-    ):
-        """Replace the user policies and allowlist of the `shell_command` verdict.
-
-        `policy_dirs` are directories of user `*.cedar` policies, read in file-name
-        order; `allowlist` maps a bundle-default policy id to `"ask"`. Same keys as
-        Ark Core's `shell` config and the Ark API's `pipeline.shell`. A loaded
-        bundle applies the configuration at once, otherwise `warmup()` does. A refused
-        configuration raises `ValueError` and changes nothing.
-        """
-        self.rust_gateway.set_shell_command_policy_config(
-            None if policy_dirs is None else [str(path) for path in policy_dirs],
-            None if allowlist is None else dict(allowlist),
-        )
-
-    def _new_benchmark_gateway(self, l3_strategy: str):
-        """Create an isolated gateway for one benchmark strategy."""
-        config = self._benchmark_config()
-        config["config"]["l3_strategy"] = l3_strategy
-        return type(self)._from_benchmark_config(config)
 
     def _require_loaded_dynamic_pii(self, categories: list[str]):
         """Raise instead of silently returning no `dynamic-pii` result when its model is not loaded."""
