@@ -357,6 +357,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   keystrokes or passwords, opens a backdoor or every port, or sets permissions to 777. An admin
   deleting their own temp file, shell alias tutorials, reverse-shell detection rules, login forms,
   ordinary code requests, tabletop exercises and test code stay benign.
+- **Detection change:** (`unsafe_action`) the code-request rules match a Windows system path with
+  ordinary single backslashes (`C:\Windows\System32\drivers\etc\hosts`), and a value of 777 counts
+  only after a permissions word ("file permissions … to 777", "Rechte … auf 777"); a script that
+  sets a port to 777 stays benign.
 - **Detection change:** (`unsafe_action`) new rules for harmful actions that tool results hand to
   an agent, in German and English, also when the result wraps its lines (YAML fields): sending as
   much money as possible or the entire balance to a bank account ("so viel Geld wie möglich auf das
