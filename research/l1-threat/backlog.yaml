@@ -375,6 +375,51 @@ tasks:
       third-party data only fetched at eval/train time); model size, p95 ms per 100 KiB and RAM per model
       unchanged within noise vs S10; Rust parity bit-exact; nothing wired into the scan path before a class
       task picks it
+  # Owner, 2026-11-21: the fastText-type models go into the cascade as `l1_model`, and every class needs
+  # one, trained and measured on DE/EN gold and on false-positive data that is ordinary benign chat traffic.
+  # The models ship inside the Ark Core package (no download), ~256 KiB each. S10 dev TPR@0.1% FPR
+  # (all/de/en): instruction_injection 36.4/0.0/38.3, prompt_extraction 87.5/-/87.5, jailbreak
+  # 81.3/0.0/84.2, harmful_content 42.2/47.6/38.6, unsafe_action 39.4/0.8/49.7, exfiltration 26.7/0.0/37.5,
+  # toxic_language 68.0/67.9/68.2, agent_config_tampering 0/0/0; no model yet for tool_poisoning,
+  # memory_poisoning and resource_exhaustion. Rules alone use none of the 0.1% budget (benign FPR 0.00 for
+  # every class), so the models carry the recall. S11 adds German positives and per-language cuts for the
+  # S10 classes; M09 supplies the gold and benign chat pool for all classes, S12 the missing models, S13
+  # ships them and wires them into the cascade.
+  - id: M09
+    title: DE/EN gold and benign chat pool for every class — per class native German and English positives from open, licence-checked sources (translated only where no native source exists, marked translated), and a DE/EN benign pool of ordinary chat traffic for false-positive measurement (e.g. OASST2 de/en user turns under Apache-2.0, WildChat de/en under ODC-BY, other open chat corpora with their licence named); registered in datasets.yaml and the entity map and run through the gold process (sample review, leakage check, dev + holdout split, holdout overlay for the holdout sets)
+    type: eval-infra
+    deps: [M07, M08]
+    accept: >-
+      every class in taxonomy.yaml has >= N German and >= N English scored dev positives from >= 2 distinct
+      sources (a generator counts as one source), with N = 200 for instruction_injection, jailbreak,
+      prompt_extraction, harmful_content and toxic_language (open sources exist; 200 positives resolve TPR in
+      0.5 pp steps) and N = 100 for tool_poisoning, memory_poisoning, resource_exhaustion,
+      agent_config_tampering, exfiltration and unsafe_action (mostly documented-synthetic or translated);
+      native / translated / synthetic column set per row; the benign chat pool has >= 10k dev rows per
+      language; every new set's licence named in datasets.yaml (no licence-encumbered sets, third-party data
+      only fetched at prepare time); gold.py dev review passes the 5% bar for every new set and gold.md is
+      re-rendered; leakage 0 (exact + MinHash, dev vs holdout); the holdout side is a counts-only report
+  - id: S12
+    title: fastText-type L1 models for all eleven classes — train and calibrate the missing classes (tool_poisoning, memory_poisoning, resource_exhaustion) and fix agent_config_tampering (0/0/0 in S10) with the S10/S11 pipeline; per-language detect and clear cuts at 0.1% and 1% FPR on the DE/EN benign pools, the M09 chat pool included
+    type: scorer
+    deps: [S11, M09]
+    accept: >-
+      per class: DE and EN TPR@0.1% FPR on dev next to the rules-only number; FPR per language <= 0.1% on
+      benign data (dev benign pool incl. hard benigns and the M09 chat pool, never train negatives), reported
+      per benign source; model size, p95 ms per 100 KiB and RAM per model within the S10 budget (~4 ms per
+      100 KiB per model, ~256 KiB per model); Rust parity bit-exact; nothing wired into the scan path before
+      S13
+  - id: S13
+    title: Ship the L1 models in Ark Core and hang them into the cascade — the models become package data of ark-core (Rust crate and Python wheel), loaded through Core's model mechanism without download; `cascade.modules.<class>.l1_model` can reference a built-in model by name (opt-in, default behaviour unchanged without a cascade), same config in Ark (Ark uses Core); research/l1-threat/scoreboard/cascade-config.json uses them and cascade.md is re-rendered (L1 heuristic + L1 model, Wolf Edge fp32 as L3 at its published settings in a separate column)
+    type: engine
+    deps: [S12]
+    accept: >-
+      per class and language: TPR at the calibrated operating point, benign FPR <= 0.1% per language (chat
+      pool included), hard-benign FPR at the same point, and the share of rows decided by the heuristic, by
+      the L1 model and escalated; L1 latency per stage measured with scripts/benchmark_injection_l1.py and
+      scripts/l1_dlp/latency.py, CLAUDE.md budgets hold (DLP 100 KiB p95 <= 10 ms); package size increase of
+      the crate and the wheel named in the PR; unit tests for loading a built-in model by name and for the
+      unchanged default without a cascade
   - id: JB02
     status: done
     title: jailbreak scorer — choose among the S04 and S10 candidates by dev TPR@0.1% FPR within the L1 budget, trained on a mix of jailbreak sources (not WildJailbreak alone; S09's fastText reached 6.2/0.0 out of distribution) with jailbreak look-alike hard negatives; rules from JB01 stay as the precise layer
