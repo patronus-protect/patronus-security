@@ -18,8 +18,8 @@ Args:
         `<category>_mode` per attack class, `explain`, `conditional`, the
         L3 worker policy `l3_policy` and the opt-in `cascade`
         (`{"modules": {...}}`: L1 early exit with per-category
-        `detect_threshold`/`clear_threshold`; results then carry
-        `module_decision`)), `cache_root` (the model cache root; default the
+        `detect_threshold`/`clear_threshold`; scan reports then carry
+        `decision`, one entry per module)), `cache_root` (the model cache root; default the
         platform cache directory plus `patronus_ark`), `wolf` (the
         dedicated injection L3: `model` `base`, `small` (default) or
         `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
@@ -79,17 +79,22 @@ Delete cache records created before `until_ts`.
 `until_ts` accepts Unix seconds or Unix milliseconds. The cache database
 file is preserved.
 
-### `scan_all(text: str) -> list[dict]`
+### `scan_all(text: str) -> ScanReport`
 
 Scan text with every category configured on this gateway.
 
-### `scan_category(category: str, text: str) -> list[dict]`
+Returns Ark Core's report shape: `input_bytes`, the per-category
+results in `native`, `wolf` (the dedicated injection L3's Wolf result
+when it ran, else `None`) and, with the opt-in `cascade`, `decision`
+(one final answer per module).
 
-Scan text with a single category.
+### `scan_category(category: str, text: str) -> ScanReport`
 
-### `scan_categories(categories: list[str], text: str) -> list[dict]`
+Scan text with a single category; the report as in `scan_all`.
 
-Scan text with a caller-provided category subset.
+### `scan_categories(categories: list[str], text: str) -> ScanReport`
+
+Scan text with a caller-provided category subset; the report as in `scan_all`.
 
 ### `enqueue(text: str, categories: list[str] | None = None, execution_gates: ScanGates | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
 

@@ -200,10 +200,11 @@ stage's `score` and the `layers` that ran after the heuristic (L1 model, L3, eac
 Full Ark reads the same `cascade` key in its gates (Python `execution_gates`, Ark API `gates`),
 with only `modules` and their `detect_threshold` / `clear_threshold` inside: its levels and
 conditional gates are the gate keys `max_level`, `l1`, `l2`, `l3` and `conditional` themselves,
-and it runs no L1 models yet. With it, the results that give a category's final answer carry that
-module's entry of the same shape as `module_decision` (`outcome`, `decided_by` `heuristic`, `l2`
-or `l3`, `score`), in the queue and the distributed plan alike; see the
-[result schema](../reference/result-schema.md).
+and it runs no L1 models yet. With it, Ark's blocking `scan_*` calls return the same report shape
+as Core (`input_bytes`, `native`, `wolf`, `decision`), with one `decision` entry per module
+(`outcome`, `decided_by` `heuristic`, `l2` or `l3`, `score`). In the queue and the distributed
+plan, the result that gives a category's final answer carries that entry as `module_decision`; see
+the [result schema](../reference/result-schema.md).
 
 ## Where the parts live
 

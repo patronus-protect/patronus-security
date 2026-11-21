@@ -2,13 +2,37 @@
 
 What the async queue (`enqueue` + `consume_next_event`) and the blocking `scan_*` helpers
 return. Python names are shown; the Rust types (`SecurityScanResult`, `LayerResult`,
-`EvaluationResult`, `QueuedSecurityEvent`, `SecurityFailure`) are in the
-[Rust API reference](../rust-api.md).
+`EvaluationResult`, `QueuedSecurityEvent`, `SecurityFailure`, and Ark Core's `ScanReport`) are in
+the [Rust API reference](../rust-api.md).
+
+## Scan report
+
+The blocking `scan_all`, `scan_categories` and `scan_category` (and Rust's `scan_input`) return
+one **report per input**, in the shape of Ark Core's scan report (Rust:
+`patronus_ark_core::ScanReport<SecurityScanResult>`):
+
+```python
+{
+    "input_bytes": 31,
+    "native": [...],   # one scan result per category, see below
+    "wolf": None,
+    "decision": [       # only with the opt-in gate key `cascade`
+        {"module": "dlp", "outcome": "clear", "decided_by": "heuristic", "score": 0.0},
+    ],
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `input_bytes` | int | UTF-8 length of the scanned text. |
+| `native` | list | The final [scan results](#scan-result), one per category (partial results are left out). |
+| `wolf` | dict or None | The Wolf result (`document_logit`, `attack_probability`, `threshold`, `matched`, `windows`, `model_id`, `revision`, `precision`) when the dedicated injection L3 ran; the same object is in that result's L3 layer `details.wolf`. `None` otherwise. |
+| `decision` | list | Only with the opt-in gate key `cascade`: one final answer per category, as in Ark Core: `module`, `outcome` (`detected` or `clear`), `decided_by` (`heuristic` or `l1_model` for L1, `l2`, `l3`), `score` (the deciding stage's score: a probability, the decision logit for the L1 model) and, when an L1 model ran, its `layers`. L1's answer counts a detection at a lowered `cascade.modules.<category>.detect_threshold` as `detected` even when the result's `class_name` stays `safe`. An L2 or L3 answer is `clear` for a `safe`/`benign` class, else `detected`, with the result's `confidence` as `score`. Absent without a cascade. |
 
 ## Scan result
 
-A single result — the `result` field of a queue `result` event, or one element of the list the
-blocking `scan_*` helpers return — is a **dictionary describing one category's verdict**:
+A single result — the `result` field of a queue `result` event, or one element of a report's
+`native` list — is a **dictionary describing one category's verdict**:
 
 ```python
 [
@@ -19,12 +43,6 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
         "level": "L1",
         "model": "native:dlp",
         "duration_ms": 0.4,
-        "module_decision": {
-            "module": "dlp",
-            "outcome": "clear",
-            "decided_by": "heuristic",
-            "score": 0.0,
-        },
         "evidence_spans": [],
         "label_scores": [],
         "layers": [
@@ -52,7 +70,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
 | `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Omitted when no authoritative classifier decision exists (Python, Rust's serialized result and the Ark API alike); Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
-| `module_decision` | dict | Only with the opt-in gate key `cascade`: the category's final answer, in the shape of an entry of Ark Core's scan-report `decision` list: `module`, `outcome` (`detected` or `clear`), `decided_by` (`heuristic` or `l1_model` for L1, `l2`, `l3`), `score` (the deciding stage's score: a probability, the decision logit for the L1 model) and, when an L1 model ran, its `layers`. On L1 results it is L1's answer: a detection at a lowered `cascade.modules.<category>.detect_threshold` shows as `detected` even when `class_name` stays `safe`. An L2 or L3 result answers `clear` for a `safe`/`benign` class, else `detected`, with its `confidence` as `score`. Absent without a cascade and while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3). Rust exposes `SecurityScanResult.module_decision: Option<ModuleDecision>`. |
+| `module_decision` | dict | Queue `result` events only, with the opt-in gate key `cascade`: the category's final answer, an entry of the report's [`decision`](#scan-report) list. Absent while a later layer still answers the category (an L1 result of a category that goes on to L2, an L2 result with a pending L3), and never on the results in a report's `native` list (the report lists it once in `decision`). Rust exposes `SecurityScanResult.module_decision: Option<ModuleDecision>`. |
 | `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |

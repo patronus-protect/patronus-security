@@ -22,7 +22,7 @@ scanner = SecurityGateway(
         "download": "never",
     }
 )
-results = scanner.scan_all(text)
+results = scanner.scan_all(text)["native"]
 ```
 
 Use this shape when your app wants to store, display, log, or otherwise reuse the same canonical

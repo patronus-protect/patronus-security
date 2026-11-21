@@ -491,7 +491,11 @@ policy.
 ## Queued Request API
 
 ```rust
-pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult>;
+pub fn scan_category(
+    &self,
+    category: SecurityCategory,
+    text: &str,
+) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with a single category.
@@ -651,19 +655,19 @@ pub fn scan_categories(
     &self,
     categories: &[SecurityCategory],
     text: &str,
-) -> Vec<SecurityScanResult>;
+) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with a caller-provided category subset.
 
 ```rust
-pub fn scan_input(&self, input: &ExternalL1Input) -> Vec<SecurityScanResult>;
+pub fn scan_input(&self, input: &ExternalL1Input) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan one category through native and registered external scanners.
 
 ```rust
-pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
+pub fn scan_all(&self, text: &str) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with every category configured on this gateway.
@@ -1851,7 +1855,8 @@ pub struct SecurityScanResult {
     /// decision: a detection at a lowered `detect_threshold` shows as
     /// `detected` even when the native class stays `safe`, and its `layers`
     /// are the L1 model's. An L2 or L3 result keeps its layer in its own
-    /// `layers`.
+    /// `layers`. The synchronous `scan_*` reports move it to the report's
+    /// `decision` list, once per module.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_decision: Option<crate::ModuleDecision>,
 }
@@ -2127,9 +2132,9 @@ pub enum ScanError {
 No public documentation is available yet.
 
 ```rust
-pub struct ScanReport {
+pub struct ScanReport<R = NativeResult> {
     pub input_bytes: usize,
-    pub native: Vec<NativeResult>,
+    pub native: Vec<R>,
     /// Wolf's result when it ran. Without a cascade Wolf runs on every scan
     /// that selects `injection`, as before. `None` when Wolf is not
     /// configured, when `injection` was not selected, or, with a configured
@@ -2147,6 +2152,9 @@ pub struct ScanReport {
 ```
 
 Complete scan output; native decisions and model probabilities remain separate.
+
+`R` is the per-category result: Core's [`NativeResult`]; Ark's gateway
+reports its own result type, which embeds `NativeResult`, in the same envelope.
 
 ```rust
 pub struct Scanner {

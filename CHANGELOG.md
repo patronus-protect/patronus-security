@@ -11,6 +11,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Blocking scans return a report:** `scan_all`, `scan_categories` and `scan_category` (and
+  Rust's `scan_input`) now return one report per input in the same shape as Ark Core's
+  `Scanner.scan`: `input_bytes`, the results in `native`, `wolf` (the Wolf result when the
+  injection L3 ran) and, with `cascade`, `decision` with one entry per category. Read the results
+  from `report["native"]` in Python and `report.native` in Rust (type
+  `patronus_ark_core::ScanReport<SecurityScanResult>`). The results in a report no longer carry
+  `module_decision`; it is listed once in the report's `decision`. Queue events are unchanged.
 - **One decision field per result:** with the opt-in `cascade`, a result that gives a category's
   final answer now carries `module_decision` (`module`, `outcome`, `decided_by`, `score` and,
   when an L1 model ran, its `layers`) in the same shape as an entry of Ark Core's scan-report

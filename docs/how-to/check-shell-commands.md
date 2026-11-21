@@ -297,7 +297,7 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
     gateway.set_shell_command_policy_config(policies)?; // before or after warmup
     gateway.warmup()?;
 
-    let result = &gateway.scan_categories(&[SecurityCategory::ShellCommand], "kubectl delete pod web-1")[0];
+    let result = &gateway.scan_categories(&[SecurityCategory::ShellCommand], "kubectl delete pod web-1").native[0];
     let verdict = &result.layers[0].details["verdict"]; // the patronus.verdict/1 document
     ```
 
