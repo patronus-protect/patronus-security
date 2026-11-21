@@ -335,6 +335,20 @@ Twins 0/900, p95 ~3,2 ms je 100 KiB wie S10. `B4` wäre besser (95,7; `jackhhao`
 Verteilung trägt das Modell nicht (`jackhhao_jailbreak` 3,5 / 0,7 bei gematchter FPR gegen ATR 89,9 / 70,0), Hard
 Benigns WildJailbreak-adversarial-benign 7/12 und WildGuardMix 0,82 %; es fehlen weitere Jailbreak-Trainingsquellen.
 
+**Stand S11.** Deutsche Positive und Schnitte je Sprache
+([`scoreboard/fasttext-language-cuts.md`](scoreboard/fasttext-language-cuts.md)): `ablation.py` teilt generierte
+Zeilen nicht mehr über den Zeilen-ID-Hash, sondern über Generator und Template-Familie (`template_key`; alle
+Füllungen eines Templates, beide Sprachen und die Twins auf einer Seite, per Test geprüft); `--oversample-de N`
+wiederholt deutsche Trainingspositive; `calibrate` setzt zusätzlich je Sprache einen eigenen Detect-/Clear-Schnitt
+auf den Benign-Zeilen dieser Sprache (`calibration.language_thresholds`, nicht im Scan-Pfad) und berichtet TPR je
+Positiv-Quelle. Gewählt: `--rows train_dev --rows generated --oversample-de 4`. Am eigenen Schnitt (FPR DE 0,08 %,
+EN 0,10 %) DE / EN gegen das S10-Setup am eigenen Schnitt: injection 21,9 → 65,7 / 38,5 → 67,6, unsafe_action 3,1 →
+45,2 / 48,6 → 74,0, exfiltration 0 → 100 / 12,2 → 87,3, harmful_content 76,2 → 79,3 / 26,4 → 29,3, toxic_language
+71,4 → 85,7 / 68,2, jailbreak 0 / 79,7 → 82,9; kein EN-Rückgang. Der gepoolte S10-Schnitt hatte auf EN-Benigns
+0,11–0,15 % FPR. Offen: deutsche Positive aus ≥ 5 Quellen nur bei injection und unsafe_action; der deutsche
+Benign-Pool ist fast nur `germanquad`; übersetzte offene Sets (deepset, Gandalf, wildjailbreak-/jackhhao-Trainings-
+hälften) und ein vielfältiger deutscher Benign-Pool brauchen neue eingefrorene Dev-Daten (`generators.py translate`).
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).
