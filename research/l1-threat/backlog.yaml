@@ -507,7 +507,7 @@ tasks:
       on dev obfuscation_slices every obfuscation kind where the clean source row is flagged is flagged
       obfuscated too (today base64, hex, rot13, homoglyph, leetspeak, spaced: 0); decoded views scanned only
       behind their existing prefilter (no second full scan of clean text); 0 new benign FP; latency stated
-  - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03]}
+  - {id: PX01, title: "prompt_extraction rules (requests to reveal hidden instructions, tool schemas, guardrail rules; input side only)", type: new-family, deps: [IJ01, T03], status: done}
   - id: T06
     status: done
     title: Native jailbreak dev source — recipes for wildjailbreak (ODC-BY; adversarial_harmful as jailbreak, adversarial_benign as hard negatives) and the adversarial part of wildguardmix, capped and deduplicated; gold review
