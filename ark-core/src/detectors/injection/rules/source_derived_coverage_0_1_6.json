@@ -1578,9 +1578,8 @@
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
       "required_literals_any": [
-        "jede",
-        "alle",
-        "verbreite"
+        "diese",
+        "folgende"
       ],
       "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:füge|hänge|kopiere|übernimm|wiederhole|setze|schreibe|schreib)\\s+(?:diesen|diese|dieses|den\\s+folgenden|die\\s+folgende|folgenden)\\s+(?:(?:genauen|gesamten|ganzen)\\s+)?(?:absatz|text|satz|anweisung(?:en)?|nachricht|hinweis|zeile|block|abschnitt|prompt)\\s+(?:wörtlich\\s+)?(?:an|in|unter|ans\\s+ende)\\s+(?:jede|jeden|jedes|alle)\\s+(?:(?:deiner|deine|ihrer)\\s+)?(?:(?:künftigen|zukünftigen|weiteren)\\s+)?(?:antworten|antwort|ausgaben|ausgabe|nachrichten|nachricht|e-mails|e-mail|mails|mail|notizen|notiz|zusammenfassungen|zusammenfassung|dokumente|dokument)|verbreite\\s+(?:diese|diesen)\\s+(?:anweisung(?:en)?|nachricht|hinweis|prompt|regel))",
       "excluded_match_words": [
