@@ -37,10 +37,14 @@ pub struct ScannerConfig {
     /// [`ScanReport::decision`] reports each scanned module's final answer.
     #[serde(flatten)]
     pub gates: ScanGateMatrix,
-    /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
-    pub max_input_bytes: usize,
-    /// Maximum actionable evidence spans; reports are never silently truncated.
-    pub max_findings: usize,
+    /// Maximum UTF-8 input size; exceeding it is an error. Default: unset
+    /// (no limit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_input_bytes: Option<usize>,
+    /// Maximum actionable evidence spans; more are an error, reports are
+    /// never silently truncated. Default: unset (no limit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_findings: Option<usize>,
     /// Model cache root of the bundles a config does not place with its own
     /// `bundle_dir`. Default: [`crate::warmup::default_cache_root`].
     pub cache_root: Option<PathBuf>,
@@ -55,8 +59,8 @@ impl Default for ScannerConfig {
             categories: SecurityCategory::DEFAULT_ACTIVE.to_vec(),
             max_level: SecurityLevel::L3,
             gates: ScanGateMatrix::default(),
-            max_input_bytes: 1024 * 1024,
-            max_findings: 10_000,
+            max_input_bytes: None,
+            max_findings: None,
             cache_root: None,
             #[cfg(feature = "wolf")]
             wolf: None,
@@ -81,9 +85,12 @@ impl ScannerConfig {
     }
 
     pub(crate) fn validate(&self) -> Result<(), ScanError> {
-        if self.max_input_bytes == 0 || self.max_findings == 0 || self.categories.is_empty() {
+        if self.max_input_bytes == Some(0)
+            || self.max_findings == Some(0)
+            || self.categories.is_empty()
+        {
             return Err(ScanError::Config(
-                "categories and positive resource limits are required".into(),
+                "categories are required and set resource limits must be positive".into(),
             ));
         }
         if let Some(&category) = self
@@ -233,11 +240,7 @@ impl Scanner {
             return Err(unsupported_category(category));
         }
         control.check()?;
-        if text.len() > self.config.max_input_bytes {
-            return Err(ScanError::InputLimit {
-                limit: self.config.max_input_bytes,
-            });
-        }
+        self.check_input(text)?;
         // With L1 switched off, no native producer runs.
         let native = if self.execution.allows_level(SecurityLevel::L1) {
             catch_unwind(AssertUnwindSafe(|| {
@@ -388,16 +391,19 @@ impl Scanner {
             .shell
             .as_ref()
             .ok_or_else(|| ScanError::Config("shell is not configured".into()))?;
-        if command.len() > self.config.max_input_bytes {
-            return Err(ScanError::InputLimit {
-                limit: self.config.max_input_bytes,
-            });
-        }
+        self.check_input(command)?;
         pipeline
             .verdict(command, context, prior_facts, |id| {
                 self.execution.gates().allows_rule(id)
             })
             .map_err(ScanError::Shell)
+    }
+    /// The configured `max_input_bytes`, when set.
+    fn check_input(&self, input: &str) -> Result<(), ScanError> {
+        match self.config.max_input_bytes {
+            Some(limit) if input.len() > limit => Err(ScanError::InputLimit { limit }),
+            _ => Ok(()),
+        }
     }
     fn scan_native(
         &self,
@@ -433,15 +439,14 @@ impl Scanner {
                 );
             }
         }
-        if results
-            .iter()
-            .map(|r| r.evidence_spans.len())
-            .sum::<usize>()
-            > self.config.max_findings
-        {
-            return Err(ScanError::FindingLimit {
-                limit: self.config.max_findings,
-            });
+        if let Some(limit) = self.config.max_findings.filter(|&limit| {
+            results
+                .iter()
+                .map(|r| r.evidence_spans.len())
+                .sum::<usize>()
+                > limit
+        }) {
+            return Err(ScanError::FindingLimit { limit });
         }
         if results.iter().any(|r| {
             r.class_name == "error" || r.decision.as_ref().is_some_and(|d| d.terminality.degraded)
@@ -556,8 +561,19 @@ mod scope_tests {
     }
     #[test]
     fn sensitive_data_retains_input_and_finding_limits() {
+        // No limit unless configured; a configured limit must be positive.
+        let defaults = ScannerConfig::default();
+        assert_eq!(
+            (defaults.max_input_bytes, defaults.max_findings),
+            (None, None)
+        );
+        assert!(Scanner::new(ScannerConfig {
+            max_findings: Some(0),
+            ..ScannerConfig::default()
+        })
+        .is_err());
         let mut scanner = Scanner::new(ScannerConfig {
-            max_input_bytes: 4,
+            max_input_bytes: Some(4),
             ..ScannerConfig::default()
         })
         .unwrap();
@@ -567,7 +583,7 @@ mod scope_tests {
         ));
         let mut scanner = Scanner::new(ScannerConfig {
             categories: vec![SecurityCategory::Pii],
-            max_findings: 1,
+            max_findings: Some(1),
             ..ScannerConfig::default()
         })
         .unwrap();

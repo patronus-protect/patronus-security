@@ -266,10 +266,10 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned")
             .requests
             .insert(request_id.clone(), RequestState::running());
-        // Like Ark Core, an input above `max_input_bytes` is refused unscanned.
-        if inputs
-            .iter()
-            .any(|input| input.text.len() > self.max_input_bytes)
+        // Like Ark Core, an input above a set `max_input_bytes` is refused unscanned.
+        if let Some(limit) = self
+            .max_input_bytes
+            .filter(|&limit| inputs.iter().any(|input| input.text.len() > limit))
         {
             self.fail_request(
                 &request_id,
@@ -279,7 +279,7 @@ impl SecurityGateway {
                     detector_id: None,
                     kind: SecurityFailureKind::LimitExceeded,
                     retryable: false,
-                    message: format!("input exceeds max_input_bytes {}", self.max_input_bytes),
+                    message: format!("input exceeds max_input_bytes {limit}"),
                 },
             );
             return request_id;
@@ -377,13 +377,13 @@ impl SecurityGateway {
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
         );
         let (mut l1_results, l1_failures) = split_results(raw_l1);
-        // Like Ark Core, more evidence spans than `max_findings` fail the
-        // request instead of publishing a silently truncated report.
+        // Like Ark Core, more evidence spans than a set `max_findings` fail
+        // the request instead of publishing a silently truncated report.
         let findings = l1_results
             .iter()
             .map(|result| result.evidence_spans.len())
             .sum::<usize>();
-        if findings > self.max_findings {
+        if let Some(limit) = self.max_findings.filter(|&limit| findings > limit) {
             self.fail_request(
                 &request_id,
                 SecurityFailure {
@@ -392,10 +392,7 @@ impl SecurityGateway {
                     detector_id: None,
                     kind: SecurityFailureKind::LimitExceeded,
                     retryable: false,
-                    message: format!(
-                        "{findings} findings exceed max_findings {}",
-                        self.max_findings
-                    ),
+                    message: format!("{findings} findings exceed max_findings {limit}"),
                 },
             );
             return;

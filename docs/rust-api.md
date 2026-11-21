@@ -2068,10 +2068,14 @@ pub struct ScannerConfig {
     /// [`ScanReport::decision`] reports each scanned module's final answer.
     #[serde(flatten)]
     pub gates: ScanGateMatrix,
-    /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
-    pub max_input_bytes: usize,
-    /// Maximum actionable evidence spans; reports are never silently truncated.
-    pub max_findings: usize,
+    /// Maximum UTF-8 input size; exceeding it is an error. Default: unset
+    /// (no limit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_input_bytes: Option<usize>,
+    /// Maximum actionable evidence spans; more are an error, reports are
+    /// never silently truncated. Default: unset (no limit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_findings: Option<usize>,
     /// Model cache root of the bundles a config does not place with its own
     /// `bundle_dir`. Default: [`crate::warmup::default_cache_root`].
     pub cache_root: Option<PathBuf>,

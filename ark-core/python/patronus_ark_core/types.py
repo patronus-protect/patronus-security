@@ -316,8 +316,8 @@ class ScannerConfig(ScanGates, total=False):
     """The Core scanner's config; Ark's config is this config plus Ark's keys."""
     categories: list[NativeCategory]
     max_level: Literal["L1", "L2", "L3", "l1", "l2", "l3"]
-    max_input_bytes: int
-    max_findings: int
+    max_input_bytes: int | None
+    max_findings: int | None
     cache_root: str
     wolf: WolfConfig | None
     shell: ShellConfig | None

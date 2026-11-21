@@ -20,7 +20,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
 | `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`, `threshold` (unset: the serving default), and Wolf's ONNX `backend` and `runtime_options`. | yes | yes |
 | `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, `allowlist`, optional `bundle_dir`. | yes | yes |
-| `max_input_bytes`, `max_findings` | integer | Input size limit (default 1 MiB) and evidence-span limit (default 10000). Core returns an error; Ark ends the request with a `limit_exceeded` failure. | yes | yes |
+| `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
 | `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | warmup option | yes |
 | `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"`; server `"multi"`. | no | yes |

@@ -45,10 +45,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   default; an L3 pipeline policy threshold still wins); `execution_backend` and `onnx_runtime`
   configure Ark's other models only, so a gateway that set `execution_backend` for Wolf sets
   `wolf.backend` too.
-- **Ark enforces `max_input_bytes` and `max_findings`:** an input above `max_input_bytes`
-  (default 1 MiB) is refused unscanned, and more L1 evidence spans than `max_findings` (default
-  10000) fail the request instead of publishing results, both as a `limit_exceeded` failure
-  (new `SecurityFailureKind::LimitExceeded`). Raise the limits for larger inputs.
+- **`max_input_bytes` and `max_findings` are optional and unset by default:** Ark Core no
+  longer limits input size (was 1 MiB) or evidence spans (was 10,000) unless a config sets them
+  (`Option<usize>` in Rust, `None`/absent in Python; a set value must be positive). When set,
+  Core returns an error as before, and Ark now applies them too: an input above
+  `max_input_bytes` is refused unscanned and more L1 evidence spans than `max_findings` fail the
+  request, both as a `limit_exceeded` failure (new `SecurityFailureKind::LimitExceeded`).
+  Without them Ark scans as before.
 - **Ark API: one decision cache key:** the top-level `cache.dir` is gone and refused; set
   `pipeline.cache.storage_location` (e.g. `/data/cache/decisions.redb`) next to the other cache
   keys. An encryption key without a storage location is still refused.

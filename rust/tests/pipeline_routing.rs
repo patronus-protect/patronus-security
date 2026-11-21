@@ -1102,8 +1102,8 @@ mod l3_worker_streaming {
             core: patronus_ark_core::ScannerConfig {
                 categories: vec![SecurityCategory::Pii],
                 max_level: SecurityLevel::L1,
-                max_input_bytes,
-                max_findings,
+                max_input_bytes: Some(max_input_bytes),
+                max_findings: Some(max_findings),
                 ..Default::default()
             },
             ..Default::default()

@@ -249,7 +249,7 @@ fn secret_overlap_preserves_pii_decisions_and_original_unicode_offsets() {
 fn synchronous_limits_are_errors_not_clean_results() {
     let mut core = Scanner::new(ScannerConfig {
         categories: vec![SecurityCategory::Pii],
-        max_input_bytes: 8,
+        max_input_bytes: Some(8),
         ..Default::default()
     })
     .unwrap();
@@ -259,7 +259,7 @@ fn synchronous_limits_are_errors_not_clean_results() {
     ));
     let mut core = Scanner::new(ScannerConfig {
         categories: vec![SecurityCategory::Pii],
-        max_findings: 1,
+        max_findings: Some(1),
         ..Default::default()
     })
     .unwrap();

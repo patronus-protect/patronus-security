@@ -616,10 +616,10 @@ pub struct SecurityGatewayCore {
     max_level: SecurityLevel,
     /// Model cache root (`cache_root`). Defaults to Core's default cache root.
     cache_root: Option<PathBuf>,
-    /// Core's `max_input_bytes`: larger inputs are refused unscanned.
-    max_input_bytes: usize,
-    /// Core's `max_findings`: more L1 evidence spans fail the request.
-    max_findings: usize,
+    /// Core's `max_input_bytes`, when set: larger inputs are refused unscanned.
+    max_input_bytes: Option<usize>,
+    /// Core's `max_findings`, when set: more L1 evidence spans fail the request.
+    max_findings: Option<usize>,
     /// Whether `warmup` may download missing model assets.
     download: DownloadPolicy,
     /// Optional allowlist of categories that may download missing assets.

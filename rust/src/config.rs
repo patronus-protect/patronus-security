@@ -102,8 +102,8 @@ impl GatewayConfig {
         {
             return Err(format!("duplicate category {}", category.as_str()));
         }
-        if self.core.max_input_bytes == 0 || self.core.max_findings == 0 {
-            return Err("max_input_bytes and max_findings must be positive".into());
+        if self.core.max_input_bytes == Some(0) || self.core.max_findings == Some(0) {
+            return Err("max_input_bytes and max_findings must be positive when set".into());
         }
         if self.onnx_runtime.intra_threads == Some(0) || self.onnx_runtime.inter_threads == Some(0)
         {
