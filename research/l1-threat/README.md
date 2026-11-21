@@ -341,11 +341,13 @@ Zeilen nicht mehr über den Zeilen-ID-Hash, sondern über Generator und Template
 Füllungen eines Templates, beide Sprachen und die Twins auf einer Seite, per Test geprüft); `--oversample-de N`
 wiederholt deutsche Trainingspositive; `calibrate` setzt zusätzlich je Sprache einen eigenen Detect-/Clear-Schnitt
 auf den Benign-Zeilen dieser Sprache (`calibration.language_thresholds`, nicht im Scan-Pfad) und berichtet TPR je
-Positiv-Quelle. Gewählt: `--rows train_dev --rows generated --oversample-de 4`. Am eigenen Schnitt (FPR DE 0,08 %,
-EN 0,10 %) DE / EN gegen das S10-Setup am eigenen Schnitt: injection 21,9 → 65,7 / 38,5 → 67,6, unsafe_action 3,1 →
-45,2 / 48,6 → 74,0, exfiltration 0 → 100 / 12,2 → 87,3, harmful_content 76,2 → 79,3 / 26,4 → 29,3, toxic_language
-71,4 → 85,7 / 68,2, jailbreak 0 / 79,7 → 82,9; kein EN-Rückgang. Der gepoolte S10-Schnitt hatte auf EN-Benigns
-0,11–0,15 % FPR. Offen: deutsche Positive aus ≥ 5 Quellen nur bei injection und unsafe_action; der deutsche
+Positiv-Quelle; `--baseline-rows` kalibriert ein zweites Setup auf demselben zurückgehaltenen Pool. Gewählt:
+`--rows train_dev --rows generated --oversample-de 4`. Beide Modelle auf demselben Pool (zurückgehaltene Hälfte von
+`train_dev` plus die nicht trainierten Template-Familien), je Sprache eigener Schnitt (FPR DE 0,08 %, EN 0,10 %),
+DE / EN S10-Setup → S11: injection 20,0 → 65,7 / 67,8 → 67,6 (EN −3 von 1 579 Zeilen), unsafe_action 1,6 → 45,2 /
+66,9 → 74,0, exfiltration 0 → 100 / 18,0 → 87,3, harmful_content 70,7 → 79,3 / 26,4 → 29,3, toxic_language
+71,4 → 85,7 / 68,2, jailbreak 0 / 82,4 → 82,9. Die frühere Tabelle las das S10-Setup auf einem anderen Pool ab
+(alle generierten Zeilen) und ist zurückgezogen. Offen: deutsche Positive aus ≥ 5 Quellen nur bei injection und unsafe_action; der deutsche
 Benign-Pool ist fast nur `germanquad`; übersetzte offene Sets (deepset, Gandalf, wildjailbreak-/jackhhao-Trainings-
 hälften) und ein vielfältiger deutscher Benign-Pool brauchen neue eingefrorene Dev-Daten (`generators.py translate`).
 

@@ -1,33 +1,40 @@
 # fastText-type candidates with German positives and per-language cuts (S11)
 
 Generated 2026-11-21 with `scripts/l1_threat/ablation.py calibrate --stage FT` per class, branch
-`threat/158-s11` (base `278b7122`), dev data as frozen on the VPS (`train_dev`, `generated` generator 7).
+`threat/158-s11` (base `278b7122`), dev data as frozen on the VPS (`train_dev`, `generated` generator 7):
 
-Two candidates, same model form as S10 (2^15 × 16 buckets, 256 KiB resident):
+    ablation.py calibrate --rows train_dev --rows generated --baseline-rows train_dev --oversample-de 4 \
+        --report-rows report --class <class> --out <class>.json
 
-- **S10 setup**: trains on the hash half of `train_dev`; the other half plus all of `generated` calibrate
-  (`--rows train_dev --eval-rows generated`).
-- **S11**: trains on the train half of `train_dev` *and* `generated`, every German train positive repeated
-  four times (`--rows train_dev --rows generated --oversample-de 4`); the held-out halves calibrate.
+Two models, same model form as S10 (2^15 × 16 buckets, 256 KiB resident), both read off **one held-out pool**:
+
+- **S10 setup** (the baseline, `--baseline-rows train_dev`): trains on the hash half of `train_dev` alone, no
+  oversampling.
+- **S11** (the candidate): trains on the train half of `train_dev` *and* `generated`, every German train positive
+  repeated four times (`--rows train_dev --rows generated --oversample-de 4`).
   Generated rows are split by generator and template family (`template_key`), so no template, its other
   language or its twins are on both sides (`test_split_keeps_train_and_calibration_template_disjoint`).
-  Calibration and evaluation use the same held-out rows, as in S10: the cut is read off the benign rows only.
+- **Pool**: the held-out half of `train_dev` plus the generated template families withheld from S11's training
+  (27 533 rows). The S10 setup never trains on generated rows, so the pool is held out for both models; each model's
+  cuts are read off its benign rows and its TPR off its positives (`baseline` in the report).
 
 Each language gets its own detect cut at 0.1 % FPR on that language's benign rows (DE: `germanquad`,
-`approve_or_deny_de`, German twins; EN: the rest). TPR in %, positives of the class in that language.
-"pooled" is S10's single cut over both languages, whose EN FPR was 0.11–0.15 % for six classes (above the bar);
-the fair EN comparison is therefore S10's model at its own EN cut.
+`approve_or_deny_de`, German twins; EN: the rest), per model. TPR in %, positives of the class in that language.
 
-| Class | S10 pooled DE | S10 pooled EN | S10 own DE | S10 own EN | S11 own DE | S11 own EN | S11 FPR DE / EN | S11 DE positives / sources |
-|---|---|---|---|---|---|---|---|---|
-| instruction_injection | 0.0 | 38.5 | 21.9 | 38.5 | **65.7** | **67.6** | 0.08 / 0.10 | 35 / 6 |
-| jailbreak | 0.0 | 86.8 | 0.0 | 79.7 | **0.0** | **82.9** | 0.08 / 0.10 | 42 / 2 |
-| unsafe_action | 0.8 | 49.3 | 3.1 | 48.6 | **45.2** | **74.0** | 0.08 / 0.10 | 62 / 7 |
-| exfiltration | 0.0 | 36.5 | 0.0 | 12.2 | **100.0** | **87.3** | 0.08 / 0.10 | 105 / 2 |
-| harmful_content | 47.6 | 38.2 | 76.2 | 26.4 | **79.3** | **29.3** | 0.08 / 0.10 | 164 / 1 |
-| toxic_language | 67.9 | 68.2 | 71.4 | 68.2 | **85.7** | **68.2** | 0.08 / 0.10 | 28 / 1 |
-| prompt_extraction | – | 98.3 | – | 97.9 | **–** | **98.8** | 0.08 / 0.10 | 0 / 0 |
-| agent_config_tampering | 0.0 | 0.0 | 0.0 | 0.0 | **0.0** | **0.0** | 0.08 / 0.10 | 20 / 1 |
+| Class | S10 setup DE | S10 setup EN | S11 DE | S11 EN | Δ DE | Δ EN | FPR DE / EN S10 setup | FPR DE / EN S11 | S11 DE positives / sources |
+|---|---|---|---|---|---|---|---|---|---|
+| instruction_injection | 20.0 | 67.8 | **65.7** | **67.6** | +45.7 | −0.2 | 0.08 / 0.10 | 0.08 / 0.10 | 35 / 6 |
+| jailbreak | 0.0 | 82.4 | **0.0** | **82.9** | 0.0 | +0.5 | 0.08 / 0.10 | 0.08 / 0.10 | 42 / 2 |
+| unsafe_action | 1.6 | 66.9 | **45.2** | **74.0** | +43.5 | +7.1 | 0.08 / 0.10 | 0.08 / 0.10 | 62 / 7 |
+| exfiltration | 0.0 | 18.0 | **100.0** | **87.3** | +100.0 | +69.3 | 0.07 / 0.10 | 0.08 / 0.10 | 105 / 2 |
+| harmful_content | 70.7 | 26.4 | **79.3** | **29.3** | +8.5 | +2.8 | 0.08 / 0.10 | 0.08 / 0.10 | 164 / 1 |
+| toxic_language | 71.4 | 68.2 | **85.7** | **68.2** | +14.3 | 0.0 | 0.08 / 0.10 | 0.08 / 0.10 | 28 / 1 |
+| prompt_extraction | – | 98.5 | **–** | **98.8** | – | +0.4 | 0.08 / 0.10 | 0.08 / 0.10 | 0 / 0 |
+| agent_config_tampering | 0.0 | 0.0 | **0.0** | **0.0** | 0.0 | 0.0 | 0.08 / 0.10 | 0.08 / 0.10 | 20 / 1 |
+
+An earlier version of this table read the S10 setup off its own pool (`--eval-rows generated`: all generated rows,
+also the template families S11 trained on) and S11 off the withheld families only; those deltas mixed the model
+change with the pool change (e.g. injection EN +29.1 there, −0.2 here) and are withdrawn.
 
 Cost: model form, size and RAM are unchanged (2^15 × 16, 256 KiB resident; the serialised `model.json` 11.2 MB
 in both setups). p95 ms per 100 KiB with `text_model_latency` (`--tokens tf1`), five alternating runs per model,
@@ -43,14 +50,15 @@ factor 8 — injection 74.3 / 69.0, unsafe_action 43.5 / 72.4, harmful_content 8
 
 Findings:
 
-- No EN regression at the EN cut against the S10 model at its own EN cut (all classes equal or up:
-  injection +29.1, jailbreak +3.2, unsafe_action +25.4, exfiltration +75.1, harmful_content +2.9,
-  prompt_extraction +0.9). Against S10's published pooled numbers, jailbreak (84.2 → 82.9) and harmful_content
-  (38.6 → 29.3) are lower; those numbers were read at a cut with EN FPR 0.15 %.
-- The two calibration pools differ: the S11 pool lacks the generated templates that went to training. The
-  generated directive sentences are shared between template families of one generator (e.g. the exfiltration
+- On the shared pool, EN at the EN cut is equal or up for six of the seven trainable classes (unsafe_action +7.1,
+  exfiltration +69.3, harmful_content +2.8, jailbreak +0.5, prompt_extraction +0.4, toxic_language ±0).
+  instruction_injection is 3 rows lower (1 067 against 1 070 of 1 579 EN positives, −0.2 pp): `spml` 967 against
+  976 and the generated carriers 38 against 40, partly made up by `agentdojo` 37 against 33 and `bipia` 25 against
+  21. That is within the row-level noise of one split, but it is not "no regression"; the German gain (+45.7) is
+  the reason to take it.
+- The generated directive sentences are shared between template families of one generator (e.g. the exfiltration
   directives of `exfil_lookalikes`), so template-disjoint is not payload-disjoint; the German exfiltration
-  100 % (two `exfil_lookalikes` families) overstates what a new German source would give.
+  100 % (two `exfil_lookalikes` families) and the EN exfiltration gain overstate what a new source would give.
 - German positives come from ≥ 5 sources only for instruction_injection (6: five `carrier_insertion` families
   and `cyberseceval_multilingual`) and unsafe_action (7: `approve_or_deny_de` and six generator families).
   jailbreak (2 families, both missed), exfiltration (2), harmful_content and toxic_language (`nemotron_safety_v3`
@@ -81,6 +89,21 @@ Each language's detect cut sits at the target FPR of that language's benign rows
 | prompt_extraction | EN | 10055 | 1.3645 | 98.8 | 0.10 | 7600 | 6 |
 | agent_config_tampering | DE | 5977 | -0.2303 | 0.0 | 0.08 | 20 | 1 |
 | agent_config_tampering | EN | 10055 | -0.1767 | 0.0 | 0.10 | 18 | 1 |
+
+## Baseline and candidate on the same held-out pool
+
+Both models' per-language cuts and TPRs on the candidate's calibration rows; the baseline never trained on them.
+
+| Class | baseline DE | baseline EN | candidate DE | candidate EN | Δ DE | Δ EN | FPR DE / EN baseline | FPR DE / EN candidate |
+|---|---|---|---|---|---|---|---|---|
+| instruction_injection | 20.0 | 67.8 | 65.7 | 67.6 | +45.7 | -0.2 | 0.08 / 0.10 | 0.08 / 0.10 |
+| jailbreak | 0.0 | 82.4 | 0.0 | 82.9 | +0.0 | +0.5 | 0.08 / 0.10 | 0.08 / 0.10 |
+| unsafe_action | 1.6 | 66.9 | 45.2 | 74.0 | +43.5 | +7.1 | 0.08 / 0.10 | 0.08 / 0.10 |
+| exfiltration | 0.0 | 18.0 | 100.0 | 87.3 | +100.0 | +69.3 | 0.07 / 0.10 | 0.08 / 0.10 |
+| harmful_content | 70.7 | 26.4 | 79.3 | 29.3 | +8.5 | +2.8 | 0.08 / 0.10 | 0.08 / 0.10 |
+| toxic_language | 71.4 | 68.2 | 85.7 | 68.2 | +14.3 | +0.0 | 0.08 / 0.10 | 0.08 / 0.10 |
+| prompt_extraction | – | 98.5 | – | 98.8 | – | +0.4 | 0.08 / 0.10 | 0.08 / 0.10 |
+| agent_config_tampering | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | +0.0 | 0.08 / 0.10 | 0.08 / 0.10 |
 
 ## instruction_injection DE: sources at the DE cut
 

@@ -526,6 +526,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   detection rate, the false positive rate per benign source and the detection rate per source of
   attack examples. Generated examples are now split between training and calibration by template, so
   no template is on both sides, and `--oversample-de N` repeats German training examples.
+  `--baseline-rows` also trains a baseline on some of the `--rows` files and sets its cuts on the
+  same held-out texts, so two training setups are compared on one pool.
   **Detection change:** none; no text model is enabled yet.
 - `scripts/l1_threat/ablation.py calibrate` accepts `--rows` more than once, so a text model can
   train on several sources at once: every file is split by the same hash of the row id, one half
