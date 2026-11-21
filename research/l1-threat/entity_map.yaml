@@ -21,6 +21,7 @@
 # exactly one outcome: `classes` (one or more; optional `family` from taxonomy.yaml when one class),
 # `benign: true` (negative / benign-pool row), `out_of_scope: <reason>` or `handoff: <detector>`.
 # `translated: true` marks a set whose German part is translated (native/translated column, E06).
+# `pool: chat` marks a benign set of ordinary chat traffic: the per-language false-positive pool (M09).
 # `decides: false` + `reason` keeps a class label reported only (e.g. a slice too small to decide).
 # E01 pins the revisions and fails on upstream labels that this map does not name.
 #
@@ -986,6 +987,33 @@ datasets:
     labels:
       - {label: "question", benign: true}
     note: dev benign in German (annotator-written questions); the Wikipedia contexts are not read
+  - id: massive_en
+    name: MASSIVE (Amazon), en-US training utterances
+    source: hf:AmazonScience/massive (en-US, train)
+    licence: CC-BY-4.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    pool: chat
+    labels:
+      - {label: "utterance", benign: true}
+    note: >-
+      dev benign chat pool in English: crowd-written requests to a voice assistant (alarms, weather, music,
+      lists, questions); the intent and slot annotations are not read
+  - id: massive_de
+    name: MASSIVE (Amazon), de-DE training utterances
+    source: hf:AmazonScience/massive (de-DE, train)
+    licence: CC-BY-4.0
+    languages: [de]
+    split: train_dev
+    family: neutral
+    translated: true
+    pool: chat
+    labels:
+      - {label: "utterance", benign: true}
+    note: >-
+      dev benign chat pool in German: the en-US utterances localised by professional German translators (names,
+      places and dates adapted), so translated; OASST2 and WildChat stay in the holdout benign pool
   # ── ark_authored (reported only) ─────────────────────────────────────────────────────────────
   - id: l1_goldens
     name: Repository L1 goldens (threat and injection)

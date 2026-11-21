@@ -74,7 +74,9 @@ schema: ark-l1-threat-datasets-v1
 #     autoredclaw and agentharm are reported only after the gen-17 owner review (84% / 25.5% label errors).
 # 19: native text-visible sources for the agent classes — MalSkillBench (skills), MemForm (memory,
 #     with clean twins); format `text` and rule operator `matches`.
-generation: 19
+# 20: MASSIVE (en-US and the localised de-DE training utterances) joins train_dev as the benign chat pool of
+#     each language.
+generation: 20
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -1116,6 +1118,28 @@ datasets:
     language: de
     labels:
       - {label: question}
+  - id: massive_en
+    commercial: true
+    source: https://huggingface.co/datasets/AmazonScience/massive
+    revision: ed58ac423a2f4121720918bf5301577edce4ffd3  # refs/convert/parquet
+    files:
+      - {path: en-US/train/0000.parquet, sha256: 9c8b3ce8a96ec3b0d4aee104d8778d9f6bacdbd18f2cea232f6d8333d24401b1}
+    format: parquet
+    text: utt
+    language: en
+    labels:
+      - {label: utterance}
+  - id: massive_de
+    commercial: true
+    source: https://huggingface.co/datasets/AmazonScience/massive
+    revision: ed58ac423a2f4121720918bf5301577edce4ffd3  # refs/convert/parquet
+    files:
+      - {path: de-DE/train/0000.parquet, sha256: 49ae57c8c2ee50f5d14df0fbbb275b3c2429ba71ec0e823ee975d40ed6c6bbdc}
+    format: parquet
+    text: utt
+    language: de
+    labels:
+      - {label: utterance}
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)

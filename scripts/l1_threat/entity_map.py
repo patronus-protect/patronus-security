@@ -53,7 +53,9 @@ LABEL_KEYS = {"label", "family", "decides", "reason"} | set(OUTCOMES)
 BASELINE_KEYS = {"id", "kind"}
 OPTIONAL_BASELINE_KEYS = {"rules", "model", "labels", "note", "trained_on", "training_data"}
 DATASET_KEYS = {"id", "name", "source", "licence", "languages", "split", "family", "labels"}
-OPTIONAL_DATASET_KEYS = {"note", "translated"}
+OPTIONAL_DATASET_KEYS = {"note", "translated", "pool"}
+# `pool: chat` marks benign sets of ordinary chat traffic (the per-language false-positive pool).
+POOLS = ("chat",)
 GAP_KEYS = {"class", "language", "reason"}
 RESTRICTED_LICENCE = re.compile(r"\bNC\b|-NC-|GPL")
 
@@ -174,6 +176,8 @@ def _check_dataset(dataset: dict[str, Any], families: dict[str, set[str]]) -> li
     problems += [f"{where}: unknown language {language}" for language in languages if language not in oss_inventory.LANGUAGES]
     if "translated" in dataset and dataset["translated"] is not True:
         problems.append(f"{where}: translated may only be true")
+    if "pool" in dataset and dataset["pool"] not in POOLS:
+        problems.append(f"{where}: unknown pool {dataset['pool']}")
     labels = dataset.get("labels") or []
     if not labels:
         problems.append(f"{where}: no labels")
