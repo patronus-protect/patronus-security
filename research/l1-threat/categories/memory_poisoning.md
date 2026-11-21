@@ -139,3 +139,9 @@ hat einen Literal-Prefilter und ASCII-Wortgrenzen; Verneinung im Match verwirft 
   Testkontext liest. Dev hat nur vier Vorlagen; die Goldens decken die übrigen Formen.
 - `memory_reset` und `store_hint` bleiben ohne neue Regel (Hard Negatives „Vergiss die letzte Nachricht“
   zeigen die Abgrenzung); `decoded` läuft über die dekodierten Sichten.
+- Latenz: kein Latenzkorpus auf dem Runner-Host; gemessen mit `threat_cascade` (alle elf Klassen, Release,
+  ein Prozess je Fenster, Bestwert aus 3 Läufen) über 15 deutsche 100-KiB-Fenster aus Dev-Benign-Text:
+  Basis p95 652 ms, MP01 715 bzw. 559 ms — Rauschen größer als der Effekt, keine messbare Verlangsamung.
+  Die acht Regeln laufen nur bei aktiver Kategorie `memory_poisoning` (opt-in). Der Prefilter von
+  `self_replication_de` nennt „diese“/„folgende“ statt „jede“/„alle“. Offen: Messung mit
+  `scripts/l1_threat/latency.py` im Gate.
