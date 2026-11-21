@@ -265,6 +265,26 @@ full. Notes describe requests and never repeat their content.
 `gold.py summary` on a freeze of these two sets alone and merged into `gold-dev.json`; the generated sets that embed
 dev rows are re-frozen with generation 16 and keep their last review.
 
+## Findings (benign chat pool and German jailbreak source, 2026-11-21)
+
+M09 adds three train_dev sets, each reviewed with 50 rows (0 wrong, 0 unclear):
+
+- **MASSIVE en-US and de-DE (benign, CC-BY-4.0): 0 of 50 wrong in each.** Crowd-written requests to a voice
+  assistant (alarms, music, weather, calendar, lists, shopping, short factual questions); the German rows are the
+  English utterances localised by translators, so they count as translated. They form the benign chat pool:
+  11,225 EN and 11,172 DE rows after deduplication. Short, lower-case and unpunctuated, so they cover ordinary chat
+  turns, not long documents.
+- **XL-SafetyBench, German jailbreak prompts (CC-BY-4.0): 0 of 50 wrong.** Every reviewed row wraps its request in a
+  forged directive (agency, institute or system notice with file numbers and clearance levels), a staged system
+  override ("filters disabled", "ethics checks offline") or a researcher or auditor pretext, and closes with a
+  demand to start the output at once. Only jailbreak is scored: the base queries (misinformation, socioeconomic
+  conflict, discrimination, alternative medicine, crime) mostly lie outside the harmful_content hazards.
+
+The three sets were summarised with `gold.py summary` on a freeze of these sets alone and merged into
+`gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool
+with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
+`gold.py targets` lists the class and language pairs still short of the dev targets.
+
 ## How this report is made
 
 ```bash
