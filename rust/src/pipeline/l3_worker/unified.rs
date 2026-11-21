@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use crate::assets::UNIFIED_L3_ASSET;
 use crate::cache::{
     decision_output, CacheCoordinator, CacheKey, CacheNamespace, CacheSource, CachedHeadOutput,
-    CachedModelOutput, HistoricalSimilarityCache,
+    CachedModelOutput, HistoricalSimilarityCache, SimilarityDecision,
 };
 use crate::ml::unified_onnx::{
     UnifiedHeadOutput, UnifiedModelOutput, UnifiedRawModelOutput, UNIFIED_MODEL,
@@ -371,7 +371,7 @@ fn run_unified_model_job(
                     chunk.head_priority = *head_priority;
                     chunk.priority = *priority;
                 }
-                if historical_unified_non_safe(&similarity_cache, &chunk, &head) {
+                if historical_unified_positive(&similarity_cache, &chunk, &head).is_some() {
                     chunk.head_priority = 0;
                     chunk.priority = 1.0;
                 }
@@ -691,50 +691,8 @@ fn infer_unified_exact(
         namespace,
         &crate::ml::tokenizer::token_key(&chunk.token_ids),
     );
-    if let Some(matched) = similarity_cache.find_best_for_head_and_producer(
-        &chunk.embedding_space,
-        &chunk.embedding,
-        requested_head,
-        UNIFIED_L3_ASSET.spec.revision,
-    ) {
-        if matched.propagation_similarity > 0.985 {
-            if let Some(decision) = matched
-                .decision
-                .filter(|decision| decision.class_name != unified_safe_class(requested_head))
-            {
-                let class_name = if requested_head == "injection" && decision.class_name == "attack"
-                {
-                    "injection".to_string()
-                } else {
-                    decision.class_name
-                };
-                return Ok((
-                    UnifiedModelOutput {
-                        heads: HashMap::from([(
-                            requested_head.to_string(),
-                            if TOOL_TAG_PROPERTIES
-                                .iter()
-                                .any(|(head, _)| *head == requested_head)
-                            {
-                                tool_property_output(if class_name == "present" {
-                                    decision.confidence
-                                } else {
-                                    1.0 - decision.confidence
-                                })
-                            } else {
-                                UnifiedHeadOutput {
-                                    class_name,
-                                    confidence: decision.confidence,
-                                    label_scores: Vec::new(),
-                                }
-                            },
-                        )]),
-                    },
-                    true,
-                    true,
-                ));
-            }
-        }
+    if let Some(output) = propagated_unified_output(similarity_cache, chunk, requested_head) {
+        return Ok((output, true, true));
     }
     let lookup = exact_cache
         .get_or_compute_heads(key, || {
@@ -775,22 +733,60 @@ fn infer_unified_exact(
     Ok((output, lookup.source != CacheSource::Computed, false))
 }
 
-fn historical_unified_non_safe(
+/// A near-duplicate's positive decision for a risk head, with its similarity. Category
+/// heads have no negative class, so a historical class never stands in for their own
+/// inference there.
+fn historical_unified_positive(
     cache: &HistoricalSimilarityCache,
     chunk: &SelectedL3Chunk,
     head: &str,
-) -> bool {
-    let Some(matched) = cache.find_best_for_head_and_producer(
+) -> Option<(f64, SimilarityDecision)> {
+    let negative_class = unified_negative_class(head)?;
+    let matched = cache.find_best_for_head_and_producer(
         &chunk.embedding_space,
         &chunk.embedding,
         head,
         UNIFIED_L3_ASSET.spec.revision,
-    ) else {
-        return false;
-    };
-    matched
+    )?;
+    let decision = matched
         .decision
-        .is_some_and(|decision| decision.class_name != unified_safe_class(head))
+        .filter(|decision| decision.class_name != negative_class)?;
+    Some((matched.propagation_similarity, decision))
+}
+
+fn propagated_unified_output(
+    cache: &HistoricalSimilarityCache,
+    chunk: &SelectedL3Chunk,
+    head: &str,
+) -> Option<UnifiedModelOutput> {
+    let (similarity, decision) = historical_unified_positive(cache, chunk, head)?;
+    if similarity <= 0.985 {
+        return None;
+    }
+    let class_name = if head == "injection" && decision.class_name == "attack" {
+        "injection".to_string()
+    } else {
+        decision.class_name
+    };
+    let output = if TOOL_TAG_PROPERTIES
+        .iter()
+        .any(|(property, _)| *property == head)
+    {
+        tool_property_output(if class_name == "present" {
+            decision.confidence
+        } else {
+            1.0 - decision.confidence
+        })
+    } else {
+        UnifiedHeadOutput {
+            class_name,
+            confidence: decision.confidence,
+            label_scores: Vec::new(),
+        }
+    };
+    Some(UnifiedModelOutput {
+        heads: HashMap::from([(head.to_string(), output)]),
+    })
 }
 
 fn cached_unified_output(output: &CachedModelOutput) -> Result<UnifiedRawModelOutput, String> {
@@ -981,14 +977,21 @@ fn unified_head_aggregation(head: &str) -> Option<L3AggregationStrategy> {
     }
 }
 
-fn unified_safe_class(head: &str) -> &'static str {
+/// The "nothing found" class of a head that flags a risk. Category heads (`routing`,
+/// `sensitive_document`, `tool_class`, `tool_action`, `tool_tags`) have none: each of
+/// their classes is an answer, not a positive.
+fn unified_negative_class(head: &str) -> Option<&'static str> {
     match head {
-        "injection" | "unsafe_action" => "benign",
+        "injection" | "unsafe_action" => Some("benign"),
         "tool_tags_source_sensitive" | "tool_tags_source_untrusted" | "tool_tags_sink_external" => {
-            "absent"
+            Some("absent")
         }
-        _ => "safe",
+        _ => None,
     }
+}
+
+fn unified_safe_class(head: &str) -> &'static str {
+    unified_negative_class(head).unwrap_or("safe")
 }
 
 #[cfg(feature = "test-util")]
@@ -2673,6 +2676,53 @@ mod tests {
         assert_eq!(trace[0]["heads"]["tool_class"]["allowed"], false);
         assert_eq!(trace[0]["heads"]["tool_class"]["confidence"], 0.99);
         assert_eq!(trace[0]["heads"]["threat"]["allowed"], true);
+    }
+
+    // #413: a near-duplicate earlier text must not replace the inference of a category head.
+    // Its propagated output carried no label scores, so the joint arbitration fell back to
+    // the current L2 values for `routing` and `sensitive_document`.
+    #[test]
+    fn similarity_propagation_only_stands_in_for_risk_heads() {
+        let cache = HistoricalSimilarityCache::new(Arc::new(
+            CacheCoordinator::from_config(crate::cache::ExactCacheConfig::default()).unwrap(),
+        ));
+        cache.remember(
+            "test-space",
+            &[1.0, 0.0],
+            UNIFIED_L3_ASSET.spec.revision,
+            vec![
+                decision_output("routing", "tool_operation_request", 0.866),
+                decision_output("sensitive_document", "other", 0.839),
+                decision_output("injection", "attack", 0.97),
+                decision_output("unsafe_action", "benign", 0.9),
+            ],
+        );
+        let chunk = SelectedL3Chunk {
+            text: "near duplicate".into(),
+            start_byte: 0,
+            end_byte: 14,
+            priority: 0.0,
+            head_priority: 1,
+            source_order: 0,
+            embedding: vec![1.0, 0.001],
+            embedding_space: "test-space".to_string(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
+        };
+
+        for head in ["routing", "sensitive_document", "unsafe_action"] {
+            assert!(
+                propagated_unified_output(&cache, &chunk, head).is_none(),
+                "{head}"
+            );
+            assert!(
+                historical_unified_positive(&cache, &chunk, head).is_none(),
+                "{head}"
+            );
+        }
+        let injection = propagated_unified_output(&cache, &chunk, "injection").unwrap();
+        assert_eq!(injection.heads["injection"].class_name, "injection");
+        assert_eq!(injection.heads["injection"].confidence, f64::from(0.97_f32));
     }
 
     #[test]
