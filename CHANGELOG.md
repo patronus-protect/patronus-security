@@ -177,6 +177,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Bring your own ONNX Runtime:** the prebuilt ONNX Runtime download is now the default
+  feature `ort-download` of `patronus-ark` and `patronus-ark-core`. Turn it off with
+  `default-features = false` to build for targets without a prebuilt, such as Intel Macs, and link
+  your own runtime (`ORT_LIB_LOCATION` or `ort/load-dynamic`). Default builds are unchanged.
 - **Ark Core lists its PII rules in Python:** `patronus_ark_core.pii_rule_ids()` returns the ids
   of the registered PII rules.
 
