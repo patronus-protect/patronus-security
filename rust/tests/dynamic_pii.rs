@@ -271,6 +271,7 @@ fn l2_gateway_does_not_run_l3_only_pipeline() {
     .unwrap();
     assert!(gateway
         .scan_category(SecurityCategory::DynamicPii, "Ada lives in Berlin")
+        .native
         .is_empty());
 }
 
@@ -363,7 +364,9 @@ fn gliner_finds_person_organization_and_location_in_english_and_german() {
         ),
     ];
     for (text, expected) in cases {
-        let results = gateway.scan_category(SecurityCategory::DynamicPii, text);
+        let results = gateway
+            .scan_category(SecurityCategory::DynamicPii, text)
+            .native;
         let found = results
             .iter()
             .flat_map(|result| &result.evidence_spans)
@@ -408,10 +411,12 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         SecurityLevelReadiness::Ready
     ));
 
-    let results = gateway.scan_category(
-        SecurityCategory::DynamicPii,
-        "Alexandr works at Patronus-Studio in Frankfurt.",
-    );
+    let results = gateway
+        .scan_category(
+            SecurityCategory::DynamicPii,
+            "Alexandr works at Patronus-Studio in Frankfurt.",
+        )
+        .native;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].category, "dynamic-pii");
     assert_eq!(results[0].class_name, "entities");
@@ -445,10 +450,12 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let filtered = gateway.scan_category(
-        SecurityCategory::DynamicPii,
-        "Alexandr works at Patronus-Studio in Frankfurt.",
-    );
+    let filtered = gateway
+        .scan_category(
+            SecurityCategory::DynamicPii,
+            "Alexandr works at Patronus-Studio in Frankfurt.",
+        )
+        .native;
     assert_eq!(filtered.len(), 1);
     assert!(filtered[0]
         .evidence_spans
@@ -468,10 +475,12 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let conditional = gateway.scan_categories(
-        &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-        "Alexandr works at Patronus-Studio in Frankfurt.",
-    );
+    let conditional = gateway
+        .scan_categories(
+            &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+            "Alexandr works at Patronus-Studio in Frankfurt.",
+        )
+        .native;
     let dynamic = conditional
         .iter()
         .find(|result| result.category == "dynamic-pii")
@@ -526,10 +535,12 @@ fn hey_person_score_uses_the_stable_base_only_label_group() {
         .unwrap();
     gateway.warmup().unwrap();
 
-    let results = gateway.scan_categories(
-        &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-        "Hey",
-    );
+    let results = gateway
+        .scan_categories(
+            &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+            "Hey",
+        )
+        .native;
     let dynamic = results
         .iter()
         .find(|result| result.category == "dynamic-pii")
@@ -571,10 +582,12 @@ fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
     let warmup_ms = warmup_started.elapsed().as_secs_f64() * 1_000.0;
 
     let scan_started = Instant::now();
-    let results = gateway.scan_category(
-        SecurityCategory::DynamicPii,
-        "Alexandr works at Patronus-Studio in Frankfurt.",
-    );
+    let results = gateway
+        .scan_category(
+            SecurityCategory::DynamicPii,
+            "Alexandr works at Patronus-Studio in Frankfurt.",
+        )
+        .native;
     let scan_wall_ms = scan_started.elapsed().as_secs_f64() * 1_000.0;
     let result = results
         .iter()

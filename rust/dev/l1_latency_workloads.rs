@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap();
             (gateway, started.elapsed().as_secs_f64() * 1000.0)
         });
-        let scan = |text: &str| gateway.scan_all(black_box(text));
+        let scan = |text: &str| gateway.scan_all(black_box(text)).native;
         for _ in 0..job.warmup {
             black_box(scan(&job.text));
         }

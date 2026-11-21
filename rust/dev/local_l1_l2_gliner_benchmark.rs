@@ -92,7 +92,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let token_count = gliner.text_token_count(&sample.text)?;
         let e2e_started = Instant::now();
         let started = Instant::now();
-        let results = scanner.scan_category(SecurityCategory::Injection, &sample.text);
+        let results = scanner
+            .scan_category(SecurityCategory::Injection, &sample.text)
+            .native;
         let scan_ms = elapsed_ms(started);
         let result = final_result(&results)
             .ok_or_else(|| format!("sample {} returned no injection result", sample.id))?;

@@ -46,10 +46,8 @@ A custom `cache_root` is convenient for shipping a pre-populated cache to anothe
 | `"download": "never"` | Never download; use native L1 + already-cached assets only. |
 | `"download": "missing"` | Download required assets for configured categories on demand. |
 | `download_categories=[…]` | Restrict automatic downloads to just these categories. |
-| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` | Also fetch non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest), which are skipped by default. |
 
-Required assets download during `warmup()` (or, in Rust, `prepare_assets()`); optional ones stay
-skipped unless the environment variable is set.
+Required assets download during `warmup()` (or, in Rust, `prepare_assets()`).
 
 ### `shell_command` model
 

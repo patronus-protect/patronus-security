@@ -27,8 +27,6 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 - `warmup()` remains the combined compatibility operation: asset preparation followed by offline runtime warmup.
 - If required assets are missing and downloads are disabled for that category, asset preparation fails; native scanners still run where available.
 - Failed downloads for required assets return an error from `prepare_assets()` and therefore from compatibility `warmup()`.
-- Missing optional assets do not block asset preparation.
-- Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.
 - Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.
 - PII is native L1-only and has no model assets.
 - `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `cache_root` asset root.
@@ -75,7 +73,7 @@ Precision picks the ONNX export: `fp32`, `fp16`, `mixed`, `mixed_x86`, `int8_int
 
 Snapshot generated: `2026-07-01T17:36:32+00:00`.
 
-The sizes below show required cold-cache downloads for the selected maximum level. Each maximum level includes lower-level required manifest assets for that category. Optional assets are listed in the manifest detail table.
+The sizes below show required cold-cache downloads for the selected maximum level. Each maximum level includes lower-level required manifest assets for that category.
 
 | Category | L1 required | L2 required | L3 required | Repositories |
 | --- | ---: | ---: | ---: | --- |
@@ -104,10 +102,6 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | Level | Required | Source | Cache path | Size |
 | --- | --- | --- | --- | --- | ---: |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/config.json` | `sensitive_document/prompts/config.json` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | 32.8 MiB |
-| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | 0.6 KiB |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/int8_int4_embeddings/model.onnx` | `sensitive_document/prompts/onnx/int8_int4_embeddings/model.onnx` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_onnx_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_onnx_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/model_int4_embeddings_int8.onnx` | `dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx` | unknown |
@@ -117,6 +111,11 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/spm.model` | `dynamic_pii/gliner_small_v2_5/spm.model` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer.json` | `dynamic_pii/gliner_small_v2_5/tokenizer.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer_config.json` | `dynamic_pii/gliner_small_v2_5/tokenizer_config.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/int8_int4_embeddings/model.onnx` | `sensitive_document/prompts/onnx/int8_int4_embeddings/model.onnx` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_document/prompts/onnx/onnx_fp16/model_fp16.onnx` | 268.7 MiB |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/config.json` | `sensitive_document/prompts/config.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | 32.8 MiB |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | 0.6 KiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/config.json` | `shell_command/cat_shell_risk_commander/config.json` | 0.3 KiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/model.json` | `shell_command/cat_shell_risk_commander/model.json` | 4.4 MiB |
 | `shell_command` | `L1` | yes | `patronus-studio/cat-shell-risk-commander/policy_levels.json` | `shell_command/cat_shell_risk_commander/policy_levels.json` | 4.3 KiB |

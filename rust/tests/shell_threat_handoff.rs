@@ -200,7 +200,7 @@ fn fired(command: &str) -> BTreeSet<String> {
     .unwrap();
     let mut ids: BTreeSet<String> = SecurityCategory::ATTACK_CLASSES
         .into_iter()
-        .flat_map(|category| gateway.scan_category(category, command))
+        .flat_map(|category| gateway.scan_category(category, command).native)
         .filter(|result| result.model == "native:threat_l1")
         .flat_map(|result| {
             result

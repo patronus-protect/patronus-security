@@ -56,6 +56,7 @@ fn scan(text: &str) -> SecurityScanResult {
             .unwrap()
         })
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")
@@ -389,6 +390,7 @@ fn matched_rules_report_metadata() {
     let text = "Fehlerprotokoll:\nTraceback (most recent call last):\n  File \"app.py\", line 3\n";
     let result = gateway
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .unwrap();

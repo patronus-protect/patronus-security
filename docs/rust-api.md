@@ -23,7 +23,6 @@ pub mod gliner_onnx_engine;
 pub mod golden_recipes;
 pub mod ml;
 pub mod pipeline;
-mod post_prediction;
 pub mod types;
 
 // Ark Core's modules and types, used inside this crate as `crate::...`.
@@ -47,7 +46,6 @@ pub use cache::{
 pub use config::GatewayConfig;
 pub use dynamic_pii::DynamicPiiConfig;
 pub use pipeline::SecurityGateway;
-pub use types::defaults;
 pub use types::{
     L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
@@ -491,7 +489,11 @@ policy.
 ## Queued Request API
 
 ```rust
-pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult>;
+pub fn scan_category(
+    &self,
+    category: SecurityCategory,
+    text: &str,
+) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with a single category.
@@ -651,19 +653,19 @@ pub fn scan_categories(
     &self,
     categories: &[SecurityCategory],
     text: &str,
-) -> Vec<SecurityScanResult>;
+) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with a caller-provided category subset.
 
 ```rust
-pub fn scan_input(&self, input: &ExternalL1Input) -> Vec<SecurityScanResult>;
+pub fn scan_input(&self, input: &ExternalL1Input) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan one category through native and registered external scanners.
 
 ```rust
-pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
+pub fn scan_all(&self, text: &str) -> ScanReport<SecurityScanResult>;
 ```
 
 Scan text with every category configured on this gateway.
@@ -1851,7 +1853,8 @@ pub struct SecurityScanResult {
     /// decision: a detection at a lowered `detect_threshold` shows as
     /// `detected` even when the native class stays `safe`, and its `layers`
     /// are the L1 model's. An L2 or L3 result keeps its layer in its own
-    /// `layers`.
+    /// `layers`. The synchronous `scan_*` reports move it to the report's
+    /// `decision` list, once per module.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_decision: Option<crate::ModuleDecision>,
 }
@@ -1883,13 +1886,15 @@ Return the canonical snake_case mode string.
 ```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
 }
 ```
 
-Physical L3 classifier topology.
+Physical L3 classifier topology. `Dedicated` is the default of every entry
+point (Rust, Python and the Ark API server).
 
 ```rust
 pub fn as_str(self) -> &'static str;
@@ -2127,9 +2132,9 @@ pub enum ScanError {
 No public documentation is available yet.
 
 ```rust
-pub struct ScanReport {
+pub struct ScanReport<R = NativeResult> {
     pub input_bytes: usize,
-    pub native: Vec<NativeResult>,
+    pub native: Vec<R>,
     /// Wolf's result when it ran. Without a cascade Wolf runs on every scan
     /// that selects `injection`, as before. `None` when Wolf is not
     /// configured, when `injection` was not selected, or, with a configured
@@ -2147,6 +2152,9 @@ pub struct ScanReport {
 ```
 
 Complete scan output; native decisions and model probabilities remain separate.
+
+`R` is the per-category result: Core's [`NativeResult`]; Ark's gateway
+reports its own result type, which embeds `NativeResult`, in the same envelope.
 
 ```rust
 pub struct Scanner {
@@ -3266,27 +3274,6 @@ the model cache root `root` (unset: the default cache root).
 ## Asset Manifest Helpers
 
 ```rust
-pub struct AssetSpec {
-    /// Scanner category that owns this asset.
-    pub category: SecurityCategory,
-    /// Minimum security level that needs this asset.
-    pub level: SecurityLevel,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision, when the asset is pinned.
-    pub revision: Option<&'static str>,
-    /// File path inside the Hugging Face repository.
-    pub source_path: &'static str,
-    /// Relative path below the category cache directory.
-    pub destination_path: &'static str,
-    /// Whether missing or failed downloads should block `warmup`.
-    pub required: bool,
-}
-```
-
-A model asset declared in the static download manifest.
-
-```rust
 pub struct NtdbL2PackageAssetSpec {
     /// Scanner category that owns this package.
     pub category: SecurityCategory,
@@ -3316,13 +3303,33 @@ pub struct PipelineModelAssetSpec {
 
 A revision-pinned model bundle used by a standalone pipeline.
 
-## Asset Download Helpers
-
 ```rust
-pub fn category_assets(category: SecurityCategory, max_level: SecurityLevel) -> Vec<AssetSpec>;
+pub fn selected_files(&self) -> Vec<&'static str>;
 ```
 
-Return manifest entries needed for a category up to `max_level`.
+The bundle files this process loads: the fp16 graph replaces the quantized one
+when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
+
+```rust
+pub fn prepare(
+    &self,
+    root: &Path,
+    download: DownloadPolicy,
+    generate: bool,
+    progress: Option<&SecurityAssetProgressCallback>,
+) -> Result<PathBuf, ScanError>;
+```
+
+Prepare the selected bundle files below the model cache `root` with Core's
+[`ModelSpec::prepare`], reporting fetch progress as this model's asset progress.
+
+```rust
+pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
+```
+
+Return the revision-pinned dedicated L3 bundle for a classifier category.
+
+## Asset Download Helpers
 
 ```rust
 pub fn ntdb_l2_package_assets(
@@ -3354,57 +3361,6 @@ pub fn ntdb_l2_package_assets_present(
 
 Check whether an official NTDB L2 package cache below the model cache `root` matches
 its pinned revision.
-
-```rust
-pub fn required_assets_present(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> bool;
-```
-
-Check whether all required assets for a category are present in `target_dir`.
-
-```rust
-pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
-```
-
-Return the revision-pinned dedicated L3 bundle for a classifier category.
-
-```rust
-pub fn selected_files(&self) -> Vec<&'static str>;
-```
-
-The bundle files this process loads: the fp16 graph replaces the quantized one
-when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
-
-```rust
-pub fn assets_present(&self, root: &Path) -> bool;
-```
-
-Whether the model cache `root` holds the complete pinned bundle.
-
-```rust
-pub fn download(
-    &self,
-    root: &Path,
-    progress: Option<&SecurityAssetProgressCallback>,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Fetch the pinned bundle into the model cache `root` and prepare its generated files.
-
-```rust
-pub fn download_category_assets(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>>;
-```
-
-Download missing manifest assets for a category into `target_dir`.
-
-Required asset failures return an error. Optional asset failures are skipped.
 
 ```rust
 pub fn download_ntdb_l2_package(

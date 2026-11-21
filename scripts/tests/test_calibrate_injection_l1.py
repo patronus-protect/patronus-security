@@ -310,7 +310,7 @@ class CalibrationToolTests(unittest.TestCase):
         class Gateway:
             def scan_category(self, category, text):
                 self.assertions = (category, text)
-                return [
+                return {"native": [
                     {
                         "model": "native:injection_l1",
                         "layers": [
@@ -330,7 +330,7 @@ class CalibrationToolTests(unittest.TestCase):
                             }
                         ],
                     }
-                ]
+                ]}
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "benign.csv"
@@ -359,12 +359,12 @@ class CalibrationToolTests(unittest.TestCase):
                     "eligible" if self.calls == 1 else "coverage",
                     candidate_only=self.calls > 1,
                 )
-                return [
+                return {"native": [
                     {
                         "model": item["producer"],
                         "layers": [{"details": {"l1_candidates": [item]}}],
                     }
-                ]
+                ]}
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "positive.csv"

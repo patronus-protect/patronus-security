@@ -160,7 +160,7 @@ def main() -> None:
     for index, identifier in enumerate(document_ids, 1):
         text = rows[identifier]["text"]
         started = time.perf_counter()
-        results = gateway.scan_category(category, text)
+        results = gateway.scan_category(category, text)["native"]
         latencies.append((time.perf_counter() - started) * 1000)
         text_bytes.append(len(text.encode("utf-8")))
         found = set()

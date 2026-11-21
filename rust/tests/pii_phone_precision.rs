@@ -28,6 +28,7 @@ fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     });
     scanner
         .scan_category(SecurityCategory::Pii, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:pii")
         .expect("native PII result must be present")

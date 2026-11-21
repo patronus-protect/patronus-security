@@ -41,7 +41,7 @@ def measure(gateway: SecurityGateway, text: str, warmup: int, iterations: int) -
     accepted = 0
     for _ in range(iterations):
         started = time.perf_counter()
-        results = gateway.scan_category("injection", text)
+        results = gateway.scan_category("injection", text)["native"]
         values.append((time.perf_counter() - started) * 1000.0)
         native = [result for result in results if result["model"] == "native:injection_l1"]
         if len(native) != 1:

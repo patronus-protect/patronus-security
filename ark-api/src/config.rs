@@ -14,7 +14,7 @@ pub struct RawConfig {
     auth: RawAuth,
     /// The gateway config: Ark Core's keys plus Ark's (see
     /// `patronus_ark::GatewayConfig`); `categories` and `max_level` are
-    /// required, `l3_strategy` defaults to the deployment's `multi`. The
+    /// required; unset keys take the Rust defaults. The
     /// decision cache is the pipeline's `cache` key.
     pipeline: serde_json::Map<String, serde_json::Value>,
 }
@@ -43,9 +43,10 @@ struct RawApiKey {
     categories: Option<Vec<SecurityCategory>>,
     #[serde(default)]
     default_categories: Option<Vec<SecurityCategory>>,
-    /// Per-key gate override. Falls back to the pipeline's gate keys when absent.
+    /// Per-key override of the pipeline gates: Core's gate keys, laid over the
+    /// pipeline's (see [`overlay_gates`]).
     #[serde(default)]
-    gates: Option<ScanGateMatrix>,
+    gates: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +58,8 @@ pub struct ApiKeyConfig {
     pub allowed_categories: Option<Vec<SecurityCategory>>,
     /// Categories used when the caller omits request-local configuration.
     pub default_categories: Option<Vec<SecurityCategory>>,
-    /// `None` means fall back to `Config::default_gates`.
+    /// The pipeline gates with this key's override laid over them; `None`
+    /// when the key sets no `gates`.
     pub gates: Option<ScanGateMatrix>,
 }
 
@@ -137,9 +139,34 @@ impl Config {
     }
 }
 
+/// A key's `gates` laid over the pipeline's gate keys, field by field: a key
+/// that sets `l2` keeps the pipeline's `rules`. Maps (`rules`, `models`,
+/// `l3_policy`, `cascade`) merge per entry; other values, `conditional`
+/// included, replace the pipeline's. Only Core's gate keys are accepted.
+fn overlay_gates(
+    pipeline: &serde_json::Map<String, serde_json::Value>,
+    gates: serde_json::Map<String, serde_json::Value>,
+) -> Result<ScanGateMatrix, serde_json::Error> {
+    fn overlay(base: &mut serde_json::Value, top: serde_json::Value) {
+        match (base, top) {
+            (serde_json::Value::Object(base), serde_json::Value::Object(top)) => {
+                for (key, value) in top {
+                    overlay(base.entry(key).or_insert(serde_json::Value::Null), value);
+                }
+            }
+            (base, top) => *base = top,
+        }
+    }
+    let gates = serde_json::Value::Object(gates);
+    ScanGateMatrix::deserialize(&gates)?;
+    let mut merged = serde_json::Value::Object(pipeline.clone());
+    overlay(&mut merged, gates);
+    Ok(serde_json::from_value::<GatewayConfig>(merged)?.core.gates)
+}
+
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
-        let mut pipeline = self.pipeline;
+        let pipeline = self.pipeline;
         for required in ["categories", "max_level"] {
             if !pipeline.contains_key(required) {
                 return Err(ConfigError::Invalid(format!(
@@ -147,10 +174,7 @@ impl RawConfig {
                 )));
             }
         }
-        pipeline
-            .entry("l3_strategy")
-            .or_insert_with(|| patronus_ark::defaults::ARK_API_L3_STRATEGY.as_str().into());
-        let gateway: GatewayConfig = serde_json::from_value(pipeline.into())
+        let gateway: GatewayConfig = serde_json::from_value(pipeline.clone().into())
             .map_err(|error| ConfigError::Invalid(format!("pipeline: {error}")))?;
         gateway
             .validate()
@@ -179,12 +203,19 @@ impl RawConfig {
                     key.name
                 )));
             }
+            let gates = key
+                .gates
+                .map(|gates| overlay_gates(&pipeline, gates))
+                .transpose()
+                .map_err(|error| {
+                    ConfigError::Invalid(format!("auth.keys[{}].gates: {error}", key.name))
+                })?;
             keys.push(ApiKeyConfig {
                 name: key.name,
                 key_hash,
                 allowed_categories: key.categories,
                 default_categories: key.default_categories,
-                gates: key.gates,
+                gates,
             });
         }
 
@@ -331,9 +362,52 @@ mod tests {
     }
 
     #[test]
-    fn startup_wolf_settings_preserve_legacy_multi_and_default_profile() {
+    fn key_gates_override_only_the_pipeline_gate_keys_they_set() {
+        let mut value = startup_config();
+        value["pipeline"]["l2"] = serde_json::json!(false);
+        value["pipeline"]["pii_mode"] = serde_json::json!("balanced");
+        value["pipeline"]["rules"] = serde_json::json!({"pii_email": false, "pii_ssn": false});
+        value["auth"]["keys"] = serde_json::json!([
+            {"name": "plain", "key_hash": "0".repeat(64)},
+            {"name": "tenant", "key_hash": "1".repeat(64), "gates": {
+                "l3": false,
+                "rules": {"pii_ssn": true, "dlp_openai_key": false}
+            }}
+        ]);
+        let config = load(value).unwrap();
+        assert!(config.keys[0].gates.is_none());
+        let pipeline = config.gates_for(&config.keys[0]);
+        assert_eq!((pipeline.l2, pipeline.l3), (Some(false), None));
+        let tenant = config.gates_for(&config.keys[1]);
+        assert_eq!((tenant.l2, tenant.l3), (Some(false), Some(false)));
+        assert_ne!(pipeline.pii_mode, Default::default());
+        assert_eq!(tenant.pii_mode, pipeline.pii_mode);
+        assert!(!tenant.allows_rule("pii_email"));
+        assert!(tenant.allows_rule("pii_ssn"));
+        assert!(!tenant.allows_rule("dlp_openai_key"));
+        assert!(pipeline.allows_rule("dlp_openai_key"));
+    }
+
+    #[test]
+    fn key_gates_accept_only_core_gate_keys() {
+        for gates in [
+            serde_json::json!({"categories": ["pii"]}),
+            serde_json::json!({"l2": "sometimes"}),
+        ] {
+            let mut value = startup_config();
+            value["auth"]["keys"][0]["gates"] = gates;
+            let error = load(value).unwrap_err();
+            assert!(error.contains("auth.keys[fixture].gates"), "{error}");
+        }
+    }
+
+    #[test]
+    fn unset_l3_strategy_is_the_rust_default_dedicated() {
         let config = load(startup_config()).unwrap();
-        assert_eq!(config.gateway.l3_strategy, patronus_ark::L3Strategy::Multi);
+        assert_eq!(
+            config.gateway.l3_strategy,
+            patronus_ark::L3Strategy::Dedicated
+        );
         assert!(config.gateway.core.wolf.is_none());
     }
 
@@ -567,12 +641,14 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
             ..GatewayConfig::default()
         })
         .unwrap();
-        let results = gateway.scan_all(
-            "password = CorrectHorseBatteryStaple\n\
+        let results = gateway
+            .scan_all(
+                "password = CorrectHorseBatteryStaple\n\
              SELECT * FROM customer;\n\
              Gehalt 74.500 EUR\n\
              Fallnummer: FALL-2026-4711",
-        );
+            )
+            .native;
         let labels = results
             .iter()
             .flat_map(|result| result.evidence_spans.iter())

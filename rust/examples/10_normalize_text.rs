@@ -23,7 +23,7 @@ fn main() {
         SecurityLevel::L1,
     ))
     .unwrap();
-    for result in scanner.scan_all(&normalized) {
+    for result in scanner.scan_all(&normalized).native {
         println!(
             "[{:<3}] {:<20} class={:<24} confidence={:.3} model={}",
             result.level, result.category, result.class_name, result.confidence, result.model,

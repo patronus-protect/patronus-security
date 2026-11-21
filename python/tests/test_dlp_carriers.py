@@ -492,7 +492,7 @@ class SelfScanTests(unittest.TestCase):
         source = Path(carriers.__file__).with_name("carrier_templates.py").read_text(encoding="utf-8")
         findings = [
             (match["rule_id"], source.encode("utf-8")[match["start_byte"] : match["end_byte"]][:24])
-            for result in gateway.scan_category("dlp", source)
+            for result in gateway.scan_category("dlp", source)["native"]
             for layer in result["layers"]
             for match in (layer.get("details") or {}).get("matched_rules", [])
             if match["rule_id"] in value_rules

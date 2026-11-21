@@ -20,6 +20,7 @@ use crate::{
     ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
     SecurityLevel, SecurityRequestState, SecurityScanResult, StageOutcome,
 };
+use patronus_ark_core::ScanReport;
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
 
@@ -46,9 +47,13 @@ struct EnqueueExecutionOptions {
 
 impl SecurityGateway {
     /// Scan text with a single category.
-    pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult> {
+    pub fn scan_category(
+        &self,
+        category: SecurityCategory,
+        text: &str,
+    ) -> ScanReport<SecurityScanResult> {
         let request_id = self.enqueue_categories(vec![category], text, None);
-        self.drain_request(request_id)
+        self.drain_request(request_id, text.len())
     }
 
     /// Submit a scan to the background L1/L2 worker and return immediately
@@ -692,7 +697,12 @@ impl SecurityGateway {
         format!("rq-{id:016x}")
     }
 
-    pub(super) fn drain_request(&self, request_id: RequestId) -> Vec<SecurityScanResult> {
+    /// Wait for a request's final results and report them; partial results are skipped.
+    fn drain_request(
+        &self,
+        request_id: RequestId,
+        input_bytes: usize,
+    ) -> ScanReport<SecurityScanResult> {
         let mut results = Vec::new();
         while let Some(event) = self.consume_matching_event(Some(&request_id), None) {
             match event {
@@ -705,7 +715,7 @@ impl SecurityGateway {
                 QueuedSecurityEvent::Finished { .. } => break,
             }
         }
-        results
+        scan_report(input_bytes, results)
     }
 
     /// Scan text with a caller-provided category subset.
@@ -713,19 +723,19 @@ impl SecurityGateway {
         &self,
         categories: &[SecurityCategory],
         text: &str,
-    ) -> Vec<SecurityScanResult> {
+    ) -> ScanReport<SecurityScanResult> {
         let request_id = self.enqueue_categories(categories.to_vec(), text, None);
-        self.drain_request(request_id)
+        self.drain_request(request_id, text.len())
     }
 
     /// Scan one category through native and registered external scanners.
-    pub fn scan_input(&self, input: &ExternalL1Input) -> Vec<SecurityScanResult> {
+    pub fn scan_input(&self, input: &ExternalL1Input) -> ScanReport<SecurityScanResult> {
         let request_id = self.enqueue_input(input.clone(), None);
-        self.drain_request(request_id)
+        self.drain_request(request_id, input.text.len())
     }
 
     /// Scan text with every category configured on this gateway.
-    pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult> {
+    pub fn scan_all(&self, text: &str) -> ScanReport<SecurityScanResult> {
         self.scan_categories(&self.categories, text)
     }
 
@@ -1323,6 +1333,40 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
         .collect()
 }
 
+/// The report of a drained request, in the envelope of Ark Core's
+/// [`patronus_ark_core::ScanReport`]: `native` holds the results; each
+/// module's [`ModuleDecision`] moves from its results to the report's
+/// `decision` list (one entry per module, `None` without a cascade); `wolf`
+/// is the Wolf result the dedicated injection L3 recorded in its layer.
+fn scan_report(
+    input_bytes: usize,
+    mut native: Vec<SecurityScanResult>,
+) -> ScanReport<SecurityScanResult> {
+    let mut decisions = Vec::<ModuleDecision>::new();
+    for decision in native
+        .iter_mut()
+        .filter_map(|result| result.module_decision.take())
+    {
+        if !decisions
+            .iter()
+            .any(|known| known.module == decision.module)
+        {
+            decisions.push(decision);
+        }
+    }
+    let wolf = native
+        .iter()
+        .flat_map(|result| &result.layers)
+        .find_map(|layer| layer.details.get("wolf"))
+        .and_then(|wolf| serde_json::from_value(wolf.clone()).ok());
+    ScanReport {
+        input_bytes,
+        native,
+        wolf,
+        decision: (!decisions.is_empty()).then_some(decisions),
+    }
+}
+
 /// L1's step of the opt-in cascade (the gate key `cascade`), shared by the
 /// queue and the distributed plan: a module L1 decides (core
 /// [`patronus_ark_core::cascade::Cascade::l1_stage`] at the cascade's module cuts) is final, and so is
@@ -1730,6 +1774,66 @@ mod tests {
                 None
             ]
         );
+    }
+
+    #[test]
+    fn scan_report_lists_each_module_decision_once_and_the_wolf_result() {
+        let result = |category, level: &str| {
+            super::super::scan_result(
+                category,
+                "m",
+                crate::EvaluationResult {
+                    class_name: "attack".to_string(),
+                    confidence: 0.9,
+                    level: level.to_string(),
+                },
+                Vec::new(),
+            )
+        };
+        let plain = scan_report(4, vec![result(SecurityCategory::Pii, "L1")]);
+        assert_eq!(plain.input_bytes, 4);
+        assert!(plain.decision.is_none() && plain.wolf.is_none());
+
+        let mut pii = [
+            result(SecurityCategory::Pii, "L1"),
+            result(SecurityCategory::Pii, "L1"),
+        ];
+        pii.iter_mut().for_each(mark_decided);
+        let mut injection = result(SecurityCategory::Injection, "L3");
+        mark_decided(&mut injection);
+        let wolf = serde_json::json!({
+            "document_logit": 2.0, "attack_probability": 0.88, "threshold": 0.5,
+            "matched": true, "windows": 1, "model_id": "wolf", "revision": "r",
+            "precision": "fp16"
+        });
+        injection.layers.push(crate::LayerResult {
+            level: "L3".into(),
+            layer_type: "l3".into(),
+            class_name: "attack".into(),
+            confidence: 0.88,
+            matched: true,
+            duration_ms: 1.0,
+            thresholds: HashMap::new(),
+            details: HashMap::from([("wolf".to_string(), wolf)]),
+        });
+        let report = scan_report(9, [pii.to_vec(), vec![injection]].concat());
+
+        let decided = report
+            .decision
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|decision| decision.module)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decided,
+            vec![SecurityCategory::Pii, SecurityCategory::Injection]
+        );
+        assert!(report
+            .native
+            .iter()
+            .all(|result| result.module_decision.is_none()));
+        assert_eq!(report.wolf.unwrap().attack_probability, 0.88);
     }
 
     #[test]

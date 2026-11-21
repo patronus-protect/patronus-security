@@ -34,9 +34,10 @@ one Core `Scanner` for PII, DLP, injection (rules + Wolf) and Cat `shell_verdict
 
 ## 01 — Basic scan
 
-Build a gateway for a set of categories and call `scan_all`. You get one result
-per configured pipeline, each with `category`, `class_name`, `confidence`,
-`level`, and `model`. Best for simple, synchronous checks.
+Build a gateway for a set of categories and call `scan_all`. You get one report
+in Ark Core's shape (`input_bytes`, `native`, `wolf`, `decision`) whose `native`
+list holds one result per configured pipeline, each with `category`,
+`class_name`, `confidence`, `level`, and `model`. Best for simple, synchronous checks.
 
 ## 02 — Enqueue / consume
 

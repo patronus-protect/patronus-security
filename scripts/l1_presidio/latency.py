@@ -336,7 +336,7 @@ def ark_engine(allow_debug: bool) -> tuple[Callable[[str, str], int], dict[str, 
     gateway = SecurityGateway({"categories": ["pii"], "max_level": "l1", "download": "never"})
 
     def analyze(text: str, language: str) -> int:
-        return sum(len(result.get("evidence_spans", [])) for result in gateway.scan_category("pii", text))
+        return sum(len(result.get("evidence_spans", [])) for result in gateway.scan_category("pii", text)["native"])
 
     info = {
         "native_module": str(module),

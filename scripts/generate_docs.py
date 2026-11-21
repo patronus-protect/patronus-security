@@ -96,25 +96,19 @@ class Asset:
 
 def parse_assets() -> list[Asset]:
     full_source = (ROOT / "rust/src/assets/specs.rs").read_text()
-    source = full_source.split("pub const ASSET_MANIFEST", 1)[1]
-    source = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[0]
-    assets: list[Asset] = []
-    for block in re.findall(r"\bAssetSpec\s*\{(.*?)\}", source, flags=re.S):
-        category = _field(block, "category").replace("SecurityCategory::", "")
-        level = _field(block, "level").replace("SecurityLevel::", "")
-        assets.append(
-            Asset(
-                category=category,
-                level=level,
-                repo=_field(block, "repo").strip('"'),
-                source_path=_field(block, "source_path").strip('"'),
-                destination_path=_field(block, "destination_path").strip('"'),
-                required=_field(block, "required") == "true",
-            )
-        )
-    assets.extend(_pipeline_bundle_assets(full_source, "DYNAMIC_PII_ASSET", "L3"))
+    assets = _pipeline_bundle_assets(full_source, "DYNAMIC_PII_ASSET", "L3")
+    assets.extend(_dedicated_l3_bundle_assets(full_source, "SensitiveDocument"))
     assets.extend(_core_shell_assets())
     return assets
+
+
+def _dedicated_l3_bundle_assets(full_source: str, category: str) -> list[Asset]:
+    """The files of a category's `DEDICATED_L3_ASSETS` bundle."""
+    table = full_source.split("pub const DEDICATED_L3_ASSETS", 1)[1].split("\n];", 1)[0]
+    for block in table.split("PipelineModelAssetSpec {")[1:]:
+        if f"SecurityCategory::{category}," in block:
+            return _bundle_assets(block, "L3")
+    raise ValueError(f"Missing {category} in DEDICATED_L3_ASSETS")
 
 
 def _core_shell_assets() -> list[Asset]:
@@ -140,7 +134,10 @@ def _core_shell_assets() -> list[Asset]:
 
 
 def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> list[Asset]:
-    block = full_source.split(f"pub const {const_name}", 1)[1].split("};", 1)[0]
+    return _bundle_assets(full_source.split(f"pub const {const_name}", 1)[1].split("};", 1)[0], level)
+
+
+def _bundle_assets(block: str, level: str) -> list[Asset]:
     category = _field(block, "category").replace("SecurityCategory::", "")
     _, repo, _, destination = _model_spec(block)
     if "files: &[" in block:
@@ -907,8 +904,6 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- `warmup()` remains the combined compatibility operation: asset preparation followed by offline runtime warmup.",
         "- If required assets are missing and downloads are disabled for that category, asset preparation fails; native scanners still run where available.",
         "- Failed downloads for required assets return an error from `prepare_assets()` and therefore from compatibility `warmup()`.",
-        "- Missing optional assets do not block asset preparation.",
-        "- Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.",
         "- Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.",
         "- PII is native L1-only and has no model assets.",
         "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `cache_root` asset root.",
@@ -935,7 +930,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
     lines.extend(
         [
             "",
-            "The sizes below show required cold-cache downloads for the selected maximum level. Each maximum level includes lower-level required manifest assets for that category. Optional assets are listed in the manifest detail table.",
+            "The sizes below show required cold-cache downloads for the selected maximum level. Each maximum level includes lower-level required manifest assets for that category.",
             "",
             "| Category | L1 required | L2 required | L3 required | Repositories |",
             "| --- | ---: | ---: | ---: | --- |",

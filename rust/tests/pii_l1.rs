@@ -22,6 +22,7 @@ fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     scanner.set_execution_gates(gates);
     scanner
         .scan_category(SecurityCategory::Pii, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:pii")
         .expect("native PII result must be present")

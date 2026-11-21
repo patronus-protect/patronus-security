@@ -51,7 +51,7 @@ class FakeGateway:
     def scan_category(self, category, text):
         self.calls.append((category, text))
         spans = self.spans_by_text.get(text, [])
-        return [{"category": "pii", "class_name": "pii" if spans else "safe", "evidence_spans": list(spans)}]
+        return {"native": [{"category": "pii", "class_name": "pii" if spans else "safe", "evidence_spans": list(spans)}]}
 
 
 def write_jsonl(path, rows):
@@ -382,7 +382,7 @@ class SecondaryGateway:
 
     def scan_category(self, category, text):
         card = span("CREDITCARD", text, 11, 33)
-        return [
+        return {"native": [
             {
                 "category": "pii",
                 "class_name": "IBAN",
@@ -403,11 +403,11 @@ class SecondaryGateway:
                     }
                 ],
             }
-        ]
+        ]}
 
 
 class FakeDynamicGateway:
-    """dynamic-pii results as ``SecurityGateway.scan_category("dynamic-pii", text)`` returns them."""
+    """dynamic-pii results as ``SecurityGateway.scan_category("dynamic-pii", text)["native"]`` returns them."""
 
     def __init__(self, spans_by_text):
         self.spans_by_text = spans_by_text
@@ -415,7 +415,7 @@ class FakeDynamicGateway:
 
     def scan_category(self, category, text):
         self.calls.append((category, text))
-        return [{"category": "dynamic-pii", "class_name": "pii", "evidence_spans": list(self.spans_by_text.get(text, []))}]
+        return {"native": [{"category": "dynamic-pii", "class_name": "pii", "evidence_spans": list(self.spans_by_text.get(text, []))}]}
 
 
 NER_TEXT = "Anna Weber works at Contoso in Köln, mail " + "anna" + "@" + "example.org"

@@ -89,6 +89,7 @@ fn category_results(category: SecurityCategory, text: &str) -> Vec<SecurityScanR
             .unwrap()
         })
         .scan_category(category, text)
+        .native
 }
 
 #[test]

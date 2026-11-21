@@ -18,12 +18,14 @@ use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3Resolved
 use crate::pipeline::l3_schedule::selected_l3_chunks;
 #[cfg(test)]
 use crate::pipeline::l3_schedule::{chunk_clusters, SelectedL3Chunk};
-use crate::post_prediction::{filter_evidence, LocalPathPersonHook, PostPredictionHook};
 #[cfg(test)]
 use crate::ScanExecution;
 use crate::{
     EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LabelScore, LayerResult,
     QueuedSecurityProgress, RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
+};
+use patronus_ark_core::post_prediction::{
+    filter_evidence, LocalPathPersonHook, PostPredictionHook,
 };
 
 use super::super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer};

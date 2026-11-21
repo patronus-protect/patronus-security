@@ -21,7 +21,7 @@ CLASSES = ["instruction_override", "secrets_access", "tool_abuse", "harmful_beha
 
 def threat_candidates(scanner, text):
     """Matched bounded threat rules of ``text`` across the rule-bearing attack classes."""
-    return [rule for category in RULE_CATEGORIES for result in scanner.scan_category(category, text)
+    return [rule for category in RULE_CATEGORIES for result in scanner.scan_category(category, text)["native"]
             if result["model"] == "native:threat_l1" for rule in result["layers"][0]["details"]["matched_rules"]]
 
 

@@ -9,7 +9,7 @@ Four workloads, built deterministically from a frozen dev split (``prepare_corpo
   carrier row per 4 KiB block;
 - ``repo``: a 10 MiB repository of benign-code files with one carrier file per 64 KiB.
 
-ARK is timed in process (``SecurityGateway.scan_category("dlp", text)``, default profile)
+ARK is timed in process (``SecurityGateway.scan_category("dlp", text)["native"]``, default profile)
 in a worker that loads the module of a build. The baselines are timed as their pinned
 binaries / CLI: one invocation over all documents of a workload (throughput), one
 invocation per document (latency including process start) and the start on an empty file.
@@ -295,7 +295,7 @@ def _ark_worker(package: Path | None, workloads_path: Path) -> int:
 
     def scan(text: str, size: str) -> float:
         begin = time.perf_counter_ns()
-        results = gateway.scan_category(category, text)
+        results = gateway.scan_category(category, text)["native"]
         elapsed = (time.perf_counter_ns() - begin) / 1e6
         if any(result.get("class_name") == "error" for result in results):
             raise RuntimeError(f"ARK scanner failed during the {size} workload")

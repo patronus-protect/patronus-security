@@ -76,9 +76,9 @@ class FakeGateway:
         self.results_by_text = results_by_text
         self.calls = []
 
-    def scan_category(self, category: str, text: str) -> list[dict]:
+    def scan_category(self, category: str, text: str) -> dict:
         self.calls.append((category, text))
-        return self.results_by_text.get(text, [result("native:dlp", [], [])])
+        return {"native": self.results_by_text.get(text, [result("native:dlp", [], [])])}
 
 
 # "Grüße 😀" puts multi-byte and non-BMP code points before the values.

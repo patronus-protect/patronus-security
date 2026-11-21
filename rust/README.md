@@ -103,7 +103,7 @@ use patronus_ark_core::{SecurityCategory, cascade::SecurityLevel};
 
 let scanner = SecurityGateway::new(GatewayConfig::new(vec![SecurityCategory::Injection, SecurityCategory::Dlp, SecurityCategory::Pii], SecurityLevel::L2)).unwrap();
 // `text` is the prompt defined in the example.
-for result in scanner.scan_all(text) {
+for result in scanner.scan_all(text).native {
     println!("[{:<3}] {:<20} class={:<24} confidence={:.3} model={}",
         result.level, result.category, result.class_name, result.confidence, result.model);
 }
@@ -158,7 +158,7 @@ gateway = SecurityGateway({
     "rules": {"pii_email": False, "dlp_sql_statement": True},
 })
 gateway.warmup()
-print([r["class_name"] for r in gateway.scan_all(text)])
+print([r["class_name"] for r in gateway.scan_all(text)["native"]])
 ```
 
 ```text
@@ -201,7 +201,7 @@ policies.add_cedar_dir(Path::new("ark-core/examples/shell_policies"))?; // user 
 gateway.set_shell_command_policy_config(policies)?;
 gateway.warmup()?;
 
-let result = &gateway.scan_categories(&[ShellCommand], "kubectl delete pod web-1")[0];
+let result = &gateway.scan_categories(&[ShellCommand], "kubectl delete pod web-1").native[0];
 let verdict = &result.layers[0].details["verdict"]; // patronus.verdict/1
 ```
 
@@ -222,7 +222,7 @@ gateway = SecurityGateway({
 })
 gateway.warmup()
 for command in ["git status", "kubectl delete pod web-1", "terraform plan"]:
-    result = gateway.scan_all(command)[0]
+    result = gateway.scan_all(command)["native"][0]
     verdict = result["layers"][0]["details"]["verdict"]
     print(verdict["decision"], result["class_name"], [p["id"] for p in verdict["policies"]], command)
 ```

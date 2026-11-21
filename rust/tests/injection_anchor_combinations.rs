@@ -132,6 +132,7 @@ fn override_and_secret_disclosure_compose_with_negation_controls() {
     ] {
         let result = gateway
             .scan_category(SecurityCategory::Injection, text)
+            .native
             .remove(0);
         assert_ne!(result.class_name, "safe", "{text}: {:?}", result.layers);
         assert!(
@@ -149,6 +150,7 @@ fn override_and_secret_disclosure_compose_with_negation_controls() {
     ] {
         let result = gateway
             .scan_category(SecurityCategory::Injection, text)
+            .native
             .remove(0);
         assert_eq!(result.class_name, "safe", "{text}: {:?}", result.layers);
     }
@@ -162,6 +164,7 @@ fn override_and_secret_disclosure_compose_with_negation_controls() {
     ] {
         let result = gateway
             .scan_category(SecurityCategory::Injection, text)
+            .native
             .remove(0);
         assert!(
             !has_rule(&result.layers[0].details["l1_candidates"], rule),
@@ -179,6 +182,7 @@ fn injection_l1(
 ) -> Option<patronus_ark::SecurityScanResult> {
     gateway
         .scan_category(category, text)
+        .native
         .into_iter()
         .find(|r| r.model == "native:injection_l1")
 }

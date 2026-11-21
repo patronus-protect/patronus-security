@@ -27,6 +27,7 @@ fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     scanner.set_execution_gates(gates);
     scanner
         .scan_category(SecurityCategory::Dlp, text)
+        .native
         .into_iter()
         .find(|result| result.model == "native:dlp")
         .expect("native DLP result must be present")
@@ -542,16 +543,29 @@ fn source_and_sql_rules_cover_structural_external_golden_shapes() {
 
 #[test]
 fn unterminated_select_lines_have_bounded_runtime_and_emit_no_sql() {
-    const SIZE: usize = 100 * 1024;
     let line = "SELECT customer_id FROM customer_records\n";
-    let text = line.repeat(SIZE.div_ceil(line.len()));
-    let text = &text[..SIZE];
     let pipeline = DlpPipeline::new();
-    let started = Instant::now();
-    let result = pipeline.evaluate(text);
-
-    assert_eq!(result.class_name, "safe");
-    assert!(started.elapsed() < Duration::from_secs(2));
+    // Rules compile on first use; a warm-up keeps that out of the timing.
+    pipeline.evaluate(line);
+    // Growth, not wall time: a quadratic scan takes ~16x as long on 4x the text, a linear one
+    // ~4x, whatever the runner's load.
+    let fastest = |size: usize| {
+        let text = line.repeat(size.div_ceil(line.len()));
+        let text = &text[..size];
+        (0..3)
+            .map(|_| {
+                let started = Instant::now();
+                assert_eq!(pipeline.evaluate(text).class_name, "safe");
+                started.elapsed()
+            })
+            .min()
+            .unwrap()
+    };
+    let (small, large) = (fastest(25 * 1024), fastest(100 * 1024));
+    assert!(
+        large < small * 10 + Duration::from_millis(5),
+        "25 KiB {small:?}, 100 KiB {large:?}"
+    );
 }
 
 #[test]
@@ -834,7 +848,9 @@ fn provider_prefix_does_not_suppress_a_real_password() {
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::default();
     gates.set_rule("dlp_github_token", false);
     scanner.set_execution_gates(gates);
-    let results = scanner.scan_category(SecurityCategory::Dlp, &format!("password = {token}"));
+    let results = scanner
+        .scan_category(SecurityCategory::Dlp, &format!("password = {token}"))
+        .native;
     assert_span(
         results
             .iter()

@@ -105,7 +105,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for row in &rows {
         l3_warmup_attempts += 1;
         let warmup_text = format!("{}{WARMUP_SUFFIX}", row.text);
-        let warmup_results = scanner.scan_category(SecurityCategory::Injection, &warmup_text);
+        let warmup_results = scanner
+            .scan_category(SecurityCategory::Injection, &warmup_text)
+            .native;
         if final_wolf_result(&warmup_results).is_some_and(|result| result.level == "L3") {
             l3_warmup_executed = true;
             break;
@@ -154,7 +156,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (index, row) in rows.iter().enumerate() {
         let e2e_started = Instant::now();
         let started = Instant::now();
-        let results = scanner.scan_category(SecurityCategory::Injection, &row.text);
+        let results = scanner
+            .scan_category(SecurityCategory::Injection, &row.text)
+            .native;
         scan_ms.push(started.elapsed().as_secs_f64() * 1_000.0);
         let result = final_wolf_result(&results)
             .ok_or_else(|| format!("sample {index} returned no Wolf result"))?;

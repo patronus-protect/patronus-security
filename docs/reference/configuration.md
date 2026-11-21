@@ -14,8 +14,8 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 
 | Key | Type | Meaning | Core | Ark |
 | --- | --- | --- | --- | --- |
-| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | text-scan categories | every category |
-| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"`; Python `"l2"`; required in the server config. | yes | yes |
+| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | [Core categories](#core-and-ark-only-categories) | every category |
+| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"` in Rust and Python; required in the server config. | yes | yes |
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
 | `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`, `threshold` (unset: the serving default), and Wolf's ONNX `backend` and `runtime_options`. | yes | yes |
@@ -23,7 +23,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
 | `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | warmup option | yes |
 | `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
-| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"`; server `"multi"`. | no | yes |
+| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"` in Rust, Python and the server. | no | yes |
 | `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
 | `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
 | `execution_backend` | str | ONNX [execution backend](#execution-backend) of Ark's own models (default `"auto"`); Wolf runs on `wolf.backend`. | no | yes |
@@ -31,6 +31,19 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of Ark's own models (default `1/1/false`); Wolf takes `wolf.runtime_options`. | no | yes |
 | `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
 | `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. | no | yes |
+
+### Core and Ark-only categories
+
+Ark Core's `Scanner` scans text, so its `categories` take only the text categories; it refuses
+any other category with an error. Ark accepts every category.
+
+| Categories | Core `Scanner` | Ark |
+| --- | --- | --- |
+| Text: `pii`, `dlp`, `injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `exfiltration`, `unsafe_action`, `resource_exhaustion`, `harmful_content`, `toxic_language` | yes | yes |
+| Ark-only: `dynamic-pii`, `sensitive_document`, `routing`, `tool_class`, `tool_action`, `tool_tags`, `shell_command` | no | yes |
+
+Core judges shell commands with `Scanner::shell_verdict` instead of the `shell_command`
+category.
 
 ```python
 from patronus_ark import SecurityGateway
@@ -86,8 +99,8 @@ be smaller than `window_tokens - 2`. The export must support the chosen window
 and batch size. Warmup validates and loads that actual profile; unchanged profiles
 reuse the warmed session. The profile is also retained by benchmark workers.
 
-The HTTP server keeps its previous `multi` default. Dedicated Wolf is an explicit
-server-start choice and needs the corresponding installed assets. Add this fragment
+The HTTP server defaults to `dedicated` like Rust and Python; the shipped server
+templates set `multi` explicitly. Dedicated Wolf needs the corresponding installed assets. Add this fragment
 to the server configuration:
 
 ```yaml
@@ -227,8 +240,12 @@ scanner.set_execution_gates(
 );
 ```
 
-The Ark API takes the same keys in YAML (`pipeline.gates`, `auth.keys[].gates`) and JSON
-(`config.gates` of a request). For example:
+The Ark API takes the same keys in YAML (at the top level of `pipeline`, and in
+`auth.keys[].gates`) and JSON (`config.gates` of a request). `auth.keys[].gates` is a **per-key
+override of the pipeline gates**: it changes only the keys it sets and keeps the pipeline's
+other gate keys; the maps `rules`, `models`, `l3_policy` and `cascade` merge per entry, other
+values (`conditional` included) replace the pipeline's. A request's `config.gates` replaces
+the key's gates for that request. For example:
 
 ```yaml
 gates:
@@ -605,7 +622,6 @@ contextual label group that the final source result rejects.
 | --- | --- | --- |
 | `HF_TOKEN` | — | Authenticated / rate-limited Hugging Face access for asset downloads. Falls back to `HUGGINGFACE_HUB_TOKEN`, then `HUGGING_FACE_HUB_TOKEN`, then the cached `huggingface-cli login` token file. |
 | `HF_HOME` | HF default | Hugging Face cache location. |
-| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest). |
 | `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted; `-1` keeps loaded sessions resident. The Ark API container sets `-1`. |
 | `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
 | `PATRONUS_L3_TIMING` | unset | When set, logs Unified-L3 tokenization, ONNX session-run, and output-decoding timings. |

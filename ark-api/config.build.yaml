@@ -15,5 +15,8 @@ pipeline:
   # baked into the final image.
   categories: ["injection", "dlp", "pii", "sensitive_document", "jailbreak", "prompt_extraction", "tool_poisoning", "agent_config_tampering", "memory_poisoning", "exfiltration", "unsafe_action", "resource_exhaustion", "harmful_content", "toxic_language", "routing", "dynamic-pii", "tool_class", "tool_action", "tool_tags", "shell_command"]
   max_level: "L3"
+  # The deployment serves L3 from the shared multi-head model; the server
+  # default is `dedicated`.
+  l3_strategy: multi
   cache_root: "/data/models"
   download: missing

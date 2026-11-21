@@ -166,7 +166,7 @@ def collect_predictions(gateway, rows: list[dict], categories: tuple[str, ...]) 
     predictions = set()
     for row in rows:
         for category in categories:
-            for result in gateway.scan_category(category, row["text"]):
+            for result in gateway.scan_category(category, row["text"])["native"]:
                 predictions.update(
                     (row["id"], span["label"], int(span["start_char"]), int(span["end_char"]))
                     for span in result["evidence_spans"]

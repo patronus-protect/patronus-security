@@ -145,7 +145,7 @@ def fake_package(path: Path, delay: float, fail: bool = False) -> Path:
         "        assert config == {'categories': ['dlp'], 'max_level': 'l1', 'download': 'never'}\n"
         "    def scan_category(self, category, text):\n"
         f"        time.sleep({delay})\n"
-        f"        return [{{'class_name': {'error' if fail else 'dlp'!r}}}]\n"
+        f"        return {{'native': [{{'class_name': {'error' if fail else 'dlp'!r}}}]}}\n"
     )
     return path
 

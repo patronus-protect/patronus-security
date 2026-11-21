@@ -54,7 +54,7 @@ fn gateway_default_excludes_sql_and_explicit_rule_enables_it() {
     ))
     .unwrap();
     let text = "password = CorrectHorseBatteryStaple\nSELECT * FROM customer;";
-    let results = scanner.scan_all(text);
+    let results = scanner.scan_all(text).native;
     assert!(results
         .iter()
         .flat_map(|r| &r.evidence_spans)
@@ -68,12 +68,14 @@ fn gateway_default_excludes_sql_and_explicit_rule_enables_it() {
     scanner.set_execution_gates(ScanGateMatrix::default().with_rule("dlp_sql_statement", true));
     assert!(scanner
         .scan_all(text)
+        .native
         .iter()
         .flat_map(|r| &r.evidence_spans)
         .any(|s| s.label == "dlp.content.sql"));
     scanner.set_execution_gates(ScanGateMatrix::default());
     assert!(!scanner
         .scan_all(text)
+        .native
         .iter()
         .flat_map(|r| &r.evidence_spans)
         .any(|s| s.label == "dlp.content.sql"));

@@ -127,7 +127,7 @@ def main():
                         "end": start + len(entity_text),
                     }
                 )
-            scan = gateway.scan_category("dynamic-pii", text)
+            scan = gateway.scan_category("dynamic-pii", text)["native"]
             dynamic = next((item for item in scan if item["category"] == "dynamic-pii"), None)
             measured.append(
                 {

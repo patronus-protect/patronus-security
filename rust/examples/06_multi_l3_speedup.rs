@@ -110,7 +110,7 @@ fn run_strategy(strategy: L3Strategy) -> Result<Value, String> {
     for index in 0..RUNS {
         let text = format!("{PROMOTION_TEXT}\nunique comparison run {index}");
         let started = Instant::now();
-        let results = scanner.scan_all(&text);
+        let results = scanner.scan_all(&text).native;
         durations.push(started.elapsed().as_secs_f64() * 1_000.0);
         last_l3 = results
             .into_iter()

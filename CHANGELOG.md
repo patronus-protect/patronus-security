@@ -11,6 +11,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Blocking scans return a report:** `scan_all`, `scan_categories` and `scan_category` (and
+  Rust's `scan_input`) now return one report per input in the same shape as Ark Core's
+  `Scanner.scan`: `input_bytes`, the results in `native`, `wolf` (the Wolf result when the
+  injection L3 ran) and, with `cascade`, `decision` with one entry per category. Read the results
+  from `report["native"]` in Python and `report.native` in Rust (type
+  `patronus_ark_core::ScanReport<SecurityScanResult>`). The results in a report no longer carry
+  `module_decision`; it is listed once in the report's `decision`. Queue events are unchanged.
+- **Every pinned model is prepared the same way:** the sensitive-document L3 model, the unified
+  L3 model, the dedicated L3 classifiers and the Dynamic PII (GLiNER) model are all checked,
+  downloaded and finished by Ark Core in one step, with the same cache folders and pins as
+  before, so nothing is downloaded again. The separate sensitive-document file list is gone, and
+  with it `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` (it only added that model's
+  `tokenizer_config.json`, which is now always fetched). In Rust, Ark Core's
+  `ModelSpec::prepare(root, files, &PrepareOptions { download, generate, progress })` replaces
+  `ModelSpec::fetch` and the public `prepare_generated_files`; Ark's `AssetSpec`,
+  `ASSET_MANIFEST`, `category_assets`, `required_assets_present` and `download_category_assets`
+  are removed, and `PipelineModelAssetSpec::prepare(root, download, generate, progress)` replaces
+  its `assets_present` and `download`. A missing model with downloads off now reports
+  `missing <model> assets at <folder>; downloads disabled`.
 - **One decision field per result:** with the opt-in `cascade`, a result that gives a category's
   final answer now carries `module_decision` (`module`, `outcome`, `decided_by`, `score` and,
   when an L1 model ran, its `layers`) in the same shape as an entry of Ark Core's scan-report
@@ -28,7 +47,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `wolf: {model, precision, execution}`, `dynamic_pii_config` is `dynamic_pii`,
   `ntdb_operating_point` is `ntdb_decision_threshold_point`, and the `cache_*` options are
   `cache: {storage_location, encryption_key_hex, entry_ttl_seconds, memory_max_entries,
-  memory_max_bytes}`). Python gateways keep `max_level: "l2"` as default. Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
+  memory_max_bytes}`). Rust: `SecurityGateway::new(GatewayConfig)` replaces `new`, `with_max_level`,
   `with_download_categories` and `try_with_download_categories_and_cache`; `GatewayConfig` holds
   Ark Core's `ScannerConfig` in `core` plus Ark's keys. `WolfSelection`,
   `set_wolf_selection`, `set_wolf_execution_options` and `pin_shell_command_manifest_for_tests`
@@ -36,6 +55,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`cache_root`, `download`, the gate keys at the top level instead of under `gates`, `wolf`
   with `execution` instead of `wolf_options`, `shell` instead of `shell_command`); per-key and
   per-request `gates` are unchanged.
+- **One default for `max_level` and `l3_strategy` everywhere:** an unset `max_level` is `l3`
+  and an unset `l3_strategy` is `dedicated` in Rust, Python and the Ark API. Python users get L3
+  by default (set `max_level: "l2"` to keep the old ceiling); Ark API users get dedicated L3
+  models unless the `pipeline` sets `l3_strategy: multi`. The shipped server templates set
+  `multi` explicitly, so their deployments keep the shared multi-head model.
+  Rust: `patronus_ark::defaults` is gone; `L3Strategy::default()` is `Dedicated`.
+- **Per-key gates are an override of the pipeline gates:** an Ark API key's `auth.keys[].gates`
+  now changes only the gate keys it sets and keeps the pipeline's other gate keys (`rules`,
+  `models`, `l3_policy` and `cascade` merge per entry) instead of replacing all pipeline gates.
+- **One DLP/PII overlap pass in Ark Core:** Ark Core's `post_prediction::resolve_dlp_pii_overlaps`
+  replaces the public `dlp_secret_ranges` and `retain_pii_outside_secret_ranges`; Core's
+  `Scanner` and Ark both drop PII evidence inside DLP secrets through it, so their PII and DLP
+  evidence is identical.
 - **`download` defaults to `never` everywhere:** the Python `SecurityGateway` no longer defaults
   to `download: "missing"`; like Rust, the Ark API and Ark Core, `warmup()` downloads missing
   models only with `download: "missing"`.
