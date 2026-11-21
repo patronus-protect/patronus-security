@@ -2975,6 +2975,7 @@ pub enum ExecutionBackend {
     /// CUDA execution provider.
     Cuda,
     /// DirectML execution provider.
+    #[serde(rename = "directml", alias = "direct_ml")]
     DirectMl,
     /// TensorRT execution provider.
     #[serde(rename = "tensorrt", alias = "tensor_rt")]
