@@ -4,7 +4,6 @@
 //! Core defines (categories, levels, gates, results, detectors) are imported
 //! from `patronus_ark_core`, this crate exports only what Ark adds.
 pub mod assets;
-#[allow(dead_code, unused_imports)]
 mod cache;
 mod config;
 pub mod dynamic_pii;

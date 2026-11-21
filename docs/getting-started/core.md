@@ -126,8 +126,8 @@ threshold 0.5, 2048-token windows with 64 overlap); the examples set `0.8` expli
 
     ```python
     scanner = Scanner(
-        {"wolf": {"bundle_dir": "/srv/models/wolf-defender", "threshold": 0.8}},
-        warmup={"download": "missing"},
+        {"wolf": {"bundle_dir": "/srv/models/wolf-defender", "threshold": 0.8},
+         "download": "missing"},
     )
     report = scanner.scan("Text to inspect", pii=False, dlp=False)
     print(report["wolf"]["attack_probability"], report["wolf"]["matched"])
@@ -136,24 +136,23 @@ threshold 0.5, 2048-token windows with 64 overlap); the examples set `0.8` expli
 === "Rust (`download` feature)"
 
     ```rust
-    use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig, WarmupOptions};
+    use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig};
     use patronus_ark_core::wolf::WolfConfig;
 
     let mut config = ScannerConfig::default();
     config.wolf = Some(WolfConfig::new("/srv/models/wolf-defender", 0.8));
-    let mut scanner = Scanner::warmup(config, WarmupOptions {
-        download: DownloadPolicy::Missing,
-        ..WarmupOptions::default()
-    })?;
+    config.download = DownloadPolicy::Missing;
+    let mut scanner = Scanner::warmup(config)?;
     ```
 
-- **Downloads happen only at construction.** The default is `download: "never"`, which accepts an
-  existing complete bundle. `"missing"` fetches the official files into an empty or managed cache;
+- **Downloads happen only at construction.** The config key `download` defaults to `"never"`,
+  which accepts an existing complete bundle. `"missing"` fetches the official files into an empty
+  or managed cache, within `download_timeout_ms` and for the `download_categories` when set;
   scans never download.
 - **One warm session per scanner.** Construction loads the model; later scans reuse it. Create the
   scanner once and keep it.
 - **Offline and air-gapped:** prepare the bundle in a separate step with
-  `warmup::prepare_assets(&config, &options)`, ship the directory, then construct with
+  `warmup::prepare_assets(&config)` (with `download: "missing"`), ship the directory, then construct with
   `download: "never"`. See [Offline & air-gapped scanning](../how-to/offline-airgapped.md).
 - **Model:** `model` is `base`, `small` (default) or `edge`: larger is more accurate, smaller is
   faster.
@@ -163,8 +162,8 @@ threshold 0.5, 2048-token windows with 64 overlap); the examples set `0.8` expli
   documents but change the document scores, so recalibrate the threshold.
 - **Precision and backend:** `precision` is `auto`, `fp32`, `fp16`, `mixed`, `mixed_x86`,
   `int8_int4` or `int8_int4_x86`. `auto` uses `PATRONUS_L3_PRECISION` when set, otherwise the
-  x86 build on `x86_64` and `int8_int4` elsewhere. `backend` selects CPU or a GPU execution
-  provider.
+  x86 build on `x86_64` and `int8_int4` elsewhere. The config key `execution_backend` selects CPU
+  or a GPU execution provider and `onnx_runtime` its threads, for Wolf as for every ONNX model.
 
 ## Add Cat for shell commands
 
@@ -176,8 +175,8 @@ Cat decides on a command an agent wants to run. Configure it next to Wolf with `
     ```python
     scanner = Scanner(
         {"shell": {"bundle_dir": "/srv/models/cat-shell-risk-commander",
-                   "policy_dirs": ["/etc/patronus/shell-policies"]}},
-        warmup={"download": "missing"},
+                   "policy_dirs": ["/etc/patronus/shell-policies"]},
+         "download": "missing"},
     )
     verdict = scanner.shell_verdict("kubectl delete pod web-1", cwd="/home/dev/app")
     print(verdict["decision"])  # "allow" | "ask" | "block"
@@ -186,15 +185,13 @@ Cat decides on a command an agent wants to run. Configure it next to Wolf with `
 === "Rust (`download` feature)"
 
     ```rust
-    use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig, WarmupOptions};
+    use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig};
     use patronus_ark_core::detectors::shell::ShellConfig;
 
     let mut config = ScannerConfig::default();
     config.shell = Some(ShellConfig::new("/srv/models/cat-shell-risk-commander"));
-    let scanner = Scanner::warmup(config, WarmupOptions {
-        download: DownloadPolicy::Missing,
-        ..WarmupOptions::default()
-    })?;
+    config.download = DownloadPolicy::Missing;
+    let scanner = Scanner::warmup(config)?;
     let verdict = scanner.shell_verdict("kubectl delete pod web-1", None, &[])?;
     println!("{}", verdict.decision.as_str());
     ```

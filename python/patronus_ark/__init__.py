@@ -5,7 +5,7 @@ from copy import deepcopy
 import json
 import math
 
-from patronus_ark_core import ScanGates, ScannerConfig, ScanReport
+from patronus_ark_core import ScanControl, ScanGates, ScannerConfig, ScanReport
 
 
 def _failure_to_dict(failure):
@@ -88,17 +88,15 @@ def normalize_text(text: str, configs: dict | None = None) -> str:
 
 class GatewayConfig(ScannerConfig, total=False):
     """`SecurityGateway(config)`: Ark Core's `Scanner` config (`categories`,
-    `max_level`, the gate keys, `cascade`, `cache_root`, `wolf`, `shell`)
-    with the same meaning, plus Ark's keys. Unknown keys raise `ValueError`."""
+    `max_level`, the gate keys, `cascade`, `cache_root`, `download`,
+    `download_categories`, `download_timeout_ms`, `execution_backend`,
+    `onnx_runtime`, `wolf`, `shell`) with the same meaning, plus Ark's keys.
+    Unknown keys raise `ValueError`."""
 
-    download: str
-    download_categories: list[str]
     l3_strategy: str
     ntdb_operating_point: str
     ntdb_decision_threshold_point: str
-    execution_backend: str
     onnx_batch_mode: str
-    onnx_runtime: dict[str, object]
     dynamic_pii: dict[str, object]
     cache: dict[str, object]
 
@@ -118,7 +116,13 @@ class SecurityGateway:
             (`{"modules": {...}}`: L1 early exit with per-category
             `detect_threshold`/`clear_threshold`; scan reports then carry
             `decision`, one entry per module)), `cache_root` (the model cache root; default the
-            platform cache directory plus `patronus_ark`), `wolf` (the
+            platform cache directory plus `patronus_ark`), `download`
+            (`never`, the default; `missing` lets `warmup()` download missing
+            model assets), `download_categories` (unset: every category),
+            `download_timeout_ms`, `execution_backend` (`auto`, `cpu`, `gpu`,
+            `coreml`, `cuda`, `directml`, `tensorrt`) and `onnx_runtime`
+            (`intra_threads`, `inter_threads`, `spinning`) of every ONNX
+            model, Wolf included, `wolf` (the
             dedicated injection L3: `model` `base`, `small` (default) or
             `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
             `mixed_x86`, `int8_int4` or `int8_int4_x86`; `execution` with
@@ -126,16 +130,11 @@ class SecurityGateway:
             retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
             the `shell_command` verdict).
 
-            Ark keys: `download` (`never`, the default as in Rust and Ark
-            Core; `missing` lets `warmup()` download missing model assets),
-            `download_categories`,
-            `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
-            `ntdb_decision_threshold_point` (`best_f1` (default),
-            `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
-            `best_latency_in_f1`), `execution_backend` (`auto`, `cpu`, `gpu`,
-            `coreml`, `cuda`, `directml`, `tensorrt`), `onnx_batch_mode`
-            (`lazy_batches` or `tensor_batch`; unset follows the backend),
-            `onnx_runtime`, `dynamic_pii` (labels, result gates, thresholds,
+            Ark keys: `l3_strategy` (`dedicated` or `multi`),
+            `ntdb_operating_point`, `ntdb_decision_threshold_point` (`best_f1`
+            (default), `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
+            `best_latency_in_f1`), `onnx_batch_mode` (`lazy_batches` or
+            `tensor_batch`; unset follows the backend), `dynamic_pii` (labels, result gates, thresholds,
             chunking, text limit and timeout of the L3-only `dynamic-pii`
             category) and `cache` (`storage_location`, `encryption_key_hex`,
             `entry_ttl_seconds`, `memory_max_entries`, `memory_max_bytes`;
@@ -187,16 +186,20 @@ class SecurityGateway:
         """
         return self.rust_gateway.reset_cache(_unix_ms_from_ts(until_ts))
 
-    def scan_all(self, text: str) -> ScanReport:
+    def scan_all(self, text: str, *, control: ScanControl | None = None) -> ScanReport:
         """Scan text with every category configured on this gateway.
 
         Returns Ark Core's report shape: `input_bytes`, the per-category
         results in `native`, `wolf` (the dedicated injection L3's Wolf result
         when it ran, else `None`) and, with the opt-in `cascade`, `decision`
         (one final answer per module).
+
+        `control` is Ark Core's `ScanControl`, as in Core's `Scanner.scan`:
+        its timeout or `cancel()` stops the scan wherever it is and raises
+        `TimeoutError` or `patronus_ark_core.CancelledError`.
         """
         self._require_loaded_dynamic_pii(self.rust_gateway.categories)
-        return self.rust_gateway.scan_all(text)
+        return self.rust_gateway.scan_all(text, control)
 
     def _require_loaded_dynamic_pii(self, categories: list[str]):
         """Raise instead of silently returning no `dynamic-pii` result when its model is not loaded."""
@@ -209,15 +212,20 @@ class SecurityGateway:
                 f"dynamic-pii needs its L3 model loaded; call warmup() before scanning ({reasons})"
             )
 
-    def scan_category(self, category: str, text: str) -> ScanReport:
-        """Scan text with a single category; the report as in `scan_all`."""
+    def scan_category(
+        self, category: str, text: str, *, control: ScanControl | None = None
+    ) -> ScanReport:
+        """Scan text with a single category; the report and `control` as in `scan_all`."""
         self._require_loaded_dynamic_pii([category])
-        return self.rust_gateway.scan_category(category, text)
+        return self.rust_gateway.scan_category(category, text, control)
 
-    def scan_categories(self, categories: list[str], text: str) -> ScanReport:
-        """Scan text with a caller-provided category subset; the report as in `scan_all`."""
+    def scan_categories(
+        self, categories: list[str], text: str, *, control: ScanControl | None = None
+    ) -> ScanReport:
+        """Scan text with a caller-provided category subset; the report and
+        `control` as in `scan_all`."""
         self._require_loaded_dynamic_pii(categories)
-        return self.rust_gateway.scan_categories(categories, text)
+        return self.rust_gateway.scan_categories(categories, text, control)
 
     def enqueue(
         self,

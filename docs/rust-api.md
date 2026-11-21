@@ -13,7 +13,6 @@ Import public items from the `patronus_ark` crate.
 //! Core defines (categories, levels, gates, results, detectors) are imported
 //! from `patronus_ark_core`, this crate exports only what Ark adds.
 pub mod assets;
-#[allow(dead_code, unused_imports)]
 mod cache;
 mod config;
 pub mod dynamic_pii;
@@ -62,26 +61,14 @@ pub struct GatewayConfig {
     /// Core's keys, at the top level of the config.
     #[serde(flatten)]
     pub core: ScannerConfig,
-    /// Whether `warmup`/`prepare_assets` may download missing model files:
-    /// `never` (the default of every entry point, as in Ark Core) or
-    /// `missing`.
-    pub download: DownloadPolicy,
-    /// The categories that may download; unset: every configured category.
-    pub download_categories: Option<Vec<SecurityCategory>>,
     /// Physical L3 classifier topology: `dedicated` (default) or `multi`.
     pub l3_strategy: L3Strategy,
     /// Calibrated NTDB operating point. Default: `best_promote`.
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
     pub ntdb_decision_threshold_point: NtdbOperatingPoint,
-    /// ONNX execution backend of Ark's own models (Wolf runs on
-    /// `wolf.backend`): `auto` (default), `cpu`, `gpu`, `coreml`, ...
-    pub execution_backend: ExecutionBackend,
-    /// L3 batch execution; unset follows `execution_backend`.
+    /// L3 batch execution; unset follows Core's `execution_backend`.
     pub onnx_batch_mode: Option<OnnxBatchMode>,
-    /// ONNX Runtime session options of Ark's own models (Wolf takes
-    /// `wolf.runtime_options`).
-    pub onnx_runtime: OnnxRuntimeOptions,
     /// The `dynamic_pii` (GLiNER) pipeline's config.
     pub dynamic_pii: DynamicPiiConfig,
     /// The exact decision cache (key `cache`): `storage_location`,
@@ -94,10 +81,12 @@ pub struct GatewayConfig {
 
 The config of a [`crate::SecurityGateway`]: every key of Ark Core's
 [`ScannerConfig`] (`categories`, `max_level`, the gate keys, `cascade`,
-`cache_root`, `wolf`, `shell`) with the same meaning, plus Ark's own keys.
-Ark accepts every category, not only Core's text-scan ones, and reads
-Core's `wolf` (model, export, windows, `threshold`, `backend`,
-`runtime_options`) and `shell` for its injection L3 and its
+`cache_root`, `download`, `download_categories`, `download_timeout_ms`,
+`execution_backend`, `onnx_runtime`, `wolf`, `shell`) with the same
+meaning, plus Ark's own keys. Ark accepts every category, not only Core's
+text-scan ones; its own ONNX models run on Core's `execution_backend` and
+`onnx_runtime` like Wolf, and it reads Core's `wolf` (model, export,
+windows, `threshold`) and `shell` for its injection L3 and its
 `shell_command` category. Unknown keys are refused.
 
 ```rust
@@ -499,6 +488,21 @@ pub fn scan_category(
 Scan text with a single category.
 
 ```rust
+pub fn scan_with_control(
+    &self,
+    text: &str,
+    categories: &[SecurityCategory],
+    control: &ScanControl,
+) -> Result<ScanReport<SecurityScanResult>, ScanError>;
+```
+
+Scan `categories` of `text` as [`Self::scan_categories`] does, under
+Ark Core's `control`, as Core's
+[`patronus_ark_core::Scanner::scan_with_control`]: its cancellation or
+deadline stops the request wherever it is (queued, L1, L2 or L3) and
+returns [`ScanError::Cancelled`] or [`ScanError::DeadlineExceeded`].
+
+```rust
 pub fn enqueue(&self, text: impl Into<String>, gates: Option<ScanGateMatrix>) -> RequestId;
 ```
 
@@ -836,6 +840,12 @@ pub fn layers(&self) -> &[LayerResult];
 The layers that ran after the heuristic (the L1 model), in order.
 
 ```rust
+pub fn ran(&self) -> bool;
+```
+
+Whether an L1 stage ran: the heuristic or the module's L1 model.
+
+```rust
 pub fn decision(&self, module: SecurityCategory) -> Option<ModuleDecision>;
 ```
 
@@ -893,22 +903,24 @@ without a decision envelope); else Clear below the `clear_threshold`;
 else Escalate.
 
 ```rust
-pub fn l1_answer<'a>(
+pub fn l1_scan_answer<'a>(
     &self,
+    levels: &LayerExecution,
+    native: &crate::native::NativeEngine,
     module: SecurityCategory,
-    mode: ScoreMode,
-    heuristic: bool,
     scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
     text: &str,
 ) -> L1Stage;
 ```
 
-L1's answer for `module`, shared by the Core scanner and Ark's
-gateway: the heuristic ([`Self::l1_stage`]) over the module's results
-in `scan` when one of its producers ran (`heuristic`), else
+L1's answer for `module` in one scan, shared by the Core scanner and
+Ark's gateway. With L1 switched off in `levels`, [`Self::l1_off`].
+Else the heuristic ([`Self::l1_stage`]) over the module's results in
+`scan` when one of its producers in `native` is enabled (also when it
+reported no result: the module is then clear of evidence), else
 [`Self::l1_off`]; then the module's L1 model ([`Self::l1_model`]) on
-an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
-scan: the model reads their rule findings, as in training.
+an escalation ([`Self::l1_model_stage`]). `scan` holds every native L1
+result of the scan: the model reads their rule findings, as in training.
 
 ```rust
 pub fn l1_model_stage(
@@ -2084,6 +2096,22 @@ pub struct ScannerConfig {
     /// Model cache root of the bundles a config does not place with its own
     /// `bundle_dir`. Default: [`crate::warmup::default_cache_root`].
     pub cache_root: Option<PathBuf>,
+    /// Whether warmup may download missing model files: `never` (the
+    /// default) or `missing`. Scans never download.
+    pub download: DownloadPolicy,
+    /// The categories whose model files may download (Wolf's is `injection`,
+    /// Cat's `shell_command`); unset: every category.
+    pub download_categories: Option<Vec<SecurityCategory>>,
+    /// Budget for asset lock waiting, downloads and retries, not model
+    /// construction. Default: 600000.
+    pub download_timeout_ms: u64,
+    /// ONNX execution backend of every ONNX model (Wolf and the host's own):
+    /// `auto` (default), `cpu`, `gpu`, `coreml`, `cuda`, `directml`, `tensorrt`.
+    #[cfg(feature = "wolf")]
+    pub execution_backend: crate::ExecutionBackend,
+    /// ONNX Runtime session options of every ONNX model.
+    #[cfg(feature = "wolf")]
+    pub onnx_runtime: crate::OnnxRuntimeOptions,
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
@@ -2105,6 +2133,12 @@ pub fn resolved(&self) -> Result<Self, ScanError>;
 
 This config with every bundle directory set: a bundle without its own
 `bundle_dir` lives below the model cache root.
+
+```rust
+pub fn warmup_options(&self) -> WarmupOptions;
+```
+
+The download keys, which warmup applies per category.
 
 ```rust
 pub enum ScanError {
@@ -2612,24 +2646,42 @@ No public documentation is available yet.
 ```rust
 pub struct WarmupOptions {
     pub download: DownloadPolicy,
+    /// The categories whose model files may download; unset: every category.
+    pub download_categories: Option<Vec<SecurityCategory>>,
     /// Budget for asset lock waiting, downloads and retries; not model construction.
     pub download_timeout_ms: u64,
 }
 ```
 
-No public documentation is available yet.
+How warmup fetches missing model files: [`ScannerConfig`]'s `download`,
+`download_categories` and `download_timeout_ms` keys
+([`ScannerConfig::warmup_options`]). The default is offline.
 
 ```rust
-pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, ScanError>;
+pub fn download_for(&self, category: SecurityCategory) -> DownloadPolicy;
 ```
 
-Prepare configured assets, then construct one warm scanner used by subsequent scans.
+The download policy for the model files of `category`.
 
 ```rust
-pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError>;
+pub fn validate(&self) -> Result<(), ScanError>;
 ```
 
-Prepare model files without creating a tokenizer, ONNX session or scanner.
+Refuse a zero download time budget.
+
+```rust
+pub fn warmup(config: ScannerConfig) -> Result<Self, ScanError>;
+```
+
+Prepare configured assets under the config's download keys, then
+construct one warm scanner used by subsequent scans.
+
+```rust
+pub fn prepare_assets(config: &ScannerConfig) -> Result<(), ScanError>;
+```
+
+Prepare model files under the config's download keys without creating a
+tokenizer, ONNX session or scanner.
 
 ```rust
 pub fn shell_assets_present(config: &crate::detectors::shell::ShellConfig) -> bool;
@@ -3017,6 +3069,12 @@ pub struct OnnxRuntimeOptions {
 Caller-provided ONNX Runtime session options.
 
 ```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+Refuse a zero thread count; unset counts follow ONNX Runtime.
+
+```rust
 pub fn normalized(self) -> Self;
 ```
 
@@ -3037,10 +3095,6 @@ pub struct WolfConfig {
     pub model: WolfModel,
     #[serde(default)]
     pub precision: WolfPrecision,
-    #[serde(default)]
-    pub backend: crate::ExecutionBackend,
-    #[serde(default)]
-    pub runtime_options: crate::OnnxRuntimeOptions,
     /// Document windows and batching; unset sizes follow the bundle.
     #[serde(default)]
     pub execution: WolfExecutionOptions,
@@ -3048,7 +3102,7 @@ pub struct WolfConfig {
 ```
 
 The Wolf Defender L3 of the injection module: model size, precision,
-bundle, document windows, backend and the attack-probability threshold it
+bundle, document windows and the attack-probability threshold it
 detects at. Everything unset follows the bundle's published settings
 (`POOLING.json`): Wolf Defender detects strictly above 0.5 over
 2048-token windows with 64 overlap.
@@ -3170,11 +3224,17 @@ pub struct WolfRunner {
 No public documentation is available yet.
 
 ```rust
-pub fn new(config: &WolfConfig) -> Result<Self, ScanError>;
+pub fn new(
+    config: &WolfConfig,
+    backend: crate::ExecutionBackend,
+    runtime_options: crate::OnnxRuntimeOptions,
+) -> Result<Self, ScanError>;
 ```
 
-Construct and warm a runner; execution sizes are validated against the local export.
-Unset sizes and threshold follow the bundle's `POOLING.json`.
+Construct and warm a runner on `backend` with `runtime_options` (the
+config's `execution_backend` and `onnx_runtime`); execution sizes are
+validated against the local export. Unset sizes and threshold follow
+the bundle's `POOLING.json`.
 
 ```rust
 pub fn set_threshold(&mut self, threshold: f64) -> Result<(), ScanError>;
@@ -3274,29 +3334,14 @@ the model cache root `root` (unset: the default cache root).
 ## Asset Manifest Helpers
 
 ```rust
-pub struct NtdbL2PackageAssetSpec {
-    /// Scanner category that owns this package.
-    pub category: SecurityCategory,
-    /// Minimum security level that needs this package.
-    pub level: SecurityLevel,
-    /// The pinned package: its id is the public model identifier used by gates and scan
-    /// results, its source prefix the package directory inside the repository, and its
-    /// environment override a local export that replaces the cached package.
-    pub spec: ModelSpec,
-    /// Whether missing or failed downloads should block `warmup`.
-    pub required: bool,
-}
-```
-
-A manifest-first NTDB L2 package declared for Hugging Face download.
-
-```rust
 pub struct PipelineModelAssetSpec {
     /// Scanner category that owns this pipeline model.
     pub category: SecurityCategory,
     /// The pinned bundle below the model cache; its id is the public model name.
     pub spec: ModelSpec,
-    /// Files required to load and validate the bundle.
+    /// Files required to load and validate the bundle; for an NTDB L2
+    /// package its manifest ([`NTDB_PACKAGE_MANIFEST`]), which lists the
+    /// others (see [`super::prepare_ntdb_l2_package`]).
     pub files: &'static [&'static str],
 }
 ```
@@ -3332,51 +3377,28 @@ Return the revision-pinned dedicated L3 bundle for a classifier category.
 ## Asset Download Helpers
 
 ```rust
-pub fn ntdb_l2_package_assets(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-) -> Vec<NtdbL2PackageAssetSpec>;
+pub fn ntdb_l2_package_current(spec: &ModelSpec, root: &Path) -> bool;
 ```
 
-Return NTDB L2 package entries needed for a category up to `max_level`.
+Whether the NTDB L2 package `spec` below the model cache `root` is the
+complete pinned revision: its manifest valid, its embedding matrix of the
+manifest's shape and an L3-compatible tokenizer the unified L3's.
 
 ```rust
-pub fn ntdb_l2_package_asset(
+pub fn prepare_ntdb_l2_package(
+    spec: &ModelSpec,
     category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
-) -> Option<NtdbL2PackageAssetSpec>;
-```
-
-Return the NTDB L2 package entry for a public model name.
-
-```rust
-pub fn ntdb_l2_package_assets_present(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
     root: &Path,
-) -> bool;
-```
-
-Check whether an official NTDB L2 package cache below the model cache `root` matches
-its pinned revision.
-
-```rust
-pub fn download_ntdb_l2_package(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
-    root: &Path,
+    download: DownloadPolicy,
     progress: Option<&SecurityAssetProgressCallback>,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
+) -> Result<PathBuf, ScanError>;
 ```
 
-Download a missing NTDB L2 package from Hugging Face below the model cache `root`.
-
-The package is downloaded manifest-first: `manifest.json` is fetched from
-the package prefix, then runtime files referenced by that manifest are
-downloaded into the same local package tree.
+Prepare the NTDB L2 package `spec` of `category` below the model cache
+`root` with Core's [`ModelSpec::prepare_package`]: the manifest first,
+then the runtime files it lists; the shared embedder files go to their
+shared cache directory (fetched again when stale) and are linked into the
+package. Under [`DownloadPolicy::Never`] a missing or stale file fails.
 
 ```rust
 pub fn ntdb_l2_package_manifest_files(

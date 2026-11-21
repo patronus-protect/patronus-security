@@ -3,6 +3,7 @@ use crate::{
     detectors::shell::{Facts, ShellConfig, ShellContext, ShellRiskPipeline, ShellVerdict},
     native::{NativeEngine, NATIVE_CATEGORIES},
     threat::NativeText,
+    warmup::{DownloadPolicy, WarmupOptions},
     NativeResult, SecurityCategory,
 };
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,22 @@ pub struct ScannerConfig {
     /// Model cache root of the bundles a config does not place with its own
     /// `bundle_dir`. Default: [`crate::warmup::default_cache_root`].
     pub cache_root: Option<PathBuf>,
+    /// Whether warmup may download missing model files: `never` (the
+    /// default) or `missing`. Scans never download.
+    pub download: DownloadPolicy,
+    /// The categories whose model files may download (Wolf's is `injection`,
+    /// Cat's `shell_command`); unset: every category.
+    pub download_categories: Option<Vec<SecurityCategory>>,
+    /// Budget for asset lock waiting, downloads and retries, not model
+    /// construction. Default: 600000.
+    pub download_timeout_ms: u64,
+    /// ONNX execution backend of every ONNX model (Wolf and the host's own):
+    /// `auto` (default), `cpu`, `gpu`, `coreml`, `cuda`, `directml`, `tensorrt`.
+    #[cfg(feature = "wolf")]
+    pub execution_backend: crate::ExecutionBackend,
+    /// ONNX Runtime session options of every ONNX model.
+    #[cfg(feature = "wolf")]
+    pub onnx_runtime: crate::OnnxRuntimeOptions,
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfConfig>,
     /// Cat, the shell-command verdict; see [`Scanner::shell_verdict`].
@@ -62,6 +79,13 @@ impl Default for ScannerConfig {
             max_input_bytes: None,
             max_findings: None,
             cache_root: None,
+            download: DownloadPolicy::Never,
+            download_categories: None,
+            download_timeout_ms: 600_000,
+            #[cfg(feature = "wolf")]
+            execution_backend: crate::ExecutionBackend::default(),
+            #[cfg(feature = "wolf")]
+            onnx_runtime: crate::OnnxRuntimeOptions::default(),
             #[cfg(feature = "wolf")]
             wolf: None,
             shell: None,
@@ -82,6 +106,15 @@ impl ScannerConfig {
             shell.bundle_dir = Some(shell.dir(root).map_err(ScanError::Config)?);
         }
         Ok(config)
+    }
+
+    /// The download keys, which warmup applies per category.
+    pub fn warmup_options(&self) -> WarmupOptions {
+        WarmupOptions {
+            download: self.download,
+            download_categories: self.download_categories.clone(),
+            download_timeout_ms: self.download_timeout_ms,
+        }
     }
 
     pub(crate) fn validate(&self) -> Result<(), ScanError> {
@@ -118,6 +151,9 @@ impl ScannerConfig {
                 "conditional: Core scans carry no request metadata; use result conditions".into(),
             ));
         }
+        self.warmup_options().validate()?;
+        #[cfg(feature = "wolf")]
+        self.onnx_runtime.validate().map_err(ScanError::Config)?;
         #[cfg(feature = "wolf")]
         if let Some(wolf) = &self.wolf {
             wolf.validate()?;
@@ -206,7 +242,13 @@ impl Scanner {
             wolf: config
                 .wolf
                 .as_ref()
-                .map(crate::wolf::WolfRunner::new)
+                .map(|wolf| {
+                    crate::wolf::WolfRunner::new(
+                        wolf,
+                        config.execution_backend,
+                        config.onnx_runtime,
+                    )
+                })
                 .transpose()?,
             shell: config
                 .shell
@@ -334,7 +376,6 @@ impl Scanner {
         } else {
             crate::cascade::l1_gate_results(native)
         };
-        let l1 = execution.allows_level(SecurityLevel::L1);
         let mut decisions = Vec::with_capacity(modules.len());
         for module in modules {
             #[cfg(feature = "wolf")]
@@ -344,23 +385,8 @@ impl Scanner {
                 .map(|layer| layer as &mut dyn L3Executor);
             #[cfg(not(feature = "wolf"))]
             let l3: Option<&mut dyn L3Executor> = None;
-            let stage = if l1 {
-                // The heuristic ran when one of the module's producers is enabled.
-                let heuristic = self
-                    .native
-                    .producers(module)
-                    .iter()
-                    .any(|producer| producer.enabled(execution.gates()));
-                cascade.l1_answer(
-                    module,
-                    execution.gates().mode(module),
-                    heuristic,
-                    native.iter(),
-                    text,
-                )
-            } else {
-                cascade.l1_off(module)
-            };
+            let stage =
+                cascade.l1_scan_answer(execution, &self.native, module, native.iter(), text);
             // A module no stage ran for (L1 off, nothing later) has no decision.
             decisions.extend(cascade.decide(
                 execution,

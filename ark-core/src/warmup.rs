@@ -1,5 +1,5 @@
 //! Explicit asset preparation and one-time runtime warmup. Scanning stays offline.
-use crate::{ScanError, Scanner, ScannerConfig};
+use crate::{ScanError, Scanner, ScannerConfig, SecurityCategory};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -96,23 +96,33 @@ pub enum DownloadPolicy {
     Never,
     Missing,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+/// How warmup fetches missing model files: [`ScannerConfig`]'s `download`,
+/// `download_categories` and `download_timeout_ms` keys
+/// ([`ScannerConfig::warmup_options`]). The default is offline.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WarmupOptions {
     pub download: DownloadPolicy,
+    /// The categories whose model files may download; unset: every category.
+    pub download_categories: Option<Vec<SecurityCategory>>,
     /// Budget for asset lock waiting, downloads and retries; not model construction.
     pub download_timeout_ms: u64,
 }
 impl Default for WarmupOptions {
     fn default() -> Self {
-        Self {
-            download: DownloadPolicy::Never,
-            download_timeout_ms: 600_000,
-        }
+        ScannerConfig::default().warmup_options()
     }
 }
 impl WarmupOptions {
-    fn validate(&self) -> Result<(), ScanError> {
+    /// The download policy for the model files of `category`.
+    pub fn download_for(&self, category: SecurityCategory) -> DownloadPolicy {
+        match &self.download_categories {
+            Some(categories) if !categories.contains(&category) => DownloadPolicy::Never,
+            _ => self.download,
+        }
+    }
+
+    /// Refuse a zero download time budget.
+    pub fn validate(&self) -> Result<(), ScanError> {
         if self.download_timeout_ms == 0 {
             return Err(ScanError::Config(
                 "positive download timeout required".into(),
@@ -122,17 +132,19 @@ impl WarmupOptions {
     }
 }
 impl Scanner {
-    /// Prepare configured assets, then construct one warm scanner used by subsequent scans.
-    pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, ScanError> {
-        prepare_assets(&config, &options)?;
+    /// Prepare configured assets under the config's download keys, then
+    /// construct one warm scanner used by subsequent scans.
+    pub fn warmup(config: ScannerConfig) -> Result<Self, ScanError> {
+        prepare_assets(&config)?;
         Self::new(config)
     }
 }
-/// Prepare model files without creating a tokenizer, ONNX session or scanner.
-pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError> {
+/// Prepare model files under the config's download keys without creating a
+/// tokenizer, ONNX session or scanner.
+pub fn prepare_assets(config: &ScannerConfig) -> Result<(), ScanError> {
     config.validate()?;
     let config = &config.resolved()?;
-    options.validate()?;
+    let options = &config.warmup_options();
     #[cfg(feature = "wolf")]
     if let Some(wolf) = &config.wolf {
         prepare_wolf_assets(wolf, options)?;
@@ -194,7 +206,7 @@ pub fn prepare_shell_assets_with_progress(
         }
         return Ok(());
     };
-    if options.download == DownloadPolicy::Never {
+    if options.download_for(SecurityCategory::ShellCommand) == DownloadPolicy::Never {
         return Err(ScanError::Asset(format!(
             "{problem}; prepare it or enable download=missing"
         )));
@@ -302,13 +314,10 @@ mod tests {
     #[test]
     fn offline_is_default_and_invalid_budget_is_rejected() {
         assert_eq!(WarmupOptions::default().download, DownloadPolicy::Never);
-        assert!(prepare_assets(
-            &ScannerConfig::default(),
-            &WarmupOptions {
-                download_timeout_ms: 0,
-                ..WarmupOptions::default()
-            }
-        )
+        assert!(prepare_assets(&ScannerConfig {
+            download_timeout_ms: 0,
+            ..ScannerConfig::default()
+        })
         .is_err());
     }
     #[test]
@@ -363,14 +372,36 @@ mod tests {
     }
     #[test]
     fn native_warmup_needs_no_assets_or_downloads() {
-        let mut scanner = Scanner::warmup(
-            ScannerConfig::default(),
-            WarmupOptions {
-                download: DownloadPolicy::Missing,
-                ..WarmupOptions::default()
-            },
-        )
+        let mut scanner = Scanner::warmup(ScannerConfig {
+            download: DownloadPolicy::Missing,
+            ..ScannerConfig::default()
+        })
         .unwrap();
         assert!(scanner.scan("Meeting agenda.").is_ok());
+    }
+    #[test]
+    fn download_keys_are_config_keys_applied_per_category() {
+        let config: ScannerConfig = serde_json::from_value(serde_json::json!({
+            "download": "missing",
+            "download_categories": ["shell_command"],
+            "download_timeout_ms": 1000,
+        }))
+        .unwrap();
+        let options = config.warmup_options();
+        assert_eq!(options.download_timeout_ms, 1000);
+        assert_eq!(
+            options.download_for(SecurityCategory::ShellCommand),
+            DownloadPolicy::Missing
+        );
+        assert_eq!(
+            options.download_for(SecurityCategory::Injection),
+            DownloadPolicy::Never
+        );
+        assert_eq!(
+            ScannerConfig::default()
+                .warmup_options()
+                .download_for(SecurityCategory::ShellCommand),
+            DownloadPolicy::Never
+        );
     }
 }

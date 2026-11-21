@@ -283,10 +283,10 @@ impl LazyOnnxTextClassifier {
                     threshold: Some(threshold),
                     model: self.wolf.model,
                     precision: self.wolf.precision,
-                    backend,
-                    runtime_options: options,
                     execution,
                 },
+                backend,
+                options,
             )?);
             self.loaded_backend = Some(backend);
             self.loaded_options = Some(options);

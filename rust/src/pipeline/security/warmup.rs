@@ -273,7 +273,7 @@ impl SecurityGateway {
                 );
                 patronus_ark_core::warmup::prepare_shell_assets_with_progress(
                     &shell,
-                    &core_warmup_options(download),
+                    &self.core_warmup_options(download),
                     report
                         .as_ref()
                         .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
@@ -345,13 +345,8 @@ impl SecurityGateway {
             for config in configs {
                 let env_override = config.package.override_dir().is_some();
                 let package_dir = config.package.dir(&base_dir);
-                let official_package_current = env_override
-                    || assets::ntdb_l2_package_assets_present(
-                        *category,
-                        self.max_level,
-                        config.package.id,
-                        &base_dir,
-                    );
+                let official_package_current =
+                    env_override || assets::ntdb_l2_package_current(&config.package, &base_dir);
                 if !official_package_current {
                     if allow_download && self.should_download_assets_for(*category) {
                         log::info!(
@@ -359,11 +354,11 @@ impl SecurityGateway {
                             category.as_str(),
                             config.public_model
                         );
-                        assets::download_ntdb_l2_package(
+                        assets::prepare_ntdb_l2_package(
+                            &config.package,
                             *category,
-                            self.max_level,
-                            config.package.id,
                             &base_dir,
+                            DownloadPolicy::Missing,
                             progress,
                         )?;
                     } else {
@@ -416,7 +411,7 @@ impl SecurityGateway {
                     );
                     patronus_ark_core::warmup::prepare_wolf_assets_with_progress(
                         &wolf,
-                        &core_warmup_options(download),
+                        &self.core_warmup_options(download),
                         report
                             .as_ref()
                             .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
@@ -481,6 +476,15 @@ impl SecurityGateway {
         }
     }
 
+    /// Core's warmup options (the config's download keys) for one
+    /// preparation step that may download when `download`.
+    fn core_warmup_options(&self, download: bool) -> patronus_ark_core::warmup::WarmupOptions {
+        patronus_ark_core::warmup::WarmupOptions {
+            download: download_policy(download),
+            ..self.warmup.clone()
+        }
+    }
+
     pub(super) fn model_base_dir(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
         Ok(patronus_ark_core::warmup::model_cache_root(
             self.cache_root.as_deref(),
@@ -538,14 +542,11 @@ impl SecurityGateway {
             return Ok(());
         };
         let execution = self.scan_execution();
-        let wolf = execution.wolf();
-        // Wolf runs on Core's `wolf` keys, Ark's other L3 models on Ark's.
-        let (backend, options) = if config.category == SecurityCategory::Injection {
-            (wolf.backend, wolf.runtime_options)
-        } else {
-            (execution.backend(), execution.onnx_runtime_options())
-        };
-        model.warmup_session(backend, options, wolf.execution)?;
+        model.warmup_session(
+            execution.backend(),
+            execution.onnx_runtime_options(),
+            execution.wolf().execution,
+        )?;
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
     }
@@ -640,14 +641,6 @@ fn download_policy(download: bool) -> DownloadPolicy {
         DownloadPolicy::Missing
     } else {
         DownloadPolicy::Never
-    }
-}
-
-/// Core's warmup options for one ARK preparation step.
-fn core_warmup_options(download: bool) -> patronus_ark_core::warmup::WarmupOptions {
-    patronus_ark_core::warmup::WarmupOptions {
-        download: download_policy(download),
-        ..Default::default()
     }
 }
 

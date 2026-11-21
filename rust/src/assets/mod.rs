@@ -7,13 +7,12 @@ use crate::{SecurityAssetProgress, SecurityAssetProgressCallback, SecurityCatego
 
 pub(crate) use download::prepare_cached_ntdb_l2_compact_tokenizer;
 pub use download::{
-    download_ntdb_l2_package, ntdb_l2_package_asset, ntdb_l2_package_assets,
-    ntdb_l2_package_assets_present, ntdb_l2_package_manifest_files,
+    ntdb_l2_package_current, ntdb_l2_package_manifest_files, prepare_ntdb_l2_package,
 };
 pub(crate) use specs::prefer_fp16_l3;
 pub use specs::{
-    dedicated_l3_asset, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, DEDICATED_L3_ASSETS,
-    DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET, WOLF_PIPELINE_MODEL,
+    dedicated_l3_asset, PipelineModelAssetSpec, DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET,
+    NTDB_L2_PACKAGE_MANIFEST, NTDB_PACKAGE_MANIFEST, UNIFIED_L3_ASSET, WOLF_PIPELINE_MODEL,
 };
 
 /// Report Core's `(completed, total)` file progress as one model's asset progress.

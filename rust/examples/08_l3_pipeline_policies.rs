@@ -25,7 +25,7 @@ fn main() {
             ],
             SecurityLevel::L3,
         );
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();

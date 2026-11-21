@@ -210,7 +210,7 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
         scope.update(&value.to_le_bytes());
     }
     scope.update(wolf.model.as_str().as_bytes());
-    scope.update(wolf.backend.as_str().as_bytes());
+    scope.update(execution.backend().as_str().as_bytes());
     scope.update(&wolf.threshold.unwrap_or(-1.0).to_le_bytes());
     scope.update(wolf.precision.as_str().as_bytes());
     DecisionCacheKey {

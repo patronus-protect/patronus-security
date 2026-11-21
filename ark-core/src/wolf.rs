@@ -26,7 +26,7 @@ use std::{
 };
 
 /// The Wolf Defender L3 of the injection module: model size, precision,
-/// bundle, document windows, backend and the attack-probability threshold it
+/// bundle, document windows and the attack-probability threshold it
 /// detects at. Everything unset follows the bundle's published settings
 /// (`POOLING.json`): Wolf Defender detects strictly above 0.5 over
 /// 2048-token windows with 64 overlap.
@@ -44,10 +44,6 @@ pub struct WolfConfig {
     pub model: WolfModel,
     #[serde(default)]
     pub precision: WolfPrecision,
-    #[serde(default)]
-    pub backend: crate::ExecutionBackend,
-    #[serde(default)]
-    pub runtime_options: crate::OnnxRuntimeOptions,
     /// Document windows and batching; unset sizes follow the bundle.
     #[serde(default)]
     pub execution: WolfExecutionOptions,
@@ -150,9 +146,15 @@ pub struct WolfRunner {
     fixed_width: Option<usize>,
 }
 impl WolfRunner {
-    /// Construct and warm a runner; execution sizes are validated against the local export.
-    /// Unset sizes and threshold follow the bundle's `POOLING.json`.
-    pub fn new(config: &WolfConfig) -> Result<Self, ScanError> {
+    /// Construct and warm a runner on `backend` with `runtime_options` (the
+    /// config's `execution_backend` and `onnx_runtime`); execution sizes are
+    /// validated against the local export. Unset sizes and threshold follow
+    /// the bundle's `POOLING.json`.
+    pub fn new(
+        config: &WolfConfig,
+        backend: crate::ExecutionBackend,
+        runtime_options: crate::OnnxRuntimeOptions,
+    ) -> Result<Self, ScanError> {
         let options = config.execution;
         config.validate()?;
         let bundle_dir = config.dir(None)?;
@@ -177,17 +179,12 @@ impl WolfRunner {
         // session pool so its configured thread budget is honored even when
         // the host already initialized a global pool.
         crate::onnx::warmup_runtime();
-        let key = format!(
-            "{}|{:?}|{:?}",
-            model.display(),
-            config.backend,
-            config.runtime_options
-        );
+        let key = format!("{}|{:?}|{:?}", model.display(), backend, runtime_options);
         let session = crate::shared_models::shared(&key, || {
             let (builder, execution_provider) = crate::onnx::configured_session_builder(
-                config.backend,
+                backend,
                 Some(&bundle_dir),
-                config.runtime_options,
+                runtime_options,
             )
             .map_err(inference)?;
             let builder = builder.with_independent_thread_pool().map_err(inference)?;

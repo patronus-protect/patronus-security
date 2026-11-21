@@ -39,8 +39,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut gateway = SecurityGateway::new({
         let mut config =
             GatewayConfig::new(vec![Pii, Dlp, Injection, ShellCommand], SecurityLevel::L1);
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(vec![ShellCommand]);
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(vec![ShellCommand]);
         config
     })
     .unwrap();

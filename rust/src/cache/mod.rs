@@ -16,7 +16,7 @@ mod types;
 mod write_behind;
 
 pub use config::{CacheEncryptionConfig, CacheWriteMode, ExactCacheConfig, PersistentCacheConfig};
-pub(crate) use coordinator::{CacheCoordinator, CacheLookup, CacheSource, Clock, SystemClock};
+pub(crate) use coordinator::{CacheCoordinator, CacheSource};
 pub(crate) use crypto::CacheCrypto;
 pub use memory::MemoryCacheConfig;
 pub(crate) use memory::MemoryCacheStore;
@@ -24,11 +24,10 @@ pub(crate) use pii_chunk::PiiChunkCache;
 pub(crate) use pii_entity::merge_pii_spans;
 pub(crate) use redb::RedbCacheStore;
 pub(crate) use similarity::{
-    cosine_similarity, decision_output, HistoricalSimilarityCache, SimilarityDecision,
-    SimilarityMatch,
+    decision_output, HistoricalSimilarityCache, SimilarityDecision, SimilarityMatch,
 };
 pub use store::CacheError;
 pub(crate) use store::{ExactCacheStore, SimilarityStoreRecord};
 pub(crate) use types::{CacheKey, CacheNamespace, CachedHeadOutput, CachedModelOutput};
 pub use write_behind::WriteBehindConfig;
-pub(crate) use write_behind::{WriteBehindStats, WriteBehindStatsSnapshot, WriteBehindStore};
+pub(crate) use write_behind::WriteBehindStore;

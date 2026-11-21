@@ -17,7 +17,7 @@ fn cache_latency_microbenchmark() {
     let output = representative_output();
     let read_key = key("read");
     let memory = MemoryCacheStore::new(MemoryCacheConfig::default());
-    let redb = Arc::new(RedbCacheStore::open(&path).unwrap());
+    let redb = Arc::new(RedbCacheStore::open_with_encryption(&path, None).unwrap());
     let encrypted_path = temp_path();
     let encrypted_redb = Arc::new(
         RedbCacheStore::open_with_encryption(&encrypted_path, Some(encryption_config())).unwrap(),
@@ -457,7 +457,7 @@ fn exact_cache_scaling_microbenchmark() {
         );
 
         let path = temp_path();
-        let redb = RedbCacheStore::open(&path).unwrap();
+        let redb = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         for batch_start in (0..size).step_by(64) {
             let batch_end = (batch_start + 64).min(size);
             redb.put_batch(

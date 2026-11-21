@@ -18,17 +18,18 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. Default `"l3"` in Rust and Python; required in the server config. | yes | yes |
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
-| `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir`, `threshold` (unset: the serving default), and Wolf's ONNX `backend` and `runtime_options`. | yes | yes |
+| `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir` and `threshold` (unset: the serving default). Wolf runs on `execution_backend` and `onnx_runtime`. | yes | yes |
 | `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, `allowlist`, optional `bundle_dir`. | yes | yes |
 | `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
-| `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | warmup option | yes |
-| `download_categories` | list | Restrict automatic downloads to these categories. | no | yes |
+| `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | yes | yes |
+| `download_categories` | list | Restrict automatic downloads to these categories (Wolf's is `injection`, Cat's `shell_command`); unset: every category. | yes | yes |
+| `download_timeout_ms` | integer | Time budget of a download, lock waits and retries included. Default `600000`. | yes | yes |
+| `execution_backend` | str | ONNX [execution backend](#execution-backend) of every ONNX model, Wolf included (default `"auto"`). | yes | yes |
+| `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of every ONNX model, Wolf included (default `1/1/false`). | yes | yes |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"` in Rust, Python and the server. | no | yes |
 | `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
 | `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
-| `execution_backend` | str | ONNX [execution backend](#execution-backend) of Ark's own models (default `"auto"`); Wolf runs on `wolf.backend`. | no | yes |
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); unset follows the backend. | no | yes |
-| `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of Ark's own models (default `1/1/false`); Wolf takes `wolf.runtime_options`. | no | yes |
 | `dynamic_pii` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | no | yes |
 | `cache` | dict | Decision cache: `storage_location` (unset: memory only), `encryption_key_hex` (64 hex chars), `entry_ttl_seconds` (default 30 days), `memory_max_entries`, `memory_max_bytes`. `encryption_key_hex` requires `storage_location`. | no | yes |
 

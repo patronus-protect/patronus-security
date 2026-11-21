@@ -60,6 +60,7 @@ impl HistoricalSimilarityCache {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn find_best(
         &self,
         vector_space: &str,
@@ -394,10 +395,6 @@ fn decode_decision(heads: &[CachedHeadOutput], logical_head: &str) -> Option<Sim
     })
 }
 
-pub(crate) fn cosine_similarity(left: &[f32], right: &[f32]) -> Option<f64> {
-    cosine_with_left_norm(left, right, vector_norm(left))
-}
-
 fn cosine_with_left_norm(left: &[f32], right: &[f32], left_norm: f64) -> Option<f64> {
     if left.is_empty() || left.len() != right.len() {
         return None;
@@ -449,12 +446,6 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("patronus-similarity-{name}-{unique}.redb"))
-    }
-
-    #[test]
-    fn cosine_uses_vector_geometry() {
-        assert_eq!(cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]), Some(1.0));
-        assert_eq!(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]), Some(0.0));
     }
 
     #[test]

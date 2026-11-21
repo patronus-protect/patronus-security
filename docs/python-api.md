@@ -20,7 +20,13 @@ Args:
         (`{"modules": {...}}`: L1 early exit with per-category
         `detect_threshold`/`clear_threshold`; scan reports then carry
         `decision`, one entry per module)), `cache_root` (the model cache root; default the
-        platform cache directory plus `patronus_ark`), `wolf` (the
+        platform cache directory plus `patronus_ark`), `download`
+        (`never`, the default; `missing` lets `warmup()` download missing
+        model assets), `download_categories` (unset: every category),
+        `download_timeout_ms`, `execution_backend` (`auto`, `cpu`, `gpu`,
+        `coreml`, `cuda`, `directml`, `tensorrt`) and `onnx_runtime`
+        (`intra_threads`, `inter_threads`, `spinning`) of every ONNX
+        model, Wolf included, `wolf` (the
         dedicated injection L3: `model` `base`, `small` (default) or
         `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
         `mixed_x86`, `int8_int4` or `int8_int4_x86`; `execution` with
@@ -28,16 +34,11 @@ Args:
         retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
         the `shell_command` verdict).
 
-        Ark keys: `download` (`never`, the default as in Rust and Ark
-        Core; `missing` lets `warmup()` download missing model assets),
-        `download_categories`,
-        `l3_strategy` (`dedicated` or `multi`), `ntdb_operating_point`,
-        `ntdb_decision_threshold_point` (`best_f1` (default),
-        `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
-        `best_latency_in_f1`), `execution_backend` (`auto`, `cpu`, `gpu`,
-        `coreml`, `cuda`, `directml`, `tensorrt`), `onnx_batch_mode`
-        (`lazy_batches` or `tensor_batch`; unset follows the backend),
-        `onnx_runtime`, `dynamic_pii` (labels, result gates, thresholds,
+        Ark keys: `l3_strategy` (`dedicated` or `multi`),
+        `ntdb_operating_point`, `ntdb_decision_threshold_point` (`best_f1`
+        (default), `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`,
+        `best_latency_in_f1`), `onnx_batch_mode` (`lazy_batches` or
+        `tensor_batch`; unset follows the backend), `dynamic_pii` (labels, result gates, thresholds,
         chunking, text limit and timeout of the L3-only `dynamic-pii`
         category) and `cache` (`storage_location`, `encryption_key_hex`,
         `entry_ttl_seconds`, `memory_max_entries`, `memory_max_bytes`;
@@ -88,13 +89,18 @@ results in `native`, `wolf` (the dedicated injection L3's Wolf result
 when it ran, else `None`) and, with the opt-in `cascade`, `decision`
 (one final answer per module).
 
+`control` is Ark Core's `ScanControl`, as in Core's `Scanner.scan`:
+its timeout or `cancel()` stops the scan wherever it is and raises
+`TimeoutError` or `patronus_ark_core.CancelledError`.
+
 ### `scan_category(category: str, text: str) -> ScanReport`
 
-Scan text with a single category; the report as in `scan_all`.
+Scan text with a single category; the report and `control` as in `scan_all`.
 
 ### `scan_categories(categories: list[str], text: str) -> ScanReport`
 
-Scan text with a caller-provided category subset; the report as in `scan_all`.
+Scan text with a caller-provided category subset; the report and
+`control` as in `scan_all`.
 
 ### `enqueue(text: str, categories: list[str] | None = None, execution_gates: ScanGates | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
 

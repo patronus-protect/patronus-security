@@ -501,8 +501,8 @@ fn run_wolf_document_job(
     model
         .ensure_wolf_loaded(
             threshold,
-            wolf.backend,
-            wolf.runtime_options,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
             wolf.execution,
         )
         .map_err(|error| error.to_string())?;
@@ -599,8 +599,8 @@ fn run_wolf_document_job(
     let output = model.infer_wolf_document_with_progress_and_control(
         source_text,
         threshold,
-        wolf.backend,
-        wolf.runtime_options,
+        job.execution.backend(),
+        job.execution.onnx_runtime_options(),
         wolf.execution,
         active.control(),
         callback,

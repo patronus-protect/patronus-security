@@ -503,7 +503,7 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         let mut value = startup_config();
         value["pipeline"]["onnx_runtime"] =
             serde_json::json!({"intra_threads": 2, "inter_threads": 1, "spinning": false});
-        let options = load(value).unwrap().gateway.onnx_runtime;
+        let options = load(value).unwrap().gateway.core.onnx_runtime;
         assert_eq!(options.intra_threads, Some(2));
         assert_eq!(options.inter_threads, Some(1));
         assert_eq!(options.spinning, Some(false));

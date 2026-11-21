@@ -21,8 +21,8 @@ use patronus_ark_core::{cascade::SecurityLevel, SecurityCategory};
 fn main() {
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(vec![SecurityCategory::Injection]);
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(vec![SecurityCategory::Injection]);
         config
     })
     .unwrap();

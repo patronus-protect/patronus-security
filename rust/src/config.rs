@@ -4,22 +4,23 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use patronus_ark_core::warmup::DownloadPolicy;
 use patronus_ark_core::ScannerConfig;
 use serde::{Deserialize, Deserializer};
 
 use crate::{
-    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, ExecutionBackend,
-    L3Strategy, MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, OnnxRuntimeOptions,
-    PersistentCacheConfig, SecurityCategory, SecurityLevel,
+    CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy,
+    MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig, SecurityCategory,
+    SecurityLevel,
 };
 
 /// The config of a [`crate::SecurityGateway`]: every key of Ark Core's
 /// [`ScannerConfig`] (`categories`, `max_level`, the gate keys, `cascade`,
-/// `cache_root`, `wolf`, `shell`) with the same meaning, plus Ark's own keys.
-/// Ark accepts every category, not only Core's text-scan ones, and reads
-/// Core's `wolf` (model, export, windows, `threshold`, `backend`,
-/// `runtime_options`) and `shell` for its injection L3 and its
+/// `cache_root`, `download`, `download_categories`, `download_timeout_ms`,
+/// `execution_backend`, `onnx_runtime`, `wolf`, `shell`) with the same
+/// meaning, plus Ark's own keys. Ark accepts every category, not only Core's
+/// text-scan ones; its own ONNX models run on Core's `execution_backend` and
+/// `onnx_runtime` like Wolf, and it reads Core's `wolf` (model, export,
+/// windows, `threshold`) and `shell` for its injection L3 and its
 /// `shell_command` category. Unknown keys are refused.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -27,26 +28,14 @@ pub struct GatewayConfig {
     /// Core's keys, at the top level of the config.
     #[serde(flatten)]
     pub core: ScannerConfig,
-    /// Whether `warmup`/`prepare_assets` may download missing model files:
-    /// `never` (the default of every entry point, as in Ark Core) or
-    /// `missing`.
-    pub download: DownloadPolicy,
-    /// The categories that may download; unset: every configured category.
-    pub download_categories: Option<Vec<SecurityCategory>>,
     /// Physical L3 classifier topology: `dedicated` (default) or `multi`.
     pub l3_strategy: L3Strategy,
     /// Calibrated NTDB operating point. Default: `best_promote`.
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
     pub ntdb_decision_threshold_point: NtdbOperatingPoint,
-    /// ONNX execution backend of Ark's own models (Wolf runs on
-    /// `wolf.backend`): `auto` (default), `cpu`, `gpu`, `coreml`, ...
-    pub execution_backend: ExecutionBackend,
-    /// L3 batch execution; unset follows `execution_backend`.
+    /// L3 batch execution; unset follows Core's `execution_backend`.
     pub onnx_batch_mode: Option<OnnxBatchMode>,
-    /// ONNX Runtime session options of Ark's own models (Wolf takes
-    /// `wolf.runtime_options`).
-    pub onnx_runtime: OnnxRuntimeOptions,
     /// The `dynamic_pii` (GLiNER) pipeline's config.
     pub dynamic_pii: DynamicPiiConfig,
     /// The exact decision cache (key `cache`): `storage_location`,
@@ -60,14 +49,10 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             core: ScannerConfig::default(),
-            download: DownloadPolicy::default(),
-            download_categories: None,
             l3_strategy: L3Strategy::default(),
             ntdb_operating_point: NtdbOperatingPoint::default(),
             ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
-            execution_backend: ExecutionBackend::default(),
             onnx_batch_mode: None,
-            onnx_runtime: OnnxRuntimeOptions::default(),
             dynamic_pii: DynamicPiiConfig::default(),
             cache: ExactCacheConfig::default(),
         }
@@ -105,10 +90,11 @@ impl GatewayConfig {
         if self.core.max_input_bytes == Some(0) || self.core.max_findings == Some(0) {
             return Err("max_input_bytes and max_findings must be positive when set".into());
         }
-        if self.onnx_runtime.intra_threads == Some(0) || self.onnx_runtime.inter_threads == Some(0)
-        {
-            return Err("onnx_runtime thread counts must be positive".into());
-        }
+        self.core
+            .warmup_options()
+            .validate()
+            .map_err(|error| error.to_string())?;
+        self.core.onnx_runtime.validate()?;
         if let Some(wolf) = &self.core.wolf {
             crate::ScanExecution::default()
                 .set_wolf(wolf.clone())
@@ -208,6 +194,8 @@ fn parse_key_hex(value: &str) -> Result<CacheEncryptionConfig, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ExecutionBackend;
+    use patronus_ark_core::warmup::DownloadPolicy;
 
     fn parse(json: serde_json::Value) -> Result<GatewayConfig, String> {
         serde_json::from_value(json).map_err(|error| error.to_string())
@@ -225,6 +213,9 @@ mod tests {
             "wolf": {"model": "edge", "execution": {"batch_size": 2}},
             "shell": {"policy_dirs": ["/p"]},
             "download": "missing",
+            "download_categories": ["shell_command"],
+            "download_timeout_ms": 5000,
+            "onnx_runtime": {"intra_threads": 2},
             "l3_strategy": "multi",
             "onnx_batch_mode": "tensor_batch",
             "execution_backend": "cpu",
@@ -240,10 +231,20 @@ mod tests {
         assert!(config.core.gates.cascade.is_some());
         assert_eq!(config.core.cache_root, Some(PathBuf::from("/models")));
         assert_eq!(config.core.wolf.as_ref().unwrap().execution.batch_size, 2);
-        assert_eq!(config.download, DownloadPolicy::Missing);
+        let warmup = config.core.warmup_options();
+        assert_eq!(
+            warmup.download_for(SecurityCategory::ShellCommand),
+            DownloadPolicy::Missing
+        );
+        assert_eq!(
+            warmup.download_for(SecurityCategory::Injection),
+            DownloadPolicy::Never
+        );
+        assert_eq!(warmup.download_timeout_ms, 5000);
         assert_eq!(config.l3_strategy, L3Strategy::Multi);
         assert_eq!(config.onnx_batch_mode, Some(OnnxBatchMode::TensorBatch));
-        assert_eq!(config.execution_backend, ExecutionBackend::Cpu);
+        assert_eq!(config.core.execution_backend, ExecutionBackend::Cpu);
+        assert_eq!(config.core.onnx_runtime.intra_threads, Some(2));
         assert_eq!(config.cache.entry_ttl, Duration::from_secs(60));
         assert!(config.cache.persistent.is_none());
         config.validate().unwrap();
@@ -260,19 +261,9 @@ mod tests {
 
     #[test]
     fn core_wolf_block_is_accepted_as_is() {
-        let config = parse(serde_json::json!({
-            "wolf": {
-                "threshold": 0.7,
-                "backend": "cpu",
-                "runtime_options": {"intra_threads": 2},
-            },
-        }))
-        .unwrap();
+        let config = parse(serde_json::json!({"wolf": {"threshold": 0.7}})).unwrap();
         config.validate().unwrap();
-        let wolf = config.core.wolf.unwrap();
-        assert_eq!(wolf.threshold, Some(0.7));
-        assert_eq!(wolf.backend, ExecutionBackend::Cpu);
-        assert_eq!(wolf.runtime_options.intra_threads, Some(2));
+        assert_eq!(config.core.wolf.unwrap().threshold, Some(0.7));
     }
 
     #[test]
@@ -282,6 +273,8 @@ mod tests {
             serde_json::json!({"download_files": true}),
             serde_json::json!({"gates": {}}),
             serde_json::json!({"wolf_options": {}}),
+            serde_json::json!({"wolf": {"backend": "cpu"}}),
+            serde_json::json!({"wolf": {"runtime_options": {}}}),
             serde_json::json!({"l3_strategy": "nope"}),
             serde_json::json!({"cache": {"dir": "/c"}}),
             serde_json::json!({"cache": {"entry_ttl_seconds": 0}}),
@@ -305,6 +298,10 @@ mod tests {
                 "positive",
             ),
             (serde_json::json!({"max_findings": 0}), "positive"),
+            (
+                serde_json::json!({"download_timeout_ms": 0}),
+                "download timeout",
+            ),
         ] {
             let error = parse(json.clone()).unwrap().validate().unwrap_err();
             assert!(error.contains(message), "{json}: {error}");

@@ -20,7 +20,7 @@ use crate::{
     ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
     SecurityLevel, SecurityRequestState, SecurityScanResult, StageOutcome,
 };
-use patronus_ark_core::ScanReport;
+use patronus_ark_core::{native::NativeEngine, ScanControl, ScanError, ScanReport};
 
 use super::{dynamic_pii_pending_result, SecurityGateway};
 
@@ -30,9 +30,13 @@ pub(super) struct QueueWork {
     execution: ScanExecution,
     metadata: serde_json::Value,
     dynamic_pii: Option<DynamicPiiConfig>,
+    control: ScanControl,
     #[cfg(feature = "test-util")]
     delay_ms: Option<u64>,
 }
+
+/// How often a scan under a [`ScanControl`] checks it while it waits.
+const CONTROL_POLL: Duration = Duration::from_millis(10);
 
 #[derive(Default)]
 struct EnqueueExecutionOptions {
@@ -41,6 +45,7 @@ struct EnqueueExecutionOptions {
     ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
     ark_api_short_injection_utility: bool,
     chunk_overlap_tokens: ChunkOverlapTokens,
+    control: ScanControl,
     #[cfg_attr(not(feature = "test-util"), allow(dead_code))]
     delay_ms: Option<u64>,
 }
@@ -52,8 +57,47 @@ impl SecurityGateway {
         category: SecurityCategory,
         text: &str,
     ) -> ScanReport<SecurityScanResult> {
-        let request_id = self.enqueue_categories(vec![category], text, None);
-        self.drain_request(request_id, text.len())
+        self.scan_categories(&[category], text)
+    }
+
+    /// Scan `categories` of `text` as [`Self::scan_categories`] does, under
+    /// Ark Core's `control`, as Core's
+    /// [`patronus_ark_core::Scanner::scan_with_control`]: its cancellation or
+    /// deadline stops the request wherever it is (queued, L1, L2 or L3) and
+    /// returns [`ScanError::Cancelled`] or [`ScanError::DeadlineExceeded`].
+    pub fn scan_with_control(
+        &self,
+        text: &str,
+        categories: &[SecurityCategory],
+        control: &ScanControl,
+    ) -> Result<ScanReport<SecurityScanResult>, ScanError> {
+        self.scan_inputs(
+            text_inputs(categories.to_vec(), text),
+            text.len(),
+            Some(control),
+        )
+    }
+
+    /// Run `inputs` as one request and wait for its final results; under a
+    /// `control`, until it stops the request.
+    fn scan_inputs(
+        &self,
+        inputs: Vec<ExternalL1Input>,
+        input_bytes: usize,
+        control: Option<&ScanControl>,
+    ) -> Result<ScanReport<SecurityScanResult>, ScanError> {
+        if let Some(control) = control {
+            control.check()?;
+        }
+        let request_id = self.enqueue_work(
+            inputs,
+            serde_json::json!({}),
+            EnqueueExecutionOptions {
+                control: control.cloned().unwrap_or_default(),
+                ..Default::default()
+            },
+        );
+        self.drain_request(request_id, input_bytes, control)
     }
 
     /// Submit a scan to the background L1/L2 worker and return immediately
@@ -222,12 +266,7 @@ impl SecurityGateway {
         metadata: serde_json::Value,
         options: EnqueueExecutionOptions,
     ) -> RequestId {
-        let text = Arc::<str>::from(text.into());
-        let inputs = categories
-            .into_iter()
-            .map(|category| ExternalL1Input::from_shared_text(category, Arc::clone(&text)))
-            .collect();
-        self.enqueue_work(inputs, metadata, options)
+        self.enqueue_work(text_inputs(categories, text), metadata, options)
     }
 
     /// Submit one category scan to the background worker.
@@ -295,6 +334,7 @@ impl SecurityGateway {
             execution,
             metadata,
             dynamic_pii: options.dynamic_pii,
+            control: options.control,
             #[cfg(feature = "test-util")]
             delay_ms: options.delay_ms,
         });
@@ -356,6 +396,7 @@ impl SecurityGateway {
             execution,
             metadata,
             dynamic_pii,
+            control,
             #[cfg(feature = "test-util")]
             delay_ms,
         } = work;
@@ -369,7 +410,7 @@ impl SecurityGateway {
         }
         metrics.checkpoint("before_l1", format!("request_id={request_id}"));
         let raw_l1 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.scan_l1_inputs(&inputs, &execution)
+            self.scan_l1_inputs(&inputs, &execution, &control)
         })) {
             Ok(results) => results,
             Err(_) => {
@@ -377,6 +418,10 @@ impl SecurityGateway {
                 return;
             }
         };
+        if control.check().is_err() {
+            self.abandon_request(&request_id);
+            return;
+        }
         metrics.checkpoint(
             "after_l1",
             format!("request_id={request_id} raw_results={}", raw_l1.len()),
@@ -416,6 +461,7 @@ impl SecurityGateway {
         // L1's answer is final for the modules it decides and for those no
         // later layer can run for; only the others reach L2 and L3.
         let undecided = l1_undecided_inputs(
+            &self.native_engine,
             &inputs,
             &mut l1_results,
             !l1_failures.is_empty(),
@@ -448,6 +494,10 @@ impl SecurityGateway {
             "after_l2_raw",
             format!("request_id={request_id} raw_results={}", raw_l2.len()),
         );
+        if control.check().is_err() {
+            self.abandon_request(&request_id);
+            return;
+        }
         let (mut l2_results, l2_failures) = split_results(raw_l2);
         metrics.checkpoint(
             "after_split_l2",
@@ -625,9 +675,7 @@ impl SecurityGateway {
                 if matches!(event, QueuedSecurityEvent::Finished { .. }) {
                     registry.requests.remove(event.request_id());
                     drop(registry);
-                    self.requests.cancel_finished_runs(event.request_id());
-                    self.l3_worker.remove_request(event.request_id());
-                    self.requests.available.notify_all();
+                    self.release_request_work(event.request_id());
                 }
                 return Some(event);
             }
@@ -660,6 +708,30 @@ impl SecurityGateway {
                     .expect("request registry mutex poisoned"),
             };
         }
+    }
+
+    /// Drop a request a [`ScanControl`] stopped: its registry entry, its
+    /// queued events and its L3 work.
+    fn abandon_request(&self, request_id: &str) {
+        let mut registry = self
+            .requests
+            .state
+            .lock()
+            .expect("request registry mutex poisoned");
+        registry.requests.remove(request_id);
+        registry
+            .ready
+            .retain(|event| event.request_id() != request_id);
+        drop(registry);
+        self.release_request_work(request_id);
+    }
+
+    /// Cancel the running and forget the queued L3 work of a request that
+    /// left the registry.
+    fn release_request_work(&self, request_id: &str) {
+        self.requests.cancel_finished_runs(request_id);
+        self.l3_worker.remove_request(request_id);
+        self.requests.available.notify_all();
     }
 
     /// Return whether a request is running or its terminal event is still queued.
@@ -697,25 +769,37 @@ impl SecurityGateway {
         format!("rq-{id:016x}")
     }
 
-    /// Wait for a request's final results and report them; partial results are skipped.
+    /// Wait for a request's final results and report them; partial results
+    /// are skipped. Under a `control`, check it while waiting: when it stops
+    /// the request, abandon the request and return its error.
     fn drain_request(
         &self,
         request_id: RequestId,
         input_bytes: usize,
-    ) -> ScanReport<SecurityScanResult> {
+        control: Option<&ScanControl>,
+    ) -> Result<ScanReport<SecurityScanResult>, ScanError> {
         let mut results = Vec::new();
-        while let Some(event) = self.consume_matching_event(Some(&request_id), None) {
+        loop {
+            let event =
+                self.consume_matching_event(Some(&request_id), control.map(|_| CONTROL_POLL));
+            if let Some(Err(error)) = control.map(ScanControl::check) {
+                self.abandon_request(&request_id);
+                return Err(error);
+            }
             match event {
-                QueuedSecurityEvent::Result(queued) => {
+                Some(QueuedSecurityEvent::Result(queued)) => {
                     if !is_partial_result(&queued.result) {
                         results.push(queued.result);
                     }
                 }
-                QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_) => {}
-                QueuedSecurityEvent::Finished { .. } => break,
+                Some(QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_)) => {}
+                Some(QueuedSecurityEvent::Finished { .. }) => break,
+                // A poll timeout while the request still runs.
+                None if control.is_some() && self.has_request(&request_id) => {}
+                None => break,
             }
         }
-        scan_report(input_bytes, results)
+        Ok(scan_report(input_bytes, results))
     }
 
     /// Scan text with a caller-provided category subset.
@@ -724,14 +808,14 @@ impl SecurityGateway {
         categories: &[SecurityCategory],
         text: &str,
     ) -> ScanReport<SecurityScanResult> {
-        let request_id = self.enqueue_categories(categories.to_vec(), text, None);
-        self.drain_request(request_id, text.len())
+        self.scan_inputs(text_inputs(categories.to_vec(), text), text.len(), None)
+            .expect("a scan without a control is never stopped")
     }
 
     /// Scan one category through native and registered external scanners.
     pub fn scan_input(&self, input: &ExternalL1Input) -> ScanReport<SecurityScanResult> {
-        let request_id = self.enqueue_input(input.clone(), None);
-        self.drain_request(request_id, input.text.len())
+        self.scan_inputs(vec![input.clone()], input.text.len(), None)
+            .expect("a scan without a control is never stopped")
     }
 
     /// Scan text with every category configured on this gateway.
@@ -1333,6 +1417,15 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
         .collect()
 }
 
+/// One input per category, all sharing `text`.
+fn text_inputs(categories: Vec<SecurityCategory>, text: impl Into<String>) -> Vec<ExternalL1Input> {
+    let text = Arc::<str>::from(text.into());
+    categories
+        .into_iter()
+        .map(|category| ExternalL1Input::from_shared_text(category, Arc::clone(&text)))
+        .collect()
+}
+
 /// The report of a drained request, in the envelope of Ark Core's
 /// [`patronus_ark_core::ScanReport`]: `native` holds the results; each
 /// module's [`ModuleDecision`] moves from its results to the report's
@@ -1354,6 +1447,7 @@ fn scan_report(
             decisions.push(decision);
         }
     }
+    native.retain(|result| result.model != L1_DECISION_MODEL);
     let wolf = native
         .iter()
         .flat_map(|result| &result.layers)
@@ -1368,16 +1462,21 @@ fn scan_report(
 }
 
 /// L1's step of the opt-in cascade (the gate key `cascade`), shared by the
-/// queue and the distributed plan: a module L1 decides (core
-/// [`patronus_ark_core::cascade::Cascade::l1_stage`] at the cascade's module cuts) is final, and so is
-/// an undecided module no later layer can run for (its answer is clear, as
-/// in Core); their L1 results carry Core's L1 decision as `module_decision`. Returns the inputs of the
-/// modules that go on to L2 or L3: without a cascade, every input, as
+/// queue and the distributed plan. Each module's L1 answer is Core's
+/// ([`patronus_ark_core::cascade::Cascade::l1_scan_answer`] over `native`'s
+/// producers) and its decision Core's
+/// ([`patronus_ark_core::cascade::Cascade::decide`]): a module L1 decides is
+/// final, and so is an undecided module no later layer can run for (clear,
+/// as in Core). Its L1 results carry the decision as `module_decision`; a
+/// module that has none (its L1 model answered alone, or its producers ran
+/// without a result) gets one result that carries it. Returns the inputs of
+/// the modules that go on to L2 or L3: without a cascade, every input, as
 /// before. `gate_results` are the L1 gate results of the request. A module
-/// without an L1 result (its rules switched off or not reporting), or any
-/// module of a request whose L1 had a failure (`l1_failed`), is never
-/// decided by L1: it passes on.
+/// no L1 stage ran for, or any module of a request whose L1 had a failure
+/// (`l1_failed`), is never decided by L1: it passes on.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn l1_undecided_inputs(
+    native: &NativeEngine,
     inputs: &[ExternalL1Input],
     l1_results: &mut Vec<SecurityScanResult>,
     l1_failed: bool,
@@ -1391,44 +1490,45 @@ pub(super) fn l1_undecided_inputs(
     let mut undecided = Vec::new();
     for input in inputs {
         let module = input.category;
-        let heuristic = l1_results
-            .iter()
-            .any(|result| result.category == module.as_str());
-        // A module without heuristic results is decided only by its L1 model,
-        // as in Core (rules switched off, model on).
-        if l1_failed || !(heuristic || cascade.l1_model(module).is_some()) {
-            undecided.push(input.clone());
-            continue;
-        }
-        // Core's L1 answer, with the cascade's L1 model of the module.
-        let stage = cascade.l1_answer(
+        let stage = cascade.l1_scan_answer(
+            execution,
+            native,
             module,
-            execution.gates().mode(module),
-            heuristic,
             l1_results.iter().map(|result| &result.native),
             &input.text,
         );
-        if !heuristic && !stage.layers().is_empty() {
-            l1_results.push(l1_model_result(module, &stage));
+        let mut has_result = l1_results
+            .iter()
+            .any(|result| result.category == module.as_str());
+        if !l1_failed && !has_result && !stage.layers().is_empty() {
+            l1_results.push(l1_decision_result(module, stage.layers(), stage.score));
+            has_result = true;
         }
-        // Undecided with no later layer to run: L1's answer is final and clear.
-        let outcome = match stage.outcome {
-            StageOutcome::Escalate
-                if super::later_layer_may_run(execution, metadata, gate_results, module) =>
-            {
-                undecided.push(input.clone());
-                continue;
-            }
-            StageOutcome::Escalate => StageOutcome::Clear,
-            decided => decided,
-        };
-        let decision = ModuleDecision {
+        if l1_failed
+            || !stage.ran()
+            || (stage.outcome == StageOutcome::Escalate
+                && super::later_layer_may_run(execution, metadata, gate_results, module))
+        {
+            undecided.push(input.clone());
+            continue;
+        }
+        // No later layer runs here: Core's decision without L2 and L3.
+        let decision = match cascade.decide(
+            execution,
             module,
-            outcome,
-            decided_by: stage.decided_by,
-            score: stage.score,
-            layers: stage.layers().to_vec(),
+            &input.text,
+            stage,
+            gate_results,
+            &mut [],
+            None,
+            &ScanControl::default(),
+        ) {
+            Ok(Some(decision)) => decision,
+            _ => unreachable!("an L1 stage ran and no later layer runs"),
         };
+        if !has_result {
+            l1_results.push(l1_decision_result(module, &[], decision.score));
+        }
         for result in l1_results
             .iter_mut()
             .filter(|result| result.category == module.as_str())
@@ -1439,27 +1539,38 @@ pub(super) fn l1_undecided_inputs(
     undecided
 }
 
-/// The published result of a module only its L1 model answered (no
-/// heuristic result): the model's layer as the module's L1 result.
-fn l1_model_result(
+/// The model of the result that carries the decision of a module whose
+/// producers ran without a result; [`scan_report`] leaves it out of `native`,
+/// as Core reports only the decision.
+const L1_DECISION_MODEL: &str = "cascade.l1_decision";
+
+/// The published L1 result of a module that has no other: the L1 model's
+/// `layers` when the model answered, else a clear result at the heuristic's
+/// `score` that carries the module's decision.
+fn l1_decision_result(
     module: SecurityCategory,
-    stage: &patronus_ark_core::cascade::L1Stage,
+    layers: &[crate::LayerResult],
+    score: f64,
 ) -> SecurityScanResult {
-    let layers = stage.layers().to_vec();
-    let last = layers.last().expect("the L1 model ran");
+    let (class_name, confidence, model) = match layers.last() {
+        Some(last) => (
+            last.class_name.clone(),
+            last.confidence,
+            last.details
+                .get("model")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(patronus_ark_core::detectors::text::L1_MODEL_LAYER),
+        ),
+        None => ("safe".to_string(), 1.0 - score, L1_DECISION_MODEL),
+    };
     patronus_ark_core::NativeResult {
         category: module.as_str().to_string(),
-        class_name: last.class_name.clone(),
-        confidence: last.confidence,
+        class_name,
+        confidence,
         level: SecurityLevel::L1.as_str().to_string(),
-        model: last
-            .details
-            .get("model")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(patronus_ark_core::detectors::text::L1_MODEL_LAYER)
-            .to_string(),
+        model: model.to_string(),
         duration_ms: layers.iter().map(|layer| layer.duration_ms).sum(),
-        layers,
+        layers: layers.to_vec(),
         evidence_spans: Vec::new(),
         label_scores: Vec::new(),
         decision: None,
@@ -1735,6 +1846,7 @@ mod tests {
         ];
 
         let undecided = l1_undecided_inputs(
+            &NativeEngine::new(&[SecurityCategory::Pii, SecurityCategory::Injection]),
             &inputs,
             &mut results,
             false,
@@ -1773,6 +1885,43 @@ mod tests {
                 )),
                 None
             ]
+        );
+    }
+
+    #[test]
+    fn a_module_whose_producers_report_nothing_gets_cores_clear_decision() {
+        let module = SecurityCategory::Jailbreak;
+        let gates = crate::ScanGateMatrix {
+            cascade: Some(patronus_ark_core::cascade::Cascade::default()),
+            ..crate::ScanGateMatrix::default()
+        };
+        let text = "What is the weather like today?";
+        let mut results = Vec::new();
+        let undecided = l1_undecided_inputs(
+            &NativeEngine::new(&[module]),
+            &[ExternalL1Input::new(module, text)],
+            &mut results,
+            false,
+            &ScanExecution::with_gates(SecurityLevel::L3, gates.clone()),
+            &serde_json::json!({}),
+            &[],
+        );
+        assert!(undecided.is_empty());
+        let report = scan_report(text.len(), results);
+        assert!(report.native.is_empty());
+
+        let core = patronus_ark_core::Scanner::new(patronus_ark_core::ScannerConfig {
+            categories: vec![module],
+            gates,
+            ..patronus_ark_core::ScannerConfig::default()
+        })
+        .unwrap()
+        .scan(text)
+        .unwrap();
+        assert!(core.native.is_empty());
+        assert_eq!(
+            serde_json::to_value(report.decision).unwrap(),
+            serde_json::to_value(core.decision).unwrap()
         );
     }
 

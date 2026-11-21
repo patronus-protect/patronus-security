@@ -1,25 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! NTDB L2 packages on Core's model mechanism: the package's [`ModelSpec`] pins and
-//! fetches its files, while the file list comes from the package's own NTDB manifest.
-//! This module keeps what is NTDB specific: manifest-first fetching, the shared
-//! embedder cache with its package links, and the migration of older embedder layouts.
+//! NTDB L2 packages on Core's model mechanism: Core's
+//! [`ModelSpec::prepare_package`] pins, fetches and links a package from the
+//! file list of its own NTDB manifest. This module keeps what is NTDB
+//! specific: that file list, the shared embedder files with their cache
+//! directory and freshness, and the migration of older embedder layouts.
 //!
-//! [`ModelSpec`]: patronus_ark_core::model_assets::ModelSpec
+//! [`ModelSpec::prepare_package`]: patronus_ark_core::model_assets::ModelSpec::prepare_package
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use patronus_ark_core::model_assets::{fetch_files, ModelFile, Progress};
+use patronus_ark_core::{
+    model_assets::{
+        link_shared_file, ModelSpec, PackageFiles, PrepareOptions, Progress, SharedFile,
+    },
+    warmup::DownloadPolicy,
+    ScanError,
+};
 
-use crate::{SecurityAssetProgressCallback, SecurityCategory, SecurityLevel};
+use crate::{SecurityAssetProgressCallback, SecurityCategory};
 
 use crate::ml::ntdb_executor::manifest::PackageManifest;
 
 use super::{
     mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
     progress_reporter,
-    specs::{NtdbL2PackageAssetSpec, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET},
+    specs::{NTDB_PACKAGE_MANIFEST, UNIFIED_L3_ASSET},
 };
 
 #[derive(Clone)]
@@ -29,62 +36,32 @@ struct SharedEmbedderFile {
     package_file: PathBuf,
 }
 
-/// Return NTDB L2 package entries needed for a category up to `max_level`.
-pub fn ntdb_l2_package_assets(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-) -> Vec<NtdbL2PackageAssetSpec> {
-    NTDB_L2_PACKAGE_MANIFEST
-        .iter()
-        .copied()
-        .filter(|asset| asset.category == category && asset.level <= max_level)
-        .collect()
-}
-
-/// Return the NTDB L2 package entry for a public model name.
-pub fn ntdb_l2_package_asset(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
-) -> Option<NtdbL2PackageAssetSpec> {
-    ntdb_l2_package_assets(category, max_level)
-        .into_iter()
-        .find(|asset| asset.spec.id == model)
-}
-
-/// Check whether an official NTDB L2 package cache below the model cache `root` matches
-/// its pinned revision.
-pub fn ntdb_l2_package_assets_present(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
-    root: &Path,
-) -> bool {
-    ntdb_l2_package_asset(category, max_level, model).is_some_and(|asset| {
-        let package_dir = asset.spec.cache_dir(root);
-        let manifest_path = package_dir.join("manifest.json");
-        if !manifest_path.is_file() || !asset.spec.is_current(&package_dir) {
-            return false;
-        }
-        let Ok(manifest_json) = fs::read_to_string(manifest_path) else {
-            return false;
-        };
-        let Ok(manifest) =
-            crate::ml::ntdb_executor::manifest::parse_package_manifest(&manifest_json)
-        else {
-            return false;
-        };
-        if manifest.validate().is_err() {
-            return false;
-        }
-        let matrix = package_dir
-            .join("minilm")
-            .join(&manifest.minilm.embedding_matrix_file);
-        let elements = manifest.minilm.vocab_size as u64 * manifest.minilm.embedding_dim as u64;
-        fs::metadata(matrix)
-            .is_ok_and(|metadata| metadata.len() == elements * 2 || metadata.len() == elements * 4)
-            && l3_compatible_tokenizer_matches_unified(&manifest, &package_dir, root)
-    })
+/// Whether the NTDB L2 package `spec` below the model cache `root` is the
+/// complete pinned revision: its manifest valid, its embedding matrix of the
+/// manifest's shape and an L3-compatible tokenizer the unified L3's.
+pub fn ntdb_l2_package_current(spec: &ModelSpec, root: &Path) -> bool {
+    let package_dir = spec.cache_dir(root);
+    let manifest_path = package_dir.join(NTDB_PACKAGE_MANIFEST);
+    if !manifest_path.is_file() || !spec.is_current(&package_dir) {
+        return false;
+    }
+    let Ok(manifest_json) = fs::read_to_string(manifest_path) else {
+        return false;
+    };
+    let Ok(manifest) = crate::ml::ntdb_executor::manifest::parse_package_manifest(&manifest_json)
+    else {
+        return false;
+    };
+    if manifest.validate().is_err() {
+        return false;
+    }
+    let matrix = package_dir
+        .join("minilm")
+        .join(&manifest.minilm.embedding_matrix_file);
+    let elements = manifest.minilm.vocab_size as u64 * manifest.minilm.embedding_dim as u64;
+    fs::metadata(matrix)
+        .is_ok_and(|metadata| metadata.len() == elements * 2 || metadata.len() == elements * 4)
+        && l3_compatible_tokenizer_matches_unified(&manifest, &package_dir, root)
 }
 
 fn l3_compatible_tokenizer_matches_unified(
@@ -110,90 +87,67 @@ fn l3_compatible_tokenizer_matches_unified(
         && same_cached_file(&package_tokenizer, &unified_tokenizer).unwrap_or(false)
 }
 
-/// Download a missing NTDB L2 package from Hugging Face below the model cache `root`.
-///
-/// The package is downloaded manifest-first: `manifest.json` is fetched from
-/// the package prefix, then runtime files referenced by that manifest are
-/// downloaded into the same local package tree.
-pub fn download_ntdb_l2_package(
+/// Prepare the NTDB L2 package `spec` of `category` below the model cache
+/// `root` with Core's [`ModelSpec::prepare_package`]: the manifest first,
+/// then the runtime files it lists; the shared embedder files go to their
+/// shared cache directory (fetched again when stale) and are linked into the
+/// package. Under [`DownloadPolicy::Never`] a missing or stale file fails.
+pub fn prepare_ntdb_l2_package(
+    spec: &ModelSpec,
     category: SecurityCategory,
-    max_level: SecurityLevel,
-    model: &str,
     root: &Path,
+    download: DownloadPolicy,
     progress: Option<&SecurityAssetProgressCallback>,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let asset = ntdb_l2_package_asset(category, max_level, model).ok_or_else(|| {
-        format!(
-            "missing NTDB L2 asset spec for {}/{}",
-            category.as_str(),
-            model
-        )
-    })?;
-    let spec = asset.spec;
-    let report = progress_reporter(progress, asset.category, spec.id);
-    let report = report.as_ref().map(|report| report as &Progress<'_>);
-    let package_dir = spec.cache_dir(root);
-    let manifest_dest = package_dir.join("manifest.json");
-    let revision_matches = spec.is_current(&package_dir);
-    let fetch = |relative: &str, dest: PathBuf| ModelFile {
-        required: asset.required,
-        ..spec.file(relative, dest)
-    };
-
-    if !revision_matches || !manifest_dest.exists() {
-        fetch_files(&[fetch("manifest.json", manifest_dest.clone())], 1, report)?;
+) -> Result<PathBuf, ScanError> {
+    let report = progress_reporter(progress, category, spec.id);
+    fn asset(error: impl std::fmt::Display) -> ScanError {
+        ScanError::Asset(error.to_string())
     }
-
-    let manifest_json = fs::read_to_string(&manifest_dest).map_err(|err| {
-        format!(
-            "failed to read downloaded NTDB L2 manifest {}: {err}",
-            manifest_dest.display()
-        )
-    })?;
-    let manifest = crate::ml::ntdb_executor::manifest::parse_package_manifest(&manifest_json)?;
-    let shared_embedder_files = ntdb_l2_shared_embedder_files(&manifest, root, &package_dir)?;
-    migrate_legacy_shared_embedder_files(&manifest, &shared_embedder_files)?;
-    let shared_relative_paths = shared_embedder_files
-        .iter()
-        .map(|file| file.relative_path.clone())
-        .collect::<HashSet<_>>();
-
-    let manifest_files = ntdb_l2_package_manifest_files_from_manifest(&manifest)?;
-    let mut fetches = Vec::new();
-    let mut refreshed = Vec::new();
-    for file in &shared_embedder_files {
-        if shared_embedder_refresh_required(revision_matches, &manifest, file, root)? {
-            fetches.push(fetch(&file.relative_path, file.shared_file.clone()));
-            refreshed.push(file);
-        } else {
-            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
-        }
-    }
-    for relative_path in &manifest_files {
-        if shared_relative_paths.contains(relative_path) {
-            continue;
-        }
-        let dest_file = package_dir.join(relative_path);
-        if revision_matches && dest_file.exists() {
-            continue;
-        }
-        fetches.push(fetch(relative_path, dest_file));
-    }
-
-    fetch_files(&fetches, manifest_files.len() + 1, report)?;
-    for file in refreshed {
-        link_shared_embedder_file(&file.shared_file, &file.package_file)?;
-    }
-    spec.mark_current(&package_dir)?;
-
-    if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
-        log::warn!(
-            "failed to prepare compact tokenizer for {}: {err}; tokenizer.json remains available",
-            package_dir.display()
-        );
-    }
-
-    Ok(package_dir)
+    spec.prepare_package(
+        root,
+        NTDB_PACKAGE_MANIFEST,
+        |package_dir, current| {
+            let manifest_path = package_dir.join(NTDB_PACKAGE_MANIFEST);
+            let manifest_json = fs::read_to_string(&manifest_path).map_err(|error| {
+                ScanError::Asset(format!(
+                    "failed to read NTDB L2 manifest {}: {error}",
+                    manifest_path.display()
+                ))
+            })?;
+            let manifest =
+                crate::ml::ntdb_executor::manifest::parse_package_manifest(&manifest_json)
+                    .map_err(asset)?;
+            let shared =
+                ntdb_l2_shared_embedder_files(&manifest, root, package_dir).map_err(asset)?;
+            migrate_legacy_shared_embedder_files(&manifest, &shared).map_err(asset)?;
+            let shared_paths = shared
+                .iter()
+                .map(|file| file.relative_path.as_str())
+                .collect::<HashSet<_>>();
+            let files = ntdb_l2_package_manifest_files_from_manifest(&manifest)
+                .map_err(asset)?
+                .into_iter()
+                .filter(|file| !shared_paths.contains(file.as_str()))
+                .collect();
+            let shared = shared
+                .iter()
+                .map(|file| {
+                    Ok(SharedFile {
+                        relative: file.relative_path.clone(),
+                        path: file.shared_file.clone(),
+                        current: !shared_embedder_refresh_required(current, &manifest, file, root)
+                            .map_err(asset)?,
+                    })
+                })
+                .collect::<Result<_, ScanError>>()?;
+            Ok(PackageFiles { files, shared })
+        },
+        &PrepareOptions {
+            download,
+            generate: false,
+            progress: report.as_ref().map(|report| report as &Progress<'_>),
+        },
+    )
 }
 
 fn prepare_downloaded_compact_tokenizer(
@@ -282,7 +236,10 @@ fn link_compact_tokenizer(
     if shared_compact_path == package_compact_path {
         return Ok(());
     }
-    link_shared_embedder_file(shared_compact_path, &package_compact_path)
+    Ok(link_shared_file(
+        shared_compact_path,
+        &package_compact_path,
+    )?)
 }
 
 /// Return all runtime files referenced by an NTDB v4 package manifest.
@@ -475,10 +432,10 @@ fn migrate_legacy_shared_embedder_files(
             clone_cached_file(reference, &file.shared_file)?;
         }
         for legacy_file in legacy_files {
-            link_shared_embedder_file(&file.shared_file, &legacy_file)?;
+            link_shared_file(&file.shared_file, &legacy_file)?;
         }
         if file.shared_file.is_file() {
-            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
+            link_shared_file(&file.shared_file, &file.package_file)?;
         }
     }
     Ok(())
@@ -605,42 +562,6 @@ fn sanitize_shared_embedder_identity(identity: &str) -> String {
     } else {
         sanitized
     }
-}
-
-fn link_shared_embedder_file(
-    shared_file: &Path,
-    package_file: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(parent) = package_file.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    if fs::symlink_metadata(package_file).is_ok() {
-        fs::remove_file(package_file)?;
-    }
-    symlink_or_link_file(shared_file, package_file)
-}
-
-#[cfg(unix)]
-fn symlink_or_link_file(source: &Path, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    std::os::unix::fs::symlink(source, dest)?;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn symlink_or_link_file(source: &Path, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    match fs::hard_link(source, dest) {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            std::os::windows::fs::symlink_file(source, dest)?;
-            Ok(())
-        }
-    }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn symlink_or_link_file(source: &Path, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    fs::hard_link(source, dest)?;
-    Ok(())
 }
 
 fn collect_json_path_values(
@@ -867,12 +788,7 @@ mod tests {
     #[test]
     fn current_l2_revision_is_not_ready_when_its_shared_tokenizer_is_stale() {
         let root = temp_dir("stale_shared_tokenizer_presence");
-        let asset = ntdb_l2_package_asset(
-            SecurityCategory::Injection,
-            SecurityLevel::L3,
-            crate::assets::WOLF_PIPELINE_MODEL,
-        )
-        .unwrap();
+        let asset = crate::assets::specs::NTDB_INJECTION;
         let package_dir = asset.spec.cache_dir(&root);
         fs::create_dir_all(package_dir.join("tokenizer")).unwrap();
         fs::create_dir_all(package_dir.join("minilm")).unwrap();
@@ -898,23 +814,13 @@ mod tests {
         fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
         fs::write(&unified_tokenizer, b"current tokenizer").unwrap();
 
-        assert!(!ntdb_l2_package_assets_present(
-            SecurityCategory::Injection,
-            SecurityLevel::L3,
-            crate::assets::WOLF_PIPELINE_MODEL,
-            &root,
-        ));
+        assert!(!ntdb_l2_package_current(&asset.spec, &root));
         fs::copy(
             &unified_tokenizer,
             package_dir.join("tokenizer/tokenizer.json"),
         )
         .unwrap();
-        assert!(ntdb_l2_package_assets_present(
-            SecurityCategory::Injection,
-            SecurityLevel::L3,
-            crate::assets::WOLF_PIPELINE_MODEL,
-            &root,
-        ));
+        assert!(ntdb_l2_package_current(&asset.spec, &root));
 
         fs::remove_dir_all(root).unwrap();
     }
@@ -1046,25 +952,6 @@ mod tests {
             .to_string()
             .contains("conflicting cached NTDB shared embedder files"));
         assert!(!files[1].shared_file.exists());
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn link_shared_embedder_file_replaces_package_copy_with_symlink() {
-        let root = temp_dir("shared_link");
-        let shared_file = root.join("shared/tokenizer/tokenizer.json");
-        let package_file = root.join("package/tokenizer/tokenizer.json");
-        fs::create_dir_all(shared_file.parent().unwrap()).unwrap();
-        fs::create_dir_all(package_file.parent().unwrap()).unwrap();
-        fs::write(&shared_file, "shared").unwrap();
-        fs::write(&package_file, "package-copy").unwrap();
-
-        link_shared_embedder_file(&shared_file, &package_file).unwrap();
-
-        assert_eq!(fs::read_link(&package_file).unwrap(), shared_file);
-        assert_eq!(fs::read_to_string(&package_file).unwrap(), "shared");
 
         fs::remove_dir_all(root).unwrap();
     }

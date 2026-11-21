@@ -1072,8 +1072,8 @@ mod download_policy {
                 vec![SecurityCategory::Injection, SecurityCategory::Pii],
                 SecurityLevel::L2,
             );
-            config.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
-            config.download_categories = Some(vec![SecurityCategory::Injection]);
+            config.core.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
+            config.core.download_categories = Some(vec![SecurityCategory::Injection]);
             config
         })
         .unwrap();
@@ -1089,7 +1089,7 @@ mod download_policy {
                 vec![SecurityCategory::Injection],
                 SecurityLevel::L2,
             );
-            config.download_categories = Some(vec![SecurityCategory::Injection]);
+            config.core.download_categories = Some(vec![SecurityCategory::Injection]);
             config
         })
         .unwrap();
@@ -1104,7 +1104,7 @@ mod download_policy {
                 vec![SecurityCategory::Injection],
                 SecurityLevel::L2,
             );
-            config.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
+            config.core.download = patronus_ark_core::warmup::DownloadPolicy::Missing;
             config
         })
         .unwrap();

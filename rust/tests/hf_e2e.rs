@@ -35,7 +35,7 @@ fn hf_ntdb_l2_download_warmup_smoke() {
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L2);
         config.core.cache_root = Some(dir.clone());
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();
@@ -106,7 +106,7 @@ fn hf_four_chunk_injection_fixture_is_not_benign() {
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L2);
         config.core.cache_root = Some(model_dir());
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();
@@ -153,7 +153,7 @@ fn hf_short_german_greeting_is_not_an_injection() {
             SecurityLevel::L3,
         );
         config.core.cache_root = Some(model_dir());
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();
@@ -191,7 +191,7 @@ fn hf_shell_command_download_warmup_smoke() {
         let mut config =
             GatewayConfig::new(vec![SecurityCategory::ShellCommand], SecurityLevel::L1);
         config.core.cache_root = Some(dir.clone());
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();
@@ -256,7 +256,7 @@ fn hf_product_asset_sync_progress_smoke() {
     let scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(categories, SecurityLevel::L3);
         config.core.cache_root = Some(dir.clone());
-        config.download = DownloadPolicy::Missing;
+        config.core.download = DownloadPolicy::Missing;
         config
     })
     .unwrap();
@@ -404,8 +404,8 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
         config.core.cache_root = Some(model_dir.clone());
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(categories.clone());
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(categories.clone());
         config
     })
     .unwrap();
@@ -439,7 +439,7 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     let mut cached_scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
         config.core.cache_root = Some(model_dir.clone());
-        config.download_categories = Some(categories);
+        config.core.download_categories = Some(categories);
         config
     })
     .unwrap();

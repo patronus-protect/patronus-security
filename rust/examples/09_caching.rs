@@ -250,8 +250,8 @@ fn new_scanner(
         SecurityCategory::DynamicPii,
     ];
     let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
-    config.download = DownloadPolicy::Missing;
-    config.download_categories = Some(categories);
+    config.core.download = DownloadPolicy::Missing;
+    config.core.download_categories = Some(categories);
     config.cache = cache_config;
     config.l3_strategy = strategy;
     if strategy == L3Strategy::Multi {

@@ -1,27 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::path::{Path, PathBuf};
 
-use crate::{SecurityAssetProgressCallback, SecurityCategory, SecurityLevel};
+use crate::{SecurityAssetProgressCallback, SecurityCategory};
 use patronus_ark_core::{
     model_assets::{ModelSpec, PrepareOptions, Progress},
     warmup::DownloadPolicy,
     ScanError,
 };
-
-#[derive(Debug, Clone, Copy)]
-/// A manifest-first NTDB L2 package declared for Hugging Face download.
-pub struct NtdbL2PackageAssetSpec {
-    /// Scanner category that owns this package.
-    pub category: SecurityCategory,
-    /// Minimum security level that needs this package.
-    pub level: SecurityLevel,
-    /// The pinned package: its id is the public model identifier used by gates and scan
-    /// results, its source prefix the package directory inside the repository, and its
-    /// environment override a local export that replaces the cached package.
-    pub spec: ModelSpec,
-    /// Whether missing or failed downloads should block `warmup`.
-    pub required: bool,
-}
 
 #[derive(Debug, Clone, Copy)]
 /// A revision-pinned model bundle used by a standalone pipeline.
@@ -30,7 +15,9 @@ pub struct PipelineModelAssetSpec {
     pub category: SecurityCategory,
     /// The pinned bundle below the model cache; its id is the public model name.
     pub spec: ModelSpec,
-    /// Files required to load and validate the bundle.
+    /// Files required to load and validate the bundle; for an NTDB L2
+    /// package its manifest ([`NTDB_PACKAGE_MANIFEST`]), which lists the
+    /// others (see [`super::prepare_ntdb_l2_package`]).
     pub files: &'static [&'static str],
 }
 
@@ -237,9 +224,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     },
 ];
 
-pub const NTDB_INJECTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_INJECTION: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         WOLF_PIPELINE_MODEL,
         WOLF_SMALL.repository,
@@ -248,12 +234,11 @@ pub const NTDB_INJECTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_INJECTION_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_SENSITIVE_DOCUMENT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_SENSITIVE_DOCUMENT: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::SensitiveDocument,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "orca-sonar-document-classifier",
         "patronus-studio/orca-sonar-document-classifier",
@@ -262,12 +247,11 @@ pub const NTDB_SENSITIVE_DOCUMENT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSp
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_TOOL_CLASS: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_TOOL_CLASS: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolClass,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "unified-v3-tool-class",
         "patronus-studio/husky-sight-tool-type-classifier",
@@ -276,12 +260,11 @@ pub const NTDB_TOOL_CLASS: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_TOOL_CLASS_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_TOOL_ACTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_TOOL_ACTION: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolAction,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "unified-v3-tool-action",
         "patronus-studio/husky-paw-tool-action-classifier",
@@ -290,12 +273,11 @@ pub const NTDB_TOOL_ACTION: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_TOOL_ACTION_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "tool_tags_sink_external",
         "patronus-studio/husky-nose-tool-security-properties-classifier",
@@ -304,12 +286,11 @@ pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: NtdbL2PackageAssetSpec = NtdbL2PackageAs
     )
     .with_source_prefix("l2/sink_external")
     .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "tool_tags_source_sensitive",
         "patronus-studio/husky-nose-tool-security-properties-classifier",
@@ -318,12 +299,11 @@ pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: NtdbL2PackageAssetSpec = NtdbL2Packag
     )
     .with_source_prefix("l2/source_sensitive")
     .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "tool_tags_source_untrusted",
         "patronus-studio/husky-nose-tool-security-properties-classifier",
@@ -332,12 +312,11 @@ pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: NtdbL2PackageAssetSpec = NtdbL2Packag
     )
     .with_source_prefix("l2/source_untrusted")
     .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_ROUTING: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_ROUTING: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Routing,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "unified-v3-routing",
         "patronus-studio/panther-read-intent-classifier",
@@ -346,12 +325,11 @@ pub const NTDB_ROUTING: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_ROUTING_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
-pub const NTDB_THREAT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
+pub const NTDB_THREAT: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::UnsafeAction,
-    level: SecurityLevel::L2,
     spec: ModelSpec::new(
         "unified-v3-threat",
         "patronus-studio/wolf-defender-threat-classifier",
@@ -360,11 +338,14 @@ pub const NTDB_THREAT: NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec {
     )
     .with_source_prefix("l2")
     .with_env_override("PATRONUS_NTDB_THREAT_DIR"),
-    required: true,
+    files: &[NTDB_PACKAGE_MANIFEST],
 };
 
+/// The file of an NTDB L2 package that lists its other files.
+pub const NTDB_PACKAGE_MANIFEST: &str = "manifest.json";
+
 /// Every NTDB L2 package; packages live below `<category dir>/l2_ntdb` of the model cache.
-pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
+pub const NTDB_L2_PACKAGE_MANIFEST: &[PipelineModelAssetSpec] = &[
     NTDB_INJECTION,
     NTDB_SENSITIVE_DOCUMENT,
     NTDB_TOOL_CLASS,

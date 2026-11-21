@@ -228,7 +228,6 @@ mod tests {
             .expect("unknown precision");
         let mut config = WolfConfig::new(&directory, 0.8);
         config.precision = precision;
-        config.backend = crate::ExecutionBackend::Cpu;
         config.execution = WolfExecutionOptions {
             window_tokens: Some(32),
             overlap_tokens: Some(0),
@@ -236,7 +235,8 @@ mod tests {
         };
         let batch = vec![vec![400; 30], vec![1500; 9], vec![400; 23], vec![500; 1]];
         let (actual, model, bos, eos, pad) = {
-            let mut runner = WolfRunner::new(&config).unwrap();
+            let mut runner =
+                WolfRunner::new(&config, crate::ExecutionBackend::Cpu, Default::default()).unwrap();
             (
                 runner.infer_batch(&batch, &ScanControl::default()).unwrap(),
                 runner.model_path.clone(),
@@ -258,9 +258,9 @@ mod tests {
             mask[row * 32..row * 32 + tokens.len() + 2].fill(1);
         }
         let (mut builder, _) = crate::onnx::configured_session_builder(
-            config.backend,
+            crate::ExecutionBackend::Cpu,
             Some(&directory),
-            config.runtime_options,
+            Default::default(),
         )
         .unwrap();
         builder = builder.with_independent_thread_pool().unwrap();

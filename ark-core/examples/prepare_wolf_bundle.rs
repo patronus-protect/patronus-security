@@ -39,7 +39,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     ensure_mmbert_compact_tokenizer("wolf-defender-small", &output.join("tokenizer.json"))?
         .ok_or("unsupported tokenizer")?;
-    let mut runner = WolfRunner::new(&WolfConfig::new(&output, threshold))?;
+    let mut runner = WolfRunner::new(
+        &WolfConfig::new(&output, threshold),
+        Default::default(),
+        Default::default(),
+    )?;
     let probe = runner.scan("Please summarize the meeting agenda.")?;
     println!(
         "{}",
