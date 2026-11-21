@@ -362,6 +362,7 @@ tasks:
   # injection DE 0 -> 11% (53-56% with a German-only cut), EN 49 -> 58%, unsafe_action DE 1 -> 34%.
   # S11 lands before the class scorers (JB02, PX02, ...) pick a fastText-type candidate.
   - id: S11
+    status: done
     title: German positives and per-language cuts for the L1 text models — native German positives in training (template-split generator rows; open German sets such as translated deepset prompt-injections/Gandalf, the German part of PolyGuard/nemotron, translated train halves of wildjailbreak/jackhhao; licences checked, no licence-encumbered sets), German oversampling/translation augmentation, a per-language detect cut each at 0.1% FPR on that language's benign pool, and a more varied German benign pool than germanquad (chat, mail, code comments)
     type: scorer
     deps: [S10]
