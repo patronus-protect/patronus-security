@@ -112,3 +112,30 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Holdout `ark_blind` | R05 DE+EN (entscheidet), Seed-Teil der Einbettung |
 | Hard Negatives | Merk-Bitten über sich selbst, Erinnerungs-Apps, Memory-Doku, Mail-Signaturen |
 | Lücke | keine öffentlichen Daten; Ergebnis gilt nur auf `ark_blind`, so im Scoreboard markiert |
+
+## 13. Stand MP01 (2026-11-21)
+
+Acht eigene DE/EN-Regeln in `source_derived_coverage_0_1_6.json` (`ark.injection.memory.*_{en,de}`), je
+Familie ein Paar: `persistent_directive` (Speicherziel „your memory/dein Gedächtnis“ oder „remember/merke
+dir“ + Dauer, danach in derselben Klausel ein Verhaltensmarker: always/ab jetzt/künftig, „treat every
+message from …“, gefälschte Freigabe oder Rolle „has approved … in advance/vorab freigegeben“,
+„verified/verifiziert“, „is now the admin/ist jetzt Administrator“ — deckt damit auch `state_claim`),
+`conditional_trigger` (whenever/if/next time + Dritte: anyone/the user/a customer, jemand/der Nutzer +
+Zukunftsmarker, nach Komma ein Imperativ reply/tell/send, antworte/sag/schicke; „you/du“ als Subjekt
+zählt nicht), `self_replication` (append/copy this paragraph/instruction to every response/e-mail/note,
+propagate this instruction; füge/kopiere diesen Absatz/diese Anweisung an/in jede/alle Antworten/Notizen),
+`hidden_store` (Speichern + „do not mention this to the user“/„erwähne das dem Nutzer gegenüber nicht“).
+Jede Regel verlangt einen Klauselanfang (ein Zitatzeichen davor zählt nicht; JSON `"key": "` schon),
+hat einen Literal-Prefilter und ASCII-Wortgrenzen; Verneinung im Match verwirft ihn (außer `hidden_store`).
+
+- Kanonische ID: Alle melden unter `skillspector.persistent_override` (Tabelle → `memory_poisoning`);
+  `upstream_id` nennt die Familie. Eigene IDs je Familie brauchen ein Scorer-Gewicht (MP02).
+- Gegenkontext: Für `memory_poisoning` zählt eine Verneinung *hinter* dem Match nicht mehr als Gegenkontext
+  („… und nie eine Bestätigung braucht“ ist Inhalt des Gespeicherten), analog zu Exfiltration
+  (Geheimhaltung) und Jailbreak (Einschränkungen); eine Verneinung davor („Never store …“) zählt weiter.
+- Dev (Regex-Replay über alle Zeilen): 0 von 41 672 Benign-Zeilen; `memory_poisoning`-Zeilen 83 von 83.
+  Über die Core-Kaskade (`threat_cascade`, kalibrierte Scoreboard-Konfiguration) 0 → 77 von 83; die sechs
+  übrigen haben einen Einleitungssatz mit „tests“/„Tests“, den der Lead-in-Gegenkontext (`test_code`) als
+  Testkontext liest. Dev hat nur vier Vorlagen; die Goldens decken die übrigen Formen.
+- `memory_reset` und `store_hint` bleiben ohne neue Regel (Hard Negatives „Vergiss die letzte Nachricht“
+  zeigen die Abgrenzung); `decoded` läuft über die dekodierten Sichten.
