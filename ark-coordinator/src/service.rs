@@ -519,7 +519,7 @@ mod tests {
         Arc<AtomicBool>,
     ) {
         use crate::config::{
-            CoordinatorApiKey, CoordinatorAuthConfig, Cube, GatewayConfig, ServerConfig,
+            CoordinatorApiKey, CoordinatorAuthConfig, Cube, FleetConfig, ServerConfig,
         };
 
         let cube_posts = Arc::new(AtomicUsize::new(0));
@@ -603,7 +603,7 @@ mod tests {
                     key_hash: format!("{:x}", Sha256::digest(b"test-key")),
                 }],
             },
-            gateway: GatewayConfig {
+            gateway: FleetConfig {
                 redis_url_file: "unused".into(),
                 cube_token_file: "unused".into(),
                 cubes: vec![cube.clone()],
