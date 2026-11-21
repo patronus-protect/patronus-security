@@ -88,7 +88,7 @@ def test_check_sheet_rejects_missing_verdicts_relabels_and_short_sets(dev_pool):
 def test_summary_counts_classes_languages_provenance_and_error_rates(dev_pool):
     sheet = MODULE.sample(dev_pool, 50)
     wrong = {item["id"] for item in sheet if item["set"] == "train_dev/inj"}
-    result = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "dev", {"de"})
+    result = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "dev", {"de"}, set())
     assert result["classes"]["instruction_injection"] == {"en": 60}
     assert result["classes"]["benign"] == {"de": 70, "en": 60}
     assert result["provenance"]["tool_poisoning"] == {"synthetic": 55}
@@ -97,7 +97,7 @@ def test_summary_counts_classes_languages_provenance_and_error_rates(dev_pool):
     assert result["sets"]["train_dev/de"]["error_rate"] == 0.0
     assert [item["verdict"] for item in result["flagged"]] == ["wrong"] * 5
     assert "text" not in json.dumps(result)
-    holdout = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "holdout", set())
+    holdout = MODULE.summary(dev_pool, review(sheet, list(wrong)[:5]), "holdout", set(), set())
     assert "flagged" not in holdout and holdout["sets"]["train_dev/inj"]["wrong"] == 5
 
 
@@ -110,14 +110,63 @@ def test_runner_translations_count_as_translated_not_synthetic(tmp_path):
                 for i, t in enumerate(texts("Webseite mit Passwortfrage", 8))]
     generated = freeze(tmp_path / "generated", {"carrier_insertion": carriers}, schema=CORPORA.GENERATED_SCHEMA)
     pool = MODULE.read_pool([translated, generated])
-    result = MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set())
+    result = MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set(), set())
     assert result["provenance"]["prompt_extraction"] == {"synthetic": 8, "translated": 12}
+
+
+def test_summary_counts_positives_by_source_and_the_chat_pool(dev_pool, tmp_path):
+    result = MODULE.summary(dev_pool, review(MODULE.sample(dev_pool, 50)), "dev", {"de"}, {"de"})
+    assert result["coverage"]["instruction_injection"] == {"en": {"provenance": {"native": 60}, "sources": {"inj": 60}}}
+    # Every generator set counts as one source, whatever its manifest dataset.
+    assert result["coverage"]["tool_poisoning"]["en"]["sources"] == {"generators": 55}
+    assert "benign" not in result["coverage"]
+    assert result["chat_pool"] == {"de": 70}
+    report = freeze(tmp_path / "report", {"chat": [row("chat", i, t, benign=True) for i, t in enumerate(texts("play music", 5))]},
+                    role="report")
+    pool = MODULE.read_pool([report])
+    assert MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set(), {"chat"})["chat_pool"] == {}
+
+
+def coverage_summary(cells, chat):
+    coverage = {}
+    for (name, language), sources in cells.items():
+        coverage.setdefault(name, {})[language] = {"sources": sources, "provenance": {"native": sum(sources.values())}}
+    return {"schema": MODULE.SUMMARY_SCHEMA, "split": "dev", "coverage": coverage, "chat_pool": chat}
+
+
+def test_targets_need_rows_and_two_sources_per_class_and_language():
+    full = {(name, language): {"a": target // 2, "generators": target - target // 2}
+            for name, target in MODULE.TARGET_ROWS.items() for language in MODULE.TARGET_LANGUAGES}
+    chat = {"de": MODULE.MIN_CHAT_ROWS, "en": MODULE.MIN_CHAT_ROWS}
+    cells, problems = MODULE.targets(coverage_summary(full, chat))
+    assert problems == [] and len(cells) == 2 * len(MODULE.TARGET_ROWS) and all(cell[-1] for cell in cells)
+    short = {**full, ("jailbreak", "de"): {"a": 150, "b": 49}, ("tool_poisoning", "en"): {"generators": 400}}
+    _, problems = MODULE.targets(coverage_summary(short, {"de": 9_999, "en": 10_000}))
+    assert problems == [
+        "jailbreak de: 199 scored positives from 2 sources (needs 200 from 2)",
+        "tool_poisoning en: 400 scored positives from 1 sources (needs 100 from 2)",
+        "chat pool de: 9999 rows (needs 10000)",
+    ]
+
+
+def test_targets_cli_and_render_section(tmp_path):
+    path = tmp_path / "dev.json"
+    path.write_text(json.dumps(coverage_summary({("jailbreak", "en"): {"a": 120, "b": 90}}, {"en": 12_000})), encoding="utf-8")
+    assert MODULE.main(["targets", str(path)]) == 1
+    dev = {**coverage_summary({("jailbreak", "en"): {"a": 120, "b": 90}}, {"en": 12_000}),
+           "sets": {}, "classes": {}, "provenance": {}, "class_sets": {}}
+    text = MODULE.render(["jailbreak"], dev, None, None)
+    assert "| jailbreak | en | 200 | 210 | 2 | 210 | 0 | 0 | yes |" in text
+    assert "| jailbreak | de | 200 | 0 | 0 | 0 | 0 | 0 | no |" in text
+    assert "Benign chat pool (dev): de 0, en 12000 rows." in text
+    legacy = {key: value for key, value in dev.items() if key != "coverage"}
+    assert "predates the per-source counts" in MODULE.render(["jailbreak"], legacy, None, None)
 
 
 def summaries(pool, wrong=()):
     sheet = MODULE.sample(pool, 50)
-    dev = MODULE.summary(pool, review(sheet, wrong), "dev", set())
-    holdout = {**MODULE.summary(pool, review(sheet), "holdout", set()), "split": "holdout"}
+    dev = MODULE.summary(pool, review(sheet, wrong), "dev", set(), set())
+    holdout = {**MODULE.summary(pool, review(sheet), "holdout", set(), set()), "split": "holdout"}
     return dev, holdout, sheet
 
 
@@ -138,16 +187,16 @@ def test_decide_go_needs_both_splits_rows_review_and_no_leakage(dev_pool):
 def test_decide_blocks_a_class_whose_set_fails_and_every_class_on_a_failing_benign_pool(dev_pool):
     sheet = MODULE.sample(dev_pool, 50)
     tool_wrong = [item["id"] for item in sheet if item["set"] == "generated/class_templates"][:3]
-    dev = MODULE.summary(dev_pool, review(sheet, tool_wrong), "dev", set())
-    holdout = {**MODULE.summary(dev_pool, review(sheet), "holdout", set()), "split": "holdout"}
+    dev = MODULE.summary(dev_pool, review(sheet, tool_wrong), "dev", set(), set())
+    holdout = {**MODULE.summary(dev_pool, review(sheet), "holdout", set(), set()), "split": "holdout"}
     decisions = MODULE.decide(["instruction_injection", "tool_poisoning"], dev, holdout, {"leaked": 0})
     assert decisions["instruction_injection"][0] == "go"
     assert decisions["tool_poisoning"] == ("no-go", "dev generated/class_templates: error rate 6.0%")
     # 75 benign rows reviewed (50 German, 25 English): 3 errors pass the pool, 4 do not.
     german = [item["id"] for item in sheet if item["set"] == "train_dev/de"]
-    dev = MODULE.summary(dev_pool, review(sheet, german[:3]), "dev", set())
+    dev = MODULE.summary(dev_pool, review(sheet, german[:3]), "dev", set(), set())
     assert MODULE.decide(["instruction_injection"], dev, holdout, {"leaked": 0})["instruction_injection"] == ("go", "")
-    dev = MODULE.summary(dev_pool, review(sheet, german[:4]), "dev", set())
+    dev = MODULE.summary(dev_pool, review(sheet, german[:4]), "dev", set(), set())
     decisions = MODULE.decide(["instruction_injection", "tool_poisoning"], dev, holdout, {"leaked": 0})
     assert all(decision == "no-go" and "dev benign pool: error rate 5.3%" in reason for decision, reason in decisions.values())
 

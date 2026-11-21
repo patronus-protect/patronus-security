@@ -217,6 +217,13 @@ def test_duplicate_dataset_and_unknown_keys_fail():
     assert "dataset pub: unknown key extra" in found
 
 
+def test_pool_marks_only_the_chat_pool():
+    entity_map = minimal_map()
+    entity_map["datasets"].append(dataset("chat", split="train_dev", pool="chat"))
+    entity_map["datasets"].append(dataset("forum", split="train_dev", pool="forum"))
+    assert problems(entity_map) == ["dataset forum: unknown pool forum"]
+
+
 def test_baselines_must_match_the_taxonomy():
     entity_map = minimal_map()
     entity_map["baselines"] = [b for b in entity_map["baselines"] if b["id"] != "atr"]
