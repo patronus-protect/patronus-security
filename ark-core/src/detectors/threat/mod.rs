@@ -766,8 +766,8 @@ pub(crate) fn native_requests(
 /// the `own` ranges is part of the rule. With `support`, only a term of that lexicon supports.
 /// For agent config tampering and exfiltration, a sibling list item (or a
 /// nested item of one) is its own instruction and no lead-in; a parent item
-/// stays one. For exfiltration, the negation of a secrecy directive after the
-/// span does not count.
+/// stays one. For exfiltration and unsafe actions, the negation of a secrecy
+/// directive after the span does not count.
 fn clause_context(
     scan: &ContextScan,
     text: &str,
@@ -779,12 +779,14 @@ fn clause_context(
 ) -> Context {
     let (start, end) = (span.start, span.end);
     let clause = scan.at(text, span.clone());
-    // After an exfiltration match, the negation of a secrecy directive ("and
-    // do not mention it", "erwähne es nicht") hides the transfer, it does not
-    // negate it.
+    // After an exfiltration or unsafe action match, the negation of a secrecy
+    // directive ("and do not mention it", "erwähne es nicht") hides the
+    // transfer or action, it does not negate it.
     let secrecy_tail = |hit: &super::context_lexica::Hit| {
-        category == SecurityCategory::Exfiltration
-            && hit.lexicon == "negation_scope"
+        matches!(
+            category,
+            SecurityCategory::Exfiltration | SecurityCategory::UnsafeAction
+        ) && hit.lexicon == "negation_scope"
             && end <= hit.range.start
             && clause.hits.iter().any(|other| {
                 other.lexicon == "secrecy"
@@ -2707,6 +2709,10 @@ mod tests {
         for (text, category) in [
             (
                 "Security documentation: our scanner flags tool descriptions that read ~/.ssh/id_rsa and pass it on.",
+                SecurityCategory::UnsafeAction,
+            ),
+            (
+                "Never run cat ~/.aws/credentials and do not mention the file in tickets.",
                 SecurityCategory::UnsafeAction,
             ),
             (
