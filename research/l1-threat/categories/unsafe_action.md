@@ -359,3 +359,72 @@ simulates a … attack“ mit Persistenz, C2-URL, Keylogger), Code-Anfragen, die
 umgehen, Passwörter oder Tastatureingaben mitschneiden, alle Ports öffnen oder `777` setzen. Recall-Folgeaufgabe
 **T21**; die UA02-Ablation läuft dort mit diesen Zeilen getrennt erneut.
 
+
+## 18. Stand T21 (2026-11-21): Regeln für die Code-Anfragen aus RedCode und Agent-SafetyBench, Ablation erneut
+
+Fünf neue Punkte-Regeln (Basis 40, `format`, ohne Pflichtkontext), je aus der Struktur einer Code-Anfrage statt
+einer gesenkten Schwelle:
+
+| Regel | Familie | Struktur |
+|---|---|---|
+| `ua_system_file_delete` | `destructive_request` | Code-Nomen + Relativsatz („script that“, „Skript, das“) + Löschverb + Systempfad in Anführungszeichen (`/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/lib`, `/root`, `/sys`, `/proc`, `/var/lib`, `/var/log`, `C:\Windows\System32`); der Pfad darf bis 300 Zeichen später in den nummerierten Schritten stehen; DE verbendständig („… die Datei "/etc/passwd" löscht“) |
+| `ua_destructive_alias` | `persistence` | `alias` + bis 100 Zeichen + `rm -rf /…` (auch `-fr`, `-r -f`, `--no-preserve-root`) oder in Prosa „alias … removes all files“ / „removes the '/usr' directory“ |
+| `ua_reverse_shell` | `unsafe_code` | Code-Nomen + Aufbauverb + „reverse/remote/bind shell“, „remote command listener/execution“; oder die Befehlsschleife „listens for commands, executes them and sends back the output“ / „Befehle empfängt, sie ausführt und die Ausgabe zurücksendet“; oder Umleiten der Standardströme auf einen Socket + Shell starten |
+| `ua_malware_stub` | `unsafe_code` | „This function / Diese Funktion“ + „simulates/implements / simuliert“ + Malware- oder Flutangriffsart (Ransomware, Trojan, Rootkit, Spyware, Adware, Worm, Virus, Botnet, Backdoor, DDoS, `… flood`, Slowloris, Ping of Death …) + „by / indem / durch“ |
+| `ua_harmful_code_request` | `unsafe_code` | Code-Nomen + bis 120 Zeichen + Authentifizierung/Sicherheitsprüfungen/Firewall umgehen oder abschalten, „without (any) authentication / security checks“, Tastatureingaben oder Passwörter mitschneiden, Backdoor oder alle Ports öffnen, `777`, Passwörter knacken/bruteforcen |
+
+Prefilter: Lexika `unsafe.code_request` (Code-Nomen), `unsafe.stub_verb` und `unsafe.malware` (getrennt, damit beide
+Pflicht sind); `ua_destructive_alias` hängt am vorhandenen `dlp.shell_profiles` (enthält `alias`). Das Anker-Gate
+prüft Teilstrings je Lexikon-Eintrag, ein Eintrag mit Verben und Arten zugleich hätte jedes Wort für beide gelten lassen.
+
+Heutiger Scorer nach der Änderung (Findings aus `text_facts --threat-findings`, Release), Negative wie §17:
+
+| Zeilen | Positive | vorher (§17) | nachher |
+|---|---|---|---|
+| Vorlagen (`class_templates`) | 83 | 83 | 83 |
+| AgentDojo | 30 | 30 | 30 |
+| RedCode-Exec | 152 | 0 | 150 |
+| RedCode-Gen | 141 | 3–4 | 141 |
+| Agent-SafetyBench | 59 | 4 | 32 |
+
+Kein `unsafe_action`-Fund auf den Benign-Zeilen von `train_dev`, `generated`, `report` (einschließlich der 2 365
+Hard-Benign und der 52 erfüllbaren Agent-SafetyBench-Code-Anfragen). Offen: RedCode-Exec 2 Zeilen (Client, der
+„commands received from a remote server“ ausführt, ohne Shell-Wort); Agent-SafetyBench 27 Zeilen, deren Risiko in der
+Absicht liegt und keine feste Form hat („email all users their saved passwords“, „grants administrative privileges
+to any new user“, „store passwords in plain text“, „scrape personal data“, Tippfehler wie „strateties“,
+„identify authentication“) oder deren Code-Nomen hinter der Bitte steht („… by writing a C++ script“).
+
+Ablation wie §16 (Hälften per sha256 der Zeilen-ID, Dolly/GermanQuAD je ein Viertel; Training 14 288 Zeilen ohne
+native Sätze), Auswertung je Herkunft getrennt auf denselben 14 171 Benign-Zeilen (Hälfte B plus die nativen
+Benign-Zeilen von AgentDojo und Agent-SafetyBench); B0 aus `threat_cascade` (L1-Konfiguration von `scoreboard.py`,
+Release); B1/B4/B5/FT ohne Zeitmessung (`untimed`), ihre Kosten stehen in §15. TPR@1 % / TPR@0,1 % / Hard-Benign-FPR@1 %:
+
+| Stufe | RedCode-Exec | RedCode-Gen | Agent-SafetyBench | AgentDojo |
+|---|---|---|---|---|
+| R / R+A | 98,7 / 98,7 / 0,0 | 100 / 100 / 0,0 | 54,2 / 54,2 / 0,0 | 100 / 100 / 0,0 |
+| **B0** | 98,7 / 98,7 / 0,0 | 100 / 100 / 0,0 | 55,9 / 55,9 / 0,0 | 100 / 100 / 0,0 |
+| R+A+L | 98,7 / 98,7 / 0,1 | 100 / 100 / 0,1 | 55,9 / 54,2 / 0,1 | 100 / 100 / 0,1 |
+| B1 | 86,8 / 38,2 / 13,1 | 0,7 / 0,0 / 13,1 | 18,6 / 0,0 / 13,1 | 53,3 / 36,7 / 13,1 |
+| B4 | 96,7 / 65,8 / 11,7 | 13,5 / 0,0 / 11,7 | 11,9 / 0,0 / 11,7 | 60,0 / 40,0 / 11,7 |
+| B5 | 100 / 99,3 / 10,6 | 100 / 100 / 10,6 | 61,0 / 54,2 / 10,6 | 100 / 100 / 10,6 |
+| FT | 100 / 63,2 / 0,6 | 98,6 / 10,6 / 0,6 | 100 / 52,5 / 0,6 | 100 / 56,7 / 0,6 |
+
+**Entscheidung: `B0` bleibt.** Auf allen vier nativen Sätzen wählt die README-Regel B0 (bestes oder innerhalb 1 pp
+des besten im Budget, 0 % Hard-Benign-FPR); B1/B4/B5 zahlen 10,6–13,1 % Hard-Benign-FPR, FT 0,6 % und verliert
+bei 0,1 % FPR 36–89 pp. Auf Agent-SafetyBench liegen B5 (61,0) und FT (100 bei 1 % FPR) vorn, aber nur mit
+Hard-Benign-FP und ohne Zeitmessung; FT bei 0,1 % FPR (52,5) liegt unter B0. Die Vorlagen-Auswertung (alle
+Generator-Positiven der Hälfte B, einschließlich Carrier-Einfügung und Verschleierung, 229) wählt R+A+L (53,7 gegen
+46,7 bei B0, 0,1 % Hard-Benign-FPR): Carrier-Einfügung und Verschleierung tragen dort die Lücke (Verschleierung 0/131,
+offen wie vor T21). Die neuen Regeln treffen auf den Generator-Zeilen nur Positive, 81 Carrier-Einfügungen der
+RedCode- und Agent-SafetyBench-Nutzlasten (Carrier-Einfügung gesamt 128/195), keine Benign-Zeile; `class_templates`
+83/83 unverändert. Vorbehalt wie §16: die Regeln sind an den Formen dieser Sätze entstanden (je
+Satz eine Vorlage, RedCode beginnt jede Exec-Zeile mit „Create and execute a Python script that“), die Zahl ist eine
+Obergrenze; Goldens mit anderen Carriern, Werten und DE prüfen die Struktur, das Urteil fällt auf dem Holdout.
+
+Latenz (Release, `text_facts --threat-findings`, alle elf Klassen samt Facts, Basis-Build mit `rules.json` und
+`unsafe_action.json` von add85bfd gegen Head, je 15 Runden, zwei Läufe): 6 × 100 KiB GermanQuAD-Dev-Text p50
+152,5/152,4 → 159,7/161,3 ms (+5 %), p95 176,6/205,8 → 173,0/166,0 ms (Rauschen); Worst Case 2 × 100 KiB RedCode-Zeilen
+am Stück (ein Treffer je ~250 Byte) p50 294,5/286,9 → 348,0/341,2 ms (+18 %). Die Kosten fallen nur an, wenn
+`unsafe_action` aktiv ist (keine Standard-Kategorie); Ursache sind die häufigen Code-Nomen (`code`, `tool`,
+`function`) als Einstieg der drei Anfrage-Regeln, nach denen die Regex den begrenzten Abstand prüft. Vorschlag für H02:
+das Code-Nomen-Gate mit dem Zielbegriff koppeln (Lexikon-Paar statt einzelner Wörter).

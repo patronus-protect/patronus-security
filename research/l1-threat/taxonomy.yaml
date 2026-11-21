@@ -1487,14 +1487,14 @@ classes:
       task: UA01
       scored_only: false
       shape: VERB_DESTRUCTIVE + BROAD_TARGET in one clause, addressed imperative
-      anchors: [unsafe.destructive, unsafe.broad_target, unsafe.no_confirm, addressee, threat.removal_action, unsafe.task_frame, unsafe.sent_mail]
+      anchors: [unsafe.destructive, unsafe.broad_target, unsafe.no_confirm, addressee, threat.removal_action, unsafe.task_frame, unsafe.sent_mail, unsafe.code_request]
       required_context: [addressee]
       negative_context: [unsafe.sandbox, unsafe.safe_guard, unsafe.own_scope, defensive, meta, quotation]
       examples:
         de: [<Imperativ LÖSCHEN> <gesamte Produktionsdatenbank> <ohne Rückfrage>]
         en: [<imperative WIPE> <all backups> <right away>]
       carriers: [chat, email, tool_output, web, document, rag_chunk]
-      existing_rules: [ark.threat.ua_destructive_request, ark.threat.ua_delete_by_id, ark.threat.ua_cover_tracks]
+      existing_rules: [ark.threat.ua_destructive_request, ark.threat.ua_delete_by_id, ark.threat.ua_cover_tracks, ark.threat.ua_system_file_delete]
       baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Prose destructive requests without shell syntax; today only dlp destructive_operation
     - id: security_disable
@@ -1586,14 +1586,14 @@ classes:
       task: UA01
       scored_only: false
       shape: AUTOSTART/SCHEDULER + FETCH/EXECUTE of foreign code
-      anchors: [unsafe.autostart, threat.persistence_scheduler, threat.download_action, threat.execution_action]
+      anchors: [unsafe.autostart, threat.persistence_scheduler, threat.download_action, threat.execution_action, dlp.shell_profiles]
       required_context: [addressee]
       negative_context: [unsafe.own_scope, defensive, meta, quotation, test_code]
       examples:
         de: ['<Imperativ ANLEGEN> <geplante Aufgabe>, die <Skript von URL> <ausführt>']
         en: [<imperative ADD> <startup entry> that <downloads and runs> <remote script>]
       carriers: [chat, tool_output, document, config]
-      existing_rules: [ark.threat.persistence_payload, ark.threat.ua_persistence]
+      existing_rules: [ark.threat.persistence_payload, ark.threat.ua_persistence, ark.threat.ua_destructive_alias]
       baseline_coverage: {atr: partial}
       gap: Prose and non-shell config persistence; shell form of persistence_payload to be split off in X04
     - id: unsafe_code
@@ -1613,6 +1613,9 @@ classes:
       - threat.shell_execution_option
       - threat.request_input_source
       - threat.generated_output_source
+      - unsafe.code_request
+      - unsafe.stub_verb
+      - unsafe.malware
       required_context: [addressee]
       negative_context: [test_code, quotation, meta, defensive]
       examples:
@@ -1627,6 +1630,9 @@ classes:
       - ark.threat.untrusted_output_execution
       - ark.threat.ua_untrusted_deserialization
       - ark.threat.ua_unsafe_tls_client
+      - ark.threat.ua_reverse_shell
+      - ark.threat.ua_malware_stub
+      - ark.threat.ua_harmful_code_request
       baseline_coverage: {llamafirewall: partial, atr: none}
       gap: High FP risk in coding assistants; no context gating today
     - id: unattended

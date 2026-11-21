@@ -379,6 +379,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   body with all the messages"). A received security code sent to a mail address counts as a data
   source of a send directive. A payment with an invoice reference, a newsletter post, a mail of
   the user's own notes and messages posted to the user's own wiki ("in unser Wiki") stay benign.
+- **Detection change:** (`unsafe_action`) new rules for code requests whose instruction itself is
+  the harmful action, in German and English: a script that deletes a system file such as
+  `/etc/passwd` (also when the path follows in numbered steps), an alias that maps a command to a
+  recursive forced delete of a root path in a shell profile, a script that sets up a reverse or
+  remote command shell ("listens for commands, executes them and sends back the output", "eine
+  Reverse Shell … aufbaut"), a code stub that "simulates a ransomware, trojan, rootkit, worm or
+  flood attack by …", and code that bypasses or disables authentication or security checks, logs
+  keystrokes or passwords, opens a backdoor or every port, or sets permissions to 777. An admin
+  deleting their own temp file, shell alias tutorials, reverse-shell detection rules, login forms,
+  ordinary code requests, tabletop exercises and test code stay benign.
+- **Detection change:** (`unsafe_action`) the code-request rules match a Windows system path with
+  ordinary single backslashes (`C:\Windows\System32\drivers\etc\hosts`), and a value of 777 counts
+  only after a permissions word ("file permissions … to 777", "Rechte … auf 777"); a script that
+  sets a port to 777 stays benign.
 - **Detection change:** (`unsafe_action`) new rules for harmful actions that tool results hand to
   an agent, in German and English, also when the result wraps its lines (YAML fields): sending as
   much money as possible or the entire balance to a bank account ("so viel Geld wie möglich auf das

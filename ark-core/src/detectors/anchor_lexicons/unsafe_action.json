@@ -415,5 +415,82 @@
       "ark-core/src/detectors/threat/rules.json",
       "research/l1-threat/categories/unsafe_action.md"
     ]
+  },
+  {
+    "id": "unsafe.code_request",
+    "description": "Eine Code-Anfrage: Skript, Programm, Funktion oder Snippet, das etwas tun soll",
+    "en": [
+      "script",
+      "program",
+      "code",
+      "snippet",
+      "example",
+      "function",
+      "module",
+      "utility",
+      "client",
+      "tool"
+    ],
+    "de": [
+      "skript",
+      "funktion",
+      "modul"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.stub_verb",
+    "description": "Ein Code-Stub, der einen Angriff simulieren oder implementieren soll",
+    "en": [
+      "simulates",
+      "emulates",
+      "implements"
+    ],
+    "de": [
+      "simuliert",
+      "implementiert"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
+  },
+  {
+    "id": "unsafe.malware",
+    "description": "Malware- und Flutangriffsarten: Ransomware, Trojaner, Rootkit, Wurm, Botnetz, DDoS",
+    "en": [
+      "ransomware",
+      "trojan",
+      "rootkit",
+      "spyware",
+      "adware",
+      "keylogger",
+      "worm",
+      "virus",
+      "botnet",
+      "backdoor",
+      "ddos",
+      "slowloris",
+      "smurf",
+      "teardrop",
+      "rudy",
+      "amplification",
+      "flood",
+      "ping",
+      "slow"
+    ],
+    "de": [
+      "wurm"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/unsafe_action.md"
+    ]
   }
 ]

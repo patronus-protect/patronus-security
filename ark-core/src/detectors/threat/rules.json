@@ -583,6 +583,66 @@
       }
     },
     {
+      "id": "ark.threat.ua_system_file_delete",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?P<request>(?-u:\\b)(?:script|program|code|codes|snippet|example|function|module|utility|client|tool|skript|programm|funktion|modul)(?-u:\\b),?\\s{1,4}(?:that|which|to|das|der|die|zum)(?-u:\\b))[^\\n.!?;]{0,40}?(?:(?P<action>(?-u:\\b)(?:deletes?|removes?|erases?|unlinks?|wipes?|l(?:ö|oe)scht|entfernt)(?-u:\\b))(?s:.){0,300}?(?P<target>[\\\"'`](?:/etc|/usr|/bin|/sbin|/boot|/lib|/lib64|/root|/sys|/proc|/var/lib|/var/log)/[a-z0-9._/-]{1,80}[\\\"'`]|c:\\\\windows\\\\system32\\\\[a-z0-9._\\\\-]{1,80})|(?P<path>[\\\"'`](?:/etc|/usr|/bin|/sbin|/boot|/lib|/lib64|/root|/sys|/proc|/var/lib|/var/log)/[a-z0-9._/-]{1,80}[\\\"'`]|c:\\\\windows\\\\system32\\\\[a-z0-9._\\\\-]{1,80})[^\\n.!?;]{0,40}?(?-u:\\b)(?:l(?:ö|oe)scht|entfernt)(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_destructive_alias",
+      "class_name": "unsafe_action",
+      "family": "persistence",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)alias(?-u:\\b))(?:[^\\n]{0,100}?(?P<target>(?-u:\\b)rm\\s{1,4}-{1,2}(?:rf|fr|r\\s{1,4}-f|f\\s{1,4}-r|recursive\\s{1,4}--force)\\s{1,4}(?:--no-preserve-root\\s{1,4})?/)|[^.!?;\\n]{0,100}?(?-u:\\b)(?:removes?|deletes?|delete|remove)\\s{1,4}(?:all\\s{1,4}files|the\\s{1,4}[\\\"'`]/[a-z]{0,8}[\\\"'`]\\s{1,4}directory)(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_reverse_shell",
+      "class_name": "unsafe_action",
+      "family": "unsafe_code",
+      "upstream_groups": [],
+      "pattern": "(?P<request>(?-u:\\b)(?:script|program|code|codes|snippet|example|function|module|utility|client|tool|skript|programm|funktion|modul)(?-u:\\b))(?:[^\\n.!?;]|\\.[0-9]){0,120}?(?P<target>(?-u:\\b)(?:establish(?:es)?|sets?\\s{1,4}up|creates?|opens?|spawns?|starts?|launch(?:es)?|handles?|acts?\\s{1,4}as|functions?\\s{1,4}as)(?-u:\\b)\\s{1,4}(?:an?\\s{1,4}|the\\s{1,4})?(?:[a-z-]{1,16}\\s{1,4}){0,2}?(?:reverse|remote|bind)[\\s-]{1,4}(?:shell|command\\s{1,4}listener|execution\\s{1,4}session|command\\s{1,4}execution)|(?-u:\\b)(?:reverse|bind)[\\s-]{1,4}shell[^\\n.!?;]{0,60}?(?-u:\\b)(?:aufbaut|öffnet|oeffnet|startet|herstellt|einrichtet)(?-u:\\b)|(?-u:\\b)(?:listens?\\s{1,4}for|receives?|accepts?)\\s{1,4}(?:incoming\\s{1,4})?commands?[^\\n.!?;]{0,80}?(?-u:\\b)execut(?:es?|ing)\\s{1,4}them[^\\n.!?;]{0,60}?(?-u:\\b)(?:sends?|returns?)\\s{1,4}(?:back\\s{1,4})?(?:the\\s{1,4})?(?:output|results?)(?-u:\\b)|(?-u:\\b)redirects?\\s{1,4}(?:the\\s{1,4})?standard\\s{1,4}(?:input|i/o|file)[^.!?;]{0,80}?(?-u:\\b)(?:socket|connection)[^.!?;]{0,60}?(?-u:\\b)(?:spawns?|launch(?:es)?|runs?|executes?|starts?)\\s{1,4}(?:an?\\s{1,4})?(?:interactive\\s{1,4}|bash\\s{1,4})?shell|(?-u:\\b)befehle\\s{1,4}(?:empf(?:ä|ae)ngt|entgegennimmt)[^\\n.!?;]{0,40}?(?-u:\\b)ausf(?:ü|ue)hrt[^\\n.!?;]{0,60}?(?-u:\\b)(?:ausgabe|ergebnis(?:se)?)(?-u:\\b)[^\\n.!?;]{0,20}?zur(?:ü|ue)ck|(?-u:\\b)execut(?:es?|ing)\\s{1,4}(?:the\\s{1,4})?received\\s{1,4}commands(?-u:\\b)|(?-u:\\b)receive\\s{1,4}and\\s{1,4}execute\\s{1,4}commands(?-u:\\b)|(?-u:\\b)command\\s{1,4}executor\\s{1,4}over)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_malware_stub",
+      "class_name": "unsafe_action",
+      "family": "unsafe_code",
+      "upstream_groups": [],
+      "pattern": "(?P<request>(?-u:\\b)(?:this|the|diese|die)\\s{1,4}(?:function|script|program|code|funktion|skript|programm)(?-u:\\b))\\s{1,8}(?P<action>(?:simulates|emulates|implements|simuliert|implementiert)(?-u:\\b))[^\\n.!?;]{0,40}?(?P<target>(?-u:\\b)(?:ransomware|trojan|rootkit|spyware|adware|keylogger|worm|virus|botnet|backdoor|ddos|slowloris|smurf|teardrop|rudy|amplification|trojaner|wurm|botnetz)[a-z-]{0,16}|(?-u:\\b)[a-z]{2,10}\\s{1,4}flood|(?-u:\\b)ping\\s{1,4}of\\s{1,4}death|(?-u:\\b)slow\\s{1,4}post)[^\\n.!?;]{0,80}?(?-u:\\b)(?:by|indem|durch)(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_harmful_code_request",
+      "class_name": "unsafe_action",
+      "family": "unsafe_code",
+      "upstream_groups": [],
+      "pattern": "(?P<request>(?-u:\\b)(?:script|program|code|codes|snippet|example|function|module|utility|client|tool|skript|programm|funktion|modul)(?-u:\\b))(?:[^\\n.!?;]|\\.[a-z0-9]){0,120}?(?P<target>(?-u:\\b)(?:bypass(?:es|ing)?|disables?|disabling|skips?|cancel|circumvents?|turns?\\s{1,4}off|jailbreak)\\s{1,4}(?:the\\s{1,4}|all\\s{1,4}|any\\s{1,4}|some\\s{1,4})?(?:usual\\s{1,4}|user\\s{1,4}|password\\s{1,4})?(?:authentication|login\\s{1,4}verification|security\\s{1,4}(?:checks?|checking|protocols|settings|features|warnings|verification|authentication|strateg[a-z]{0,6})|firewall(?:\\s{1,4}protections?)?|certificate\\s{1,4}validation)(?-u:\\b)|(?-u:\\b)(?:die\\s{1,4}|alle\\s{1,4})?(?:authentifizierung|anmeldepr(?:ü|ue)fung|sicherheitspr(?:ü|ue)fungen|sicherheitseinstellungen|firewall)\\s{1,4}(?:umgeht|deaktiviert|(?:ü|ue)berspringt|ausschaltet|abschaltet)(?-u:\\b)|(?-u:\\b)without\\s{1,4}(?:any\\s{1,4})?(?:identity\\s{1,4})?(?:authentication|security\\s{1,4}(?:checks?|checkings?|verification))(?-u:\\b)|(?-u:\\b)ohne\\s{1,4}(?:jede\\s{1,4})?(?:authentifizierung|sicherheitspr(?:ü|ue)fung(?:en)?)(?-u:\\b)|(?-u:\\b)(?:log|logs|capture|captures|record|records)\\s{1,4}(?:all\\s{1,4}|every\\s{1,4})?(?:the\\s{1,4})?(?:[a-z]{1,10}'\\s{1,4})?(?:keystrokes|keypress(?:es)?|keypress\\s{1,4}events?)(?-u:\\b)|(?-u:\\b)(?:logs?|prints?|printing)\\s{1,4}(?:all\\s{1,4})?(?:the\\s{1,4})?(?:user\\s{1,4})?passwords(?-u:\\b)|(?-u:\\b)(?:tastatureingaben|tastenanschl(?:ä|ae)ge|passw(?:ö|oe)rter)\\s{1,4}(?:aller\\s{1,4}nutzer\\s{1,4})?(?:heimlich\\s{1,4})?(?:mitschneidet|aufzeichnet|protokolliert|mitloggt)(?-u:\\b)|(?-u:\\b)opens?\\s{1,4}a\\s{1,4}backdoor(?-u:\\b)|(?-u:\\b)(?:hintert(?:ü|ue)r|backdoor)\\s{1,4}(?:auf\\s{1,4}port\\s{1,4}[0-9]{1,5}\\s{1,4})?(?:öffnet|oeffnet)(?-u:\\b)|(?-u:\\b)(?:open|opens)\\s{1,4}(?:inbound\\s{1,4}traffic\\s{1,4}on\\s{1,4})?all\\s{1,4}ports(?-u:\\b)|(?-u:\\b)allow\\s{1,4}(?:all|unrestricted)\\s{1,4}(?:incoming\\s{1,4})?(?:traffic|access)(?-u:\\b)|(?-u:\\b)alle\\s{1,4}(?:eingehenden\\s{1,4})?ports\\s{1,4}(?:öffnet|oeffnet|freigibt)(?-u:\\b)|(?-u:\\b)(?:(?:file\\s{1,4})?(?:permissions?|perms|mode)|(?:datei|zugriffs)?(?:rechte|berechtigungen))(?-u:\\b)[^\\n.!?;]{0,80}?(?-u:\\b)(?:to|auf)\\s{1,4}777(?-u:\\b)|(?-u:\\b)chmod\\s{1,4}(?:-r\\s{1,4})?777(?-u:\\b)|(?-u:\\b)crack\\s{1,4}(?:the\\s{1,4})?passwords?(?-u:\\b)|(?-u:\\b)brute-?force\\s{1,4}(?:the\\s{1,4})?(?:weak\\s{1,4})?passwords?(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
       "id": "ark.threat.tp_sensitive_file_param",
       "class_name": "tool_poisoning",
       "family": "sensitive_file_param",

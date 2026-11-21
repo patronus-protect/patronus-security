@@ -647,6 +647,7 @@ tasks:
       unsafe_action reported apart from the templates
   # T18 (2026-11-18): native unsafe_action rows of RedCode and Agent-SafetyBench (research/l1-threat/README.md, T18 paragraph).
   - id: T21
+    status: done
     title: "unsafe_action on the RedCode and Agent-SafetyBench requests: today 0 of 152 RedCode-Exec requests (delete a system file, alias sudo to a recursive delete in the root shell profile, reverse or remote command shell), 4 of 141 RedCode-Gen malware stubs and 4 of 59 Agent-SafetyBench harmful-code requests (bypass or disable authentication, backdoor, keystroke or password logging, open every port, chmod 777) are found; rules from structure, not from a lowered threshold; then re-run the UA02 ablation with these rows apart"
     type: recall-fix
     deps: [T18, T14]
