@@ -1072,7 +1072,7 @@
         "what",
         "which"
       ],
-      "pattern": "\\b(?:what|which)\\s+(?:are|were|is|was)\\s+(?P<io_target>your\\s+(?:(?:entire|full|complete|whole|exact|initial|original|hidden|secret|internal|developer|underlying|preset|pre-set|confidential)\\s+)+(?:system\\s+)?(?:instructions|rules|guidelines|directives|prompt|message|configuration))\\b|\\b(?:what|which)\\s+(?:exact\\s+)?(?P<io_target_given>instructions|directives|prompt)\\s+(?:were|have)\\s+you\\s+(?:been\\s+)?(?:given|told|programmed|configured|fed)\\b[^.!?\\n]{0,30}?\\b(?:before|at\\s+the\\s+(?:start|beginning)\\s+of)\\s+(?:this|our|the)\\s+(?:conversation|chat|session|exchange)",
+      "pattern": "\\b(?:what|which)\\s+(?:are|were|is|was)\\s+(?P<io_target>your\\s+(?:(?:entire|full|complete|whole|exact|initial|original|hidden|secret|internal|developer|underlying|preset|pre-set|confidential)\\s+)+(?:system\\s+)?(?:instructions|rules|guidelines|directives|prompt|message|configuration))\\b|\\b(?:what|which)\\s+(?:exact\\s+)?(?P<io_target_given>instructions|directives|prompt)\\s+(?:were|have)\\s+you\\s+(?:been\\s+)?(?:given|told|programmed|configured|fed)\\b[^.!?\\n]{0,30}?\\b(?:before|at\\s+the\\s+(?:start|beginning)\\s+of)\\s+(?:this|our|the)\\s+(?:conversation|chat|session|exchange)|\\bwhat\\s+(?P<io_target_said>your\\s+(?:previous|prior|initial|original|first|hidden|secret|system)\\s+(?:prompt|instructions?|message|directives?))\\s+(?:was|were|is|are|says?|said)\\b|\\bwhat\\s+(?:was|were)\\s+(?P<io_target_prior>your\\s+(?:previous|prior|first)\\s+(?:prompt|instructions?|message))\\b|\\bwhat(?:'s|\\s+is|\\s+was)\\s+(?P<io_target_before>the\\s+(?:previous|prior|first)\\s+(?:instruction|prompt)s?)\\s+(?:just\\s+)?before\\b",
       "excluded_match_words": [
         "not",
         "never",
@@ -1390,9 +1390,11 @@
         "system instruction",
         "instructions",
         "prompt",
-        "directives"
+        "directives",
+        "rules",
+        "guidelines"
       ],
-      "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?P<disclosure_action>share|paste|recite|spill|leak|copy|send|post|type\\s+out|write\\s+out|print\\s+out|tell\\s+me)\\s+(?:me\\s+|us\\s+)?(?P<io_target>your\\s+(?:(?:entire|full|complete|whole|exact|initial|original|hidden|secret|internal|developer|underlying|preset|pre-set|confidential)\\s+)*(?:system\\s+(?:prompt|message|instructions?)|(?:initial|hidden|original|secret|internal|developer|preset|pre-set|confidential|underlying)\\s+(?:instructions|prompt|directives)|initial\\s+prompt|pre-?prompt))\\b",
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|\\b(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|just)\\s+){0,2}(?:(?P<disclosure_action>share|paste|recite|spill|leak|copy|send|post|type\\s+out|write\\s+out|print\\s+out|tell\\s+me)\\s+(?:me\\s+|us\\s+)?(?P<io_target>your\\s+(?:(?:entire|full|complete|whole|exact|initial|original|hidden|secret|internal|developer|underlying|preset|pre-set|confidential)\\s+)*(?:system\\s+(?:prompt|message|instructions?)|(?:initial|hidden|original|secret|internal|developer|preset|pre-set|confidential|underlying)\\s+(?:instructions|prompt|directives)|initial\\s+prompt|pre-?prompt))\\b|(?P<given_action>repeat|print|output|show|reveal|list|recite|tell\\s+me|write\\s+out|translate|summari[sz]e|spell\\s+out)\\s+(?:me\\s+|us\\s+)?(?:back\\s+)?(?:all\\s+(?:of\\s+)?)?(?:the\\s+|your\\s+)?(?:(?:previous|prior|initial|original|first)\\s+)?(?P<io_given>(?:instructions|rules|guidelines|directives|prompts?)\\s+(?:(?:that\\s+)?(?:were\\s+|have\\s+been\\s+)?given\\s+to\\s+you|(?:that\\s+)?you\\s+(?:were|have\\s+been)\\s+given|(?:that\\s+)?you\\s+(?:have\\s+)?received|above|before\\s+this)))",
       "excluded_match_words": [
         "not",
         "never",
