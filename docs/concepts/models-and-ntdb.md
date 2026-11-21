@@ -64,9 +64,7 @@ determined by configuration — the [L3 strategy](#dedicated-vs-unified-l3) and 
 categories — and those models are kept **resident in RAM**, subject to an idle-TTL policy
 (`PATRONUS_L3_TTL_SECS`, default 300 s) that evicts a session after a period of no use and
 re-materializes it on the next promotion; `-1` disables eviction. Budget memory for the L3 models you enable. They are
-executed by the L3 background worker. Only required assets are downloaded by default;
-`PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` additionally fetches non-required files (currently
-`tokenizer_config.json` for the legacy L3 manifest).
+executed by the L3 background worker.
 
 ## The model families
 

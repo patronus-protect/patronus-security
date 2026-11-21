@@ -3274,27 +3274,6 @@ the model cache root `root` (unset: the default cache root).
 ## Asset Manifest Helpers
 
 ```rust
-pub struct AssetSpec {
-    /// Scanner category that owns this asset.
-    pub category: SecurityCategory,
-    /// Minimum security level that needs this asset.
-    pub level: SecurityLevel,
-    /// Hugging Face repository identifier.
-    pub repo: &'static str,
-    /// Immutable Hugging Face commit revision, when the asset is pinned.
-    pub revision: Option<&'static str>,
-    /// File path inside the Hugging Face repository.
-    pub source_path: &'static str,
-    /// Relative path below the category cache directory.
-    pub destination_path: &'static str,
-    /// Whether missing or failed downloads should block `warmup`.
-    pub required: bool,
-}
-```
-
-A model asset declared in the static download manifest.
-
-```rust
 pub struct NtdbL2PackageAssetSpec {
     /// Scanner category that owns this package.
     pub category: SecurityCategory,
@@ -3324,13 +3303,33 @@ pub struct PipelineModelAssetSpec {
 
 A revision-pinned model bundle used by a standalone pipeline.
 
-## Asset Download Helpers
-
 ```rust
-pub fn category_assets(category: SecurityCategory, max_level: SecurityLevel) -> Vec<AssetSpec>;
+pub fn selected_files(&self) -> Vec<&'static str>;
 ```
 
-Return manifest entries needed for a category up to `max_level`.
+The bundle files this process loads: the fp16 graph replaces the quantized one
+when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
+
+```rust
+pub fn prepare(
+    &self,
+    root: &Path,
+    download: DownloadPolicy,
+    generate: bool,
+    progress: Option<&SecurityAssetProgressCallback>,
+) -> Result<PathBuf, ScanError>;
+```
+
+Prepare the selected bundle files below the model cache `root` with Core's
+[`ModelSpec::prepare`], reporting fetch progress as this model's asset progress.
+
+```rust
+pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
+```
+
+Return the revision-pinned dedicated L3 bundle for a classifier category.
+
+## Asset Download Helpers
 
 ```rust
 pub fn ntdb_l2_package_assets(
@@ -3362,57 +3361,6 @@ pub fn ntdb_l2_package_assets_present(
 
 Check whether an official NTDB L2 package cache below the model cache `root` matches
 its pinned revision.
-
-```rust
-pub fn required_assets_present(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> bool;
-```
-
-Check whether all required assets for a category are present in `target_dir`.
-
-```rust
-pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
-```
-
-Return the revision-pinned dedicated L3 bundle for a classifier category.
-
-```rust
-pub fn selected_files(&self) -> Vec<&'static str>;
-```
-
-The bundle files this process loads: the fp16 graph replaces the quantized one
-when `PATRONUS_L3_PRECISION=fp16` and the bundle has one.
-
-```rust
-pub fn assets_present(&self, root: &Path) -> bool;
-```
-
-Whether the model cache `root` holds the complete pinned bundle.
-
-```rust
-pub fn download(
-    &self,
-    root: &Path,
-    progress: Option<&SecurityAssetProgressCallback>,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Fetch the pinned bundle into the model cache `root` and prepare its generated files.
-
-```rust
-pub fn download_category_assets(
-    category: SecurityCategory,
-    max_level: SecurityLevel,
-    target_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>>;
-```
-
-Download missing manifest assets for a category into `target_dir`.
-
-Required asset failures return an error. Optional asset failures are skipped.
 
 ```rust
 pub fn download_ntdb_l2_package(

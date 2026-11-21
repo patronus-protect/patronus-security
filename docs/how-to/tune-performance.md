@@ -101,8 +101,6 @@ export PATRONUS_L3_TTL_SECS=600
 
 - Stay at `max_level="l2"` where transformer accuracy isn't required — L2 shares one static
   encoder across categories.
-- Don't download optional full-precision assets (leave `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS`
-  unset) — the quantized bundles are the default.
 - Scan only the categories you act on, and leave rules you do not need switched off: native
   rules are compiled only when the gates enable them, so rules of categories a scanner does not
   run, opt-in forms and rules switched off in `rules` take no memory. The enabled rules are

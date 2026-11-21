@@ -18,6 +18,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
   from `report["native"]` in Python and `report.native` in Rust (type
   `patronus_ark_core::ScanReport<SecurityScanResult>`). The results in a report no longer carry
   `module_decision`; it is listed once in the report's `decision`. Queue events are unchanged.
+- **Every pinned model is prepared the same way:** the sensitive-document L3 model, the unified
+  L3 model, the dedicated L3 classifiers and the Dynamic PII (GLiNER) model are all checked,
+  downloaded and finished by Ark Core in one step, with the same cache folders and pins as
+  before, so nothing is downloaded again. The separate sensitive-document file list is gone, and
+  with it `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` (it only added that model's
+  `tokenizer_config.json`, which is now always fetched). In Rust, Ark Core's
+  `ModelSpec::prepare(root, files, &PrepareOptions { download, generate, progress })` replaces
+  `ModelSpec::fetch` and the public `prepare_generated_files`; Ark's `AssetSpec`,
+  `ASSET_MANIFEST`, `category_assets`, `required_assets_present` and `download_category_assets`
+  are removed, and `PipelineModelAssetSpec::prepare(root, download, generate, progress)` replaces
+  its `assets_present` and `download`. A missing model with downloads off now reports
+  `missing <model> assets at <folder>; downloads disabled`.
 - **One decision field per result:** with the opt-in `cascade`, a result that gives a category's
   final answer now carries `module_decision` (`module`, `outcome`, `decided_by`, `score` and,
   when an L1 model ran, its `layers`) in the same shape as an entry of Ark Core's scan-report
