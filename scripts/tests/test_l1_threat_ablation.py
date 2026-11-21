@@ -549,3 +549,49 @@ def test_calibration_markdown_lists_the_per_language_cuts(tmp_path):
     text = md.read_text(encoding="utf-8")
     assert "## Per-language cuts" in text
     assert f"| {CLS} | DE |" in text
+
+
+# ── baseline and candidate on one held-out pool ─────────────────────────────
+
+
+def test_calibrate_class_reads_the_baseline_off_the_candidate_s_held_out_pool():
+    native = toy_rows(20) + benign_pool(40)
+    train, held_out = MODULE.split_rows(native + generated_rows())
+    baseline, _ = MODULE.split_rows(native)
+    _, report = MODULE.calibrate_class(train, held_out, CLS, oversample_de=2, baseline=baseline)
+    reference = report["baseline"]
+    assert reference["rows"] == {"train": len(baseline), "calibration": report["rows"]["calibration"]}
+    # Same rows, same language pools: only the model differs.
+    for language in ("de", "en"):
+        ours, theirs = report["per_language"][language], reference["per_language"][language]
+        assert (theirs["negatives"], theirs["positives"]) == (ours["negatives"], ours["positives"])
+        assert theirs["benign_sources"].keys() == ours["benign_sources"].keys()
+        assert theirs["positive_sources"].keys() == ours["positive_sources"].keys()
+    # The baseline is a model of its own: trained without the generated rows and the oversampling.
+    (fitted,) = MODULE.fit_stages(baseline, CLS, stages=["FT"])
+    calibrated, _ = MODULE.calibrate(fitted.model, MODULE.calibration_rows(train, held_out), CLS,
+                                     tokens=fitted.tokens)
+    assert reference["thresholds"] == calibrated["thresholds"]
+
+
+def test_calibrate_class_rejects_a_baseline_outside_the_candidate_s_train_rows():
+    train, held_out = MODULE.split_rows(toy_rows(20) + benign_pool(40))
+    with pytest.raises(ValueError):
+        MODULE.calibrate_class(train, held_out, CLS, baseline=held_out[:3])
+
+
+def test_cli_calibrate_compares_the_baseline_rows_on_the_same_pool(tmp_path):
+    first, second = tmp_path / "train_dev.jsonl", tmp_path / "generated.jsonl"
+    first.write_text("".join(json.dumps(r) + "\n" for r in toy_rows(20) + benign_pool(40)), encoding="utf-8")
+    second.write_text("".join(json.dumps(r) + "\n" for r in generated_rows()), encoding="utf-8")
+    out, md = tmp_path / "calibration.json", tmp_path / "calibration.md"
+    assert MODULE.main(["calibrate", "--rows", str(first), "--rows", str(second), "--baseline-rows", str(first),
+                        "--class", CLS, "--out", str(out), "--markdown", str(md)]) == 0
+    (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
+    assert entry["baseline"]["rows"]["train"] == len(MODULE.split_rows(toy_rows(20) + benign_pool(40))[0])
+    text = md.read_text(encoding="utf-8")
+    assert "## Baseline and candidate on the same held-out pool" in text
+    assert f"\n| {CLS} | " in text.split("## Baseline and candidate on the same held-out pool")[1]
+    with pytest.raises(SystemExit):
+        MODULE.main(["calibrate", "--rows", str(first), "--baseline-rows", str(second), "--class", CLS,
+                     "--out", str(out)])

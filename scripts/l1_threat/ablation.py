@@ -51,7 +51,9 @@ twins) and what the train-negative cut would have flagged; ``--report-rows`` (se
 Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
 alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
 source and its TPR per positive source (generator and template family, else the set).
-``--oversample-de N`` repeats every German train positive ``N`` times.
+``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
+``--rows`` files) also trains a baseline on their train half alone, without oversampling, and calibrates it on
+the candidate's calibration rows, so a comparison of two setups reads both off one held-out pool.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -510,10 +512,15 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
 def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str = "FT",
                     report_rows: Iterable[dict] = (), bench_bin: Path | None = None, windows: Path | None = None,
                     target_fpr: float = SCOREBOARD.TARGET_FPR, clear_fpr: float = SCOREBOARD.CLEAR_FPR,
-                    oversample_de: int = 1) -> tuple[dict, dict[str, Any]]:
-    """Train ``stage`` on ``train``, calibrate it on the rows of ``test`` that are not in ``train`` and time it."""
+                    oversample_de: int = 1, baseline: list[dict] | None = None) -> tuple[dict, dict[str, Any]]:
+    """Train ``stage`` on ``train``, calibrate it on the rows of ``test`` that are not in ``train`` and time it.
+
+    ``baseline`` (a subset of ``train``) trains a second ``stage`` model without oversampling; it is calibrated on
+    the same rows, so both models' cuts and TPRs come from one held-out pool (``report["baseline"]``)."""
     if stage not in TOKENS:
         raise ValueError(f"{stage} is not a model stage with its own model.json")
+    if baseline is not None and not {row["id"] for row in baseline} <= {row["id"] for row in train}:
+        raise ValueError("the baseline trains on a subset of the candidate's train rows")
     fitted = fit_stages(train, cls, stages=[stage], oversample_de=oversample_de)[0]
     rows = calibration_rows(train, test)
     document, report = calibrate(fitted.model, rows, cls, tokens=fitted.tokens, target_fpr=target_fpr,
@@ -523,6 +530,12 @@ def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str
                    "ram_bytes": model_ram_bytes(document),
                    "ms_per_100kib": None if bench_bin is None or windows is None
                    else bench(bench_bin, windows, Stage(stage, fitted.score, model=document))})
+    if baseline is not None:
+        reference = fit_stages(baseline, cls, stages=[stage])[0]
+        _, reference_report = calibrate(reference.model, rows, cls, tokens=reference.tokens, target_fpr=target_fpr,
+                                        clear_fpr=clear_fpr)
+        report["baseline"] = {"rows": {"train": len(baseline), "calibration": len(rows)},
+                              **{key: reference_report[key] for key in ("thresholds", "calibration", "per_language")}}
     return document, report
 
 
@@ -554,6 +567,28 @@ def calibration_markdown(reports: list[dict[str, Any]]) -> str:
             lines.append(f"| {report['class']} | {language.upper()} | {cell['negatives']} | "
                          f"{cell['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {_pct(cell['tpr'])} | "
                          f"{_pct(cell['fpr'], 2)} | {cell['positives']} | {len(sources)} |")
+    compared = [report for report in reports if "baseline" in report]
+    if compared:
+        lines += ["", "## Baseline and candidate on the same held-out pool", "",
+                  "Both models' per-language cuts and TPRs on the candidate's calibration rows; the baseline never "
+                  "trained on them.", "",
+                  "| Class | baseline DE | baseline EN | candidate DE | candidate EN | Δ DE | Δ EN | "
+                  "FPR DE / EN baseline | FPR DE / EN candidate |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for report in compared:
+            ours, theirs = report.get("per_language", {}), report["baseline"].get("per_language", {})
+
+            def cell(side: dict, language: str, key: str) -> float | None:
+                return (side.get(language) or {}).get(key)
+
+            def delta(language: str) -> str:
+                new, old = cell(ours, language, "tpr"), cell(theirs, language, "tpr")
+                return "–" if new is None or old is None else f"{100 * (new - old):+.1f}"
+
+            lines.append(f"| {report['class']} | {_pct(cell(theirs, 'de', 'tpr'))} | {_pct(cell(theirs, 'en', 'tpr'))} | "
+                         f"{_pct(cell(ours, 'de', 'tpr'))} | {_pct(cell(ours, 'en', 'tpr'))} | {delta('de')} | "
+                         f"{delta('en')} | {_pct(cell(theirs, 'de', 'fpr'), 2)} / {_pct(cell(theirs, 'en', 'fpr'), 2)} | "
+                         f"{_pct(cell(ours, 'de', 'fpr'), 2)} / {_pct(cell(ours, 'en', 'fpr'), 2)} |")
     for report in reports:
         for language, cell in report.get("per_language", {}).items():
             lines += ["", f"## {report['class']} {language.upper()}: sources at the {language.upper()} cut", "",
@@ -634,6 +669,9 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--target-fpr", type=float, default=SCOREBOARD.TARGET_FPR)
     cal.add_argument("--clear-fpr", type=float, default=SCOREBOARD.CLEAR_FPR)
     cal.add_argument("--oversample-de", type=int, default=1, help="repeat German train positives this often")
+    cal.add_argument("--baseline-rows", type=Path, action="append", default=[],
+                     help="also train a baseline on the train half of these --rows files only (no oversampling) "
+                          "and calibrate it on the candidate's held-out pool")
     cal.add_argument("--bench-bin", type=Path, help="text_model_latency example binary")
     cal.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
     cal.add_argument("--model-out", type=Path, help="calibrated model.json (one --class only)")
@@ -644,15 +682,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "calibrate":
         if args.model_out is not None and len(args.classes) != 1:
             parser.error("--model-out takes one --class")
+        if not set(args.baseline_rows) <= set(args.rows):
+            parser.error("--baseline-rows must be among --rows")
         train, held_out = split_rows([row for path in args.rows for row in MODEL.read_rows(path)])
         test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
         reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
+        baseline = (split_rows([row for path in args.baseline_rows for row in MODEL.read_rows(path)])[0]
+                    if args.baseline_rows else None)
         reports = []
         for cls in args.classes:
             document, report = calibrate_class(train, test, cls, stage=args.stage, report_rows=reported,
                                                bench_bin=args.bench_bin, windows=args.windows,
                                                target_fpr=args.target_fpr, clear_fpr=args.clear_fpr,
-                                               oversample_de=args.oversample_de)
+                                               oversample_de=args.oversample_de, baseline=baseline)
             if args.model_out is not None:
                 args.model_out.write_text(MODEL.dump_model(document), encoding="utf-8")
             reports.append(report)
