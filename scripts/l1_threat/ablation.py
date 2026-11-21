@@ -518,7 +518,8 @@ def calibrate_class(train: list[dict], test: list[dict], cls: str, *, stage: str
     rows = calibration_rows(train, test)
     document, report = calibrate(fitted.model, rows, cls, tokens=fitted.tokens, target_fpr=target_fpr,
                                  clear_fpr=clear_fpr, report_rows=calibration_rows(train, report_rows))
-    report.update({"stage": stage, "oversample_de": oversample_de, "rows": {"train": len(train), "calibration": len(rows)},
+    report.update({"stage": stage, "oversample_de": oversample_de,
+                   "rows": {"train": len(train), "calibration": len(rows)},
                    "ram_bytes": model_ram_bytes(document),
                    "ms_per_100kib": None if bench_bin is None or windows is None
                    else bench(bench_bin, windows, Stage(stage, fitted.score, model=document))})
