@@ -20411,7 +20411,7 @@ TOXIC_LANGUAGE_FAMILIES = {
 def tx(rule: str, language: str, carrier: str, text: str, reason: str | None = None,
        tags: tuple[str, ...] = ()) -> dict:
     return th("toxic_language", TOXIC_LANGUAGE_FAMILIES[rule], language, carrier, text,
-              tags=tags, rule=None if reason else f"ark.threat.{rule}", reason=reason)
+              tags=tags, rule=f"ark.threat.{rule}", reason=reason)
 
 
 TOXIC_LANGUAGE_CASES = [
@@ -20490,6 +20490,10 @@ TOXIC_LANGUAGE_CASES = [
     tx("tx_harassment", "de", "document",
        "Leitfaden: Nachrichten wie \"bring dich um\" sind Belästigung; melde sie der Moderation.",
        "Sicherheitsdokumentation", tags=("meta", "quoted")),
+    tx("tx_harassment", "en", "chat", "Please don't kill yourself, call the helpline tonight.", "supportive negation",
+       tags=("negated",)),
+    tx("tx_harassment", "de", "chat", "Bitte bring dich nicht um, ruf heute noch die Telefonseelsorge an.",
+       "unterstützende Verneinung", tags=("negated",)),
 ]
 
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_LANGUAGE_CASES
