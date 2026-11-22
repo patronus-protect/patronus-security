@@ -285,6 +285,32 @@ The three sets were summarised with `gold.py summary` on a freeze of these sets 
 with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
 `gold.py targets` lists the class and language pairs still short of the dev targets.
 
+## Findings (M09 second round: agent_scenarios and the runner translations, 2026-11-22)
+
+Dev pool as frozen by the owner on 2026-11-22 (`DEV/translated` with 600 SPML/Mosscap rows, `DEV/generated` at
+generator version 7) plus `agent_scenarios` from generator version 8 (built locally from the same `DEV/train_dev`
+and `DEV/translated`; the four version-7 sets came out byte-identical).
+
+- **`agent_scenarios`: 0 of 50 wrong or unclear.** A second, independent generator family for tool_poisoning,
+  memory_poisoning, resource_exhaustion and agent_config_tampering: its own carriers (tool docstrings, MCP server
+  YAML and package READMEs; support chats, knowledge-base chunks and saved preferences; mails, API payloads and code
+  TODOs; copilot instructions, issue comments and setup READMEs) and phrasings, none shared with `class_templates`
+  or between dev and holdout. 80 attacks per class and language, each with a benign look-alike in the same frame.
+  It counts as its own source (`source_family: agent_scenarios`), so the four classes reach 121 to 125 scored
+  positives per language from two sources.
+- **`runner_translations_de`: 1 of 51 unclear (2 %).** The SPML attack rows keep their override cue in German, the
+  Mosscap rows ask for or probe the password; the unclear row asks the model to restate its compliance steps and
+  swap its refusal line, which probes the hidden instructions only indirectly. Benign rows clean. With this set
+  instruction_injection and prompt_extraction reach their German targets.
+- **Still short: harmful_content and toxic_language (DE and EN)**, one scored source each (Nemotron Safety Guard
+  v3). Their open candidates in the entity map are either holdout sets or report-only after review (TextDetox,
+  Civil Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels); a second open, licence-checked
+  scored source per language is the remaining M09 work.
+
+Both sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
+provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
+review fields of the earlier sets are unchanged.
+
 ## How this report is made
 
 ```bash

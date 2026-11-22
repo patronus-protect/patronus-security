@@ -22,47 +22,47 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 77 | 3211 | 0 | 11711 | 2727 | 9 | 552 | 11711 | 0 | 0 |
-| jailbreak | 492 | 2124 | 63 | 1086 | 2450 | 0 | 166 | 647 | 0 | 502 |
-| prompt_extraction | 0 | 15087 | 0 | 725 | 15000 | 0 | 87 | 331 | 0 | 394 |
-| tool_poisoning | 42 | 41 | 63 | 894 | 0 | 0 | 83 | 474 | 0 | 483 |
-| agent_config_tampering | 45 | 42 | 63 | 347 | 0 | 3 | 84 | 285 | 0 | 125 |
-| memory_poisoning | 42 | 41 | 63 | 665 | 0 | 0 | 83 | 232 | 0 | 496 |
-| exfiltration | 151 | 426 | 225 | 11936 | 113 | 1 | 463 | 11711 | 0 | 450 |
-| unsafe_action | 145 | 681 | 63 | 144 | 382 | 35 | 409 | 82 | 0 | 125 |
-| resource_exhaustion | 42 | 41 | 63 | 62 | 0 | 0 | 83 | 0 | 0 | 125 |
+| instruction_injection | 268 | 3119 | 0 | 11711 | 2727 | 159 | 501 | 11711 | 0 | 0 |
+| jailbreak | 492 | 2114 | 63 | 1086 | 2450 | 0 | 156 | 647 | 0 | 502 |
+| prompt_extraction | 387 | 15070 | 0 | 725 | 15000 | 300 | 157 | 331 | 0 | 394 |
+| tool_poisoning | 122 | 121 | 63 | 894 | 0 | 0 | 243 | 474 | 0 | 483 |
+| agent_config_tampering | 125 | 122 | 63 | 347 | 0 | 3 | 244 | 285 | 0 | 125 |
+| memory_poisoning | 122 | 121 | 63 | 665 | 0 | 0 | 243 | 232 | 0 | 496 |
+| exfiltration | 151 | 397 | 225 | 11936 | 113 | 1 | 434 | 11711 | 0 | 450 |
+| unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
+| resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
 | harmful_content | 316 | 483 | 0 | 172 | 483 | 316 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
-| benign | 23121 | 30783 | 17191 | 15030 | 41381 | 11219 | 1304 | 37235 | 0 | 2100 |
+| benign | 23687 | 31013 | 17191 | 15030 | 41381 | 11369 | 1950 | 37235 | 0 | 2100 |
 
 ## Dev targets per class and language
 
-Scored dev positives per class and language against the target, from at least 2 sources (all generator sets count as one source); benign chat pool at least 10000 rows per language.
+Scored dev positives per class and language against the target, from at least 2 sources (the generator sets count as one source, an independent generator family as its own); benign chat pool at least 10000 rows per language.
 
 | Class | Lang | Target | Positives | Sources | native | translated | synthetic | Met |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| instruction_injection | de | 200 | 77 | 2 | 0 | 9 | 68 | no |
-| instruction_injection | en | 200 | 3211 | 4 | 2727 | 0 | 484 | yes |
+| instruction_injection | de | 200 | 268 | 3 | 0 | 159 | 109 | yes |
+| instruction_injection | en | 200 | 3119 | 4 | 2727 | 0 | 392 | yes |
 | jailbreak | de | 200 | 492 | 2 | 450 | 0 | 42 | yes |
-| jailbreak | en | 200 | 2124 | 2 | 2000 | 0 | 124 | yes |
-| prompt_extraction | de | 200 | 0 | 0 | 0 | 0 | 0 | no |
-| prompt_extraction | en | 200 | 15087 | 2 | 15000 | 0 | 87 | yes |
+| jailbreak | en | 200 | 2114 | 2 | 2000 | 0 | 114 | yes |
+| prompt_extraction | de | 200 | 387 | 2 | 0 | 300 | 87 | yes |
+| prompt_extraction | en | 200 | 15070 | 2 | 15000 | 0 | 70 | yes |
 | harmful_content | de | 200 | 316 | 1 | 0 | 316 | 0 | no |
 | harmful_content | en | 200 | 483 | 1 | 483 | 0 | 0 | no |
 | toxic_language | de | 200 | 55 | 1 | 0 | 55 | 0 | no |
 | toxic_language | en | 200 | 51 | 1 | 51 | 0 | 0 | no |
-| tool_poisoning | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
-| tool_poisoning | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
-| memory_poisoning | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
-| memory_poisoning | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
-| resource_exhaustion | de | 100 | 42 | 1 | 0 | 0 | 42 | no |
-| resource_exhaustion | en | 100 | 41 | 1 | 0 | 0 | 41 | no |
-| agent_config_tampering | de | 100 | 45 | 2 | 0 | 3 | 42 | no |
-| agent_config_tampering | en | 100 | 42 | 1 | 0 | 0 | 42 | no |
+| tool_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
+| tool_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
+| memory_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
+| memory_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
+| resource_exhaustion | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
+| resource_exhaustion | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
+| agent_config_tampering | de | 100 | 125 | 3 | 0 | 3 | 122 | yes |
+| agent_config_tampering | en | 100 | 122 | 2 | 0 | 0 | 122 | yes |
 | exfiltration | de | 100 | 151 | 2 | 0 | 1 | 150 | yes |
-| exfiltration | en | 100 | 426 | 3 | 113 | 0 | 313 | yes |
-| unsafe_action | de | 100 | 145 | 2 | 0 | 35 | 110 | yes |
-| unsafe_action | en | 100 | 681 | 4 | 382 | 0 | 299 | yes |
+| exfiltration | en | 100 | 397 | 3 | 113 | 0 | 284 | yes |
+| unsafe_action | de | 100 | 164 | 2 | 0 | 35 | 129 | yes |
+| unsafe_action | en | 100 | 643 | 4 | 382 | 0 | 261 | yes |
 
 Benign chat pool (dev): de 11172, en 11225 rows.
 
@@ -70,10 +70,11 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/carrier_insertion | dev | 1158 | 56 | 0 | 0 | 0.0% | 0 / 8 |
+| generated/agent_scenarios | dev | 1280 | 50 | 0 | 0 | 0.0% | 0 / 10 |
+| generated/carrier_insertion | dev | 1170 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/class_templates | dev | 925 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
-| generated/obfuscation_slices | dev | 383 | 54 | 0 | 0 | 0.0% | 0 / 0 |
+| generated/obfuscation_slices | dev | 388 | 54 | 0 | 0 | 0.0% | 0 / 0 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/civil_comments | report | 6000 | 50 | 1 | 7 | 16.0% | 0 / 25 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
@@ -96,8 +97,9 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 | train_dev/xl_safetybench | dev | 450 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| translated/runner_translations_de | dev | 600 | 51 | 0 | 1 | 2.0% | 0 / 17 |
 
-Benign pool (dev, scored sets): 0 of 426 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 453 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -188,6 +190,7 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0022884 | harmful_content | wrong | Self-defence request by a victim |
 | report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0016319 | harmful_content | unclear | Cheating in a game; no hazard |
 | train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
+| translated/runner_translations_de | runner_translations_de:mosscap:0117738 | prompt_extraction | unclear | asks the model to restate its compliance steps and swap its refusal line; probes the hidden instructions only indirectly |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -475,6 +478,32 @@ The three sets were summarised with `gold.py summary` on a freeze of these sets 
 `gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool
 with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
 `gold.py targets` lists the class and language pairs still short of the dev targets.
+
+## Findings (M09 second round: agent_scenarios and the runner translations, 2026-11-22)
+
+Dev pool as frozen by the owner on 2026-11-22 (`DEV/translated` with 600 SPML/Mosscap rows, `DEV/generated` at
+generator version 7) plus `agent_scenarios` from generator version 8 (built locally from the same `DEV/train_dev`
+and `DEV/translated`; the four version-7 sets came out byte-identical).
+
+- **`agent_scenarios`: 0 of 50 wrong or unclear.** A second, independent generator family for tool_poisoning,
+  memory_poisoning, resource_exhaustion and agent_config_tampering: its own carriers (tool docstrings, MCP server
+  YAML and package READMEs; support chats, knowledge-base chunks and saved preferences; mails, API payloads and code
+  TODOs; copilot instructions, issue comments and setup READMEs) and phrasings, none shared with `class_templates`
+  or between dev and holdout. 80 attacks per class and language, each with a benign look-alike in the same frame.
+  It counts as its own source (`source_family: agent_scenarios`), so the four classes reach 121 to 125 scored
+  positives per language from two sources.
+- **`runner_translations_de`: 1 of 51 unclear (2 %).** The SPML attack rows keep their override cue in German, the
+  Mosscap rows ask for or probe the password; the unclear row asks the model to restate its compliance steps and
+  swap its refusal line, which probes the hidden instructions only indirectly. Benign rows clean. With this set
+  instruction_injection and prompt_extraction reach their German targets.
+- **Still short: harmful_content and toxic_language (DE and EN)**, one scored source each (Nemotron Safety Guard
+  v3). Their open candidates in the entity map are either holdout sets or report-only after review (TextDetox,
+  Civil Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels); a second open, licence-checked
+  scored source per language is the remaining M09 work.
+
+Both sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
+provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
+review fields of the earlier sets are unchanged.
 
 ## How this report is made
 
