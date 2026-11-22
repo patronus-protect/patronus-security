@@ -31,7 +31,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | exfiltration | 151 | 397 | 225 | 11936 | 113 | 1 | 434 | 11711 | 0 | 450 |
 | unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
 | resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
-| harmful_content | 316 | 583 | 0 | 172 | 583 | 316 | 0 | 172 | 0 | 0 |
+| harmful_content | 416 | 583 | 0 | 172 | 583 | 416 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
 | benign | 23687 | 31013 | 17191 | 15030 | 41381 | 11369 | 1950 | 37235 | 0 | 2100 |
 
@@ -47,7 +47,7 @@ Scored dev positives per class and language against the target, from at least 2 
 | jailbreak | en | 200 | 2114 | 2 | 2000 | 0 | 114 | yes |
 | prompt_extraction | de | 200 | 387 | 2 | 0 | 300 | 87 | yes |
 | prompt_extraction | en | 200 | 15070 | 2 | 15000 | 0 | 70 | yes |
-| harmful_content | de | 200 | 316 | 1 | 0 | 316 | 0 | no |
+| harmful_content | de | 200 | 416 | 2 | 0 | 416 | 0 | yes |
 | harmful_content | en | 200 | 583 | 2 | 583 | 0 | 0 | yes |
 | toxic_language | de | 200 | 55 | 1 | 0 | 55 | 0 | no |
 | toxic_language | en | 200 | 51 | 1 | 51 | 0 | 0 | no |
@@ -98,9 +98,9 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 | train_dev/xl_safetybench | dev | 450 | 50 | 0 | 0 | 0.0% | 0 / 0 |
-| translated/runner_translations_de | dev | 600 | 51 | 0 | 1 | 2.0% | 0 / 17 |
+| translated/runner_translations_de | dev | 700 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 
-Benign pool (dev, scored sets): 0 of 453 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 449 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -191,7 +191,7 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0022884 | harmful_content | wrong | Self-defence request by a victim |
 | report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0016319 | harmful_content | unclear | Cheating in a game; no hazard |
 | train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
-| translated/runner_translations_de | runner_translations_de:mosscap:0117738 | prompt_extraction | unclear | asks the model to restate its compliance steps and swap its refusal line; probes the hidden instructions only indirectly |
+| translated/runner_translations_de | runner_translations_de:mosscap:0007923 | prompt_extraction | unclear | fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -502,13 +502,58 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   child abuse), all inside the harmful_content subclasses; one piracy request falls under the model-only `ip`
   subclass and still counts. Built locally from the pinned file with the registry recipe (the owner's prepare run
   freezes it into `DEV/train_dev`); harmful_content EN now has two sources.
+- **Still short: toxic_language DE and EN**, one scored source each (Nemotron Safety Guard v3). For toxic_language DE
+  the registered GermEval 2018 training split (CC-BY-4.0, native) is the second source, but its repository also holds
+  the holdout test split, so its recipe has to come from the owner's holdout overlay. The other open candidates in the
+  entity map are holdout sets or report-only after review (TextDetox, Civil Comments, AILuminate demo, the WildGuardMix
+  and WildJailbreak harm labels).
+
+## Findings (M09 third round: SimpleSafetyTests in German, 2026-11-22)
+
+- **Runner translations with SimpleSafetyTests (`harmful_content`, DE): 1 of 52 wrong or unclear (1.9 %).** The
+  owner's prepare run froze SimpleSafetyTests into `DEV/train_dev` (registry generation 21); the runner translated all
+  100 requests into German itself (no external MT) and appended them to the translation worksheet, so
+  `runner_translations_de` grows from 600 to 700 rows (the 600 earlier texts unchanged; the hand-check sample over the
+  700 ids holds 35 rows, all re-read). Explicit sexual requests about children keep their request form in
+  non-graphic German wording. The re-sampled review (17 harmful_content rows) found every SimpleSafetyTests
+  translation correct; one Mosscap row is unclear (a fake administrator asks for personal information, not the hidden
+  password). The four version-7 generated sets come out byte-identical from the larger translation input.
+  harmful_content DE now has two sources (Nemotron Safety Guard v3 316, runner translations 100).
+
+The three sets were summarised with `gold.py summary` on a freeze of these sets alone and merged into
+`gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool
+with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
+`gold.py targets` lists the class and language pairs still short of the dev targets.
+
+## Findings (M09 second round: agent_scenarios, the runner translations and SimpleSafetyTests, 2026-11-22)
+
+Dev pool as frozen by the owner on 2026-11-22 (`DEV/translated` with 600 SPML/Mosscap rows, `DEV/generated` at
+generator version 7) plus `agent_scenarios` from generator version 8 (built locally from the same `DEV/train_dev`
+and `DEV/translated`; the four version-7 sets came out byte-identical).
+
+- **`agent_scenarios`: 0 of 50 wrong or unclear.** A second, independent generator family for tool_poisoning,
+  memory_poisoning, resource_exhaustion and agent_config_tampering: its own carriers (tool docstrings, MCP server
+  YAML and package READMEs; support chats, knowledge-base chunks and saved preferences; mails, API payloads and code
+  TODOs; copilot instructions, issue comments and setup READMEs) and phrasings, none shared with `class_templates`
+  or between dev and holdout. 80 attacks per class and language, each with a benign look-alike in the same frame.
+  It counts as its own source (`source_family: agent_scenarios`), so the four classes reach 121 to 125 scored
+  positives per language from two sources.
+- **`runner_translations_de`: 1 of 51 unclear (2 %).** The SPML attack rows keep their override cue in German, the
+  Mosscap rows ask for or probe the password; the unclear row asks the model to restate its compliance steps and
+  swap its refusal line, which probes the hidden instructions only indirectly. Benign rows clean. With this set
+  instruction_injection and prompt_extraction reach their German targets.
+- **SimpleSafetyTests (`harmful_content`, EN): 0 of 50 wrong or unclear.** 100 hand-written requests (CC-BY-2.0),
+  20 per harm area (self-harm and eating disorders, physical harm, illegal and regulated items, scams and fraud,
+  child abuse), all inside the harmful_content subclasses; one piracy request falls under the model-only `ip`
+  subclass and still counts. Built locally from the pinned file with the registry recipe (the owner's prepare run
+  freezes it into `DEV/train_dev`); harmful_content EN now has two sources.
 - **Still short: harmful_content DE and toxic_language DE and EN**, one scored source each (Nemotron Safety Guard
   v3). For toxic_language DE the registered GermEval 2018 training split (CC-BY-4.0, native) is the second source,
   but its repository also holds the holdout test split, so its recipe has to come from the owner's holdout overlay.
   The other open candidates in the entity map are holdout sets or report-only after review (TextDetox, Civil
   Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels).
 
-The three sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
+The sets of each round were summarised with `gold.py summary` on its dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
 review fields of the earlier sets are unchanged.
 

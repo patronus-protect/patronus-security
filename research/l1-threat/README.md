@@ -674,7 +674,9 @@ SPML halb Angriff, halb Benign), damit `instruction_injection` und `prompt_extra
 Zeilen mit deutschen Benign-Zwillingen haben; dazu der deutsche Teil von CyberSecEval multilingual (MIT,
 maschinenübersetzt, `translated`, Cue-Filter, gegen die übrigen Dev-Sätze dedupliziert; im Gate verwirft das
 Vorbereiten des Holdouts dessen Duplikate). Carrier-Insertion und Obfuskations-Slices erzeugen damit deutsche
-Angriffszeilen (Generator-Version 4, Registry-Generation 6).
+Angriffszeilen (Generator-Version 4, Registry-Generation 6). M09 (2026-11-22): das Blatt bekommt zusätzlich alle 100
+SimpleSafetyTests-Anfragen (`harmful_content`, zweite deutsche Quelle neben dem übersetzten Nemotron-Teil); die 600
+eingefrorenen SPML/Mosscap-Zeilen bleiben textgleich, `DEV/translated` wächst auf 700 Zeilen.
 
 **Native Jailbreak-Dev-Quelle (T06, 2026-11-16).** WildJailbreak (ODC-BY) kommt als `train_dev`-Rezept: der
 Eval-Split (2 000 `adversarial_harmful`, 210 `adversarial_benign`) aus der ungegateten ODC-BY-Kopie
