@@ -50,7 +50,9 @@ every undetected row escalates). It never changes ark-core defaults.
 ``gate`` builds the predictor of the head and the base commit (offline, cached per ark-core
 sources), predicts every split with both on the L1 cascade and fails on a regression in the gated
 scope: TPR@1 % or TPR@0.1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp
-below the base, or a hard-benign row of a class that the head's L1 detects and the base's does not.
+below the base, or a hard-benign row of a class that the head's L1 detects and the base's does not, unless
+the class's head hard-benign FPR (its flags over the hard-benign rows of its ``all``/``all`` cell) stays
+within 0.1 % and none of its TPR checks fails; the check line names the head FPR and the budget.
 stdout carries the dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the
 holdout leaves as a verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
@@ -120,6 +122,7 @@ CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
 FPRS = (0.01, 0.001)
 # Report keys of the gated operating points; both gate with the same tolerance, 1 % first.
 GATE_FPRS = tuple(f"{fpr:g}" for fpr in FPRS)
+HARD_BENIGN_FPR_BUDGET = 0.001
 GATE_LANGUAGES = ("all", "de", "en")
 LANGUAGES = ("all", "de", "en")
 ORIGINS = ("all", "native", "translated")
@@ -534,10 +537,22 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TO
                                "positives": head_cell["positives"] if after is not None else 0, "ok": ok})
     for cls in CLASSES:
         new = sorted(set(head["hard_benign_flags"].get(cls, [])) - set(base["hard_benign_flags"].get(cls, [])))
+        flagged = len(head["hard_benign_flags"].get(cls, []))
+        rows = ((_gate_cell(head, cls, "all") or {}).get("hard_benign") or {}).get("rows", 0)
+        head_fpr = flagged / rows if rows else None
+        # New hard-benign FPs are a budget (owner decision 2026-11-22): they pass while the class's head
+        # hard-benign FPR stays within HARD_BENIGN_FPR_BUDGET and none of its TPR checks falls.
+        tpr_ok = all(c["ok"] for c in checks if c["name"].startswith("tpr@") and c["name"].split()[1] == cls)
+        within = head_fpr is not None and head_fpr <= HARD_BENIGN_FPR_BUDGET + 1e-12 and tpr_ok
         checks.append({"name": f"hard-benign new fp {cls}", "base": len(base["hard_benign_flags"].get(cls, [])),
-                       "head": len(head["hard_benign_flags"].get(cls, [])), "new": len(new), "rows": new,
-                       "ok": not new})
+                       "head": flagged, "new": len(new), "rows": new, "head_fpr": head_fpr,
+                       "budget": HARD_BENIGN_FPR_BUDGET, "ok": not new or within})
     return checks
+
+
+def _budget_text(check: dict[str, Any]) -> str:
+    fpr = "–" if check["head_fpr"] is None else f"{check['head_fpr'] * 100:.3g}%"
+    return f"head hard-benign FPR {fpr}, budget {check['budget'] * 100:g}%"
 
 
 # ── rendering ────────────────────────────────────────────────────────────────
@@ -1015,12 +1030,16 @@ def verdict_lines(split: str, checks: list[dict[str, Any]], numbers: bool) -> li
     lines = [f"{split}: {'regression' if failed else 'no regression'} ({len(checks) - len(failed)}/{len(checks)} checks pass)"]
     for check in failed:
         if not numbers:
-            lines.append(f"  FAIL {check['name']}")
+            lines.append(f"  FAIL {check['name']}" + (f" ({_budget_text(check)})" if "budget" in check else ""))
         elif "new" in check:
-            lines.append(f"  FAIL {check['name']}: {check['new']} new ({', '.join(check['rows'][:10])})")
+            lines.append(f"  FAIL {check['name']}: {check['new']} new ({', '.join(check['rows'][:10])}); "
+                         f"{_budget_text(check)}")
         else:
             lines.append(f"  FAIL {check['name']}: {_pct(check['base'])} -> {_pct(check['head'])} "
                          f"({check['delta_pp']} pp, {check['positives']} positives)")
+    for check in checks:
+        if check["ok"] and check.get("new"):
+            lines.append(f"  PASS {check['name']}: {check['new']} new within budget ({_budget_text(check)})")
     return lines
 
 

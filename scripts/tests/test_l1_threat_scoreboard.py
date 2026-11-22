@@ -194,6 +194,32 @@ def test_compare_fails_a_drop_beyond_tolerance_and_new_hard_benign_fp():
     assert failed["tpr@1%fpr exfiltration de"]["delta_pp"] == -50.0
 
 
+def budget_report(flags, hard_rows, tpr=0.5):
+    cell = {"positives": 1000, "0.01": {"tpr": tpr}, "0.001": {"tpr": tpr}, "hard_benign": {"rows": hard_rows}}
+    return {"gated": {"toxic_language": {"all": {"all": cell}}}, "hard_benign_flags": {"toxic_language": flags}}
+
+
+def test_compare_lets_new_hard_benign_fp_pass_within_the_class_budget():
+    # owner decision 2026-11-22: new hard-benign FPs pass while the head FPR of the class stays <= 0.1 %
+    base = budget_report([], 2000)
+    within = {c["name"]: c for c in MODULE.compare(base, budget_report(["h:1", "h:2"], 2000))}
+    check = within["hard-benign new fp toxic_language"]
+    assert check["ok"] and check["new"] == 2 and check["head_fpr"] == 0.001 and check["budget"] == 0.001
+    assert MODULE.verdict_lines("holdout", list(within.values()), numbers=False)[1] == (
+        "  PASS hard-benign new fp toxic_language: 2 new within budget "
+        "(head hard-benign FPR 0.1%, budget 0.1%)")
+    over = {c["name"]: c for c in MODULE.compare(base, budget_report(["h:1", "h:2", "h:3"], 2000))}
+    assert not over["hard-benign new fp toxic_language"]["ok"]
+    assert MODULE.verdict_lines("holdout", list(over.values()), numbers=False)[1] == (
+        "  FAIL hard-benign new fp toxic_language (head hard-benign FPR 0.15%, budget 0.1%)")
+    # within the budget, but a falling TPR of the class keeps the check red
+    dropped = {c["name"]: c for c in MODULE.compare(base, budget_report(["h:1"], 2000, tpr=0.4))}
+    assert not dropped["hard-benign new fp toxic_language"]["ok"]
+    # no hard-benign rows in the gate cell: no FPR, no budget
+    assert not {c["name"]: c for c in MODULE.compare(base, budget_report(["h:1"], 0))}[
+        "hard-benign new fp toxic_language"]["ok"]
+
+
 def test_compare_tolerates_half_a_point():
     base = {"gated": {"jailbreak": {"all": {"all": {"positives": 1000, "0.01": {"tpr": 0.500}}}}},
             "hard_benign_flags": {}}
@@ -266,10 +292,12 @@ def test_holdout_verdict_names_checks_without_numbers():
                "ok": False},
               {"name": "tpr@0.1%fpr jailbreak de", "base": 0.2, "head": 0.1, "delta_pp": -10.0, "positives": 50,
                "ok": False},
-              {"name": "hard-benign new fp jailbreak", "base": 0, "head": 1, "new": 1, "rows": ["h:1"], "ok": False}]
+              {"name": "hard-benign new fp jailbreak", "base": 0, "head": 1, "new": 1, "rows": ["h:1"],
+               "head_fpr": 0.002, "budget": 0.001, "ok": False}]
     lines = MODULE.verdict_lines("holdout", checks, numbers=False)
     assert lines == ["holdout: regression (0/3 checks pass)", "  FAIL tpr@1%fpr jailbreak de",
-                     "  FAIL tpr@0.1%fpr jailbreak de", "  FAIL hard-benign new fp jailbreak"]
+                     "  FAIL tpr@0.1%fpr jailbreak de",
+                     "  FAIL hard-benign new fp jailbreak (head hard-benign FPR 0.2%, budget 0.1%)"]
     dev = "\n".join(MODULE.verdict_lines("dev", checks, numbers=True))
     assert "-10.0 pp" in dev and "h:1" in dev
 

@@ -468,7 +468,7 @@ SHA-gepinnt. Dokumentebene je Klasse; Recall immer bei gleicher Dokument-FPR auf
 | M2 DE-Vorsprung | Je Klasse auf DE: TPR@1 % ≥ beste Baseline + 15 pp |
 | M3 Präzision | FPR auf sicherheitsnahem Benign (NotInject, OR-Bench-hard, Security-Doku, Abwehr-Prompts) ≤ 1 % je Klasse in `balanced` |
 | M4 Breite | Jede Klasse hat die Pflicht-Familien der Taxonomie in DE und EN und ihre Ablations-Entscheidung |
-| Immer | keine Klasse verliert > 0,5 pp TPR@1 % oder TPR@0,1 %; 0 neue FP auf Hard Negatives; Python↔Rust-Parität exakt; L1 gesamt nicht langsamer als Base + 5 % |
+| Immer | keine Klasse verliert > 0,5 pp TPR@1 % oder TPR@0,1 %; neue FP auf Hard Negatives nur im Budget (Hard-Benign-FPR der Klasse im Head ≤ 0,1 %, Owner 2026-11-22); Python↔Rust-Parität exakt; L1 gesamt nicht langsamer als Base + 5 % |
 
 Heuristik-Baselines: pipelock, Cisco mcp-scanner (YARA), ATR, seojoonkim/prompt-guard, LlamaFirewall/NeMo
 (deterministische Teile). Selbst trainiert auf denselben Daten: B1–B4. Referenzzeilen: ProtectAI v2 und Prompt
@@ -499,7 +499,9 @@ Benign-Pool, je mit Bootstrap-95-%-KI, AUPRC, Hard-Benign-FPR an derselben Schwe
 die Benign-Zeilen von NotInject, OR-Bench-hard, XSTest, WildJailbreak `adversarial_benign`, Goldens) und Leave-one-dataset-out. `report_only`-Sätze
 werden getrennt berichtet und gaten nie. Gate: Head gegen Base auf Dev und Holdout; rot bei > 0,5 pp Verlust an TPR@1 % oder an
 TPR@0,1 % einer Klasse (`all`, `de`, `en`; E08, Owner 2026-11-18: 0,1 % ist die entscheidende Kennzahl) oder einer
-Hard-Benign-Zeile, die nur der Head meldet. Die Dev-Zusammenfassung des Gates (und damit die PR-Tabelle des
+Hard-Benign-Zeile, die nur der Head meldet — Letzteres seit Owner-Entscheidung 2026-11-22 nur, wenn die
+Hard-Benign-FPR der Klasse im Head (ihre Flags / Hard-Benign-Zeilen der Gate-Zelle `all/all`) über 0,1 % liegt
+oder eine TPR-Prüfung der Klasse fällt; die Check-Zeile nennt Head-FPR und Budget. Die Dev-Zusammenfassung des Gates (und damit die PR-Tabelle des
 Runners) zeigt je Klasse und Sprache beide TPRs, Base -> Head mit KI. Der Holdout erscheint im
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
 `latency_ab`. Aktueller Stand von main: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
