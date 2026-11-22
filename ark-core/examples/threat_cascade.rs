@@ -17,7 +17,7 @@
 //!   classes at 0 are left out;
 //! - `flagged`: the classes L1 detected;
 //! - `cascade`, for every class with a decision (a class no stage ran for, for
-//!   example one without rules and without a later layer, is left out and
+//!   example one whose layers are all switched off, is left out and
 //!   counts as clear): `l1` (L1's outcome), `l1_score` (at full precision, since
 //!   `scoreboard.py calibrate` cuts on it: the score the detect and clear thresholds
 //!   compare), `decision` (final outcome) and `decided_by` (deciding stage);
@@ -259,10 +259,25 @@ mod tests {
 
     #[test]
     fn a_module_without_a_decision_is_left_out() {
-        // toxic_language has no rule and no later layer: no stage runs for it.
-        let (mut scanner, cascade, gates) = l1_only();
+        // With L1 switched off and no later layer, no stage runs for
+        // toxic_language.
+        let mut config = ScannerConfig {
+            categories: modules(),
+            max_level: patronus_ark_core::cascade::SecurityLevel::L1,
+            ..ScannerConfig::default()
+        };
+        config.gates.cascade = Some(Cascade::default());
+        config.gates.l1 = Some(false);
+        let gates = config.gates.clone();
+        let mut scanner = Scanner::new(config).unwrap();
         let row = json!({"id": "a:4", "text": "Please summarise the attached meeting notes."});
-        let out = predict(&mut scanner, (&cascade, &gates), &modules(), &row).unwrap();
+        let out = predict(
+            &mut scanner,
+            (&Cascade::default(), &gates),
+            &modules(),
+            &row,
+        )
+        .unwrap();
         assert!(out["cascade"].get("toxic_language").is_none());
         assert!(!out["flagged"]
             .as_array()
