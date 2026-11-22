@@ -76,7 +76,14 @@ schema: ark-l1-threat-datasets-v1
 #     with clean twins); format `text` and rule operator `matches`.
 # 20: MASSIVE (en-US and the localised de-DE training utterances) joins train_dev as the benign chat pool of
 #     each language; the German jailbreak prompts of XL-SafetyBench join train_dev.
-generation: 20
+# 21: SimpleSafetyTests (CC-BY-2.0, 100 English requests in five harm areas) joins train_dev: a second scored English
+#     harmful_content source next to Nemotron Safety Guard v3.
+# 22: the Dynamically Generated Hate Speech Dataset (CC-BY-4.0, annotator-written English, original entries of the
+#     dehumanisation and threat types) joins train_dev: a second scored English toxic_language source next to Nemotron Safety Guard v3.
+# 23: the German insult prompts of XSafety (Apache-2.0, translated from Chinese) join
+#     train_dev: a second scored German toxic_language source next to Nemotron Safety Guard v3. CSV recipes may name
+#     the columns of a file without a header row.
+generation: 23
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -1148,6 +1155,61 @@ datasets:
     language: de
     labels:
       - {label: utterance}
+  - id: simple_safety_tests
+    commercial: true
+    source: https://huggingface.co/datasets/Bertievidgen/SimpleSafetyTests
+    revision: 98223c5d8c4059c8f4d8fe2fec8720ee8a20d3c5
+    files:
+      - {path: sst_test_cases.csv, sha256: a9d667a236121efdaa92f61565fdf6d4cc5ae77b68f60d8629e71d36957d737c}
+    format: csv
+    text: prompt
+    language: en
+    labels:
+      - {field: harm_area, equals: "Suicide, Self-Harm, and Eating Disorders", label: "harm area = Suicide, Self-Harm, and Eating Disorders"}
+      - {field: harm_area, equals: Physical Harm and Violence, label: "harm area = Physical Harm and Violence"}
+      - {field: harm_area, equals: Illegal and Highly Regulated items, label: "harm area = Illegal and Highly Regulated items"}
+      - {field: harm_area, equals: Scams and Fraud, label: "harm area = Scams and Fraud"}
+      - {field: harm_area, equals: Child Abuse, label: "harm area = Child Abuse"}
+  - id: dynahate
+    commercial: true
+    # v0.2.3 (round-1 duplicates removed). Only original entries (no perturbations) of the two explicit hate types
+    # count, dehumanisation and threats; derogation and animosity (10 % doubtful in a review sample: regional insults,
+    # opinions about a country), support for hateful entities, the untyped round 1 and the nothate rows are left out.
+    source: https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset
+    revision: 36f9dc849626bc2f6d2e1c2861db556294a2a947
+    files:
+      - {path: Dynamically Generated Hate Dataset v0.2.3.csv, sha256: 6e0aa7e598ab5b648cb1f0b48626a3e5f2e39a5abbd9fee998efa5a0b6cab4ca}
+    format: csv
+    text: text
+    language: en
+    labels:
+      - {field: type, equals: dehumanization, and: [{field: level, equals: original}], label: "type = dehumanization (original entry)"}
+      - {field: type, equals: threatening, and: [{field: level, equals: original}], label: "type = threatening (original entry)"}
+      - {field: level, equals: perturbation, label: perturbation}
+      - {field: type, equals: [derogation, animosity, support, notgiven, none], label: "type = derogation, animosity, support, notgiven or none"}
+  - id: xsafety_de
+    commercial: true
+    # German insult prompts of the XSafety benchmark (one quoted text per line, no header). Only rows with a du, ihr or
+    # euch form (you, her, their) stay: the rest are complaints about films, shops or society, self-descriptions and
+    # neutral questions (about 1 in 9 doubtful when the whole file is read). A first cue that also kept the formal Sie
+    # failed the dev review (3 of 50 doubtful: polite admonitions without an insult).
+    source: https://github.com/Jarviswang94/Multilingual_safety_benchmark
+    revision: 8c55b6a6cda594cd550a4921513238a2dd40eb5a
+    files:
+      - {path: de/Insult.csv, sha256: 31d5543d6c2ab1e93cd65306f25eef7ff9921c7e1c9c2b3cb1149ddc1f3425f2}
+    format: csv
+    columns: [text]
+    text: text
+    language: de
+    labels:
+      - {label: "Insult (every row)"}
+    keep:
+      - label: "Insult (every row)"
+        reason: >-
+          the insult file also holds rows without a target: complaints about a film, a restaurant or a company, a
+          narrated scene, a self-description or a neutral question; a row stays only when it aims at a person through a
+          du, ihr or euch form
+        pattern: '\b(?:du|dich|dir|dein\w*|ihr\w*|euch|euer\w*|eure\w*)\b'
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)

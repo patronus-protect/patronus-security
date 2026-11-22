@@ -19,7 +19,7 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 EMAP = MODULE.entity_map.load(MODULE.entity_map.MAP_PATH)
-COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20}
+COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20, "agent_scenarios": 16}
 SMALL = {"dev": COUNTS, "holdout": COUNTS}
 # Class template families without a benign look-alike (owner decision 2026-11-20).
 TWINLESS_FAMILIES = {"memory_note_in_doc", "refusal_suppression"}
@@ -96,6 +96,88 @@ def test_class_templates_cover_the_classes_without_public_dev_data(roots):
         assert manifest["template_families"]["class_templates"]["unsafe_action"] == sorted(MODULE.CLASS_TEMPLATES["unsafe_action"][split])
 
 
+AGENT_CLASSES = {"tool_poisoning", "memory_poisoning", "resource_exhaustion", "agent_config_tampering"}
+
+
+def test_agent_scenarios_are_an_independent_family_for_the_agent_classes(roots):
+    dev, holdout = roots
+    assert set(MODULE.AGENT_SCENARIOS) == AGENT_CLASSES
+    template_families = {f for table in MODULE.CLASS_TEMPLATES.values() for split in ("dev", "holdout") for f in table[split]}
+    assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
+    texts = {}
+    for root, split in ((dev, "dev"), (holdout, "holdout")):
+        rows = generated(root / "generated")["agent_scenarios"]
+        attacks = [row for row in rows if not row["benign"]]
+        assert {(row["classes"][0], row["language"]) for row in attacks} == {(c, lang) for c in AGENT_CLASSES for lang in ("de", "en")}
+        by_id = {row["id"]: row for row in rows}
+        no_twin = [row for row in attacks if row["template_family"] in MODULE.AGENT_SCENARIOS[row["classes"][0]].get("no_twin_frames", ())]
+        assert len(rows) == 2 * len(attacks) - len(no_twin)  # every attack outside a no-twin frame has its look-alike
+        for row in rows:
+            name = (row if not row["benign"] else by_id[row["twin_of"]])["classes"][0]
+            assert row["template_family"] in MODULE.AGENT_SCENARIOS[name]["frames"][split]
+            assert row["template_family"] not in template_families
+            assert row["modelled_on"] == MODULE.AGENT_SCENARIOS[name]["modelled_on"]
+            assert row["translated"] is False and "{" + "n}" not in row["text"] and "{x}" not in row["text"]
+            if row["text"].startswith("{"):
+                json.loads(row["text"])
+        texts[split] = {row["text"] for row in rows}
+        manifest = json.loads((root / "generated" / "manifest.json").read_text())
+        assert manifest["sets"]["agent_scenarios"]["source_family"] == "agent_scenarios"
+        assert "source_family" not in manifest["sets"]["class_templates"]
+        assert manifest["template_families"]["agent_scenarios"]["tool_poisoning"] == sorted(MODULE.AGENT_SCENARIOS["tool_poisoning"]["frames"][split])
+    assert not texts["dev"] & texts["holdout"]
+
+
+def test_agent_scenario_rows_vary_and_keep_the_directive_in_the_frame():
+    rows = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    attacks = [row for row in rows if not row["benign"]]
+    assert len({row["text"] for row in attacks}) >= 0.95 * len(attacks)
+    for row in attacks:
+        name, lang = row["classes"][0], row["language"]
+        assert any(d.split("{n}")[0][:40] in row["text"].replace('\\"', '"') for d in MODULE.AGENT_SCENARIOS[name]["attacks"]["dev"][lang])
+
+
+def test_agent_scenarios_write_no_benign_memory_directive_in_a_retrieved_document():
+    # A knowledge-base chunk that asks the assistant to remember something is no benign input, like the
+    # class template memory_note_in_doc: the kb_chunk attacks keep their rows, their look-alikes are dropped.
+    assert MODULE.AGENT_SCENARIOS["memory_poisoning"]["no_twin_frames"] == ("kb_chunk",)
+    rows = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    kb = [row for row in rows if row["template_family"] == "kb_chunk"]
+    assert {row["language"] for row in kb} == {"de", "en"}
+    assert kb and not [row for row in kb if row["benign"]]
+    assert [row for row in rows if row["benign"] and row["template_family"] == "support_chat"]
+
+
+def test_agent_scenarios_drop_a_look_alike_after_its_draws(monkeypatch):
+    # Dropping a look-alike leaves every other row byte-identical, so the gold review per row id holds.
+    kept = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    table = {name: {k: v for k, v in t.items() if k != "no_twin_frames"} for name, t in MODULE.AGENT_SCENARIOS.items()}
+    monkeypatch.setattr(MODULE, "AGENT_SCENARIOS", table)
+    full = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    assert kept == [row for row in full if not (row["benign"] and row["template_family"] == "kb_chunk")]
+
+
+def test_check_families_rejects_a_no_twin_frame_outside_the_frames(monkeypatch):
+    table = MODULE.AGENT_SCENARIOS["memory_poisoning"]
+    monkeypatch.setitem(MODULE.AGENT_SCENARIOS, "memory_poisoning", {**table, "no_twin_frames": ("wiki_page",)})
+    assert any("no_twin_frames" in problem for problem in MODULE.check_families())
+
+
+@pytest.mark.parametrize("part", ["attacks", "lookalikes"])
+def test_check_families_rejects_agent_scenario_phrasing_shared_between_splits(monkeypatch, part):
+    table = MODULE.AGENT_SCENARIOS["memory_poisoning"]
+    shared = {**table[part], "holdout": {**table[part]["holdout"], "en": table[part]["dev"]["en"][:1]}}
+    monkeypatch.setitem(MODULE.AGENT_SCENARIOS, "memory_poisoning", {**table, part: shared})
+    assert any("disjoint dev and holdout phrasings" in problem for problem in MODULE.check_families())
+
+
+def test_check_families_rejects_an_agent_scenario_frame_of_a_class_template(monkeypatch):
+    table = MODULE.AGENT_SCENARIOS["tool_poisoning"]
+    frames = {**table["frames"], "dev": {**table["frames"]["dev"], "rules_file": {"en": "{x}", "de": "{x}"}}}
+    monkeypatch.setitem(MODULE.AGENT_SCENARIOS, "tool_poisoning", {**table, "frames": frames})
+    assert any("reuses a class template family" in problem for problem in MODULE.check_families())
+
+
 def test_check_families_needs_a_documented_model_and_a_lookalike(monkeypatch):
     table = dict(MODULE.CLASS_TEMPLATES["unsafe_action"], modelled_on="")
     monkeypatch.setitem(MODULE.CLASS_TEMPLATES, "unsafe_action", table)
@@ -129,9 +211,12 @@ def test_dev_generation_is_deterministic_and_paired(roots):
     labels = {item["label"] for item in next(d for d in EMAP["datasets"] if d["id"] == "generators_dev_seed")["labels"]}
     dev_families = {f for splits in MODULE.CARRIERS.values() for f in splits["dev"]} | set(MODULE.TOOL_FRAMES["dev"]) | set(MODULE.WRAPPERS["dev"])
     dev_families |= {f for table in MODULE.CLASS_TEMPLATES.values() for f in table["dev"]}
+    dev_families |= {f for table in MODULE.AGENT_SCENARIOS.values() for f in table["frames"]["dev"]}
     for name, rows in generated(dev / "generated").items():
         attacks = [row for row in rows if not row["benign"]]
-        twinless = sum(row["template_family"] in TWINLESS_FAMILIES for row in attacks)
+        twinless = sum(row["template_family"] in TWINLESS_FAMILIES if name == "class_templates"
+                       else row["template_family"] in MODULE.AGENT_SCENARIOS[row["classes"][0]].get("no_twin_frames", ())
+                       if name == "agent_scenarios" else False for row in attacks)
         assert len(attacks) == COUNTS[name]
         assert len(rows) - len(attacks) == (0 if name == "obfuscation_slices" else COUNTS[name] - twinless)
         by_id = {row["id"]: row for row in rows}
@@ -203,6 +288,7 @@ def test_holdout_uses_a_secret_seed_and_its_own_families(roots):
     assert seed not in (holdout / "generated" / "manifest.json").read_text()
     holdout_families = {f for splits in MODULE.CARRIERS.values() for f in splits["holdout"]} | set(MODULE.TOOL_FRAMES["holdout"]) | set(MODULE.WRAPPERS["holdout"])
     holdout_families |= {f for table in MODULE.CLASS_TEMPLATES.values() for f in table["holdout"]}
+    holdout_families |= {f for table in MODULE.AGENT_SCENARIOS.values() for f in table["frames"]["holdout"]}
     labels = {item["label"] for item in next(d for d in EMAP["datasets"] if d["id"] == "generators_holdout_seed")["labels"]}
     for rows in generated(holdout / "generated").values():
         for row in rows:

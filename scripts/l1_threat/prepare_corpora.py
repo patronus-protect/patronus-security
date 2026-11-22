@@ -100,7 +100,7 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against", "records"}
+OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against", "records", "columns"}
 KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "contains", "excludes", "matches", "at_least", "below")
 LIST_OPS = ("equals", "contains", "excludes", "matches")
@@ -222,6 +222,9 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
         problems.append(f"{where}: format must be one of {FORMATS}")
     if "records" in entry and (entry["format"] != "json" or not isinstance(entry["records"], str) or not entry["records"]):
         problems.append(f"{where}: records needs format json and a field path ('.' for one record per file, '*' to expand)")
+    if "columns" in entry and (entry["format"] != "csv" or not isinstance(entry["columns"], list) or not entry["columns"]
+                               or not all(isinstance(name, str) and name for name in entry["columns"])):
+        problems.append(f"{where}: columns needs format csv and a non-empty list of column names (for files without a header row)")
     if ("language" in entry) == ("language_field" in entry):
         problems.append(f"{where}: exactly one of language / language_field")
     rules = entry["labels"]
@@ -537,8 +540,9 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
             yield from agentdojo_records(json.loads(path.read_text(encoding="utf-8")))
         elif entry["format"] == "csv":
             csv.field_size_limit(sys.maxsize)
-            with path.open(encoding="utf-8", newline="") as handle:
-                yield from csv.DictReader(handle)
+            # utf-8-sig drops a leading byte order mark, which would otherwise end up in the first column name.
+            with path.open(encoding="utf-8-sig", newline="") as handle:
+                yield from csv.DictReader(handle, fieldnames=entry.get("columns"))
         else:
             yield from PRESIDIO.read_parquet_columns(path, columns)
 

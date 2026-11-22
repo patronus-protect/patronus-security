@@ -5,11 +5,13 @@
   },
   "class_sets": {
     "agent_config_tampering": {
+      "generated/agent_scenarios": 160,
       "generated/class_templates": 84,
       "train_dev/approve_or_deny_de": 3
     },
     "benign": {
-      "generated/carrier_insertion": 579,
+      "generated/agent_scenarios": 640,
+      "generated/carrier_insertion": 585,
       "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
       "report/civil_comments": 5856,
@@ -25,12 +27,13 @@
       "train_dev/massive_en": 11225,
       "train_dev/spml": 3326,
       "train_dev/wildguardmix": 490,
-      "train_dev/wildjailbreak": 23
+      "train_dev/wildjailbreak": 23,
+      "translated/runner_translations_de": 150
     },
     "exfiltration": {
-      "generated/carrier_insertion": 102,
+      "generated/carrier_insertion": 75,
       "generated/exfil_lookalikes": 300,
-      "generated/obfuscation_slices": 61,
+      "generated/obfuscation_slices": 59,
       "train_dev/agentdojo": 63,
       "train_dev/approve_or_deny_de": 1,
       "train_dev/bipia": 50
@@ -38,49 +41,58 @@
     "harmful_content": {
       "report/ailuminate_demo": 800,
       "report/nemotron_content_safety_v2": 1471,
-      "train_dev/nemotron_safety_v3": 799
+      "train_dev/nemotron_safety_v3": 799,
+      "train_dev/simple_safety_tests": 100,
+      "translated/runner_translations_de": 100
     },
     "instruction_injection": {
-      "generated/carrier_insertion": 334,
-      "generated/obfuscation_slices": 218,
+      "generated/carrier_insertion": 304,
+      "generated/obfuscation_slices": 197,
       "report/gandalf": 998,
       "train_dev/agentdojo": 136,
       "train_dev/bipia": 188,
       "train_dev/cyberseceval_multilingual": 9,
-      "train_dev/spml": 2403
+      "train_dev/spml": 2403,
+      "translated/runner_translations_de": 150
     },
     "jailbreak": {
-      "generated/carrier_insertion": 49,
+      "generated/carrier_insertion": 43,
       "generated/class_templates": 84,
-      "generated/obfuscation_slices": 33,
+      "generated/obfuscation_slices": 29,
       "report/jackhhao_jailbreak": 544,
       "train_dev/wildjailbreak": 2000,
       "train_dev/xl_safetybench": 450
     },
     "memory_poisoning": {
+      "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
     "prompt_extraction": {
-      "generated/carrier_insertion": 49,
-      "generated/obfuscation_slices": 38,
+      "generated/carrier_insertion": 86,
+      "generated/obfuscation_slices": 71,
       "report/gandalf": 998,
-      "train_dev/mosscap": 15000
+      "train_dev/mosscap": 15000,
+      "translated/runner_translations_de": 300
     },
     "resource_exhaustion": {
+      "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
     "tool_poisoning": {
+      "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
     "toxic_language": {
       "report/civil_comments": 144,
       "report/textdetox_de": 2072,
-      "train_dev/nemotron_safety_v3": 106
+      "train_dev/dynahate": 752,
+      "train_dev/nemotron_safety_v3": 106,
+      "train_dev/xsafety_de": 152
     },
     "unsafe_action": {
-      "generated/carrier_insertion": 195,
+      "generated/carrier_insertion": 191,
       "generated/class_templates": 83,
-      "generated/obfuscation_slices": 131,
+      "generated/obfuscation_slices": 116,
       "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
       "train_dev/approve_or_deny_de": 35,
@@ -89,70 +101,73 @@
   },
   "classes": {
     "agent_config_tampering": {
-      "de": 45,
-      "en": 42
+      "de": 125,
+      "en": 122
     },
     "benign": {
-      "de": 23121,
-      "en": 30783
+      "de": 23687,
+      "en": 31013
     },
     "exfiltration": {
       "de": 151,
-      "en": 426
+      "en": 397
     },
     "harmful_content": {
-      "de": 316,
-      "en": 483
+      "de": 416,
+      "en": 583
     },
     "instruction_injection": {
-      "de": 77,
-      "en": 3211
+      "de": 268,
+      "en": 3119
     },
     "jailbreak": {
       "de": 492,
-      "en": 2124
+      "en": 2114
     },
     "memory_poisoning": {
-      "de": 42,
-      "en": 41
+      "de": 122,
+      "en": 121
     },
     "prompt_extraction": {
-      "en": 15087
+      "de": 387,
+      "en": 15070
     },
     "resource_exhaustion": {
-      "de": 42,
-      "en": 41
+      "de": 122,
+      "en": 121
     },
     "tool_poisoning": {
-      "de": 42,
-      "en": 41
+      "de": 122,
+      "en": 121
     },
     "toxic_language": {
-      "de": 55,
-      "en": 51
+      "de": 207,
+      "en": 803
     },
     "unsafe_action": {
-      "de": 145,
-      "en": 681
+      "de": 164,
+      "en": 643
     }
   },
   "coverage": {
     "agent_config_tampering": {
       "de": {
         "provenance": {
-          "synthetic": 42,
+          "synthetic": 122,
           "translated": 3
         },
         "sources": {
+          "agent_scenarios": 80,
           "approve_or_deny_de": 3,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 42
+          "synthetic": 122
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 42
         }
       }
@@ -171,53 +186,56 @@
       "en": {
         "provenance": {
           "native": 113,
-          "synthetic": 313
+          "synthetic": 284
         },
         "sources": {
           "agentdojo": 63,
           "bipia": 50,
-          "generators": 313
+          "generators": 284
         }
       }
     },
     "harmful_content": {
       "de": {
         "provenance": {
-          "translated": 316
+          "translated": 416
         },
         "sources": {
-          "nemotron_safety_v3": 316
+          "nemotron_safety_v3": 316,
+          "runner_translations_de": 100
         }
       },
       "en": {
         "provenance": {
-          "native": 483
+          "native": 583
         },
         "sources": {
-          "nemotron_safety_v3": 483
+          "nemotron_safety_v3": 483,
+          "simple_safety_tests": 100
         }
       }
     },
     "instruction_injection": {
       "de": {
         "provenance": {
-          "synthetic": 68,
-          "translated": 9
+          "synthetic": 109,
+          "translated": 159
         },
         "sources": {
           "cyberseceval_multilingual": 9,
-          "generators": 68
+          "generators": 109,
+          "runner_translations_de": 150
         }
       },
       "en": {
         "provenance": {
           "native": 2727,
-          "synthetic": 484
+          "synthetic": 392
         },
         "sources": {
           "agentdojo": 136,
           "bipia": 188,
-          "generators": 484,
+          "generators": 392,
           "spml": 2403
         }
       }
@@ -236,10 +254,10 @@
       "en": {
         "provenance": {
           "native": 2000,
-          "synthetic": 124
+          "synthetic": 114
         },
         "sources": {
-          "generators": 124,
+          "generators": 114,
           "wildjailbreak": 2000
         }
       }
@@ -247,29 +265,41 @@
     "memory_poisoning": {
       "de": {
         "provenance": {
-          "synthetic": 42
+          "synthetic": 122
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 41
+          "synthetic": 121
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 41
         }
       }
     },
     "prompt_extraction": {
-      "en": {
+      "de": {
         "provenance": {
-          "native": 15000,
-          "synthetic": 87
+          "synthetic": 87,
+          "translated": 300
         },
         "sources": {
           "generators": 87,
+          "runner_translations_de": 300
+        }
+      },
+      "en": {
+        "provenance": {
+          "native": 15000,
+          "synthetic": 70
+        },
+        "sources": {
+          "generators": 70,
           "mosscap": 15000
         }
       }
@@ -277,17 +307,19 @@
     "resource_exhaustion": {
       "de": {
         "provenance": {
-          "synthetic": 42
+          "synthetic": 122
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 41
+          "synthetic": 121
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 41
         }
       }
@@ -295,17 +327,19 @@
     "tool_poisoning": {
       "de": {
         "provenance": {
-          "synthetic": 42
+          "synthetic": 122
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 41
+          "synthetic": 121
         },
         "sources": {
+          "agent_scenarios": 80,
           "generators": 41
         }
       }
@@ -313,17 +347,19 @@
     "toxic_language": {
       "de": {
         "provenance": {
-          "translated": 55
+          "translated": 207
         },
         "sources": {
-          "nemotron_safety_v3": 55
+          "nemotron_safety_v3": 55,
+          "xsafety_de": 152
         }
       },
       "en": {
         "provenance": {
-          "native": 51
+          "native": 803
         },
         "sources": {
+          "dynahate": 752,
           "nemotron_safety_v3": 51
         }
       }
@@ -331,23 +367,23 @@
     "unsafe_action": {
       "de": {
         "provenance": {
-          "synthetic": 110,
+          "synthetic": 129,
           "translated": 35
         },
         "sources": {
           "approve_or_deny_de": 35,
-          "generators": 110
+          "generators": 129
         }
       },
       "en": {
         "provenance": {
           "native": 382,
-          "synthetic": 299
+          "synthetic": 261
         },
         "sources": {
           "agent_safetybench": 59,
           "agentdojo": 30,
-          "generators": 299,
+          "generators": 261,
           "redcode": 293
         }
       }
@@ -703,61 +739,101 @@
       "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
       "set": "train_dev/agent_safetybench",
       "verdict": "unclear"
+    },
+    {
+      "id": "runner_translations_de:mosscap:0007923",
+      "label": "prompt_extraction",
+      "note": "fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions",
+      "set": "translated/runner_translations_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "dynahate:0032382",
+      "label": "toxic_language",
+      "note": "questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat",
+      "set": "train_dev/dynahate",
+      "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000061",
+      "label": "toxic_language",
+      "note": "reproaches the reader for bad manners and swearing; critical but no insult, slur or threat",
+      "set": "train_dev/xsafety_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000062",
+      "label": "toxic_language",
+      "note": "polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat",
+      "set": "train_dev/xsafety_de",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
     "agent_config_tampering": {
-      "synthetic": 84,
+      "synthetic": 244,
       "translated": 3
     },
     "benign": {
       "native": 41381,
-      "synthetic": 1304,
-      "translated": 11219
+      "synthetic": 1950,
+      "translated": 11369
     },
     "exfiltration": {
       "native": 113,
-      "synthetic": 463,
+      "synthetic": 434,
       "translated": 1
     },
     "harmful_content": {
-      "native": 483,
-      "translated": 316
+      "native": 583,
+      "translated": 416
     },
     "instruction_injection": {
       "native": 2727,
-      "synthetic": 552,
-      "translated": 9
+      "synthetic": 501,
+      "translated": 159
     },
     "jailbreak": {
       "native": 2450,
-      "synthetic": 166
+      "synthetic": 156
     },
     "memory_poisoning": {
-      "synthetic": 83
+      "synthetic": 243
     },
     "prompt_extraction": {
       "native": 15000,
-      "synthetic": 87
+      "synthetic": 157,
+      "translated": 300
     },
     "resource_exhaustion": {
-      "synthetic": 83
+      "synthetic": 243
     },
     "tool_poisoning": {
-      "synthetic": 83
+      "synthetic": 243
     },
     "toxic_language": {
-      "native": 51,
-      "translated": 55
+      "native": 803,
+      "translated": 207
     },
     "unsafe_action": {
       "native": 382,
-      "synthetic": 409,
+      "synthetic": 390,
       "translated": 35
     }
   },
   "schema": "ark-l1-threat-gold-summary-v1",
   "sets": {
+    "generated/agent_scenarios": {
+      "benign_errors": 0,
+      "benign_reviewed": 10,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 1280,
+      "unclear": 0,
+      "wrong": 0
+    },
     "generated/carrier_insertion": {
       "benign_errors": 0,
       "benign_reviewed": 8,
@@ -765,7 +841,7 @@
       "error_rate": 0.0,
       "reviewed": 56,
       "role": "dev",
-      "rows": 1158,
+      "rows": 1170,
       "unclear": 0,
       "wrong": 0
     },
@@ -798,7 +874,7 @@
       "error_rate": 0.0,
       "reviewed": 54,
       "role": "dev",
-      "rows": 383,
+      "rows": 388,
       "unclear": 0,
       "wrong": 0
     },
@@ -934,6 +1010,17 @@
       "unclear": 0,
       "wrong": 0
     },
+    "train_dev/dynahate": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "dynahate",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 752,
+      "unclear": 1,
+      "wrong": 0
+    },
     "train_dev/germanquad": {
       "benign_errors": 0,
       "benign_reviewed": 50,
@@ -1000,6 +1087,17 @@
       "unclear": 0,
       "wrong": 0
     },
+    "train_dev/simple_safety_tests": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "simple_safety_tests",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 100,
+      "unclear": 0,
+      "wrong": 0
+    },
     "train_dev/spml": {
       "benign_errors": 0,
       "benign_reviewed": 25,
@@ -1042,6 +1140,28 @@
       "role": "dev",
       "rows": 450,
       "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/xsafety_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "xsafety_de",
+      "error_rate": 0.04,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 152,
+      "unclear": 2,
+      "wrong": 0
+    },
+    "translated/runner_translations_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 13,
+      "dataset": "runner_translations_de",
+      "error_rate": 0.0192,
+      "reviewed": 52,
+      "role": "dev",
+      "rows": 700,
+      "unclear": 1,
       "wrong": 0
     }
   },

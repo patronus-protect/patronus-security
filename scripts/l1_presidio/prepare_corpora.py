@@ -41,6 +41,7 @@ import struct
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from pathlib import Path
@@ -423,6 +424,7 @@ def _sha256(data: bytes) -> str:
 
 
 def _upstream_url(base: str, revision: str, path: str) -> str:
+    path = urllib.parse.quote(path, safe="/")
     if base.startswith("https://huggingface.co/datasets/"):
         return f"{base}/resolve/{revision}/{path}"
     if base.startswith("https://github.com/"):

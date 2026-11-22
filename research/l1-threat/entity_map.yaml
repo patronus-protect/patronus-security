@@ -1032,6 +1032,59 @@ datasets:
       - {label: "positive golden of a class", classes: [instruction_injection, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language]}
       - {label: "hard negative golden", benign: true}
     note: ARK-authored; never decide
+  - id: simple_safety_tests
+    name: SimpleSafetyTests
+    source: hf:Bertievidgen/SimpleSafetyTests
+    licence: CC-BY-2.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "harm area = Suicide, Self-Harm, and Eating Disorders", classes: [harmful_content]}
+      - {label: "harm area = Physical Harm and Violence", classes: [harmful_content]}
+      - {label: "harm area = Illegal and Highly Regulated items", classes: [harmful_content]}
+      - {label: "harm area = Scams and Fraud", classes: [harmful_content]}
+      - {label: "harm area = Child Abuse", classes: [harmful_content]}
+    note: >-
+      100 hand-written English test prompts (Vidgen et al., 2023), 20 per harm area, half information and advice
+      seeking and half instructions and actions; every prompt is a harmful request, so the set adds positives only.
+      The five harm areas lie inside the harmful_content subclasses (self_harm, violent_crime, cbrne and
+      nonviolent_crime for regulated items, nonviolent_crime for scams, child_safety). Licence CC-BY-2.0 on the
+      dataset card at the pinned revision
+  - id: dynahate
+    name: Dynamically Generated Hate Speech Dataset
+    source: github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset
+    licence: CC-BY-4.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "type = dehumanization (original entry)", classes: [toxic_language]}
+      - {label: "type = threatening (original entry)", classes: [toxic_language]}
+      - {label: perturbation, out_of_scope: "minimal edit of an original entry, often flipping its label; kept out so one entry is not counted twice"}
+      - {label: "type = derogation, animosity, support, notgiven or none", out_of_scope: "derogation (10 % doubtful in the dev review sample), implicit or untyped hate and the nothate rows"}
+    note: >-
+      Synthetic English hate speech written by trained annotators against a model in the loop (Vidgen et al., ACL 2021),
+      labelled hate or nothate with a hate type and target group. Only original entries of the two explicit types
+      (dehumanisation and threats against a group) count; derogation, animosity, support for hateful entities, untyped
+      round-1 rows, perturbations and nothate rows are left out. Running text rather than requests to a model, so it
+      complements the request-shaped Nemotron rows. Licence CC-BY-4.0 in the README at the pinned commit
+  - id: xsafety_de
+    name: XSafety, German insult prompts
+    source: github:Jarviswang94/Multilingual_safety_benchmark (de/Insult.csv)
+    licence: Apache-2.0
+    languages: [de]
+    split: train_dev
+    family: neutral
+    translated: true
+    labels:
+      - {label: "Insult (every row)", classes: [toxic_language]}
+    note: >-
+      XSafety (Wang et al., ACL Findings 2024): safety prompts in ten languages, translated from the Chinese safety
+      prompts. Only the German insult file is read, and only rows aimed at a person through a
+      du, ihr or euch form; complaints about things, narrated scenes, polite admonitions and neutral questions are left
+      out. Insults and threats aimed at the reader, unlike the request-shaped Nemotron rows. Licence
+      Apache-2.0 in the repository at the pinned commit
   - id: generators_dev_seed
     name: Generators, dev seed
     source: E02 generators with the dev seed
