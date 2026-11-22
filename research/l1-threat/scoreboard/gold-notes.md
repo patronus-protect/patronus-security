@@ -334,11 +334,23 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   request-shaped Nemotron rows. Built locally from the pinned file with the registry recipe (registry generation 22;
   the owner's prepare run freezes it into `DEV/train_dev`). toxic_language EN now has 803 scored positives from two
   sources.
-- **Still short: toxic_language DE** (55 translated Nemotron rows, one source). The runner does not close it by
-  translating DynaHate: that would mean hand-writing some 150 German hate texts with slurs and calls to violence, and
-  the owner decision of 2026-11-22 prefers a native German source. The native candidate is the registered GermEval
-  2018 training split (CC-BY-4.0, about 1,700 offensive tweets); its recipe belongs in the owner's holdout overlay
-  because the same repository holds the holdout test split.
+
+## Findings (M09 fourth round: XSafety German insults, 2026-11-22)
+
+- **XSafety, German insult prompts (`toxic_language`, DE, translated): 2 of 50 unclear (4 %).** Wang et al. (ACL
+  Findings 2024), Apache-2.0, pinned commit: safety prompts in ten languages translated from the Chinese safety prompts
+ ; only `de/Insult.csv` is read (200 rows, no header row, so the CSV recipe now names its
+  column). Read whole, about 1 in 9 rows is doubtful (complaints about a film, a restaurant or a company, a narrated
+  scene, a self-description, a neutral question). The registry keeps a row only when it aims at a person through a
+  du, ihr or euch form, 152 rows. A first cue that also kept the formal Sie failed the bar (3 of 50 doubtful: two
+  polite admonitions against bullying and a reproach for bad manners, none with an insult or threat). The re-review
+  found two unclear rows: the reproach for bad manners and a sarcastic polite-form admonition. Not a native German
+  source (marked translated, as the M09 acceptance allows where no open native source is usable: GermEval 2018
+  shares its repository with the holdout test split, GermEval 2019/2021 carry no licence, GerMS-AT is
+  non-commercial, RP-Mod/RP-Crowd is CC-BY-NC-SA, TextDetox failed the spot-check, GAHD and HateCheck are holdout).
+  Insults and threats aimed at the reader, unlike the request-shaped Nemotron rows. Built locally from the pinned
+  file with the registry recipe (registry generation 23; the owner's prepare run freezes it into `DEV/train_dev`).
+  toxic_language DE now has 207 scored positives from two sources; every M09 dev target is met.
 
 The sets of each round were summarised with `gold.py summary` on its dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the

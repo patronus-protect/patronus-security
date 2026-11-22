@@ -32,7 +32,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
 | resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
 | harmful_content | 416 | 583 | 0 | 172 | 583 | 416 | 0 | 172 | 0 | 0 |
-| toxic_language | 55 | 803 | 1999 | 2162 | 803 | 55 | 0 | 4161 | 0 | 0 |
+| toxic_language | 207 | 803 | 1999 | 2162 | 803 | 207 | 0 | 4161 | 0 | 0 |
 | benign | 23687 | 31013 | 17191 | 15030 | 41381 | 11369 | 1950 | 37235 | 0 | 2100 |
 
 ## Dev targets per class and language
@@ -49,7 +49,7 @@ Scored dev positives per class and language against the target, from at least 2 
 | prompt_extraction | en | 200 | 15070 | 2 | 15000 | 0 | 70 | yes |
 | harmful_content | de | 200 | 416 | 2 | 0 | 416 | 0 | yes |
 | harmful_content | en | 200 | 583 | 2 | 583 | 0 | 0 | yes |
-| toxic_language | de | 200 | 55 | 1 | 0 | 55 | 0 | no |
+| toxic_language | de | 200 | 207 | 2 | 0 | 207 | 0 | yes |
 | toxic_language | en | 200 | 803 | 2 | 803 | 0 | 0 | yes |
 | tool_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
 | tool_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
@@ -99,6 +99,7 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 | train_dev/xl_safetybench | dev | 450 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| train_dev/xsafety_de | dev | 152 | 50 | 0 | 2 | 4.0% | 0 / 0 |
 | translated/runner_translations_de | dev | 700 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 
 Benign pool (dev, scored sets): 0 of 449 reviewed benign rows wrong or unclear.
@@ -194,6 +195,8 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
 | translated/runner_translations_de | runner_translations_de:mosscap:0007923 | prompt_extraction | unclear | fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions |
 | train_dev/dynahate | dynahate:0032382 | toxic_language | unclear | questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat |
+| train_dev/xsafety_de | xsafety_de:0000061 | toxic_language | unclear | reproaches the reader for bad manners and swearing; critical but no insult, slur or threat |
+| train_dev/xsafety_de | xsafety_de:0000062 | toxic_language | unclear | polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -531,11 +534,23 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   request-shaped Nemotron rows. Built locally from the pinned file with the registry recipe (registry generation 22;
   the owner's prepare run freezes it into `DEV/train_dev`). toxic_language EN now has 803 scored positives from two
   sources.
-- **Still short: toxic_language DE** (55 translated Nemotron rows, one source). The runner does not close it by
-  translating DynaHate: that would mean hand-writing some 150 German hate texts with slurs and calls to violence, and
-  the owner decision of 2026-11-22 prefers a native German source. The native candidate is the registered GermEval
-  2018 training split (CC-BY-4.0, about 1,700 offensive tweets); its recipe belongs in the owner's holdout overlay
-  because the same repository holds the holdout test split.
+
+## Findings (M09 fourth round: XSafety German insults, 2026-11-22)
+
+- **XSafety, German insult prompts (`toxic_language`, DE, translated): 2 of 50 unclear (4 %).** Wang et al. (ACL
+  Findings 2024), Apache-2.0, pinned commit: safety prompts in ten languages translated from the Chinese safety prompts
+ ; only `de/Insult.csv` is read (200 rows, no header row, so the CSV recipe now names its
+  column). Read whole, about 1 in 9 rows is doubtful (complaints about a film, a restaurant or a company, a narrated
+  scene, a self-description, a neutral question). The registry keeps a row only when it aims at a person through a
+  du, ihr or euch form, 152 rows. A first cue that also kept the formal Sie failed the bar (3 of 50 doubtful: two
+  polite admonitions against bullying and a reproach for bad manners, none with an insult or threat). The re-review
+  found two unclear rows: the reproach for bad manners and a sarcastic polite-form admonition. Not a native German
+  source (marked translated, as the M09 acceptance allows where no open native source is usable: GermEval 2018
+  shares its repository with the holdout test split, GermEval 2019/2021 carry no licence, GerMS-AT is
+  non-commercial, RP-Mod/RP-Crowd is CC-BY-NC-SA, TextDetox failed the spot-check, GAHD and HateCheck are holdout).
+  Insults and threats aimed at the reader, unlike the request-shaped Nemotron rows. Built locally from the pinned
+  file with the registry recipe (registry generation 23; the owner's prepare run freezes it into `DEV/train_dev`).
+  toxic_language DE now has 207 scored positives from two sources; every M09 dev target is met.
 
 The sets of each round were summarised with `gold.py summary` on its dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the

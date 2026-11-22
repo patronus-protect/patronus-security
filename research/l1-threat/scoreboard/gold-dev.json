@@ -86,7 +86,8 @@
       "report/civil_comments": 144,
       "report/textdetox_de": 2072,
       "train_dev/dynahate": 752,
-      "train_dev/nemotron_safety_v3": 106
+      "train_dev/nemotron_safety_v3": 106,
+      "train_dev/xsafety_de": 152
     },
     "unsafe_action": {
       "generated/carrier_insertion": 191,
@@ -140,7 +141,7 @@
       "en": 121
     },
     "toxic_language": {
-      "de": 55,
+      "de": 207,
       "en": 803
     },
     "unsafe_action": {
@@ -346,10 +347,11 @@
     "toxic_language": {
       "de": {
         "provenance": {
-          "translated": 55
+          "translated": 207
         },
         "sources": {
-          "nemotron_safety_v3": 55
+          "nemotron_safety_v3": 55,
+          "xsafety_de": 152
         }
       },
       "en": {
@@ -751,6 +753,20 @@
       "note": "questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat",
       "set": "train_dev/dynahate",
       "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000061",
+      "label": "toxic_language",
+      "note": "reproaches the reader for bad manners and swearing; critical but no insult, slur or threat",
+      "set": "train_dev/xsafety_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000062",
+      "label": "toxic_language",
+      "note": "polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat",
+      "set": "train_dev/xsafety_de",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -797,7 +813,7 @@
     },
     "toxic_language": {
       "native": 803,
-      "translated": 55
+      "translated": 207
     },
     "unsafe_action": {
       "native": 382,
@@ -1124,6 +1140,17 @@
       "role": "dev",
       "rows": 450,
       "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/xsafety_de": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "xsafety_de",
+      "error_rate": 0.04,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 152,
+      "unclear": 2,
       "wrong": 0
     },
     "translated/runner_translations_de": {

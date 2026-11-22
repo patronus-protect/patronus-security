@@ -1069,6 +1069,22 @@ datasets:
       (dehumanisation and threats against a group) count; derogation, animosity, support for hateful entities, untyped
       round-1 rows, perturbations and nothate rows are left out. Running text rather than requests to a model, so it
       complements the request-shaped Nemotron rows. Licence CC-BY-4.0 in the README at the pinned commit
+  - id: xsafety_de
+    name: XSafety, German insult prompts
+    source: github:Jarviswang94/Multilingual_safety_benchmark (de/Insult.csv)
+    licence: Apache-2.0
+    languages: [de]
+    split: train_dev
+    family: neutral
+    translated: true
+    labels:
+      - {label: "Insult (every row)", classes: [toxic_language]}
+    note: >-
+      XSafety (Wang et al., ACL Findings 2024): safety prompts in ten languages, translated from the Chinese safety
+      prompts. Only the German insult file is read, and only rows aimed at a person through a
+      du, ihr or euch form; complaints about things, narrated scenes, polite admonitions and neutral questions are left
+      out. Insults and threats aimed at the reader, unlike the request-shaped Nemotron rows. Licence
+      Apache-2.0 in the repository at the pinned commit
   - id: generators_dev_seed
     name: Generators, dev seed
     source: E02 generators with the dev seed
