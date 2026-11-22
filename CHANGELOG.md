@@ -296,6 +296,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change:** (`toxic_language`) the category now has its own L1 rules: an insult aimed
+  at the addressed person ("you are a …", "du bist ein …"), derogatory or dehumanising statements
+  about a protected group, threats of violence in the first person against a person or group, and
+  harassment (telling someone to kill themselves, "I know where you live"), in German and English.
+  Insult, dehumanising and violence words are looked up in a hashed word list, so no plaintext list
+  ships with the scanner; leetspeak and umlaut spellings are folded before the lookup. Counter-speech
+  ("the claim that … is false"), moderation guidelines and reports, quoted messages and a negated
+  insult ("you are not an idiot") do not report. Before, `toxic_language` found nothing on L1.
 - **Cancel and time out Ark scans:** `scan_all`, `scan_category` and `scan_categories` take
   Ark Core's `ScanControl` as `control=`, as Core's `Scanner.scan` does; Rust has
   `SecurityGateway::scan_with_control`. A cancelled or expired control stops the request and

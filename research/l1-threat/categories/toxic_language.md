@@ -87,7 +87,19 @@ GermEval, HateCheck-DE/EN, RTP-LX, Measuring Hate Speech; Holdout siehe `researc
 
 ## 9. Bestand
 
-Keine L1-Regeln. L2/L3-Label `toxic_or_harmful` mappt primär hierher (X03).
+TX01 (2026-11-22): fünf Punkte-Regeln `ark.threat.tx_insult_addressee` (35), `tx_group_derogation` (45),
+`tx_dehumanisation` (45), `tx_threat` (45), `tx_harassment` (45, neue Familie `harassment`: Aufforderung
+zur Selbsttötung, „ich weiß, wo du wohnst“). Regex für die Struktur (Anrede + Kopula, Gruppe + Kopula,
+Absicht in der ersten Person, Belästigungsphrase) mit Anker-Prefilter `anchor_lexicons/toxic_language.json`;
+die Wörter danach prüft das gehashte Lexikon `threat/toxic_lexicon.json` (Familien `insult`, `dehumanise`,
+`violence_verb`; Bau und Lizenzprüfung je Quelle: `scripts/l1_threat/toxic_lexicon.py`,
+`toxic_lexicon_sources.yaml`). Gegen-Lexika `toxic.counter_speech`, `toxic.moderation` (nur diese Klasse);
+Verneinung zählt nur vor dem Lexikonwort oder direkt vor dem Treffer. `requires_context` ist für
+`tx_insult_addressee` aus, weil die Anrede Teil des Musters ist. Offen: `slur`, `sexual_harass`,
+`profanity` (brauchen eine geerntete, lizenzgeprüfte Quelle), Vokativ („du Idiot“), trennbare Verben
+(„ich bring dich um“). Lexikon derzeit nur Hand-Seed; GAHD und HateCheck sind Holdout-Quellen und dürfen
+nicht geerntet werden, GermEval 2018 Train nur nach Abruf durch den Owner.
+Davor: keine L1-Regeln. L2/L3-Label `toxic_or_harmful` mappt primär hierher (X03).
 
 ## 10. Übernommene OSS-Regeln
 
