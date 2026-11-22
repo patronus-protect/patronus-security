@@ -402,6 +402,7 @@ tasks:
       only fetched at prepare time); gold.py dev review passes the 5% bar for every new set and gold.md is
       re-rendered; leakage 0 (exact + MinHash, dev vs holdout); the holdout side is a counts-only report
   - id: S12
+    status: done
     title: fastText-type L1 models for all eleven classes — train and calibrate the missing classes (tool_poisoning, memory_poisoning, resource_exhaustion) and fix agent_config_tampering (0/0/0 in S10) with the S10/S11 pipeline; per-language detect and clear cuts at 0.1% and 1% FPR on the DE/EN benign pools, the M09 chat pool included
     type: scorer
     deps: [S11, M09]

@@ -595,3 +595,86 @@ def test_cli_calibrate_compares_the_baseline_rows_on_the_same_pool(tmp_path):
     with pytest.raises(SystemExit):
         MODULE.main(["calibrate", "--rows", str(first), "--baseline-rows", str(second), "--class", CLS,
                      "--out", str(out)])
+
+
+def test_cli_calibrate_keeps_the_baseline_rows_on_the_candidate_s_split(tmp_path):
+    # Split alone, the baseline's two families both train; next to the other four, rules_file is held out.
+    generated = generated_rows()
+    native = toy_rows(20) + benign_pool(40)
+    ours = [r for r in generated if r["template_family"] in ("plain_mail", "rules_file")]
+    first, second = tmp_path / "generated.jsonl", tmp_path / "more_generated.jsonl"
+    first.write_text("".join(json.dumps(r) + "\n" for r in native + ours), encoding="utf-8")
+    second.write_text("".join(json.dumps(r) + "\n" for r in generated if r not in ours), encoding="utf-8")
+    out = tmp_path / "calibration.json"
+    assert MODULE.main(["calibrate", "--rows", str(first), "--rows", str(second), "--baseline-rows", str(first),
+                        "--class", CLS, "--out", str(out)]) == 0
+    (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
+    train, _ = MODULE.split_rows(native + generated)
+    baseline_ids = {r["id"] for r in native + ours}
+    assert entry["baseline"]["rows"]["train"] == sum(r["id"] in baseline_ids for r in train)
+
+
+# ── every class with two template families trains on one and calibrates on the other ─
+
+
+def agent_rows():
+    rows = []
+    for cls, families in (("tool_poisoning", ("mcp_tool_description", "tool_shadowing")),
+                          ("resource_exhaustion", ("recursive_task", "repetition_request")),
+                          ("memory_poisoning", ("remember_request", "memory_note_in_doc")),
+                          ("agent_config_tampering", ("rules_file", "skill_file"))):
+        for family in families:
+            for i in range(4):
+                rid = f"gen:class_templates:{family}:{i}"
+                positive = row(rid, f"{family} {i}: attack", classes=[cls], language="de" if i % 2 else "en")
+                twin = {**row(f"{rid}:twin", f"{family} {i}: look-alike", benign=True), "twin_of": rid}
+                for r in (positive, twin):
+                    r.update(generator="class_templates", template_family=family)
+                rows += [positive, twin]
+    return rows
+
+
+def test_split_puts_one_template_family_of_every_class_on_each_side():
+    rows = agent_rows() + toy_rows(20) + benign_pool(40)
+    train, held_out = MODULE.split_rows(rows)
+    for cls in ("tool_poisoning", "resource_exhaustion", "memory_poisoning", "agent_config_tampering"):
+        trained = {MODULE.template_key(r) for r in train if cls in r["classes"]}
+        held = {MODULE.template_key(r) for r in held_out if cls in r["classes"]}
+        assert len(trained) == 1 and len(held) == 1 and not trained & held
+    # Twins follow their template, and the split is independent of the row order.
+    train_keys = {MODULE.template_key(r) for r in train}
+    assert all(MODULE.template_key(r) in train_keys for r in train if r.get("twin_of"))
+    assert {r["id"] for r in MODULE.split_rows(list(reversed(rows)))[0]} == {r["id"] for r in train}
+
+
+# ── rules-only number and the clear cut next to the model ────────────────────
+
+
+def test_calibrate_reports_the_rules_only_number_and_the_clear_cut_per_language():
+    document = ft_model(toy_rows())
+    rows = toy_rows(20) + benign_pool(40)
+    calibrated, report = MODULE.calibrate(document, rows, CLS, tokens=FT_TOKENS, target_fpr=0.1, clear_fpr=0.2)
+    model = MODULE.MODEL.load_model(calibrated)
+    for language in ("de", "en"):
+        chosen = [(r, CLS in r["classes"]) for r in rows if r["language"] == language
+                  and (CLS in r["classes"] or r["benign"])]
+        rules = report["rules"][language]
+        assert rules["tp"] == sum(label and bool(r["facts"]["findings"]) for r, label in chosen)
+        assert rules["fp"] == sum(not label and bool(r["facts"]["findings"]) for r, label in chosen)
+        cell = report["per_language"][language]
+        clear = cell["thresholds"]["1pct_fpr"]
+        scores = [(model.score(r["text"], FT_TOKENS(r))[0], label) for r, label in chosen]
+        assert cell["clear"]["tp"] == sum(label and s > clear for s, label in scores)
+        assert cell["clear"]["fp"] == sum(not label and s > clear for s, label in scores)
+        assert cell["clear"]["tp"] >= cell["tp"]
+
+
+def test_calibration_markdown_shows_the_clear_cut_and_the_rules_only_number(tmp_path):
+    source = tmp_path / "rows.jsonl"
+    source.write_text("".join(json.dumps(r) + "\n" for r in toy_rows(20) + benign_pool(40)), encoding="utf-8")
+    out, md = tmp_path / "calibration.json", tmp_path / "calibration.md"
+    assert MODULE.main(["calibrate", "--rows", str(source), "--class", CLS, "--out", str(out),
+                        "--markdown", str(md)]) == 0
+    header = next(line for line in md.read_text(encoding="utf-8").splitlines()
+                  if line.startswith("| Class | Language |"))
+    assert "TPR at clear" in header and "rules-only TPR" in header

@@ -358,6 +358,20 @@ DE / EN S10-Setup → S11: injection 20,0 → 65,7 / 67,8 → 67,6 (EN −3 von 
 Benign-Pool ist fast nur `germanquad`; übersetzte offene Sets (deepset, Gandalf, wildjailbreak-/jackhhao-Trainings-
 hälften) und ein vielfältiger deutscher Benign-Pool brauchen neue eingefrorene Dev-Daten (`generators.py translate`).
 
+**Stand S12.** fastText-Modelle für alle elf Klassen
+([`scoreboard/fasttext-all-classes.md`](scoreboard/fasttext-all-classes.md)): S11-Setup auf allen Dev-Sets
+(`--rows train_dev --rows generated --rows agent_scenarios --rows translated --oversample-de 4`), Schnitte je Sprache
+bei 0,1 % (Detect) und 1 % FPR (Clear) auf dem Benign-Pool samt M09-Chat-Pool, FPR je Sprache ≤ 0,1 % für jede Klasse.
+`split_rows` lässt die Template-Familien einer Klassenmenge reihum auf beide Seiten fallen; vorher lagen beide
+`class_templates`-Familien von resource_exhaustion auf der Eval-Seite und beide von tool_poisoning auf der
+Trainingsseite. `calibrate` berichtet je Sprache zusätzlich TPR/FPR am Clear-Schnitt und die Zahl der Regeln allein.
+DE / EN TPR@0,1 %: injection 90,2 / 74,6, jailbreak 90,8 / 87,3, prompt_extraction 97,4 / 99,2, exfiltration
+100 / 96,6, unsafe_action 59,4 / 82,6 (Regeln allein EN 92,8), harmful_content 51,8 / 32,5, toxic_language
+83,8 / 50,4; die vier Agenten-Klassen 100 / 100 mit `agent_scenarios` (Generator v8, für den Lauf nur dev-seitig
+erzeugt, in DEV noch nicht eingefroren), ohne es 0 / 0. Gleiche Modellform (256 KiB, p95 3,2–4,4 ms je 100 KiB),
+Parität unverändert, nichts verdrahtet. Offen: Owner-Befehl für Generator v8 in DEV; die Agenten-Zahlen sind
+synthetisch (zwei Quellen je Sprache); toxic_language und harmful_content brauchen eine zweite offene Quelle.
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).

@@ -18,10 +18,11 @@ Every stage scores the same rows; the comparison shows what each building block 
 Rows carry ``id``, ``text``, ``facts`` (``patronus.text_facts/1`` from the ``text_facts`` example),
 ``classes``, ``benign``, ``language`` and ``dataset``, as in the frozen corpora. A row is a positive
 of the class when the class is in ``classes`` and a negative when ``benign``; other rows are left
-out. ``--rows`` is split by a hash of the row's template key into train and eval halves unless
+out. ``--rows`` is split by the row's template key into train and eval halves unless
 ``--eval-rows`` is given: a generated row's key is its generator and template family, so every fill of a
-template and its look-alike twins land on one side; any other row's key is its id. Learned stages train
-on the train rows.
+template and its look-alike twins land on one side, and the families of one class set take turns, so a class
+with two families trains on one and is measured on the other; any other row's key is its id, split by hash.
+Learned stages train on the train rows.
 
 Per stage on the eval rows, per language (``all``, ``de``, ``en``): TPR at matched FPR 1 % and
 0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the same matched thresholds on the
@@ -50,10 +51,12 @@ twins) and what the train-negative cut would have flagged; ``--report-rows`` (se
 ``model.json`` (``--model-out``) records the pool in ``calibration``; it is not wired into any scan path.
 Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
 alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
-source and its TPR per positive source (generator and template family, else the set).
+source and its TPR per positive source (generator and template family, else the set), the TPR and FPR at its own
+clear cut, and next to it the rules-only number (a rule finding of the class, ``R``) on the same rows.
 ``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
-``--rows`` files) also trains a baseline on their train half alone, without oversampling, and calibrates it on
-the candidate's calibration rows, so a comparison of two setups reads both off one held-out pool.
+``--rows`` files) also trains a baseline, without oversampling, on the candidate's train rows from those files
+alone (the candidate's split, not one of their own) and calibrates it on the candidate's calibration rows, so a
+comparison of two setups reads both off one held-out pool.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -249,10 +252,24 @@ def template_key(row: dict) -> str:
 
 
 def split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Train and eval halves by the parity of the first byte of sha256(``template_key``)."""
+    """Train and eval halves by ``template_key``. Generated template families are grouped by the classes of their
+    rows and take turns within a group in sha256 order (the first trains), so a class with two families has one on
+    each side; any other key goes by the parity of the first byte of its sha256."""
+    def digest(key: str) -> bytes:
+        return hashlib.sha256(key.encode("utf-8")).digest()
+
+    families: dict[str, set[str]] = {}
+    for row in rows:
+        if row.get("generator") and row.get("template_family"):
+            families.setdefault(template_key(row), set()).update(row["classes"])
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for key, classes in families.items():
+        groups.setdefault(tuple(sorted(classes)), []).append(key)
+    held = {key for keys in groups.values() for turn, key in enumerate(sorted(keys, key=digest)) if turn % 2}
     train, test = [], []
     for row in rows:
-        (test if hashlib.sha256(template_key(row).encode("utf-8")).digest()[0] & 1 else train).append(row)
+        key = template_key(row)
+        (test if (key in held if key in families else digest(key)[0] & 1) else train).append(row)
     return train, test
 
 
@@ -487,6 +504,7 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
         language_cuts = cuts(own, target_fpr, clear_fpr)
         detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD])
         per_language[language] = {"thresholds": language_cuts, **detections[language],
+                                  "clear": _detections(chosen, language_cuts[MODEL.ASK_THRESHOLD])[language],
                                   "benign_sources": detections["benign_sources"],
                                   "positive_sources": detections["positive_sources"]}
     train_cut = document["thresholds"].get(MODEL.BLOCK_THRESHOLD)
@@ -499,6 +517,8 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
     report: dict[str, Any] = {
         "class": cls, "model": document["name"], "target_fpr": target_fpr, "clear_fpr": clear_fpr,
         "thresholds": thresholds, "calibration": _detections(calibration, detect), "per_language": per_language,
+        "rules": _detections([(row, label, rule_points(row["facts"], SCOREBOARD.category(cls)))
+                              for row, label, _ in calibration], 0),
         "escalate_fpr": sum(score > clear for score in benign) / len(benign),
     }
     if train_cut is not None:
@@ -558,15 +578,20 @@ def calibration_markdown(reports: list[dict[str, Any]]) -> str:
                      f"{_pct(cells['all']['fpr'], 2)} | {_pct(train.get('fpr'), 2)} | {'–' if ms is None else ms} | "
                      f"{'–' if ram is None else round(ram / 1024, 1)} |")
     lines += ["", "## Per-language cuts", "",
-              "Each language's detect cut sits at the target FPR of that language's benign rows.", "",
-              "| Class | Language | benign rows | detect cut | TPR | FPR | positives | positive sources |",
-              "|---|---|---|---|---|---|---|---|"]
+              "Each language's detect cut sits at the target FPR and its clear cut at the clear FPR of that language's "
+              "benign rows; rules only is a rule finding of the class on the same rows.", "",
+              "| Class | Language | benign rows | detect cut | TPR | FPR | clear cut | TPR at clear | FPR at clear "
+              "| rules-only TPR | rules-only FPR | positives | positive sources |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for report in reports:
         for language, cell in report.get("per_language", {}).items():
-            sources = cell["positive_sources"]
+            sources, clear = cell["positive_sources"], cell["clear"]
+            rules = (report.get("rules") or {}).get(language) or {}
             lines.append(f"| {report['class']} | {language.upper()} | {cell['negatives']} | "
                          f"{cell['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {_pct(cell['tpr'])} | "
-                         f"{_pct(cell['fpr'], 2)} | {cell['positives']} | {len(sources)} |")
+                         f"{_pct(cell['fpr'], 2)} | {cell['thresholds'][MODEL.ASK_THRESHOLD]:.4f} | "
+                         f"{_pct(clear['tpr'])} | {_pct(clear['fpr'], 2)} | {_pct(rules.get('tpr'))} | "
+                         f"{_pct(rules.get('fpr'), 2)} | {cell['positives']} | {len(sources)} |")
     compared = [report for report in reports if "baseline" in report]
     if compared:
         lines += ["", "## Baseline and candidate on the same held-out pool", "",
@@ -670,8 +695,8 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--clear-fpr", type=float, default=SCOREBOARD.CLEAR_FPR)
     cal.add_argument("--oversample-de", type=int, default=1, help="repeat German train positives this often")
     cal.add_argument("--baseline-rows", type=Path, action="append", default=[],
-                     help="also train a baseline on the train half of these --rows files only (no oversampling) "
-                          "and calibrate it on the candidate's held-out pool")
+                     help="also train a baseline on the candidate's train rows from these --rows files only "
+                          "(no oversampling) and calibrate it on the candidate's held-out pool")
     cal.add_argument("--bench-bin", type=Path, help="text_model_latency example binary")
     cal.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
     cal.add_argument("--model-out", type=Path, help="calibrated model.json (one --class only)")
@@ -684,11 +709,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--model-out takes one --class")
         if not set(args.baseline_rows) <= set(args.rows):
             parser.error("--baseline-rows must be among --rows")
-        train, held_out = split_rows([row for path in args.rows for row in MODEL.read_rows(path)])
+        sources = {path: MODEL.read_rows(path) for path in args.rows}
+        train, held_out = split_rows([row for rows in sources.values() for row in rows])
         test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
         reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
-        baseline = (split_rows([row for path in args.baseline_rows for row in MODEL.read_rows(path)])[0]
-                    if args.baseline_rows else None)
+        # The baseline keeps the candidate's split: a family that the extra files push to the eval side stays there.
+        chosen = {row["id"] for path in args.baseline_rows for row in sources[path]}
+        baseline = [row for row in train if row["id"] in chosen] if args.baseline_rows else None
         reports = []
         for cls in args.classes:
             document, report = calibrate_class(train, test, cls, stage=args.stage, report_rows=reported,

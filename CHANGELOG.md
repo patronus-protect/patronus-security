@@ -675,6 +675,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Reading JSONL rows in the threat scripts no longer breaks a row at a Unicode line separator
   inside a string. The text model parity data now also checks each model's answer at its cuts.
   **Detection change:** none; no text model is enabled yet.
+- `scripts/l1_threat/ablation.py calibrate` now trains and measures every attack class that has
+  only a few generated templates: when a class's generated examples come from two or more templates,
+  training and calibration each get at least one of them, instead of a coin flip that could put all
+  of them on one side. The per-language report adds the detection and false positive rate at the
+  clear cut and, on the same texts, the rules-only detection and false positive rate.
+  A `--baseline-rows` baseline now trains on the candidate's training texts from its files, so
+  adding templates can no longer move one of them to the other side and stop the comparison.
+  **Detection change:** none; no text model is enabled yet.
 - `scripts/l1_threat/ablation.py calibrate` also sets a cut per language: German and English each
   get their own detect and clear cut, read off the benign texts of that language alone, so the
   false positive rate holds within each language rather than only across the mix. The calibrated
