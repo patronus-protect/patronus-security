@@ -387,6 +387,7 @@ tasks:
   # S10 classes; M09 supplies the gold and benign chat pool for all classes, S12 the missing models, S13
   # ships them and wires them into the cascade.
   - id: M09
+    status: done
     title: DE/EN gold and benign chat pool for every class — per class native German and English positives from open, licence-checked sources (translated only where no native source exists, marked translated), and a DE/EN benign pool of ordinary chat traffic for false-positive measurement (e.g. OASST2 de/en user turns under Apache-2.0, WildChat de/en under ODC-BY, other open chat corpora with their licence named); registered in datasets.yaml and the entity map and run through the gold process (sample review, leakage check, dev + holdout split, holdout overlay for the holdout sets)
     type: eval-infra
     deps: [M07, M08]
