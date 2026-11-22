@@ -31,19 +31,15 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
         .map(|r| r["id"].as_str().unwrap())
         .collect();
     assert_eq!(actual, expected);
-    let gateway_with = |gates: ScanGateMatrix| {
-        SecurityGateway::new(
-            GatewayConfig::new(SecurityCategory::ATTACK_CLASSES.to_vec(), SecurityLevel::L1)
-                .with_gates(gates),
-        )
-        .unwrap()
-    };
-    let enabled = gateway_with(ScanGateMatrix::all_enabled());
+    let gateway = &SecurityGateway::new(
+        GatewayConfig::new(SecurityCategory::ATTACK_CLASSES.to_vec(), SecurityLevel::L1)
+            .with_gates(ScanGateMatrix::all_enabled()),
+    )
+    .unwrap();
     for case in cases {
         let category = rule_category(&case.rule_id);
         assert_ne!(case.en, case.de);
         for text in [&case.en, &case.de] {
-            let gateway = &enabled;
             let result = &injection_l1(gateway, category, text)
                 .unwrap_or_else(|| panic!("{}: no rule result: {text}", case.rule_id));
             assert_ne!(
@@ -69,15 +65,12 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
             }
             let mut gates = ScanGateMatrix::all_enabled();
             gates.rules.insert(case.rule_id.clone(), false);
-            let gateway = &gateway_with(gates);
             assert!(
-                injection_l1(gateway, category, text).is_none_or(|disabled| !has_rule(
-                    &disabled.layers[0].details["l1_candidates"],
-                    &case.rule_id
-                ))
+                injection_l1_under(gateway, category, text, &gates).is_none_or(|disabled| {
+                    !has_rule(&disabled.layers[0].details["l1_candidates"], &case.rule_id)
+                })
             );
         }
-        let gateway = &enabled;
         for text in [&case.negative_en, &case.negative_de] {
             let Some(result) = injection_l1(gateway, category, text) else {
                 continue;
@@ -176,4 +169,31 @@ fn has_rule(candidates: &serde_json::Value, rule: &str) -> bool {
             .iter()
             .any(|id| id == rule)
     })
+}
+
+/// The L1 results of `text` under `gates` on `gateway`: gates are config keys,
+/// so a scan under other gates passes them in its own execution.
+fn scan_l1_under(
+    gateway: &SecurityGateway,
+    category: SecurityCategory,
+    text: &str,
+    gates: &ScanGateMatrix,
+) -> Vec<patronus_ark::SecurityScanResult> {
+    gateway.scan_distributed_l1(
+        &[patronus_ark_core::cascade::ExternalL1Input::new(
+            category, text,
+        )],
+        &patronus_ark::ScanExecution::with_gates(SecurityLevel::L1, gates.clone()),
+    )
+}
+
+fn injection_l1_under(
+    gateway: &SecurityGateway,
+    category: SecurityCategory,
+    text: &str,
+    gates: &ScanGateMatrix,
+) -> Option<patronus_ark::SecurityScanResult> {
+    scan_l1_under(gateway, category, text, gates)
+        .into_iter()
+        .find(|r| r.model == "native:injection_l1")
 }

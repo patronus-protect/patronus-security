@@ -131,12 +131,25 @@ fn every_threat_rule_has_bilingual_positive_negative_and_exact_evidence_tests() 
 
 #[test]
 fn every_threat_rule_can_be_disabled_individually() {
+    // One gateway; each scan passes its gates in its own execution.
+    let gateway = attack_gateway(ScanGateMatrix::all_enabled());
     for case in cases() {
         let mut gates = ScanGateMatrix::all_enabled();
         gates.rules.insert(case.rule_id.clone(), false);
-        let gateway = attack_gateway(gates);
+        let execution = patronus_ark::ScanExecution::with_gates(SecurityLevel::L1, gates);
         for text in [&case.en, &case.de] {
-            let result = threat_result(&gateway, rule_category(&case.rule_id), text);
+            let category = rule_category(&case.rule_id);
+            let result = gateway
+                .scan_distributed_l1(
+                    &[patronus_ark_core::cascade::ExternalL1Input::new(
+                        category,
+                        text.as_str(),
+                    )],
+                    &execution,
+                )
+                .into_iter()
+                .find(|r| r.model == "native:threat_l1")
+                .unwrap();
             assert!(result.layers[0].details["matched_rules"]
                 .as_array()
                 .unwrap()
