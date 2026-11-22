@@ -866,6 +866,8 @@ class PublicApiTests(unittest.TestCase):
                 build({"policy_dirs": [str(Path(tmp) / "missing")]})
             (Path(tmp) / "kubectl.cedar").write_text(NO_KUBECTL_DELETE)
             build({"policy_dirs": [tmp], "allowlist": {"C2-WEBHOOK-SITE": "ask"}})
+        # Inline Cedar policies are Core's `shell.policies` key.
+        build({"policies": [NO_KUBECTL_DELETE], "allowlist": {"C2-WEBHOOK-SITE": "ask"}})
 
     @unittest.skipUnless(os.environ.get("PATRONUS_SHELL_RISK_BUNDLE"), "requires the K26 bundle")
     def test_shell_command_policies_and_rule_gates_with_the_bundle(self):

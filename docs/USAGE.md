@@ -110,5 +110,5 @@ suite check. See [Normalize text before scanning](how-to/normalize-text-before-s
 ## 14 — Shell commands
 
 The `shell_command` category (Cat) next to PII, DLP and injection, with user `.cedar` policies set
-through the `shell` config key (`policy_dirs`, `allowlist`). The `patronus.verdict/1` document is in
+through the `shell` config key (inline `policies`, `policy_dirs`, `allowlist`). The `patronus.verdict/1` document is in
 `layers[0].details["verdict"]`. See [Check shell commands](how-to/check-shell-commands.md).

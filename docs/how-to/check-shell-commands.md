@@ -158,8 +158,9 @@ back unchanged; Rust parses such a JSON document with `Facts::from_json`.
 
 ## Write policies
 
-A user policy is a Cedar `forbid` in a `.cedar` file. Put the files in a directory and list it in
-`policy_dirs`: the same key in the Core `shell` config, the full Ark gateway and the Ark API (see
+A user policy is a Cedar `forbid`. Put `.cedar` files in a directory and list it in `policy_dirs`,
+or give the Cedar sources inline in `policies` (applied after the files): the same keys in the Core
+`shell` config, the full Ark gateway and the Ark API (see
 [Full Ark](#full-ark-the-shell_command-category)).
 
 ```cedar
@@ -275,8 +276,13 @@ to ask, `rules` turns any policy off.
 ## Full Ark: the `shell_command` category
 
 In the full runtime, Cat is the category `shell_command`. The gateway downloads and pins the same
-bundle. User policies and the allowlist use the Core keys `policy_dirs` and `allowlist`; a loaded
-bundle applies them at once (a refused configuration changes nothing), otherwise `warmup` does.
+bundle. User policies and the allowlist use the Core keys `policy_dirs`, `policies` and
+`allowlist`, applied when `warmup` loads the bundle.
+
+To replace the policies and allowlist at runtime, pass a new `ShellConfig` with the same bundle to
+`reload_shell`: Core's `Scanner::reload_shell` and Ark's `SecurityGateway::reload_shell` take the
+same path and apply it to the loaded bundle without reloading it. A refused config (another bundle,
+unreadable or invalid policies) changes nothing.
 
 === "Rust"
 

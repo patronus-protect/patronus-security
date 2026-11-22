@@ -190,7 +190,8 @@ block score=  4.296 model=block policies=["core.secret_to_net"]  cat ~/.ssh/id_e
 ```
 
 - **Policies.** Three tiers: `core.*` (built in), bundle defaults such as `CMD-PIPE-CURL`, and
-  your `user.*` policies from `policy_dirs`. `allowlist` lowers a bundle-default policy from
+  your `user.*` policies from `policy_dirs` and inline `policies`; `Scanner::reload_shell`
+  replaces them at runtime. `allowlist` lowers a bundle-default policy from
   `block` to `ask`; core policies cannot be lowered.
 - **Rules.** A policy is the rule `cat.<policy id>`: `rules: {"cat.CMD-PIPE-CURL": false}` turns that policy
   off, the same way as any L1 rule.

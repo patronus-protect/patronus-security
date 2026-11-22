@@ -75,7 +75,7 @@ logistic regression over TF-IDF character n-grams and shell tokens (4.4 MiB bund
 ONNX/tokenizer). The verdict is the stricter of the model and Cedar policies over the command's
 facts (core policies, the bundle's DefenseClaw rules, and your own `.cedar` files). The command is
 never executed. In full Ark (library, HTTP API, Cube Coordinator) Cat is the `shell_command`
-category: no harness context or session; user policies and allowlist come from `policy_dirs` and
+category: no harness context or session; user policies and allowlist come from `policy_dirs`, `policies` and
 `allowlist` (the `shell` config key in Rust and Python, `pipeline.shell` in the
 Ark API). Every Cat policy id is an L1 rule id in the shared `rules` gates. In Ark Core it is not a scan category but
 `Scanner::shell_verdict`, which also takes the harness context (cwd, home, repo root) and the facts

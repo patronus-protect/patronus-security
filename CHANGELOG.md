@@ -14,9 +14,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - **Ark Core's keys are set only in the config (Rust):** `SecurityGateway::set_execution_gates`,
   `set_execution_backend`, `set_onnx_runtime_options` and `set_shell_command_policy_config` are
   gone; put the gates (`GatewayConfig::with_gates`), `execution_backend`, `onnx_runtime` and
-  `shell.policy_dirs` / `shell.allowlist` in the gateway config. `ScanExecution::set_backend` and
+  `shell` (`policy_dirs`, `policies`, `allowlist`) in the gateway config. `ScanExecution::set_backend` and
   `set_onnx_runtime_options` are gone too; a scan reads the backend and runtime options from the
-  gateway's config. `shell_command_policy_config()` returns a reference. Ark's own keys keep their
+  gateway's config. `shell_command_policy_config()` is replaced by `shell_config()`, and
+  `reload_shell` replaces the shell policies at runtime (see Fixed). Ark's own keys keep their
   setters. Python: `SecurityGateway.rust_gateway.set_execution_gates` is gone.
 - **One `enqueue` (Rust):** `SecurityGateway::enqueue(ScanRequest)` replaces `enqueue(text,
   gates)`, `enqueue_with_metadata`, `enqueue_with_options`, `enqueue_with_chunk_overlap_options`,
@@ -954,6 +955,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
   to the same detector.
 ### Fixed
+
+- **Inline Cedar shell policies and their runtime replacement are back:** Core's `shell` config
+  has a `policies` key (inline Cedar sources, applied after the `policy_dirs` files), so inline
+  policies reach Core's `Scanner`, the Ark gateway, Python and the Ark API through the one config.
+  Core's `Scanner::reload_shell(ShellConfig)` replaces the policies and allowlist at runtime
+  without reloading the bundle, and `SecurityGateway::reload_shell` takes the same Core path
+  (`ShellConfig::reload`). `ShellPolicyConfig::load` now takes the `ShellConfig`.
 
 - **Same module decisions as Ark Core:** with `cascade`, a category whose rules ran without a
   result (for example an attack class with no candidate) now gets Ark Core's clear decision in

@@ -127,8 +127,8 @@ class SecurityGateway:
             `edge`; `precision` `auto` (default), `fp32`, `fp16`, `mixed`,
             `mixed_x86`, `int8_int4` or `int8_int4_x86`; `execution` with
             `window_tokens`, `overlap_tokens`, `batch_size`, unset values
-            retaining 256/0/1) and `shell` (`policy_dirs` and `allowlist` of
-            the `shell_command` verdict).
+            retaining 256/0/1) and `shell` (`policy_dirs`, inline Cedar
+            `policies` and `allowlist` of the `shell_command` verdict).
 
             Ark keys: `l3_strategy` (`dedicated` or `multi`),
             `ntdb_operating_point`, `ntdb_decision_threshold_point` (`best_f1`

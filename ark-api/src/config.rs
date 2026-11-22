@@ -468,15 +468,20 @@ when { context.program == "kubectl" && context.verb == "DELETE" };"#,
         });
         let config = load(value.clone()).unwrap();
         let gateway = SecurityGateway::new(config.gateway.clone()).unwrap();
-        let shell = gateway.shell_command_policy_config();
-        assert_eq!(shell.user_policies.len(), 1);
+        let shell = gateway.shell_config();
+        assert_eq!(shell.policy_dirs, std::slice::from_ref(&dir));
         assert_eq!(shell.allowlist["C2-WEBHOOK-SITE"], "ask");
 
         value["pipeline"]["shell"]["policy_dirs"] = serde_json::json!([dir.join("missing")]);
         let config = load(value.clone()).unwrap();
         let error = SecurityGateway::new(config.gateway).err().unwrap();
         assert!(error.contains("shell"), "{error}");
-        value["pipeline"]["shell"] = serde_json::json!({"policies": []});
+        // Inline Cedar policies are Core's `shell.policies`.
+        value["pipeline"]["shell"] = serde_json::json!({"policies": ["// inline"]});
+        let config = load(value.clone()).unwrap();
+        let gateway = SecurityGateway::new(config.gateway).unwrap();
+        assert_eq!(gateway.shell_config().policies, ["// inline"]);
+        value["pipeline"]["shell"] = serde_json::json!({"policy": []});
         assert!(load(value).is_err());
         std::fs::remove_dir_all(dir).ok();
     }

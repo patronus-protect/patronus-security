@@ -122,17 +122,12 @@ impl SecurityGateway {
         let execution = self.scan_execution();
         self.shell_command_pipeline = if self.shell_command_configured(&execution) {
             let shell = self.shell_command_config(&base_dir)?;
-            let dir = shell.dir(None).map_err(std::io::Error::other)?;
-            let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(&dir, &shell.manifest_sha256)
-                .map_err(std::io::Error::other)?;
-            pipeline
-                .configure(self.shell_command_policy_config())
-                .map_err(std::io::Error::other)?;
+            let pipeline = ShellRiskPipeline::from_config(&shell).map_err(std::io::Error::other)?;
             let (ask, block) = pipeline.model().cuts();
             log::info!(
                 "shell_command model {} loaded from {}; cuts ask={ask} block={block}",
                 patronus_ark_core::warmup::SHELL_MODEL,
-                dir.display(),
+                shell.dir(None).map_err(std::io::Error::other)?.display(),
             );
             metrics.checkpoint("shell_command_l1", "");
             Some(pipeline)
