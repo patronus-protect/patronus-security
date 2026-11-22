@@ -1991,9 +1991,9 @@ classes:
         de: [<Gruppenbezeichnung> sind <abwertendes Prädikat>, <Slur-Token (gehasht)>]
         en: [<group term> are <derogatory predicate>]
       carriers: [chat, email, web, document, tool_output, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.tx_group_derogation]
       baseline_coverage: {nemo: partial, prompt_guard_2: none, protectai_v2: none}
-      gap: No L1 toxicity detector; hashed lexicon not built
+      gap: Slur family of the hashed lexicon not built yet (needs a mined, licence-checked source)
     - id: dehumanisation
       pattern: tx_dehumanisation
       title: Group compared to animals, vermin or disease
@@ -2008,7 +2008,7 @@ classes:
         de: [<Gruppenbezeichnung> sind <Ungeziefer-Metapher>]
         en: [<group term> are <disease metaphor>]
       carriers: [chat, email, web, document, tool_output, rag_chunk]
-      existing_rules: []
+      existing_rules: [ark.threat.tx_dehumanisation]
       baseline_coverage: {nemo: partial}
       gap: No L1 detector
     - id: threat
@@ -2025,7 +2025,7 @@ classes:
         de: [<ich werde> <dich> <Gewaltverb>]
         en: [<I will> <violence verb> <you/group term>]
       carriers: [chat, email, web, document, tool_output]
-      existing_rules: []
+      existing_rules: [ark.threat.tx_threat]
       baseline_coverage: {nemo: partial}
       gap: No L1 detector
     - id: insult_addressee
@@ -2042,9 +2042,26 @@ classes:
         de: [<du> <Beleidigung>]
         en: [<you> <insult>]
       carriers: [chat, email, web, document, tool_output]
-      existing_rules: []
+      existing_rules: [ark.threat.tx_insult_addressee]
       baseline_coverage: {nemo: partial}
       gap: No L1 detector
+    - id: harassment
+      pattern: tx_harassment
+      title: Harassment of an addressed person (telling them to harm themselves, naming where they live)
+      priority: must
+      task: TX01
+      scored_only: false
+      shape: SELF_HARM_IMPERATIVE + yourself/dich, or I know where + you live
+      anchors: [toxic.harass]
+      required_context: []
+      negative_context: [toxic.moderation, meta, quotation]
+      examples:
+        de: [<Imperativ> <dich> <um>, <ich weiß, wo> <du wohnst>]
+        en: [<go kill> <yourself>, <I know where> <you live>]
+      carriers: [chat, email, web, document]
+      existing_rules: [ark.threat.tx_harassment]
+      baseline_coverage: {}
+      gap: Doxxing beyond the place of residence and repeated contact are not covered
     - id: sexual_harassment
       pattern: tx_sexual_harassment
       title: Sexualised harassment of an addressed person
@@ -2086,9 +2103,6 @@ classes:
     - {id: toxic.violence_verb, kind: support, task: TX01, title: violence verbs in threat form (hashed)}
     - {id: toxic.sexual_harass, kind: support, task: TX01, title: sexualised harassment (hashed)}
     - {id: toxic.profanity, kind: support, task: TX01, title: untargeted curse words (hashed)}
-    - {id: toxic.group, kind: support, task: TX01, title: protected group names (plain text)}
-    - {id: toxic.counter_speech, kind: counter, task: TX01, title: counter-speech phrases}
-    - {id: toxic.moderation, kind: counter, task: TX01, title: moderation and classification context}
     - {id: toxic.self_directed, kind: counter, task: TX01, title: self-deprecation without third party}
 
 # Shell-syntax rules handed to shell risk K26 (shell_command); each leaves threat once K26 decides

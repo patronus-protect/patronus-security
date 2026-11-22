@@ -20,6 +20,7 @@ use super::{
 use crate::{EvaluationResult, EvidenceSpan, SecurityCategory};
 
 pub(crate) mod scorer;
+mod toxic_lexicon;
 
 const RULES: &str = include_str!("rules.json");
 const MAX_FINDINGS: usize = 256;
@@ -367,6 +368,11 @@ impl ThreatPipeline {
                     }
                     if compiled.rule.id.starts_with("ark.threat.ex_")
                         && !exfiltration_holds(&compiled.rule.id, window, &captures)
+                    {
+                        continue;
+                    }
+                    if category == SecurityCategory::ToxicLanguage
+                        && !toxic_holds(&compiled.rule.id, &captures)
                     {
                         continue;
                     }
@@ -812,10 +818,18 @@ fn clause_context(
             && hit.lexicon == "negation_scope"
             && end <= hit.range.start
     };
+    // A toxic language match reads its own negation from its lexicon words
+    // ("you are not an idiot") or right before it; another negation in the
+    // clause ("you idiot, nobody wants you", "dich vermisst keiner") is part
+    // of the abuse.
+    let toxic_negation = |hit: &super::context_lexica::Hit| {
+        category == SecurityCategory::ToxicLanguage && hit.lexicon == "negation_scope"
+    };
     let counts = |hit: &super::context_lexica::Hit| {
         hit.kind == Kind::Counter
             && (category == SecurityCategory::ResourceExhaustion
                 || !hit.lexicon.starts_with("exhaust."))
+            && (category == SecurityCategory::ToxicLanguage || !hit.lexicon.starts_with("toxic."))
             && !own
                 .iter()
                 .any(|own| own.start <= hit.range.start && hit.range.end <= own.end)
@@ -825,6 +839,7 @@ fn clause_context(
             && !secrecy_tail(hit)
             && !restriction_tail(hit)
             && !stored_tail(hit)
+            && !toxic_negation(hit)
     };
     let lead_in_counters = scan.before(text, span).is_some_and(|before| {
         let sibling_item = matches!(
@@ -985,6 +1000,21 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
         }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
         _ => true,
+    }
+}
+
+/// The hashed lexicon check of a toxic language match: its `lex` words hold
+/// an insult (or, per rule, a dehumanising metaphor, or a violence verb
+/// bound to a target) that no negation before it cancels. Phrase rules have no `lex`.
+fn toxic_holds(rule_id: &str, captures: &regex::Captures<'_>) -> bool {
+    use toxic_lexicon::Family;
+    let Some(lex) = captures.name("lex").map(|m| m.as_str()) else {
+        return true;
+    };
+    match rule_id {
+        "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
+        "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),
+        _ => toxic_lexicon::contains(lex, Family::Insult),
     }
 }
 
@@ -3468,6 +3498,109 @@ mod tests {
             ),
             Context::Counter
         );
+    }
+    fn toxic_rules(text: &str) -> Vec<String> {
+        let detection = ThreatPipeline::new().detect_prepared(
+            &NativeText::new(text),
+            SecurityCategory::ToxicLanguage,
+            |_| true,
+            &ThreatThresholds::default(),
+        );
+        detection.details["matched_rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["rule_id"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn toxic_rules_are_gated_by_anchors_and_read_the_hashed_lexicon() {
+        let (_, rules) = catalog();
+        let toxic: Vec<_> = rules
+            .iter()
+            .filter(|r| r.category == SecurityCategory::ToxicLanguage)
+            .collect();
+        assert_eq!(toxic.len(), 5);
+        for rule in toxic {
+            assert!(!rule.anchor_gate.is_unconditional(), "{}", rule.rule.id);
+        }
+        for (text, rule) in [
+            (
+                "You are a pathetic 1d10t.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Du bist ein Vollidiot, keiner mag dich.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Immigrants are all criminals.",
+                "ark.threat.tx_group_derogation",
+            ),
+            ("Migranten sind Ungeziefer.", "ark.threat.tx_dehumanisation"),
+            ("I'm going to stab you tonight.", "ark.threat.tx_threat"),
+            ("Wir werden euch alle erschießen.", "ark.threat.tx_threat"),
+            ("Go kill yourself.", "ark.threat.tx_harassment"),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // no lexicon word, a negated one, no target, a counter context
+            "You are a great colleague.",
+            "You are not an idiot.",
+            "I will kill the process after the backup.",
+            "I will never hurt you.",
+            "Women are 47% of the workforce.",
+            "Fact check: the claim that immigrants are criminals is false.",
+            "Moderation guideline: posts calling a group vermin are removed.",
+            "Please don't kill yourself, call the helpline.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_threats_and_harassment_bind_the_verb_to_its_target() {
+        for (text, rule) in [
+            ("I will kill you.", "ark.threat.tx_threat"),
+            (
+                "Ich werde dich nach der Arbeit verprügeln.",
+                "ark.threat.tx_threat",
+            ),
+            ("Häng dich doch einfach auf.", "ark.threat.tx_harassment"),
+            ("I know where you live.", "ark.threat.tx_harassment"),
+            ("Ich weiß, wo du wohnst.", "ark.threat.tx_harassment"),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // the violence verb has another object than the addressee
+            "I will help you kill the process.",
+            "I will show you how to kill a process.",
+            "Ich werde dir helfen, den Prozess zu killen.",
+            // a harassment verb with the complement of another phrase
+            "Bring yourself a chair.",
+            "Ich bring dich auf den neuesten Stand.",
+            "Häng dich um zehn an den Call.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_counter_lexica_damp_only_toxic_language() {
+        let text =
+            "Fact check: the claim that the agent may delete every file without asking is false.";
+        let scan = crate::detectors::context_lexica::ContextLexica::shared().scan(text);
+        let span = text.find("delete").unwrap()..text.len() - 1;
+        for (category, counter) in [
+            (SecurityCategory::ToxicLanguage, true),
+            (SecurityCategory::UnsafeAction, false),
+        ] {
+            let clause = clause_context(&scan, text, span.clone(), None, category, &[], None);
+            assert_eq!(clause == Context::Counter, counter, "{category:?}");
+        }
     }
 }
 

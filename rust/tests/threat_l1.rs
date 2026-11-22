@@ -14,13 +14,14 @@ struct Case {
     negative_en: String,
 }
 /// The attack classes that hold bounded threat rules.
-const RULE_CLASSES: [SecurityCategory; 6] = [
+const RULE_CLASSES: [SecurityCategory; 7] = [
     SecurityCategory::UnsafeAction,
     SecurityCategory::Exfiltration,
     SecurityCategory::AgentConfigTampering,
     SecurityCategory::HarmfulContent,
     SecurityCategory::ToolPoisoning,
     SecurityCategory::ResourceExhaustion,
+    SecurityCategory::ToxicLanguage,
 ];
 fn attack_gateway(gates: ScanGateMatrix) -> SecurityGateway {
     SecurityGateway::new(

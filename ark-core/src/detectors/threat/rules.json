@@ -965,6 +965,66 @@
         "validator": "format",
         "requires_context": false
       }
+    },
+    {
+      "id": "ark.threat.tx_insult_addressee",
+      "class_name": "toxic_language",
+      "family": "insult_addressee",
+      "upstream_groups": [],
+      "pattern": "(?P<addressee>(?-u:\\b)(?:you\\s{1,4}are|you\\x27re|youre|you\\s{1,4}r|ur|du\\s{1,4}bist|ihr\\s{1,4}seid|sie\\s{1,4}sind))(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
+      "points": {
+        "base_score": 35,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.tx_group_derogation",
+      "class_name": "toxic_language",
+      "family": "group_derogation",
+      "upstream_groups": [],
+      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
+      "points": {
+        "base_score": 45,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.tx_dehumanisation",
+      "class_name": "toxic_language",
+      "family": "dehumanisation",
+      "upstream_groups": [],
+      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
+      "points": {
+        "base_score": 45,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.tx_threat",
+      "class_name": "toxic_language",
+      "family": "threat",
+      "upstream_groups": [],
+      "pattern": "(?P<intent>(?-u:\\b)(?:i\\s{1,4}will|i\\x27ll|i\\s{1,4}am\\s{1,4}going\\s{1,4}to|i\\x27m\\s{1,4}going\\s{1,4}to|i\\x27m\\s{1,4}gonna|i\\s{1,4}gonna|we\\s{1,4}will|we\\x27ll|we\\s{1,4}are\\s{1,4}going\\s{1,4}to|we\\x27re\\s{1,4}going\\s{1,4}to|we\\x27re\\s{1,4}gonna|ich\\s{1,4}werde|werde\\s{1,4}ich|wir\\s{1,4}werden|werden\\s{1,4}wir))(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){2,6})",
+      "points": {
+        "base_score": 45,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.tx_harassment",
+      "class_name": "toxic_language",
+      "family": "harassment",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?:(?P<self_harm>(?:go\\s{1,4}(?:and\\s{1,4})?)?kill\\s{1,4}yourself|bring\\s{1,4}dich\\s{1,4}(?:(?:doch|einfach|endlich|bitte)\\s{1,4}){0,3}um|h(?:ä|ae)ng\\s{1,4}dich\\s{1,4}(?:(?:doch|einfach|endlich|bitte)\\s{1,4}){0,3}auf)|(?P<stalking>i\\s{1,4}know\\s{1,4}where\\s{1,4}you\\s{1,4}live|ich\\s{1,4}wei(?:ß|ss),?\\s{1,4}wo\\s{1,4}du\\s{1,4}wohnst))(?-u:\\b)",
+      "points": {
+        "base_score": 45,
+        "validator": "format",
+        "requires_context": false
+      }
     }
   ]
 }

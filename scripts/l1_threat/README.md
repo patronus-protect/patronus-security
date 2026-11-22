@@ -45,6 +45,26 @@ Die Ausgabe ist eine Kandidatenliste; übernommene Terme bekommen `mined:<hash>`
 
 Tests: `scripts/tests/test_l1_threat_lexicons.py`.
 
+## Gehashtes toxic_language-Lexikon
+
+`toxic_lexicon.py` baut `ark-core/src/detectors/threat/toxic_lexicon.json`: je Familie (`insult`,
+`dehumanise`, `violence_verb`) sortierte FNV-1a-64-Hashes über Salz + normalisierten Begriff (NFKC,
+Kleinschreibung, ä/ö/ü/ß ausgeschrieben, Leetspeak gefaltet). Der Klartext bleibt außerhalb des Repos:
+Kandidaten kommen per `lexicons.py mine` aus dem Train-Split einer gelisteten Quelle oder aus einer
+gelisteten permissiven Wortliste; nach Durchsicht stehen sie als `familie<TAB>begriff<TAB>quelle` in einer
+Datei außerhalb des Repos. `build` verweigert Quellen, die in `research/l1-threat/toxic_lexicon_sources.yaml`
+fehlen, `use: false` tragen oder keine erlaubte Lizenz haben (GAHD und HateCheck sind Holdout-Quellen und
+bleiben aus).
+
+```bash
+python3 scripts/l1_threat/toxic_lexicon.py build TERMS.tsv     # schreibt das Hash-Lexikon
+python3 scripts/l1_threat/toxic_lexicon.py check               # Exit 1 bei jedem Problem
+python3 scripts/l1_threat/toxic_lexicon.py count TEXTS.jsonl   # nur Trefferzahlen je Familie
+```
+
+Rust (`toxic_lexicon.rs`) normalisiert und hasht gleich; ein Paritätsfall steht in beiden Tests.
+Tests: `scripts/tests/test_l1_toxic_lexicon.py`.
+
 ## OSS-Regelinventar
 
 `oss_inventory.py` baut und prüft [`research/l1-threat/oss_rules.yaml`](../../research/l1-threat/oss_rules.yaml),

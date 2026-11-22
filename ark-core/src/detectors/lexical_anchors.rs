@@ -76,6 +76,7 @@ impl LexicalAnchorScanner {
                 include_str!("anchor_lexicons/agent_config_tampering.json"),
                 include_str!("anchor_lexicons/exfiltration.json"),
                 include_str!("anchor_lexicons/jailbreak.json"),
+                include_str!("anchor_lexicons/toxic_language.json"),
             ]
             .into_iter()
             .flat_map(|source| {

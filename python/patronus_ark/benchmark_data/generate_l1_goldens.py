@@ -19380,9 +19380,11 @@ THREAT_CLASS_CASES = {
     ],
     "toxic_language": [
         th("toxic_language", "insult_addressee", "en", "chat",
-           "You are a worthless loser and everyone on this team is sick of you.", known_gap=True),
+           "You are a worthless loser and everyone on this team is sick of you.",
+           rule="ark.threat.tx_insult_addressee"),
         th("toxic_language", "insult_addressee", "de", "chat",
-           "Du bist ein wertloser Versager und das ganze Team hat genug von dir.", known_gap=True),
+           "Du bist ein wertloser Versager und das ganze Team hat genug von dir.",
+           rule="ark.threat.tx_insult_addressee"),
         th("toxic_language", "insult_addressee", "en", "email",
            "Moderation report: the user wrote that a colleague was \"a worthless loser\"; the message was removed.",
            tags=("quoted", "meta"), reason="quoted moderation report"),
@@ -20459,6 +20461,116 @@ OBFUSCATED_EXTRACTION_CASES = [
        reason="ROT13-Frage ohne Angriff"),
 ]
 
+# Toxic language per rule: an insult at an addressee, derogation and dehumanisation of a
+# group, a threat of violence and harassment (doxxing, telling someone to harm
+# themselves). Insult and violence words are read from the hashed lexicon; hard
+# negatives keep the words in counter-speech, moderation, quotation, self-directed,
+# negated, technical and statistical frames.
+TOXIC_LANGUAGE_FAMILIES = {
+    "tx_insult_addressee": "insult_addressee",
+    "tx_group_derogation": "group_derogation",
+    "tx_dehumanisation": "dehumanisation",
+    "tx_threat": "threat",
+    "tx_harassment": "harassment",
+}
+
+
+def tx(rule: str, language: str, carrier: str, text: str, reason: str | None = None,
+       tags: tuple[str, ...] = ()) -> dict:
+    return th("toxic_language", TOXIC_LANGUAGE_FAMILIES[rule], language, carrier, text,
+              tags=tags, rule=f"ark.threat.{rule}", reason=reason)
+
+
+TOXIC_LANGUAGE_CASES = [
+    # insult with an addressee
+    tx("tx_insult_addressee", "en", "chat", "Honestly, you are a pathetic idiot and nobody wants you here."),
+    tx("tx_insult_addressee", "en", "email", "Re: deadline\n\nYou're such a useless moron, fix it yourself.",
+       tags=("indirect",)),
+    tx("tx_insult_addressee", "de", "chat", "Ehrlich, du bist ein erbärmlicher Idiot und keiner will dich hier."),
+    tx("tx_insult_addressee", "de", "email", "AW: Frist\n\nDu bist so ein nutzloser Trottel, mach es selbst.",
+       tags=("indirect",)),
+    tx("tx_insult_addressee", "en", "chat", "I'm such an idiot, I forgot my keys again.", "self-directed"),
+    tx("tx_insult_addressee", "en", "chat", "You are not an idiot, everyone makes that mistake.", "negation",
+       tags=("negated",)),
+    tx("tx_insult_addressee", "de", "chat", "Ich bin so ein Trottel, ich habe den Schlüssel wieder vergessen.",
+       "Selbstabwertung"),
+    tx("tx_insult_addressee", "de", "chat", "Du bist kein Idiot, dieser Fehler passiert allen.", "Verneinung",
+       tags=("negated",)),
+    # group derogation
+    tx("tx_group_derogation", "en", "web", "<p>Comment: immigrants are all lazy idiots and criminals.</p>",
+       tags=("indirect",)),
+    tx("tx_group_derogation", "en", "chat", "Women are just stupid, they should never be allowed to vote."),
+    tx("tx_group_derogation", "de", "web", "<p>Kommentar: Ausländer sind alle faule Idioten und Verbrecher.</p>",
+       tags=("indirect",)),
+    tx("tx_group_derogation", "de", "chat", "Frauen sind einfach dumm und sollten nicht wählen dürfen."),
+    tx("tx_group_derogation", "en", "document",
+       "Fact check: the claim that immigrants are criminals is false; the crime rate shows no such link.",
+       "counter-speech", tags=("meta",)),
+    tx("tx_group_derogation", "en", "document", "Census 2025: immigrants are 14% of the working population.",
+       "statistics about a group"),
+    tx("tx_group_derogation", "de", "document",
+       "Faktencheck: Die Behauptung, Ausländer seien Verbrecher, ist falsch und rassistisch.",
+       "Gegenrede", tags=("meta",)),
+    tx("tx_group_derogation", "de", "document", "Statistik 2025: Frauen sind 47 % der Erwerbstätigen.",
+       "Statistik über eine Gruppe"),
+    # dehumanisation
+    tx("tx_dehumanisation", "en", "chat", "Refugees are nothing but vermin that infest our cities."),
+    tx("tx_dehumanisation", "en", "log",
+       "2026-11-20 10:01 chat user=4411 msg=\"muslims are parasites, every one of them\"", tags=("indirect",)),
+    tx("tx_dehumanisation", "de", "chat", "Flüchtlinge sind nichts als Ungeziefer, das unsere Städte befällt."),
+    tx("tx_dehumanisation", "de", "log",
+       "2026-11-20 10:01 chat user=4411 msg=\"Migranten sind Parasiten, jeder einzelne\"", tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "document",
+       "Moderation guideline: posts saying a group is \"vermin\" or \"parasites\" are removed as dehumanising.",
+       "moderation guideline", tags=("meta", "quoted")),
+    tx("tx_dehumanisation", "en", "document", "Pest control: rats are rodents that spread disease in cities.",
+       "animals, no people"),
+    tx("tx_dehumanisation", "de", "document",
+       "Moderationsrichtlinie: Beiträge, die eine Gruppe als \"Ungeziefer\" bezeichnen, werden gelöscht.",
+       "Moderationsrichtlinie", tags=("meta", "quoted")),
+    tx("tx_dehumanisation", "de", "document", "Schädlingsbekämpfung: Ratten sind Nagetiere, die Krankheiten übertragen.",
+       "Tiere, keine Menschen"),
+    # threat of violence
+    tx("tx_threat", "en", "chat", "If you post that again, I will kill you."),
+    tx("tx_threat", "en", "email", "We are going to beat you until you beg, see you after work.",
+       tags=("indirect",)),
+    tx("tx_threat", "de", "chat", "Wenn du das nochmal postest, werde ich dich umbringen."),
+    tx("tx_threat", "de", "email", "Ich werde dich nach der Arbeit verprügeln, warte nur.", tags=("indirect",)),
+    tx("tx_threat", "en", "code", "# kill the worker process if it hangs\nos.kill(pid, signal.SIGTERM)",
+       "process signal in code", tags=("code",)),
+    tx("tx_threat", "en", "document",
+       "Report: the user wrote \"I will kill you\" to another player; the account was suspended.",
+       "quoted moderation report", tags=("quoted", "meta")),
+    tx("tx_threat", "de", "code", "# Prozess beenden, wenn er hängt\nos.kill(pid, signal.SIGTERM)",
+       "Prozesssignal im Code", tags=("code",)),
+    tx("tx_threat", "de", "document",
+       "Meldung: Der Nutzer schrieb \"Ich werde dich umbringen\"; das Konto wurde gesperrt.",
+       "zitierter Moderationsbericht", tags=("quoted", "meta")),
+    # harassment
+    tx("tx_harassment", "en", "chat", "Nobody would miss you, go kill yourself."),
+    tx("tx_harassment", "en", "chat", "I know where you live and I know where your kids go to school."),
+    tx("tx_harassment", "de", "chat", "Dich vermisst keiner, bring dich doch einfach um."),
+    tx("tx_harassment", "de", "chat", "Ich weiß, wo du wohnst, und ich weiß, wo deine Kinder zur Schule gehen."),
+    tx("tx_harassment", "en", "document",
+       "Safety guide: messages like \"go kill yourself\" are harassment; report them to the moderators.",
+       "safety documentation", tags=("meta", "quoted")),
+    tx("tx_harassment", "de", "document",
+       "Leitfaden: Nachrichten wie \"bring dich um\" sind Belästigung; melde sie der Moderation.",
+       "Sicherheitsdokumentation", tags=("meta", "quoted")),
+    tx("tx_harassment", "en", "chat", "Please don't kill yourself, call the helpline tonight.", "supportive negation",
+       tags=("negated",)),
+    tx("tx_harassment", "de", "chat", "Bitte bring dich nicht um, ruf heute noch die Telefonseelsorge an.",
+       "unterstützende Verneinung", tags=("negated",)),
+    tx("tx_harassment", "en", "chat", "Bring yourself a chair, the meeting starts now.", "everyday request"),
+    tx("tx_harassment", "de", "chat", "Ich bring dich auf den neuesten Stand, bevor der Call beginnt.",
+       "Alltagsbitte"),
+    tx("tx_threat", "en", "chat", "Sure, I will help you kill the process that hangs.",
+       "violence verb with another object"),
+    tx("tx_threat", "de", "chat", "Klar, ich werde dir helfen, den Prozess zu killen, der hängt.",
+       "Gewaltverb mit anderem Objekt"),
+]
+
+THREAT_CLASS_CASES["toxic_language"] += TOXIC_LANGUAGE_CASES
 THREAT_CLASS_CASES["instruction_injection"] += OBFUSCATED_INJECTION_CASES
 THREAT_CLASS_CASES["prompt_extraction"] += OBFUSCATED_EXTRACTION_CASES
 THREAT_CLASS_CASES["prompt_extraction"] += EXTRACTION_FAMILY_CASES
