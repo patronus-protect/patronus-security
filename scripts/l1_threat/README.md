@@ -219,7 +219,15 @@ Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
   `modelled_on` nennt (Paper, Advisories, MCPTox-Muster), und einen harmlosen Doppelgänger im selben
   Rahmen (keinen für `memory_note_in_doc` — ein Dokument mit einer Notiz an den Assistenten — und
   `refusal_suppression`, dessen Doppelgänger den Jailbreak-Rahmen behält: keine harmlose Eingabe; im
-  Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.
+  Template steht dann `None`); nur Platzhalter und `.invalid`-Hosts, keine wirksame Nutzlast.;
+- `agent_scenarios`: eine zweite, unabhängige Generator-Familie für `tool_poisoning`, `memory_poisoning`,
+  `resource_exhaustion` und `agent_config_tampering` (Owner-Entscheidung 2026-11-22) mit eigenen Trägern
+  (Tool-Docstring, MCP-Server-YAML, Paket-README; Support-Chat, Wissensdatenbank-Chunk, gespeicherte Vorlieben;
+  Mail, API-Payload, Code-TODO; Copilot-Instructions, Issue-Kommentar, Setup-README) und eigenen Formulierungen,
+  keine davon aus `class_templates` und keine in Dev und Holdout zugleich (`check_families`). Rahmen, Anweisung
+  und Nummer werden unabhängig gezogen; jeder Angriff hat eine harmlose Doppelgänger-Anweisung im selben Rahmen.
+  Der Satz trägt im Manifest `source_family: agent_scenarios` und zählt in `gold.py` als eigene Quelle; alle
+  anderen Generator-Sätze bleiben zusammen die eine Quelle `generators`.
 
 Quellfilter (Owner-Entscheidung 2026-11-21, ein Filter statt einer niedrigeren Latte): `carrier_insertion` und
 `obfuscation_slices` nehmen eine Angriffszeile nur, wenn jede ihrer Klassen im eigenen Text sichtbar ist

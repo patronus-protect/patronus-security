@@ -597,7 +597,12 @@ Der Dev-Chat-Pool (M09, `pool: chat` in der Entity-Map) sind die MASSIVE-Trainin
 nativ, de-DE von Übersetzern lokalisiert und daher `translated`, je Sprache über 11k Zeilen nach Dedup.
 `gold.py targets` prüft eine Dev-Summary gegen die M09-Ziele (je Klasse und Sprache 200 bzw. 100 gewertete
 Positive aus mindestens zwei Quellen, alle Generatoren eine Quelle; Chat-Pool mindestens 10k Zeilen je Sprache);
-`gold.md` zeigt die Tabelle „Dev targets per class and language“.
+`gold.md` zeigt die Tabelle „Dev targets per class and language“. Owner-Entscheidung 2026-11-22: das Ziel bleibt
+ohne Ausnahme; eine zweite, unabhängige Generator-Familie mit eigenen Trägern und Formulierungen zählt als eigene
+Quelle (`agent_scenarios` für die vier Agenten-Klassen, `source_family` im Manifest), und harmful_content und
+toxic_language brauchen je Sprache eine zweite offene, lizenzgeprüfte Quelle (nativ bevorzugt, keine
+Maschinenübersetzung derselben Nemotron-Prompts). Braucht eine Runde neu erzeugte oder geholte Dev-Daten, nennt
+der PR den Owner-Befehl.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
