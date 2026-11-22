@@ -107,6 +107,16 @@ einer erlaubten Train-Quelle, dann `lexicons.py mine` → Durchsicht → `toxic_
 zusammen ≈ 130 ms ± 5 % mit und ohne die Klasse (im Rauschen).
 Davor: keine L1-Regeln. L2/L3-Label `toxic_or_harmful` mappt primär hierher (X03).
 
+TX02 (2026-11-22, Punkte und Ablations-Entscheidung): **`B0` bleibt**, kein gelerntes Modell, keine eigenen
+Familien-Gewichte. Zeichen-N-Gramm-LR (`B1`, `B4`) und `FT` liegen auf der Kalibrierhälfte bei 80–82 % bzw.
+66 % TPR@0,1 %, lernen aber nur den Anfrage-Rahmen der einzigen Quelle (`nemotron_safety_v3`: „schreib eine
+Beleidigung über …“): auf nativem toxischem Text (`civil_comments`, `textdetox_de`) 0–1,4 % am Dev-Schnitt (die
+Regeln 0,6 % bei 0 FP), auf den Goldens 1 von 32 Positiven. Die Erwartung „Zeichen-N-Gramm-LR zahlt sich aus“
+gilt erst mit nativen Trainingspositiven (Owner-Abruf GermEval 2018 Train und DynaHate nach `DEV/train_dev`).
+Regel-Ergänzung: ein verneinendes Subjekt mit Verb des Sagens/Glaubens vor dem Treffer im selben Satz
+(„Nobody here thinks you are an idiot“, „Niemand denkt, du bist ein Trottel“) hebt den Lexikon-Treffer auf;
+Dev unverändert (0 Benign-Treffer, Report 13/2 216). Zahlen: [`scoreboard/toxic-language-scorer.md`](../scoreboard/toxic-language-scorer.md).
+
 ## 10. Übernommene OSS-Regeln
 
 Keine Regelquellen; nur die lizenzsaubere Lexikonquelle aus TX01.
