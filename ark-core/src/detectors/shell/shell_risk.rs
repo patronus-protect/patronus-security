@@ -159,7 +159,8 @@ impl ShellConfig {
     /// The runtime replacement of this config by `next`: `next`'s user
     /// policies and allowlist ([`ShellPolicyConfig::load`]) applied to
     /// `pipeline`, this config's bundle loaded from (`None`: not loaded yet,
-    /// the bundle load applies them). The bundle is not reloaded, so a `next`
+    /// so they are [validated](ShellPolicyConfig::validate) without the bundle
+    /// and the bundle load applies them). The bundle is not reloaded, so a `next`
     /// naming another bundle (`bundle_dir`, both resolved below the model cache
     /// root `root`, or `manifest_sha256`) is refused. A refused `next` leaves
     /// the pipeline unchanged. Returns the config now in effect.
@@ -177,8 +178,9 @@ impl ShellConfig {
             );
         }
         let policies = ShellPolicyConfig::load(&next)?;
-        if let Some(pipeline) = pipeline {
-            pipeline.configure(&policies)?;
+        match pipeline {
+            Some(pipeline) => pipeline.configure(&policies)?,
+            None => policies.validate()?,
         }
         Ok(ShellConfig {
             bundle_dir: self.bundle_dir.clone(),

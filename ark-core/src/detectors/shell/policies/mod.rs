@@ -113,6 +113,16 @@ struct DcRule {
     pattern: Option<String>,
 }
 
+fn lowers_to_ask(id: &str, to: &str) -> Result<(), String> {
+    if to == "ask" {
+        Ok(())
+    } else {
+        Err(format!(
+            "allowlist {id}: a policy can only be lowered to ask"
+        ))
+    }
+}
+
 /// User policies and allowlist from the runtime configuration.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ShellPolicyConfig {
@@ -135,6 +145,20 @@ impl ShellPolicyConfig {
         }
         config.user_policies.extend(shell.policies.iter().cloned());
         Ok(config)
+    }
+
+    /// Check what holds without a bundle: every user policy compiles and
+    /// validates with a unique `user.*` id, and the allowlist lowers to ask
+    /// only. Whether an allowlisted id is a bundle-default policy is checked
+    /// when the bundle applies the config.
+    pub fn validate(&self) -> Result<(), String> {
+        ShellPolicies::none().configure(&Self {
+            user_policies: self.user_policies.clone(),
+            allowlist: BTreeMap::new(),
+        })?;
+        self.allowlist
+            .iter()
+            .try_for_each(|(id, to)| lowers_to_ask(id, to))
     }
 
     /// Add the `*.cedar` files of `dir`, in file-name order.
@@ -248,11 +272,7 @@ impl ShellPolicies {
             }
         }
         for (id, to) in &config.allowlist {
-            if to != "ask" {
-                return Err(format!(
-                    "allowlist {id}: a policy can only be lowered to ask"
-                ));
-            }
+            lowers_to_ask(id, to)?;
             let tier = bundle.iter().find(|r| r.id() == id).map(|r| r.tier);
             if tier != Some(Tier::BundleDefault) {
                 return Err(format!(
@@ -469,6 +489,25 @@ mod tests {
         );
         shell.policy_dirs = vec![dir.join("missing")];
         assert!(ShellPolicyConfig::load(&shell).is_err());
+
+        // Without a bundle, validation checks the policies and allowlist levels.
+        let valid = ShellPolicyConfig {
+            allowlist: allowlist.clone(),
+            ..user(NO_KUBECTL_DELETE)
+        };
+        assert_eq!(valid.validate(), Ok(()));
+        let core_id = user(&NO_KUBECTL_DELETE.replace("user.", "core."));
+        let duplicate = ShellPolicyConfig {
+            user_policies: vec![NO_KUBECTL_DELETE.into(), NO_KUBECTL_DELETE.into()],
+            ..ShellPolicyConfig::default()
+        };
+        let to_allow = ShellPolicyConfig {
+            allowlist: BTreeMap::from([("C2-WEBHOOK-SITE".into(), "allow".into())]),
+            ..ShellPolicyConfig::default()
+        };
+        for invalid in [core_id, duplicate, to_allow] {
+            assert!(invalid.validate().is_err(), "{invalid:?}");
+        }
         let config = ShellPolicyConfig {
             allowlist: BTreeMap::new(),
             ..config

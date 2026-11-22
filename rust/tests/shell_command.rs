@@ -248,10 +248,18 @@ fn gateway_takes_inline_policies_and_allowlist_from_its_config_and_reloads_them(
         .unwrap(),
     );
     let mut gateway = SecurityGateway::new(config).unwrap();
-    // Set before warmup, a reload is what warmup loads.
+    // Before warmup a reload is validated without the bundle: an invalid one
+    // keeps the config, a valid one is what warmup loads.
+    let configured = gateway.shell_config();
+    let invalid = ShellConfig {
+        policies: vec![NO_KUBECTL_DELETE.replace("user.", "core.")],
+        ..configured.clone()
+    };
+    assert!(gateway.reload_shell(invalid).is_err());
+    assert_eq!(gateway.shell_config(), configured);
     let before_warmup = ShellConfig {
         policies: vec![NO_KUBECTL_DELETE.to_string()],
-        ..gateway.shell_config()
+        ..configured
     };
     gateway.reload_shell(before_warmup).unwrap();
     gateway.warmup().unwrap();
