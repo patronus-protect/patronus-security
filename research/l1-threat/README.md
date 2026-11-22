@@ -406,6 +406,13 @@ nur aus Regeln, nicht aus Neukalibrierung. Vorschlag für die 80er-Marke: N-Gram
 Anker-Fenstern. Zahlen, Regeln, Latenz und offene Lücken in
 [`categories/injection.md` §13](categories/injection.md#13-stand-ij02-2026-11-18-punkte-und-ablations-entscheidung).
 
+**Stand MP02.** `memory_poisoning` behält `B0` (MP01-Regeln unter `skillspector.persistent_override`,
+bewertet vom Injection-Scorer 0.1.7); keine eigenen Familien-Gewichte, kein gelerntes Modell. Wie bei
+IJ02 erzeugen Benign-Zeilen keinen Kandidaten, Recall kommt nur aus Regeln und Kontext. Neu im
+Klauselkontext: ein abgeschlossener Satz auf einer Zeile über einer Notiz an den Agenten ist kein
+Lead-in mehr (Dev 77 → 83 von 83, 0 Benign-Treffer). Zahlen und Latenz in
+[`categories/memory_poisoning.md` §14](categories/memory_poisoning.md#14-stand-mp02-2026-11-22-punkte-und-ablations-entscheidung).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
