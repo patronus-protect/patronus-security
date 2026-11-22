@@ -204,3 +204,25 @@ def test_outcome_detects_above_the_block_cut_and_clears_at_or_below_the_ask_cut(
     assert MODULE.outcome(cuts, 1.0) == "escalate"
     assert MODULE.outcome(cuts, 0.5) == "clear"
     assert MODULE.outcome({MODULE.ASK_THRESHOLD: 1.0, MODULE.BLOCK_THRESHOLD: 1.0}, 1.0) == "clear"
+
+
+def test_packed_synthetic_fasttext_model_is_fresh():
+    document = json.loads((MODULE.TESTDATA / "synthetic_fasttext_model.json").read_text(encoding="utf-8"))
+    packed = (MODULE.TESTDATA / "synthetic_fasttext_model.ftpack").read_bytes()
+    assert MODULE.pack_fasttext(document) == packed
+
+
+def test_pack_holds_the_folded_values_and_bias():
+    import struct
+
+    document = json.loads((MODULE.TESTDATA / "synthetic_fasttext_model.json").read_text(encoding="utf-8"))
+    model = MODULE.FastTextModel(document)
+    packed = MODULE.pack_fasttext(document)
+    assert packed.startswith(MODULE.PACKED_MAGIC)
+    (length,) = struct.unpack("<I", packed[8:12])
+    header = json.loads(packed[12 : 12 + length])
+    assert header["kind"] == MODULE.PACKED_KIND
+    assert header["bias"] == model.bias
+    assert header["thresholds"] == document["thresholds"]
+    values = struct.unpack(f"<{model.buckets}d", packed[12 + length :])
+    assert list(values) == model.values
