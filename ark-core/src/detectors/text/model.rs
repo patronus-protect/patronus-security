@@ -62,6 +62,14 @@ impl CategoryModel {
         }
     }
 
+    /// The cuts calibrated per text language, if the model has any.
+    pub fn language_thresholds(&self) -> &[(String, L1Thresholds)] {
+        match self {
+            Self::TfidfLr(_) => &[],
+            Self::FastText(model) => model.language_thresholds(),
+        }
+    }
+
     /// Decision score (logit) of `text` with its `facts`, and the top
     /// positive feature contributions. The K26 form reads every `tf1`
     /// token, the fastText-type form only the fact tokens.

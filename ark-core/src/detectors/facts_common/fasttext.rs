@@ -70,6 +70,9 @@ struct PackedHeader {
     char_ngram_range: [usize; 2],
     bias: f64,
     thresholds: BTreeMap<String, f64>,
+    /// Cuts per text language, calibrated on that language's benign text.
+    #[serde(default)]
+    language_thresholds: BTreeMap<String, BTreeMap<String, f64>>,
     decision_rule: String,
 }
 
@@ -81,6 +84,7 @@ pub struct FastTextModel {
     values: Vec<f64>,
     bias: f64,
     thresholds: L1Thresholds,
+    language_thresholds: Vec<(String, L1Thresholds)>,
 }
 
 /// Whether a `model.json` document is of the fastText-type form.
@@ -133,6 +137,7 @@ impl FastTextModel {
             char_ngrams: (file.char_ngram_range[0], file.char_ngram_range[1]),
             values,
             bias: file.bias[1] - file.bias[0],
+            language_thresholds: Vec::new(),
         })
     }
 
@@ -168,17 +173,24 @@ impl FastTextModel {
                 "packed {label} fastText model does not hold one value per bucket"
             ));
         }
+        let what = format!("{label} fastText model");
+        let language_thresholds = header
+            .language_thresholds
+            .iter()
+            .map(|(language, cuts)| {
+                L1Thresholds::from_model(cuts, form, &what).map(|cuts| (language.clone(), cuts))
+            })
+            .collect::<Result<_, _>>()?;
         Ok(Self {
-            thresholds: L1Thresholds::from_model(
-                &header.thresholds,
-                form,
-                &format!("{label} fastText model"),
-            )?,
+            thresholds: L1Thresholds::from_model(&header.thresholds, form, &what)?,
+            language_thresholds,
             name: header.name,
             char_ngrams: (header.char_ngram_range[0], header.char_ngram_range[1]),
             values: values
-                .chunks_exact(8)
-                .map(|value| f64::from_le_bytes(value.try_into().expect("8 bytes")))
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|value| f64::from_le_bytes(*value))
                 .collect(),
             bias: header.bias,
         })
@@ -192,6 +204,12 @@ impl FastTextModel {
     /// The detect and clear cuts on the decision score.
     pub fn thresholds(&self) -> L1Thresholds {
         self.thresholds
+    }
+
+    /// The cuts calibrated per text language (packed models only); a
+    /// language without its own uses [`Self::thresholds`].
+    pub fn language_thresholds(&self) -> &[(String, L1Thresholds)] {
+        &self.language_thresholds
     }
 
     /// Number of embedding buckets.

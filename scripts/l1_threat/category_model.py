@@ -462,7 +462,8 @@ def load_model(document: dict) -> "Model | FastTextModel":
 
 def pack_fasttext(document: dict) -> bytes:
     """The packed form of a fastText-type ``model.json`` document: the folded per-bucket values and the
-    bias difference as ``FastTextModel`` computes them, so the packed model scores bit for bit the same."""
+    bias difference as ``FastTextModel`` computes them, so the packed model scores bit for bit the same. A
+    calibrated model also carries its per-language cuts (``calibration.language_thresholds``)."""
     model = FastTextModel(document)
     header = {
         "kind": PACKED_KIND,
@@ -476,6 +477,9 @@ def pack_fasttext(document: dict) -> bytes:
         "thresholds": document["thresholds"],
         "decision_rule": document["decision_rule"],
     }
+    languages = document.get("calibration", {}).get("language_thresholds")
+    if languages:
+        header["language_thresholds"] = languages
     encoded = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return PACKED_MAGIC + struct.pack("<I", len(encoded)) + encoded + struct.pack(f"<{model.buckets}d", *model.values)
 
