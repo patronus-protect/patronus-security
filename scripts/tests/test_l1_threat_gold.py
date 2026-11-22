@@ -128,6 +128,25 @@ def test_summary_counts_positives_by_source_and_the_chat_pool(dev_pool, tmp_path
     assert MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set(), {"chat"})["chat_pool"] == {}
 
 
+def test_an_independent_generator_family_counts_as_its_own_source(tmp_path):
+    # A generator set with its own source_family in the manifest (agent_scenarios) is a second source next to
+    # the other generator sets, which together stay one source.
+    sets = {name: [row("generators_dev_seed", i, t, language="de", classes=["memory_poisoning"]) for i, t in enumerate(texts(name, n))]
+            for name, n in (("class_templates", 45), ("carrier_insertion", 5), ("agent_scenarios", 80))}
+    generated = freeze(tmp_path / "generated", sets, schema=CORPORA.GENERATED_SCHEMA)
+    manifest = json.loads((generated / "manifest.json").read_bytes())
+    manifest["sets"]["agent_scenarios"]["source_family"] = "agent_scenarios"
+    data = CORPORA.BENIGN_CODE._manifest_bytes(manifest)
+    (generated / "manifest.json").write_bytes(data)
+    (generated / ".ready").write_text(f"{CORPORA.PRESIDIO._sha256(data)}  manifest.json\n", encoding="utf-8")
+    pool = MODULE.read_pool([generated])
+    result = MODULE.summary(pool, review(MODULE.sample(pool, 50)), "dev", set(), set())
+    assert result["coverage"]["memory_poisoning"]["de"] == {"provenance": {"synthetic": 130},
+                                                             "sources": {"agent_scenarios": 80, "generators": 50}}
+    cells, _ = MODULE.targets(result)
+    assert ("memory_poisoning", "de", 100, 130, 2, True) in cells
+
+
 def coverage_summary(cells, chat):
     coverage = {}
     for (name, language), sources in cells.items():
