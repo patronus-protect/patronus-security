@@ -767,7 +767,8 @@ pub(crate) fn native_requests(
 /// For agent config tampering and exfiltration, a sibling list item (or a
 /// nested item of one) is its own instruction and no lead-in; a parent item
 /// stays one. For exfiltration and unsafe actions, the negation of a secrecy
-/// directive after the span does not count.
+/// directive after the span does not count. For memory poisoning, a finished
+/// sentence on a line above a note to the agent is no lead-in.
 fn clause_context(
     scan: &ContextScan,
     text: &str,
@@ -833,7 +834,15 @@ fn clause_context(
             list_item_line(text, before.clause.start)
                 .is_some_and(|(other, other_indent)| other != line && other_indent >= indent)
         });
+        // A note to the agent after a finished sentence on a line above is a
+        // statement of its own; a line that introduces it (colon, heading) is
+        // still a lead-in.
+        let own_statement = category == SecurityCategory::MemoryPoisoning
+            && text[before.clause.end..start].contains('\n')
+            && text[before.clause.clone()].ends_with(['.', '!', '?'])
+            && clause.has("addressee");
         !sibling_item
+            && !own_statement
             && before
                 .hits
                 .iter()
