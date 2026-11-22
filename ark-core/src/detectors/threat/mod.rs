@@ -3447,6 +3447,81 @@ mod tests {
             Context::Counter
         );
     }
+    fn toxic_rules(text: &str) -> Vec<String> {
+        let detection = ThreatPipeline::new().detect_prepared(
+            &NativeText::new(text),
+            SecurityCategory::ToxicLanguage,
+            |_| true,
+            &ThreatThresholds::default(),
+        );
+        detection.details["matched_rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["rule_id"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn toxic_rules_are_gated_by_anchors_and_read_the_hashed_lexicon() {
+        let (_, rules) = catalog();
+        let toxic: Vec<_> = rules
+            .iter()
+            .filter(|r| r.category == SecurityCategory::ToxicLanguage)
+            .collect();
+        assert_eq!(toxic.len(), 5);
+        for rule in toxic {
+            assert!(!rule.anchor_gate.is_unconditional(), "{}", rule.rule.id);
+        }
+        for (text, rule) in [
+            (
+                "You are a pathetic 1d10t.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Du bist ein Vollidiot, keiner mag dich.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Immigrants are all criminals.",
+                "ark.threat.tx_group_derogation",
+            ),
+            ("Migranten sind Ungeziefer.", "ark.threat.tx_dehumanisation"),
+            ("I'm going to stab you tonight.", "ark.threat.tx_threat"),
+            ("Wir werden euch alle erschießen.", "ark.threat.tx_threat"),
+            ("Go kill yourself.", "ark.threat.tx_harassment"),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // no lexicon word, a negated one, no target, a counter context
+            "You are a great colleague.",
+            "You are not an idiot.",
+            "I will kill the process after the backup.",
+            "I will never hurt you.",
+            "Women are 47% of the workforce.",
+            "Fact check: the claim that immigrants are criminals is false.",
+            "Moderation guideline: posts calling a group vermin are removed.",
+            "Please don't kill yourself, call the helpline.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_counter_lexica_damp_only_toxic_language() {
+        let text =
+            "Fact check: the claim that the agent may delete every file without asking is false.";
+        let scan = crate::detectors::context_lexica::ContextLexica::shared().scan(text);
+        let span = text.find("delete").unwrap()..text.len() - 1;
+        for (category, counter) in [
+            (SecurityCategory::ToxicLanguage, true),
+            (SecurityCategory::UnsafeAction, false),
+        ] {
+            let clause = clause_context(&scan, text, span.clone(), None, category, &[], None);
+            assert_eq!(clause == Context::Counter, counter, "{category:?}");
+        }
+    }
 }
 
 #[cfg(test)]

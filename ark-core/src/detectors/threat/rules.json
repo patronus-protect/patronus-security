@@ -983,7 +983,7 @@
       "class_name": "toxic_language",
       "family": "group_derogation",
       "upstream_groups": [],
-      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|the\\s{1,4}disabled|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
+      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
       "points": {
         "base_score": 45,
         "validator": "format",
@@ -995,7 +995,7 @@
       "class_name": "toxic_language",
       "family": "dehumanisation",
       "upstream_groups": [],
-      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|the\\s{1,4}disabled|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
+      "pattern": "(?P<group>(?-u:\\b)(?:immigrants|migrants|refugees|foreigners|muslims|jews|christians|women|gays|lesbians|trans\\s{1,4}people|homosexuals|disabled\\s{1,4}people|arabs|africans|asians|mexicans|ausländer|auslaender|flüchtlinge|fluechtlinge|geflüchtete|gefluechtete|migranten|muslime|juden|christen|frauen|schwule|lesben|homosexuelle|behinderte|araber|afrikaner|türken|tuerken))\\s{1,4}(?P<copula>are|sind|seien)(?-u:\\b)(?P<lex>(?:\\s{1,4}[\\p{L}\\d@$*\\x27-]{1,24}){1,5})",
       "points": {
         "base_score": 45,
         "validator": "format",
