@@ -331,6 +331,8 @@ fn evaluate(
 /// Golden schema v2 for the attack classes: a text, the class and taxonomy family it
 /// belongs to, its carrier and difficulty tags; positives may name the rule that must
 /// report them, and a positive no L1 rule detects yet is a known gap (reported, not gated).
+/// A hard negative must leave every attack class benign but the ones it is a positive of
+/// (`also_positive`).
 #[derive(Deserialize)]
 struct ThreatRow {
     id: String,
@@ -344,6 +346,8 @@ struct ThreatRow {
     #[serde(default)]
     known_gap: bool,
     rule_id: Option<String>,
+    #[serde(default)]
+    also_positive: Vec<String>,
     text: String,
 }
 
@@ -406,7 +410,27 @@ fn evaluate_threat(
                             })
                     })
             }
-            "hard_negative" => !detected,
+            "hard_negative" => {
+                let mut flagged = Vec::new();
+                for category in SecurityCategory::ATTACK_CLASSES {
+                    let other = gateway.scan_category(category, &row.text).native;
+                    if threat_category(&row.class)? != category
+                        && !row
+                            .also_positive
+                            .iter()
+                            .any(|class| threat_category(class) == Ok(category))
+                        && other
+                            .iter()
+                            .any(|result| !matches!(result.class_name.as_str(), "benign" | "safe"))
+                    {
+                        flagged.push(category.as_str());
+                    }
+                }
+                if !flagged.is_empty() {
+                    eprintln!("hard_negative id={} flagged under {flagged:?}", row.id);
+                }
+                !detected && flagged.is_empty()
+            }
             other => return Err(format!("unknown case_type {other:?} in {}", row.id).into()),
         };
         if row.known_gap {

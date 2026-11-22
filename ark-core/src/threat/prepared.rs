@@ -15,6 +15,7 @@ pub struct NativeText<'a> {
     anchors: OnceLock<crate::detectors::lexical_anchors::AnchorPresence>,
     structure: OnceLock<crate::detectors::structure::Fields>,
     sql: OnceLock<Vec<crate::detectors::dlp::sql_rows::Statement>>,
+    context: OnceLock<crate::detectors::context_lexica::ContextScan>,
 }
 
 impl<'a> NativeText<'a> {
@@ -31,6 +32,7 @@ impl<'a> NativeText<'a> {
             anchors: OnceLock::new(),
             structure: OnceLock::new(),
             sql: OnceLock::new(),
+            context: OnceLock::new(),
         }
     }
 
@@ -67,6 +69,14 @@ impl<'a> NativeText<'a> {
     pub fn sql_statements(&self) -> &[crate::detectors::dlp::sql_rows::Statement] {
         self.sql
             .get_or_init(|| crate::detectors::dlp::sql_rows::statements(self.text()))
+    }
+
+    /// The context terms and clauses of the text, scanned once for every rule
+    /// and producer that reads the clause around a match.
+    pub fn context(&self) -> &crate::detectors::context_lexica::ContextScan {
+        self.context.get_or_init(|| {
+            crate::detectors::context_lexica::ContextLexica::shared().scan(self.text())
+        })
     }
 
     pub fn lower_windows(&self) -> &[(Range<usize>, MatchText)] {

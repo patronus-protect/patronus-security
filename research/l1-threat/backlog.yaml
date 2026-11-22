@@ -658,6 +658,7 @@ tasks:
       dev unsafe_action TPR@1% on the RedCode and Agent-SafetyBench rows up at 0 hard-benign FP (the 52 fulfillable
       code cases included); templates and AgentDojo unchanged; ablation re-run and the decision recorded
   - id: T12
+    status: done
     title: Clause context for the legacy threat rules credential_file_access, secret_exfiltration and native secret_transfer (quoted examples, security documentation, test code and tool-poisoning hard negatives flagged under unsafe_action/exfiltration today)
     type: precision-fix
     deps: [UA02, EX02]

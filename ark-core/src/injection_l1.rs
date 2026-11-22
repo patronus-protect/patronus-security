@@ -115,7 +115,13 @@ fn aggregate(
         let scan = ContextLexica::shared().scan(text);
         candidates.retain(|entry| {
             let span = entry.candidate.start_byte..entry.candidate.end_byte;
-            !counter_context(&scan, text, span, category)
+            !counter_context(
+                &scan,
+                text,
+                span.clone(),
+                category,
+                std::slice::from_ref(&span),
+            )
         });
     }
     metrics.checkpoint("read_candidates", "");
