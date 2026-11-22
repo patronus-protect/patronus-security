@@ -54,8 +54,9 @@ alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own d
 source and its TPR per positive source (generator and template family, else the set), the TPR and FPR at its own
 clear cut, and next to it the rules-only number (a rule finding of the class, ``R``) on the same rows.
 ``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
-``--rows`` files) also trains a baseline on their train half alone, without oversampling, and calibrates it on
-the candidate's calibration rows, so a comparison of two setups reads both off one held-out pool.
+``--rows`` files) also trains a baseline, without oversampling, on the candidate's train rows from those files
+alone (the candidate's split, not one of their own) and calibrates it on the candidate's calibration rows, so a
+comparison of two setups reads both off one held-out pool.
 
     cargo run -q -p patronus-ark-core --example text_facts -- --threat-findings < rows.jsonl > rows.facts.jsonl
     cargo build --release -p patronus-ark-core --example text_model_latency
@@ -694,8 +695,8 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--clear-fpr", type=float, default=SCOREBOARD.CLEAR_FPR)
     cal.add_argument("--oversample-de", type=int, default=1, help="repeat German train positives this often")
     cal.add_argument("--baseline-rows", type=Path, action="append", default=[],
-                     help="also train a baseline on the train half of these --rows files only (no oversampling) "
-                          "and calibrate it on the candidate's held-out pool")
+                     help="also train a baseline on the candidate's train rows from these --rows files only "
+                          "(no oversampling) and calibrate it on the candidate's held-out pool")
     cal.add_argument("--bench-bin", type=Path, help="text_model_latency example binary")
     cal.add_argument("--windows", type=Path, help="latency windows (latency.py windows.jsonl)")
     cal.add_argument("--model-out", type=Path, help="calibrated model.json (one --class only)")
@@ -708,11 +709,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--model-out takes one --class")
         if not set(args.baseline_rows) <= set(args.rows):
             parser.error("--baseline-rows must be among --rows")
-        train, held_out = split_rows([row for path in args.rows for row in MODEL.read_rows(path)])
+        sources = {path: MODEL.read_rows(path) for path in args.rows}
+        train, held_out = split_rows([row for rows in sources.values() for row in rows])
         test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
         reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
-        baseline = (split_rows([row for path in args.baseline_rows for row in MODEL.read_rows(path)])[0]
-                    if args.baseline_rows else None)
+        # The baseline keeps the candidate's split: a family that the extra files push to the eval side stays there.
+        chosen = {row["id"] for path in args.baseline_rows for row in sources[path]}
+        baseline = [row for row in train if row["id"] in chosen] if args.baseline_rows else None
         reports = []
         for cls in args.classes:
             document, report = calibrate_class(train, test, cls, stage=args.stage, report_rows=reported,

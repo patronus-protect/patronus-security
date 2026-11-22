@@ -597,6 +597,23 @@ def test_cli_calibrate_compares_the_baseline_rows_on_the_same_pool(tmp_path):
                      "--out", str(out)])
 
 
+def test_cli_calibrate_keeps_the_baseline_rows_on_the_candidate_s_split(tmp_path):
+    # Split alone, the baseline's two families both train; next to the other four, rules_file is held out.
+    generated = generated_rows()
+    native = toy_rows(20) + benign_pool(40)
+    ours = [r for r in generated if r["template_family"] in ("plain_mail", "rules_file")]
+    first, second = tmp_path / "generated.jsonl", tmp_path / "more_generated.jsonl"
+    first.write_text("".join(json.dumps(r) + "\n" for r in native + ours), encoding="utf-8")
+    second.write_text("".join(json.dumps(r) + "\n" for r in generated if r not in ours), encoding="utf-8")
+    out = tmp_path / "calibration.json"
+    assert MODULE.main(["calibrate", "--rows", str(first), "--rows", str(second), "--baseline-rows", str(first),
+                        "--class", CLS, "--out", str(out)]) == 0
+    (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
+    train, _ = MODULE.split_rows(native + generated)
+    baseline_ids = {r["id"] for r in native + ours}
+    assert entry["baseline"]["rows"]["train"] == sum(r["id"] in baseline_ids for r in train)
+
+
 # ── every class with two template families trains on one and calibrates on the other ─
 
 
