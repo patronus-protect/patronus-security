@@ -285,7 +285,7 @@ The three sets were summarised with `gold.py summary` on a freeze of these sets 
 with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
 `gold.py targets` lists the class and language pairs still short of the dev targets.
 
-## Findings (M09 second round: agent_scenarios and the runner translations, 2026-11-22)
+## Findings (M09 second round: agent_scenarios, the runner translations and SimpleSafetyTests, 2026-11-22)
 
 Dev pool as frozen by the owner on 2026-11-22 (`DEV/translated` with 600 SPML/Mosscap rows, `DEV/generated` at
 generator version 7) plus `agent_scenarios` from generator version 8 (built locally from the same `DEV/train_dev`
@@ -302,12 +302,18 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   Mosscap rows ask for or probe the password; the unclear row asks the model to restate its compliance steps and
   swap its refusal line, which probes the hidden instructions only indirectly. Benign rows clean. With this set
   instruction_injection and prompt_extraction reach their German targets.
-- **Still short: harmful_content and toxic_language (DE and EN)**, one scored source each (Nemotron Safety Guard
-  v3). Their open candidates in the entity map are either holdout sets or report-only after review (TextDetox,
-  Civil Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels); a second open, licence-checked
-  scored source per language is the remaining M09 work.
+- **SimpleSafetyTests (`harmful_content`, EN): 0 of 50 wrong or unclear.** 100 hand-written requests (CC-BY-2.0),
+  20 per harm area (self-harm and eating disorders, physical harm, illegal and regulated items, scams and fraud,
+  child abuse), all inside the harmful_content subclasses; one piracy request falls under the model-only `ip`
+  subclass and still counts. Built locally from the pinned file with the registry recipe (the owner's prepare run
+  freezes it into `DEV/train_dev`); harmful_content EN now has two sources.
+- **Still short: harmful_content DE and toxic_language DE and EN**, one scored source each (Nemotron Safety Guard
+  v3). For toxic_language DE the registered GermEval 2018 training split (CC-BY-4.0, native) is the second source,
+  but its repository also holds the holdout test split, so its recipe has to come from the owner's holdout overlay.
+  The other open candidates in the entity map are holdout sets or report-only after review (TextDetox, Civil
+  Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels).
 
-Both sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
+The three sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
 review fields of the earlier sets are unchanged.
 

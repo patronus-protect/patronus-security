@@ -126,7 +126,7 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | `ark_existing` (threat.harmful_intent); `taxonomy`: AILuminate-Gefahrenklassen; gehashte Lexika `mined` auf Train; Anfrage-Rahmung `hand` |
-| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test- und Validierungs-Split, nur menschlich gelabelte unsichere Prompts mit Schaden- und ohne Toxizitäts-Kategorie, kurz und mit Bitte um operative Hilfe; AILuminate-Gefahr je Zeile als Upstream-Label `vcr`/`ncr`/`ssh`/`cse`; DE maschinell übersetzt, als `translated` markiert; Gold siehe `scoreboard/gold-notes.md`); Hard Negatives: WildGuardMix-Test, nicht-adversariale harmlose Prompts (ODC-BY-Kopie `walledai/WildGuardTest`). Offen: PolyGuardPrompts, XL-SafetyBench |
+| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test- und Validierungs-Split, nur menschlich gelabelte unsichere Prompts mit Schaden- und ohne Toxizitäts-Kategorie, kurz und mit Bitte um operative Hilfe; AILuminate-Gefahr je Zeile als Upstream-Label `vcr`/`ncr`/`ssh`/`cse`; DE maschinell übersetzt, als `translated` markiert; Gold siehe `scoreboard/gold-notes.md`); SimpleSafetyTests (CC-BY-2.0, 100 englische Anfragen aus fünf Schadensbereichen, alle positiv); Hard Negatives: WildGuardMix-Test, nicht-adversariale harmlose Prompts (ODC-BY-Kopie `walledai/WildGuardTest`). Offen: PolyGuardPrompts, XL-SafetyBench |
 | Holdout `neutral` | aya_redteaming (EN, FR/ES nativ), MultiJail, JBB-Behaviors, HarmBench; DE: RTP-LX de |
 | Holdout `ark_blind` | R05 DE (Harm-Anteil, ohne funktionierende Anleitungen: nur Anfragen) |
 | Hard Negatives | XSTest-safe, OR-Bench-hard, Prävention, Nachrichten, Chemieunterricht, Pentest mit Auftrag |

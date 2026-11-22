@@ -41,7 +41,8 @@
     "harmful_content": {
       "report/ailuminate_demo": 800,
       "report/nemotron_content_safety_v2": 1471,
-      "train_dev/nemotron_safety_v3": 799
+      "train_dev/nemotron_safety_v3": 799,
+      "train_dev/simple_safety_tests": 100
     },
     "instruction_injection": {
       "generated/carrier_insertion": 304,
@@ -110,7 +111,7 @@
     },
     "harmful_content": {
       "de": 316,
-      "en": 483
+      "en": 583
     },
     "instruction_injection": {
       "de": 268,
@@ -202,10 +203,11 @@
       },
       "en": {
         "provenance": {
-          "native": 483
+          "native": 583
         },
         "sources": {
-          "nemotron_safety_v3": 483
+          "nemotron_safety_v3": 483,
+          "simple_safety_tests": 100
         }
       }
     },
@@ -756,7 +758,7 @@
       "translated": 1
     },
     "harmful_content": {
-      "native": 483,
+      "native": 583,
       "translated": 316
     },
     "instruction_injection": {
@@ -1044,6 +1046,17 @@
       "reviewed": 50,
       "role": "dev",
       "rows": 293,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/simple_safety_tests": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "simple_safety_tests",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 100,
       "unclear": 0,
       "wrong": 0
     },

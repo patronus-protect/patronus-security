@@ -76,7 +76,9 @@ schema: ark-l1-threat-datasets-v1
 #     with clean twins); format `text` and rule operator `matches`.
 # 20: MASSIVE (en-US and the localised de-DE training utterances) joins train_dev as the benign chat pool of
 #     each language; the German jailbreak prompts of XL-SafetyBench join train_dev.
-generation: 20
+# 21: SimpleSafetyTests (CC-BY-2.0, 100 English requests in five harm areas) joins train_dev: a second scored English
+#     harmful_content source next to Nemotron Safety Guard v3.
+generation: 21
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -1148,6 +1150,21 @@ datasets:
     language: de
     labels:
       - {label: utterance}
+  - id: simple_safety_tests
+    commercial: true
+    source: https://huggingface.co/datasets/Bertievidgen/SimpleSafetyTests
+    revision: 98223c5d8c4059c8f4d8fe2fec8720ee8a20d3c5
+    files:
+      - {path: sst_test_cases.csv, sha256: a9d667a236121efdaa92f61565fdf6d4cc5ae77b68f60d8629e71d36957d737c}
+    format: csv
+    text: prompt
+    language: en
+    labels:
+      - {field: harm_area, equals: "Suicide, Self-Harm, and Eating Disorders", label: "harm area = Suicide, Self-Harm, and Eating Disorders"}
+      - {field: harm_area, equals: Physical Harm and Violence, label: "harm area = Physical Harm and Violence"}
+      - {field: harm_area, equals: Illegal and Highly Regulated items, label: "harm area = Illegal and Highly Regulated items"}
+      - {field: harm_area, equals: Scams and Fraud, label: "harm area = Scams and Fraud"}
+      - {field: harm_area, equals: Child Abuse, label: "harm area = Child Abuse"}
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)

@@ -31,7 +31,7 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | exfiltration | 151 | 397 | 225 | 11936 | 113 | 1 | 434 | 11711 | 0 | 450 |
 | unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
 | resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
-| harmful_content | 316 | 483 | 0 | 172 | 483 | 316 | 0 | 172 | 0 | 0 |
+| harmful_content | 316 | 583 | 0 | 172 | 583 | 316 | 0 | 172 | 0 | 0 |
 | toxic_language | 55 | 51 | 1999 | 2162 | 51 | 55 | 0 | 4161 | 0 | 0 |
 | benign | 23687 | 31013 | 17191 | 15030 | 41381 | 11369 | 1950 | 37235 | 0 | 2100 |
 
@@ -48,7 +48,7 @@ Scored dev positives per class and language against the target, from at least 2 
 | prompt_extraction | de | 200 | 387 | 2 | 0 | 300 | 87 | yes |
 | prompt_extraction | en | 200 | 15070 | 2 | 15000 | 0 | 70 | yes |
 | harmful_content | de | 200 | 316 | 1 | 0 | 316 | 0 | no |
-| harmful_content | en | 200 | 483 | 1 | 483 | 0 | 0 | no |
+| harmful_content | en | 200 | 583 | 2 | 583 | 0 | 0 | yes |
 | toxic_language | de | 200 | 55 | 1 | 0 | 55 | 0 | no |
 | toxic_language | en | 200 | 51 | 1 | 51 | 0 | 0 | no |
 | tool_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
@@ -93,6 +93,7 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/nemotron_safety_v3 | dev | 905 | 60 | 0 | 3 | 5.0% | 0 / 0 |
 | train_dev/redcode | dev | 293 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| train_dev/simple_safety_tests | dev | 100 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
@@ -479,7 +480,7 @@ The three sets were summarised with `gold.py summary` on a freeze of these sets 
 with these sets (the dev pool reproduces the earlier class, provenance and per-set counts exactly).
 `gold.py targets` lists the class and language pairs still short of the dev targets.
 
-## Findings (M09 second round: agent_scenarios and the runner translations, 2026-11-22)
+## Findings (M09 second round: agent_scenarios, the runner translations and SimpleSafetyTests, 2026-11-22)
 
 Dev pool as frozen by the owner on 2026-11-22 (`DEV/translated` with 600 SPML/Mosscap rows, `DEV/generated` at
 generator version 7) plus `agent_scenarios` from generator version 8 (built locally from the same `DEV/train_dev`
@@ -496,12 +497,18 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   Mosscap rows ask for or probe the password; the unclear row asks the model to restate its compliance steps and
   swap its refusal line, which probes the hidden instructions only indirectly. Benign rows clean. With this set
   instruction_injection and prompt_extraction reach their German targets.
-- **Still short: harmful_content and toxic_language (DE and EN)**, one scored source each (Nemotron Safety Guard
-  v3). Their open candidates in the entity map are either holdout sets or report-only after review (TextDetox,
-  Civil Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels); a second open, licence-checked
-  scored source per language is the remaining M09 work.
+- **SimpleSafetyTests (`harmful_content`, EN): 0 of 50 wrong or unclear.** 100 hand-written requests (CC-BY-2.0),
+  20 per harm area (self-harm and eating disorders, physical harm, illegal and regulated items, scams and fraud,
+  child abuse), all inside the harmful_content subclasses; one piracy request falls under the model-only `ip`
+  subclass and still counts. Built locally from the pinned file with the registry recipe (the owner's prepare run
+  freezes it into `DEV/train_dev`); harmful_content EN now has two sources.
+- **Still short: harmful_content DE and toxic_language DE and EN**, one scored source each (Nemotron Safety Guard
+  v3). For toxic_language DE the registered GermEval 2018 training split (CC-BY-4.0, native) is the second source,
+  but its repository also holds the holdout test split, so its recipe has to come from the owner's holdout overlay.
+  The other open candidates in the entity map are holdout sets or report-only after review (TextDetox, Civil
+  Comments, AILuminate demo, the WildGuardMix and WildJailbreak harm labels).
 
-Both sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
+The three sets were summarised with `gold.py summary` on this dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
 review fields of the earlier sets are unchanged.
 
