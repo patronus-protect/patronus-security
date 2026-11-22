@@ -21,8 +21,8 @@ of the class when the class is in ``classes`` and a negative when ``benign``; ot
 out. ``--rows`` is split by the row's template key into train and eval halves unless
 ``--eval-rows`` is given: a generated row's key is its generator and template family, so every fill of a
 template and its look-alike twins land on one side, and the families of one class set take turns, so a class
-with two families trains on one and is measured on the other; any other row's key is its id, split by hash. Learned stages train
-on the train rows.
+with two families trains on one and is measured on the other; any other row's key is its id, split by hash.
+Learned stages train on the train rows.
 
 Per stage on the eval rows, per language (``all``, ``de``, ``en``): TPR at matched FPR 1 % and
 0.1 % and AUPRC (``scoreboard.cell_metrics``), hard-benign FPR at the same matched thresholds on the
@@ -584,7 +584,8 @@ def calibration_markdown(reports: list[dict[str, Any]]) -> str:
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for report in reports:
         for language, cell in report.get("per_language", {}).items():
-            sources, rules, clear = cell["positive_sources"], (report.get("rules") or {}).get(language) or {}, cell["clear"]
+            sources, clear = cell["positive_sources"], cell["clear"]
+            rules = (report.get("rules") or {}).get(language) or {}
             lines.append(f"| {report['class']} | {language.upper()} | {cell['negatives']} | "
                          f"{cell['thresholds'][MODEL.BLOCK_THRESHOLD]:.4f} | {_pct(cell['tpr'])} | "
                          f"{_pct(cell['fpr'], 2)} | {cell['thresholds'][MODEL.ASK_THRESHOLD]:.4f} | "
