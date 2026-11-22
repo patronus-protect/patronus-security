@@ -225,7 +225,10 @@ Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
   (Tool-Docstring, MCP-Server-YAML, Paket-README; Support-Chat, Wissensdatenbank-Chunk, gespeicherte Vorlieben;
   Mail, API-Payload, Code-TODO; Copilot-Instructions, Issue-Kommentar, Setup-README) und eigenen Formulierungen,
   keine davon aus `class_templates` und keine in Dev und Holdout zugleich (`check_families`). Rahmen, Anweisung
-  und Nummer werden unabhängig gezogen; jeder Angriff hat eine harmlose Doppelgänger-Anweisung im selben Rahmen.
+  und Nummer werden unabhängig gezogen; jeder Angriff hat eine harmlose Doppelgänger-Anweisung im selben Rahmen,
+  außer in den `no_twin_frames` einer Klasse (`kb_chunk` bei `memory_poisoning`: ein abgerufener
+  Wissensdatenbank-Eintrag mit einer Merk-Anweisung an den Assistenten ist wie `memory_note_in_doc` keine harmlose
+  Eingabe; Generator-Version 9, die Doppelgänger-Anweisung wird trotzdem gezogen, die übrigen Zeilen bleiben gleich).
   Der Satz trägt im Manifest `source_family: agent_scenarios` und zählt in `gold.py` als eigene Quelle; alle
   anderen Generator-Sätze bleiben zusammen die eine Quelle `generators`.
 

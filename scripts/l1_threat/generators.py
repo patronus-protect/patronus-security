@@ -30,7 +30,8 @@ detector (owner decision 2026-11-20; out of scope, so no row at all):
   resource_exhaustion and agent_config_tampering, with its own carriers (tool docstrings and server
   manifests, support chats and knowledge-base chunks, mails and API payloads, rules files, issues and
   READMEs) and its own phrasings; frame, directive and number are drawn independently, and every attack
-  has a benign look-alike directive in the same frame. Its rows count as their own source in the gold
+  has a benign look-alike directive in the same frame (none in a ``no_twin_frames`` frame: a knowledge-base
+  chunk asking the assistant to remember something is no benign input). Its rows count as their own source in the gold
   (``source_family`` in the manifest), apart from the other generator sets.
 
 Source filter (owner decision 2026-11-21): carrier insertion and obfuscation slices take an attack row
@@ -105,9 +106,10 @@ SCHEMA = CORPORA.GENERATED_SCHEMA
 # v5: tool_poisoning rows only in tool-metadata carriers (rows of the other classes keep their texts), the OpenAPI
 # class template as JSON; v6: no benign twin for obfuscation slices and two class template families; v7: carrier and
 # obfuscation rows only from attack rows whose classes are visible in their own text (``payload_visible``); v8: the
-# ``agent_scenarios`` generator (a second, independent family for the agent classes), ``source_family`` per set.
+# ``agent_scenarios`` generator (a second, independent family for the agent classes), ``source_family`` per set;
+# v9: no benign twin for ``agent_scenarios`` rows in a ``no_twin_frames`` frame (kb_chunk).
 # A frozen output of a lower version is regenerated without --force.
-GENERATOR_VERSION = 8
+GENERATOR_VERSION = 9
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -545,6 +547,8 @@ CLASS_TEMPLATES: dict[str, dict[str, Any]] = {
 # phrasings and source family, no rewrite of a CLASS_TEMPLATES family. Each class has carrier ``frames`` per
 # split (``{x}`` takes the directive) and per split and language a list of ``attacks`` and of benign
 # ``lookalikes`` (directives in the same frame); a row draws frame, directive and ``{n}`` independently.
+# ``no_twin_frames`` names frames where a look-alike directive is no benign input (retrieved content with a
+# note to the assistant, like the class template ``memory_note_in_doc``): their attacks get no twin.
 AGENT_SCENARIOS: dict[str, dict[str, Any]] = {
     "tool_poisoning": {
         "modelled_on": "Invariant Labs, MCP tool poisoning advisory (2025); ToolHijacker (Shi et al., 2025); MCP-Safety audits of tool descriptions (Radosevich and Halloran, 2025)",
@@ -619,6 +623,7 @@ AGENT_SCENARIOS: dict[str, dict[str, Any]] = {
     },
     "memory_poisoning": {
         "modelled_on": "MINJA memory injection (Dong et al., 2025); AgentPoison (Chen et al., 2024); Rehberger, SpAIware: persistent prompt injection into ChatGPT memory (2024)",
+        "no_twin_frames": ("kb_chunk",),
         "frames": {
             "dev": {
                 "support_chat": {
@@ -889,6 +894,8 @@ def check_families() -> list[str]:
             problems.append(f"agent scenarios {name}: modelled_on names no public example")
         if set(table["frames"]) != {"dev", "holdout"} or set(table["frames"]["dev"]) & set(table["frames"]["holdout"]):
             problems.append(f"agent scenarios {name}: frames need disjoint dev and holdout families")
+        if not set(table.get("no_twin_frames", ())) <= {f for frames in table["frames"].values() for f in frames}:
+            problems.append(f"agent scenarios {name}: no_twin_frames names a frame it does not have")
         if set(table["frames"]["dev"]) & {f for t in CLASS_TEMPLATES.values() for split in ("dev", "holdout") for f in t[split]}:
             problems.append(f"agent scenarios {name}: a frame reuses a class template family")
         for split, frames in table["frames"].items():
@@ -1272,7 +1279,8 @@ def agent_scenarios(r: Any, split: str, dataset: str, label_of: Callable[[list[s
         frame = table["frames"][split][family]
         base = {**_base(dataset, "agent_scenarios", family, lang, None), "modelled_on": table["modelled_on"]}
         attack = {**base, "classes": [name], "text": _insert(frame, lang, values, attack_text)}
-        twin = {**base, "text": _insert(frame, lang, values, twin_text)}
+        # Drawn either way, so the other rows stay byte-identical.
+        twin = None if family in table.get("no_twin_frames", ()) else {**base, "text": _insert(frame, lang, values, twin_text)}
         rows.extend(_pair(dataset, "agent_scenarios", index, label_of([name]), attack, twin))
     return rows
 

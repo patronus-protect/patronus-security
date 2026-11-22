@@ -110,7 +110,8 @@ def test_agent_scenarios_are_an_independent_family_for_the_agent_classes(roots):
         attacks = [row for row in rows if not row["benign"]]
         assert {(row["classes"][0], row["language"]) for row in attacks} == {(c, lang) for c in AGENT_CLASSES for lang in ("de", "en")}
         by_id = {row["id"]: row for row in rows}
-        assert len(rows) == 2 * len(attacks)  # every attack has its look-alike
+        no_twin = [row for row in attacks if row["template_family"] in MODULE.AGENT_SCENARIOS[row["classes"][0]].get("no_twin_frames", ())]
+        assert len(rows) == 2 * len(attacks) - len(no_twin)  # every attack outside a no-twin frame has its look-alike
         for row in rows:
             name = (row if not row["benign"] else by_id[row["twin_of"]])["classes"][0]
             assert row["template_family"] in MODULE.AGENT_SCENARIOS[name]["frames"][split]
@@ -134,6 +135,32 @@ def test_agent_scenario_rows_vary_and_keep_the_directive_in_the_frame():
     for row in attacks:
         name, lang = row["classes"][0], row["language"]
         assert any(d.split("{n}")[0][:40] in row["text"].replace('\\"', '"') for d in MODULE.AGENT_SCENARIOS[name]["attacks"]["dev"][lang])
+
+
+def test_agent_scenarios_write_no_benign_memory_directive_in_a_retrieved_document():
+    # A knowledge-base chunk that asks the assistant to remember something is no benign input, like the
+    # class template memory_note_in_doc: the kb_chunk attacks keep their rows, their look-alikes are dropped.
+    assert MODULE.AGENT_SCENARIOS["memory_poisoning"]["no_twin_frames"] == ("kb_chunk",)
+    rows = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    kb = [row for row in rows if row["template_family"] == "kb_chunk"]
+    assert {row["language"] for row in kb} == {"de", "en"}
+    assert kb and not [row for row in kb if row["benign"]]
+    assert [row for row in rows if row["benign"] and row["template_family"] == "support_chat"]
+
+
+def test_agent_scenarios_drop_a_look_alike_after_its_draws(monkeypatch):
+    # Dropping a look-alike leaves every other row byte-identical, so the gold review per row id holds.
+    kept = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    table = {name: {k: v for k, v in t.items() if k != "no_twin_frames"} for name, t in MODULE.AGENT_SCENARIOS.items()}
+    monkeypatch.setattr(MODULE, "AGENT_SCENARIOS", table)
+    full = MODULE.agent_scenarios(MODULE.Rng("test"), "dev", "generators_dev_seed", lambda classes: "L", 640)
+    assert kept == [row for row in full if not (row["benign"] and row["template_family"] == "kb_chunk")]
+
+
+def test_check_families_rejects_a_no_twin_frame_outside_the_frames(monkeypatch):
+    table = MODULE.AGENT_SCENARIOS["memory_poisoning"]
+    monkeypatch.setitem(MODULE.AGENT_SCENARIOS, "memory_poisoning", {**table, "no_twin_frames": ("wiki_page",)})
+    assert any("no_twin_frames" in problem for problem in MODULE.check_families())
 
 
 @pytest.mark.parametrize("part", ["attacks", "lookalikes"])
@@ -187,7 +214,9 @@ def test_dev_generation_is_deterministic_and_paired(roots):
     dev_families |= {f for table in MODULE.AGENT_SCENARIOS.values() for f in table["frames"]["dev"]}
     for name, rows in generated(dev / "generated").items():
         attacks = [row for row in rows if not row["benign"]]
-        twinless = sum(row["template_family"] in TWINLESS_FAMILIES for row in attacks)
+        twinless = sum(row["template_family"] in TWINLESS_FAMILIES if name == "class_templates"
+                       else row["template_family"] in MODULE.AGENT_SCENARIOS[row["classes"][0]].get("no_twin_frames", ())
+                       if name == "agent_scenarios" else False for row in attacks)
         assert len(attacks) == COUNTS[name]
         assert len(rows) - len(attacks) == (0 if name == "obfuscation_slices" else COUNTS[name] - twinless)
         by_id = {row["id"]: row for row in rows}
