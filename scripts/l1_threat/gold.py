@@ -63,8 +63,9 @@ MIN_REVIEWED = 50
 MAX_ERROR_RATE = 0.05
 MIN_CLASS_ROWS = 50
 # Dev targets per class and language: scored positives (200 resolve TPR in 0.5 pp steps; 100 for the classes
-# whose data is mostly documented-synthetic or translated), from at least two sources (all generator sets
-# count as one source), and a benign chat pool of ordinary user turns per language.
+# whose data is mostly documented-synthetic or translated), from at least two sources (the generator sets count
+# as one source, an independent generator family with its own ``source_family`` as another), and a benign chat
+# pool of ordinary user turns per language.
 TARGET_ROWS = {
     "instruction_injection": 200, "jailbreak": 200, "prompt_extraction": 200, "harmful_content": 200,
     "toxic_language": 200, "tool_poisoning": 100, "memory_poisoning": 100, "resource_exhaustion": 100,
@@ -178,7 +179,7 @@ def summary(pool: list[tuple[str, dict[str, Any], list[dict[str, Any]]]], sheet:
             benign_verdicts[item["set"]][item["verdict"]] += 1
     for key, entry, rows in pool:
         scored = entry["role"] != "report"
-        source = GENERATOR_SOURCE if entry["generated"] else entry.get("dataset", key.split("/", 1)[1])
+        source = entry.get("source_family", GENERATOR_SOURCE) if entry["generated"] else entry.get("dataset", key.split("/", 1)[1])
         for row in rows:
             names = ["benign"] if row["benign"] else row["classes"]
             for name in names:
@@ -353,7 +354,7 @@ def render(classes: list[str], dev: dict[str, Any], holdout: dict[str, Any] | No
         lines.append("Pending: the dev summary predates the per-source counts.")
     else:
         lines += [f"Scored dev positives per class and language against the target, from at least {MIN_TARGET_SOURCES} "
-                  f"sources (all generator sets count as one source); benign chat pool at least {MIN_CHAT_ROWS} rows per "
+                  f"sources (the generator sets count as one source, an independent generator family as its own); benign chat pool at least {MIN_CHAT_ROWS} rows per "
                   "language.", "",
                   "| Class | Lang | Target | Positives | Sources | " + " | ".join(PROVENANCE) + " | Met |",
                   "|---|---|---:|---:|---:|" + "---:|" * len(PROVENANCE) + "---|"]
