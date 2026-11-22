@@ -262,17 +262,15 @@ fn high_entropy_generators_stay_above_the_detect_secrets_limit() {
 fn each_rule_reports_exactly_its_generated_values() {
     let map = rule_map();
     let generators = generators();
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     for (rule, entry) in &map.rules {
         let mut gates = ScanGateMatrix::default();
         for pattern in DLP_PATTERNS {
             gates.set_rule(pattern.name, pattern.name == rule);
         }
-        gateway.set_execution_gates(gates);
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+        )
+        .unwrap();
         let values = entry
             .generators
             .iter()
@@ -308,7 +306,6 @@ fn each_rule_reports_exactly_its_generated_values() {
             }
         }
     }
-    gateway.set_execution_gates(ScanGateMatrix::default());
 }
 
 #[test]
@@ -316,18 +313,16 @@ fn rules_do_not_report_their_lookalike_values() {
     // F03: a token shape with a wrong check value or length is no match for its rule.
     let map = rule_map();
     let generators = generators();
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     let mut checked = 0;
     for (rule, entry) in &map.rules {
         let mut gates = ScanGateMatrix::default();
         for pattern in DLP_PATTERNS {
             gates.set_rule(pattern.name, pattern.name == rule);
         }
-        gateway.set_execution_gates(gates);
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+        )
+        .unwrap();
         for name in &entry.lookalike {
             for probe in &entry.probes {
                 for seed in 0..32 {
@@ -349,6 +344,5 @@ fn rules_do_not_report_their_lookalike_values() {
             }
         }
     }
-    gateway.set_execution_gates(ScanGateMatrix::default());
     assert!(checked > 0, "no lookalike generator");
 }

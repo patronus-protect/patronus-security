@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use patronus_ark_core::wolf::WolfConfig;
+use patronus_ark_core::ScannerConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::NtdbOperatingPoint;
@@ -345,13 +347,15 @@ impl std::str::FromStr for L3Strategy {
 
 #[derive(Debug, Clone)]
 /// Effective execution state consumed by scan methods and model pipelines:
-/// the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
-/// plus Ark's runtime and NTDB settings.
+/// the Core [`LayerExecution`] (max level and gates, reached through `Deref`),
+/// the gateway's Core config (its ONNX backend and runtime options) and
+/// Ark's NTDB settings.
 pub struct ScanExecution {
     layers: LayerExecution,
-    backend: ExecutionBackend,
-    onnx_runtime_options: OnnxRuntimeOptions,
-    onnx_batch_mode: OnnxBatchMode,
+    /// The gateway's Core config; `backend` and `onnx_runtime_options` read it.
+    core: Arc<ScannerConfig>,
+    /// Ark's L3 batch mode; unset follows the backend.
+    onnx_batch_mode: Option<OnnxBatchMode>,
     ntdb_operating_point: NtdbOperatingPoint,
     ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
@@ -382,13 +386,24 @@ impl ScanExecution {
         Self::with_gates(max_level, ScanGateMatrix::default())
     }
 
-    /// Create an execution with explicit gates up to `max_level`.
+    /// Create an execution with explicit gates up to `max_level` and Core's
+    /// default ONNX backend and runtime options.
     pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self {
+        Self::from_core(Arc::new(ScannerConfig {
+            max_level,
+            gates,
+            ..ScannerConfig::default()
+        }))
+    }
+
+    /// Create the execution of a gateway built from Core's `core` config: its
+    /// max level and gates, its ONNX backend and runtime options. Wolf keeps
+    /// Ark's serving profile until [`Self::set_wolf`].
+    pub(crate) fn from_core(core: Arc<ScannerConfig>) -> Self {
         Self {
-            layers: LayerExecution::with_gates(max_level, gates),
-            backend: ExecutionBackend::default(),
-            onnx_runtime_options: OnnxRuntimeOptions::default(),
-            onnx_batch_mode: OnnxBatchMode::LazyBatches,
+            layers: LayerExecution::with_gates(core.max_level, core.gates.clone()),
+            core,
+            onnx_batch_mode: None,
             ntdb_operating_point: NtdbOperatingPoint::default(),
             ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             l3_strategy: L3Strategy::default(),
@@ -422,25 +437,7 @@ impl ScanExecution {
 
     /// Replace the ONNX batch execution mode.
     pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode) {
-        self.onnx_batch_mode = mode;
-    }
-
-    /// Replace the execution backend and apply its default L3 batch mode.
-    pub fn set_backend(&mut self, backend: ExecutionBackend) {
-        self.backend = backend;
-        self.onnx_batch_mode = match backend {
-            ExecutionBackend::Auto | ExecutionBackend::Cpu => OnnxBatchMode::LazyBatches,
-            ExecutionBackend::Gpu
-            | ExecutionBackend::CoreMl
-            | ExecutionBackend::Cuda
-            | ExecutionBackend::DirectMl
-            | ExecutionBackend::TensorRt => OnnxBatchMode::TensorBatch,
-        };
-    }
-
-    /// Replace ONNX Runtime session options used by L3 ONNX classifiers.
-    pub fn set_onnx_runtime_options(&mut self, options: OnnxRuntimeOptions) {
-        self.onnx_runtime_options = options.normalized();
+        self.onnx_batch_mode = Some(mode);
     }
 
     /// Select the calibrated NTDB operating point used by subsequent scans.
@@ -482,19 +479,27 @@ impl ScanExecution {
         self
     }
 
-    /// Return the ONNX batch mode backing this execution.
+    /// Return the ONNX batch mode backing this execution: the set one, else
+    /// lazy batches on the CPU and tensor batches on an accelerator.
     pub fn onnx_batch_mode(&self) -> OnnxBatchMode {
-        self.onnx_batch_mode
+        self.onnx_batch_mode.unwrap_or(match self.backend() {
+            ExecutionBackend::Auto | ExecutionBackend::Cpu => OnnxBatchMode::LazyBatches,
+            ExecutionBackend::Gpu
+            | ExecutionBackend::CoreMl
+            | ExecutionBackend::Cuda
+            | ExecutionBackend::DirectMl
+            | ExecutionBackend::TensorRt => OnnxBatchMode::TensorBatch,
+        })
     }
 
-    /// Return the configured execution backend.
+    /// Return Core's `execution_backend`.
     pub fn backend(&self) -> ExecutionBackend {
-        self.backend
+        self.core.execution_backend
     }
 
-    /// Return the ONNX Runtime session options backing this execution.
+    /// Return Core's `onnx_runtime` session options.
     pub fn onnx_runtime_options(&self) -> OnnxRuntimeOptions {
-        self.onnx_runtime_options
+        self.core.onnx_runtime.normalized()
     }
 
     /// Return the selected NTDB operating point.
@@ -575,6 +580,31 @@ mod tests {
                 ..Default::default()
             }))
             .is_err());
+    }
+
+    #[test]
+    fn backend_and_runtime_options_come_from_the_core_config() {
+        let execution = ScanExecution::from_core(Arc::new(ScannerConfig {
+            execution_backend: ExecutionBackend::CoreMl,
+            onnx_runtime: OnnxRuntimeOptions {
+                intra_threads: Some(0),
+                inter_threads: Some(2),
+                ..OnnxRuntimeOptions::default()
+            },
+            ..ScannerConfig::default()
+        }));
+        assert_eq!(execution.backend(), ExecutionBackend::CoreMl);
+        assert_eq!(execution.onnx_runtime_options().intra_threads, None);
+        assert_eq!(execution.onnx_runtime_options().inter_threads, Some(2));
+        // Unset, the batch mode follows the backend; a set one wins.
+        assert_eq!(execution.onnx_batch_mode(), OnnxBatchMode::TensorBatch);
+        assert_eq!(
+            ScanExecution::default().onnx_batch_mode(),
+            OnnxBatchMode::LazyBatches
+        );
+        let mut execution = execution;
+        execution.set_onnx_batch_mode(OnnxBatchMode::LazyBatches);
+        assert_eq!(execution.onnx_batch_mode(), OnnxBatchMode::LazyBatches);
     }
 
     #[test]

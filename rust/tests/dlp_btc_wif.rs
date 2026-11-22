@@ -68,16 +68,15 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
         [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
-            let scanner = SecurityGateway::new(GatewayConfig::new(
-                vec![SecurityCategory::Dlp],
-                SecurityLevel::L1,
-            ))
-            .unwrap();
-            scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
-                ..ScanGateMatrix::all_enabled()
-            });
-            scanner
+            SecurityGateway::new(
+                GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(
+                    ScanGateMatrix {
+                        dlp_mode: mode,
+                        ..ScanGateMatrix::all_enabled()
+                    },
+                ),
+            )
+            .unwrap()
         })
     });
     scanners[mode as usize]

@@ -171,12 +171,12 @@ The gates are top-level keys of the config; a request can override them
 ```rust
 use patronus_ark_core::cascade::ScanGateMatrix;
 
-gateway.set_execution_gates(
+let gateway = SecurityGateway::new(config.with_gates(
     ScanGateMatrix::default()
         .with_rule("pii_email", false)
         .with_rule("dlp_sql_statement", true)
         .with_model("native:mcp_runtime_risk", false),
-);
+))?;
 ```
 
 `ScanGateMatrix::levels(true, false, false)` keeps L1 only. Details:
@@ -191,14 +191,14 @@ binary. From `examples/14_shell_command.rs`:
 ```rust
 let mut gateway = SecurityGateway::new({
     let mut config = GatewayConfig::new(vec![Pii, Dlp, Injection, ShellCommand], SecurityLevel::L1);
-    config.download = DownloadPolicy::Missing;
-    config.download_categories = Some(vec![ShellCommand]);
+    config.core.download = DownloadPolicy::Missing;
+    config.core.download_categories = Some(vec![ShellCommand]);
+    config.core.shell = Some(ShellConfig {
+        policy_dirs: vec!["ark-core/examples/shell_policies".into()], // user *.cedar files
+        ..ShellConfig::default()
+    });
     config
-
 }).unwrap();
-let mut policies = ShellPolicyConfig::default();
-policies.add_cedar_dir(Path::new("ark-core/examples/shell_policies"))?; // user *.cedar files
-gateway.set_shell_command_policy_config(policies)?;
 gateway.warmup()?;
 
 let result = &gateway.scan_categories(&[ShellCommand], "kubectl delete pod web-1").native[0];

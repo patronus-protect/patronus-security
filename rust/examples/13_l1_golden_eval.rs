@@ -1,6 +1,6 @@
 use patronus_ark::GatewayConfig;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
@@ -81,6 +81,31 @@ fn gates_for(target_label: &str, pii_mode: ScoreMode, dlp_mode: ScoreMode) -> Sc
         }
     }
     gates
+}
+
+/// One warmed-up PII and DLP gateway per gate set the rows ask for
+/// ([`gates_for`]).
+#[derive(Default)]
+struct Gateways(HashMap<String, SecurityGateway>);
+
+impl Gateways {
+    fn for_row(
+        &mut self,
+        row: &FixtureRow,
+    ) -> Result<&SecurityGateway, Box<dyn std::error::Error>> {
+        let key = format!("{}|{:?}|{:?}", row.target_label, row.pii_mode, row.dlp_mode);
+        if !self.0.contains_key(&key) {
+            let config = GatewayConfig::new(
+                vec![SecurityCategory::Pii, SecurityCategory::Dlp],
+                SecurityLevel::L1,
+            )
+            .with_gates(gates_for(&row.target_label, row.pii_mode, row.dlp_mode));
+            let mut gateway = SecurityGateway::new(config)?;
+            gateway.warmup()?;
+            self.0.insert(key.clone(), gateway);
+        }
+        Ok(&self.0[&key])
+    }
 }
 
 /// `(start_char, end_char, rule_id)` of every rule match the scanner reported.
@@ -191,7 +216,7 @@ impl Coverage {
 }
 
 fn evaluate(
-    gateway: &SecurityGateway,
+    gateways: &mut Gateways,
     generators: &GeneratorSet,
     path: &Path,
     category: SecurityCategory,
@@ -216,7 +241,7 @@ fn evaluate(
             .filter(|entity| entity.label == row.target_label)
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
-        gateway.set_execution_gates(gates_for(&row.target_label, row.pii_mode, row.dlp_mode));
+        let gateway = gateways.for_row(row)?;
         let text = row.materialized_text(generators)?;
         let result = gateway
             .scan_category(category, &text)
@@ -293,8 +318,6 @@ fn evaluate(
             other => return Err(format!("unknown case_type {other:?} in {}", row.id).into()),
         }
     }
-
-    gateway.set_execution_gates(ScanGateMatrix::default());
 
     println!(
         "fixture={} rows={} positive_exact={}/{} hard_negative_rejected={}/{} known_gaps={}",
@@ -490,12 +513,7 @@ fn evaluate_threat(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii, SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
-    gateway.warmup()?;
+    let mut gateways = Gateways::default();
     let root = Path::new("../python/patronus_ark/benchmark_data");
     let generators = GeneratorSet::load("../python/patronus_ark/dlp_synth/generators.json")?;
     // Optional suite filter: `pii`, `dlp`, `threat` or `all` (default).
@@ -505,7 +523,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if matches!(suite.as_str(), "pii" | "all") {
         evaluate(
-            &gateway,
+            &mut gateways,
             &generators,
             &root.join("pii_l1.jsonl"),
             SecurityCategory::Pii,
@@ -521,7 +539,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if matches!(suite.as_str(), "dlp" | "all") {
         evaluate(
-            &gateway,
+            &mut gateways,
             &generators,
             &root.join("dlp_l1.jsonl"),
             SecurityCategory::Dlp,

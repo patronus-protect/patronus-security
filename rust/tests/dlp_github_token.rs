@@ -76,16 +76,15 @@ fn mode_scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
     static SCANNERS: OnceLock<[SecurityGateway; 3]> = OnceLock::new();
     let scanners = SCANNERS.get_or_init(|| {
         [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall].map(|mode| {
-            let scanner = SecurityGateway::new(GatewayConfig::new(
-                vec![SecurityCategory::Dlp],
-                SecurityLevel::L1,
-            ))
-            .unwrap();
-            scanner.set_execution_gates(ScanGateMatrix {
-                dlp_mode: mode,
-                ..ScanGateMatrix::default()
-            });
-            scanner
+            SecurityGateway::new(
+                GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(
+                    ScanGateMatrix {
+                        dlp_mode: mode,
+                        ..ScanGateMatrix::default()
+                    },
+                ),
+            )
+            .unwrap()
         })
     });
     scanners[mode as usize]
@@ -240,12 +239,11 @@ fn an_underscore_in_the_body_is_no_github_token() {
 
 #[test]
 fn generic_rules_skip_a_token_with_a_wrong_checksum() {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1)
+            .with_gates(ScanGateMatrix::default().with_rule("dlp_github_token", false)),
+    )
     .unwrap();
-    scanner.set_execution_gates(ScanGateMatrix::default().with_rule("dlp_github_token", false));
     let scan = |text: &str| {
         scanner
             .scan_category(SecurityCategory::Dlp, text)

@@ -653,11 +653,11 @@ scanner = SecurityGateway({
 Rust:
 
 ```rust
-scanner.set_execution_gates(
+let scanner = SecurityGateway::new(config.with_gates(
     ScanGateMatrix::levels(true, false, false)
         .with_model("native:mcp_runtime_risk", false)
         .with_rule("pii_email", false),
-);
+))?;
 ```
 
 Ark API YAML:

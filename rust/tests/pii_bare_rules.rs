@@ -202,13 +202,10 @@ const NEGATIVE: [&str; 6] = [
 ];
 
 fn scanner(gates: ScanGateMatrix) -> SecurityGateway {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
-    scanner.set_execution_gates(gates);
-    scanner
+    SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(gates),
+    )
+    .unwrap()
 }
 
 fn gates(rule: Option<&str>, mode: ScoreMode) -> ScanGateMatrix {

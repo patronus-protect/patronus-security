@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{SecurityAssetProgressCallback, SecurityCategory};
 use patronus_ark_core::{
-    model_assets::{ModelSpec, PrepareOptions, Progress},
+    model_assets::{self, ModelSpec, PrepareOptions, Progress},
     warmup::DownloadPolicy,
     ScanError,
 };
@@ -23,12 +23,7 @@ pub struct PipelineModelAssetSpec {
 
 pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::DynamicPii,
-    spec: ModelSpec::new(
-        "gliner_small-v2.5-edge",
-        "patronus-studio/gliner_small-v2.5-edge",
-        "6cfcbd93d7fc6f5e1658f80afa38f73891b91693",
-        "dynamic_pii/gliner_small_v2_5",
-    ),
+    spec: model_assets::GLINER_SMALL,
     files: &[
         "gliner_config.json",
         "gliner_onnx_config.json",
@@ -226,118 +221,55 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
 
 pub const NTDB_INJECTION: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
-    spec: ModelSpec::new(
-        WOLF_PIPELINE_MODEL,
-        WOLF_SMALL.repository,
-        WOLF_SMALL.revision,
-        "injection/l2_ntdb/injection_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_INJECTION_DIR"),
+    spec: model_assets::NTDB_INJECTION,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_SENSITIVE_DOCUMENT: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::SensitiveDocument,
-    spec: ModelSpec::new(
-        "orca-sonar-document-classifier",
-        "patronus-studio/orca-sonar-document-classifier",
-        "efa2b1724946fb2de5a22ce58ef99d7b246c2798",
-        "sensitive_document/l2_ntdb/sensitive_document_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR"),
+    spec: model_assets::NTDB_SENSITIVE_DOCUMENT,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_TOOL_CLASS: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolClass,
-    spec: ModelSpec::new(
-        "unified-v3-tool-class",
-        "patronus-studio/husky-sight-tool-type-classifier",
-        "de43b66056fc6b41e5f5c170712770ae805a4850",
-        "tool_class/l2_ntdb/tool_class_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_TOOL_CLASS_DIR"),
+    spec: model_assets::NTDB_TOOL_CLASS,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_TOOL_ACTION: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolAction,
-    spec: ModelSpec::new(
-        "unified-v3-tool-action",
-        "patronus-studio/husky-paw-tool-action-classifier",
-        "b2f4a556e7c9b02606589c5c587e096503f274c5",
-        "tool_action/l2_ntdb/tool_action_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_TOOL_ACTION_DIR"),
+    spec: model_assets::NTDB_TOOL_ACTION,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    spec: ModelSpec::new(
-        "tool_tags_sink_external",
-        "patronus-studio/husky-nose-tool-security-properties-classifier",
-        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        "tool_tags/l2_ntdb/tool_tags_sink_external_current",
-    )
-    .with_source_prefix("l2/sink_external")
-    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR"),
+    spec: model_assets::NTDB_TOOL_TAGS_SINK_EXTERNAL,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    spec: ModelSpec::new(
-        "tool_tags_source_sensitive",
-        "patronus-studio/husky-nose-tool-security-properties-classifier",
-        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        "tool_tags/l2_ntdb/tool_tags_source_sensitive_current",
-    )
-    .with_source_prefix("l2/source_sensitive")
-    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR"),
+    spec: model_assets::NTDB_TOOL_TAGS_SOURCE_SENSITIVE,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ToolTags,
-    spec: ModelSpec::new(
-        "tool_tags_source_untrusted",
-        "patronus-studio/husky-nose-tool-security-properties-classifier",
-        "f5736c09bcb6f75f1af3604706a1ee5c7e39d745",
-        "tool_tags/l2_ntdb/tool_tags_source_untrusted_current",
-    )
-    .with_source_prefix("l2/source_untrusted")
-    .with_env_override("PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR"),
+    spec: model_assets::NTDB_TOOL_TAGS_SOURCE_UNTRUSTED,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_ROUTING: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Routing,
-    spec: ModelSpec::new(
-        "unified-v3-routing",
-        "patronus-studio/panther-read-intent-classifier",
-        "74ec1d568bdddc34d408d4e96ce52b5dd7789cbe",
-        "routing/l2_ntdb/routing_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_ROUTING_DIR"),
+    spec: model_assets::NTDB_ROUTING,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
 pub const NTDB_THREAT: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::UnsafeAction,
-    spec: ModelSpec::new(
-        "unified-v3-threat",
-        "patronus-studio/wolf-defender-threat-classifier",
-        "6520c1f43c716d1210321aecc7681446dd5ce317",
-        "threat/l2_ntdb/threat_current",
-    )
-    .with_source_prefix("l2")
-    .with_env_override("PATRONUS_NTDB_THREAT_DIR"),
+    spec: model_assets::NTDB_THREAT,
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 

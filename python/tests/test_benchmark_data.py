@@ -815,21 +815,25 @@ class BenchmarkDataTests(unittest.TestCase):
         )
 
     def test_native_l1_benchmark_uses_10kb_texts_and_isolates_models(self):
+        gates = []
+        scans = []
+
         class FakeGateway:
             @property
             def rust_gateway(self):
                 return self
             categories = ["injection", "dlp", "pii"]
 
-            def __init__(self):
-                self.gates = []
-                self.scans = []
+            def __init__(self, config=None):
+                self._config = config or {"categories": self.categories}
+                if config is not None:
+                    gates.append(config)
 
-            def set_execution_gates(self, gates):
-                self.gates.append(None if gates is None else json.loads(gates))
+            def warmup(self):
+                pass
 
             def scan_categories(self, categories, text):
-                self.scans.append((list(categories), text))
+                scans.append((list(categories), text))
                 category = categories[0]
                 return {"native": [
                     {
@@ -849,19 +853,14 @@ class BenchmarkDataTests(unittest.TestCase):
             set(result["profiles"]),
             {"injection_all", "dlp", "pii", "mcp_policy", "all_native_l1"},
         )
-        self.assertTrue(gateway.scans)
-        self.assertTrue(
-            all(len(text.encode("utf-8")) == 10 * 1024 for _, text in gateway.scans)
-        )
-        self.assertEqual(len({text for _, text in gateway.scans}), len(gateway.scans))
-        self.assertTrue(any(text.startswith("bash ") for _, text in gateway.scans))
-        self.assertIsNone(gateway.gates[-1])
+        self.assertTrue(scans)
+        self.assertTrue(all(len(text.encode("utf-8")) == 10 * 1024 for _, text in scans))
+        self.assertEqual(len({text for _, text in scans}), len(scans))
+        self.assertTrue(any(text.startswith("bash ") for _, text in scans))
+        # Each gated phase runs on its own gateway of the config plus its gates.
+        self.assertTrue(all(config["categories"] == FakeGateway.categories for config in gates))
 
-        model_gates = [
-            gates["models"]
-            for gates in gateway.gates
-            if gates and "models" in gates
-        ]
+        model_gates = [config["models"] for config in gates if "models" in config]
         self.assertIn(
             {model: model == "native:dlp" for model in benchmark.DLP_NATIVE_MODELS},
             model_gates,

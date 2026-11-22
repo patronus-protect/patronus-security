@@ -45,16 +45,15 @@ const REASONS: [&str; 7] = [
 ];
 
 fn scanner(mode: ScoreMode) -> SecurityGateway {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
-    scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
-        ..Default::default()
-    });
-    scanner
+    SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(
+            ScanGateMatrix {
+                pii_mode: mode,
+                ..Default::default()
+            },
+        ),
+    )
+    .unwrap()
 }
 
 fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {

@@ -3,8 +3,7 @@
 //!
 //! `shell_command` is an L1 category with a model: the gateway downloads the
 //! pinned K26 bundle, verifies it against the manifest pinned in the binary
-//! and applies the user `.cedar` policies set with
-//! `set_shell_command_policy_config`. A command scan returns the usual
+//! and applies the user `.cedar` policies of Core's `shell.policy_dirs`. A command scan returns the usual
 //! `SecurityScanResult`; the `patronus.verdict/1` document is in
 //! `layers[0].details["verdict"]`.
 //!
@@ -18,9 +17,7 @@ use patronus_ark_core::warmup::DownloadPolicy;
 
 use patronus_ark::SecurityGateway;
 
-use patronus_ark_core::{
-    cascade::SecurityLevel, detectors::shell::ShellPolicyConfig, SecurityCategory,
-};
+use patronus_ark_core::{cascade::SecurityLevel, detectors::shell::ShellConfig, SecurityCategory};
 
 /// A user policy: `forbid` with `@id("user.<name>")` and `@decision("block")`
 /// or `@decision("ask")`; `Action::"segment"` sees one command of a pipeline.
@@ -35,24 +32,25 @@ when { context.program == "kubectl" && context.verb == "DELETE" };
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use SecurityCategory::{Dlp, Injection, Pii, ShellCommand};
 
+    // User policies: every `*.cedar` file of the `shell.policy_dirs`, applied
+    // when warmup loads the bundle.
+    let policy_dir = std::env::temp_dir().join("patronus-shell-policies");
+    std::fs::create_dir_all(&policy_dir)?;
+    std::fs::write(policy_dir.join("kubectl.cedar"), KUBECTL_DELETE_POLICY)?;
+
     // Raise the level to L3 for model-backed injection (Wolf); see 03_l2_l3_promotion.
     let mut gateway = SecurityGateway::new({
         let mut config =
             GatewayConfig::new(vec![Pii, Dlp, Injection, ShellCommand], SecurityLevel::L1);
         config.core.download = DownloadPolicy::Missing;
         config.core.download_categories = Some(vec![ShellCommand]);
+        config.core.shell = Some(ShellConfig {
+            policy_dirs: vec![policy_dir],
+            ..ShellConfig::default()
+        });
         config
     })
     .unwrap();
-
-    // User policies: Cedar sources, here inline; `add_cedar_dir` loads every
-    // `*.cedar` file of a directory. Set before or after warmup; a refused
-    // configuration changes nothing.
-    let policies = ShellPolicyConfig {
-        user_policies: vec![KUBECTL_DELETE_POLICY.to_string()],
-        ..ShellPolicyConfig::default()
-    };
-    gateway.set_shell_command_policy_config(policies)?;
 
     if let Err(failure) = gateway.warmup() {
         eprintln!("warmup failed (offline?): {failure:?}");

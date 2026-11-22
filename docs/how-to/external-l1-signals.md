@@ -63,11 +63,19 @@ Because it is exposed as `external:<id>`, you can toggle it with an
 [execution gate](../reference/configuration.md#execution-gates) exactly like a native detector:
 
 ```rust
-scanner.set_execution_gates(
-    ScanGateMatrix::levels(true, false, false)
-        .with_model("external:internal_token", false),
-);
+let request_id = scanner.enqueue(ScanRequest {
+    options: ScanRequestOptions {
+        gates: Some(
+            ScanGateMatrix::levels(true, false, false)
+                .with_model("external:internal_token", false),
+        ),
+        ..Default::default()
+    },
+    ..ScanRequest::new(text)
+})?;
 ```
+
+The same gates in the gateway's config (`GatewayConfig::with_gates`) apply to every scan.
 
 ## When to use this
 

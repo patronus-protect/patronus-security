@@ -32,10 +32,15 @@ fn check(
     if injection_rule {
         assert_eq!(rule_category(rule), category, "{rule}");
     }
-    let gateway =
-        SecurityGateway::new(GatewayConfig::new(vec![category], SecurityLevel::L1)).unwrap();
+    let gateway_with = |gates: ScanGateMatrix| {
+        SecurityGateway::new(
+            GatewayConfig::new(vec![category], SecurityLevel::L1).with_gates(gates),
+        )
+        .unwrap()
+    };
+    let enabled = gateway_with(ScanGateMatrix::all_enabled());
     for text in positives {
-        gateway.set_execution_gates(ScanGateMatrix::all_enabled());
+        let gateway = &enabled;
         let results = gateway.scan_category(category, text).native;
         let result = results
             .iter()
@@ -52,7 +57,7 @@ fn check(
         }
         let mut gates = ScanGateMatrix::all_enabled();
         gates.set_rule(rule, false);
-        gateway.set_execution_gates(gates);
+        let gateway = &gateway_with(gates);
         let disabled = gateway.scan_category(category, text).native;
         if injection_rule {
             // Outside injection a class without any rule candidate has no aggregate.
@@ -64,7 +69,7 @@ fn check(
             assert!(!disabled.iter().any(|r| r.class_name == class));
         }
     }
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
+    let gateway = &enabled;
     for text in negatives {
         let results = gateway.scan_category(category, text).native;
         assert!(

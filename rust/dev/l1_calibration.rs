@@ -5,12 +5,14 @@ use patronus_ark::SecurityGateway;
 use patronus_ark_core::{cascade::ScanGateMatrix, cascade::SecurityLevel, SecurityCategory};
 use std::io::{self, BufRead};
 fn main() {
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
-        SecurityLevel::L1,
-    ))
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(
+            vec![SecurityCategory::Injection, SecurityCategory::UnsafeAction],
+            SecurityLevel::L1,
+        )
+        .with_gates(ScanGateMatrix::all_enabled()),
+    )
     .unwrap();
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     for line in io::stdin().lock().lines() {
         let input: serde_json::Value =
             serde_json::from_str(&line.expect("stdin")).expect("JSON input");

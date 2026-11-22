@@ -122,17 +122,15 @@ content-token overlap.
 
 ## Runtime setters (Rust)
 
-Python takes every key above in the `SecurityGateway(config)` dict and has no setters. The Rust
-gateway can also change these on a live gateway:
+Python takes every key above in the `SecurityGateway(config)` dict and has no setters. Ark Core's
+keys (gates, `execution_backend`, `onnx_runtime`, `shell`, ...) are set only in the config. The
+Rust gateway can change these Ark keys on a live gateway:
 
 | Setter | Values | Effect |
 | --- | --- | --- |
-| `set_execution_gates(ScanGateMatrix)` | see [below](#execution-gates) | Enable/disable levels and detectors. |
 | `set_l3_strategy(L3Strategy)` | `Dedicated`, `Multi` | Switch the [L3 strategy](#l3-strategy). |
 | `set_ntdb_decision_threshold_point(NtdbOperatingPoint)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
 | `set_onnx_batch_mode(OnnxBatchMode)` | `LazyBatches`, `TensorBatch` | How L3 fallback batches execute. |
-| `set_execution_backend(ExecutionBackend)` | see [below](#execution-backend) | ONNX execution provider. |
-| `set_onnx_runtime_options(OnnxRuntimeOptions)` | constrained CPU | Configure ONNX Runtime intra/inter threads and spin-wait behavior. |
 | `set_dynamic_pii_config(DynamicPiiConfig)` | see [dynamic PII](#dynamic-pii) | Reconfigure the GLiNER pipeline. |
 
 ## Levels
@@ -231,14 +229,18 @@ scanner = SecurityGateway({
 - `l3_policy` — optional L3 worker policy (see [below](#l3-worker-policy)).
 
 Per-request gates passed to `enqueue()` are **snapshotted** at enqueue time and do not change
-the gateway defaults. In Rust, build a `ScanGateMatrix`:
+the gateway defaults. In Rust, build a `ScanGateMatrix` for the config or for one request:
 
 ```rust
-scanner.set_execution_gates(
-    ScanGateMatrix::levels(true, false, false)
-        .with_model("native:mcp_runtime_risk", false)
-        .with_rule("pii_email", false),
-);
+let gates = ScanGateMatrix::levels(true, false, false)
+    .with_model("native:mcp_runtime_risk", false)
+    .with_rule("pii_email", false);
+let scanner = SecurityGateway::new(config.with_gates(gates.clone()))?;
+// or for one request only:
+scanner.enqueue(ScanRequest {
+    options: ScanRequestOptions { gates: Some(gates), ..Default::default() },
+    ..ScanRequest::new(text)
+})?;
 ```
 
 The Ark API takes the same keys in YAML (at the top level of `pipeline`, and in

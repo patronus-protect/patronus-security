@@ -52,13 +52,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rss_before_mb = rss_mb();
     let started = Instant::now();
-    let mut scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L2,
-    ))
+    let mut scanner = SecurityGateway::new({
+        let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L2);
+        config.core.execution_backend = ExecutionBackend::Cpu;
+        config.ntdb_operating_point = NtdbOperatingPoint::BestLatencyInF1;
+        config
+    })
     .unwrap();
-    scanner.set_execution_backend(ExecutionBackend::Cpu);
-    scanner.set_ntdb_operating_point(NtdbOperatingPoint::BestLatencyInF1);
     scanner.warmup()?;
     let l1_l2_load_ms = elapsed_ms(started);
     let rss_l1_l2_ready_mb = rss_mb();

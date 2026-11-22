@@ -40,15 +40,11 @@ const SECRET_GROUPS: &[&str] = &[
 ];
 
 fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
-    if let Some(gates) = gates {
-        scanner.set_execution_gates(gates);
-    }
-    scanner
+    SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1)
+            .with_gates(gates.unwrap_or_default()),
+    )
+    .unwrap()
 }
 
 fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {

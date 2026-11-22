@@ -146,14 +146,13 @@ fn native_policy_gates_and_scored_modes_preserve_complete_results() {
         .insert("ark.injection.override.discard_prior".into(), false);
     policies.push(rules);
 
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        SecurityCategory::DEFAULT_ACTIVE.to_vec(),
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     for policy in policies {
         let mut core = Scanner::new(policy.clone()).unwrap();
-        gateway.set_execution_gates(policy.gates.clone());
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(SecurityCategory::DEFAULT_ACTIVE.to_vec(), SecurityLevel::L1)
+                .with_gates(policy.gates.clone()),
+        )
+        .unwrap();
         for text in &texts {
             let direct = core.scan(text).unwrap();
             let queued = gateway.scan_all(text).native;
@@ -304,8 +303,11 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
     let mut core_config = gates.clone();
     core_config["categories"] = serde_json::to_value(&categories).unwrap();
     let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
-    let gateway = SecurityGateway::new(GatewayConfig::new(categories, SecurityLevel::L1)).unwrap();
-    gateway.set_execution_gates(serde_json::from_value(gates).unwrap());
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(categories, SecurityLevel::L1)
+            .with_gates(serde_json::from_value(gates).unwrap()),
+    )
+    .unwrap();
     let untimed = |result: &NativeResult| {
         let mut result = result.clone();
         result.duration_ms = 0.0;
@@ -363,9 +365,11 @@ fn ark_runs_the_cascade_l1_model_like_core() {
         let mut core_config = gates.clone();
         core_config["categories"] = serde_json::to_value(&categories).unwrap();
         let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
-        let gateway =
-            SecurityGateway::new(GatewayConfig::new(categories, SecurityLevel::L1)).unwrap();
-        gateway.set_execution_gates(serde_json::from_value(gates).unwrap());
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(categories, SecurityLevel::L1)
+                .with_gates(serde_json::from_value(gates).unwrap()),
+        )
+        .unwrap();
         let direct = core.scan(text).unwrap();
         assert_eq!(direct.native.is_empty(), rules_off);
         let decision = &direct.decision.unwrap()[0];

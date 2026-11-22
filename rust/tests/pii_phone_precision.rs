@@ -17,15 +17,15 @@ use patronus_ark_core::{detectors::pii::pii::PII_PATTERNS, detectors::pii::valid
 use regex::Regex;
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(
+            ScanGateMatrix {
+                pii_mode: mode,
+                ..Default::default()
+            },
+        ),
+    )
     .unwrap();
-    scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
-        ..Default::default()
-    });
     scanner
         .scan_category(SecurityCategory::Pii, text)
         .native

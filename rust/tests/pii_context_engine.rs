@@ -32,15 +32,15 @@ use serde::Deserialize;
 const PROXIMITY_RULE: &str = "pii_phone_de_national_proximity";
 
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(
+            ScanGateMatrix {
+                pii_mode: mode,
+                ..Default::default()
+            },
+        ),
+    )
     .unwrap();
-    scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
-        ..Default::default()
-    });
     scanner
         .scan_category(SecurityCategory::Pii, text)
         .native

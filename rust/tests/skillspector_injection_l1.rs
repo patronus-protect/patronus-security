@@ -31,17 +31,20 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
         .map(|r| r["id"].as_str().unwrap())
         .collect();
     assert_eq!(actual, expected);
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        SecurityCategory::ATTACK_CLASSES.to_vec(),
-        SecurityLevel::L1,
-    ))
-    .unwrap();
+    let gateway_with = |gates: ScanGateMatrix| {
+        SecurityGateway::new(
+            GatewayConfig::new(SecurityCategory::ATTACK_CLASSES.to_vec(), SecurityLevel::L1)
+                .with_gates(gates),
+        )
+        .unwrap()
+    };
+    let enabled = gateway_with(ScanGateMatrix::all_enabled());
     for case in cases {
         let category = rule_category(&case.rule_id);
         assert_ne!(case.en, case.de);
         for text in [&case.en, &case.de] {
-            gateway.set_execution_gates(ScanGateMatrix::all_enabled());
-            let result = &injection_l1(&gateway, category, text)
+            let gateway = &enabled;
+            let result = &injection_l1(gateway, category, text)
                 .unwrap_or_else(|| panic!("{}: no rule result: {text}", case.rule_id));
             assert_ne!(
                 result.class_name, "safe",
@@ -66,17 +69,17 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
             }
             let mut gates = ScanGateMatrix::all_enabled();
             gates.rules.insert(case.rule_id.clone(), false);
-            gateway.set_execution_gates(gates);
+            let gateway = &gateway_with(gates);
             assert!(
-                injection_l1(&gateway, category, text).is_none_or(|disabled| !has_rule(
+                injection_l1(gateway, category, text).is_none_or(|disabled| !has_rule(
                     &disabled.layers[0].details["l1_candidates"],
                     &case.rule_id
                 ))
             );
         }
-        gateway.set_execution_gates(ScanGateMatrix::all_enabled());
+        let gateway = &enabled;
         for text in [&case.negative_en, &case.negative_de] {
-            let Some(result) = injection_l1(&gateway, category, text) else {
+            let Some(result) = injection_l1(gateway, category, text) else {
                 continue;
             };
             assert!(

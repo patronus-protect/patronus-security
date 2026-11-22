@@ -381,12 +381,11 @@ fn matched_rules_report_metadata() {
     assert_eq!(rule["severity"], "live");
 
     // Content classes are off by default; enable them for this check.
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1)
+            .with_gates(ScanGateMatrix::all_enabled()),
+    )
     .unwrap();
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     let text = "Fehlerprotokoll:\nTraceback (most recent call last):\n  File \"app.py\", line 3\n";
     let result = gateway
         .scan_category(SecurityCategory::Dlp, text)
